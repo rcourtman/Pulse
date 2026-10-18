@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -42,6 +44,129 @@ type enrollResponse struct {
 	ReportInterval string `json:"reportInterval"`
 }
 
+// EnrollmentConfig is what a process needs to exchange its bootstrap token
+// before it builds any client that authenticates with it.
+type EnrollmentConfig struct {
+	PulseURL                string
+	APIToken                string
+	StateDir                string
+	HostnameOverride        string
+	AgentVersion            string
+	EnableCommands          bool
+	CommandAuthorityProfile CommandAuthorityProfile
+	InsecureSkipVerify      bool
+	CACertPath              string
+	ServerFingerprint       string
+	Logger                  *zerolog.Logger
+	Collector               SystemCollector // Optional: override default system information collector (for testing)
+}
+
+// EnrollmentResult carries the credentials every agent module must use once
+// enrollment has run.
+type EnrollmentResult struct {
+	// APIToken is the runtime token, or the configured token unchanged when
+	// the server reports it is not a bootstrap token.
+	APIToken string
+	// AgentID is the server-assigned canonical agent ID. It is empty when no
+	// exchange happened in this call or the server assigned none.
+	AgentID string
+}
+
+// Enroll exchanges a bootstrap token for a runtime token, or loads the runtime
+// token an earlier run persisted. A process must call it before it builds any
+// authenticated client: a bootstrap token carries only the enrollment scope and
+// the server revokes it on exchange, so a client built with it keeps failing
+// until the process restarts.
+func Enroll(ctx context.Context, cfg EnrollmentConfig) (EnrollmentResult, error) {
+	token := strings.TrimSpace(cfg.APIToken)
+	if token == "" {
+		return EnrollmentResult{}, fmt.Errorf("api token is required when enrollment is enabled")
+	}
+	commandAuthorityProfile, err := NormalizeCommandAuthorityProfile(string(cfg.CommandAuthorityProfile))
+	if err != nil {
+		return EnrollmentResult{}, err
+	}
+	enableCommands := cfg.EnableCommands
+	if effectiveCommands, accepted := ResolveCommandAuthority(commandAuthorityProfile, enableCommands); !accepted {
+		enableCommands = effectiveCommands
+	}
+
+	pulseURL := strings.TrimSpace(cfg.PulseURL)
+	if pulseURL == "" {
+		pulseURL = "http://localhost:7655"
+	}
+	pulseURL, err = normalizePulseURL(pulseURL)
+	if err != nil {
+		return EnrollmentResult{}, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	stateDir := strings.TrimSpace(cfg.StateDir)
+	if stateDir == "" {
+		stateDir = defaultStateDir
+	}
+	logger := zerolog.Nop()
+	if cfg.Logger != nil {
+		logger = cfg.Logger.With().Str("component", "agent").Logger()
+	}
+	agentVersion := cfg.AgentVersion
+	if agentVersion == "" {
+		agentVersion = Version
+	}
+	collector := cfg.Collector
+	if collector == nil {
+		collector = &defaultCollector{}
+	}
+	// A restart reuses the saved runtime token. That needs no request and no
+	// host discovery, so a host-information failure cannot block a process
+	// that is already enrolled.
+	if persisted := persistedRuntimeToken(collector, stateDir); persisted != "" {
+		logger.Info().Msg("Found existing runtime token, skipping enrollment")
+		return EnrollmentResult{APIToken: persisted}, nil
+	}
+
+	infoCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	info, err := collector.HostInfo(infoCtx)
+	cancel()
+	if err != nil {
+		return EnrollmentResult{}, fmt.Errorf("fetch host info: %w", err)
+	}
+	identity := resolveHostIdentity(collector, info, cfg.HostnameOverride)
+
+	client, err := newAgentHTTPClient(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
+	if err != nil {
+		return EnrollmentResult{}, fmt.Errorf("invalid TLS configuration: %w", err)
+	}
+
+	a := &Agent{
+		cfg:             Config{APIToken: token, EnableCommands: enableCommands},
+		logger:          logger,
+		httpClient:      client,
+		hostname:        identity.hostname,
+		osName:          identity.osName,
+		architecture:    identity.arch,
+		agentVersion:    agentVersion,
+		stateDir:        stateDir,
+		trimmedPulseURL: pulseURL,
+		collector:       collector,
+	}
+	if err := a.runEnrollmentLoop(ctx); err != nil {
+		return EnrollmentResult{}, err
+	}
+	return EnrollmentResult{
+		APIToken: a.cfg.APIToken,
+		AgentID:  strings.TrimSpace(a.cfg.AgentID),
+	}, nil
+}
+
+// persistedRuntimeToken returns the runtime token an earlier enrollment saved
+// in stateDir, or "" when there is none.
+func persistedRuntimeToken(collector SystemCollector, stateDir string) string {
+	data, err := collector.ReadFile(filepath.Join(stateDir, runtimeTokenFile))
+	if err != nil {
+		return ""
+	}
+	return string(bytes.TrimSpace(data))
+}
+
 // runEnrollmentLoop checks for an existing runtime token or performs enrollment
 // with exponential backoff. On success, updates a.cfg.APIToken in memory and
 // persists the runtime token to disk.
@@ -54,16 +179,11 @@ type enrollResponse struct {
 //   - 400/404: invalid request or target not found — permanent failure, no retry
 //   - 5xx/network errors: retry with exponential backoff
 func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
-	tokenPath := filepath.Join(a.stateDir, runtimeTokenFile)
-
 	// Check if we already have a persisted runtime token from a previous enrollment.
-	if data, err := a.collector.ReadFile(tokenPath); err == nil {
-		token := string(bytes.TrimSpace(data))
-		if token != "" {
-			a.logger.Info().Msg("Found existing runtime token, skipping enrollment")
-			a.cfg.APIToken = token
-			return nil
-		}
+	if token := persistedRuntimeToken(a.collector, a.stateDir); token != "" {
+		a.logger.Info().Msg("Found existing runtime token, skipping enrollment")
+		a.cfg.APIToken = token
+		return nil
 	}
 
 	a.logger.Info().Msg("Starting enrollment to exchange bootstrap token for runtime token")

@@ -74,8 +74,8 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     currentState() !== 'idle';
 
   // Server-evaluated refusal for the update capability (agent disconnected,
-  // agent too old, stale inventory). Mirrors the lifecycle buttons: render
-  // disabled with the reason instead of letting the click fail at plan time.
+  // agent too old, stale inventory). Render a passive update status with the
+  // reason instead of suggesting that Pulse can apply the update.
   // Only gates the actionable states; in-flight and settled states keep their
   // own presentation.
   const updateUnavailableReason = (): string | undefined => {
@@ -209,5 +209,6 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     reviewDetail,
     settingsLoaded,
     shouldHideButton,
+    updateUnavailableReason,
   };
 }

@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "base_sha": "1322db3fed15b0bd2616cd359e4e5e44d7509b8b",
+  "verified_at": "2026-10-10T18:24:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "d3f125e7e5a735314bb427ce8bdb99e2575a0f65e8564617fe9ebb80014f112a",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "6dccdfeee862fba2f68c61026e5c3f7a0d8c8f916dd86a2385c843443e22313b",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "041b9ad9c0a1bc9b1ba4a05f31340ed24b892ec46add48821ab851224e9db41b",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "d6b6422b4adbc8bee235905dc8db7874e699ff6cb753fa43e972bb1a133cd29c",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "f55809164a9f744ba86fbf779888e3faaf4186e22214edff5adf9f1a958c92a9",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "dd78725083f57b020a9c5ebe364cc3693b72bfa303796857a5d8c1263482cce9",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "69a853de4a91ccf56ec693b843450488c64a0684712567835a0d09f5a283db28",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "31812d106672cb92f6c613dca711ee76c99de2d194508f044d0423af8ea49b02",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "48e103c8de9856ff453d0cbeeb0132b14b83efccfbe4257936b14ce01912354c",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "d823a3319821fb3f663cb3a8873c500f1b29c4605ad3707fccdae6c61cb93588",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "b1a6b50023cadd36a1ed67380190a2fd742f2cca9acc6e11423d3ec77341c53f",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "9922485f9b09a6c2ec7015436e366cba3dbf137aab9329f35cd10f3b71c909be",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "23cdd66303fea43cbccd577ae96d985d25e4bb84a1eb83ff9b635a3aa732032f",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "a3d49a539f2ba173f58050b3c7161e5e9cb5f458360f8c12a851ff89997664c5"
+  },
+  "routes": [
+    "/tmp/reading-recovery/index.html?surface=table",
+    "/tmp/reading-recovery/index.html?surface=fleet",
+    "/tmp/reading-recovery/index.html?surface=card",
+    "/tmp/reading-recovery/index.html?surface=settings",
+    "/tmp/reading-recovery/index.html?surface=guest",
+    "/tmp/reading-recovery/index.html?surface=node",
+    "/tmp/reading-recovery/index.html?surface=pmg",
+    "/tmp/reading-recovery/index.html?surface=nodes",
+    "/tmp/reading-recovery/index.html?surface=vmware"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Synthetic recovered HTTP check with withdrawn failure fields and platform mirror",
+    "Removed availability source without rehydrated check sets",
+    "Expired retained availability evidence in table, fleet, card and Settings",
+    "Held guest/node/gateway metric reading ages independently of breach date",
+    "Legacy attention copy after live status disappears",
+    "Desktop temperature hover ages; phone layout retains its intentional omitted column",
+    "Filtered VMs table heading in desktop/phone kiosk and filtered-empty state",
+    "Inspected light desktop and dark phone captures without page-level overflow"
+  ],
+  "interactions": [
+    "Apply synthetic raw resource merge-patch recovery and source withdrawal through the production websocket store",
+    "Advance a controlled shared clock with unchanged observation timestamps",
+    "Remove live metric status without clearing the retained alert",
+    "Search and commit app-01; enter and exit kiosk with the production page-owned state",
+    "Remove the committed search chip (expand Filters on phone), apply an unmatched search and return to empty kiosk",
+    "Check no page errors, unexpected endpoints, off-origin or action/probe/mutation requests; allow readonly History POSTs"
+  ],
+  "notes": "Production components/page with synthetic local inputs. 18 selected completed cases, 62 control blocks and 20 inspected captures across incremental byte-bound proofs. Earlier failed harness expectations are retained separately; this is not full-source, native or published acceptance."
+}

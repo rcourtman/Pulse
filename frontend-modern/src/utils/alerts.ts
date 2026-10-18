@@ -1,4 +1,6 @@
 import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import { isAlertsDetectionEnabled } from '@/utils/alertsActivation';
 
 const noAlertStyles = {
@@ -30,13 +32,36 @@ export const getAlertStyles = (
     return noAlertStyles;
   }
 
-  const alertsForResource = getAlertsForResource(
-    Array.isArray(resourceId) ? resourceId : [resourceId],
-    activeAlerts,
-    alertsEnabled,
-    nodeMatch,
+  return getAlertStylesForAlerts(
+    getAlertsForResource(
+      Array.isArray(resourceId) ? resourceId : [resourceId],
+      activeAlerts,
+      alertsEnabled,
+      nodeMatch,
+    ),
   );
+};
 
+// Alert highlighting for a unified resource's row, from the open alerts its
+// drawer lists under "Needs attention" (getAlertsForUnifiedResource). Matching
+// by display name misses machines whose alerts are keyed on the agent or
+// Docker host id, and a row that disagrees with its own drawer hides the
+// problem until someone opens it.
+export const getUnifiedResourceAlertStyles = (
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+) => {
+  if (!alertsEnabled) {
+    return noAlertStyles;
+  }
+
+  return getAlertStylesForAlerts(
+    getAlertsForUnifiedResource(resource, activeAlerts, alertsEnabled),
+  );
+};
+
+function getAlertStylesForAlerts(alertsForResource: Alert[]) {
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
   const acknowledgedAlerts = alertsForResource.filter((alert) => alert.acknowledged);
 
@@ -132,7 +157,7 @@ export const getAlertStyles = (
     acknowledgedCount,
     hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
-};
+}
 
 export function getAlertsForResource(
   resourceIds: string[],
@@ -145,6 +170,102 @@ export function getAlertsForResource(
   return Object.values(activeAlerts).filter(
     (alert) => ids.has(alert.resourceId) || (nodeMatch !== undefined && alert.node === nodeMatch),
   );
+}
+
+const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning: 1, info: 2 };
+
+// The alert keys one unified resource answers to. Alerts raised on the unified
+// resource itself (provider incidents, availability, TrueNAS, vSphere,
+// Kubernetes) carry its id; poller alerts carry the canonical primary id, the
+// Proxmox source id or the metrics target (PBS, PMG, storage). A machine also
+// answers to its agent ("agent:<id>") and Docker runtime ("docker:<id>") keys,
+// and its components' alerts nest under those: "agent:<id>/disk:<mount>",
+// "agent:<id>/raid:<device>", "docker:<id>/<container>".
+const getUnifiedResourceAlertKeys = (
+  resource: Resource,
+): { exact: Set<string>; machine: string[] } => {
+  const exact = new Set<string>();
+  const add = (value: string | undefined) => {
+    const trimmed = value?.trim();
+    if (trimmed) exact.add(trimmed);
+  };
+  add(resource.id);
+  add(resource.canonicalIdentity?.primaryId);
+  resource.canonicalIdentity?.supersededIds?.forEach(add);
+  add(resource.proxmox?.sourceId);
+  add(resource.metricsTarget?.resourceId);
+  // The alert engine keys a Docker container's alerts on its host and
+  // container ID ("docker:<host>/<container ID>"), or on its name when it has
+  // no ID (internal/alerts DockerContainerResourceID).
+  if (resource.type === 'app-container') {
+    const dockerHostId = resource.docker?.hostSourceId?.trim();
+    const containerId = resource.docker?.containerId?.trim();
+    const containerName = resource.name?.trim().replace(/^\/+/, '');
+    if (dockerHostId && containerId) add(`docker:${dockerHostId}/${containerId}`);
+    else if (dockerHostId && containerName) add(`docker:${dockerHostId}/name:${containerName}`);
+  }
+
+  const machine = new Set<string>();
+  if (resource.type === 'agent' || resource.type === 'docker-host') {
+    const agentId = getActionableAgentIdFromResource(resource);
+    if (agentId) machine.add(agentId.startsWith('agent:') ? agentId : `agent:${agentId}`);
+    // The backend writes the agent key of a machine reported through a linked
+    // agent (a Proxmox node, a Docker host) into the canonical aliases.
+    resource.canonicalIdentity?.aliases
+      ?.filter((alias) => alias.startsWith('agent:'))
+      .forEach((alias) => machine.add(alias));
+    // Docker hosts are "docker-host" resources or agents with a Docker runtime;
+    // the backend keys their alerts on the Docker host's source id.
+    const dockerHostId =
+      resource.docker?.hostSourceId?.trim() ||
+      (resource.metricsTarget?.resourceType === 'docker-host'
+        ? resource.metricsTarget.resourceId?.trim()
+        : undefined);
+    if (dockerHostId) machine.add(`docker:${dockerHostId}`);
+  }
+  machine.forEach(add);
+  return { exact, machine: [...machine] };
+};
+
+/**
+ * Open alerts for one unified resource, read from the websocket's active
+ * alert map, most severe first. This is the canonical source for a resource
+ * drawer's "Needs attention" list: resources do not embed their alerts.
+ */
+export function getAlertsForUnifiedResource(
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const { exact, machine } = getUnifiedResourceAlertKeys(resource);
+  const machinePrefixes = machine.map((key) => `${key}/`);
+  return Object.values(activeAlerts)
+    .filter(
+      (alert) =>
+        exact.has(alert.resourceId) ||
+        machinePrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)),
+    )
+    .sort(
+      (a, b) =>
+        (ALERT_LEVEL_RANK[a.level] ?? 3) - (ALERT_LEVEL_RANK[b.level] ?? 3) ||
+        Date.parse(a.startTime) - Date.parse(b.startTime),
+    );
+}
+
+/**
+ * Alerts raised on the resource itself, not on anything nested under it (a
+ * Docker host's containers and services, a machine's disks). A drawer chart
+ * draws only these: a container's memory trigger is not its host's.
+ */
+export function getOwnAlertsForUnifiedResource(
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const { exact } = getUnifiedResourceAlertKeys(resource);
+  return Object.values(activeAlerts).filter((alert) => exact.has(alert.resourceId));
 }
 
 // Alert types representing binary or enumerated state conditions rather

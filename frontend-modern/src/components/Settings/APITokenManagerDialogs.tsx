@@ -53,7 +53,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
               class="mt-0.5 h-4 w-4 rounded-sm border-border text-amber-600 focus:ring-amber-500"
             />
             <span>
-              <span class="block font-semibold text-amber-900/25 dark:text-amber-100">
+              <span class="block font-semibold text-amber-900 dark:text-amber-100">
                 Full access
               </span>
               <span class="text-amber-800 dark:text-amber-200">

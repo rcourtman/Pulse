@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "410d84c69444ce4b59d00432b0b5510ce3016d0e",
+  "verified_at": "2026-10-08T07:54:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "a6c8fe542971abd4938326622957ddf7b7dc3b8432010261e8a3342c48095ec8"
+  },
+  "routes": [
+    "/docker",
+    "/kubernetes/overview",
+    "/kubernetes/workloads",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private Vite dev server from this change's tree (origin/main d2ac0c5112 plus the change; the base then moved to 410d84c694 across 883 commits, none of which touch ResourceDetailSummary.tsx, DetailSectionTable, MetadataBadge, Table or index.css, and the only dependency changes are an icon library and a patch-level prettier bump) against a private mock-mode backend built from the same base (4 PVE nodes, 2 Docker hosts with 12 containers, 1 Kubernetes cluster with 3 nodes, 4 deployments and pods)",
+    "Every inline drawer on the four routes opened in turn (83 drawers per width: 12 Docker containers, 22 Kubernetes overview rows, 19 Kubernetes workload rows, 4 Proxmox nodes and 26 guests) and every value and label cell measured for clipping (scrollWidth over clientWidth with hidden overflow, split into ellipsis and silent cuts)",
+    "Before, on main's ResourceDetailSummary.tsx: 390px had 148 cut values in Docker and Kubernetes drawers (Primary ID ellipsized in all 12 containers and 40 Kubernetes rows, Parent 40, Hostname 16, Discovery 23, Machine ID 2, Image 3, Labels chips silently cut in all 12 containers with no ellipsis, 161px shown of up to 343px); 768px had 28 (Labels 2, Kubernetes Primary ID 26); 1440px had 7 (Labels 5, Kubernetes Primary ID 2)",
+    "After: zero cut values in Docker and Kubernetes drawers at 390, 768 and 1440; pod names such as checkout-api-6c746d5bcf-c7z2p, Primary IDs, parent cluster IDs, image tags and every label chip read in full, wrapping inside the drawer",
+    "Proxmox node and guest drawers (NodeDrawerOverview, GuestDrawerOverview, not touched) show the same residual cuts before and after: node Pulse coverage and CPU model, guest System and the Last completed backup label",
+    "1440x900 A/B by swapping main's file under the same Vite session: 12 of 15 sampled drawers have identical row heights; the 3 that changed were the ones clipped before (two Kubernetes node Primary ID rows 20px to 34.3px; the customer-portal Labels row 288px to 320px with its two cut chips, 274px of 300px and of 279px, now whole); section cards keep the same three-across 424px layout"
+  ],
+  "interactions": [
+    "Opened and closed each row's detail disclosure on /docker, /kubernetes/overview, /kubernetes/workloads and /proxmox/overview",
+    "Resized to 390x844, 768x1024 and 1440x900 and re-ran the clip sweep at each width, before and after the change",
+    "Swapped main's ResourceDetailSummary.tsx in and out under the running Vite server and compared drawer row heights at 1440x900"
+  ]
+}

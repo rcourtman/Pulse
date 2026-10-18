@@ -131,17 +131,3 @@ func (d *ChangeDetector) loadFromDisk() error {
 	d.trimChanges()
 	return nil
 }
-
-// Helper functions
-
-func intToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var result string
-	for n > 0 {
-		result = string(rune('0'+n%10)) + result
-		n /= 10
-	}
-	return result
-}

@@ -123,7 +123,10 @@ describe('getResourceHealthIssuePresentation', () => {
 
   it('keeps a non-matching detail in both `details` and `title`', () => {
     const result = getResourceHealthIssuePresentation(
-      makeResource({ incidentSummary: 'Primary issue', incidentLabel: 'Secondary issue' }),
+      makeResource({
+        incidentSummary: 'Primary issue',
+        storage: { postureSummary: 'Secondary issue' },
+      }),
     );
     expect(result?.details).toStrictEqual(['Secondary issue']);
     expect(result?.title).toBe('Primary issue · Secondary issue');
@@ -135,12 +138,26 @@ describe('getResourceHealthIssuePresentation', () => {
     const result = getResourceHealthIssuePresentation(
       makeResource({
         incidentSummary: 'Alpha',
-        incidentLabel: 'Beta',
-        storage: { postureSummary: 'BETA' },
+        storage: { postureSummary: 'Beta', riskSummary: 'BETA' },
       }),
     );
     expect(result?.details).toStrictEqual(['Beta']);
     expect(result?.title).toBe('Alpha · Beta');
+  });
+
+  it('uses the category label only when nothing more specific exists', () => {
+    expect(
+      getResourceHealthIssuePresentation(
+        makeResource({
+          incidentSummary: 'Pool is degraded',
+          incidentLabel: 'Resource Health Issue',
+        }),
+      ),
+    ).toMatchObject({ primary: 'Pool is degraded', details: [] });
+    expect(
+      getResourceHealthIssuePresentation(makeResource({ incidentLabel: 'Capacity Pressure' }))
+        ?.primary,
+    ).toBe('Capacity Pressure');
   });
 
   it('skips whitespace-only summaries so they never become the primary', () => {

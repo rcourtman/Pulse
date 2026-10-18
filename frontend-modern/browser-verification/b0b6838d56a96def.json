@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "120af509e1a5027d759cbcbb981fb4217311e1d9",
+  "verified_at": "2026-10-11T19:24:37.932984Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "8994b85795dfaaa4f99eb1de601a4ef2730eb082cd503ac9962bd6a2fb8692cf"
+  },
+  "routes": [
+    "/browser-tests/machines-health-filters.html with production StandalonePageSurface/router/table and q/status state; synthetic local evidence, not a new application route"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches the integration lock. Desktop Chromium 141.0.7390.37 light and touch-phone WebKit 26.0 dark. Exact composed parent 120af509e1a5027d759cbcbb981fb4217311e1d9 and final runtime hashes checked; twenty settled parent/final captures inspected. Earlier captures failed visual acceptance due frozen-clock transitions and are retained separately, not used as visual proof.",
+    "Exactly five minutes after the retained report, Healthy remains 1 and the row stays green. At the next existing shared-clock tick the canonical online/stale-false report is unchanged but the row is amber. Parent retains Healthy 1 / Degraded 0, Healthy includes the row and Degraded omits it. Final shows Healthy 0 / Degraded 1, Healthy excludes the row and Degraded includes it. Final tooltip and accessible status name are Stale.",
+    "Quiet clock advancement keeps the original snapshot, row and focus without read/write. Ordinary initial REST reads and metadata refresh after injected source updates remain. No unexpected read, write, off-origin request, page or console error, or page-level horizontal overflow. Browser and server close.",
+    "Synthetic production page evidence is not a full application, physical phone, native collector, guest thaw/writes/liveness/restoration, installed result, publication or release."
+  ],
+  "interactions": [
+    "Expand phone Filters. Enter identity search, select Healthy and Degraded, inspect actual selected rows and accessible counts, including filtered-empty state; q/status URL state remains owned by the page.",
+    "An arriving report changes Degraded membership immediately while retaining the selected filter and search, then Healthy shows the recovered green row. A subsequent explicit stale/withdrawn-report update removes it from Healthy and includes it in Degraded without polling or rewriting canonical observations."
+  ]
+}

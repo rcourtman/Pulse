@@ -2,29 +2,10 @@ package config
 
 import (
 	"testing"
-	"time"
 )
 
-func TestAIConfig_DiscoveryAndControl(t *testing.T) {
+func TestAIConfig_Control(t *testing.T) {
 	cfg := &AIConfig{}
-	// Default discovery model should fall back to GetModel()
-	if got := cfg.GetDiscoveryModel(); got != cfg.GetModel() {
-		t.Fatalf("default discovery model should fall back to GetModel(), got %q", got)
-	}
-
-	// A Patrol override is the operator's background-work model; discovery
-	// follows it before the shared default.
-	cfg.PatrolModel = "custom:patrol"
-	if got := cfg.GetDiscoveryModel(); got != "custom:patrol" {
-		t.Fatalf("discovery model should fall back to the Patrol model, got %q", got)
-	}
-
-	cfg.DiscoveryModel = "custom:discovery"
-	if got := cfg.GetDiscoveryModel(); got != "custom:discovery" {
-		t.Fatalf("custom discovery model = %q", got)
-	}
-
-	cfg = &AIConfig{}
 	if got := cfg.GetControlLevel(); got != ControlLevelReadOnly {
 		t.Fatalf("default control level = %q", got)
 	}
@@ -113,18 +94,7 @@ func TestAIConfig_PatrolSettings(t *testing.T) {
 	}
 }
 
-func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
-	cfg := &AIConfig{}
-	if guests := cfg.GetProtectedGuests(); len(guests) != 0 {
-		t.Fatalf("expected empty protected guests, got %v", guests)
-	}
-
-	cfg.ProtectedGuests = []string{"vm-100", "vm-200"}
-	guests := cfg.GetProtectedGuests()
-	if len(guests) != 2 || guests[0] != "vm-100" {
-		t.Fatalf("unexpected protected guests: %v", guests)
-	}
-
+func TestAIConfig_ControlAndPatrolLevelValidation(t *testing.T) {
 	if IsValidControlLevel("bad") {
 		t.Fatalf("expected invalid control level to be false")
 	}
@@ -200,36 +170,4 @@ func TestDefaultModelForProvider(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestAIConfig_DiscoverySettings(t *testing.T) {
-	t.Run("enabled flag passthrough", func(t *testing.T) {
-		cfg := &AIConfig{DiscoveryEnabled: true}
-		if !cfg.IsDiscoveryEnabled() {
-			t.Fatalf("expected discovery to be enabled")
-		}
-		cfg.DiscoveryEnabled = false
-		if cfg.IsDiscoveryEnabled() {
-			t.Fatalf("expected discovery to be disabled")
-		}
-	})
-
-	t.Run("interval manual when hours are non-positive", func(t *testing.T) {
-		cfg := &AIConfig{DiscoveryIntervalHours: 0}
-		if got := cfg.GetDiscoveryInterval(); got != 0 {
-			t.Fatalf("expected manual interval (0), got %v", got)
-		}
-
-		cfg.DiscoveryIntervalHours = -2
-		if got := cfg.GetDiscoveryInterval(); got != 0 {
-			t.Fatalf("expected manual interval (0) for negative hours, got %v", got)
-		}
-	})
-
-	t.Run("interval converts hours to duration", func(t *testing.T) {
-		cfg := &AIConfig{DiscoveryIntervalHours: 6}
-		if got := cfg.GetDiscoveryInterval(); got != 6*time.Hour {
-			t.Fatalf("expected 6h interval, got %v", got)
-		}
-	})
 }

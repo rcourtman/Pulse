@@ -96,26 +96,31 @@ func collectPVENodeNetworkInterfaces(
 	return mapPVENodeNetworkInterfaces(interfaces)
 }
 
-func (m *Monitor) canCarryForwardNodeMemory(instance, node string, now time.Time) bool {
+// carryForwardNodeMemory returns the node's last memory reading from this
+// poller's own snapshot when that reading came from a trusted source recently
+// enough to stand in for one failed status read. The unified read state is not
+// used here: on a node merged with a host agent it holds the agent's reading,
+// not the Proxmox value this snapshot vouches for.
+func (m *Monitor) carryForwardNodeMemory(instance, node string, now time.Time) (models.Memory, bool) {
 	if m == nil {
-		return false
+		return models.Memory{}, false
 	}
 	m.diagMu.RLock()
 	snapshot, ok := m.nodeSnapshots[makeNodeSnapshotKey(instance, node)]
 	m.diagMu.RUnlock()
 	if !ok || !snapshot.Memory.HasKnownUsage() || snapshot.RetrievedAt.IsZero() {
-		return false
+		return models.Memory{}, false
 	}
 	age := now.Sub(snapshot.RetrievedAt)
 	if age < 0 || age > nodeMemoryCarryForwardMaxAge {
-		return false
+		return models.Memory{}, false
 	}
 	switch CanonicalMemorySource(snapshot.MemorySource) {
 	case "available-field", "derived-free-buffers-cached", "derived-total-minus-used",
 		"rrd-memavailable", "rrd-memused":
-		return true
+		return snapshot.Memory, true
 	default:
-		return false
+		return models.Memory{}, false
 	}
 }
 
@@ -126,7 +131,6 @@ func (m *Monitor) pollPVENode(
 	client PVEClientInterface,
 	node proxmox.Node,
 	connectionHealthStr string,
-	prevNodeMemory map[string]models.Memory,
 	prevInstanceNodes []models.Node,
 ) (models.Node, string, string, error) {
 	nodeStart := time.Now()
@@ -314,10 +318,8 @@ func (m *Monitor) pollPVENode(
 	}
 
 	// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available
-	if !memoryUpdated &&
-		effectiveStatus == "online" &&
-		m.canCarryForwardNodeMemory(instanceName, node.Node, time.Now()) {
-		if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.HasKnownUsage() {
+	if !memoryUpdated && effectiveStatus == "online" {
+		if prevMem, ok := m.carryForwardNodeMemory(instanceName, node.Node, time.Now()); ok {
 			total := int64(node.MaxMem)
 			if total == 0 {
 				total = prevMem.Total
@@ -326,14 +328,14 @@ func (m *Monitor) pollPVENode(
 			if total > 0 && used > total {
 				used = total
 			}
-			free := total - used
-			if free < 0 {
-				free = 0
-			}
+			// Keep the snapshot's used | cache | free split summing to total.
+			cache := min(max(prevMem.Cache, 0), max(total-used, 0))
+			free := max(total-used-cache, 0)
 
 			preserved := prevMem
 			preserved.Total = total
 			preserved.Used = used
+			preserved.Cache = cache
 			preserved.Free = free
 			preserved.Usage = safePercentage(float64(used), float64(total))
 

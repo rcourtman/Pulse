@@ -550,7 +550,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               <div class="text-sm font-semibold text-base-content">Uninstall commands</div>
               <p class="text-xs text-muted">
                 Removing the source forgets it from Pulse. Uninstall the agent on the host as well
-                if you want to detach it completely.
+                if you want to detach it completely. The commands use the host's saved connection
+                and credentials, not a new installation token.
               </p>
             </div>
 

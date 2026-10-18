@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "ce2111c089b451fb59f410f180b979ba95619b1c",
+  "verified_at": "2026-10-05T16:59:02.182220Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "0b5db44ee2a4f393ebac64cc9900721a3dac880b10f0b0cf1fd43b9eb07f0304"
+  },
+  "routes": [
+    "/browser-tests/resource-guest-safety.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Fresh final-content checks after the type-only shared input correction. Real canonical drawer/Discovery client and CSS with synthetic local HTTP only; Chromium 141.0.7390.37 and dark touch WebKit 26.0, Playwright 1.56.1 matches the integration lock.",
+    "Both viewports cover empty saved data during backup, same-ID clearance with no automatic scan, then retained legacy timeout with reported availability re-pausing the same control. Three checks per engine, no POST, page errors or off-origin requests; browser/server closure confirmed.",
+    "Both captures inspected: backup-safety notice and guide wrap beside a visible, disabled Discovery control; the 320px page has no horizontal overflow.",
+    "Two earlier phone admissions returned gateway restarting before execution and no operation started. This successful fresh admission followed the completed corrected-source proof; it does not diagnose the restart or clear earlier stopped/unknown browser operations.",
+    "The earlier own-parent receipt remains valid for the four unchanged canonical production files and their complete saved-result/explicit-action matrix. This receipt verifies only the changed shared helper final content.",
+    "No native QGA, backup, thaw, every-covered-filesystem writes, liveness, prior-active-only resumption, physical phone, installation, publication or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard Manage -> Open analysis; reactive same-ID provider snapshots retain the actual Discovery control and revoke/restore its disabled state without dispatch.",
+    "Desktop and phone capture/DOM checks use the exact optional-evidence helper content hashed here. No earlier completed matrix or unavailable executed operation was replayed."
+  ]
+}

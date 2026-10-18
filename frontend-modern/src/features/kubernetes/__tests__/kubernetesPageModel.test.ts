@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import {
+  getKubernetesNodeAttentionRank,
+  getKubernetesNodesNeedingAttention,
+  splitKubernetesNameTail,
+  isSingleKubernetesCluster,
+  kubernetesScopeDisplayLabel,
+} from '../kubernetesPageModel';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
@@ -43,6 +51,76 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('kubernetesPageModel', () => {
+  it('shows the namespace alone when one cluster is in view', () => {
+    const inCluster = (id: string, clusterName: string, namespace?: string) =>
+      ({
+        id,
+        type: 'pod',
+        name: id,
+        kubernetes: { clusterName, ...(namespace ? { namespace } : {}) },
+      }) as unknown as Resource;
+    const services = inCluster('a', 'Production EU', 'services');
+    const clusterRole = inCluster('b', 'Production EU');
+    const otherCluster = inCluster('c', 'Staging', 'services');
+
+    expect(isSingleKubernetesCluster([services, clusterRole])).toBe(true);
+    expect(isSingleKubernetesCluster([services, otherCluster])).toBe(false);
+    expect(isSingleKubernetesCluster([])).toBe(true);
+    // Two clusters can share a display name, and a row with no cluster at all
+    // counts as its own, so neither case loses the cluster from the cell.
+    const sameNameOtherId = {
+      id: 'd',
+      type: 'pod',
+      name: 'd',
+      kubernetes: { clusterId: 'eu-2', clusterName: 'Production EU', namespace: 'services' },
+    } as unknown as Resource;
+    const euOne = {
+      id: 'e',
+      type: 'pod',
+      name: 'e',
+      kubernetes: { clusterId: 'eu-1', clusterName: 'Production EU', namespace: 'apps' },
+    } as unknown as Resource;
+    const noCluster = {
+      id: 'f',
+      type: 'pod',
+      name: 'f',
+      kubernetes: { namespace: 'apps' },
+    } as unknown as Resource;
+    expect(isSingleKubernetesCluster([euOne, sameNameOtherId])).toBe(false);
+    expect(isSingleKubernetesCluster([euOne, noCluster])).toBe(false);
+    expect(isSingleKubernetesCluster([noCluster])).toBe(true);
+
+    expect(kubernetesScopeDisplayLabel(services, true)).toBe('services');
+    expect(kubernetesScopeDisplayLabel(clusterRole, true)).toBe('Cluster');
+    // Several clusters keep the cluster in the cell so rows stay unambiguous.
+    expect(kubernetesScopeDisplayLabel(services, false)).toBe('Production EU/services');
+    expect(kubernetesScopeDisplayLabel(clusterRole, false)).toBe('Production EU');
+  });
+
+  it('splits off the generated tail that tells sibling names apart', () => {
+    expect(splitKubernetesNameTail('checkout-api-6d8f9c7b5-x7k2p')).toEqual({
+      head: 'checkout-api-6d8f9c7b5',
+      tail: '-x7k2p',
+    });
+    expect(splitKubernetesNameTail('prod-euw1-k8s-03')).toEqual({
+      head: 'prod-euw1-k8s',
+      tail: '-03',
+    });
+    expect(splitKubernetesNameTail('nightly-backfill-28918234')).toEqual({
+      head: 'nightly-backfill',
+      tail: '-28918234',
+    });
+    // No dash, a trailing dash, or a tail too long to be a generated suffix
+    // (a cloud node's domain) leaves the name whole for plain truncation.
+    expect(splitKubernetesNameTail('postgres')).toEqual({ head: 'postgres', tail: '' });
+    expect(splitKubernetesNameTail('web-')).toEqual({ head: 'web-', tail: '' });
+    expect(splitKubernetesNameTail('ip-10-0-1-23.eu-west-1.compute.internal')).toEqual({
+      head: 'ip-10-0-1-23.eu-west-1.compute.internal',
+      tail: '',
+    });
+    expect(splitKubernetesNameTail('-')).toEqual({ head: '-', tail: '' });
+  });
+
   it('declares operator workflow tabs for Kubernetes inventory', () => {
     expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
@@ -1084,5 +1162,109 @@ describe('kubernetesPageModel', () => {
       ).toEqual(['pod-payments']);
       expect(filterKubernetesIncidents(incidents, 'prod', 'all').length).toBe(2);
     });
+  });
+});
+
+describe('getKubernetesNodesNeedingAttention', () => {
+  const node = (id: string, kubernetes: Record<string, unknown>, status = 'online') =>
+    ({ id, name: id, type: 'k8s-node', status, kubernetes }) as never;
+
+  it('names NotReady nodes first, then cordoned ones, and leaves Ready nodes out', () => {
+    const nodes = [
+      node('b-ready', { ready: true }),
+      node('c-cordoned', { ready: true, unschedulable: true }),
+      node('a-down', { ready: false }),
+    ];
+
+    const result = getKubernetesNodesNeedingAttention({ nodes } as never);
+
+    expect(result.map((entry: { id: string }) => entry.id)).toEqual(['a-down', 'c-cordoned']);
+  });
+
+  // A node running a Pulse agent is an agent row whose alerts are keyed
+  // "agent:<agentId>" and labelled with its hostname.
+  const agentNode = (id: string, agentId: string, kubernetes: Record<string, unknown>) =>
+    ({
+      id,
+      name: id,
+      type: 'agent',
+      status: 'online',
+      agent: { agentId },
+      kubernetes,
+    }) as never;
+  const alert = (id: string, resourceId: string, overrides: Partial<Alert> = {}): Alert => ({
+    id,
+    type: 'memory',
+    level: 'critical',
+    resourceId,
+    resourceName: id,
+    node: id,
+    instance: '',
+    message: id,
+    value: 100,
+    threshold: 90,
+    startTime: '2026-10-06T10:00:00Z',
+    acknowledged: false,
+    ...overrides,
+  });
+
+  it('names Ready nodes with an unacknowledged open alert, critical ones with NotReady', () => {
+    const nodes = [
+      agentNode('a-ready', 'host-a', { ready: true }),
+      agentNode('b-memory', 'host-b', { ready: true }),
+      agentNode('c-cordoned', 'host-c', { ready: true, unschedulable: true }),
+      agentNode('d-down', 'host-d', { ready: false }),
+      agentNode('e-disk', 'host-e', { ready: true }),
+      agentNode('f-acked', 'host-f', { ready: true }),
+    ];
+    const activeAlerts = {
+      memory: alert('memory', 'agent:host-b'),
+      // A component alert the drawer lists counts for its node too.
+      disk: alert('disk', 'agent:host-e/disk:root', { type: 'disk', level: 'warning' }),
+      acked: alert('acked', 'agent:host-f', { acknowledged: true }),
+    };
+
+    const result = getKubernetesNodesNeedingAttention({ nodes } as never, activeAlerts, true);
+
+    // Within a rank, node state orders: NotReady ahead of a Ready node.
+    expect(result.map((entry: { id: string }) => entry.id)).toEqual([
+      'd-down',
+      'b-memory',
+      'c-cordoned',
+      'e-disk',
+    ]);
+    // With alert detection off the list falls back to node state alone.
+    expect(
+      getKubernetesNodesNeedingAttention({ nodes } as never, activeAlerts, false).map(
+        (entry: { id: string }) => entry.id,
+      ),
+    ).toEqual(['d-down', 'c-cordoned']);
+  });
+
+  it('counts alerts keyed on a node without an agent by its own id', () => {
+    // Unified Kubernetes metric and incident alerts carry the resource id and
+    // the cluster as their node.
+    const nodes = [node('k8s-node-a', { ready: true }), node('k8s-node-b', { ready: true })];
+    const activeAlerts = {
+      cpu: alert('cpu', 'k8s-node-b', { type: 'cpu', level: 'warning', node: 'prod-west' }),
+    };
+
+    expect(
+      getKubernetesNodesNeedingAttention({ nodes } as never, activeAlerts, true).map(
+        (entry: { id: string }) => entry.id,
+      ),
+    ).toEqual(['k8s-node-b']);
+  });
+
+  it('ranks a node by the stronger of its state and its open alerts', () => {
+    const ready = agentNode('ready', 'host-ready', { ready: true });
+    const cordoned = agentNode('cordoned', 'host-cordoned', { ready: true, unschedulable: true });
+    const warning = { w: alert('w', 'agent:host-ready', { level: 'warning' }) };
+    const critical = { c: alert('c', 'agent:host-cordoned') };
+
+    expect(getKubernetesNodeAttentionRank(ready, {}, true)).toBe(2);
+    expect(getKubernetesNodeAttentionRank(ready, warning, true)).toBe(1);
+    expect(getKubernetesNodeAttentionRank(cordoned, {}, true)).toBe(1);
+    expect(getKubernetesNodeAttentionRank(cordoned, critical, true)).toBe(0);
   });
 });

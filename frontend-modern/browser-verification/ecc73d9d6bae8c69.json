@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5456291cfe9c7301dbb87407d08bf28c57540dfc",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "c12816c418af01e7cb3cb6834f1ad9ced1b9bd8e427122ea6b5951907328dda6",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "8db75c3c3c8e1abfc116aab729116da99182a9999c08b88d68e6b810ada9b1aa"
+  },
+  "routes": [
+    "Workloads VM row and full drawer (synthetic observations)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis"
+  ],
+  "states": [
+    "Windows missing read",
+    "Android retained read, quantitative values last known/no utilization bar",
+    "Provider-disabled agent",
+    "Unknown reason without raw-detail disclosure",
+    "Same guest current read removes uncertainty link/restores utilization bar"
+  ],
+  "interactions": [
+    "Keyboard Enter on desktop disclosure and help link",
+    "Trusted phone row tap and help link",
+    "Follow real Docs renderer and fragment destination; no off-origin or mutating requests"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-06T03:31:56.248Z",
+  "evidence": {
+    "script": "frontend-modern/browser-tests/guest-reading-help.cjs",
+    "script_sha256": "05cd1bce89467fe3918f748ea9dc1762f88bb8a7dcfc609f741a3332879804f2",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "chromium-desktop",
+        "browser": "141.0.7390.37",
+        "width": 1365
+      },
+      {
+        "name": "webkit-phone",
+        "browser": "26.0",
+        "width": 390
+      }
+    ],
+    "captures": [
+      {
+        "file": "chromium-desktop-missing-windows.png",
+        "sha256": "a9d2ce9280f8fa889d85a9c0d18ba32391dba23a1a0bacae4df2a5c9527798fa"
+      },
+      {
+        "file": "chromium-desktop-retained-android.png",
+        "sha256": "7770bfe63ff9d85531a4fac6effe9e6c34ebec539b68d58e91e7b692534ea0e0"
+      },
+      {
+        "file": "chromium-desktop-disabled.png",
+        "sha256": "81acb12c2404d612f994f0225caa71d878548bfb3eb6490013d67577164a3346"
+      },
+      {
+        "file": "chromium-desktop-unknown.png",
+        "sha256": "b1391965160966eac56393a6c091c765cd11d362861b2efc3e897c3ef73d1787"
+      },
+      {
+        "file": "webkit-phone-missing-windows.png",
+        "sha256": "f20d99d128b525ce2e6f4b26c124adc459ba9f871b80b7661a32c9053cbd6dfa"
+      },
+      {
+        "file": "webkit-phone-retained-android.png",
+        "sha256": "0ce9f5109d283a7501e92befb3fb01cdc44ae84a35604be70a44d94f59dc7277"
+      },
+      {
+        "file": "webkit-phone-disabled.png",
+        "sha256": "fd18d29e47d084abce6087114c1a10a94a49fbb21083f7cfc6ce8b81e3919d16"
+      },
+      {
+        "file": "webkit-phone-unknown.png",
+        "sha256": "5ff1adb04abc9e80121a34fa1bf84891f9bc1fdeb878ded1d05e882445b476c9"
+      }
+    ],
+    "limits": "Static production-component preview with synthetic observations/APIs. No native guest, collector, cause, thaw, writes, restart, installed or release acceptance."
+  }
+}

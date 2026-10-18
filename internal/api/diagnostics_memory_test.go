@@ -356,7 +356,7 @@ func TestComputeDiagnostics_DiscoveryUsesStructuredErrorOwnership(t *testing.T) 
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor := newMonitorForDiagnostics(t, cfg)
 
-	service := discoverysvc.NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+	service := discoverysvc.NewService(nil, "default", time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
 	})
 	cache := &discoverysvc.DiscoveryCache{}

@@ -6,7 +6,7 @@ interface TlsVerificationWarningBannerProps extends JSX.HTMLAttributes<HTMLDivEl
 }
 
 const bannerClass =
-  'rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200';
+  'rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200';
 
 export function TlsVerificationWarningBanner(props: TlsVerificationWarningBannerProps) {
   const [local, rest] = splitProps(props, ['subject', 'remediation', 'class']);

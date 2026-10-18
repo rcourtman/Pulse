@@ -158,7 +158,6 @@ function mockBackupAPIs(
       verificationWindowSeconds: 604800,
       requireVerification: true,
     },
-    meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
   });
 }
 
@@ -271,6 +270,53 @@ describe('ProxmoxBackupsTable', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
+  it('shows host cells once for a server with several datastores', async () => {
+    mockBackupAPIs();
+    const twoStores = {
+      ...pbsServerResource,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        datastores: [
+          ...pbsServerResource.pbs!.datastores!,
+          { name: 'offsite', total: 20_000, used: 5_000, available: 15_000, usagePercent: 25 },
+        ],
+      },
+    } as Resource;
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[twoStores]}
+      />
+    ));
+    await screen.findByText('offsite');
+    const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
+    const columns = Array.from(table.querySelectorAll('col')).map((col) =>
+      col.getAttribute('data-proxmox-backups-column'),
+    );
+    const dataRows = () =>
+      Array.from(table.querySelectorAll('tbody tr')).filter(
+        (row) => row.querySelectorAll('td').length === columns.length,
+      );
+    const cellText = (row: number, column: string) => {
+      expect(columns).toContain(column);
+      return dataRows()[row].querySelectorAll('td')[columns.indexOf(column)].textContent?.trim();
+    };
+
+    // Two datastores of one server read as one server, not two identical ones:
+    // the host cells sit on its first row, and the second row keeps its name
+    // and its own datastore figures.
+    expect(dataRows()).toHaveLength(2);
+    expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
+    for (const column of ['status', 'version', 'cpu', 'memory', 'uptime']) {
+      expect(cellText(0, column)).not.toBe('');
+      expect(cellText(1, column)).toBe('');
+    }
+    expect(cellText(0, 'datastore')).toBe('main');
+    expect(cellText(1, 'datastore')).toBe('offsite');
+    expect(cellText(1, 'used')).toContain('25');
+  });
+
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {
     const pbs = {
       ...pbsServerResource,
@@ -346,7 +392,6 @@ describe('ProxmoxBackupsTable', () => {
         verificationWindowSeconds: 604800,
         requireVerification: true,
       },
-      meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
     });
 
     await waitFor(() =>
@@ -574,6 +619,62 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
+  it('lets a backup health count filter Coverage to those workloads', async () => {
+    // "17 attention" was text: finding which workloads it counted took the
+    // Filters sheet on a phone.
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    const attention = await screen.findByRole('button', { name: '1 attention' });
+    expect(attention).toHaveAttribute('aria-pressed', 'false');
+    // A zero count would open an empty list, so it stays text.
+    expect(screen.queryByRole('button', { name: '0 unprotected' })).toBeNull();
+    expect(screen.getByText('unprotected')).toBeInTheDocument();
+
+    await fireEvent.click(attention);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+    });
+    expect(screen.getByRole('button', { name: '1 attention' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
+
+    // Toggling off keeps the same focused control rather than rebuilding it.
+    const pressed = screen.getByRole('button', { name: '1 attention' });
+    pressed.focus();
+    await fireEvent.click(pressed);
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('posture')).toBeNull(),
+    );
+    expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+    expect(pressed).toHaveAttribute('aria-pressed', 'false');
+    expect(pressed).toHaveFocus();
+  });
+
+  it('pins Coverage when a health count is used on the bare Backups route', async () => {
+    // Coverage was chosen only because something needs attention; without the
+    // route segment the view would flip to By date once the counts reached zero.
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await fireEvent.click(await screen.findByRole('button', { name: '1 attention' }));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+    });
+  });
+
   it('switches to Coverage showing posture, and keeps per-source evidence in the row expansion', async () => {
     mockBackupAPIs();
 
@@ -714,10 +815,6 @@ describe('ProxmoxBackupsTable', () => {
       'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
     );
     expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
     expect(proxmoxPageSurfaceSource).toContain('workloads={model().guests}');
     expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });
@@ -790,7 +887,7 @@ const sourceCalls = (source: 'pve' | 'pbs') =>
 describe('independent Proxmox backup inventory reads', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
   });
 
   it.each(['pve', 'pbs'] as const)(
@@ -1167,7 +1264,7 @@ describe('backup-identity: connected Coverage and By date', () => {
         }),
       ),
     );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
     vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
   };
   afterEach(() => vi.restoreAllMocks());

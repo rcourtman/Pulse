@@ -174,12 +174,24 @@ const cloneBackupDefaults = (backupDefaults: BackupAlertConfig): BackupAlertConf
   ignoreVMIDs: [...(backupDefaults.ignoreVMIDs ?? [])],
 });
 
+// Off is written as 0. The editors stage -1 for Off, but the backend reads a
+// negative default trigger as unset and restores the factory threshold, so a
+// saved -1 came back On.
 const createHysteresisThreshold = (trigger: number | undefined, clearMargin = 5) => {
-  const normalized = typeof trigger === 'number' ? trigger : 0;
+  const normalized = typeof trigger === 'number' && trigger > 0 ? trigger : 0;
   return {
     trigger: normalized,
     clear: Math.max(0, normalized - clearMargin),
   };
+};
+
+// Unset leaves TrueNAS disks on Disk temperature by type, so it is omitted
+// rather than written as a trigger. Off is written as 0: the backend reads a
+// negative trigger as unset.
+const buildTrueNASDiskDefaultsConfig = (temperature: number | undefined) => {
+  if (temperature === undefined) return {};
+  if (temperature <= 0) return { temperature: { trigger: 0, clear: 0 } };
+  return { temperature: createHysteresisThreshold(temperature) };
 };
 
 const normalizeGap = (value: unknown, fallback: number) => {
@@ -216,6 +228,22 @@ const normalizeWarningCriticalPair = (
   return {
     warning: finalWarning,
     critical: finalCritical,
+  };
+};
+
+// Backup and snapshot ages, as the backend reads them: each level is Off at 0
+// (the editor's Off toggle stages -1), and a warning above a set critical
+// drops to it. Unlike sizes, a critical age left Off stays Off; raising it to
+// the warning age made backups go critical at the warning age.
+const normalizeAgeWarningCriticalPair = (
+  warning: number | undefined,
+  critical: number | undefined,
+): { warning: number; critical: number } => {
+  const safeWarning = Math.max(0, warning ?? 0);
+  const safeCritical = Math.max(0, critical ?? 0);
+  return {
+    warning: safeCritical > 0 && safeWarning > safeCritical ? safeCritical : safeWarning,
+    critical: safeCritical,
   };
 };
 
@@ -410,10 +438,10 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.truenasDiskDefaults) {
+    // Unset means each TrueNAS disk follows Disk temperature by type.
+    const temperature = config.truenasDiskDefaults.temperature;
     snapshot.trueNASDiskDefaults = {
-      temperature:
-        getTriggerValue(config.truenasDiskDefaults.temperature) ??
-        FACTORY_TRUENAS_DISK_DEFAULTS.temperature,
+      temperature: temperature === undefined ? undefined : getTriggerValue(temperature),
     };
   }
 
@@ -550,7 +578,7 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.backupDefaults) {
-    const normalizedPair = normalizeWarningCriticalPair(
+    const normalizedPair = normalizeAgeWarningCriticalPair(
       config.backupDefaults.warningDays,
       config.backupDefaults.criticalDays,
     );
@@ -573,7 +601,7 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.snapshotDefaults) {
-    const normalizedPair = normalizeWarningCriticalPair(
+    const normalizedPair = normalizeAgeWarningCriticalPair(
       config.snapshotDefaults.warningDays,
       config.snapshotDefaults.criticalDays,
     );
@@ -733,7 +761,7 @@ export function buildAlertsConfigurationPayload({
     };
   }
 
-  const normalizedSnapshotPair = normalizeWarningCriticalPair(
+  const normalizedSnapshotPair = normalizeAgeWarningCriticalPair(
     snapshot.snapshotDefaults.warningDays,
     snapshot.snapshotDefaults.criticalDays,
   );
@@ -741,7 +769,7 @@ export function buildAlertsConfigurationPayload({
     snapshot.snapshotDefaults.warningSizeGiB,
     snapshot.snapshotDefaults.criticalSizeGiB,
   );
-  const normalizedBackupPair = normalizeWarningCriticalPair(
+  const normalizedBackupPair = normalizeAgeWarningCriticalPair(
     snapshot.backupDefaults.warningDays,
     snapshot.backupDefaults.criticalDays,
   );
@@ -844,9 +872,8 @@ export function buildAlertsConfigurationPayload({
         networkIn: createHysteresisThreshold(snapshot.trueNASDefaults.networkIn),
         networkOut: createHysteresisThreshold(snapshot.trueNASDefaults.networkOut),
       },
-      truenasDiskDefaults: {
-        temperature: createHysteresisThreshold(snapshot.trueNASDiskDefaults.temperature),
-      },
+      truenasDiskDefaults: buildTrueNASDiskDefaultsConfig(snapshot.trueNASDiskDefaults.temperature),
+      truenasDiskTemperatureByType: true,
       vmwareDefaults: {
         cpu: createHysteresisThreshold(snapshot.vmwareDefaults.cpu),
         memory: createHysteresisThreshold(snapshot.vmwareDefaults.memory),

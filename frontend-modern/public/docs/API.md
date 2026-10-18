@@ -17,7 +17,8 @@ secret does not appear in shell history or process arguments.
 
 On a trusted machine, as the account running curl, prepare the file and open
 it in an editor. This preserves an existing file, restricts its directory and
-stops before editing if preparation fails or a credential path is a symlink:
+stops before editing if preparation fails or a credential path is symlinked or
+not a regular file:
 
 ```bash
 (
@@ -27,6 +28,10 @@ stops before editing if preparation fails or a credential path is a symlink:
   auth_file="$auth_dir/api-header"
   if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
     printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$auth_file" ] && [ ! -f "$auth_file" ]; then
+    printf 'Credential file must be a regular file.\n' >&2
     exit 1
   fi
   mkdir -p "$auth_dir"
@@ -43,20 +48,91 @@ In the editor, save just this line, replacing `<token>` with the API token:
 X-API-Token: <token>
 ```
 
-Then make a read-only request (curl 7.76 or later):
+Define this helper in the same Bash session (curl 7.76 or later). The examples
+on this page use it to make **one request**, print only the HTTP status and save
+each response to a new owner-only file. This keeps resource names, audit details
+and credential-bearing error bodies out of terminal output and recordings.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/state/summary
+pulse_api() (
+  set -eu
+  umask 077
+  if [ "$#" -ne 2 ]; then
+    printf 'Usage: pulse_api GET|POST|PUT|DELETE /api/path\n' >&2
+    exit 2
+  fi
+  method=$1
+  api_path=$2
+  case "$api_path" in
+    /api/*) ;;
+    *) printf 'Use an API path on this Pulse instance, not a full URL.\n' >&2; exit 2 ;;
+  esac
+  case "$method" in
+    GET) set -- ;;
+    POST) set -- --header 'Content-Type: application/json' --request POST --data-binary @- ;;
+    PUT) set -- --header 'Content-Type: application/json' --request PUT --data-binary @- ;;
+    DELETE) set -- --request DELETE ;;
+    *) printf 'This example helper accepts only GET, POST, PUT and DELETE.\n' >&2; exit 2 ;;
+  esac
+  auth_dir="$HOME/.config/pulse"
+  auth_file="$auth_dir/api-header"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ] || [ ! -f "$auth_file" ]; then
+    printf 'Prepare a regular, private header file first.\n' >&2
+    exit 1
+  fi
+  chmod 700 "$auth_dir" || exit "$?"
+  chmod 600 "$auth_file" || exit "$?"
+  result_file=$(mktemp "$auth_dir/api-response.XXXXXX") || exit "$?"
+  curl_exit=0
+  status=$(curl --disable --fail-with-body --silent --show-error \
+    --proto '=http' --noproxy 127.0.0.1 --connect-timeout 5 --max-time 20 \
+    --header "@$auth_file" --output "$result_file" --write-out '%{http_code}' \
+    "$@" "http://127.0.0.1:7655$api_path") || curl_exit=$?
+  printf 'HTTP %s\nPrivate response: %s\n' "$status" "$result_file"
+  [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+  case "$status" in
+    2??) ;;
+    *) exit 1 ;;
+  esac
+)
 ```
 
-This loopback URL applies only when curl runs on the Pulse host. For remote
-access, use your Pulse HTTPS URL and keep certificate verification enabled;
-do not use `--insecure`. On an authentication-enabled instance, the protected
-summary checks token access; `/api/health` is public and does not verify authentication.
-`--fail-with-body` returns a non-zero exit on HTTP errors, including 401 and
-403, while retaining the error response. Keep `--disable` first: it ignores
-local curl configuration that could otherwise enable credential-bearing trace output.
+Then make a read-only request with a `monitoring:read` token:
+
+```bash
+pulse_api GET /api/state/summary
+```
+
+The default loopback origin applies only when curl runs on the Pulse host and
+explicitly bypasses proxy environment settings. For remote access, replace
+`http://127.0.0.1:7655` **in the helper** with your Pulse HTTPS origin, and replace
+`--proto '=http' --noproxy 127.0.0.1` with `--proto '=https'`. Keep certificate
+verification enabled; for a private CA, add `--cacert` with a CA file you
+verified separately, never `--insecure`. Do not put credentials in the URL.
+
+Open the reported response file privately to inspect it, including on failure;
+share only the relevant redacted error, not the whole response or file. Each
+call preserves earlier responses. HTTP 401 and 403 return curl's non-zero exit
+and retain the error body; redirects are not followed and are not success.
+The connection limit is five seconds and the whole request limit is twenty
+seconds. A partial file after a transport error is not a complete result.
+No request is retried automatically, especially a POST whose outcome is
+uncertain: inspect the existing action and target before deciding what to do.
+A 2xx response is only HTTP success, not proof that an action completed.
+
+The helper also supports the existing [RBAC administration examples](RBAC.md#managing-roles).
+POST and PUT read their JSON body from standard input; GET and DELETE send no
+body. A method being supported is not permission to change a resource. Choose
+each administrative change separately and check its current state afterwards.
+A timeout or incomplete response can occur **after a change was applied**;
+do not repeat a POST, PUT or DELETE merely because the response was lost.
+
+Keep `--disable` first: it ignores local curl configuration that could enable
+trace output, bypass TLS or follow redirects. On an authentication-enabled
+instance, the protected summary checks token access; `/api/health` is public
+and does not verify authentication. The helper is local example code, not an
+installed Pulse command; define it again in a new shell before using these
+examples. Dispose of response files under your normal private-data policy.
 
 Do not paste tokens into command lines, URLs or issue reports. Keep the header
 file private and outside shared repositories and diagnostics; do not use curl
@@ -67,7 +143,7 @@ needed in Pulse's API Access settings.
 ### Bearer Token
 
 The same API token can use a Bearer header instead. Replace the header file's
-line in the editor with the following, then use the same curl command above;
+line in the editor with the following, then use the same helper above;
 do not send both authentication headers:
 
 ```text
@@ -83,7 +159,7 @@ State-changing session requests also require Pulse's CSRF protection, which
 the UI handles.
 
 Session endpoints:
-- `POST /api/login` (sets `pulse_session` + `pulse_csrf`)
+- `POST /api/login` (sets the session cookie, `pulse_session` over plain HTTP or `__Host-pulse_session` over HTTPS, plus `pulse_csrf`)
 - `POST /api/logout` (clears session)
 
 Login body:
@@ -95,7 +171,7 @@ Public endpoints include:
 - `GET /api/health`
 - `GET /api/version`
 - `GET /api/agent/version` (agent update checks)
-- `GET /api/setup-script` (requires a setup token)
+- `GET /api/setup-script` (public; the generated script prompts for its setup token at runtime and skips auto-registration if none is supplied)
 
 ## 🔏 Scopes and Admin Access
 
@@ -110,6 +186,14 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `audit:read`
 
 Endpoints that require admin access are noted below.
+
+Admin endpoints are instance administration unless they act only on the
+request organization. On instance administration an API token must not be
+bound to any organization other than the default one: a token bound to a
+tenant organization gets `403` whatever its scopes, as that organization's
+owner does. Endpoints that serve only the request organization, such as nodes
+and platform connections, agents, install commands, configuration transfer and
+reports, accept tokens bound to that organization with the listed scope.
 
 ---
 
@@ -184,7 +268,7 @@ Lightweight HTML status page for quick checks.
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
 
 Query params:
-- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
+- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
 - `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
 - `excludeSource`: comma-separated list of sources that must not be present on a matching resource
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
@@ -205,7 +289,45 @@ canonical `verdict` and stable `reasons` (`code` plus optional compact
 `detail`). Consumers should use this envelope for cross-platform posture
 instead of deriving health from provider-specific status strings.
 
-Note: guest disk usage percentages use `-1` as an "unknown" sentinel — reported when a VM is stopped or its guest agent is unavailable, so there is no filesystem view to measure. Consumers should treat negative values as "no data", not as a percentage; the accompanying `diskStatusReason` field (e.g. `vm-stopped`, `agent-disabled`) says why.
+#### Guest readings: availability and age
+
+In legacy VM payloads, `disk.usage: -1` means unavailable, not negative usage.
+In `GET /api/resources` and `GET /api/resources/{id}`, an unavailable disk
+reading is omitted as `metrics.disk`. **Do not replace an absent metric with
+zero**; a genuinely observed zero is valid. Allocated virtual-disk capacity
+alone does not establish used space inside the guest.
+
+Read `proxmox.diskStatusReason` alongside the value. A `prev-` reason means
+retained disk evidence, not a fresh reading. `agent-not-running` can also
+represent a general guest-agent HTTP 500 error: it does not establish that the
+guest's service is absent or stopped. An absent reason alone does not prove
+freshness either.
+
+For memory, use `metrics.memory.observation` for the **selected metric's**
+source and age, not a different source's retained `proxmox.memory` facet:
+
+| Observation `state` | Meaning for the consumer |
+| --- | --- |
+| `current` | Accepted source observation; a normal cache hit can keep the original `observedAt`. Check its age for your use. |
+| `last-known` | Retained evidence, not a new measurement. Keep its original age visible; do not record it as a fresh sample. |
+| `unavailable` | No usable usage observation; do not treat retained numbers or zero-valued fields as a measurement. |
+| Missing or unrecognised | Freshness is unknown, including older payloads without an observation. Do not infer `current`. |
+
+`observedAt` belongs to that source observation. If it is absent or in the
+future, its age is unknown; do not substitute the resource's `lastSeen` or
+`updatedAt`. In the raw `proxmox.memory` facet, `usageUnavailable: true` can
+preserve known capacity without measured usage. An absent `metrics.memory`
+is not 0% usage. Conversely, an independently observed PVE or Pulse-agent
+memory reading can remain current while QEMU disk collection is deferred;
+disk state is not memory provenance.
+
+A running VM, an advancing row timestamp or an OK backup does not prove fresh
+guest readings or successful thaw. Do not install or restart an agent or send
+live guest-agent probes merely to fill these gaps, especially during a backup,
+freeze/thaw or an unresponsive-guest incident. Follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+and [missing-reading guidance](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis).
+Recovery needs independent thaw, fresh successful writes to every covered
+filesystem and workload liveness; retained API values cannot establish it.
 
 Availability is an additive resource facet. `availability` is the compatibility
 summary used by existing clients; `availabilityChecks` contains every check
@@ -242,19 +364,19 @@ Returns child resources for the parent ID.
 `GET /api/resources/{id}/metrics`
 Returns the resource metrics payload.
 
-`POST /api/resources/{id}/link`
+`POST /api/resources/{id}/link` (`monitoring:write`)
 Manually link two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/resources/{id}/unlink`
+`POST /api/resources/{id}/unlink` (`monitoring:write`)
 Manually unlink two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/resources/{id}/report-merge`
+`POST /api/resources/{id}/report-merge` (`monitoring:write`)
 Report an incorrect merge (creates exclusions).
 ```json
 { "sources": ["proxmox", "agent"], "notes": "optional note" }
@@ -326,12 +448,11 @@ Returns the canonical fleet connections ledger with per-row fleet-governance sta
 
 The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
 
-Use the private header file prepared in [Authentication](#-authentication),
+Define the private-response helper in [Authentication](#-authentication),
 with `settings:read` on the token:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/connections
+pulse_api GET /api/connections
 ```
 
 ### Unified Action Planning
@@ -339,9 +460,10 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
 The existing action API separates planning, approval and execution. Run these
 steps separately, inspecting each response before moving on; do not paste the
 whole sequence as an unattended recovery script. Use the private header file
-from [Authentication](#-authentication), not a token in a command or environment
-assignment. For remote access, replace the loopback origin with your Pulse HTTPS
-URL and keep certificate verification enabled.
+and `pulse_api` helper from [Authentication](#-authentication), not a token in a
+command or environment assignment. Inspect each reported private response file
+before proceeding. For remote access, change the helper as described there,
+using your Pulse HTTPS origin with certificate verification enabled.
 
 | Endpoint | Token scope and access |
 | --- | --- |
@@ -365,8 +487,7 @@ not an action-control or audit token.
    An empty capabilities list means there is nothing to plan for that resource.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/agent/resource-capabilities/vm%3A42
+pulse_api GET /api/agent/resource-capabilities/vm%3A42
 ```
 
 2. **Plan only.** Use an advertised capability and its actual parameter schema;
@@ -375,9 +496,7 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
    authenticated credential, not a caller-supplied `requestedBy` value.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/plan <<'JSON'
+pulse_api POST /api/actions/plan <<'JSON'
 {
   "requestId": "manual-recovery-123",
   "resourceId": "vm:42",
@@ -398,9 +517,7 @@ or currently available.
    response rather than weakening the policy or creating another recovery action.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/act_.../decision <<'JSON'
+pulse_api POST /api/actions/act_.../decision <<'JSON'
 {
   "outcome": "approved",
   "reason": "Inside maintenance window",
@@ -413,9 +530,7 @@ JSON
    approval-free executable plan, use the executor's authorised header file:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/act_.../execute <<'JSON'
+pulse_api POST /api/actions/act_.../execute <<'JSON'
 {
   "reason": "Execute approved recovery",
   "planHash": "sha256:..."
@@ -431,13 +546,11 @@ resource's observed state.
 5. **Read the audit and events**, using a private header file with audit access:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  'http://127.0.0.1:7655/api/audit/actions?resourceId=vm%3A42&limit=10'
+pulse_api GET '/api/audit/actions?resourceId=vm%3A42&limit=10'
 ```
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/audit/actions/act_.../events
+pulse_api GET /api/audit/actions/act_.../events
 ```
 
 When audit logging is unavailable, use Pulse's action detail in the signed-in
@@ -484,25 +597,27 @@ Response:
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.
 
-- `GET /api/agents/metadata` (admin or `monitoring:read`)
-- `GET /api/agents/metadata/{agentId}` (admin or `monitoring:read`)
-- `PUT /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
-- `DELETE /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
+These routes do not require admin access. Any authenticated browser session can call them, and API tokens need the scope shown.
 
-- `GET /api/guests/metadata` (admin or `monitoring:read`)
-- `GET /api/guests/metadata/{guestId}` (admin or `monitoring:read`)
-- `PUT /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
-- `DELETE /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
+- `GET /api/agents/metadata` (`monitoring:read`)
+- `GET /api/agents/metadata/{agentId}` (`monitoring:read`)
+- `PUT /api/agents/metadata/{agentId}` (`monitoring:write`)
+- `DELETE /api/agents/metadata/{agentId}` (`monitoring:write`)
 
-- `GET /api/docker/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/metadata/{containerId}` (admin or `monitoring:read`)
-- `PUT /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
+- `GET /api/guests/metadata` (`monitoring:read`)
+- `GET /api/guests/metadata/{guestId}` (`monitoring:read`)
+- `PUT /api/guests/metadata/{guestId}` (`monitoring:write`)
+- `DELETE /api/guests/metadata/{guestId}` (`monitoring:write`)
 
-- `GET /api/docker/runtimes/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:read`)
-- `PUT /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
+- `GET /api/docker/metadata` (`monitoring:read`)
+- `GET /api/docker/metadata/{containerId}` (`monitoring:read`)
+- `PUT /api/docker/metadata/{containerId}` (`monitoring:write`)
+- `DELETE /api/docker/metadata/{containerId}` (`monitoring:write`)
+
+- `GET /api/docker/runtimes/metadata` (`monitoring:read`)
+- `GET /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:read`)
+- `PUT /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:write`)
+- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:write`)
 
 ### Version Info
 `GET /api/version`
@@ -529,39 +644,129 @@ Version fields are returned as plain semantic versions (no leading `v`).
 Returns a small public config payload (update channel, auto-update enabled).
 
 ### List Nodes
-`GET /api/config/nodes`
+`GET /api/config/nodes` (admin, `settings:read`)
+
+This administrative inventory covers saved **PVE, PBS and PMG connections**,
+not individual VMs or agents. Keep its response private. Use the returned
+connection `id` for updates, deletion and tests; a display name, VMID or another
+installation's node name is not that ID. Re-read the inventory before a change
+rather than guessing an ID from a list position.
 
 ### Add Node
-`POST /api/config/nodes`
+`POST /api/config/nodes` (admin, `settings:write`)
+
+Adding a connection saves credentials and enables collection; it is not a
+passive validation step. Use an existing dedicated, least-privilege platform
+token. The **Pulse API token** in the private header file authorises this
+configuration request; the **Proxmox token** in the JSON body authorises reads
+from the monitored platform. They are different credentials. Do not use a root
+password or widen a department-scoped token to make denied peer reads succeed;
+follow the [scoped-access checks](TROUBLESHOOTING.md#check-permissions-proxmox).
+For PBS and PMG, use their [PBS](PBS.md#method-1-api-only-connection-recommended)
+and [PMG](MAIL_GATEWAY.md) token guidance. PBS password-based onboarding can
+also try to create a token and ACLs on the PBS server; it is not read-only.
+
+Prepare the request in a private editor, not a credential-bearing shell
+assignment, here-document or command argument. Use the same Bash session as
+the [private-response helper](#api-token-recommended):
+
+```bash
+node_request_dir=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/pulse-node.XXXXXX") &&
+node_request_file="$node_request_dir/node.json" &&
+(umask 077; set -C; : > "$node_request_file") &&
+vi "$node_request_file"
+```
+
+If preparation or the editor fails, stop. In that editor, enter the following
+JSON, replacing the example hostname, connection name, full platform token ID
+(`user@realm!token`) and token-secret placeholder with your intended values:
+
 ```json
 {
   "type": "pve",
-  "name": "Proxmox 1",
-  "host": "https://198.51.100.10:8006",
-  "user": "root@pam",
-  "password": "password"
+  "name": "PVE connection A",
+  "host": "https://pve.example.net:8006",
+  "tokenName": "pulse-monitor@pve!pulse-readonly",
+  "tokenValue": "<platform-token-secret>",
+  "verifySSL": true
 }
 ```
 
-### Test Connection
-`POST /api/config/nodes/test-connection`
-Validate credentials before saving.
+Set `verifySSL` explicitly to `true`: omission on these new-connection and
+test request paths does **not** enable certificate verification. The example
+requires a certificate trusted by the Pulse server for that hostname. For a
+self-signed/private certificate, also supply `fingerprint` with the SHA-256
+certificate fingerprint verified through an independent trusted channel.
+A fingerprint merely fetched from the endpoint is not established trust.
+Do not clear an existing pin, set `verifySSL` to `false`, or change to HTTP to
+work around a certificate failure.
 
-### Test Node Config (Validation Only)
-`POST /api/config/nodes/test-config`
-Validates node config without saving.
+After reviewing this one intended configuration change, send the file:
+
+```bash
+pulse_api POST /api/config/nodes < "$node_request_file"
+```
+
+The helper retains the response privately and makes one bounded request,
+without retries. A lost response can follow a successful save: re-read the
+saved inventory before deciding whether another request is needed. HTTP success
+does not establish fresh readings for every node, guest, backup or History view.
+Keep both request and response files out of reports and shared repositories;
+remove the temporary request under your credential policy when no longer needed.
+
+### Test Connection
+`POST /api/config/nodes/test-connection` (admin, `settings:write`)
+
+Tests supplied credentials with live platform requests without saving the
+connection. Use the same private JSON-file transport and explicit TLS settings,
+only when a live connection test is appropriate; it is not a required precursor
+to filing a report. Success covers the reads performed by that test, not all
+collection permissions, guest recovery or sustained monitoring.
+
+### Test Node Config (No Save, Live Request)
+`POST /api/config/nodes/test-config` (admin, `settings:write`)
+
+This also contacts the platform using the supplied credentials; **no save**
+does not mean offline schema validation. Do not run either test merely to
+collect new evidence during a freeze/thaw, backup or unresponsive-host incident.
+Use existing observations and the [safe diagnostic guidance](TROUBLESHOOTING.md#collect-diagnostics-safely).
 
 ### Update Node
-`PUT /api/config/nodes/{id}`
+`PUT /api/config/nodes/{id}` (admin, `settings:write`)
+
+Review the current connection and submit only the intended supported changes
+from a private JSON file. Do not copy masked credentials from a GET response
+back as new secrets. Credential rotation and trust changes are separate
+decisions; preserve the existing credential and fingerprint when not changing
+them. A response failure does not prove the update was unapplied.
 
 ### Delete Node
-`DELETE /api/config/nodes/{id}`
+`DELETE /api/config/nodes/{id}` (admin, `settings:write`)
+
+Removes the Pulse connection, not the platform workloads or the upstream token.
+Collection and related alert coverage can stop. Check the exact connection and
+arrange any needed independent coverage before an intentional removal; do not
+delete and re-add a connection to diagnose missing readings or identity mixing.
 
 ### Test Node (Legacy)
-`POST /api/config/nodes/{id}/test`
+`POST /api/config/nodes/{id}/test` (admin, `settings:write`)
+
+Uses the saved connection for a live test. It is not a passive read of its
+last result or a guarantee that ordinary collection recovered.
+
+An optional JSON body can override `verifySSL` and `fingerprint` for this test
+without changing the saved connection or credentials. Omitted fields keep their
+saved values. Send `false` to disable CA verification or `""` to clear the saved
+fingerprint for the test. A nonempty fingerprint remains enforced regardless of
+`verifySSL`. Empty-body requests keep the saved TLS settings. For example,
+`{"verifySSL":true,"fingerprint":"<SHA-256 fingerprint>"}` tests an edited pin.
 
 ### Refresh Cluster Nodes
-`POST /api/config/nodes/{id}/refresh-cluster`
+`POST /api/config/nodes/{id}/refresh-cluster` (admin, `settings:write`)
+
+Actively rediscovers a saved PVE connection's cluster membership. It does not
+select authorised nodes, grant missing permissions or repair an unrelated
+standalone installation. Keep intentional token restrictions intact.
 
 ### Export Configuration
 `POST /api/config/export` (instance admin for the default organization, tenant
@@ -607,7 +812,7 @@ node identity as the bootstrap response. The optional `backup_perms=true`
 query is supported only for `type=pve`.
 
 ### Setup Script URL
-`POST /api/setup-script-url` (auth)
+`POST /api/setup-script-url` (admin, `settings:write`)
 Generates a one-time setup token and URL for `/api/setup-script`.
 Canonical callers must send a supported `type` of `pve` or `pbs` plus a
 non-empty `host`; the backend normalizes that host before minting the setup
@@ -661,29 +866,18 @@ back to the installer or runtime-side Unified Agent:
 `{"status":"success","action":"use_token","type":"pve|pbs","source":"agent|script","host":"https://...","nodeId":"<stored-name>","nodeName":"<stored-name>",...}`.
 
 ### Agent Install Command
-`POST /api/agent-install-command` (auth)
+`POST /api/agent-install-command` (admin, `settings:write`)
 Generates an API token and install command for agent-based Proxmox setup.
 
 ### Discovery
-`GET /api/discover` (auth)
-Runs network discovery.
+`GET /api/discover` (admin, `settings:write`)
+Returns the last cached network discovery result from the background discovery service. It does not scan.
 
-### AI Discovery (Service Discovery)
-Service discovery is used by Pulse Assistant and the UI to inventory web services and enrich links.
-
-- `GET /api/discovery` (list summaries)
-- `GET /api/discovery/status`
-- `PUT /api/discovery/settings` (admin, `settings:write`)
-- `GET /api/discovery/type/{type}`
-- `GET /api/discovery/agent/{agentId}`
-- `GET /api/discovery/{type}/{targetId}/{resourceId}`
-- `POST /api/discovery/{type}/{targetId}/{resourceId}` (trigger discovery, optional `force`)
-- `DELETE /api/discovery/{type}/{targetId}/{resourceId}`
-- `GET /api/discovery/{type}/{targetId}/{resourceId}/progress`
-- `PUT /api/discovery/{type}/{targetId}/{resourceId}/notes`
+`POST /api/discover` (admin, `settings:write`)
+Runs a manual network scan. JSON body: `{"subnet": "...", "use_cache": false}`. `subnet` defaults to `auto`; `use_cache: true` returns the cached result instead of scanning.
 
 ### Test Notification
-`POST /api/test-notification` (auth)
+`POST /api/test-notification` (admin, `settings:write`)
 Broadcasts a WebSocket test event.
 
 ---
@@ -700,8 +894,8 @@ Returns time-series data for CPU, Memory, and Storage.
 Returns storage chart data.
 
 ### Storage Stats
-`GET /api/storage/`
-Detailed storage usage per node and pool.
+`GET /api/storage/{storageId}` (`monitoring:read`)
+Returns one storage resource by its `id`, wrapped as `{"data": {...}, "timestamp": 1700000000}`. The `data` object includes `id`, `name`, `node`, `instance`, `type`, `status`, `total`, `used`, `free`, `usage`, `content`, `shared`, `enabled` and `active`. Returns HTTP 404 with code `storage_not_found` for an unknown ID, and HTTP 405 for methods other than GET. A request without an ID (`GET /api/storage/`) returns HTTP 400 with code `missing_storage_id`.
 
 ### Recovery (formerly Backups / Snapshots)
 Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
@@ -733,29 +927,29 @@ points, rollups, posture, and filter semantics.
 ## 🔔 Notifications
 
 ### Send Test Notification
-`POST /api/notifications/test` (admin)
-Triggers a test alert to all configured channels.
+`POST /api/notifications/test` (admin, `settings:write`)
+Sends one test notification through a single channel per request, not all configured channels. The JSON body `method` (or `type`) selects `email`, `webhook`, or `apprise` and uses the saved configuration. `webhookId` targets one specific saved webhook. `config` tests unsaved email or Apprise settings. If alert delivery is paused, the response includes `deliveryPaused: true`.
 
 ### Email, Apprise, and Webhooks
-- `GET /api/notifications/email` (admin)
-- `PUT /api/notifications/email` (admin)
-- `GET /api/notifications/apprise` (admin)
-- `PUT /api/notifications/apprise` (admin)
-- `GET /api/notifications/webhooks` (admin)
-- `POST /api/notifications/webhooks` (admin)
-- `PUT /api/notifications/webhooks/<id>` (admin)
-- `DELETE /api/notifications/webhooks/<id>` (admin)
-- `POST /api/notifications/webhooks/test` (admin)
-- `GET /api/notifications/webhook-templates` (admin)
-- `GET /api/notifications/webhook-history` (admin)
-- `GET /api/notifications/email-providers` (admin)
+- `GET /api/notifications/email` (admin, `settings:read`; `settings:write` also accepted)
+- `PUT /api/notifications/email` (admin, `settings:write`)
+- `GET /api/notifications/apprise` (admin, `settings:read`; `settings:write` also accepted)
+- `PUT /api/notifications/apprise` (admin, `settings:write`)
+- `GET /api/notifications/webhooks` (admin, `settings:read`; `settings:write` also accepted)
+- `POST /api/notifications/webhooks` (admin, `settings:write`)
+- `PUT /api/notifications/webhooks/<id>` (admin, `settings:write`)
+- `DELETE /api/notifications/webhooks/<id>` (admin, `settings:write`)
+- `POST /api/notifications/webhooks/test` (admin, `settings:write`)
+- `GET /api/notifications/webhook-templates` (admin, `settings:read`; `settings:write` also accepted)
+- `GET /api/notifications/webhook-history` (admin, `settings:read`; `settings:write` also accepted)
+- `GET /api/notifications/email-providers` (admin, `settings:read`; `settings:write` also accepted)
 
 Email and webhook configurations accept optional `tagFilter` (an array of
 resource-tag strings) and `tagFilterMode` (`"all"` or `"any"`). An omitted
 field is preserved on update; an empty `tagFilter` clears routing and restores
 delivery for all resources.
 
-- `GET /api/notifications/health` (admin)
+- `GET /api/notifications/health` (admin, `settings:read`; `settings:write` also accepted)
   - Queue health is `degraded` whenever any retained `failed` or `dlq`
     delivery exists, and `unavailable` when queue state cannot be read.
     Recoverable failed attempts that returned to `pending` for retry do not
@@ -775,15 +969,28 @@ delivery for all resources.
   - Endpoint fails closed if URL validation runtime is unavailable.
 
 ### Advanced Reporting (Pro)
+
+Report generation uses `settings:read`. For single-resource and fleet PDF
+narration, an API token also needs `ai:execute` (or full access). Without it,
+the report still succeeds with a deterministic summary and no AI provider call;
+a single-resource PDF also explains the missing scope. Browser sessions and
+server-run schedules keep their existing narration behaviour. AI budgets still
+apply. GET and CSV never use AI narration.
+
 - `GET /api/admin/reports/catalog` (admin, `settings:read`)
   - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, enabled-surface guidance copy, performance-report options, canonical single-report filename subject, canonical fallback filename date style, and the nested VM inventory export definition.
   - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
-- `GET /api/admin/reports/generate` (admin, `settings:read`)
-  - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+- `POST /api/admin/reports/generate` (admin, `settings:read`)
+  - Body fields: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default title for that resource report.
+  - When narration is permitted and Pulse Assistant is configured, the configured AI provider narrates a PDF's executive summary; each narration counts against the AI budget and appears in AI usage. If the call fails, times out or the budget is spent, the PDF falls back to the deterministic summary. CSV output is never narrated. The settings UI uses this method.
+  - API-token callers also need the `ai:execute` scope for AI narration. With only `settings:read` the report is still produced, with the deterministic summary and a note saying why.
+- `GET /api/admin/reports/generate` (admin, `settings:read`)
+  - Takes the same fields as query params and returns the same report, except that it never calls an AI provider: a PDF carries the deterministic summary and a note saying AI narration needs `POST`. Other methods return `405` with `Allow: GET, POST`.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default fleet report title.
+  - AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used. CSV output is never narrated.
 - `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
   - Query params: `format` (`csv` only; optional and defaults to `csv`)
   - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.
@@ -793,8 +1000,8 @@ Validation and limits:
 - Malformed `start`/`end` values, `end` not strictly after `start`, or report windows over 366 days return `400 invalid_time_range`.
 - `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars, otherwise `400 invalid_metric_type`.
 - `title` must be <= 256 chars, otherwise `400 invalid_title`.
-- Multi-report body max size is 1MB; oversized payloads return `400 body_too_large`.
-- Multi-report bodies reject trailing payload and unknown JSON fields with `400 invalid_body`.
+- Report body max size is 1MB; oversized payloads return `400 body_too_large`.
+- Report bodies reject trailing payload and unknown JSON fields with `400 invalid_body`.
 - VM inventory export only accepts `csv`.
 
 Common reporting error codes:
@@ -809,12 +1016,19 @@ Common reporting error codes:
     text. Completed attempts are retained for 7 days; dead-letter attempts are
     retained for 30 days, so the response reports both windows explicitly.
   - `limit` defaults to 50 and is capped at 200.
-- `GET /api/notifications/queue/stats` (admin)
+- `GET /api/notifications/queue/stats` (admin, `settings:read` and `monitoring:read`)
   - Returns counts for all rows still retained by the queue. Status counts have
     different retention windows and are not a delivery rate or lifetime total.
 - `GET /api/notifications/dlq` (admin)
 - `POST /api/notifications/dlq/retry` (admin)
-- `POST /api/notifications/dlq/delete` (admin)
+- `POST /api/notifications/dlq/delete` (admin, `settings:write`; `DELETE` also accepted)
+  - Body: `{ "id": "<notification id>" }`. Marks that queue row `cancelled`
+    with the note "Manually deleted from DLQ"; the row is not removed and is
+    retained for 7 days like other cancelled rows. The endpoint does not check
+    that the row is in the dead-letter queue.
+  - Returns `{ "success": true, "message": "Notification deleted from DLQ",
+    "id": "<notification id>" }`. An empty or missing `id`, or an invalid JSON
+    body, returns `400`. An unknown `id` returns `500`.
 - `POST /api/notifications/terminal-failures/retry` (admin, `settings:write`)
   - Returns every retained `failed` or `dlq` delivery to `pending` with a fresh
     retry budget. Existing per-attempt delivery history is preserved.
@@ -833,7 +1047,9 @@ For an existing incident whose notifications should be paused without clearing
 it, use the snooze and unsnooze endpoints below.
 
 - `GET /api/alerts/config`
-- `PUT /api/alerts/config`
+- `PUT /api/alerts/config` — replaces only the top-level keys the body
+  carries; a key left out keeps its stored value, and the merged config is
+  normalized as before. The body must be a JSON object.
 - `GET /api/alerts/deadman/config` — returns only whether an external watchdog
   is configured; `pingUrl` is `***REDACTED***` when present and never returns
   the credential-bearing URL
@@ -857,7 +1073,7 @@ it, use the snooze and unsnooze endpoints below.
 - `POST /api/alerts/unacknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
 - `POST /api/alerts/snooze` (body: `{ "alertIdentifier": "alert-id", "until": "RFC3339 timestamp" }`; pauses delivery and escalation for up to 30 days while monitoring continues)
 - `POST /api/alerts/unsnooze` (body: `{ "alertIdentifier": "alert-id" }`; resumes normal policy without resolving the incident)
-- `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
+- `POST /api/alerts/clear` (body: `{ "alertIdentifier": "alert-id" }`)
 
 ---
 
@@ -874,6 +1090,15 @@ Returns authentication status, proxy auth state, and security posture flags.
 ```
 In Docker installs, the response includes a restart notice.
 
+Token management is instance administration, so a token bound to a tenant
+organization gets `403` on these routes. Among the tokens that remain,
+API-token callers manage only the tokens in their own organizations: every
+organization a target token is bound to must be one the caller is bound to.
+Tokens from other organizations are left out of the list and answer `404` on
+read, edit, delete and rotate. Only an instance-wide token (full access, bound
+only to the default organization) can create, edit, rotate or delete another
+instance-wide token. Browser sessions are not limited this way.
+
 ### List API Tokens
 `GET /api/security/tokens`
 
@@ -883,19 +1108,38 @@ In Docker installs, the response includes a restart notice.
 { "name": "ansible-script", "scopes": ["monitoring:read"] }
 ```
 
-### Edit API Token Scopes
+### Edit API Token
 `PATCH /api/security/tokens/<id>`
 ```json
 { "scopes": ["monitoring:read", "settings:read"] }
 ```
 
-The `scopes` field is required and must contain at least one known scope.
-Wildcard access (`"*"`) cannot be combined with other scopes. The update takes
-effect on the token's next request without changing its ID, secret, expiry, or
-organization bindings.
+Send `scopes`, `name`, or both; a body with neither returns 400. A rename-only
+body such as `{ "name": "new-name" }` leaves the scopes unchanged, and a blank
+`name` returns 400. When `scopes` is sent it must contain at least one known
+scope, and wildcard access (`"*"`) cannot be combined with other scopes.
+API-token callers that change scopes must already hold every existing scope on
+the target token and every scope they request. The update takes effect on the
+token's next request without changing its ID, secret, expiry, or organization
+bindings.
+
+### Rotate API Token
+`POST /api/security/tokens/<id>/rotate`
+
+Replaces one token with a new one and returns `{ "token": "raw-token", "record": { ... } }`
+(the raw token is shown once). The new token keeps the old one's name, scopes,
+organization bindings, metadata and expiry, and the old token stops working.
+API-token callers must hold every scope on the target token.
 
 ### Revoke Token
 `DELETE /api/security/tokens/<id>`
+
+### Validate API Token (admin session or `settings:write` token)
+`POST /api/security/validate-token`
+```json
+{ "token": "raw-token" }
+```
+Returns `{ "valid": true, "message": "Token is valid" }` for a known, unexpired token. An unknown or expired token returns HTTP 200 with `"valid": false` and `"message": "Token is invalid"`. An empty `token` returns HTTP 400 with `"valid": false` and `"message": "Token is required"`. When no API tokens are configured, the response is HTTP 200 with `"valid": false` and `"message": "API token authentication is not configured"`. API-token callers need the `settings:write` scope; a token without it gets HTTP 403. Non-admin proxy-auth callers get HTTP 403. Requests over the rate limit get HTTP 429. A successful validation updates the token's last-used time. This endpoint is not gated by the Pro audit licence.
 
 ### Recovery (Localhost or Recovery Token)
 `POST /api/security/recovery`
@@ -906,17 +1150,23 @@ Supports actions:
 
 `GET /api/security/recovery` returns recovery mode status.
 
-### Reset Account Lockout (Admin)
-`POST /api/security/reset-lockout`
+### Reset Account Lockout (Admin or settings:write token)
+`POST /api/security/reset-lockout` (admin, `settings:write`)
 ```json
 { "identifier": "admin" }
 ```
-Identifier can be a username or IP address.
+Callers need an admin session, or an API token with the `settings:write` scope; a token without that scope gets `403` with `error: "missing_scope"`. Identifier can be a username or IP address. An empty identifier returns `400 missing_identifier`. Success returns `{ "success": true, "message": "Lockout reset for admin" }`.
 
 ### Regenerate API Token (Admin)
-`POST /api/security/regenerate-token`
+`POST /api/security/regenerate-token` (admin, `settings:write`)
 
-Returns a new raw token (shown once) and updates stored hashes:
+Replaces every stored API token with one new full-access token. All other
+tokens stop working. An API token may call this only if it has full-access
+scope (`*`) and is not bound to a non-default organization; any other token
+gets `403`, and should use `POST /api/security/tokens/{id}/rotate` to replace
+just itself.
+
+Returns the new raw token (shown once) and updates stored hashes:
 ```json
 {
   "success": true,
@@ -925,12 +1175,13 @@ Returns a new raw token (shown once) and updates stored hashes:
   "requiresRestart": false,
   "message": "New API token generated and active immediately! Save this token - it won't be shown again."
 }
+```
 
 ---
 
 ## 🧾 Audit Log (Pro)
 
-These endpoints require admin access and the `settings:read` scope. On Community, the list endpoint returns an empty set and `persistentLogging: false`.
+These endpoints require admin access and the `audit:read` scope. On Community (no `audit_logging` license), these endpoints return HTTP 402 Payment Required with `error: "license_required"` and `feature: "audit_logging"` before any events are read.
 
 ### List Audit Events
 `GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
@@ -968,16 +1219,6 @@ Response:
 }
 ```
 
-### Validate API Token (Admin)
-`POST /api/security/validate-token`
-```json
-{ "token": "raw-token" }
-```
-Returns:
-```json
-{ "valid": true, "message": "Token is valid" }
-```
-
 ### Bootstrap Token Validation (Public)
 `POST /api/security/validate-bootstrap-token`
 
@@ -992,6 +1233,9 @@ Returns `204 No Content` on success.
 `POST /api/security/quick-setup`
 
 Requires a valid bootstrap token (header `X-Setup-Token`) or an authenticated session.
+When authentication is already configured, a request that would change credentials
+(`force: true`) from an API token needs an instance-wide full-access token; any
+other token gets `403`.
 
 ```json
 {
@@ -1041,7 +1285,7 @@ Tests SSH connectivity for temperature collection (requires setup token or auth)
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`
-Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
+Returns scheduler health, DLQ, and breaker status. Requires authentication (session or API token); no specific scope is enforced.
 
 ### Updates (Admin)
 - `GET /api/updates/check`
@@ -1051,6 +1295,15 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix)
 - `GET /api/updates/history`
 - `GET /api/updates/history/entry?id=<event_id>`
+- `GET /api/updates/pro-runtime` (`settings:read`): whether this community build
+  can switch to the Pulse Pro runtime. The license server decides eligibility;
+  `reason` explains a switch that is not offered (`not_activated`,
+  `not_eligible`, `older_release`, `unavailable`, ...). Docker installs get the
+  digest-pinned image commands in `docker`.
+- `POST /api/updates/pro-runtime/apply` (`settings:write`): installs the Pulse
+  Pro runtime in place through the same verified, backed-up apply as an update
+  (systemd and Proxmox LXC installs only). Returns `409` when no in-place switch
+  is offered.
 
 ### Infrastructure Updates
 - `GET /api/infra-updates` (requires `monitoring:read`)
@@ -1060,7 +1313,7 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
 
 ### Diagnostics
-- `GET /api/diagnostics` (auth)
+- `GET /api/diagnostics` (admin, `settings:read`)
 - `POST /api/diagnostics/docker/prepare-token` (admin, `settings:write`)
 
 The Docker migration token request accepts `agentId`, optional `tokenName`, and
@@ -1090,26 +1343,26 @@ Returns minimal server info for installer scripts.
 OIDC and SAML configuration is managed via SSO providers.
 
 ### SSO Provider Management (Community)
-- `GET /api/security/sso/providers` (admin)
-- `POST /api/security/sso/providers` (admin)
-- `GET /api/security/sso/providers/{id}` (admin)
-- `PUT /api/security/sso/providers/{id}` (admin)
-- `DELETE /api/security/sso/providers/{id}` (admin)
+- `GET /api/security/sso/providers` (admin, `settings:read`)
+- `POST /api/security/sso/providers` (admin, `settings:write`)
+- `GET /api/security/sso/providers/{id}` (admin, `settings:read`)
+- `PUT /api/security/sso/providers/{id}` (admin, `settings:write`)
+- `DELETE /api/security/sso/providers/{id}` (admin, `settings:write`)
 
 Provider mutation request contract:
 - Max request body: 1MB.
-- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Unknown JSON fields are ignored. A trailing payload after the JSON object is rejected with `invalid_json`.
 - Provider IDs must match server validation.
 - OIDC and SAML providers are included with the Community SSO entitlement.
 
 ### SSO Test and Metadata Preview (Community)
-- `POST /api/security/sso/providers/test` (admin)
-- `POST /api/security/sso/providers/metadata/preview` (admin)
+- `POST /api/security/sso/providers/test` (admin, `settings:write`)
+- `POST /api/security/sso/providers/metadata/preview` (admin, `settings:read`)
 
 Test/preview request contract:
 - Max request body: 32KB.
-- Strict JSON contract: unknown fields and trailing payload are rejected.
-- Common errors include `invalid_json`, `validation_error`, `rate_limited`, `body_too_large`.
+- Unknown JSON fields are ignored. A trailing payload after the JSON object is rejected with `invalid_json`.
+- Common errors include `invalid_json`, `validation_error`, `rate_limited`. A body over the 32KB limit is silently truncated, so it fails as `invalid_json` (these endpoints do not return `body_too_large`).
 
 ---
 
@@ -1121,13 +1374,13 @@ Test/preview request contract:
 ### License Features (Authenticated)
 `GET /api/license/features`
 
-### Activate License (Admin)
+### Activate License (Admin, `settings:write`)
 `POST /api/license/activate`
 ```json
 { "license_key": "PASTE_KEY_HERE" }
 ```
 
-### Clear License (Admin)
+### Clear License (Admin, `settings:write`)
 `POST /api/license/clear`
 
 ---
@@ -1400,45 +1653,63 @@ Runs a focused investigation for an alert payload (used by the UI).
     `409 patrol_objective_revision_conflict`.
 - `GET /api/ai/patrol/history`
 - `GET /api/ai/patrol/runs`
-- `GET /api/ai/patrol/stream` (Pro)
-- `POST /api/ai/patrol/run` (admin, Pro)
-- `POST /api/ai/patrol/acknowledge` (Pro)
+- `GET /api/ai/patrol/runs/{id}` (`ai:execute`)
+  - Returns one retained Patrol run by the `id` from `GET /api/ai/patrol/runs`.
+    Percent-encode the ID in the path. Tool-call arrays are omitted unless
+    `?include=tool_calls`. Returns `400` when the ID is empty, `404`
+    (`not_found`) when no retained run has that ID, and `503`
+    (`service_unavailable`) when the Patrol service is unavailable.
+- `GET /api/ai/patrol/stream` (`ai:execute`)
+  - Server-sent events for live Patrol progress. Send `Last-Event-ID` (or the
+    `last_event_id` query parameter) to resume after the last event `id`;
+    replay is best-effort.
+- `POST /api/ai/patrol/run` (admin, `ai:execute`)
+  - Community installs are limited to one successful full run per hour and
+    get `429 patrol_rate_limited` until it has passed. Pro and Cloud have no
+    cap.
+- `POST /api/ai/patrol/acknowledge` (`ai:execute`)
 - `POST /api/ai/patrol/dismiss`
 - `POST /api/ai/patrol/findings/note`
 - `POST /api/ai/patrol/resolve`
-- `POST /api/ai/patrol/snooze` (Pro)
-- `POST /api/ai/patrol/suppress` (Pro)
-- `GET /api/ai/patrol/suppressions` (Pro)
-- `POST /api/ai/patrol/suppressions` (Pro)
-- `DELETE /api/ai/patrol/suppressions/{id}` (Pro)
-- `GET /api/ai/patrol/dismissed` (Pro)
+- `POST /api/ai/patrol/snooze` (`ai:execute`)
+- `POST /api/ai/patrol/suppress` (`ai:execute`)
+- `GET /api/ai/patrol/suppressions` (`ai:execute`)
+- `POST /api/ai/patrol/suppressions` (`ai:execute`)
+- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`)
+- `GET /api/ai/patrol/dismissed` (`ai:execute`)
+
+Patrol itself and managing its findings (acknowledge, snooze, suppress,
+dismiss) are available on Community. Only the paid-labelled routes below
+return `402`. Tokens issued for Pulse Mobile (`relay:mobile:access`) are also
+accepted on the acknowledge, dismiss and snooze routes.
 
 ### Findings & Investigations
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
-- `POST /api/ai/findings/{id}/reinvestigate`
-- `POST /api/ai/findings/{id}/reapprove` (Pro)
+- `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`)
+  - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
+    Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
+    `409 investigation_running` while one is already in progress.
+- `POST /api/ai/findings/{id}/reapprove` (Pro, `ai:execute`; retired: it always
+  returns `410 Gone` with error code `command_fix_retired`; approve typed
+  actions through `POST /api/actions/{id}/decision` (`actions:approve`)
+  instead)
 
 ### Approvals & Command Execution (Pro)
 - `GET /api/ai/approvals`
 - `GET /api/ai/approvals/{id}`
 - `POST /api/ai/approvals/{id}/approve`
 - `POST /api/ai/approvals/{id}/deny`
-- `POST /api/ai/run-command` (execute an approved command)
+- `POST /api/ai/run-command` (retired: always returns `410 Gone` with error code `raw_command_retired`; raw command execution is no longer supported, so use advertised typed resource actions instead)
 - `GET /api/ai/agents` (connected agents via `/api/agent/ws`)
 
 ### Remediation Plans (Pro)
 - `GET /api/ai/remediation/plans`
 - `GET /api/ai/remediation/plan?plan_id=<id>`
-- `POST /api/ai/remediation/approve`
-- `POST /api/ai/remediation/execute`
-- `POST /api/ai/remediation/rollback`
-
-Request bodies:
-- `approve`: `{ "plan_id": "...", "approved_by": "api" }`
-- `execute`: `{ "execution_id": "..." }`
-- `rollback`: `{ "execution_id": "..." }`
+- `POST /api/ai/remediation/approve` (`ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response; approve typed actions through `POST /api/actions/{id}/decision` (`actions:approve`) instead)
+- `POST /api/ai/remediation/execute` (admin, `ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response)
+- `POST /api/ai/remediation/rollback` (admin, `ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response; no rollback runs through this endpoint)
 
 ### Intelligence & Forecasting
 - `GET /api/ai/intelligence`
@@ -1490,14 +1761,19 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s`, `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
 > **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
-> **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
+An explicit `metric` returns a `points` array; omitting it returns a `metrics`
+object keyed by metric name. Use the source ID and type from the affected
+chart's request, not its display name or an internal store type. Older
+`container`, `dockerHost`, `dockerContainer`, `guest` and `docker` query values
+are unsupported. See [Metrics History](METRICS_HISTORY.md#api-access) for
+private one-shot reads, response sources and empty-history troubleshooting.
 
 ---
 
@@ -1542,18 +1818,21 @@ Serves the PowerShell installer for Windows.
 `GET /api/agents/agent/lookup?hostname=<hostname>`  
 Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 
-`POST /api/agents/agent/uninstall`  
-Agent self-unregister during uninstall. Requires `agent:report`.
+`POST /api/agents/agent/uninstall` (`agent:report` token, or an admin session)  
+Agent self-unregister during uninstall: a token holding `agent:report` removes the agent that token owns. Without a token, only an admin session can remove an agent this way.
 
-`POST /api/agents/agent/unlink` (admin, `agent:manage`)  
+`POST /api/agents/agent/unlink` (admin, `settings:write`)  
 Unlinks an agent from a node.
 
-`DELETE /api/agents/agent/{agent_id}` (admin, `agent:manage`)  
+`DELETE /api/agents/agent/{agent_id}` (admin, `settings:write`)  
 Removes an agent from state.
 
+`POST /api/agents/agent/{agent_id}/allow-reenroll` (admin, `settings:write`)  
+Clears the removal block left by `DELETE /api/agents/agent/{agent_id}` so the agent can report again. Returns `{"success": true, "agentId": "<agent_id>"}`. Other methods return `405`.
+
 ### Agent Linking (Admin)
-- `POST /api/agents/agent/link` (admin, `agent:manage`)
-- `POST /api/agents/agent/unlink` (admin, `agent:manage`)
+- `POST /api/agents/agent/link` (admin, `settings:write`)
+- `POST /api/agents/agent/unlink` (admin, `settings:write`)
 
 ### Agent Remote Config
 `GET /api/agents/agent/{agent_id}/config`  
@@ -1603,29 +1882,31 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 - `POST /api/agents/docker/containers/update` (`docker:manage`) — retired, returns `410 Gone`; use the `/api/actions` plan/decision/execute flow instead
 
 ### Kubernetes Agent Management (Admin)
-- `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`, supports `?hide=true` or `?force=true`)
+- `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`) — removes the cluster and blocks re-enrollment until `allow-reenroll`; takes no `hide` or `force` query parameters
 - `POST /api/agents/kubernetes/clusters/{clusterId}/allow-reenroll` (`kubernetes:manage`)
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/unhide` (`kubernetes:manage`)
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/pending-uninstall` (`kubernetes:manage`)
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/display-name` (`kubernetes:manage`)
 
 ### Agent Profiles (Pro)
-`GET /api/admin/profiles` (admin, Pro)
-`POST /api/admin/profiles` (admin, Pro)
-`GET /api/admin/profiles/{id}` (admin, Pro)
-`PUT /api/admin/profiles/{id}` (admin, Pro)
-`DELETE /api/admin/profiles/{id}` (admin, Pro)
-`GET /api/admin/profiles/schema` (admin, Pro)
-`POST /api/admin/profiles/validate` (admin, Pro)
-`POST /api/admin/profiles/suggestions` (admin, Pro)
-`GET /api/admin/profiles/changelog` (admin, Pro)
-`GET /api/admin/profiles/deployments` (admin, Pro)
-`POST /api/admin/profiles/deployments` (admin, Pro)
-`GET /api/admin/profiles/{id}/versions` (admin, Pro)
-`POST /api/admin/profiles/{id}/rollback/{version}` (admin, Pro)
-`GET /api/admin/profiles/assignments` (admin, Pro)
-`POST /api/admin/profiles/assignments` (admin, Pro)
-`DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
+`GET /api/admin/profiles/` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`PUT /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`DELETE /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/schema` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/validate` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/suggestions` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/changelog` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/deployments` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/deployments` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/{id}/versions` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/{id}/rollback/{version}` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/assignments` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/assignments` (admin, `settings:write`, Pro)
+`DELETE /api/admin/profiles/assignments/{agent_id}` (admin, `settings:write`, Pro)
+
+Every profile route requires admin access and the `agent_profiles` licence feature (HTTP 402 when unlicensed). Token callers also need `settings:write` on every profile route, including GET requests; session requests are not subject to the token scope check. Use the trailing slash on the collection path; the path without it is redirected, not served.
 
 ---
 
@@ -1638,12 +1919,12 @@ the API for automation.
 
 ### Target Management
 
-- `GET /api/availability-targets` (`settings:read`) - List configured targets and latest probe status.
-- `POST /api/availability-targets` (`settings:write`) - Add a target.
-- `PUT /api/availability-targets/{id}` (`settings:write`) - Update a target.
-- `DELETE /api/availability-targets/{id}` (`settings:write`) - Remove a target.
-- `POST /api/availability-targets/test` (`settings:write`) - Test an unsaved target.
-- `POST /api/availability-targets/{id}/test` (`settings:write`) - Test a saved target.
+- `GET /api/availability-targets` (admin, `settings:read`) - List configured targets and latest probe status.
+- `POST /api/availability-targets` (admin, `settings:write`) - Add a target.
+- `PUT /api/availability-targets/{id}` (admin, `settings:write`) - Update a target.
+- `DELETE /api/availability-targets/{id}` (admin, `settings:write`) - Remove a target.
+- `POST /api/availability-targets/test` (admin, `settings:write`) - Test an unsaved target. If the body includes the `id` of a saved target, that target's stored HTTP credentials are reused, but only while the HTTP scheme, host and port are unchanged.
+- `POST /api/availability-targets/{id}/test` (admin, `settings:write`) - Test a saved target.
 
 Target payload fields:
 
@@ -1694,6 +1975,14 @@ Example ping-only target:
 
 The create response and subsequent reads return `"protocol": "icmp"`.
 
+### History
+
+- `POST /api/availability-history` (`monitoring:read`) - Recent state and latency history for up to 200 availability targets in one request. Body: `{"targetIds": ["<target-id>"], "range": "24h"}`. `targetIds` is required; blank and duplicate IDs are dropped, and at most 200 unique IDs are accepted. `range` is optional (default `24h`). Allowed ranges are `1h`, `6h`, `12h`, `24h`, `7d`, `14d`, `30d`, `90d`, and `365d`. A range longer than the licence's metrics history retention returns `402` (free tier: 7 days). Non-POST methods return `405`.
+
+Response (`200`): `start` and `end` (UTC, end truncated to the minute) and `targets`. Each target has `targetId` and either `summary` (`reachableSeconds`, `unreachableSeconds`, `indeterminateSeconds`, `unknownSeconds`, `coveragePercent`, optional `availabilityPercent`, optional `reachableLatencyMillis`) with `buckets` (at most 120) and, only when present, `revisionBoundaries`; or an `error` with code `not_found` when the ID is not a configured target. An unknown ID does not fail the batch.
+
+Errors: `400` with `invalid_request` (malformed JSON, unknown fields, or body over 32 KiB), `missing_target_ids`, `too_many_target_ids`, or `invalid_range`. Server-side failures return `500` or `503` with a typed error code.
+
 ---
 
 ## 🐟 TrueNAS
@@ -1704,7 +1993,9 @@ TrueNAS connection management endpoints for adding, testing, and removing TrueNA
 - `GET /api/truenas/connections` (admin, `settings:read`) — List configured TrueNAS connections.
 - `POST /api/truenas/connections` (admin, `settings:write`) — Add a new TrueNAS connection.
 - `POST /api/truenas/connections/test` (admin, `settings:write`) — Test a TrueNAS connection before saving.
+- `POST /api/truenas/connections/{id}/test` (admin, `settings:write`) — Live-test a saved connection with its stored credentials. An optional JSON body overrides fields for this test only and is not saved. Returns `404` (`truenas_not_found`) for an unknown ID and `400` (`truenas_invalid_config` or `truenas_connection_failed`) on failure. The probe does not clear poll errors or advance poll freshness, so check the `poll` field from `GET /api/truenas/connections` to see whether ordinary polling has recovered.
 - `DELETE /api/truenas/connections/{id}` (admin, `settings:write`) — Remove a TrueNAS connection.
+- `PUT /api/truenas/connections/{id}` (admin, `settings:write`) — Update a saved TrueNAS connection. Send only the fields to change in a private JSON file; omitted fields keep their stored values. A masked `apiKey` or `password` returned by a GET response is kept from the stored record, so never send a masked value as a new secret. Saving does not test the connection. Setting `monitorDatasets`, `monitorPools` and `monitorReplication` all to `false` is saved as all enabled. Returns 200 with the redacted connection, 400 `validation_error`, 404 `truenas_not_found`, or 403 `mock_mode_enabled` in mock mode.
 
 TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, alerts) are surfaced through the unified `/api/resources` endpoint with `source=truenas`.
 
@@ -1716,10 +2007,10 @@ End-to-end encrypted relay protocol for mobile connectivity.
 
 > Relay pairing endpoints generate the QR code and deep link used by supported Pulse Mobile clients.
 
-### Relay Configuration (Admin, Relay and Above)
-- `GET /api/settings/relay` (admin, `settings:read`, Relay+) — Get current relay configuration.
-- `PUT /api/settings/relay` (admin, `settings:write`, Relay+) — Update relay configuration.
-- `GET /api/settings/relay/status` (admin, `settings:read`, Relay+) — Get relay connection status.
+### Relay Configuration (Relay and Above; admin session or scoped token)
+- `GET /api/settings/relay` (`settings:read` token scope, or admin session, Relay+) — Get current relay configuration.
+- `PUT /api/settings/relay` (`settings:write` token scope, or admin session, Relay+) — Update relay configuration.
+- `GET /api/settings/relay/status` (`settings:read` token scope, or admin session, Relay+) — Get relay connection status.
 
 ### Mobile Onboarding
 - `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for Pulse Mobile pairing.

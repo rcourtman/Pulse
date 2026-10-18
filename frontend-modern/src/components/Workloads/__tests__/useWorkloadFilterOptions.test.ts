@@ -105,8 +105,41 @@ describe('useWorkloadFilterOptions', () => {
 
     expect(result.workloadNodeOptions()).toEqual([
       { value: 'docker-prod-a', label: 'docker-prod-a' },
-      { value: 'core-fabric-pve-prod-a', label: 'pve-prod-a' },
+      { value: 'node|core-fabric|pve-prod-a', label: 'pve-prod-a' },
     ]);
     expect(result.containerRuntimeOptions()).toEqual(['docker']);
+  });
+  it('keeps an unresolved bookmark visible and removable as an active node filter', () => {
+    const handleNodeSelect = vi.fn();
+    const [hint, setHint] = createSignal<string | null>('lab-east-pve1');
+    const { result } = renderHook(() =>
+      useWorkloadFilterOptions({
+        allGuests: () => [
+          makeGuest({ instance: 'lab-east', node: 'pve1' }),
+          makeGuest({ instance: 'lab', node: 'east-pve1' }),
+        ],
+        isWorkloadsRoute: () => true,
+        allowEmbeddedScopeFilters: () => true,
+        viewMode: () => 'vm',
+        containerRuntime: () => '',
+        selectedPlatform: () => null,
+        selectedNode: () => null,
+        selectedHostHint: hint,
+        selectedKubernetesContext: () => null,
+        selectedKubernetesNamespace: () => null,
+        selectedCluster: () => null,
+        setContainerRuntime: vi.fn(),
+        setSelectedPlatform: vi.fn(),
+        setSelectedKubernetesContext: vi.fn(),
+        setSelectedKubernetesNamespace: vi.fn(),
+        setSelectedCluster: vi.fn(),
+        handleNodeSelect,
+      }),
+    );
+    expect(result.hostFilterConfig()?.value).toBe('lab-east-pve1');
+    result.hostFilterConfig()?.onChange('');
+    expect(handleNodeSelect).toHaveBeenCalledWith(null, null);
+    setHint(null);
+    expect(result.hostFilterConfig()?.value).toBe('');
   });
 });

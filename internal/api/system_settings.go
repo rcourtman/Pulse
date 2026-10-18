@@ -206,13 +206,39 @@ func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMo
 	defaultMonitor := h.defaultMonitor
 	h.stateMu.RUnlock()
 
-	if mtMonitor != nil {
-		orgID := GetOrgID(ctx)
-		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		if mtMonitor != nil {
+			if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+				return m
+			}
 		}
+		return defaultMonitor
 	}
-	return defaultMonitor
+
+	// Never fall back to the default organization's runtime for another
+	// organization: its requests would read or change the wrong tenant.
+	if mtMonitor == nil {
+		log.Warn().Str("org_id", orgID).Msg("Tenant monitor manager unavailable for system settings request")
+		return nil
+	}
+	m, err := mtMonitor.GetMonitor(orgID)
+	if err != nil || m == nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to resolve tenant monitor for system settings request")
+		return nil
+	}
+	return m
+}
+
+// requireMonitor resolves the request organization's monitor, writing a 503
+// and returning nil when it is unavailable.
+func (h *SystemSettingsHandler) requireMonitor(w http.ResponseWriter, r *http.Request) SystemSettingsMonitor {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
+		return nil
+	}
+	return monitor
 }
 
 // SetConfig updates the configuration reference used by the handler.
@@ -380,6 +406,12 @@ func applyDiscoveryConfigOverrides(current config.DiscoveryConfig, cfgMap map[st
 
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]interface{}) error {
+	if value, present := rawRequest["allowedOrigins"]; present {
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("allowedOrigins must be a string (use an empty string for same-origin only)")
+		}
+	}
+
 	if val, ok := rawRequest["reportBranding"]; ok {
 		settings, ok := val.(map[string]interface{})
 		if !ok {
@@ -713,6 +745,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			Msg("Loaded system settings for API response")
 
 		settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
+		// Expose the effective policy, including deployment overrides and clears.
+		settings.AllowedOrigins = h.config.AllowedOrigins
 		// Always expose effective backup polling configuration
 		settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
@@ -866,6 +900,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	// A disabled deployment-owned field is still included by the settings form.
+	// Accept an unchanged value without copying the override into system.json;
+	// reject attempts to change it, before persisting any part of the patch.
+	_, allowedOriginsUpdated := rawRequest["allowedOrigins"]
+	allowedOriginsLocked := h.config.EnvOverrides["ALLOWED_ORIGINS"] || h.config.EnvOverrides["allowedOrigins"]
+	if allowedOriginsUpdated && allowedOriginsLocked && updates.AllowedOrigins != h.config.AllowedOrigins {
+		writeErrorResponse(w, http.StatusConflict, "env_locked", "allowedOrigins is locked by the ALLOWED_ORIGINS environment variable", nil)
+		return
+	}
+
 	// Start with existing settings
 	settings := *existingSettings
 	discoveryConfigUpdated := false
@@ -886,7 +930,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["backupPollingInterval"]; ok {
 		settings.BackupPollingInterval = updates.BackupPollingInterval
 	}
-	if updates.AllowedOrigins != "" {
+	if allowedOriginsUpdated && !allowedOriginsLocked {
 		settings.AllowedOrigins = updates.AllowedOrigins
 	}
 	if _, ok := rawRequest["connectionTimeout"]; ok {
@@ -1026,7 +1070,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		}
 		h.config.PVEPollingInterval = newInterval
 	}
-	if settings.AllowedOrigins != "" {
+	if allowedOriginsUpdated && !allowedOriginsLocked {
 		h.config.AllowedOrigins = settings.AllowedOrigins
 	}
 	if settings.ConnectionTimeout > 0 {

@@ -235,10 +235,11 @@ func resolveGroupRoles(groups []string, mappings map[string]string) []string {
 
 // InitializeOIDCProviders initializes all enabled SSO OIDC providers at startup.
 func (r *Router) InitializeOIDCProviders(ctx context.Context) error {
-	if r.ssoConfig == nil {
+	ssoCfg := r.currentSSOConfig()
+	if ssoCfg == nil {
 		return nil
 	}
-	for _, provider := range r.ssoConfig.Providers {
+	for _, provider := range ssoCfg.Providers {
 		if provider.Type == config.SSOProviderTypeOIDC && provider.Enabled && provider.OIDC != nil {
 			p := provider // capture loop variable
 			if err := r.oidcManager.InitializeProvider(ctx, p.ID, &p, ""); err != nil {

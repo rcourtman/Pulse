@@ -1,11 +1,16 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { RELATIVE_TIME_TICK_MS, useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
+import { buildStandalonePostureSummary } from '../standalonePageModel';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
@@ -31,6 +36,13 @@ vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
     deleteAgent: vi.fn(async () => undefined),
   },
+}));
+
+// The websocket's activeAlerts is a Solid store, so rows must follow it live.
+const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, Alert> }));
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: activeAlertsRef.current }),
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -111,6 +123,9 @@ const resource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
+const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+activeAlertsRef.current = activeAlerts;
+
 const emptyIcon = <span data-testid="empty-icon" />;
 const getAllAgentMetadataMock = vi.mocked(AgentMetadataAPI.getAllMetadata);
 const deleteAgentMetadataMock = vi.mocked(AgentMetadataAPI.deleteMetadata);
@@ -140,12 +155,186 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  setActiveAlerts(reconcile({}));
   window.localStorage.clear();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 describe('AgentsMachinesTable', () => {
+  it('keeps health counts and selected rows truthful for retained, arriving and withdrawn reports', () => {
+    const start = Date.parse('2026-10-11T17:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    try {
+      const [machines, setMachines] = createStore([
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
+      ]);
+      const original = JSON.stringify(machines);
+      const [search, setSearch] = createSignal('silent');
+      const [status, setStatus] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
+      const view = render(() => (
+        <AgentsMachinesTable
+          resources={machines}
+          emptyIcon={emptyIcon}
+          emptyTitle="No machines"
+          emptyDescription="Install Pulse Agent."
+          externalSearch={search}
+          onExternalSearchChange={setSearch}
+          externalStatus={status}
+          onExternalStatusChange={setStatus}
+        />
+      ));
+      const chip = (label: string, count: number) =>
+        screen.getByRole('button', { name: `${label}, ${count}` });
+      const rows = () => view.container.querySelectorAll('[data-agents-machine-row]');
+      fireEvent.click(chip('Healthy', 1));
+      const healthy = chip('Healthy', 1);
+      healthy.focus();
+      expect(rows()).toHaveLength(1);
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(rows()).toHaveLength(1);
+      expect(chip('Healthy', 1)).toHaveAttribute('aria-pressed', 'true');
+
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(rows()).toHaveLength(0);
+      expect(chip('Healthy', 0)).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Degraded', 1)).toBeInTheDocument();
+      expect(chip('Offline', 0)).toBeInTheDocument();
+      expect(document.activeElement).toBe(healthy);
+      expect(search()).toBe('silent');
+      expect(status()).toBe('online');
+      expect(JSON.stringify(machines)).toBe(original);
+
+      fireEvent.click(chip('Degraded', 1));
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0].querySelector('span[role="img"]')).toHaveClass('bg-amber-500');
+      expect(screen.getByRole('img', { name: 'Stale' })).toHaveAttribute('title', 'Stale');
+      expect(screen.getByTestId('agent-machine-cpu-bar')).toHaveAttribute('data-usage', '24');
+      setMachines(0, 'lastSeen', Date.now());
+      expect(rows()).toHaveLength(0);
+      expect(chip('Degraded', 0)).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Healthy', 1)).toBeInTheDocument();
+
+      fireEvent.click(chip('Healthy', 1));
+      expect(rows()).toHaveLength(1);
+      setMachines(0, 'lastSeen', 0);
+      setMachines(0, 'agent', 'stale', true);
+      expect(rows()).toHaveLength(0);
+      fireEvent.click(chip('Degraded', 1));
+      expect(rows()).toHaveLength(1);
+      expect(machines[0].status).toBe('online');
+
+      setMachines(0, 'status', 'offline');
+      expect(rows()).toHaveLength(0);
+      expect(chip('Healthy', 0)).toBeInTheDocument();
+      fireEvent.click(chip('Offline', 1));
+      expect(rows()[0].querySelector('span[title="Offline"]')).toHaveClass('bg-red-500');
+      expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+      expect(search()).toBe('silent');
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not promote unknown status or missing freshness to Healthy or Offline', () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({ id: 'fresh', lastSeen: now }),
+          resource({ id: 'unknown', status: 'unknown', lastSeen: now }),
+          resource({ id: 'unclassified', status: undefined, lastSeen: 0 }),
+          resource({ id: 'offline', status: 'offline', lastSeen: 0, agent: { stale: true } }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+    const ids = () =>
+      [...container.querySelectorAll('[data-agents-machine-row]')].map((row) =>
+        row.getAttribute('data-agents-machine-row'),
+      );
+    // Explicit Unknown already has a warning row; unclassified has a muted row.
+    // Neither is promoted. All keeps the latter visible without claiming health.
+    expect(ids()).toHaveLength(4);
+    fireEvent.click(screen.getByRole('button', { name: 'Healthy, 1' }));
+    expect(ids()).toEqual(['fresh']);
+    fireEvent.click(screen.getByRole('button', { name: 'Degraded, 1' }));
+    expect(ids()).toEqual(['unknown']);
+    fireEvent.click(screen.getByRole('button', { name: 'Offline, 1' }));
+    expect(ids()).toEqual(['offline']);
+    fireEvent.click(screen.getByRole('button', { name: 'All, 4' }));
+    expect(ids()).toHaveLength(4);
+  });
+
+  it('keeps the retained row status in agreement with posture across the five-minute clock boundary', () => {
+    const start = Date.parse('2026-10-11T17:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    try {
+      const [machines, setMachines] = createStore([
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
+      ]);
+      const original = JSON.stringify(machines);
+      const [mounted, setMounted] = createSignal(true);
+      const view = render(() => {
+        const now = useRelativeTimeNow();
+        return (
+          <>
+            <output data-testid="posture-attention">
+              {buildStandalonePostureSummary(machines, now()).attention}
+            </output>
+            <Show when={mounted()}>
+              <AgentsMachinesTable
+                resources={machines}
+                emptyIcon={emptyIcon}
+                emptyTitle="No machines"
+                emptyDescription="Install Pulse Agent."
+              />
+            </Show>
+          </>
+        );
+      });
+      const dot = () => view.container.querySelector('[data-agents-machine-row] span[role="img"]')!;
+      const row = view.container.querySelector('[data-agents-machine-row]');
+      const cpu = screen.getByTestId('agent-machine-cpu-bar');
+      expect(dot()).toHaveClass('bg-emerald-500');
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('1');
+      expect(dot()).toHaveClass('bg-amber-500');
+      expect(view.container.querySelector('[data-agents-machine-row]')).toBe(row);
+      expect(screen.getByTestId('agent-machine-cpu-bar')).toBe(cpu);
+      expect(cpu).toHaveAttribute('data-usage', '24');
+      expect(JSON.stringify(machines)).toBe(original);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
+
+      setMounted(false);
+      setMounted(true);
+      expect(dot()).toHaveClass('bg-amber-500');
+      setMachines(0, 'lastSeen', Date.now());
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+      setMachines(0, 'status', 'offline');
+      expect(
+        view.container.querySelector('[data-agents-machine-row] span[title="Offline"]'),
+      ).toHaveClass('bg-red-500');
+      expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps disk and last-seen telemetry in the phone column set', () => {
     const { container } = render(() => (
       <AgentsMachinesTable
@@ -188,6 +377,65 @@ describe('AgentsMachinesTable', () => {
     expect(onResetFilters).toHaveBeenCalledTimes(1);
     expect(onExternalSearchChange).not.toHaveBeenCalled();
     expect(onExternalStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('tints a machine row for the open alerts its drawer lists', () => {
+    const agentAlert = (id: string, resourceId: string, overrides: Partial<Alert> = {}): Alert => ({
+      id,
+      type: 'memory',
+      level: 'warning',
+      resourceId,
+      resourceName: id,
+      node: id,
+      instance: '',
+      message: id,
+      value: 91,
+      threshold: 85,
+      startTime: '2026-10-06T10:00:00Z',
+      acknowledged: false,
+      ...overrides,
+    });
+    // Agent alerts are keyed "agent:<agentId>", never the row's resource id.
+    setActiveAlerts({
+      memory: agentAlert('memory', 'agent:host-tower'),
+      disk: agentAlert('disk', 'agent:host-nas/disk:data', { type: 'disk', level: 'critical' }),
+      acked: agentAlert('acked', 'agent:host-pi', { acknowledged: true }),
+    });
+    const machine = (id: string, agentId: string) =>
+      resource({ id, name: id, agent: { agentId } } as Partial<Resource>);
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          machine('tower', 'host-tower'),
+          machine('nas', 'host-nas'),
+          machine('pi', 'host-pi'),
+          machine('laptop', 'host-laptop'),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const row = (id: string) => document.querySelector(`[data-agents-machine-row="${id}"]`)!;
+    expect(row('tower')).toHaveClass('bg-yellow-50');
+    expect(row('nas')).toHaveClass('bg-red-50');
+    // An acknowledged alert stays in the drawer but no longer tints the row.
+    for (const id of ['pi', 'laptop']) {
+      expect(row(id)).not.toHaveClass('bg-yellow-50');
+      expect(row(id)).not.toHaveClass('bg-red-50');
+    }
+
+    // The tint follows the live alert store without a re-render: acknowledging
+    // clears it, escalation turns it red, and resolution clears it.
+    setActiveAlerts('memory', 'acknowledged', true);
+    expect(row('tower')).not.toHaveClass('bg-yellow-50');
+    setActiveAlerts('memory', { acknowledged: false, level: 'critical' });
+    expect(row('tower')).toHaveClass('bg-red-50');
+    setActiveAlerts(reconcile({}));
+    expect(row('tower')).not.toHaveClass('bg-red-50');
+    expect(row('nas')).not.toHaveClass('bg-red-50');
   });
 
   it('keeps the column picker inside the shared View preferences disclosure', async () => {
@@ -941,6 +1189,90 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('120 MB/s')).toBeInTheDocument();
   });
 
+  it("reads a silent agent's RAID arrays as last known, without live colour or rebuild progress", async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-raid-host',
+            name: 'Silent RAID Host',
+            status: 'offline',
+            agent: {
+              stale: true,
+              raid: [
+                {
+                  device: '/dev/md0',
+                  name: 'media',
+                  level: 'raid6',
+                  state: 'recovering',
+                  totalDevices: 6,
+                  activeDevices: 5,
+                  workingDevices: 5,
+                  failedDevices: 1,
+                  spareDevices: 1,
+                  devices: [
+                    { device: '/dev/sda', state: 'active sync', slot: 0 },
+                    { device: '/dev/sdb', state: 'faulty', slot: 1 },
+                    { device: '/dev/sdc', state: 'spare', slot: 2 },
+                  ],
+                  rebuildPercent: 37.2,
+                  rebuildSpeed: '120 MB/s',
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('RAID'));
+
+    const trigger = container.querySelector('[data-agent-machine-raid-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+    // The summary keeps the evidence but drops to muted text.
+    const summary = trigger.querySelector('[data-raid-reading]');
+    expect(summary).toHaveAttribute('data-raid-reading', 'last-known');
+    expect(summary).toHaveClass('text-muted');
+    expect(summary).not.toHaveClass('text-base-content');
+    expect(summary).toHaveTextContent('1/1 degraded, last known');
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('RAID Arrays (last known)')).toBeInTheDocument();
+    const state = screen.getByText('recovering');
+    expect(state).toHaveClass('text-muted');
+    expect(state.className).not.toMatch(/amber|emerald|red/);
+    expect(state.parentElement).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+    expect(state.parentElement?.querySelector('span[aria-hidden="true"]')).toHaveClass(
+      'bg-slate-400',
+    );
+    expect(screen.getByText('Rebuild was at 37%')).toBeInTheDocument();
+    expect(screen.queryByText('Rebuilding')).not.toBeInTheDocument();
+    const tooltip = document.querySelector('[data-agent-machine-raid-tooltip="true"]');
+    expect(tooltip?.innerHTML).not.toMatch(/(text|bg|border)-(emerald|amber|red)-\d/);
+    expect(tooltip?.querySelector('[style*="width"]')).toBeNull();
+    expect(screen.queryByText('120 MB/s')).not.toBeInTheDocument();
+    // Badges lose their colour, so a member that was not healthy names its state.
+    for (const label of ['/dev/sda', '/dev/sdb · faulty', '/dev/sdc · spare']) {
+      const badge = screen.getByText(label);
+      expect(badge.className).not.toMatch(/amber|emerald|red/);
+      expect(badge).toHaveClass('text-muted');
+    }
+    const failedCount = screen
+      .getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'Failed 1')
+      .querySelector('.font-mono');
+    expect(failedCount).toHaveClass('text-base-content');
+    expect(failedCount?.className).not.toMatch(/red/);
+  });
+
   it('sorts machines by operational metrics from the column headers', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable
@@ -1086,6 +1418,238 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1400 RPM')).toBeInTheDocument();
   });
 
+  it('shows a retained disk temperature as last known, never as a current reading', async () => {
+    // A reporting agent whose SMART probe returned no temperature keeps the
+    // last reading with a non-available collection state. (A host agent past
+    // its lease is offline, and its row shows no temperature at all.)
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'SMART probe returned no usable temperature data',
+      },
+    };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-nas',
+            name: 'Silent NAS',
+            agent: {
+              sensors: {
+                smart: [
+                  { device: '/dev/sda', model: 'Archive HDD', temperature: 71 },
+                  { device: '/dev/sdb', model: 'Parity HDD', temperature: 66 },
+                ].map((disk) => ({ ...disk, collection: stoppedReporting })),
+              },
+            },
+          }),
+          resource({
+            id: 'mixed-host',
+            name: 'Mixed Host',
+            agent: {
+              sensors: {
+                smart: [
+                  {
+                    device: '/dev/sda',
+                    model: 'Retained HDD',
+                    temperature: 69,
+                    collection: stoppedReporting,
+                  },
+                  { device: '/dev/nvme0', model: 'Fast SSD', temperature: 44 },
+                ],
+              },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+
+    const triggerFor = (id: string) =>
+      container.querySelector(
+        `[data-agents-machine-row="${id}"] [data-agent-machine-temperature-trigger="true"]`,
+      ) as HTMLElement | null;
+
+    // Nothing is collected now, so the cell keeps the hottest retained value
+    // without a threshold colour and says it is last known.
+    const silent = triggerFor('silent-nas');
+    expect(silent).not.toBeNull();
+    if (!silent) return;
+    const retained = silent.querySelector('[data-temperature-reading="last-known"]');
+    expect(retained).not.toBeNull();
+    expect(retained).toHaveTextContent('71°C, last known');
+    expect(retained).toHaveClass('underline', 'decoration-dotted', 'text-muted');
+    expect(retained?.className).not.toMatch(/text-(green|yellow|red)-/);
+
+    await fireEvent.mouseEnter(silent);
+    const tooltip = await waitFor(() => {
+      const element = document.querySelector('[data-agent-machine-temperature-tooltip="true"]');
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+    expect(within(tooltip).getByText('71°C (last known)')).toHaveClass('text-muted');
+    expect(within(tooltip).getByText('66°C (last known)')).toHaveClass('text-muted');
+    await fireEvent.mouseLeave(silent);
+
+    // A disk collected now leads the cell even when a retained one is hotter.
+    const mixed = triggerFor('mixed-host');
+    expect(mixed).not.toBeNull();
+    if (!mixed) return;
+    expect(mixed).toHaveTextContent('44°C');
+    expect(mixed.querySelector('[data-temperature-reading="last-known"]')).toBeNull();
+    expect(within(mixed).queryByText('69°C')).toBeNull();
+  });
+
+  it("blanks an offline machine's retained readings, temperature and uptime included", async () => {
+    // A host agent past its reporting lease is offline: CPU, memory, disk and
+    // the sensors, uptime and disks it last reported are not current.
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    };
+    const lastReport: Partial<Resource> = {
+      cpu: { current: 32 },
+      memory: { total: 100, used: 73, free: 27, current: 73 },
+      disk: { total: 100, used: 80, free: 20, current: 80 },
+    };
+    const sensors = {
+      temperatureCelsius: { 'cpu.package': 45 },
+      thermalState: { pressure: 'serious' },
+      smart: [
+        {
+          device: '/dev/sda',
+          model: 'Archive HDD',
+          temperature: 41,
+          collection: stoppedReporting,
+        },
+      ],
+    };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-host',
+            name: 'Silent Host',
+            status: 'offline',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: { stale: true, uptimeSeconds: 2_500_000, sensors },
+          }),
+          resource({
+            id: 'live-host',
+            name: 'Live Host',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: {
+              uptimeSeconds: 2_500_000,
+              sensors: { temperatureCelsius: { 'cpu.package': 45 } },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    await fireEvent.click(screen.getByLabelText('Uptime'));
+
+    const cells = (id: string) => {
+      const row = container.querySelector(`[data-agents-machine-row="${id}"]`) as HTMLElement;
+      const headers = Array.from(container.querySelectorAll('thead th')).map((th) =>
+        (th.textContent ?? '').replace(/[▲▼]/g, '').trim(),
+      );
+      const values = Array.from(row.querySelectorAll('td')).map((td) =>
+        (td.textContent ?? '').trim(),
+      );
+      return (label: string) => values[headers.indexOf(label)];
+    };
+
+    const silent = cells('silent-host');
+    expect(silent('CPU')).toBe('—');
+    expect(silent('Up')).toBe('—');
+    expect(silent('Temp')).toBe('—');
+    expect(
+      container.querySelector(
+        '[data-agents-machine-row="silent-host"] [data-agent-machine-temperature-trigger="true"]',
+      ),
+    ).toBeNull();
+
+    const live = cells('live-host');
+    expect(live('CPU')).not.toBe('—');
+    expect(live('Up')).toBe('28d');
+    expect(live('Temp')).toBe('45°C');
+  });
+
+  it('moves a machine temperature between current and last known as its disk reports change', async () => {
+    // Fresh objects per update, like parsed API payloads: the store reconciles
+    // into the objects it was given, so a reused fixture would be rewritten.
+    const collected = () => ({ temperature: { state: 'available' as const, source: 'smartctl' } });
+    const stoppedReporting = () => ({
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    });
+    const nas = (
+      temperature: number,
+      collection?: ReturnType<typeof collected> | ReturnType<typeof stoppedReporting>,
+    ) =>
+      resource({
+        id: 'nas',
+        name: 'NAS',
+        agent: {
+          sensors: { smart: [{ device: '/dev/sda', type: 'sata', temperature, collection }] },
+        },
+      });
+    const [resources, setResources] = createSignal<Resource[]>([nas(52, collected())]);
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={resources()}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    const cell = () =>
+      container.querySelector(
+        '[data-agents-machine-row="nas"] [data-agent-machine-temperature-trigger="true"]',
+      ) as HTMLElement;
+    const lastKnown = () => cell().querySelector('[data-temperature-reading="last-known"]');
+
+    expect(cell()).toHaveTextContent('52°C');
+    expect(lastKnown()).toBeNull();
+
+    setResources([nas(52, stoppedReporting())]);
+    await waitFor(() => expect(lastKnown()).not.toBeNull());
+    expect(cell()).toHaveTextContent('52°C, last known');
+
+    setResources([nas(47, collected())]);
+    await waitFor(() => expect(lastKnown()).toBeNull());
+    expect(cell()).toHaveTextContent('47°C');
+    expect(cell().querySelector('.decoration-dotted')).toBeNull();
+    expect(cell()).not.toHaveTextContent('last known');
+
+    setResources([nas(0)]);
+    await waitFor(() => expect(cell()).toHaveTextContent('—'));
+    expect(lastKnown()).toBeNull();
+  });
+
   it('shows thermal pressure when macOS reports no Celsius temperature', async () => {
     render(() => (
       <AgentsMachinesTable
@@ -1120,5 +1684,51 @@ describe('AgentsMachinesTable', () => {
       'title',
       'Thermal pressure nominal via pmset',
     );
+  });
+
+  it("keeps a silent machine's seen and last-report ages moving while its data does not change", async () => {
+    const start = Date.parse('2026-07-08T09:05:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    try {
+      render(() => (
+        <AgentsMachinesTable
+          resources={[
+            resource({
+              id: 'omv',
+              name: 'omv',
+              lastSeen: Date.parse('2026-07-08T09:00:00Z'),
+              identity: { ips: ['192.168.0.21'] },
+              agent: {
+                agentVersion: '6.0.2',
+                stale: true,
+                lastReportAt: '2026-07-08T09:00:00Z',
+              },
+            }),
+          ]}
+          emptyIcon={emptyIcon}
+          emptyTitle="No machines"
+          emptyDescription="Install Pulse Agent."
+        />
+      ));
+      await openMachineColumnPicker();
+      await fireEvent.click(screen.getByLabelText('Last seen'));
+
+      expect(screen.getByTitle('omv · 192.168.0.21 | seen 5m ago')).toBeInTheDocument();
+      expect(
+        screen.getByTitle(/Agent has stopped reporting\. Last report 5m ago\./),
+      ).toBeInTheDocument();
+
+      // The agent stays silent: no new data arrives and only the clock moves.
+      vi.setSystemTime(start + 3 * 60 * 60 * 1000);
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+
+      expect(screen.getByTitle('omv · 192.168.0.21 | seen 3h ago')).toBeInTheDocument();
+      expect(
+        screen.getByTitle(/Agent has stopped reporting\. Last report 3h ago\./),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

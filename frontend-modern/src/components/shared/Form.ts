@@ -25,9 +25,9 @@ export const formCheckbox = baseCheckbox;
 export const formControlDense = join(baseControl, 'py-1.5 px-2');
 export const formControlMono = join(baseControl, 'font-mono');
 
-export const formSelect = join(baseControl, 'pr-8 appearance-none');
+export const formSelect = join(baseControl, 'pr-8 appearance-none form-select-arrow');
 export const formTextarea = join(baseControl, 'min-h-[120px] resize-vertical');
-export const formSelectCompact = join(compactControl, 'pr-8 appearance-none');
+export const formSelectCompact = join(compactControl, 'pr-8 appearance-none form-select-arrow');
 export const formTextareaCompact = join(compactControl, 'min-h-16 resize-y');
 
 export const formLabelMuted = join(baseLabel, 'text-muted font-normal');

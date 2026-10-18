@@ -38,6 +38,9 @@ type FleetResourceSummary struct {
 	UnhealthyDisks   int
 	StoragePoolsHigh int
 	Findings         int
+	// MovedTo names the Pulse agents this resource's unresolved alerts
+	// moved to without recovering; those alerts also count as active.
+	MovedTo []string
 }
 
 // FleetAggregate is the fleet-wide rollup. Means are means-of-means:
@@ -313,7 +316,9 @@ func fleetHeuristicPatterns(in FleetNarrativeInput) []NarrativeBullet {
 			Severity: NarrativeSeverityInfo,
 		})
 	}
-	if len(out) == 0 {
+	// Open alerts, including ones that moved to an agent without
+	// recovering, rule out the all-clear even when no metric pattern fired.
+	if len(out) == 0 && in.Aggregate.TotalActiveAlerts == 0 {
 		out = append(out, NarrativeBullet{
 			Text:     fmt.Sprintf("Fleet of %d resources operating within nominal thresholds", in.Aggregate.ResourceCount),
 			Severity: NarrativeSeverityOK,
@@ -373,6 +378,19 @@ func fleetHeuristicRecommendations(in FleetNarrativeInput) []string {
 	if disksHigh > 0 {
 		recs = append(recs, "Replace failing or end-of-life disks before they cause outage")
 	}
+	seenSuccessors := make(map[string]struct{})
+	for _, r := range in.Resources {
+		for _, successor := range r.MovedTo {
+			if _, ok := seenSuccessors[successor]; ok {
+				continue
+			}
+			seenSuccessors[successor] = struct{}{}
+			recs = append(recs, fmt.Sprintf("Check the current reading on %s - an alert moved there without recovering", successor))
+		}
+	}
+	if len(recs) == 0 && a.TotalActiveAlerts > 0 {
+		recs = append(recs, "Review the active alerts on the resources listed above")
+	}
 	if len(recs) == 0 {
 		recs = append(recs, "No fleet-wide action required - continue routine monitoring")
 	}
@@ -402,6 +420,7 @@ func buildFleetNarrativeInput(data *MultiReportData) FleetNarrativeInput {
 
 	var sumCPU, sumMem, sumDisk float64
 	var countCPU, countMem, countDisk int
+	fleetAlerts := data.fleetAlerts()
 
 	for _, rd := range data.Resources {
 		if rd == nil {
@@ -450,11 +469,16 @@ func buildFleetNarrativeInput(data *MultiReportData) FleetNarrativeInput {
 		}
 
 		for _, alert := range rd.Alerts {
-			if alert.ResolvedTime != nil {
+			if alert.Recovered() {
 				summary.ResolvedAlerts++
 				in.Aggregate.TotalResolvedAlerts++
-				continue
 			}
+		}
+		// An alert that moved without recovering stays active until the
+		// fleet report lists its successor's own alert.
+		unresolved := unresolvedAlertsAmong(rd.Alerts, fleetAlerts)
+		summary.MovedTo = movedAlertSuccessors(unresolved)
+		for _, alert := range unresolved {
 			summary.ActiveAlerts++
 			in.Aggregate.TotalActiveAlerts++
 			if alert.Level == "critical" {

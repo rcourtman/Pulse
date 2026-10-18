@@ -1,8 +1,151 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildStackedMemoryBarPresentation } from '../stackedMemoryBarModel';
+import type { AnomalyReport } from '@/types/aiIntelligence';
 
 const GiB = 1024 ** 3;
+
+const anomaly: AnomalyReport = {
+  resource_id: 'vm-100',
+  resource_name: 'test-vm',
+  resource_type: 'vm',
+  metric: 'memory',
+  current_value: 90,
+  baseline_mean: 30,
+  baseline_std_dev: 5,
+  z_score: 12,
+  severity: 'critical',
+  description: 'Memory usage 3x above baseline',
+};
+
+describe('source-owned memory decorations', () => {
+  const props = {
+    used: 90,
+    total: 100,
+    cache: 2,
+    balloon: 98,
+    swapUsed: 10,
+    swapTotal: 20,
+    anomaly,
+  };
+
+  it.each(['last-known', 'unknown'] as const)(
+    'keeps %s composition inspectable without a live severity or anomaly',
+    (state) => {
+      const message = `${state}. Source: QEMU guest agent. Not a current measurement.`;
+      const current = buildStackedMemoryBarPresentation(props, 400);
+      const retained = buildStackedMemoryBarPresentation(
+        { ...props, reading: { state, message } },
+        400,
+      );
+
+      expect(retained.displayPercentValue).toBe(90);
+      expect(retained.displaySublabel).toBe(current.displaySublabel);
+      expect(
+        retained.segments.map(({ label, leftPercent, widthPercent }) => ({
+          label,
+          leftPercent,
+          widthPercent,
+        })),
+      ).toEqual(
+        current.segments.map(({ label, leftPercent, widthPercent }) => ({
+          label,
+          leftPercent,
+          widthPercent,
+        })),
+      );
+      expect(retained.segments.every(({ color }) => color === 'rgba(148, 163, 184, 0.5)')).toBe(
+        true,
+      );
+      expect(retained.tooltipRows.map(({ label, value }) => ({ label, value }))).toEqual(
+        current.tooltipRows.map(({ label, value }) => ({ label, value })),
+      );
+      expect(retained.tooltipRows.every(({ labelClass }) => labelClass === 'text-muted')).toBe(
+        true,
+      );
+      expect(retained.tooltipMessage).toBe(message);
+      expect(retained.showSwapBar).toBe(true);
+      expect(retained.swapBarPercent).toBe(50);
+      expect(retained.swapBarColor).toBe('rgba(148, 163, 184, 0.5)');
+      expect(retained.anomalyDescription).toBeUndefined();
+      expect(retained.anomalyRatio).toBe('');
+    },
+  );
+
+  it.each(['last-known', 'unknown'] as const)(
+    'does not colour a %s percentage-only or host-share value as current pressure',
+    (state) => {
+      const reading = { state, message: 'Not a current measurement.' };
+      const percentOnly = buildStackedMemoryBarPresentation(
+        { used: 0, total: 0, percentOnly: 95, reading, anomaly },
+        400,
+      );
+      const hostShare = buildStackedMemoryBarPresentation(
+        {
+          used: 10,
+          total: 100,
+          severityPercent: 95,
+          comparisonTotalLabel: 'Host total',
+          reading,
+          anomaly,
+        },
+        400,
+      );
+      for (const presentation of [percentOnly, hostShare]) {
+        expect(presentation.segments[0].color).toBe('rgba(148, 163, 184, 0.5)');
+        expect(presentation.anomalyDescription).toBeUndefined();
+        expect(presentation.tooltipMessage).toBe(reading.message);
+      }
+      expect(percentOnly.displayPercentValue).toBe(95);
+      expect(hostShare.displayPercentValue).toBe(10);
+      expect(hostShare.tooltipRows.map(({ label }) => label)).toEqual(['Used', 'Host total']);
+    },
+  );
+
+  it.each([
+    { unavailable: true },
+    { reading: { state: 'unavailable' as const, message: 'Reading unavailable.' } },
+    { unavailable: true, reading: { state: 'last-known' as const, message: 'Last known.' } },
+  ])('withholds every live decoration for unavailable usage (%j)', (availability) => {
+    const presentation = buildStackedMemoryBarPresentation({ ...props, ...availability }, 400);
+    expect(presentation.unavailable).toBe(true);
+    expect(presentation.segments).toEqual([]);
+    expect(presentation.showSwapBar).toBe(false);
+    expect(presentation.swapBarPercent).toBe(0);
+    expect(presentation.showSublabel).toBe(false);
+    expect(presentation.tooltipRows.map(({ label }) => label)).toEqual(['Usage', 'Total']);
+    expect(presentation.anomalyDescription).toBeUndefined();
+    expect(presentation.anomalyRatio).toBe('');
+  });
+
+  it('preserves current and unannotated-platform severity, swap and anomaly behaviour', () => {
+    const legacy = buildStackedMemoryBarPresentation(props, 400);
+    const current = buildStackedMemoryBarPresentation(
+      { ...props, reading: { state: 'current', message: 'Current. Source: Pulse Agent.' } },
+      400,
+    );
+    for (const presentation of [current, legacy]) {
+      expect(presentation.segments[0].color).toBe('rgba(239, 68, 68, 0.6)');
+      expect(presentation.tooltipRows[0].labelClass).toBe('text-red-400');
+      expect(presentation.showSwapBar).toBe(true);
+      expect(presentation.swapBarColor).toBe('rgb(168 85 247)');
+      expect(presentation.anomalyDescription).toBe(anomaly.description);
+      expect(presentation.anomalyRatio).toBe('3.0x');
+    }
+    expect(legacy.tooltipMessage).toBeUndefined();
+  });
+
+  it('keeps a retained measured zero as zero rather than unavailable', () => {
+    const presentation = buildStackedMemoryBarPresentation(
+      { used: 0, total: 100, reading: { state: 'last-known', message: 'Last known zero.' } },
+      400,
+    );
+    expect(presentation.unavailable).toBe(false);
+    expect(presentation.displayLabel).toBe('0%');
+    expect(presentation.tooltipRows[0].value).toBe('0 B');
+    expect(presentation.tooltipMessage).toBe('Last known zero.');
+  });
+});
 
 describe('buildStackedMemoryBarPresentation', () => {
   it('renders unavailable usage without inventing a zero-percent segment', () => {
@@ -19,13 +162,13 @@ describe('buildStackedMemoryBarPresentation', () => {
       {
         borderTop: false,
         label: 'Usage',
-        labelClass: 'text-slate-400',
+        labelClass: 'text-muted',
         value: 'Unavailable',
       },
       {
         borderTop: true,
         label: 'Total',
-        labelClass: 'text-slate-400',
+        labelClass: 'text-muted',
         value: '8.00 GB',
       },
     ]);

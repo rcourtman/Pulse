@@ -1,27 +1,34 @@
-import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode, WorkloadType } from '@/types/workloads';
-import { getWorkloadInfoValue, type WorkloadIOEmphasis } from './guestRowModel';
-import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
+import {
+  getWorkloadInfoValue,
+  type IODistributionStats,
+  type WorkloadIOEmphasis,
+} from './guestRowModel';
+import {
+  parseFilter,
+  parseFilterStack,
+  evaluateFilterStack,
+  splitSearchExclusions,
+} from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
-import { getNodeDisplayName } from '@/utils/nodes';
 import {
   isContainerWorkloadViewMode,
-  getCanonicalWorkloadId,
   getWorkloadCPUPercent,
   resolveWorkloadType,
   workloadMatchesPlatformScope,
   workloadMatchesViewMode,
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 import {
-  buildNodeByInstance,
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
   workloadHostScopeId,
+  workloadNodeScopeId,
+  resolveWorkloadHostScope,
 } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
@@ -76,6 +83,13 @@ const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket
   // own bucket; the probe says nothing useful about a guest nobody expects to
   // answer.
   if (bucket === 'running' && hasFailedAttachedAvailabilityCheck(guest)) {
+    return 'degraded';
+  }
+
+  // A running guest with an open warning or critical alert needs attention
+  // even while its power state and resource status read healthy. Backup age
+  // is deliberately not counted here: it has its own column and tab.
+  if (bucket === 'running' && guest.hasOpenAlert) {
     return 'degraded';
   }
 
@@ -162,7 +176,8 @@ export const filterWorkloads = ({
 
   const nodeScope = selectedNode;
   if (nodeScope && viewMode !== 'pod') {
-    guests = guests.filter((g) => workloadHostScopeId(g) === nodeScope);
+    const resolvedScope = resolveWorkloadHostScope(allGuests, nodeScope);
+    guests = resolvedScope ? guests.filter((g) => workloadHostScopeId(g) === resolvedScope) : [];
   }
 
   const hostHint = (selectedHostHint || '').trim().toLowerCase();
@@ -235,7 +250,12 @@ export const filterWorkloads = ({
     const exclusions: string[] = [];
 
     searchParts.forEach((part) => {
-      if (part.includes('>') || part.includes('<') || part.includes(':')) {
+      if (
+        part.includes('>') ||
+        part.includes('<') ||
+        part.includes(':') ||
+        parseFilter(part).type === 'metric'
+      ) {
         filters.push(part);
       } else {
         const split = splitSearchExclusions(part);
@@ -268,7 +288,16 @@ export const filterWorkloads = ({
 
 export const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
   const disk = guest?.disk;
-  if (!disk) return null;
+  // The row may retain a clearly labelled last-known number. It must not
+  // compete with current readings when sorting capacity, in either direction.
+  if (
+    !disk ||
+    guest.telemetryAvailability?.disk === false ||
+    getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current' ||
+    (typeof disk.usage === 'number' && disk.usage < 0)
+  ) {
+    return null;
+  }
 
   const clamp = (value: number) => Math.min(100, Math.max(0, value));
 
@@ -311,6 +340,12 @@ export const createWorkloadSortComparator = (
     numeric: true,
     sensitivity: 'base',
   });
+  const memorySortValue = (guest: WorkloadGuest): number | null => {
+    const usage = getCurrentWorkloadMemoryUsage(guest);
+    if (usage === null) return null;
+    const value = options.memoryValue ? options.memoryValue(guest) : usage;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  };
 
   return (a: WorkloadGuest, b: WorkloadGuest): number => {
     let aVal: SortValue = null;
@@ -323,8 +358,8 @@ export const createWorkloadSortComparator = (
       aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
       bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
-      aVal = options.memoryValue ? (options.memoryValue(a) ?? 0) : a.memory?.usage || 0;
-      bVal = options.memoryValue ? (options.memoryValue(b) ?? 0) : b.memory?.usage || 0;
+      aVal = memorySortValue(a);
+      bVal = memorySortValue(b);
     } else if (sortKey === 'disk') {
       aVal = getDiskUsagePercent(a);
       bVal = getDiskUsagePercent(b);
@@ -366,7 +401,17 @@ export const createWorkloadSortComparator = (
 export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type === 'vm' || type === 'system-container') {
-    return `${guest.instance}-${guest.node}`;
+    const scope = workloadNodeScopeId(guest);
+    if (
+      guest.platformScopes?.includes('vmware-vsphere') &&
+      !guest.platformScopes.includes('proxmox-pve')
+    ) {
+      // Cluster, connection and host labels can arrive after the first snapshot.
+      // Group ownership follows the server parent so enrichment keeps rows mounted.
+      const parentId = guest.parentResourceId?.trim();
+      return parentId ? `vsphere|parent|${encodeURIComponent(parentId)}` : `vsphere|${scope}`;
+    }
+    return scope;
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
   return `${type}:${context}`;
@@ -403,31 +448,10 @@ export const getWorkloadGroupLabel = (
     const nodeName = (first.node || '').trim();
     if (nodeName && cluster) return { type: cluster, name: nodeName };
     if (nodeName) return { type: '', name: nodeName };
+    const instance = (first.instance || '').trim();
+    if (instance) return { type: '', name: instance };
   }
   return { type: '', name: context };
-};
-
-export const buildWorkloadSummaryGroupScope = (
-  groupId: string,
-  guests: WorkloadGuest[],
-  label: { type: string; name: string },
-): SummarySeriesGroupScope | null => {
-  const seriesIds = Array.from(
-    new Set(guests.map((guest) => getCanonicalWorkloadId(guest)).filter(Boolean)),
-  );
-  if (seriesIds.length === 0) {
-    return null;
-  }
-
-  const summaryLabelParts = [label.name.trim(), label.type.trim()].filter(Boolean);
-  const scopeLabel = summaryLabelParts.join(' · ');
-  const workloadCountLabel = `${guests.length} workload${guests.length === 1 ? '' : 's'}`;
-
-  return {
-    id: groupId.trim(),
-    label: scopeLabel ? `${scopeLabel} (${workloadCountLabel})` : workloadCountLabel,
-    seriesIds,
-  };
 };
 
 export const groupWorkloads = (
@@ -461,46 +485,6 @@ export const groupWorkloads = (
   return groups;
 };
 
-export const buildWorkloadSummaryGroupScopeMap = ({
-  guests,
-  nodes,
-  groupingMode,
-  sortComparator,
-  groupLabelBadges,
-}: {
-  guests: WorkloadGuest[];
-  nodes: Node[];
-  groupingMode: 'grouped' | 'flat';
-  sortComparator: ((a: WorkloadGuest, b: WorkloadGuest) => number) | null;
-  groupLabelBadges?: Record<string, { label: string }>;
-}): Map<string, SummarySeriesGroupScope> => {
-  if (groupingMode !== 'grouped') {
-    return new Map<string, SummarySeriesGroupScope>();
-  }
-
-  const grouped = groupWorkloads(guests, groupingMode, sortComparator);
-  const nodeByInstance = buildNodeByInstance(nodes);
-  const scopes = new Map<string, SummarySeriesGroupScope>();
-  for (const [groupKey, groupGuests] of Object.entries(grouped)) {
-    const node = nodeByInstance[groupKey];
-    const badge = groupLabelBadges?.[groupKey] ?? groupLabelBadges?.[groupKey.toLowerCase()];
-    const scope = buildWorkloadSummaryGroupScope(
-      groupKey,
-      groupGuests,
-      getWorkloadGroupLabel(
-        groupKey,
-        groupGuests,
-        node ? getNodeDisplayName(node) : null,
-        badge?.label,
-      ),
-    );
-    if (scope) {
-      scopes.set(scope.id, scope);
-    }
-  }
-  return scopes;
-};
-
 export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => {
   let running = 0;
   let degraded = 0;
@@ -528,18 +512,47 @@ export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => 
   };
 };
 
-export const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => {
-  const resources = guests.map((guest) => ({
-    network: {
-      rxBytes: Math.max(0, guest.networkIn ?? 0),
-      txBytes: Math.max(0, guest.networkOut ?? 0),
-    },
-    diskIO: {
-      readRate: Math.max(0, guest.diskRead ?? 0),
-      writeRate: Math.max(0, guest.diskWrite ?? 0),
-    },
-  }));
-
-  const { network, diskIO } = computeIOScale(resources as Parameters<typeof computeIOScale>[0]);
-  return { network, diskIO };
+const computeMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
 };
+
+const computePercentile = (values: number[], percentile: number): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const clamped = Math.max(0, Math.min(1, percentile));
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
+  return sorted[index];
+};
+
+// Median absolute deviation plus upper percentiles feed getOutlierEmphasis in
+// guestRowModel; non-finite and negative samples are dropped.
+const buildIODistribution = (values: number[]): IODistributionStats => {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
+  if (valid.length === 0) {
+    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+  }
+
+  const median = computeMedian(valid);
+  const deviations = valid.map((value) => Math.abs(value - median));
+  const mad = computeMedian(deviations);
+  const max = Math.max(...valid, 0);
+  const p97 = computePercentile(valid, 0.97);
+  const p99 = computePercentile(valid, 0.99);
+
+  return { median, mad, max, p97, p99, count: valid.length };
+};
+
+export const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => ({
+  network: buildIODistribution(
+    guests.map((guest) => Math.max(0, guest.networkIn ?? 0) + Math.max(0, guest.networkOut ?? 0)),
+  ),
+  diskIO: buildIODistribution(
+    guests.map((guest) => Math.max(0, guest.diskRead ?? 0) + Math.max(0, guest.diskWrite ?? 0)),
+  ),
+});

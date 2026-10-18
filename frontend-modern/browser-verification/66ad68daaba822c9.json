@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "ca255a0e3f81a8d1588f3e783b7084fc863b37c8",
+  "verified_at": "2026-10-05T05:44:42.674Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "85753788c2e982dcedbab9aed99ff74a1f1623ec35bc7886ab25661e86de2dd9"
+  },
+  "routes": [
+    "/browser-tests/docker-composed.html (production DockerContainersTable and ResourceDetailDrawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Four Chromium desktop / touch WebKit emulated-phone light/dark cases; Playwright 1.56.1 matches integration lock. All 12 captures independently hash-matched and visually inspected.",
+    "Combined small-positive/zero/tiny-positive CPU labels with silent-host/shared-column presentation. Available and missing host context; grouped and flat layout preserve labels and total-host-capacity guidance.",
+    "Real drawer expansion/collapse uses trusted keyboard desktop and tap phone input. View selection follows actual mobile Filters disclosure. No unexpected errors, off-origin requests or operation requests."
+  ],
+  "interactions": [
+    "Toggle host context and restore it; verify host status and engine fallback separately.",
+    "Open real View disclosure (phone Filters first), select List, expand and collapse small-positive container; inspect real drawer scale explanation."
+  ],
+  "proof": {
+    "script": "frontend-modern/browser-tests/docker-composed.cjs",
+    "script_sha256": "7529007d411f8d40bda969e2b43470779077c263e704aba43ecba34fc21467e8",
+    "checks": 12,
+    "screenshots": 12,
+    "browser_closed": true,
+    "server_closed": true,
+    "limits": "Production table, drawer and CSS with selected synthetic resources/APIs. Emulated phone, not a native phone. No collector, engine, threshold duration, notification, installed or release acceptance."
+  }
+}

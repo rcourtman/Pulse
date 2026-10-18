@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Show, createSignal } from 'solid-js';
 import type { AIChatExplanationRequest } from '@/stores/aiChat';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
@@ -7,6 +7,10 @@ import type { QueuedFollowUp } from '../hooks/useChat';
 import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
 import aiChatSource from '../index.tsx?raw';
 import { logger } from '@/utils/logger';
+// Vitest hoists vi.hoisted/vi.mock before these imports. Collect the component
+// here so cold Vite transforms do not consume a functional setup-hook budget.
+import { AIChat, resetAIChatComposerDraftStashForTests } from '../index';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -82,7 +86,6 @@ const {
       chat_model: '',
       control_level: 'read_only',
       autonomous_mode: false,
-      discovery_enabled: true,
     }),
     testProvider: vi.fn().mockResolvedValue({
       success: true,
@@ -412,6 +415,7 @@ vi.mock('../MentionAutocomplete', () => ({
       data-resource-count={String(props.resources.length)}
       data-resource-ids={props.resources.map((resource) => resource.id).join('|')}
       data-resource-labels={props.resources.map((resource) => resource.label).join('|')}
+      data-resource-nodes={props.resources.map((resource) => resource.node || '').join('|')}
     >
       <button
         type="button"
@@ -483,22 +487,6 @@ vi.mock('@/stores/websocket-global', () => ({
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({ byType: mockByType, resources: mockResources }),
 }));
-
-// ── Lazy import after mocks ────────────────────────────────────────────────
-
-let AIChat: typeof import('../index').AIChat;
-let resetAIChatComposerDraftStashForTests: typeof import('../index').resetAIChatComposerDraftStashForTests;
-let resetAIRuntimeState: typeof import('@/stores/aiRuntimeState').resetAIRuntimeState;
-
-beforeAll(async () => {
-  const [chatModule, runtimeModule] = await Promise.all([
-    import('../index'),
-    import('@/stores/aiRuntimeState'),
-  ]);
-  AIChat = chatModule.AIChat;
-  resetAIChatComposerDraftStashForTests = chatModule.resetAIChatComposerDraftStashForTests;
-  resetAIRuntimeState = runtimeModule.resetAIRuntimeState;
-});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -584,7 +572,6 @@ beforeEach(() => {
     chat_model: '',
     control_level: 'read_only',
     autonomous_mode: false,
-    discovery_enabled: true,
   });
   mockAIAPI.testProvider.mockResolvedValue({
     success: true,
@@ -667,12 +654,12 @@ describe('AIChat', () => {
       for (const retiredActionIconShell of [
         'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
         'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
         'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
         'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-        'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-        'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
-        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+        'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
+        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
         'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
         'disabled:opacity-45',
@@ -687,12 +674,33 @@ describe('AIChat', () => {
     });
 
     it('disables transcript actions until the current session has messages', () => {
+      const labels = [
+        'Fork current Assistant session',
+        'Copy last Assistant answer',
+        'Copy Assistant transcript',
+        'Export Assistant transcript',
+      ];
+      // Unrelated controls must not satisfy or make the header oracle ambiguous.
+      // Both rendered roots are owned by the suite's normal cleanup.
+      render(() => (
+        <aside>
+          {labels.map((label) => (
+            <button aria-label={label}>Unrelated action</button>
+          ))}
+        </aside>
+      ));
       renderChat();
 
-      expect(screen.getByRole('button', { name: 'Fork current Assistant session' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Copy last Assistant answer' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Copy Assistant transcript' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Export Assistant transcript' })).toBeDisabled();
+      const actions = within(screen.getByTestId('assistant-header-actions'));
+      // Enumerate visible button roles once, rather than repeat a whole-panel
+      // role/visibility scan for each label. Keep names and disabled state gating.
+      const visibleButtons = actions.getAllByRole('button');
+      for (const label of labels) {
+        const button = actions.getByLabelText(label);
+        expect(visibleButtons).toContain(button);
+        expect(button).toHaveAccessibleName(label);
+        expect(button).toBeDisabled();
+      }
     });
 
     it('copies the latest Assistant answer from the header', async () => {
@@ -1186,7 +1194,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1250,7 +1257,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['openrouter', 'openai'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1307,7 +1313,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter', 'openai'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1363,7 +1368,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1402,7 +1406,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockReturnValue(new Promise(() => {}));
 
@@ -1442,7 +1445,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1482,7 +1484,6 @@ describe('AIChat', () => {
         chat_model: 'gemini:gemini-3.1-flash-lite',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1522,7 +1523,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1582,7 +1582,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1639,7 +1638,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1703,7 +1701,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider
         .mockResolvedValueOnce({
@@ -1746,7 +1743,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -1873,11 +1869,7 @@ describe('AIChat', () => {
           title: 'Home Assistant',
           subject: 'app-container / online / docker',
           statusLabel: 'Read-only context attached',
-          detailLines: [
-            'Resource ID: app-container:homeassistant',
-            'Parent: ha-lxc',
-            'Discovery: app-container:homeassistant',
-          ],
+          detailLines: ['Resource ID: app-container:homeassistant', 'Parent: ha-lxc'],
           safetyNote: 'Approval required before any action.',
         },
       };
@@ -2590,7 +2582,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['openai', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -2683,7 +2674,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValue({
         success: true,
@@ -2749,8 +2739,9 @@ describe('AIChat', () => {
         expect.stringContaining('Explain this issue'),
         undefined,
         'finding-1',
-        expect.objectContaining({ autonomousMode: false, handoffContext: 'Current evidence' }),
+        expect.objectContaining({ handoffContext: 'Current evidence' }),
       );
+      expect(mockChat.sendMessage.mock.calls[0]?.[3]).not.toHaveProperty('autonomousMode');
       expect(textarea).toHaveValue('My unfinished question');
       expect(mockChat.newSession).not.toHaveBeenCalled();
       expect(mockChat.stop).not.toHaveBeenCalled();
@@ -3102,7 +3093,7 @@ describe('AIChat', () => {
         prompt: 'queued scoped prompt',
         mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         findingId: 'finding-1',
-        sendOptions: { autonomousMode: false, handoffContext: 'scoped context' },
+        sendOptions: { handoffContext: 'scoped context' },
         timestamp: new Date('2026-06-06T08:00:00Z'),
       };
       mockChat.queuedFollowUps.mockReturnValue([queued]);
@@ -3132,7 +3123,7 @@ describe('AIChat', () => {
         'edited scoped prompt',
         [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-1',
-        { autonomousMode: false, handoffContext: 'scoped context' },
+        { handoffContext: 'scoped context' },
       );
     });
 
@@ -3519,7 +3510,6 @@ describe('AIChat', () => {
         mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         findingId: 'finding-1',
         sendOptions: {
-          autonomousMode: false,
           handoffContext: 'scoped context',
         },
         timestamp: new Date(),
@@ -3547,7 +3537,6 @@ describe('AIChat', () => {
         [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-1',
         {
-          autonomousMode: false,
           handoffContext: 'scoped context',
         },
       );
@@ -3585,13 +3574,33 @@ describe('AIChat', () => {
       );
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
       expect(screen.getByText('Observes only')).toBeInTheDocument();
-      expect(screen.getByText('Asks before chat-only actions')).toBeInTheDocument();
-      expect(screen.getByText('Eligible chat-only actions')).toBeInTheDocument();
+      expect(screen.getByText('Plans actions for your review')).toBeInTheDocument();
+      expect(screen.queryByText('Eligible chat-only actions')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
       await waitFor(() => {
         expect(document.activeElement).toBe(
           screen.getByRole('menuitemradio', { name: /Read-only/ }),
         );
       });
+    });
+
+    it('clamps the mode menu inside the composer and closes it on viewport resize', () => {
+      renderChat();
+      const trigger = screen.getByRole('button', { name: 'Assistant chat action mode: Read-only' });
+      const composer = trigger.closest('[data-assistant-control-toolbar]') as HTMLElement;
+      expect(composer).not.toBeNull();
+      vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ left: 185 } as DOMRect);
+      vi.spyOn(composer, 'getBoundingClientRect').mockReturnValue({
+        left: 16,
+        right: 374,
+      } as DOMRect);
+      fireEvent.click(trigger);
+      const menu = screen.getByRole('menu', { name: 'Assistant chat action options' });
+      expect(menu.style.width).toBe('240px');
+      expect(menu.style.left).toBe('-51px');
+      fireEvent(window, new Event('resize'));
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('opens the control menu from the keyboard', async () => {
@@ -3628,7 +3637,6 @@ describe('AIChat', () => {
       fireEvent.click(controlButton);
       const readOnlyOption = screen.getByRole('menuitemradio', { name: /Read-only/ });
       const askFirstOption = screen.getByRole('menuitemradio', { name: /Ask first/ });
-      const chatActionsOption = screen.getByRole('menuitemradio', { name: /Chat actions/ });
       await waitFor(() => {
         expect(document.activeElement).toBe(readOnlyOption);
       });
@@ -3637,15 +3645,15 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(askFirstOption);
 
       fireEvent.keyDown(askFirstOption, { key: 'End' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Home' });
+      fireEvent.keyDown(askFirstOption, { key: 'Home' });
       expect(document.activeElement).toBe(readOnlyOption);
 
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowUp' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Escape' });
+      fireEvent.keyDown(askFirstOption, { key: 'Escape' });
 
       await waitFor(() => {
         expect(
@@ -3859,7 +3867,6 @@ describe('AIChat', () => {
           mentions: [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
           findingId: 'finding-101',
           model: 'openrouter:deepseek/deepseek-chat',
-          autonomousMode: false,
           handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
         },
       });
@@ -3885,7 +3892,6 @@ describe('AIChat', () => {
           [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
           'finding-101',
           expect.objectContaining({
-            autonomousMode: false,
             handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
             model: 'openrouter:deepseek/deepseek-chat',
           }),
@@ -4601,9 +4607,7 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: 'what failed?' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.sendMessage).toHaveBeenCalledWith('what failed?', undefined, undefined, {
-        autonomousMode: false,
-      });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('what failed?', undefined, undefined);
     });
 
     it('does not restore handoff context when loading a session fails', async () => {
@@ -4826,7 +4830,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAIChatAPI.listSessions.mockResolvedValue([
         {
@@ -4893,7 +4896,6 @@ describe('AIChat', () => {
         'what changed?',
         undefined,
         'finding-context-only',
-        { autonomousMode: false },
       );
     });
 
@@ -4982,6 +4984,113 @@ describe('AIChat', () => {
   // ── @ mention detection ──────────────────────────────────────────────
 
   describe('mention autocomplete', () => {
+    it('uses canonical provider labels without displaying a legacy instance placeholder', async () => {
+      const storage = {
+        id: 'storage-opaque',
+        type: 'storage' as const,
+        name: 'Archive',
+        displayName: 'Archive',
+        status: 'online',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        vmware: {
+          connectionName: 'Lab vCenter',
+          entityType: 'datastore',
+          managedObjectId: 'datastore-1',
+        },
+        platformData: { instance: 'storage-opaque' },
+      };
+      mockByType.mockImplementation((type: string) => (type === 'storage' ? [storage] : []));
+      mockResources.mockReturnValue([storage]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+      fireEvent.click(screen.getByTestId('mention-select-storage-opaque'));
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).toHaveTextContent('Lab vCenter');
+      expect(selected).not.toHaveTextContent('storage-opaque');
+      expect(selected.textContent?.match(/Lab vCenter/g)).toHaveLength(1);
+    });
+
+    it('withholds governed guest nodes and site names from suggestions and selected chips', async () => {
+      const guest = {
+        id: 'vm-governed',
+        type: 'vm' as const,
+        name: 'secret-guest',
+        status: 'running',
+        label: 'withheld guest',
+        aiSafeSummary: 'withheld guest',
+        policy: {
+          sensitivity: 'restricted' as const,
+          routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
+        },
+        proxmox: { vmid: 101, nodeName: 'secret-node', instance: 'secret-site' },
+      };
+      mockByType.mockImplementation((type: string) => (type === 'vm' ? [guest] : []));
+      mockResources.mockReturnValue([guest]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+      const suggestions = screen.getByTestId('mention-autocomplete');
+      expect(suggestions).toHaveAttribute('data-resource-nodes', '');
+      fireEvent.click(screen.getByTestId('mention-select-vm-governed'));
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).not.toHaveTextContent('secret-node');
+      expect(selected).not.toHaveTextContent('secret-site');
+      expect(selected).not.toHaveTextContent('secret-guest');
+    });
+
+    it('keeps same-label selections distinct and removable by canonical ID', async () => {
+      const clones = ['Site A', 'Site B'].map((instance, index) => ({
+        id: 'vm-owner-' + index,
+        type: 'vm' as const,
+        name: 'duplicate',
+        displayName: 'duplicate',
+        status: 'running',
+        platformType: 'proxmox',
+        sourceType: 'proxmox',
+        proxmox: { vmid: 101, nodeName: 'node1', instance },
+      }));
+      mockByType.mockImplementation((type: string) => (type === 'vm' ? clones : []));
+      mockResources.mockReturnValue(clones);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      const pick = (id: string) => {
+        Object.defineProperty(textarea, 'selectionStart', {
+          value: 1,
+          writable: true,
+          configurable: true,
+        });
+        fireEvent.input(textarea, { target: { value: '@' } });
+        fireEvent.click(screen.getByTestId('mention-select-' + id));
+      };
+      pick('vm-owner-0');
+      pick('vm-owner-1');
+      const selected = screen.getByLabelText('Selected resources');
+      expect(selected).toHaveTextContent('Site A');
+      expect(selected).toHaveTextContent('Site B');
+      fireEvent.click(
+        within(selected).getByRole('button', { name: 'Remove resource: duplicate: Site A: node1' }),
+      );
+      expect(selected).not.toHaveTextContent('Site A');
+      expect(textarea.value).toContain('@duplicate');
+      await waitForProviderCheckSettled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        '@duplicate',
+        [expect.objectContaining({ id: 'vm-owner-1', name: 'duplicate', type: 'vm' })],
+        undefined,
+      );
+    });
+
     it('activates mention autocomplete on @ input', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
@@ -5211,10 +5320,10 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(
           screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids'),
-        ).toContain('agent:vc-1:host:host-101');
+        ).toContain('vmware-host-1');
       });
 
-      fireEvent.click(screen.getByTestId('mention-select-agent:vc-1:host:host-101'));
+      fireEvent.click(screen.getByTestId('mention-select-vmware-host-1'));
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
@@ -5222,7 +5331,7 @@ describe('AIChat', () => {
           '@ESXi 01',
           [
             expect.objectContaining({
-              id: 'agent:vc-1:host:host-101',
+              id: 'vmware-host-1',
               name: 'ESXi 01',
               type: 'agent',
             }),
@@ -5338,7 +5447,7 @@ describe('AIChat', () => {
         '@redacted by policy',
         [
           expect.objectContaining({
-            id: 'node::secret-node-1',
+            id: 'agent-1',
             name: 'redacted by policy',
             type: 'agent',
           }),
@@ -5497,7 +5606,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -5573,7 +5681,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -5719,45 +5826,28 @@ describe('AIChat', () => {
   // ── Autonomous warning ───────────────────────────────────────────────
 
   describe('autonomous warning', () => {
-    it('shows autonomous warning in the activity dock when control level is autonomous', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      renderChat();
-      await waitFor(() => {
-        const warning = screen.getByRole('status', {
-          name: 'Assistant chat actions warning',
+    it.each(['autonomous', 'suggest', 'controlled'])(
+      'shows saved %s as planning for review without a misleading execution warning',
+      async (level) => {
+        mockAIAPI.getSettings.mockResolvedValue({
+          model: 'gpt-4',
+          control_level: level,
         });
-        expect(screen.getByTestId('assistant-activity-dock')).toContainElement(warning);
-        expect(warning).toHaveTextContent('Chat-only actions are allowed.');
-      });
-    });
-
-    it('shows Switch to Ask first button in autonomous warning row', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      renderChat();
-      await waitFor(() => {
+        renderChat();
+        await waitFor(() => expect(screen.getByText('Chat: Ask first')).toBeInTheDocument());
         expect(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        ).toBeInTheDocument();
+          screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
+        ).not.toBeInTheDocument();
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Assistant chat action mode: Ask first' }),
+        );
+        expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
         expect(
-          screen.getByRole('button', { name: 'Switch Assistant chat actions to Ask first' }),
-        ).toBeInTheDocument();
-        expect(
-          screen.getByRole('button', { name: 'Dismiss chat actions warning' }),
-        ).toBeInTheDocument();
-      });
-    });
+          screen.getByRole('menuitemradio', { name: /Plans actions for your review/ }),
+        ).toHaveAttribute('aria-checked', 'true');
+        expect(mockAIAPI.updateSettings).not.toHaveBeenCalled();
+      },
+    );
 
     it('keeps scoped dashboard handoffs approval-required without showing the autonomous warning', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
@@ -5765,7 +5855,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: undefined,
@@ -5793,7 +5882,6 @@ describe('AIChat', () => {
         'summarize this dashboard',
         undefined,
         undefined,
-        { autonomousMode: false },
       );
     });
 
@@ -5803,7 +5891,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
@@ -5834,7 +5921,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         autonomousMode: false,
@@ -5867,7 +5953,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         autonomousMode: false,
@@ -5906,7 +5991,6 @@ describe('AIChat', () => {
         undefined,
         undefined,
         {
-          autonomousMode: false,
           handoffContext:
             '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
           handoffResources: [
@@ -5934,7 +6018,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
@@ -5989,39 +6072,7 @@ describe('AIChat', () => {
         'what changed next?',
         undefined,
         undefined,
-        { autonomousMode: false },
       );
-    });
-  });
-
-  // ── Discovery hint ───────────────────────────────────────────────────
-
-  describe('discovery hint', () => {
-    it('shows discovery hint when discovery is disabled', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'read_only',
-        autonomous_mode: false,
-        discovery_enabled: false,
-      });
-      renderChat();
-      await waitFor(() => {
-        expect(screen.getByText('Discovery is off.')).toBeInTheDocument();
-      });
-      expect(
-        screen.getByText(
-          /Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details\./,
-        ),
-      ).toBeInTheDocument();
-    });
-
-    it('does not show discovery hint when discovery is enabled', async () => {
-      renderChat();
-      await waitFor(() => {
-        expect(mockAIAPI.getSettings).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Discovery is off.')).not.toBeInTheDocument();
     });
   });
 
@@ -6506,13 +6557,12 @@ describe('AIChat', () => {
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 
-    it('keeps autonomous warning alongside active assistant streaming status', async () => {
+    it('keeps active streaming status without a retired autonomous warning', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
@@ -6532,9 +6582,12 @@ describe('AIChat', () => {
         expect(activityDock).toContainElement(
           screen.getByLabelText('Assistant active turn status'),
         );
-        expect(activityDock).toContainElement(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        );
+        expect(
+          screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Assistant chat action mode: Ask first' }),
+        ).toBeInTheDocument();
       });
     });
 

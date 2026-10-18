@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "39dcdc4ba5b2b17d27d0f121049808e5f4d05578",
+  "verified_at": "2026-10-16T22:50:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "e6bde0c1e54e65978cc884b3cc4692029a029a6795bfa6bd89918ea682ab9c2c",
+    "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx": "88961b2058d5a2c65e854a41ed3d5289adcce090efb43d52b66558fbc5e61217",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "f55a8fbfb24d73e1ca97d9331d8cb7135f02d192eaa2b3666ebdf1b59d38c8f2",
+    "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx": "ce16b2cbcca1f2cf8e693dd30facba35c635031127def00c38fd811d6ad77d63",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "1e7f81b175567fc32ac679606ea46b87c24c600002037437a8192c7aefe27f34"
+  },
+  "routes": [
+    "/settings/security/api",
+    "/settings/support/diagnostics",
+    "/settings/infrastructure/agent-doctor",
+    "/standalone/availability?view=fleet"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of origin/main a93b5be1d3 plus this change, served by vite preview and proxied to the pulse-dev :7699 mock-estate rig, signed in through the real login form",
+    "API Access token inventory with one injected token (lastUsedAt one minute before the page clock): Last used read '1 min ago' and 'Created 1 day ago' at both widths",
+    "Diagnostics & Health after Run Diagnostics, response passed through with discovery.lastScanStartedAt set one minute back: Last Scan read '1m ago'",
+    "Agent Doctor with the rig's live agents: the compact Seen label is visible only at phone width ('4h ago'); at 1440 the table shows the absolute Last seen column and no relative label",
+    "Availability fleet drawer (non-table-row presentation, remote history on): Overview Relationship map with one relationship injected into the real facet response read 'last seen 1m ago'",
+    "Same drawer Manage tab with one stubbed action audit: Action history row read '2 hours ago \u2022 admin' before the second clock jump"
+  ],
+  "interactions": [
+    "Installed the page clock (Playwright clock), then jumped it forward two hours per surface with no navigation, refetch or other input",
+    "API token Last used advanced 1 min ago -> 2 hours ago (desktop and phone)",
+    "Diagnostics Last Scan advanced 1m ago -> 2h ago (desktop and phone)",
+    "Agent Doctor phone Seen labels advanced 4h ago -> 6h ago",
+    "Relationship map last seen advanced 1m/2m ago -> 2h ago (desktop and phone)",
+    "Action history row advanced 2 hours ago -> 4 hours ago (desktop and phone)",
+    "Clicked Run Diagnostics, opened a fleet card drawer, switched Overview -> Manage"
+  ],
+  "browser": {
+    "client": "1.62.1",
+    "engine": "Chromium",
+    "version": "151.0.7922.34"
+  },
+  "scope": "Real authenticated app against the synthetic mock rig. API token list, diagnostics discovery field, relationship facet and action-audit list were injected or patched with page.route because the mock estate has none with a recent timestamp; Agent Doctor used live rig data. Ticking was driven by the Playwright page clock, so data pushes from the rig were not excluded at that layer; the vitest fake-timer tests prove the label advances with no other re-render."
+}

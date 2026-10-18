@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -1389,4 +1390,36 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 				result.Guests[0].Node, result.Guests[1].Node)
 		}
 	})
+}
+
+func TestGuestMemorySampleCapacityContract(t *testing.T) {
+	t.Run("selection", testGuestMemorySampleCapacitySelection)
+	t.Run("cache-binding", testGuestMemorySampleCapacityCacheBinding)
+}
+
+func TestGuestPollOwnershipStagesAllReadingEffects(t *testing.T) {
+	c := &guestPollOwnershipClient{cpu: .95}
+	m := guestPollOwnershipMonitor(t, c)
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", c)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	resources := c.resources()
+	vm, ok := m.handleClusterVMResource(ctx, "site-a", resources[0], "site-a:node:105", c, nil, nil)
+	if !ok {
+		t.Fatal("VM builder lost inventory")
+	}
+	ct, ok := m.handleClusterContainerResource(ctx, "site-a", resources[1], "site-a:node:106", c, nil, nil)
+	if !ok {
+		t.Fatal("container builder lost inventory")
+	}
+	stagePVEGuestEffect(ctx, func() { m.recordGuestMetrics([]models.VM{vm}, []models.Container{ct}, time.Time{}) })
+	if len(m.GetDiagnosticSnapshots().Guests) != 0 || len(m.metricsHistory.GetGuestMetrics(vm.ID, "cpu", time.Hour)) != 0 || len(m.state.GetSnapshot().VMs) != 0 {
+		t.Fatal("a partial builder published before the complete guest generation")
+	}
+	m.publishPVEGuests(ctx, "site-a", []models.VM{vm}, []models.Container{ct})
+	if len(m.GetDiagnosticSnapshots().Guests) != 2 || len(m.state.GetSnapshot().VMs) != 1 || len(m.metricsHistory.GetGuestMetrics(vm.ID, "cpu", time.Hour)) != 1 || len(guestHistoryStoredPoints(t, m, "vm", vm.ID, "cpu")) != 1 {
+		t.Fatal("accepted generation lost diagnostics or in-memory/persistent History")
+	}
 }

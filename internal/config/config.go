@@ -676,6 +676,11 @@ type PMGInstance struct {
 	Fingerprint string
 	VerifySSL   bool
 
+	// MonitoringConfigured distinguishes an explicit all-off scope from legacy
+	// entries which predate collection options. Older all-zero entries keep
+	// the existing mail-statistics default until their scope is saved.
+	MonitoringConfigured bool `json:"monitoringConfigured,omitempty"`
+
 	MonitorMailStats             bool
 	MonitorQueues                bool
 	MonitorQuarantine            bool
@@ -685,6 +690,12 @@ type PMGInstance struct {
 
 	// Lifecycle. See PVEInstance.Disabled.
 	Disabled bool `json:"disabled,omitempty"`
+}
+
+// MailStatsEnabled resolves the legacy default without overriding a saved opt-out.
+func (i PMGInstance) MailStatsEnabled() bool {
+	return i.MonitorMailStats || (!i.MonitoringConfigured && !i.MonitorQueues &&
+		!i.MonitorQuarantine && !i.MonitorDomainStats)
 }
 
 // Global persistence instance for saving

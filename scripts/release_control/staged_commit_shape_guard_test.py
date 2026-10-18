@@ -1,27 +1,90 @@
 import io
+import json
 import os
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+from repo_file_io import strip_local_git_env
 from staged_commit_shape_guard import (
+    REGISTRY_PATH,
+    STATUS_PATH,
     CONTRACT_NEUTRAL_OVERRIDE_ENV,
     advanced_lane_ids,
     format_combined_errors,
     lane_progress_shape_errors,
+    load_staged_registry_payload,
+    load_staged_status_payload,
     main,
     staged_promotion_proof_errors,
 )
 
 
+class StagedGovernanceInputTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> None:
+        env = os.environ.copy()
+        strip_local_git_env(env)
+        subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_staged_inputs_ignore_unstaged_edits_and_missing_worktree_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            self.git(repo_root, "init", "--initial-branch=main")
+            loaders = (
+                (STATUS_PATH, load_staged_status_payload),
+                (REGISTRY_PATH, load_staged_registry_payload),
+            )
+            expected = {"fixture_source": "index"}
+            for rel, _ in loaders:
+                path = repo_root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(expected) + "\n", encoding="utf-8")
+            self.git(repo_root, "add", "--", *(rel for rel, _ in loaders))
+
+            with patch("repo_file_io.REPO_ROOT", repo_root):
+                for rel, loader in loaders:
+                    path = repo_root / rel
+                    for content in ('{"fixture_source": "working-tree"}', "invalid json"):
+                        with self.subTest(path=rel, unstaged_content=content):
+                            path.write_text(content + "\n", encoding="utf-8")
+                            self.assertEqual(loader(), expected)
+                    with self.subTest(path=rel, worktree_missing=True):
+                        path.unlink()
+                        self.assertEqual(loader(), expected)
+
+    def test_missing_index_inputs_fail_closed_with_worktree_files_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            self.git(repo_root, "init", "--initial-branch=main")
+            with patch("repo_file_io.REPO_ROOT", repo_root):
+                for rel, loader in (
+                    (STATUS_PATH, load_staged_status_payload),
+                    (REGISTRY_PATH, load_staged_registry_payload),
+                ):
+                    with self.subTest(path=rel):
+                        path = repo_root / rel
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text('{"fixture_source": "working-tree"}\n', encoding="utf-8")
+                        with self.assertRaises(FileNotFoundError):
+                            loader()
+
+
 class StagedCommitShapeGuardTest(unittest.TestCase):
-    def test_advanced_lane_ids_detects_score_or_completion_progress(self) -> None:
+    def test_advanced_lane_ids_detects_declared_status_or_completion_progress(self) -> None:
         previous = {
             "lanes": [
                 {
                     "id": "L15",
-                    "current_score": 6,
-                    "target_score": 8,
                     "status": "partial",
                     "completion": {"state": "open"},
                 }
@@ -31,15 +94,11 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
             "lanes": [
                 {
                     "id": "L15",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
-                    "completion": {"state": "open"},
+                    "completion": {"state": "bounded-residual"},
                 },
                 {
                     "id": "L16",
-                    "current_score": 8,
-                    "target_score": 8,
                     "status": "target-met",
                     "completion": {"state": "complete"},
                 },
@@ -90,8 +149,6 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
@@ -103,9 +160,7 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 6,
-                    "target_score": 8,
-                    "status": "partial",
+                    "status": "not-started",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
                 }
@@ -145,8 +200,6 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
@@ -158,9 +211,7 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 6,
-                    "target_score": 8,
-                    "status": "partial",
+                    "status": "not-started",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
                 }

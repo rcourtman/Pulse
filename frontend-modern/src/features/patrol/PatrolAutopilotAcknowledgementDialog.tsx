@@ -62,7 +62,7 @@ export const PatrolAutopilotAcknowledgementDialog: Component<{ state: PatrolInte
           </Button>
         </header>
         <div class="overflow-y-auto px-5 py-4">
-          <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950/25 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
             <p class="font-semibold">
               Autopilot may execute eligible infrastructure actions without asking each time.
             </p>

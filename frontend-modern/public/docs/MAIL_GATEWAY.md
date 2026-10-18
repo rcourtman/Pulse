@@ -1,92 +1,149 @@
-# Proxmox Mail Gateway (PMG) Monitoring
+# Proxmox Mail Gateway (PMG) monitoring
 
-Pulse monitors Proxmox Mail Gateway instances alongside your PVE, PBS, and other infrastructure.
+Pulse reads PMG mail statistics, queues, quarantine totals and cluster information.
+It does not send mail through PMG, release quarantined messages or repair its
+queues. Pulse's own alert email uses a separate SMTP destination in
+**Alerts → Notifications**; see [email troubleshooting](TROUBLESHOOTING.md#emails-not-sending).
 
-## Features
+## Add a PMG connection
 
-- **Mail Queue Monitoring**: Track active, deferred, and held messages
-- **Spam Statistics**: View spam detection rates and virus blocks
-- **Cluster Status**: Monitor PMG cluster node health
-- **Quarantine Overview**: See quarantine size and pending reviews
+1. Open **Settings → Infrastructure → Add infrastructure**. Search for
+   **Proxmox Mail Gateway**, or use **Show more sources** to reveal its card.
+2. Give the connection a recognisable name and the PMG API address, normally
+   `https://pmg.example.com:8006`. Use the address reachable **from the Pulse
+   server**, not just from your browser. Keep HTTPS and certificate verification
+   enabled; correct the certificate trust or name rather than bypassing them.
+3. Choose **Username & Password**. Use a dedicated PMG service account, such
+   as `pulse-monitor@pmg`, with the minimum read permissions supported by your
+   PMG version for the data you need. Enter its password only in the private
+   settings form; do not put it in a command, URL or issue report.
+4. Review the connection and save it. Check ordinary collection afterwards in
+   **Proxmox → Mail Gateway** (`/proxmox/mail`). A successful connection test
+   does not establish that queues, quarantine and every cluster node were read.
 
-## Adding a PMG Instance
+The current PMG credential form uses password authentication, not the PVE/PBS
+API-token setup. Do not follow a PVE/PBS token or privilege-separation recipe
+for PMG, or switch to `root@pam` merely to make a read succeed. An older setup
+hint that refers to PMG API-token fields does not change this form's contract.
+Use the PMG version's own account-management tools for the service account;
+do not grant mail-management or administrator privileges just to fill a panel.
 
-### Via Settings UI
+### Discovery is optional
 
-1. Navigate to **Settings → Infrastructure**
-2. Click **Add Node**
-3. Select **Proxmox Mail Gateway** as the type
-4. Enter connection details:
-   - Host: Your PMG IP or hostname
-   - Port: 8006 (default)
-   - Username: e.g., `root@pam` or a dedicated `api@pmg` user
-   - Password: the PMG account password
+If you already know the endpoint, add it directly; a network scan is not needed.
+Discovery in **Settings → Infrastructure** finds candidate platform APIs on
+configured networks for review. It does not authenticate or add a PMG connection
+by itself, and a missing candidate does not prove the gateway is unavailable.
+Only scan networks you administer and intend to scan. Do not broaden a scan or
+repeat discovery merely to diagnose missing statistics.
 
-### Via Discovery
+### Collection scope and older releases
 
-Pulse can automatically discover PMG instances on your network:
+The connection form offers **Mail statistics & trends**, **Queue health
+insights**, **Quarantine totals** and **Domain-level statistics**. Domain
+statistics are off by default for a new connection. In current development
+source, the saved switches control these subsequent ordinary poll requests:
 
-1. Enable discovery in **Settings → System → Network**
-2. Go to **Settings → Infrastructure**
-3. PMG instances on port 8006 are detected and shown in the Proxmox discovery panels
-4. Click a discovered PMG server to add it
+| Saved option | Reads it controls |
+| --- | --- |
+| Mail statistics & trends | Mail statistics, hourly mail counts and spam-score distribution. |
+| Queue health insights | Each collected cluster node's queue status. |
+| Quarantine totals | Both spam and virus quarantine counts. |
+| Domain-level statistics | Relay-domain inventory and domain statistics. |
 
-## Service Account Setup on PMG
+Saving all four options off preserves that choice when settings are reopened.
+An older connection with no recorded scope keeps the legacy mail-statistics
+default until its collection scope is explicitly saved; all-zero legacy settings
+cannot distinguish an old opt-out from an unset default. Version, cluster and
+configuration-backup reads are independent of these four switches: all four off
+does not mean no PMG requests. Edits apply to the next poll, not requests already
+in flight. Disabling collection removes coverage; it does not dismiss an
+existing alert or establish recovery.
 
-PMG does not support API tokens. Use a dedicated PMG user with read-only access if possible:
+**Published v6.5.0 does not contain this scope correction.** In that version,
+mail, queue and quarantine requests can still run with their options off;
+domain statistics alone follow their switch. Do not rely on those three
+switches as a privacy boundary in v6.5.0, or assume development-source behaviour
+is present in an installed release. An absent chart is not evidence that
+requests stopped.
 
-- Create a user in the PMG UI (or CLI) such as `api@pmg`.
-- Assign the minimum permissions needed to read mail statistics and cluster status.
-- Use that username and password when adding the node in Pulse.
+If PMG collection must stop, pause the **PMG connection** in
+**Settings → Infrastructure**, rather than deleting it or only disabling
+alerts. Pausing prevents subsequent ordinary polls; it does not cancel a
+request already in flight. PMG readings and alerts are unavailable or stale
+while paused, so use the gateway's own monitoring and arrange independent
+coverage. Restore only the connection you deliberately paused when it is safe
+to resume. Do not restart Pulse or alter PMG queues to verify an opt-out.
 
-## Dashboard
+## Read the Mail Gateway view
 
-In the v6 unified navigation, PMG data appears on the **Infrastructure** page (filter by **PMG** source):
+There is no PMG filter on a top-level Infrastructure monitoring page. Use
+**Proxmox → Mail Gateway** and clear its search and status filters before
+treating an absent row as a missing connection. Expand the intended gateway's
+row to inspect its detail; compare connection and node identity, not just a
+similar name in another installation.
 
-| Metric | Description |
-|--------|-------------|
-| **Mail Processed** | Total emails processed today |
-| **Spam Rate** | Percentage of spam detected |
-| **Virus Blocked** | Malicious emails caught |
-| **Queue Depth** | Messages pending delivery |
-| **Quarantine Size** | Emails in quarantine |
+| Reading | Meaning and limits |
+| --- | --- |
+| **Mail**, **Spam**, **Virus** | Collected counts, not a mail-delivery receipt or a configurable spam-rate threshold. The drawer labels its mail-statistics timeframe; compare the same window in PMG. |
+| **Queue**, **Deferred** | Reported backlog across collected nodes. The node details separate active, deferred, held and incoming messages, and show the oldest-message age where available. |
+| **Quarantine** | Collected category totals, not a list of messages awaiting your review or permission to release them. |
+| Gateway/node state | Connection and alert context, not proof that all datasets are complete or that intended recipients received mail. Inspect any attention reason and the affected reading separately. |
+| Domain detail | Optional domain statistics; an absent section is not proof of zero traffic. The drawer shows only the top eight reported domains, not the entire domain inventory. |
 
-### Status Indicators
+**Healthy is not complete collection.** The gateway can remain online after a
+mail-statistics, node-queue or quarantine read fails. Some missing fields can
+display as zero or an empty section. A recent overall update time, a green
+badge or one populated panel does not prove that every dataset was read. Compare
+the affected value and observation window with PMG's own existing view before
+acting on an apparent empty queue or quarantine.
 
-- 🟢 **Healthy**: Normal operation
-- 🟡 **Warning**: Queue building up or high spam rate
-- 🔴 **Critical**: Delivery issues or cluster problems
+Current development source records downstream read failures as incomplete
+collection while retaining the successful version connection. Missing readings
+do not become observed zero totals or resolve their metric alerts. Partial
+queue data can still raise the highest configured severity, but cannot clear
+or downgrade an existing alert; quarantine recovery requires both categories.
+These collector safeguards do not make every empty display a verified zero.
 
 ## Alerts
 
-Configure alerts for PMG metrics in **Alerts → Thresholds**:
+Open **Alerts → Thresholds → Proxmox** and find **Mail Gateway Thresholds**.
+The configurable PMG thresholds cover total, deferred and held queue counts,
+oldest-message age in **minutes**, spam/virus quarantine counts, and quarantine
+growth **percentage plus minimum message growth**. Check the saved values and
+the intended gateway's overrides; a queue-count threshold is not a percentage.
 
-- Queue depth exceeding threshold
-- Spam rate spike
-- Delivery failures
-- Cluster node offline
+PMG also has connectivity and mail anomaly checks, but the displayed spam/virus
+counts do not expose a user-configurable spam-rate or delivery-failure
+threshold. An alert in Pulse does not guarantee a notification was routed or
+received. Follow [notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+for that separate path. Do not send test mail, fill a queue, release quarantine
+or lower a production threshold merely to generate an alert.
 
-## Multi-Instance Support
+## Troubleshooting without changing the gateway
 
-Monitor multiple PMG instances from a single Pulse dashboard:
+Use the original error, time and affected dataset before changing credentials
+or permissions:
 
-- Compare spam rates across gateways
-- Aggregate mail statistics
-- View cluster-wide health
+| Observation | First check |
+| --- | --- |
+| Connection refused or timed out | The saved scheme, host and port, and the network path from the Pulse server. Browser access is a different path; refusal is not a password verdict. |
+| Certificate validation error | The certificate name, expiry and trusted chain for that endpoint. Do not disable verification or change to HTTP. |
+| 401/403 | The configured account and its read permissions for the specific failed request, privately. Do not grant administrator access as a diagnostic shortcut. |
+| Gateway is present but statistics are missing | Clear view filters, check whether the connection is paused, and compare the particular dataset and time window with PMG. A successful test or version read does not establish dataset access. |
+| Cluster nodes or node queues are missing | Compare the gateway's existing cluster inventory and each affected node's native queue view. One reachable node does not prove every node was collected. |
 
-## Troubleshooting
+For a new connection, allow its configured polling interval rather than a fixed
+one- or two-cycle promise. If a previously working reading stops advancing,
+retain that observation and the original bounded error; do not repeatedly test,
+scan, restart, re-add the connection or change the mail system to reproduce it.
+Use the [bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs)
+for your actual deployment if needed. Do not enable Debug to obtain more data.
 
-### Connection refused
-1. Verify PMG is accessible on port 8006
-2. Check firewall rules
-3. Ensure the PMG user/password is correct and has read permissions
-
-### No statistics showing
-1. Wait for initial data collection (may take 1-2 polling cycles)
-2. Verify PMG has mail activity
-3. Check Pulse logs for API errors
-
-### Cluster nodes missing
-1. PMG cluster must be properly configured
-2. The PMG user needs cluster-wide permissions
-3. All nodes must be reachable from Pulse
+A useful report names the running Pulse/PMG versions, affected view and dataset,
+original time/sequence, expected versus displayed value and matching native
+time window, plus the relevant redacted error. Use consistent placeholders for
+private gateway/node/domain identities. Keep passwords, tickets, tokens, mail
+addresses, subjects, message contents, full API responses, configuration and
+unredacted screenshots private. Unavailable evidence is unknown, not zero;
+do not recreate mail traffic or repeat a failing action to obtain it.

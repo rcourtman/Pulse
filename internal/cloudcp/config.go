@@ -222,24 +222,29 @@ func LoadConfig() (*CPConfig, error) {
 	providerMSPLicenseKey := ""
 	providerMSPLeaseSigningPublicKey := ""
 	providerMSPLicenseExpiresAt := time.Time{}
-	if isMSPControlPlaneMode(controlPlaneMode) && providerMSPLicenseFile != "" {
+	// A provider that started without a host licence can later persist a paid
+	// renewal. Read that same signed source on restart even while the original
+	// Compose secret remains the unused /dev/null placeholder.
+	if isMSPControlPlaneMode(controlPlaneMode) && (providerMSPLicenseFile != "" || controlPlaneMode == ControlPlaneModeProviderHostedMSP) {
 		resolved, source, err := resolveProviderMSPLicense(providerMSPLicenseFile, dataDir)
 		if err != nil {
 			return nil, fmt.Errorf("resolve provider MSP license: %w", err)
 		}
-		providerMSPPlanVersion = resolved.PlanVersion
-		providerMSPPlanSource = source
-		providerMSPLicenseExpiresAt = resolved.ExpiresAt
-		providerMSPLicenseID = resolved.LicenseID
-		providerMSPLicenseEmail = resolved.LicenseEmail
-		providerMSPLicenseKey = resolved.LicenseKey
-		providerMSPLeaseSigningPublicKey = resolved.LeaseSigningPublicKey
-		if resolved.lapsed(time.Now()) {
-			log.Warn().
-				Str("license_id", resolved.LicenseID).
-				Str("plan_version", resolved.PlanVersion).
-				Time("expired_at", resolved.ExpiresAt).
-				Msg("Provider MSP license has lapsed: the portal stays up to sell the renewal, no new clients can be added, and client workspaces drop MSP capabilities")
+		if resolved != nil {
+			providerMSPPlanVersion = resolved.PlanVersion
+			providerMSPPlanSource = source
+			providerMSPLicenseExpiresAt = resolved.ExpiresAt
+			providerMSPLicenseID = resolved.LicenseID
+			providerMSPLicenseEmail = resolved.LicenseEmail
+			providerMSPLicenseKey = resolved.LicenseKey
+			providerMSPLeaseSigningPublicKey = resolved.LeaseSigningPublicKey
+			if resolved.lapsed(time.Now()) {
+				log.Warn().
+					Str("license_id", resolved.LicenseID).
+					Str("plan_version", resolved.PlanVersion).
+					Time("expired_at", resolved.ExpiresAt).
+					Msg("Provider MSP license has lapsed: the portal stays up to sell the renewal, no new clients can be added, and client workspaces drop MSP capabilities")
+			}
 		}
 	}
 
@@ -336,7 +341,7 @@ func LoadConfig() (*CPConfig, error) {
 func (c *CPConfig) validateProviderMSPLeaseSigningBinding() error {
 	if c == nil || !c.IsProviderHostedMSP() || strings.TrimSpace(c.ProviderMSPLicenseKey) == "" {
 		// Pulse-hosted modes sign with Pulse's own key, and the env-fallback
-		// plan path (dev/install-proof without a license file) has nothing
+		// plan path (unlicensed evaluation or dev/install-proof) has nothing
 		// to bind against.
 		return nil
 	}
@@ -455,7 +460,10 @@ func (c *CPConfig) validate() error {
 		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 			return fmt.Errorf("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
-		if c.Environment == "production" && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
+		// Provider-operated portals must remain reachable when setup deliberately
+		// skips evaluation issuance or cannot reach the licence server. This is
+		// not an unlicensed production route for Pulse-hosted MSP planes.
+		if c.Environment == "production" && !c.IsProviderHostedMSP() && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
 			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if !strings.HasPrefix(strings.ToLower(c.ProviderMSPPlanVersion), "msp_") {
@@ -463,6 +471,9 @@ func (c *CPConfig) validate() error {
 		}
 		if _, known := pkglicensing.WorkspaceLimitForPlan(c.ProviderMSPPlanVersion); !known {
 			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must have a known workspace limit, got %q", c.ProviderMSPPlanVersion)
+		}
+		if c.Environment == "production" && c.IsProviderHostedMSP() && !ProviderMSPPlanSourceIsSignedLicense(c.ProviderMSPPlanSource) && c.ProviderMSPPlanVersion != defaultProviderHostedMSPPlanVersion {
+			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must be %s without a signed provider MSP license in production", defaultProviderHostedMSPPlanVersion)
 		}
 	}
 	if c.StorageGuardrailsEnabled {
@@ -689,7 +700,7 @@ func resolveProviderMSPLicenseFile(path string, allowLapsed bool) (*providerMSPL
 
 // ProviderMSPPlanSourceIsSignedLicense reports whether the plan came from a
 // Pulse-signed licence, either the host licence file or a renewed licence,
-// rather than the development-only environment fallback.
+// rather than unlicensed evaluation or the development environment fallback.
 func ProviderMSPPlanSourceIsSignedLicense(source string) bool {
 	switch strings.TrimSpace(source) {
 	case ProviderMSPPlanSourceLicenseFile, ProviderMSPPlanSourceRenewedLicense:
@@ -738,19 +749,28 @@ func (c *CPConfig) ProviderMSPLicenseLapsed(now time.Time) bool {
 // candidates must be authentic Pulse licences, and validate still ties the
 // chosen one to this control plane's lease signing key.
 func resolveProviderMSPLicense(hostFile, dataDir string) (*providerMSPLicenseResolution, string, error) {
+	hostFile = strings.TrimSpace(hostFile)
 	now := time.Now()
 	var renewed *providerMSPLicenseResolution
 	renewedPath := ProviderMSPRenewedLicensePath(dataDir)
 	if _, err := os.Stat(renewedPath); err == nil {
 		candidate, err := resolveProviderMSPLicenseFile(renewedPath, true)
 		if err != nil {
+			if hostFile == "" {
+				return nil, "", fmt.Errorf("read renewed provider MSP license: %w", err)
+			}
 			log.Warn().Err(err).Str("path", renewedPath).Msg("Renewed provider MSP license is unusable; falling back to CP_PROVIDER_MSP_LICENSE_FILE")
 		} else {
 			renewed = candidate
 		}
+	} else if hostFile == "" && !os.IsNotExist(err) {
+		return nil, "", fmt.Errorf("stat renewed provider MSP license: %w", err)
 	}
-	if renewed != nil && !renewed.lapsed(now) {
+	if renewed != nil && (!renewed.lapsed(now) || hostFile == "") {
 		return renewed, ProviderMSPPlanSourceRenewedLicense, nil
+	}
+	if hostFile == "" {
+		return nil, ProviderMSPPlanSourceEnvFallback, nil
 	}
 	host, err := resolveProviderMSPLicenseFile(hostFile, true)
 	if err != nil {

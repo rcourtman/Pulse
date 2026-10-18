@@ -271,6 +271,8 @@ describe('securityScorePresentation', () => {
           key: 'export',
           description: 'Token + passphrase required',
         }),
+        // Publicly reachable, so HTTPS counts as critical.
+        expect.objectContaining({ key: 'https', critical: true }),
       ]),
     );
 

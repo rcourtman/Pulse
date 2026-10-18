@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getAuditWebhookNotificationsSignpost,
   AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS,
   AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS,
   AUDIT_WEBHOOK_READONLY_NOTICE_CLASS,
@@ -41,5 +42,13 @@ describe('auditWebhookPresentation', () => {
     expect(AUDIT_WEBHOOK_READONLY_NOTICE_CLASS).toContain('border-blue-200');
     expect(AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS).toContain('bg-surface-alt');
     expect(AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS).toContain('bg-blue-100');
+  });
+
+  it('points people looking for alert delivery to alert notifications', () => {
+    const signpost = getAuditWebhookNotificationsSignpost();
+    expect(signpost.text).toContain('security events only');
+    expect(signpost.text).toContain('Discord');
+    expect(signpost.linkLabel).toBe('alert notifications');
+    expect(`${signpost.text} ${signpost.linkLabel}`).not.toContain(';');
   });
 });

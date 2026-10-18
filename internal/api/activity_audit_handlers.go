@@ -126,10 +126,23 @@ func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *audit
 		}
 		filter.Offset = offset
 	}
+	if err := auditTimeFilterFromQuery(query, &filter); err != nil {
+		return audit.QueryFilter{}, err
+	}
+	if err := auditSuccessFilterFromQuery(query, &filter); err != nil {
+		return audit.QueryFilter{}, err
+	}
+
+	return filter, nil
+}
+
+// A supplied malformed or empty bound must not become an unfiltered read.
+// Keep list, export and summary on the same time-window validation boundary.
+func auditTimeFilterFromQuery(query url.Values, filter *audit.QueryFilter) *auditQueryValidationError {
 	if query.Has("startTime") {
 		start, err := time.Parse(time.RFC3339, query.Get("startTime"))
 		if err != nil {
-			return audit.QueryFilter{}, &auditQueryValidationError{
+			return &auditQueryValidationError{
 				code:    "invalid_start_time",
 				message: "Invalid startTime; expected an RFC3339 timestamp",
 			}
@@ -139,7 +152,7 @@ func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *audit
 	if query.Has("endTime") {
 		end, err := time.Parse(time.RFC3339, query.Get("endTime"))
 		if err != nil {
-			return audit.QueryFilter{}, &auditQueryValidationError{
+			return &auditQueryValidationError{
 				code:    "invalid_end_time",
 				message: "Invalid endTime; expected an RFC3339 timestamp",
 			}
@@ -147,15 +160,19 @@ func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *audit
 		filter.EndTime = &end
 	}
 	if filter.StartTime != nil && filter.EndTime != nil && !filter.StartTime.Before(*filter.EndTime) {
-		return audit.QueryFilter{}, &auditQueryValidationError{
+		return &auditQueryValidationError{
 			code:    "invalid_time_range",
 			message: "startTime must be before endTime",
 		}
 	}
+	return nil
+}
+
+func auditSuccessFilterFromQuery(query url.Values, filter *audit.QueryFilter) *auditQueryValidationError {
 	if query.Has("success") {
 		rawSuccess := query.Get("success")
 		if rawSuccess != "true" && rawSuccess != "false" {
-			return audit.QueryFilter{}, &auditQueryValidationError{
+			return &auditQueryValidationError{
 				code:    "invalid_success",
 				message: "Invalid success; expected a boolean",
 			}
@@ -163,8 +180,7 @@ func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *audit
 		success := rawSuccess == "true"
 		filter.Success = &success
 	}
-
-	return filter, nil
+	return nil
 }
 
 // HandleVerifyAuditEvent handles GET /api/audit/{id}/verify
@@ -441,24 +457,13 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 		User:      query.Get("user"),
 	}
 
-	// Parse startTime
-	if startStr := query.Get("startTime"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			filter.StartTime = &t
-		}
+	if validationErr := auditTimeFilterFromQuery(query, &filter); validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
 	}
-
-	// Parse endTime
-	if endStr := query.Get("endTime"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			filter.EndTime = &t
-		}
-	}
-
-	// Parse success
-	if successStr := query.Get("success"); successStr != "" {
-		success := successStr == "true"
-		filter.Success = &success
+	if validationErr := auditSuccessFilterFromQuery(query, &filter); validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
 	}
 
 	// Parse verification flag
@@ -512,18 +517,9 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 		User:      query.Get("user"),
 	}
 
-	// Parse startTime
-	if startStr := query.Get("startTime"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			filter.StartTime = &t
-		}
-	}
-
-	// Parse endTime
-	if endStr := query.Get("endTime"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			filter.EndTime = &t
-		}
+	if validationErr := auditTimeFilterFromQuery(query, &filter); validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
 	}
 
 	// Parse verification flag

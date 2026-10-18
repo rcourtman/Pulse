@@ -339,7 +339,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
   });
 
   describe('getWorkloadGroupLabel', () => {
-    it('returns empty type and the raw context for a vm guest with no node and no cluster', () => {
+    it('uses the instance label rather than the opaque scope for a vm without node or cluster', () => {
       const guests = [
         makeGuest(1, {
           id: 'solo',
@@ -354,7 +354,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
 
       // groupKey = 'solo-' (no colon) -> prefix not recognized -> first guest has
       // no node and no cluster -> final fallback { type: '', name: context }.
-      expect(getWorkloadGroupLabel('', guests)).toStrictEqual({ type: '', name: 'solo-' });
+      expect(getWorkloadGroupLabel('', guests)).toStrictEqual({ type: '', name: 'solo' });
     });
 
     it('joins a multi-segment context after a recognized prefix for an empty guests array', () => {

@@ -19,11 +19,14 @@ vi.mock('@/api/resourceActions', () => ({
   },
 }));
 vi.mock('@/api/security', () => ({ SecurityAPI: { getStatus: vi.fn() } }));
+const getResource = vi.hoisted(() => vi.fn());
+vi.mock('@/api/resources', () => ({ ResourceAPI: { getResource } }));
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 beforeEach(() => {
+  getResource.mockRejectedValue(new Error('Resource not found'));
   vi.mocked(SecurityAPI.getStatus).mockResolvedValue({
     hasAuthentication: true,
     requiresAuth: true,
@@ -339,6 +342,78 @@ describe('ActionReviewDialog trust gates', () => {
     ));
     expect(screen.getByRole('link', { name: 'Open Patrol' })).toHaveAttribute('href', '/patrol');
     expect(screen.queryByRole('link', { name: 'Open Patrol record' })).not.toBeInTheDocument();
+  });
+
+  // The review tells the operator to check the resource before approving or
+  // retrying; it linked only back to Patrol, never to the resource itself.
+  it('links the action resource to the page that shows it', async () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.request.resourceId = 'agent-acdf';
+    audit.resource = { id: 'agent-acdf', name: 'Apollo-114', type: 'agent' };
+    getResource.mockResolvedValue({
+      id: 'agent-acdf',
+      name: 'Apollo-114',
+      type: 'agent',
+      status: 'online',
+      platformScopes: ['agent'],
+    });
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => (
+            <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} showResourceLink />
+          )}
+        />
+      </Router>
+    ));
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+        'href',
+        '/standalone/machines?q=Apollo-114',
+      ),
+    );
+    expect(getResource).toHaveBeenCalledWith('agent-acdf', expect.anything());
+  });
+
+  it('links the action resource by its recorded type when the registry cannot resolve it', async () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.request.resourceId = 'pve:vm:101';
+    audit.resource = { id: 'pve:vm:101', name: 'analytics-batch-01', type: 'vm' };
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => (
+            <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} showResourceLink />
+          )}
+        />
+      </Router>
+    ));
+    await waitFor(() => expect(getResource).toHaveBeenCalled());
+    expect(screen.getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=pve%3Avm%3A101',
+    );
+  });
+
+  // Patrol and the Docker container controls open the review over the
+  // resource itself and keep it only in memory, so they get no resource link.
+  it('offers no resource link unless the host asks for one', async () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.request.resourceId = 'pve:vm:101';
+    audit.resource = { id: 'pve:vm:101', name: 'analytics-batch-01', type: 'vm' };
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />}
+        />
+      </Router>
+    ));
+    expect(await screen.findByRole('heading', { name: 'Restart' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Open resource' })).not.toBeInTheDocument();
+    expect(getResource).not.toHaveBeenCalled();
   });
 
   it('does not treat another origin surface as Patrol even when it carries a record id', () => {

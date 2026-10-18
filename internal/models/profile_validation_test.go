@@ -530,3 +530,16 @@ func TestAgentProfile_MergedConfigReturnsDefensiveCopy(t *testing.T) {
 		t.Fatalf("parent config mutated through merged map: got %v", parent.Config["enable_docker"])
 	}
 }
+
+// The schema describes monitoring, not the independently constrained command channel.
+func TestHostMonitoringSchemaDoesNotGrantCommandAuthority(t *testing.T) {
+	for _, key := range ValidConfigKeys {
+		if key.Key == "enable_host" {
+			if key.Type != ConfigTypeBool || key.Default != true || key.Description != "Enable host metrics collection; command execution is controlled separately by local authority" {
+				t.Fatalf("host monitoring schema must preserve its boolean/default and independent command boundary: %#v", key)
+			}
+			return
+		}
+	}
+	t.Fatal("enable_host missing from schema")
+}

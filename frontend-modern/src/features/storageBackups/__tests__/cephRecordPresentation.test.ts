@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { CephCluster } from '@/types/api';
+import type { Alert, CephCluster } from '@/types/api';
+import { getAlertsForResource } from '@/utils/alerts';
+import { getStorageRecordAlertResourceIds } from '@/features/storageBackups/storageAlertState';
+import {
+  describeStorageAlertHeadline,
+  pickStorageHeadlineAlert,
+} from '@/features/storageBackups/storageRowAlertPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   collectCephClusterNodes,
@@ -143,6 +149,47 @@ describe('cephRecordPresentation', () => {
     expect(survivor.issueSummary).toBe('Ceph reports pool cephfs-data degraded');
   });
 
+  it('keeps a folded pool alert attached to the storage row that mounts it', () => {
+    const poolRecord = makeRecord({
+      id: 'pool-1',
+      name: 'vm-pool',
+      health: 'healthy',
+      refs: { platformEntityId: 'cluster-a', resourceId: 'ceph-pool-resource' },
+      details: { type: 'ceph', node: 'cluster', status: 'online' },
+    });
+    const mountRecord = makeRecord({
+      id: 'mount-1',
+      name: 'fast-rbd',
+      health: 'healthy',
+      details: { type: 'rbd', node: 'shared', pool: 'vm-pool', status: 'online' },
+    });
+
+    const [survivor] = consolidateCephClusterPoolRecords([poolRecord, mountRecord]);
+
+    // The pool row disappears even when it is healthy, so its alert identity
+    // must travel with the surviving row or a fill forecast on the pool is lost.
+    expect(survivor.id).toBe('mount-1');
+    expect(survivor.health).toBe('healthy');
+    expect(survivor.absorbedAlertResourceIds).toEqual(
+      expect.arrayContaining(['pool-1', 'ceph-pool-resource']),
+    );
+    const alert = {
+      id: 'forecast',
+      type: 'usage',
+      level: 'critical',
+      resourceId: 'ceph-pool-resource',
+      threshold: 100,
+      message: 'Storage projected to fill in about 3 days',
+      metadata: { forecastDaysToFull: 3 },
+      startTime: '2026-10-04T12:00:00Z',
+      acknowledged: false,
+    } as unknown as Alert;
+    const headlineAlert = pickStorageHeadlineAlert(
+      getAlertsForResource(getStorageRecordAlertResourceIds(survivor), { forecast: alert }, true),
+    );
+    expect(headlineAlert && describeStorageAlertHeadline(headlineAlert)).toBe('Full in ~3 days');
+  });
+
   it('matches pool rows to mounts via the backing pool detail', () => {
     const poolRecord = makeRecord({
       id: 'pool-1',
@@ -187,6 +234,8 @@ describe('cephRecordPresentation', () => {
       details: { type: 'cephfs', node: 'shared', status: 'unavailable' },
     });
     const consolidated = consolidateCephClusterPoolRecords([healthyPool, sickMount]);
-    expect(consolidated).toEqual([sickMount]);
+    expect(consolidated).toEqual([
+      { ...sickMount, absorbedAlertResourceIds: getStorageRecordAlertResourceIds(healthyPool) },
+    ]);
   });
 });

@@ -10,6 +10,8 @@ import {
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useStorageAlertState } from './useStorageAlertState';
+import { consolidateCephClusterPoolRecords } from '@/features/storageBackups/cephRecordPresentation';
+import { storageAlertSeverityWeight } from '@/features/storageBackups/storageAlertState';
 import { useStorageCephModel } from './useStorageCephModel';
 import {
   buildStorageNodeOnlineByLabel,
@@ -42,8 +44,11 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     buildStorageRecords({ state: options.state(), resources: options.resources() }),
   );
 
+  // Alert state follows the rows the table shows, so a Ceph pool folded into
+  // its mounting storage still explains and ranks that row.
+  const alertRecords = createMemo(() => consolidateCephClusterPoolRecords(records()));
   const { getRecordAlertState } = useStorageAlertState({
-    records,
+    records: alertRecords,
     activeAlerts: options.activeAlerts,
     alertsEnabled: options.alertsEnabled,
   });
@@ -72,6 +77,12 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     sortKey: options.sortKey,
     sortDirection: options.sortDirection,
     storageGrowthBySeriesId: options.storageGrowthBySeriesId,
+    alertWeightByRecordId: (recordId) => {
+      const alertState = getRecordAlertState(recordId);
+      return alertState.hasUnacknowledgedAlert
+        ? storageAlertSeverityWeight(alertState.severity)
+        : 0;
+    },
     groupBy: options.groupBy,
   });
 

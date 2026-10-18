@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "base_sha": "efa6b93839c3201c59e761b016e96c43c17ea27c",
+  "verified_at": "2026-10-12T09:13:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "5390597c2163a68fa5f7b3530b9e160b9a3939b8d14c8233501be08bc18c8669",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "3a5e9594e87783e1a37f393ea281d2857b2ec155a3d5259e5c744d58382ee2bd"
+  },
+  "routes": [
+    "Existing resource drawer Overview/change history in residual-evidence-ages local production fixture",
+    "Existing Workloads guest row and drawer Overview/Needs attention in guest-alert-memory-basis local production fixture"
+  ],
+  "states": [
+    "Exact composed production bytes after upstream AI Discovery removal; Playwright 1.56.1 matches integration lock, desktop Chromium and dark touch-phone WebKit. Synthetic local observations only; no installed recovery, guest action or release acceptance.",
+    "Held change observed/occurred times advance from minutes to two hours without rewriting evidence or making clock-triggered reads. Replacement and withdrawal continue to work; the obsolete Discovery tab stays removed.",
+    "Fourteen guest-alert checks cover retained/unavailable/unlike current readings, alert-owned 86.6% and 72% values, 85% trigger/70% clear rule, unchanged CPU, guest/host table calculations and missing/zero host capacity. No unrelated host percentage is inserted into alert evidence.",
+    "All twelve retained desktop/phone captures were inspected. No page errors or page-level overflow; browsers and local servers closed. The first ages attempt failed before execution because canonical node_modules lacked @tailwindcss/vite. Matching launch snapshot was prepared offline; no source assertion or runtime was changed to obtain the final proof."
+  ],
+  "interactions": [
+    "Keyboard Enter and touch open production guest drawers; switch memory basis between guest and host while preserving alert readings and timestamps.",
+    "Open change filters with desktop keyboard and phone tap; focused filters survive two hours. Replace and withdraw canonical changes without clock-triggered API traffic."
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 950
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "evidence": {
+    "ages_result_sha256": "a3a22a4588146dd0025b880896808e48c1269a66fcfe2b1b4f4293c54aefa82b",
+    "memory_result_sha256": "bd703467da18c1f0eebb7a9894fd977e73e10e15251cb20bd840d7478ff99ac7",
+    "captures": [
+      {
+        "name": "desktop-resource-initial.png",
+        "sha256": "58209ca67c82dedb241f28ac3020a80fe7c9bf82eb4bfb881717a13f9aec404b",
+        "viewed": true
+      },
+      {
+        "name": "desktop-resource-held-two-hours.png",
+        "sha256": "9ffa13e04cc1a523438e7d65dd366085fe38213a65f16f1c58d5b9521b24d882",
+        "viewed": true
+      },
+      {
+        "name": "phone-resource-initial.png",
+        "sha256": "89c27a7b8fff8f0e66fb078a632a5f8e9d0a28a591906b23d8762087f8bb7368",
+        "viewed": true
+      },
+      {
+        "name": "phone-resource-held-two-hours.png",
+        "sha256": "3a222e8447b661024cbef58eb3607872464b976c5385b2096ec93f478350b870",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-retained.png",
+        "sha256": "b85d223667d25ac39de158515ffe581a5cc918075b3274f432521001573118d2",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-unavailable.png",
+        "sha256": "ed891dfa88e4b41fa1c1660554897a267dac33b8a59c5513049df4dea7e5ab65",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-live-alert.png",
+        "sha256": "474dc606857f653db63ba58ae5ac3a52edd0303abff0c62991ee53ebb14a932e",
+        "viewed": true
+      },
+      {
+        "name": "chromium-desktop-light-guest-basis.png",
+        "sha256": "778c086036880efa07a172d144e28ec639d17d13866d48100859366fcae89e9c",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-retained.png",
+        "sha256": "4ff620fe3d78473920996ae1112c7d1799dc4f494ea3b5c8fb19ad6eb8473ecc",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-unavailable.png",
+        "sha256": "3dd001fc0b85ff327a6711162f0495f1a3e58dd9f79bd6fbf4beb05e5e1e933e",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-live-alert.png",
+        "sha256": "3ab0a153a1e93894aba40462f39b5b1dbe7bd0881f2a3b988d54f50bc30e39a3",
+        "viewed": true
+      },
+      {
+        "name": "webkit-phone-dark-guest-basis.png",
+        "sha256": "52e595716d154848397da74f4857fc3fca6bb91e395852b6914c9886f64eba41",
+        "viewed": true
+      }
+    ]
+  }
+}

@@ -45,6 +45,29 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def expandable_intake_context(form: dict, field_id: str, heading: str) -> str:
+    """Read the conditional guidance at its report field, not arbitrary prose.
+
+    The forms keep optional context in expandable Markdown immediately before
+    the relevant textarea. A matching sentence elsewhere must not conceal a
+    removed, misplaced or malformed section.
+    """
+    fields = [index for index, field in enumerate(form["body"]) if field.get("id") == field_id]
+    if len(fields) != 1 or fields[0] == 0:
+        raise ValueError("missing or repeated report field")
+    block = form["body"][fields[0] - 1]
+    if block.get("type") != "markdown":
+        raise ValueError("conditional context must precede its report field as Markdown")
+    text = block.get("attributes", {}).get("value", "")
+    sections = re.findall(r"<details>\s*<summary>([^<]+)</summary>(.*?)</details>", text, re.DOTALL)
+    if text.count("<details>") != len(sections) or text.count("</details>") != len(sections):
+        raise ValueError("malformed conditional context")
+    matches = [context for title, context in sections if title == heading]
+    if len(matches) != 1:
+        raise ValueError("missing, malformed or repeated conditional context")
+    return normalize_ws(matches[0])
+
+
 def release_notes_have_exact_title(notes: str, version: str) -> bool:
     """Match the first title, as the reader-facing Go notes contract does.
 
@@ -267,8 +290,8 @@ def rc_packet_paths_for_version(version: str) -> tuple[str, str, str] | None:
 
 
 def support_prerelease_packet_paths_for_version(version: str) -> tuple[str, str] | None:
-    """Return release-notes and changelog paths for post-GA support RC versions."""
-    if not re.match(r"^6\.\d+\.\d+-rc\.\d+$", version):
+    """Return release-notes and changelog paths for post-GA support beta and RC versions."""
+    if not re.match(r"^6\.\d+\.\d+-(?:rc|beta)\.\d+$", version):
         return None
     if version.startswith("6.0.0-rc."):
         return None
@@ -1371,7 +1394,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("`beta.N` is the normal user-testing stage", content)
-        self.assertIn("`rc.N` is reserved for a build the release owner believes", content)
+        self.assertIn("`rc.N` is the release train's candidate for stable", content)
         self.assertIn("Stable promotion lineage must come from a published `rc.N`", content)
         self.assertIn("live run of the release pipeline for the prerelease tag itself", content)
         self.assertIn("an accidental git tag by itself", content)
@@ -1661,7 +1684,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 release_notes = read(release_notes_path)
                 changelog = read(changelog_path)
 
-                self.assertIn("current v6 release candidate packet", release_index)
+                packet_label = "beta" if "-beta." in current_version else "release candidate"
+                self.assertIn(f"current v6 {packet_label} packet", release_index)
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
                 self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
@@ -1698,6 +1722,53 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("`PULSE_VERSION` to the exact target tag", server_updates)
         self.assertIn("This also applies to rollback", server_updates)
         self.assertIn("Verify the installed version with `GET /api/version`", server_updates)
+
+    def test_manual_update_help_preserves_helper_ownership_and_software_identity(self) -> None:
+        automatic_updates = read("docs/AUTO_UPDATE.md")
+        lxc_updates = normalize_ws(
+            automatic_updates.split("### ProxmoxVE LXC (Manual)", 1)[1].split("\n### ", 1)[0]
+        )
+        systemd_updates = normalize_ws(
+            automatic_updates.split("### Systemd Service (Manual)", 1)[1].split("\n### ", 1)[0]
+        )
+        chart_help = normalize_ws(
+            automatic_updates.split("### A helper selects a Helm-chart release", 1)[1]
+            .split("\n### ", 1)[0]
+        )
+        manual_update = normalize_ws(
+            read("docs/INSTALL.md").split("#### Manual Update", 1)[1].split("\n#### ", 1)[0]
+        )
+        release_guide = normalize_ws(
+            read("docs/RELEASE_PROCESS.md").split("## Software releases and Helm charts", 1)[1]
+            .split("\n## ", 1)[0]
+        )
+
+        # Newer canonical help delegates to the ownership-checked procedure
+        # instead of copying a command into either host entry point. Keep that
+        # stronger boundary, including custom paths and private Pro installs.
+        for entry in (lxc_updates, systemd_updates):
+            self.assertIn("](INSTALL.md#-updates)", entry)
+            self.assertNotIn("sudo /bin/update", entry)
+        self.assertIn("inside the existing Pulse LXC", lxc_updates)
+        self.assertIn("community-scripts installation", lxc_updates)
+        self.assertIn("helper whose owner is unknown", systemd_updates)
+        self.assertIn("default installation paths", systemd_updates)
+        self.assertIn("helper is absent or its owner is unknown", manual_update)
+        self.assertIn("stop before executing it", manual_update)
+        self.assertIn("existing service and data/config paths", manual_update)
+        self.assertIn("private Pro runtime with a public build", manual_update)
+        self.assertIn("unknown helper may ignore `--version`", chart_help)
+        self.assertIn("exact `PULSE_VERSION`", chart_help)
+        self.assertIn("check the running version and service health", chart_help)
+        self.assertIn("Private Pro installations must retain their private runtime", chart_help)
+        self.assertIn("Do not recreate the LXC", chart_help)
+
+        self.assertIn("`helm-chart-*`", chart_help)
+        self.assertIn("not the Linux server archive", chart_help)
+        self.assertIn("List order does not establish the latest software release", release_guide)
+        self.assertIn("cannot update a systemd or Proxmox LXC server", release_guide)
+        self.assertIn("disabling signature verification", release_guide)
+        self.assertIn("Settings → System → Updates", release_guide)
 
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
@@ -1751,10 +1822,319 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
-        self.assertIn("placeholder: v6.0.0-rc.N", template)
-        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...", template)
+        self.assertIn("placeholder: v6.x.y-rc.N", template)
+        self.assertIn("placeholder: rcourtman/pulse:v6.x.y-rc.N or rcourtman/pulse@sha256:...", template)
         self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
+
+    def test_prerelease_intake_covers_stable_upgrades_and_separate_agent_versions(self) -> None:
+        form = yaml.load(read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml"), Loader=UniqueKeyLoader)
+        fields = {field["id"]: field for field in form["body"] if "id" in field}
+        self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+        self.assertEqual(fields["install_path"]["attributes"]["options"], [
+            "Clean v6 install", "Upgrade from v5", "Upgrade from a stable v6 release",
+            "Upgrade from an earlier v6 prerelease", "Not sure",
+        ])
+        self.assertTrue(fields["install_path"]["validations"]["required"])
+        agent = fields["agent_version"]
+        self.assertEqual(agent["type"], "input")
+        self.assertEqual(agent["attributes"]["label"], "Agent version")
+        self.assertFalse(agent["validations"]["required"])
+        for distinction in ("affected agent", "separately from the Pulse server", '"none"',
+                            '"unknown"', "Do not reinstall or re-enrol"):
+            self.assertIn(distinction, agent["attributes"]["description"])
+        self.assertIn("affected monitored platform and its release", fields["environment"]["attributes"]["description"])
+
+    def test_report_environment_keeps_platform_and_collection_context_optional(self) -> None:
+        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                environment = fields["environment"]
+                self.assertEqual(environment["type"], "input")
+                self.assertEqual(environment["attributes"]["label"], "OS / environment")
+                self.assertFalse(environment["validations"]["required"])
+                self.assertNotIn("render", environment["attributes"])
+                prose = normalize_ws(environment["attributes"]["description"])
+                for distinction in (
+                    "Pulse server OS", "affected monitored platform and its release",
+                    "TrueNAS SCALE", "CORE", "platform API, a Pulse agent, or both",
+                    "separate from the Pulse server's installation and version",
+                    "Use existing settings or observations", 'leave blank or write "unknown"',
+                    "Do not run diagnostics, probe, restart or change a connection",
+                ):
+                    self.assertIn(distinction, prose)
+                self.assertIn("via API, no Pulse agent", environment["attributes"]["placeholder"])
+                # Optional context must not relax the original report's core fields.
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                summary_id = "bug_description" if name == "bug_report.yml" else "summary"
+                self.assertTrue(fields[summary_id]["validations"]["required"])
+        for document in ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md"):
+            prose = normalize_ws(read(document))
+            for distinction in (
+                "optional **OS / environment**", "platform API, a Pulse agent, or both",
+                "TrueNAS SCALE versus CORE", "separately from the Pulse and agent versions",
+                "working agent view does not prove that the API view recovered",
+                'blank or "unknown" is valid', "Existing reports need no refile",
+            ):
+                self.assertIn(distinction, prose)
+
+    def test_working_version_context_is_optional_and_never_requires_another_attempt(self) -> None:
+        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                previous = fields["previous_version"]
+                self.assertEqual(previous["type"], "input")
+                self.assertEqual(previous["attributes"]["label"], "Last known working Pulse version")
+                self.assertFalse(previous["validations"]["required"])
+                for precaution in ("already observed the same behaviour working",
+                                   "not necessarily a working baseline", 'write "unknown"',
+                                   "do not downgrade, restart or repeat the action"):
+                    self.assertIn(precaution, previous["attributes"]["description"])
+                self.assertEqual(fields["pulse_version"]["attributes"]["label"], "Pulse version")
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                self.assertIn('"unknown"', fields["agent_version"]["attributes"]["description"])
+                self.assertNotIn("render", previous["attributes"])
+        for document in ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md"):
+            triage = normalize_ws(read(document))
+            self.assertIn("an upgrade's starting version alone does not establish that", triage)
+            self.assertIn("do not ask for a downgrade, restart, reinstall or re-enrolment", triage)
+
+    def test_report_intake_safety_is_self_contained_for_installed_releases(self) -> None:
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                template = read(f".github/ISSUE_TEMPLATE/{name}")
+                form = yaml.safe_load(template)
+                introduction = form["body"][0]
+                self.assertEqual(introduction["type"], "markdown")
+                prose = introduction["attributes"]["value"]
+                self.assertNotRegex(
+                    template,
+                    r"https://github\.com/[^/\s)]+/[^/\s)]+/(?:blob|tree)/(?:main|master)/",
+                )
+                # The precautions must survive without following any link;
+                # putting them only in a link label is insufficient.
+                standalone = re.sub(r"\[[^\]]+\]\([^)]*\)", "", prose)
+                for precaution in (
+                    "only collect diagnostics if Pulse is running and collection is safe",
+                    "live API and guest-agent requests",
+                    "do not run it during backups, freeze/thaw or an unresponsive-host incident",
+                    "Prefer existing observations",
+                    "downloads that result without running checks again",
+                    "Review files and screenshots locally before posting",
+                    "even when an export is labelled",
+                    "session cookies",
+                    "secret URLs",
+                    "personal details",
+                    "private keys",
+                    "Copy as cURL",
+                    "full network exports",
+                ):
+                    self.assertIn(precaution, standalone)
+                evidence = next(field for field in form["body"] if field.get("id") == evidence_id)
+                self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+
+    def test_notification_report_context_is_optional_and_passive(self) -> None:
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                evidence = fields[evidence_id]
+                self.assertEqual(evidence["type"], "textarea")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+                self.assertNotIn("render", evidence["attributes"])
+                # Keep every distinction at the optional attachment point. The
+                # accepted form expands it there instead of overloading the
+                # field's short description or adding a required questionnaire.
+                context = expandable_intake_context(
+                    form, evidence_id, "Notification delivery: Test versus ordinary alerts",
+                )
+                for distinction in (
+                    "already-observed **Test** result", "ordinary alert delivery",
+                    "single, grouped/digest or resolved", "destination type",
+                    "built-in or custom template", "original time", "redacted error",
+                    "missing host/resource context where known",
+                    "successful Test does not establish ordinary delivery or correct identity",
+                    "Use existing messages and queue details only", 'blank or "unknown" is valid',
+                    "Do not send a Test, trigger an alert, retry/replay a queued message",
+                    "clear the queue or change notification settings just to complete this report",
+                    "Keep destination addresses, webhook URLs, chat IDs, tokens",
+                    "full notification settings or payloads private",
+                ):
+                    self.assertIn(distinction, context)
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+
+    def test_expandable_intake_context_cannot_be_hidden_or_detached(self) -> None:
+        for name, summary_id, evidence_id in (
+            ("bug_report.yml", "bug_description", "logs"),
+            ("v6_rc_feedback.yml", "summary", "evidence"),
+        ):
+            for field_id, heading in (
+                (summary_id, "Several hosts or clusters: preserve which names and IDs repeat"),
+                (evidence_id, "Notification delivery: Test versus ordinary alerts"),
+            ):
+                with self.subTest(form=name, field=field_id):
+                    form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                    context = expandable_intake_context(form, field_id, heading)
+                    self.assertTrue(context)
+                    index = next(i for i, field in enumerate(form["body"]) if field.get("id") == field_id)
+                    original = form["body"][index - 1]
+                    value = original["attributes"]["value"]
+                    for change in (
+                        {"type": "textarea", "attributes": {"description": value}},
+                        {"type": "markdown", "attributes": {"value": value.replace("<details>", "", 1)}},
+                        {"type": "markdown", "attributes": {"value": value.replace("</details>", "", 1)}},
+                        {"type": "markdown", "attributes": {"value": value.replace(heading, "Other context", 1)}},
+                        {"type": "markdown", "attributes": {"value": value + "\n" + value}},
+                        {"type": "markdown", "attributes": {"value": "See the introduction."}},
+                    ):
+                        # Keep the original elsewhere: a whole-form substring
+                        # search would wrongly accept this detached context.
+                        form["body"][index - 1] = change
+                        form["body"].append(original)
+                        with self.assertRaises(ValueError):
+                            expandable_intake_context(form, field_id, heading)
+                        form["body"].pop()
+                    form["body"][index - 1] = original
+                    self.assertEqual(expandable_intake_context(form, field_id, heading), context)
+
+    def test_notification_triage_separates_evaluation_delivery_and_identity(self) -> None:
+        documents = ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md")
+        self.assertEqual(read(documents[0]), read(documents[1]))
+        for document in documents:
+            with self.subTest(document=document):
+                context = normalize_ws(read(document).split("For notification reports,", 1)[1]
+                                       .split("## Required disposition", 1)[0])
+                for distinction in (
+                    "successful Test does not establish ordinary delivery or correct identity",
+                    "consistent private aliases", "alert appearing in Pulse",
+                    "queued attempt", "recipient's actual message as separate observations",
+                    "subject or body still identifies the wrong resource",
+                    "including earlier comments", "rather than asking for the same facts again",
+                    "Queued messages can retain older settings",
+                    "current configuration screenshot does not establish",
+                    "Unknown evidence stays unknown", "existing reports need no refile",
+                    "Do not request another Test, induced alert, queue retry/replay",
+                    "queue clearing or notification-setting changes",
+                    "Keep destination addresses, webhook URLs, chat IDs, tokens",
+                    "full notification settings or payloads private",
+                    "missing notification alone does not prove that alert evaluation failed",
+                    "retain both symptoms",
+                ):
+                    self.assertIn(distinction, context)
+
+    def test_report_intake_distinguishes_server_install_from_affected_target(self) -> None:
+        for name, summary_id, install_id in (
+            ("bug_report.yml", "bug_description", "install_type"),
+            ("v6_rc_feedback.yml", "summary", "installation_type"),
+        ):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                install = fields[install_id]
+                self.assertEqual(install["type"], "dropdown")
+                self.assertEqual(install["attributes"]["label"], "Installation type")
+                self.assertIn("Pulse server", install["attributes"]["description"])
+                self.assertIn("not the kind of workload", install["attributes"]["description"])
+                summary = fields[summary_id]
+                self.assertEqual(summary["type"], "textarea")
+                self.assertTrue(summary["validations"]["required"])
+                prose = normalize_ws(summary["attributes"]["description"])
+                for distinction in (
+                    "affected target", "VM, LXC, Docker container, NAS or Pulse itself",
+                    "from how the Pulse server is installed", "For missing readings",
+                    "workload's usual UI", "when the problem occurred",
+                    "Use existing observations", 'write "unknown" if you cannot safely tell',
+                    "Do not run another update, backup or guest-agent probe just to answer",
+                ):
+                    self.assertIn(distinction, prose)
+                self.assertNotIn("render", summary["attributes"])
+
+        for document in (
+            "docs/ISSUE_TRIAGE.md",
+            "frontend-modern/public/docs/ISSUE_TRIAGE.md",
+        ):
+            with self.subTest(document=document):
+                triage = normalize_ws(read(document))
+                for precaution in (
+                    "installation type does not make Docker commands relevant",
+                    "Read later comments", "retain both topics",
+                    "not Pulse's displayed connection status",
+                    "Responsiveness is not proof that every filesystem is writable",
+                    'Accept "unknown"', "Existing reports need no refile",
+                ):
+                    self.assertIn(precaution, triage)
+
+    def test_cross_installation_intake_preserves_relationships_without_private_identity(self) -> None:
+        for name, summary_id in (
+            ("bug_report.yml", "bug_description"),
+            ("v6_rc_feedback.yml", "summary"),
+        ):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                summary = fields[summary_id]
+                self.assertEqual(summary["type"], "textarea")
+                self.assertTrue(summary["validations"]["required"])
+                self.assertNotIn("render", summary["attributes"])
+                prose = expandable_intake_context(
+                    form, summary_id, "Several hosts or clusters: preserve which names and IDs repeat",
+                )
+                for distinction in (
+                    "For reports involving several hosts or clusters",
+                    "which nodes share a cluster", "independent installations",
+                    "whether node names or guest IDs (VMIDs) repeat",
+                    "share a backup destination", "consistent aliases for private names and addresses",
+                    "across the description, screenshots and logs", "preserve which values repeat",
+                    "cluster A/node 1 and standalone B/node 1", "Use existing observations",
+                    'write "unknown"', "do not add, rename, remove or re-enrol anything just to answer",
+                ):
+                    self.assertIn(distinction, prose)
+                # The conditional context belongs in the existing report, not a new
+                # required identity field or a request to collect a configuration.
+                self.assertNotIn("topology", fields)
+                self.assertNotIn("hostname", fields)
+                self.assertFalse(fields["environment"]["validations"]["required"])
+
+        documents = ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md")
+        self.assertEqual(read(documents[0]), read(documents[1]))
+        for document in documents:
+            with self.subTest(document=document):
+                prose = normalize_ws(read(document))
+                for distinction in (
+                    "which nodes share a cluster", "independent installations",
+                    "whether node names or guest IDs (VMIDs) repeat", "share a backup destination",
+                    "Display names and VMIDs are not globally unique",
+                    "distinct Pulse display name alone does not prove",
+                    "consistent aliases for private names and addresses",
+                    "preserving which values repeat", "same native node name",
+                    "Do not infer that a backup or agent belongs",
+                    "duplicate just because those identifiers overlap",
+                    "full thread and attachments", "Unknown relationships remain unknown",
+                    "do not ask for public hostnames, addresses or a configuration dump",
+                    "add, rename, remove or re-enrol anything", "Existing reports need no refile",
+                    "node errors, backup status and Docker monitoring",
+                    "recovery in one does not establish recovery in the others",
+                    "connection Host/URL, Pulse display name, native node/guest name",
+                    "agent-reported hostname separate",
+                    "full connection hostname does not establish",
+                    "guest or agent names are fully qualified",
+                    "ask only for the remembered short/full form",
+                    "whether full domain suffixes differ, not the literal names",
+                    "which guest has an agent", "whether it remained connected",
+                    "shared guest name unique across the platform inventory",
+                    "link is not proof that agent reporting stopped",
+                    "Do not install another agent, change a link or recreate the addition",
+                    "does not establish a fix for repeated short names",
+                ):
+                    self.assertIn(distinction, prose)
 
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
         demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
@@ -2407,6 +2787,77 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             normalize_ws(contract),
         )
 
+
+    def test_create_release_locates_its_release_through_a_bounded_complete_listing_retry(self) -> None:
+        """Run the real step script against doubles: GitHub 504s must be retried, never read as absence."""
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        step = next(s for s in workflow["jobs"]["create_release"]["steps"]
+                    if s.get("name") == "Locate existing release")
+        script = step["run"].replace("${{ github.repository }}", "owner/repo")
+        pages = (
+            '[{"id": 1, "tag_name": "v6.5.0", "draft": false, "assets": []}]\n'
+            '[{"id": 42, "tag_name": "v6.6.0-beta.1", "draft": true, "html_url": "https://example.test/42",'
+            ' "target_commitish": "abc", "published_at": null, "assets": [{"name": "checksums.txt"}]}]\n'
+        )
+        fake_gh = (
+            '#!/bin/bash\n'
+            'n=$(cat "$FIX/count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$FIX/count"\n'
+            'case "$MODE" in\n'
+            '  flaky) if [ "$n" -le 2 ]; then\n'
+            '      echo "gh: We could not respond to your request in time (HTTP 504)" >&2; exit 1; fi\n'
+            '      cat "$FIX/pages.json" ;;\n'
+            '  truncated) printf \'[{"id": 42, "tag_name": \' ; exit 0 ;;\n'
+            '  ok) cat "$FIX/pages.json" ;;\n'
+            'esac\n'
+        )
+        fake_sleep = '#!/bin/bash\necho "$1" >> "$FIX/sleeps"\n'
+
+        def outputs(text: str) -> dict:
+            # write_github_output.py writes name<<delimiter, value, delimiter blocks.
+            return {m.group(1): m.group(3)
+                    for m in re.finditer(r"^(\w+)<<(\S+)\n(.*?)\n\2$", text, re.MULTILINE | re.DOTALL)}
+
+        def run(mode: str, tag: str) -> dict:
+            with tempfile.TemporaryDirectory() as directory:
+                fix = Path(directory)
+                (fix / "bin").mkdir()
+                for name, body in (("gh", fake_gh), ("sleep", fake_sleep)):
+                    (fix / "bin" / name).write_text(body)
+                    (fix / "bin" / name).chmod(0o755)
+                (fix / "pages.json").write_text(pages)
+                output = fix / "github_output"
+                output.write_text("")
+                env = {**os.environ, "FIX": str(fix), "MODE": mode, "WORKFLOW_OUTPUT_1": tag,
+                       "GH_TOKEN": "unused", "GITHUB_OUTPUT": str(output),
+                       "PATH": f"{fix / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+                result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                                        cwd=REPO_ROOT, env=env, text=True, capture_output=True, timeout=60)
+                read_text = lambda name: (fix / name).read_text() if (fix / name).exists() else ""
+                return {"result": result, "output": output.read_text(),
+                        "calls": int(read_text("count").strip() or 0),
+                        "sleeps": read_text("sleeps").split()}
+
+        # Two GitHub 504s, then a complete listing: retried with backoff, then the draft is found.
+        flaky = run("flaky", "v6.6.0-beta.1")
+        self.assertEqual(flaky["result"].returncode, 0, flaky["result"].stderr)
+        self.assertEqual((flaky["calls"], flaky["sleeps"]), (3, ["15", "30"]))
+        self.assertEqual(outputs(flaky["output"]).get("release_id"), "42")
+        self.assertEqual(outputs(flaky["output"]).get("release_is_draft"), "true")
+
+        # A read that exits 0 but is truncated every time is never an empty answer: five attempts,
+        # capped backoff, an explicit error, and no outputs written.
+        truncated = run("truncated", "v6.6.0-beta.1")
+        self.assertNotEqual(truncated["result"].returncode, 0)
+        self.assertIn("releases listing failed after 5 attempts", truncated["result"].stdout)
+        self.assertEqual((truncated["calls"], truncated["sleeps"]), (5, ["15", "30", "60", "120"]))
+        self.assertEqual(truncated["output"], "")
+
+        # A complete listing that does not contain the tag still means "no existing release".
+        absent = run("ok", "v6.7.0")
+        self.assertEqual(absent["result"].returncode, 0, absent["result"].stderr)
+        self.assertEqual((absent["calls"], absent["sleeps"]), (1, []))
+        self.assertEqual(outputs(absent["output"]).get("release_id"), "")
+
     def test_v620_owner_soak_waiver_is_version_bound(self) -> None:
         policy = normalize_ws(
             read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
@@ -2927,7 +3378,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--arg draft_only "false"', helper)
         self.assertNotIn("--argjson", helper)
         self.assertIn("Single-Build Release Path", policy)
-        self.assertIn("Routine Stable Patch Path", policy)
+        self.assertIn("## Stable Patch Path", policy)
         self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))
         self.assertIn("An asynchronous dispatch or manual SSH deployment is not release completion.", normalize_ws(contract))
 

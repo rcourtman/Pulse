@@ -130,15 +130,16 @@ type CommandAuthorizationRequest struct {
 }
 
 type agentConn struct {
-	conn             *websocket.Conn
-	agent            ConnectedAgent
-	admission        AgentAdmission
-	sessionKey       string
-	authorityKey     string
-	approvalGrantKey []byte
-	writeMu          sync.Mutex
-	done             chan struct{}
-	doneOnce         sync.Once
+	conn                  *websocket.Conn
+	agent                 ConnectedAgent
+	admission             AgentAdmission
+	sessionKey            string
+	authorityKey          string
+	guestExecGuardVersion int
+	approvalGrantKey      []byte
+	writeMu               sync.Mutex
+	done                  chan struct{}
+	doneOnce              sync.Once
 }
 
 type pendingHostOperation struct {
@@ -896,7 +897,7 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 	case PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case PolicyRequireApproval:
-		// Trusted internal subsystems (e.g. servicediscovery deep scans) carry
+		// Trusted internal subsystems (e.g. the Docker-in-guest checker) carry
 		// a hardcoded command catalog and never accept user-supplied commands,
 		// so the user-driven approval gate does not apply to them.
 		if cmd.Trusted {
@@ -1376,11 +1377,12 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			ActionPreflightVersion:   reg.ActionPreflightVersion,
 			DockerObservationVersion: reg.DockerObservationVersion,
 		},
-		admission:        admission,
-		sessionKey:       agentSessionKey(admission.OrganizationID, admission.AgentID),
-		authorityKey:     uuid.NewString(),
-		approvalGrantKey: DeriveApprovalGrantKey(reg.Token),
-		done:             make(chan struct{}),
+		admission:             admission,
+		sessionKey:            agentSessionKey(admission.OrganizationID, admission.AgentID),
+		authorityKey:          uuid.NewString(),
+		approvalGrantKey:      DeriveApprovalGrantKey(reg.Token),
+		guestExecGuardVersion: reg.GuestExecGuardVersion,
+		done:                  make(chan struct{}),
 	}
 
 	// Clear deadline for normal operation - both on the WebSocket and underlying connection
@@ -2087,6 +2089,9 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if err := requireLegacyFullTrustConnection(ac, "execute_command"); err != nil {
 		return nil, err
 	}
+	if err := requireVMGuestExecGuard(ac, cmd.TargetType); err != nil {
+		return nil, err
+	}
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
 	}
@@ -2780,6 +2785,9 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("agent %s not connected", agentID)
 	}
 	if err := requireLegacyFullTrustConnection(ac, "read_file"); err != nil {
+		return nil, err
+	}
+	if err := requireVMGuestExecGuard(ac, req.TargetType); err != nil {
 		return nil, err
 	}
 

@@ -60,7 +60,7 @@ describe('nested workload context', () => {
       platformScope: 'proxmox-pve',
     });
 
-    expect(result['pve-a:node-a:141']).toMatchObject({
+    expect(result['lxc-141']).toMatchObject({
       label: 'Docker',
       count: 1,
       href: '/docker/overview?host=media-lxc.mist-stork.ts.net',
@@ -109,7 +109,7 @@ describe('nested workload context', () => {
       platformScope: 'proxmox-pve',
     });
 
-    expect(result['pve-a:node-a:141']?.href).toBe('/docker/overview');
+    expect(result['lxc-141']?.href).toBe('/docker/overview');
   });
 
   it('does not guess when Docker host identity only matches ambiguous VMIDs', () => {

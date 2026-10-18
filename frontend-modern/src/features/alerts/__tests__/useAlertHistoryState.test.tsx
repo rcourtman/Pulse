@@ -1,6 +1,6 @@
-import { renderHook, waitFor } from '@solidjs/testing-library';
+import { cleanup, renderHook, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
 import { eventBus } from '@/stores/events';
@@ -71,6 +71,8 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
+afterEach(cleanup);
+
 describe('useAlertHistoryState', () => {
   beforeEach(() => {
     vi.mocked(AlertsAPI.getHistory).mockReset();
@@ -84,6 +86,289 @@ describe('useAlertHistoryState', () => {
       vi.fn(() => true),
     );
     localStorage.clear();
+  });
+
+  type History = Awaited<ReturnType<typeof AlertsAPI.getHistory>>;
+  const row = (id: string): History[number] =>
+    ({
+      id,
+      type: 'cpu',
+      level: 'warning',
+      startTime: new Date(Date.now() - 60000).toISOString(),
+      lastSeen: new Date().toISOString(),
+      resourceId: `host-${id}`,
+      resourceName: id,
+      message: `Reading for ${id}`,
+      acknowledged: false,
+    }) as History[number];
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: Error) => void;
+    const promise = new Promise<T>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    return { promise, resolve, reject };
+  };
+  const mount = () =>
+    renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts: () => ({}),
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+  const switchOrg = () => {
+    const onSwitch = vi
+      .mocked(eventBus.on)
+      .mock.calls.find(([event]) => event === 'org_switched')![1];
+    onSwitch('replacement');
+  };
+
+  // Notifications link to /alerts/history?alert=<id>: History narrows to that
+  // alert's occurrences and opens the latest one's timeline.
+  it('narrows History to a linked alert and opens its latest occurrence', async () => {
+    setMockLocation('?alert=disk-1');
+    const older = { ...row('disk-1'), startTime: new Date(Date.now() - 3_600_000).toISOString() };
+    const newer = row('disk-1');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([older, row('other'), newer]);
+    const { result } = mount();
+    await waitFor(() => expect(result.loading()).toBe(false));
+    expect(result.focusedAlertId()).toBe('disk-1');
+    expect(result.alertData().map(({ id }) => id)).toEqual(['disk-1', 'disk-1']);
+    await waitFor(() => expect(result.focusRequest()?.alert.startTime).toBe(newer.startTime));
+    expect(result.expandedIncidents().has(`disk-1::${newer.startTime}`)).toBe(true);
+    expect(result.focusedAlertMissing()).toBe(false);
+
+    result.clearFocusedAlert();
+    expect(mockRouterSearch()).not.toContain('alert=');
+    expect(result.alertData()).toHaveLength(3);
+  });
+
+  it('widens to all history once when the linked alert is older than the range', async () => {
+    setMockLocation('?alert=old-1');
+    vi.mocked(AlertsAPI.getHistory)
+      .mockResolvedValueOnce([row('recent')])
+      .mockResolvedValueOnce([row('recent'), row('old-1')]);
+    const { result } = mount();
+    await waitFor(() => expect(result.timeFilter()).toBe('all'));
+    await waitFor(() => expect(result.alertData().map(({ id }) => id)).toEqual(['old-1']));
+    expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(2);
+    expect(mockRouterSearch()).toContain('alert=old-1');
+    expect(result.focusedAlertMissing()).toBe(false);
+  });
+
+  // Saved history holds resolved alerts; a linked alert still firing arrives
+  // with the live list, which can land after the saved read.
+  it('waits for the live alerts before widening or reporting a linked alert missing', async () => {
+    setMockLocation('?alert=live-1');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([row('recent')]);
+    const [settled, setSettled] = createSignal(false);
+    const [active, setActive] = createSignal<Record<string, History[number]>>({});
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts: active,
+        getResource: () => undefined,
+        allResources: () => [],
+        activeAlertsSettled: settled,
+      }),
+    );
+    await waitFor(() => expect(result.loading()).toBe(false));
+    expect(result.timeFilter()).toBe('7d');
+    expect(result.focusedAlertMissing()).toBe(false);
+
+    setActive({ 'live-1': row('live-1') });
+    setSettled(true);
+    await waitFor(() => expect(result.focusRequest()?.alert.id).toBe('live-1'));
+    expect(result.timeFilter()).toBe('7d');
+    expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(1);
+    expect(result.alertData().map(({ id }) => id)).toEqual(['live-1']);
+  });
+
+  it('shows a linked alert still firing even when it started before the range', async () => {
+    setMockLocation('?alert=long-1');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([row('recent')]);
+    const longRunning = {
+      ...row('long-1'),
+      startTime: new Date(Date.now() - 10 * 24 * 3_600_000).toISOString(),
+    };
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts: () => ({ 'long-1': longRunning }),
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+    await waitFor(() => expect(result.focusRequest()?.alert.id).toBe('long-1'));
+    expect(result.timeFilter()).toBe('7d');
+    expect(result.alertData().map(({ id }) => id)).toEqual(['long-1']);
+  });
+
+  it('leaves a later range choice to the operator', async () => {
+    setMockLocation('?alert=two-days');
+    const twoDays = {
+      ...row('two-days'),
+      startTime: new Date(Date.now() - 2 * 24 * 3_600_000).toISOString(),
+    };
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([twoDays]).mockResolvedValue([]);
+    const { result } = mount();
+    await waitFor(() => expect(result.focusRequest()?.alert.id).toBe('two-days'));
+    result.setTimeFilter('24h');
+    await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.loading()).toBe(false));
+    expect(result.timeFilter()).toBe('24h');
+  });
+
+  it('hands the cards one drawer request and keeps the alert named for the notice', async () => {
+    setMockLocation('?alert=disk-1');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([row('disk-1')]);
+    const { result } = mount();
+    await waitFor(() => expect(result.focusRequest()?.alert.id).toBe('disk-1'));
+    expect(result.takeFocusRequest()?.alert.id).toBe('disk-1');
+    expect(result.focusRequest()).toBeNull();
+    expect(result.takeFocusRequest()).toBeNull();
+    expect(result.focusedAlert()?.id).toBe('disk-1');
+    result.clearFocusedAlert();
+    await waitFor(() => expect(result.focusedAlert()).toBeNull());
+  });
+
+  it('says when history no longer holds the linked alert', async () => {
+    setMockLocation('?alert=gone');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([row('recent')]);
+    const { result } = mount();
+    await waitFor(() => expect(result.focusedAlertMissing()).toBe(true));
+    expect(result.timeFilter()).toBe('all');
+    expect(result.alertData()).toEqual([]);
+    expect(result.focusRequest()).toBeNull();
+  });
+
+  it('exposes initial failure and admits only one explicit current-range retry', async () => {
+    vi.mocked(AlertsAPI.getHistory).mockRejectedValueOnce(new Error('Private provider body'));
+    const retry = deferred<History>();
+    vi.mocked(AlertsAPI.getHistory).mockReturnValueOnce(retry.promise);
+    const { result } = mount();
+    await waitFor(() => expect(result.historyLoadError()).toBe(true));
+    expect(result.loading()).toBe(false);
+    const pending = result.retryHistory();
+    result.retryHistory();
+    expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(2);
+    expect(result.loading()).toBe(true);
+    expect(result.historyLoadError()).toBe(true);
+    retry.resolve([]);
+    await pending;
+    expect(result.historyLoadError()).toBe(false);
+    expect(result.loading()).toBe(false);
+    expect(result.alertData()).toEqual([]);
+    expect(AlertsAPI.clearHistory).not.toHaveBeenCalled();
+  });
+
+  it('keeps same-range entries after a failed read without losing URL filters', async () => {
+    setMockLocation('?period=30d&severity=warning&q=retained');
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([row('retained')]);
+    const { result } = mount();
+    await waitFor(() => expect(result.loading()).toBe(false));
+    vi.mocked(AlertsAPI.getHistory).mockRejectedValueOnce(new Error('Unavailable'));
+    await result.retryHistory();
+    expect(result.historyLoadError()).toBe(true);
+    expect(result.alertData().map(({ id }) => id)).toEqual(['retained']);
+    expect(result.searchTerm()).toBe('retained');
+    expect(result.severityFilter()).toBe('warning');
+    expect(result.timeFilter()).toBe('30d');
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse saved rows after a different-range read fails; live alerts remain', async () => {
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([row('old-range')]);
+    const live = row('live');
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts: () => ({ live }),
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+    await waitFor(() => expect(result.loading()).toBe(false));
+    vi.mocked(AlertsAPI.getHistory).mockRejectedValueOnce(new Error('Unavailable'));
+    result.setTimeFilter('30d');
+    await waitFor(() => expect(result.historyLoadError()).toBe(true));
+    expect(result.alertHistory().map(({ id }) => id)).toEqual(['old-range']);
+    expect(result.alertData().map(({ id }) => id)).toEqual(['live']);
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([row('new-range')]);
+    await result.retryHistory();
+    expect(result.alertData().map(({ id }) => id)).toEqual(
+      expect.arrayContaining(['live', 'new-range']),
+    );
+    expect(result.historyLoadError()).toBe(false);
+  });
+
+  it.each(['obsolete-success', 'obsolete-failure'] as const)(
+    'ignores %s after a newer range result',
+    async (kind) => {
+      const old = deferred<History>();
+      vi.mocked(AlertsAPI.getHistory)
+        .mockReturnValueOnce(old.promise)
+        .mockResolvedValueOnce([row('latest')]);
+      const { result } = mount();
+      result.setTimeFilter('30d');
+      await waitFor(() => expect(result.alertHistory()[0]?.id).toBe('latest'));
+      if (kind === 'obsolete-success') old.resolve([row('obsolete')]);
+      else old.reject(new Error('Obsolete failure'));
+      await old.promise.catch(() => {});
+      expect(result.alertHistory()[0]?.id).toBe('latest');
+      expect(result.historyLoadError()).toBe(false);
+      expect(result.loading()).toBe(false);
+    },
+  );
+
+  it('invalidates old-context entries and errors when the organisation changes', async () => {
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValueOnce([row('previous-org')]);
+    const { result } = mount();
+    await waitFor(() => expect(result.loading()).toBe(false));
+    const oldRetry = deferred<History>();
+    vi.mocked(AlertsAPI.getHistory)
+      .mockReturnValueOnce(oldRetry.promise)
+      .mockResolvedValueOnce([row('replacement-org')]);
+    const pending = result.retryHistory();
+    switchOrg();
+    expect(result.alertHistory()).toEqual([]);
+    await waitFor(() => expect(result.alertHistory()[0]?.id).toBe('replacement-org'));
+    oldRetry.reject(new Error('Old org unavailable'));
+    await pending;
+    expect(result.historyLoadError()).toBe(false);
+    expect(result.alertHistory()[0]?.id).toBe('replacement-org');
+  });
+
+  it.each([true, false])(
+    'does not settle a retired-context clear (success=%s) into new history',
+    async (success) => {
+      vi.mocked(AlertsAPI.getHistory)
+        .mockResolvedValueOnce([row('previous-org')])
+        .mockResolvedValueOnce([row('replacement-org')]);
+      const clear = deferred<Awaited<ReturnType<typeof AlertsAPI.clearHistory>>>();
+      vi.mocked(AlertsAPI.clearHistory).mockReturnValueOnce(clear.promise);
+      const { result } = mount();
+      await waitFor(() => expect(result.loading()).toBe(false));
+      const pending = result.clearAlertHistory();
+      switchOrg();
+      await waitFor(() => expect(result.alertHistory()[0]?.id).toBe('replacement-org'));
+      if (success) clear.resolve(undefined as never);
+      else clear.reject(new Error('Previous org unavailable'));
+      await pending;
+      expect(result.alertHistory()[0]?.id).toBe('replacement-org');
+      expect(result.historyLoadError()).toBe(false);
+    },
+  );
+
+  it('does not apply a late failure or dispatch another retry after disposal', async () => {
+    const old = deferred<History>();
+    vi.mocked(AlertsAPI.getHistory).mockReturnValueOnce(old.promise);
+    const { result, cleanup: dispose } = mount();
+    dispose();
+    old.reject(new Error('Disposed read'));
+    await old.promise.catch(() => {});
+    result.retryHistory();
+    expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(1);
+    expect(result.historyLoadError()).toBe(false);
   });
 
   it('owns alert history fetch, filters, resource incidents, and clear behavior outside the render tab', async () => {

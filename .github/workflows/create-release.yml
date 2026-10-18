@@ -857,6 +857,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout repository
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
@@ -869,11 +870,14 @@ jobs:
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
         run: |
           npm ci --ignore-scripts
+          python3 scripts/release_control/release_note_visuals_test.py
+          node --test scripts/release_control/capture_release_note_visuals.test.mjs
           npx playwright install --with-deps chromium
 
       - name: Capture comparison and candidate views
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
         env:
+          GH_TOKEN: ${{ github.token }}
           WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.visual_comparison_tag }}
         run: |
           set -euo pipefail
@@ -1027,7 +1031,36 @@ jobs:
           WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
           TAG="${WORKFLOW_OUTPUT_1}"
-          EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate | jq -sc --arg tag "$TAG" 'add | map(select(.tag_name == $tag)) | first // empty')
+          # The listing carries every release's assets and is about 25 MB, and GitHub answers
+          # it with an HTTP 504 often enough to fail a release on its own. Retry a bounded
+          # number of times and accept only a complete listing: a failed or truncated read
+          # must never look like "no existing release", which would stage a duplicate draft.
+          RELEASES_FILE="$(mktemp)"
+          attempt=1
+          max_attempts=5
+          wait_seconds=15
+          while true; do
+            if gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > "$RELEASES_FILE" &&
+               jq -s -e 'length > 0 and all(.[]; type == "array")' "$RELEASES_FILE" > /dev/null; then
+              break
+            fi
+
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::releases listing failed after ${max_attempts} attempts"
+              exit 1
+            fi
+
+            echo "releases listing failed on attempt ${attempt}/${max_attempts}; retrying in ${wait_seconds}s"
+            sleep "$wait_seconds"
+            attempt=$((attempt + 1))
+            if [ "$wait_seconds" -lt 120 ]; then
+              wait_seconds=$((wait_seconds * 2))
+              if [ "$wait_seconds" -gt 120 ]; then
+                wait_seconds=120
+              fi
+            fi
+          done
+          EXISTING_RELEASE=$(jq -sc --arg tag "$TAG" 'add | map(select(.tag_name == $tag)) | first // empty' "$RELEASES_FILE")
           RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
           RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url // empty')
           RELEASE_IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft // false')

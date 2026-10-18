@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "970f8ec019e2a1b7388b489a1682e6709079e28d",
+  "verified_at": "2026-10-06T08:16:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx": "760a55c1a97677123543d5dffc0af7007bbe0fd28019587418a92f9c4d84e0b5"
+  },
+  "routes": [
+    "/settings/system/network (real section in signal-only fixture)",
+    "/docs/FAQ",
+    "/docs/TROUBLESHOOTING#cors-errors"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "editable empty default with no automatic setting changes",
+    "exact comma-separated keyboard input",
+    "environment-overridden disabled field",
+    "light desktop and dark narrow layout",
+    "rendered FAQ to CORS diagnosis and effective-policy guidance"
+  ],
+  "interactions": [
+    "keyboard focus and typed exact origins preserve the supplied values and dirty signal",
+    "override remains disabled and unchanged",
+    "keyboard activation of FAQ and CORS check link focuses/scolls the real target heading",
+    "ARIA description IDs resolve to both policy and credential limits",
+    "all six captures inspected: readable helper and override text, visible input focus, no viewport overflow"
+  ],
+  "scope": "real component/Docs/router/CSS fixtures; not native CORS, settings persistence, authentication or proxy acceptance",
+  "playwright_version": "1.56.1",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  }
+}

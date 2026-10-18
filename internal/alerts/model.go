@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
@@ -136,6 +137,7 @@ type Alert struct {
 	AckTime           *time.Time                             `json:"ackTime,omitempty"`
 	AckUser           string                                 `json:"ackUser,omitempty"`
 	Correlation       *AlertCorrelation                      `json:"correlation,omitempty"`
+	Resolution        *AlertResolution                       `json:"resolution,omitempty"` // set only when a close was not a recovery
 	Metadata          map[string]interface{}                 `json:"metadata,omitempty"`
 	LastNotified      *time.Time                             `json:"lastNotified,omitempty"`
 	LastEscalation    int                                    `json:"lastEscalation,omitempty"`
@@ -144,6 +146,23 @@ type Alert struct {
 	LatestTransition  *operationaltrust.LifecycleTransition  `json:"latestTransition,omitempty"`
 	Transitions       []operationaltrust.LifecycleTransition `json:"transitions,omitempty"`
 	Evidence          []operationaltrust.EvidenceEnvelope    `json:"evidence,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert. It
+	// is volatile and stripped from durable snapshots.
+	MetricStatus *models.MetricAlertStatus `json:"metricStatus,omitempty"`
+}
+
+// lastObservedAt is when the alert's condition was last evaluated. A
+// threshold alert held below its trigger keeps LastSeen at the last breach,
+// so its live status carries the newer observation.
+func (a *Alert) lastObservedAt() time.Time {
+	if a == nil {
+		return time.Time{}
+	}
+	observed := a.LastSeen
+	if a.MetricStatus != nil && a.MetricStatus.ObservedAt.After(observed) {
+		observed = a.MetricStatus.ObservedAt
+	}
+	return observed
 }
 
 // Clone returns a deep copy of the alert so it can be safely shared across goroutines.
@@ -168,6 +187,8 @@ func (a *Alert) Clone() *Alert {
 		clone.Correlation = cloneAlertCorrelation(a.Correlation)
 	}
 
+	clone.Resolution = a.Resolution.Clone()
+
 	if len(a.EscalationTimes) > 0 {
 		clone.EscalationTimes = append([]time.Time(nil), a.EscalationTimes...)
 	}
@@ -175,6 +196,8 @@ func (a *Alert) Clone() *Alert {
 	if a.Metadata != nil {
 		clone.Metadata = cloneMetadata(a.Metadata)
 	}
+
+	clone.MetricStatus = a.MetricStatus.Clone()
 
 	if a.OperationalRecord != nil {
 		value := a.OperationalRecord.Clone()

@@ -108,10 +108,10 @@ completion records, the active readiness assertion catalog, readiness
 derivation rules, executable proof commands, structured evidence references,
 typed lane/subsystem decision records, active work claims, and the canonical machine-readable
 workspace repo catalog.
-Lane scores reaching target in `status.json` mean the tracked architecture and
-governance work for those lanes is at target; they are not, by themselves,
-approval to cut an RC or promote stable/GA if phase-blocking readiness
-assertions, `open_decisions`, or `release_gates` still remain.
+Lane `completion.state`, its evidence and typed residuals describe the tracked
+work. A `bounded-residual` lane remains distinct from `complete`. Neither state
+approves an RC or stable/GA promotion while phase-blocking readiness assertions,
+`open_decisions`, or `release_gates` remain.
 When the agent starts from a sibling repo or the shared workspace root, these
 same files are still authoritative; resolve them from `pulse/docs/release-control/v6/`
 rather than recreating release control in the current repo.
@@ -369,8 +369,9 @@ destructive state changes, authentication or another trust boundary, or
 stable-promotion lineage. When classification is uncertain, choose the RC
 path.
 
-Successful reporter validation does not force an immediate patch release.
-Severity and active customer harm decide scheduling. After a stable release
+Successful reporter validation does not force a release. The fix ships in
+the next candidate the release train cuts from `main`, or sooner through an
+early cut. After a stable release
 containing the fix ships and the issue is resolved, the test image becomes
 eligible for removal only with explicit maintainer approval. Its tag must
 never be reused.
@@ -418,7 +419,7 @@ Every substantial task must finish by checking these questions:
     state, or scope boundary, keep it internal and continue the work.
 9. Did I learn that the current lane map is hiding a durable product surface?
    If yes: record a `coverage_gaps` entry with evidence, an explicit coverage
-   impact deduction, and the intended promotion path instead of burying the
+   scope evidence, and the intended promotion path instead of burying the
    discovery inside generic residual text.
    When the intended destination is already clear, also add or update the
    matching `candidate_lanes` record so the lane-expansion plan is typed,
@@ -452,10 +453,8 @@ Every substantial task must finish by checking these questions:
     If the lane state is being advanced in `status.json`, the same slice
     should normally also change an owned runtime or product surface for that
     lane unless the remaining lane gap is explicitly governance-only.
-10aa. Am I treating score or evidence deltas as the task instead of as
-    diagnostics?
-    Missing evidence items, current-vs-target score, and proof counts are
-    signals that help locate the real same-lane gap.
+10aa. Am I treating evidence counts as the task instead of checking the
+    actual remaining behavior and its proof?
 10ab. Have I checked real browser truth for a customer-facing surface?
     For customer-facing UI, code-level proof is not enough. Complete the
     Frontend Browser Verification Gate against the current build, exercise the
@@ -494,9 +493,8 @@ Every substantial task must finish by checking these questions:
     Pair lane `status` and `completion.state` coherently: `complete` goes with
     `target-met`, `bounded-residual` goes with `partial`, and `open` must not
     be paired with `target-met`.
-    `partial` means measurable progress, so it must not sit at zero score.
-    `not-started` means zero score and `open`. `blocked` remains an `open`
-    lane below target rather than a residual or complete state.
+    `not-started` and `blocked` remain `open`, rather than residual or complete
+    states. `partial` describes evidenced work that is still incomplete.
     Blocked lanes must declare typed same-lane blocker references to unresolved
     readiness assertions, release gates, or open decisions.
     `completion.tracking` is only for bounded residuals; if the lane is still
@@ -527,8 +525,8 @@ residual work, the same slice must record that residual in
 `status.json.lanes[*].completion` with a short rationale and explicit tracking
 references to the governing lane followup, readiness assertion, release gate,
 or open decision that owns the follow-up.
-When feature work fits an existing lane, reopen that lane's completion state or
-score instead of pretending the map is still complete.
+When feature work fits an existing lane, reopen that lane's completion state
+instead of pretending the map is still complete.
 Existing lanes are not grandfathered out of the modernization rules.
 If a previously touched lane still relies on a non-canonical v6 path, lower
 its claimed completeness and continue from the canonical model rather than
@@ -556,15 +554,11 @@ rather than hand-editing `status.json`.
 Support-only slices are not exempt from this rule: claim the owning lane or
 the narrower governed item they unblock, and say in the claim summary why the
 plumbing is necessary for that governed surface.
-When the slice is mutating and another mutating agent is already active,
-prefer `scripts/release_control/worktree_base.py` first so the canonical clean
-landing worktree for the base branch exists,
-then prefer `scripts/release_control/worktree_claim.py` so the claim is reserved
-and the branch/worktree are isolated in one step.
-When an isolated mutating slice is finished and the base branch worktree is
-clean, prefer `scripts/release_control/worktree_finish.py` to land the scoped
-commit(s) back onto the base branch worktree instead of leaving manual merge
-cleanup for later.
+Checkout isolation and landing follow the repository's current branch policy.
+When isolation is needed, use the available Git worktree tools and reserve the
+governed slice with the same public work_claim.py command in the checkout
+where the work will run. An uncommitted claim in another checkout is not
+transferred by Git worktree creation.
 If you are continuing straight from one governed slice to another, replace the old claim with the new claim in the same `status.json` edit so the live claim
 set never passes through a temporary unclaimed window.
 If you are stopping without finishing the lane, record the remaining same-lane
@@ -572,22 +566,13 @@ residual in `status.json.lanes[*].completion`, `status.json.lane_followups`,
 `status.json.coverage_gaps`, or another owning governed surface before you replace or release the claim.
 Treat a broad lane claim as blocking narrower same-lane blocker or follow-up
 claims until that broad claim is released or expires.
-Treat lane completion, lane coverage, and coverage planning as separate
-derived signals.
-`status_audit.py --pretty` may derive a lane-completion score from
-`current_score/target_score`, a lane-coverage score from unresolved
-`coverage_gaps`, a coverage-planning score from unresolved `coverage_gaps`
-that still lack explicit `candidate_lanes`, and a conservative
-governed-surface score as the lower of completion and coverage.
-Treat those scores and any missing evidence counts as diagnostic summaries,
-not as the task itself.
-Use them to choose the real remaining gap on the owned surface rather than
-optimizing directly for score movement or evidence-count closure unless the
-remaining work is explicitly governance-only.
-When lane-expansion work is the intended target, that same audit output may
-also derive a ranked `candidate_lane_queue` so agents can take the highest
-impact valid candidate lane first.
-That same audit output may also derive `available_candidate_lane_queue`,
+Keep declared completion, unresolved coverage gaps and proposed work distinct.
+`status_audit.py --pretty` exposes these records and their evidence without
+grading completion or assigning priority from proxy counts. Choose work from
+current user direction and the actual product, runtime and ownership evidence.
+For lane expansion, `candidate_lane_options` lists scope and demand evidence in
+stable identifier order. This order does not recommend one option over another.
+The audit also derives `available_candidate_lane_options`,
 active-versus-expired `work_claims`, and claim-conflict records so agents have
 an executable "do not overlap" surface instead of only prose.
 Those claim surfaces reduce logical overlap.
@@ -616,27 +601,53 @@ the git index rather than rewriting the whole repo or restaging whole files.
 Formatters must run before any staged-content audit that hashes or otherwise
 binds evidence to exact bytes, including the browser verification guard.
 
-For runtime subsystem changes, the same commit must now include:
+For runtime changes that alter a declared subsystem contract, the same commit
+must include:
 
 1. the matching subsystem contract update
 2. any dependent subsystem contract whose `Canonical Files`, `Shared Boundaries`, or `Extension Points` explicitly reference a touched runtime path
 3. at least one matching verification artifact update
 
-A staged contract file only counts when the staged diff changes a substantive
-contract section such as `Purpose`, `Canonical Files`, `Shared Boundaries`, `Extension Points`,
-`Forbidden Paths`, `Completion Obligations`, or `Current State`. Metadata-only
-edits are not sufficient completion proof for runtime changes.
+A staged contract file only counts when its diff changes a substantive contract
+section. Update the owning statement of current behavior, responsibility, shared
+boundary, extension point, invariant or unresolved gap. Replace superseded text
+rather than appending another account of the task. Metadata-only edits do not
+qualify.
+
+Subsystem contracts describe the current system. Test output, pass counts,
+browser receipts, benchmark runs and implementation chronology belong in the
+existing verification artifacts or commit and delivery history. Keep one
+authoritative rule at its boundary owner and use a scoped reference from its
+consumers. Do not add a receipt paragraph or change an unrelated test merely to
+satisfy the staged-file shape.
+
+The completion guard infers affected contracts from paths. It cannot determine
+whether an implementation changes their meaning. When a change is contract
+neutral, use the established explicit declaration with a concrete reason:
+
+`PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT='<reason>' git commit ...`
+
+The prepare-commit-msg hook records the reason as a `Contract-Neutral` trailer.
+Canonical governance CI reads that trailer and applies the same declaration to
+the completion guard for the candidate commit. This avoids artificial contract
+and verification-artifact diffs. It does not waive execution of appropriate
+checks, current-source browser verification, ownership, security or release
+gates. A real contract change still requires the owning and dependent contract
+updates and meaningful verification above.
 
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/internal/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
-approved test-prefix matches, non-test contract/type files, or same-subsystem
-tests only when the registry explicitly allows them.
+approved test-prefix matches, or non-test contract/type files. An arbitrary
+test elsewhere in the same subsystem is never proof on its own: the registry
+audit keeps `allow_same_subsystem_tests` false, because it would accept any
+test the subsystem owns rather than the ones a path policy names.
 
-Cross-subsystem contract dependencies are not advisory. If a touched runtime
-path is named in another subsystem contract's `Canonical Files`,
-`Shared Boundaries`, or `Extension Points`, the canonical completion guard now requires that dependent
-contract to be staged in the same slice.
+For changes to a declared contract, cross-subsystem dependencies are not
+advisory. If a touched runtime path is named in another subsystem contract's
+`Canonical Files`, `Shared Boundaries`, or `Extension Points`, include the
+dependent contract update in the same slice. The completion guard requires it
+by default, subject to the explicit contract neutral declaration above.
 
 `status.json` evidence references must use repo-qualified relative paths.
 Absolute machine-local paths are forbidden.
@@ -646,7 +657,10 @@ satisfy the first matching proof policy for that file. The v6 registry requires
 explicit path-policy coverage for every governed subsystem, and default
 subsystem verification is no longer a supported governed path. New owned
 runtime files must therefore be added to a concrete proof route instead of
-inheriting subsystem-default verification.
+inheriting subsystem-default verification. For the same reason the registry
+audit requires each subsystem's default `test_prefixes` and `exact_files` to
+stay empty: a proof listed there is never consulted, so it belongs on the path
+policy whose runtime files it proves.
 
 ## Guardrails
 
@@ -704,3 +718,12 @@ Pulse v6 should be:
 2. extension-oriented instead of patch-oriented
 3. enforced by tests and guardrails
 4. obvious for both humans and agents to continue correctly
+
+### Inherited merge content
+
+Staged qualification compares each file’s Git mode and object ID with the
+merged parents. Exact inherited states, including deletions, keep their parent
+qualification. New resolutions and mode changes remain current work and must
+satisfy their owning contract and proof requirements. Range checks still
+qualify the complete proposed change. Combined frontend content needs a fresh
+browser receipt in a subsequent non-merge commit.

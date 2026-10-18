@@ -86,7 +86,7 @@ func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, u
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +96,14 @@ func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, u
 	identity := "fixture:node:105"
 	registry := unifiedresources.NewRegistry(nil)
 	build := func() (models.VM, string) {
+		// The cycle starts before collection, as in pollVMsAndContainersEfficient.
+		cycleStart := time.Now()
 		vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "fixture", res, client, identity, nil, previous)
 		if !ok {
 			t.Fatal("VM disappeared")
 		}
 		m.recordGuestSnapshot("fixture", "qemu", "node", 105, GuestMemorySnapshot{Name: vm.Name, Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
-		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+		m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 		// Production obtains previous guest context from the unified read view,
 		// not the builder's raw model (the context need not contain memory).
 		registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
@@ -220,7 +222,7 @@ func TestGuestAgentDeferralPreservesMetadataAndMemoryCache(t *testing.T) {
 		http.Error(w, "QEMU command timed out", 500)
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +231,7 @@ func TestGuestAgentDeferralPreservesMetadataAndMemoryCache(t *testing.T) {
 	memory := agentMemCacheEntry{available: 1024, fetchedAt: now, info: proxmox.LinuxMemoryAvailability{Source: "meminfo-available", EffectiveAvailable: 1024}}
 	mk, gk := guestMemoryCacheKey("fixture", "node", 105), guestMetadataCacheKey("fixture", "node", 105)
 	m := &Monitor{guestMetadataCache: map[string]guestMetadataCacheEntry{gk: metadata}, vmAgentMemCache: map[string]agentMemCacheEntry{mk: memory}, guestMetadataLimiter: make(map[string]time.Time)}
-	ips, _, os, _, version := m.fetchGuestAgentMetadata(context.Background(), client, "fixture", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
+	ips, _, os, _, version, _ := m.fetchGuestAgentMetadata(context.Background(), client, "fixture", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
 	if len(ips) != 1 || os != "Linux" || version != "1.0" {
 		t.Fatal("deferral lost last known metadata")
 	}

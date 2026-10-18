@@ -548,6 +548,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 				vm.Memory.Usage = 0
 				vm.Memory.Free = vm.Memory.Total
 				vm.Memory.SwapUsed = 0
+				mockSettleGuestMemoryObservation(&vm.Memory, false, "")
 				vm.Disk.Used = 0
 				vm.Disk.Free = vm.Disk.Total
 				vm.Disk.Usage = -1
@@ -571,6 +572,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 				lxc.Memory.Usage = 0
 				lxc.Memory.Free = lxc.Memory.Total
 				lxc.Memory.SwapUsed = 0
+				mockSettleGuestMemoryObservation(&lxc.Memory, false, "")
 				lxc.Disk.Used = 0
 				lxc.Disk.Free = lxc.Disk.Total
 				lxc.Disk.Usage = -1
@@ -1275,6 +1277,52 @@ func generateRealisticIO(ioType string) int64 {
 	return 0
 }
 
+// mockGuestMemoryObservation gives a running guest the provenance a real
+// estate reports for its memory reading, so the UI qualifies mock readings the
+// way it qualifies live ones instead of treating every guest as unannotated.
+func mockGuestMemoryObservation(source string) models.MemoryObservation {
+	return models.MemoryObservation{State: "current", Source: source, ObservedAt: time.Now()}
+}
+
+// applyMockVMMemoryProvenance picks the source a running VM's reading comes
+// from. A quarter of VMs have nothing better than Proxmox's cache-inclusive
+// value, which carries no used | cache | free split. Pulse reads guest memory
+// through the QEMU guest agent from Linux /proc/meminfo only, so a Windows VM
+// is cache-aware only through a Pulse agent inside it.
+func applyMockVMMemoryProvenance(mem *models.Memory, osName string) {
+	switch {
+	case rand.Float64() < 0.25:
+		mem.Free += mem.Cache
+		mem.Cache = 0
+		mem.Observation = mockGuestMemoryObservation("status-mem")
+	case strings.Contains(strings.ToLower(osName), "windows"):
+		mem.Observation = mockGuestMemoryObservation("agent")
+	default:
+		mem.Observation = mockGuestMemoryObservation("guest-agent-meminfo")
+	}
+}
+
+// refreshMockMemoryObservation moves a current reading's observation time with
+// the sample just taken; a retained or unavailable observation keeps its own.
+func refreshMockMemoryObservation(mem *models.Memory, at time.Time) {
+	if mem.Observation.State == "current" {
+		mem.Observation.ObservedAt = at
+	}
+}
+
+// mockSettleGuestMemoryObservation keeps a guest's memory provenance in step
+// with a power state a scenario forces after generation: a stopped guest has
+// no reading to qualify, and a guest started later needs a current source. A
+// retained or current observation on a running guest is left as it is.
+func mockSettleGuestMemoryObservation(memory *models.Memory, running bool, runningSource string) {
+	switch {
+	case !running:
+		memory.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
+	case memory.Observation.State == "" || memory.Observation.State == "unavailable":
+		memory.Observation = mockGuestMemoryObservation(runningSource)
+	}
+}
+
 func generateVM(nodeName string, instance string, vmid int, config MockConfig) models.VM {
 	name := generateGuestName("vm", fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid))
 	status := "running"
@@ -1345,6 +1393,8 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			mem.Free -= mem.Cache
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
+	} else {
+		mem.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
 	}
 
 	// Disk stats
@@ -1384,6 +1434,9 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 
 	osName, osVersion := generateGuestOSMetadata()
 	ipAddresses, networkIfaces := generateGuestNetworkInfo()
+	if status == "running" {
+		applyMockVMMemoryProvenance(&mem, osName)
+	}
 
 	vm := models.VM{
 		Name:              name,
@@ -1738,14 +1791,95 @@ func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now
 		}
 	}
 
+	activePodsByNode := make(map[string]int, len(cluster.Nodes))
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		if mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			activePodsByNode[nodeName]++
+		}
+	}
+
 	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
 	for i := range cluster.Pods {
 		pod := &cluster.Pods[i]
-		node := nodeByName[strings.TrimSpace(pod.NodeName)]
-		updateMockKubernetesPodUsage(pod, node, now, randomize, clusterOffline)
+		nodeName := strings.TrimSpace(pod.NodeName)
+		updateMockKubernetesPodUsage(pod, nodeByName[nodeName], activePodsByNode[nodeName], now, randomize, clusterOffline)
 	}
+	capMockKubernetesNodePodMemory(cluster, nodeByName)
 
 	recomputeMockKubernetesNodeUsage(cluster, now)
+}
+
+// mockKubernetesNodePodMemoryBudget is how many single-pod memory footprints
+// the active pods on one node share. A pod's memory percent is measured
+// against its node's allocatable memory, as the live agent reports it, so
+// giving every pod a whole footprint (roughly 10-83%) committed any node
+// running four or more pods past its allocatable memory. The node, and the
+// host agent linked to it, then read a constant 100%. The largest footprint
+// is about 83% (a Guaranteed StatefulSet pod at full burst), so a budget of
+// 0.7 footprints keeps a node's pods at or below 58% in steady state, under
+// mockKubernetesNodePodMemoryCeiling.
+const mockKubernetesNodePodMemoryBudget = 0.7
+
+// mockKubernetesPodMemoryShare scales one pod's memory target by the number
+// of active pods on its node, so the node total stays within the budget plus
+// system overhead however many pods are scheduled there.
+func mockKubernetesPodMemoryShare(activePodsOnNode int) float64 {
+	if activePodsOnNode < 1 {
+		activePodsOnNode = 1
+	}
+	return mockKubernetesNodePodMemoryBudget / float64(activePodsOnNode)
+}
+
+// mockKubernetesNodePodMemoryCeiling bounds the fraction of a node's
+// allocatable memory its active pods may hold together. Pod readings smooth
+// toward their share of the budget, so they lag a change in the node's pod
+// count: a pod rescheduled off a failed node arrives with a reading sized for
+// its old node. Share-scaled targets stay under the ceiling, so it binds only
+// on that transient, keeping the node, with its system overhead of up to 26%,
+// below allocatable memory while readings settle.
+const mockKubernetesNodePodMemoryCeiling = 0.6
+
+// capMockKubernetesNodePodMemory applies the ceiling and reports how many
+// nodes it clipped.
+func capMockKubernetesNodePodMemory(cluster *models.KubernetesCluster, nodeByName map[string]*models.KubernetesNode) int {
+	usedByNode := make(map[string]int64, len(cluster.Nodes))
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		if nodeByName[nodeName] != nil && mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			usedByNode[nodeName] += pod.UsageMemoryBytes
+		}
+	}
+
+	scaleByNode := make(map[string]float64, len(usedByNode))
+	for nodeName, used := range usedByNode {
+		node := nodeByName[nodeName]
+		allocMemory := node.AllocMemoryBytes
+		if allocMemory <= 0 {
+			allocMemory = node.CapacityMemoryBytes
+		}
+		ceiling := float64(allocMemory) * mockKubernetesNodePodMemoryCeiling
+		if allocMemory > 0 && float64(used) > ceiling {
+			scaleByNode[nodeName] = ceiling / float64(used)
+		}
+	}
+	if len(scaleByNode) == 0 {
+		return 0
+	}
+
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		scale, ok := scaleByNode[nodeName]
+		if !ok || !mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			continue
+		}
+		pod.UsageMemoryPercent *= scale
+		pod.UsageMemoryBytes = int64(float64(pod.UsageMemoryBytes) * scale)
+	}
+	return len(scaleByNode)
 }
 
 // reconcileMockKubernetesPodScheduling keeps pod placement coherent with
@@ -1916,6 +2050,7 @@ func normalizeMockKubernetesNodeCapacity(node *models.KubernetesNode) {
 func updateMockKubernetesPodUsage(
 	pod *models.KubernetesPod,
 	node *models.KubernetesNode,
+	activePodsOnNode int,
 	now time.Time,
 	randomize bool,
 	clusterOffline bool,
@@ -2002,8 +2137,9 @@ func updateMockKubernetesPodUsage(
 
 	baseMemory := 9.0 + float64(mockStableHash64(seedID, "mem-base")%20)
 	burstMemory := 14.0 + float64(mockStableHash64(seedID, "mem-burst")%36)
-	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12)
-	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.08), 3, 97)
+	memoryShare := mockKubernetesPodMemoryShare(activePodsOnNode)
+	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12) * memoryShare
+	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.08), 3*memoryShare, 97)
 	pod.UsageMemoryBytes = int64(float64(allocMemory) * (pod.UsageMemoryPercent / 100.0))
 
 	baseNetIn := float64((24 + int(mockStableHash64(seedID, "netin-base")%180)) * 1024)
@@ -3633,7 +3769,7 @@ func generateHosts(config MockConfig) []models.Host {
 		sensors := models.HostSensorSummary{}
 		if profile.Platform == "linux" || profile.Platform == "macos" {
 			sensors.TemperatureCelsius = map[string]float64{
-				"cpu.package": SampleMetric("agent", hostID, "temperature", now),
+				"cpu_package": SampleMetric("agent", hostID, "temperature", now),
 			}
 			if rand.Float64() < 0.4 {
 				sensors.Additional = map[string]float64{
@@ -3772,12 +3908,20 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
 		hostIndex, exists := hostsByLinkedNodeID[node.ID]
-		if exists && hostIndex >= 0 && hostIndex < len(data.Hosts) {
-			linkedHost := buildMockLinkedHostFromNode(*node, data.Hosts[hostIndex].ID, hostIndex, now)
+		exists = exists && hostIndex >= 0 && hostIndex < len(data.Hosts)
+		// The linked agent's sensors are built from the node's reading, so
+		// the node takes the agent's sampled value before the agent is built.
+		node.LinkedAgentID = mockLinkedHostIDForNode(node.ID)
+		if exists {
+			node.LinkedAgentID = data.Hosts[hostIndex].ID
+		}
+		refreshMockNodeCPUTemperature(node, now)
+		if exists {
+			linkedHost := buildMockLinkedHostFromNode(*node, node.LinkedAgentID, hostIndex, now)
 			data.Hosts[hostIndex] = linkedHost
 			node.LinkedAgentID = linkedHost.ID
 		} else {
-			linkedHost := buildMockLinkedHostFromNode(*node, "", nextHostIndex, now)
+			linkedHost := buildMockLinkedHostFromNode(*node, node.LinkedAgentID, nextHostIndex, now)
 			data.Hosts = append(data.Hosts, linkedHost)
 			hostsByLinkedNodeID[node.ID] = len(data.Hosts) - 1
 			nextHostIndex++
@@ -4098,9 +4242,13 @@ func ensureMockFixtureHostIORates(data *models.StateSnapshot) {
 	}
 }
 
+func mockLinkedHostIDForNode(nodeID string) string {
+	return fmt.Sprintf("host-node-%s", nodeID)
+}
+
 func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int, now time.Time) models.Host {
 	if hostID == "" {
-		hostID = fmt.Sprintf("host-node-%s", node.ID)
+		hostID = mockLinkedHostIDForNode(node.ID)
 	}
 
 	cpuCount := node.CPUInfo.Cores
@@ -4265,6 +4413,66 @@ func nodeStatusToHostStatus(status string) string {
 	default:
 		return "online"
 	}
+}
+
+// A mock machine's CPU temperature follows one sampler series, the same
+// series that seeds its history, so the current reading continues the line
+// drawn beneath it. A node with a linked agent follows the agent's series:
+// the poller merges the agent's sensors into the node, and the node's drawer
+// and history read the agent. The package carries the sampled value and each
+// core sits a stable amount below it, so models.PrimaryCPUTemperatureCelsius
+// returns exactly the sample for the node and for its agent.
+func CPUTemperatureSeries(node models.Node) (resourceClass, resourceID string) {
+	if linkedAgentID := strings.TrimSpace(node.LinkedAgentID); linkedAgentID != "" {
+		return "agent", linkedAgentID
+	}
+	return "node", node.ID
+}
+
+func mockCoreTemperature(primary float64, seriesID string, core int) float64 {
+	offset := 0.5 + float64(mockStableHash64(seriesID, fmt.Sprintf("core-%d", core), "temperature-offset")%56)/10
+	return math.Max(primary-offset, 1)
+}
+
+// refreshMockNodeCPUTemperature replaces the node's CPU readings (not the
+// low/record tracking or other sensors) with the current sample. The
+// Temperature is copied, never mutated in place, because published snapshots
+// may still share the old pointer.
+func refreshMockNodeCPUTemperature(node *models.Node, now time.Time) {
+	if node == nil || node.Temperature == nil || !node.Temperature.Available || !node.Temperature.HasCPU {
+		return
+	}
+	resourceClass, seriesID := CPUTemperatureSeries(*node)
+	primary := SampleMetric(resourceClass, seriesID, "temperature", now)
+	temperature := *node.Temperature
+	temperature.CPUPackage = primary
+	temperature.CPUMax = primary
+	temperature.Cores = make([]models.CoreTemp, len(node.Temperature.Cores))
+	for i, core := range node.Temperature.Cores {
+		temperature.Cores[i] = models.CoreTemp{Core: core.Core, Temp: mockCoreTemperature(primary, seriesID, core.Core)}
+	}
+	node.Temperature = &temperature
+}
+
+// refreshMockHostCPUSensors writes the agent's current sample under the keys a
+// real agent reports: cpu_package, plus cpu_core_N for the cores it already
+// carries. A linked agent's keys come from its node, so both read one value.
+func refreshMockHostCPUSensors(host *models.Host, now time.Time) {
+	if host == nil || host.Sensors.TemperatureCelsius == nil {
+		return
+	}
+	primary := SampleMetric("agent", host.ID, "temperature", now)
+	sensors := make(map[string]float64, len(host.Sensors.TemperatureCelsius)+1)
+	for key, value := range host.Sensors.TemperatureCelsius {
+		var core int
+		if _, err := fmt.Sscanf(key, "cpu_core_%d", &core); err == nil && key == fmt.Sprintf("cpu_core_%d", core) {
+			sensors[key] = mockCoreTemperature(primary, host.ID, core)
+			continue
+		}
+		sensors[key] = value
+	}
+	sensors["cpu_package"] = primary
+	host.Sensors.TemperatureCelsius = sensors
 }
 
 func nodeTemperatureToHostSensors(temperature *models.Temperature) models.HostSensorSummary {
@@ -4839,7 +5047,16 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			SwapTotal: swapTotal,
 			SwapUsed:  swapUsed,
 		}
+		// Proxmox reports container memory from the cgroup, cache included;
+		// only a linked Pulse agent supplies a cache-aware figure.
+		if rand.Float64() < 0.15 {
+			mem.Observation = mockGuestMemoryObservation("agent")
+		} else {
+			mem.Observation = mockGuestMemoryObservation("cluster-resources")
+		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
+	} else {
+		mem.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
 	}
 
 	// Disk stats - containers typically smaller
@@ -6282,11 +6499,24 @@ func updateFixtureStateMetricsSelectedAt(
 		}
 		*lastSeen = refreshNow
 	}
+	// A current memory reading is observed on the same poll that sights the
+	// guest, so its time moves with the sighting, in static-metrics mode too.
+	stampGuestMemoryObservation := func(nodeName, status string, memory *models.Memory) {
+		if !selection.includesProxmoxNode(nodeName) || status != "running" {
+			return
+		}
+		if _, offline := offlineNodes[nodeName]; offline {
+			return
+		}
+		refreshMockMemoryObservation(memory, refreshNow)
+	}
 	for i := range data.VMs {
 		stampGuestSighting(data.VMs[i].Node, &data.VMs[i].LastSeen)
+		stampGuestMemoryObservation(data.VMs[i].Node, data.VMs[i].Status, &data.VMs[i].Memory)
 	}
 	for i := range data.Containers {
 		stampGuestSighting(data.Containers[i].Node, &data.Containers[i].LastSeen)
+		stampGuestMemoryObservation(data.Containers[i].Node, data.Containers[i].Status, &data.Containers[i].Memory)
 	}
 	for i := range data.Storage {
 		stampGuestSighting(data.Storage[i].Node, &data.Storage[i].LastSeen)
@@ -6307,6 +6537,7 @@ func updateFixtureStateMetricsSelectedAt(
 		node.CPU = SampleMetric("node", node.ID, "cpu", refreshNow) / 100.0
 		applyMemoryUsage(&node.Memory, SampleMetric("node", node.ID, "memory", refreshNow))
 		applyDiskUsage(&node.Disk, SampleMetric("node", node.ID, "disk", refreshNow))
+		refreshMockNodeCPUTemperature(node, refreshNow)
 	}
 
 	// Update VM metrics
@@ -6911,9 +7142,7 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 			applyDiskUsage(&host.Disks[j], SampleMetric("agent", diskID, "disk", now))
 		}
 
-		if host.Sensors.TemperatureCelsius != nil {
-			host.Sensors.TemperatureCelsius["cpu.package"] = SampleMetric("agent", host.ID, "temperature", now)
-		}
+		refreshMockHostCPUSensors(host, now)
 
 		if len(host.LoadAverage) == 3 {
 			for j := range host.LoadAverage {
@@ -7253,4 +7482,13 @@ func generateDockerSwarmSecretsAndConfigs(hostname string, now time.Time) ([]mod
 	}
 
 	return secrets, configs
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

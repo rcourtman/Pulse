@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestBuildUnifiedResourceContext_NilProvider(t *testing.T) {
@@ -738,6 +739,56 @@ func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
 	}
 	if strings.Contains(got, "truenas-main") {
 		t.Fatalf("expected raw truenas host name to be redacted, got %q", got)
+	}
+}
+
+// A retained disk temperature (a disk in standby, a host agent past its
+// reporting lease) is not current heat: it must not put a disk on the
+// attention list, and a disk listed for another reason shows it as last known.
+func TestBuildUnifiedResourceContextJudgesDiskHeatOnCollectedTemperature(t *testing.T) {
+	disk := func(id string, status unifiedresources.ResourceStatus, temperature int, collection diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Name: id, Type: unifiedresources.ResourceTypePhysicalDisk, Status: status, ParentName: "tower",
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: collection},
+			},
+		}
+	}
+	disks := []unifiedresources.Resource{
+		disk("standby-disk", unifiedresources.StatusOnline, 58, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		disk("silent-disk", unifiedresources.StatusOffline, 52, diskinventory.Unavailable("smartctl", "host agent stopped reporting")),
+		disk("hot-disk", unifiedresources.StatusOnline, 55, diskinventory.Available("smartctl")),
+	}
+	s := &Service{unifiedResourceProvider: &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
+			return unifiedresources.ResourceStats{Total: len(disks), ByType: map[unifiedresources.ResourceType]int{unifiedresources.ResourceTypePhysicalDisk: len(disks)}}
+		},
+		getByTypeFunc: func(resourceType unifiedresources.ResourceType) []unifiedresources.Resource {
+			if resourceType == unifiedresources.ResourceTypePhysicalDisk {
+				return disks
+			}
+			return nil
+		},
+	}}
+
+	got := s.buildUnifiedResourceContext()
+	_, attention, found := strings.Cut(got, "**Physical Disks Needing Attention:**")
+	if !found {
+		t.Fatalf("expected disk attention section, got %q", got)
+	}
+	attention, _, _ = strings.Cut(attention, "\n\n")
+	if entries := strings.Count(attention, "\n- "); entries != 2 {
+		t.Fatalf("attention entries = %d, want the offline and the collected-hot disk only: %q", entries, attention)
+	}
+	if strings.Contains(attention, "58C") {
+		t.Fatalf("a standby disk's retained 58C must not flag it for heat: %q", attention)
+	}
+	if !strings.Contains(attention, "(PASSED), Temp: last known 52C (host agent stopped reporting) [offline]") {
+		t.Fatalf("expected the offline disk's retained temperature as last known: %q", attention)
+	}
+	if !strings.Contains(attention, "(PASSED), Temp: 55C [online]") {
+		t.Fatalf("expected the collected 55C disk on the attention list: %q", attention)
 	}
 }
 

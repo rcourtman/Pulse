@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "bffd21f47026ca2408ee1d0b5bb071c02e60c623",
+  "verified_at": "2026-10-06T15:46:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "df5d337cbac9e091aa0e9dfaa2623a7169eedc7609829a76338f0e4208685e0b",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "90ab80e79b7516c5693768657739ab1b6426615312e0dc03ff9c8636f39f35af",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "7cbb73c2b4e903ba9bb4c783fada2493189f325f312c23a13f600541520e8a79",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "2c5818b026c1976786bf858fddcbbce552217eed4410302db573cbebef3ac944",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "5d68a4b1e2904bdfb76245bfda24f77bd330424f830952b4d134b1931fba0518"
+  },
+  "routes": [
+    "/alerts/destinations",
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7731 built from this clone, Vite :5251 serving this branch, base bffd21f470, after #2578 landed) with Playwright page.clock installed before load; data held by dropping /ws data frames and replaying cached API GETs while a data-free keep-alive frame per fake minute keeps one live socket (no heartbeat reconnect)",
+    "Alerts > Destinations external watchdog with an injected healthy status (lastSuccessAt 30s, lastMonitoringProgress 20s before load; the mock has no watchdog): Last success 33s ago and Monitor progress 23s ago read 10 mins ago after 10 held minutes at 1440 and 390; 20 background re-reads of /api/alerts/deadman/status in those 10 minutes, Refresh button untouched",
+    "Same page, delivery log with one injected sent email attempt 5 minutes old: the row time tooltip moved 5 mins ago to 15 mins ago",
+    "Patrol activity with an injected blocked status (blocked_at 2 minutes before load): 'Blocked 2m ago' read 'Blocked 12m ago' after 10 held minutes",
+    "Patrol activity > Finding options and history > History, newest demo run start rewritten to 3 minutes before load: row read 3m ago then 13m ago; selecting it showed 'Patrol run 3m ago' and then 'Patrol run 13m ago' while held",
+    "Patrol inbox attention detail with injected acknowledgement, timeline and evidence times (3, 5 and 7 minutes before load): read 13m, 15m and 17m ago after 10 held minutes; 'Last seen' and the flapping window stay read-time by design",
+    "Same-session control: with these five runtime files swapped back to origin/main under the running Vite, the watchdog ages, delivery tooltip, Blocked banner, selected-run banner and attention detail ages stayed frozen (one status read, no background re-reads); only the run history row moved, because history re-reads on Patrol's 60-second refresh, so that row is not changed here",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded /alerts/destinations at 1440x900 and 390x844, held the data stream and advanced the page clock ten one-minute steps",
+    "Loaded /patrol/activity, opened Finding options and history, opened History, selected the newest run, held and advanced ten minutes",
+    "Loaded /patrol, opened the first attention item's detail, held and advanced ten minutes",
+    "Repeated every scenario with the pre-change files as the control"
+  ]
+}

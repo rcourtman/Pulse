@@ -217,7 +217,7 @@ Important:
             </div>
           </div>
 
-          <div class="bg-base rounded-md p-3 space-y-3">
+          <div class="bg-page rounded-md p-3 space-y-3">
             <div class="flex items-center justify-between">
               <span class={labelClass()}>Password Setup</span>
               <div class="flex items-center space-x-2">
@@ -390,7 +390,7 @@ Important:
           </div>
 
           <div class="space-y-3">
-            <div class="bg-base rounded-md p-3">
+            <div class="bg-page rounded-md p-3">
               <span class={labelClass('text-xs')}>Username</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border">
@@ -406,7 +406,7 @@ Important:
               </div>
             </div>
 
-            <div class="bg-base rounded-md p-3">
+            <div class="bg-page rounded-md p-3">
               <span class={labelClass('text-xs')}>Password</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border break-all">
@@ -422,7 +422,7 @@ Important:
               </div>
             </div>
 
-            <div class="bg-base rounded-md p-3">
+            <div class="bg-page rounded-md p-3">
               <span class={labelClass('text-xs')}>API token</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border break-all">

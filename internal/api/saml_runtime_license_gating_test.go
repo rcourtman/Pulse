@@ -26,7 +26,7 @@ func TestSAMLRuntimeEndpointsUseCommunitySSOFeature(t *testing.T) {
 		{http.MethodGet, "/api/saml/test-provider/login"},
 		{http.MethodPost, "/api/saml/test-provider/acs"},
 		{http.MethodGet, "/api/saml/test-provider/metadata"},
-		{http.MethodGet, "/api/saml/test-provider/logout"},
+		{http.MethodPost, "/api/saml/test-provider/logout"},
 		{http.MethodPost, "/api/saml/test-provider/slo"},
 	}
 

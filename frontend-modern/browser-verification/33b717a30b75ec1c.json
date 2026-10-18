@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "d0915be19993b6c44c17d8e0bf27a8e3c71201d4",
+  "verified_at": "2026-10-05T03:11:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "2d4e46f19ecd610978e73e1b75a270edc3dc8e2411c4c3c432a7bd6e7fc83306",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "bc9643a9f68d7ace6d1ec46d9d41ad2972a0d5f62543ef5c5b5f638a9dc68b0f",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "0d3fb6f4444baa550ec710f4893f0779f4f7f0ffa58055ec247729664d645f6d"
+  },
+  "routes": [
+    "/kubernetes",
+    "/kubernetes/nodes"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Overview with one degraded node: Nodes needing attention lists Prod Euw1 K8s 03 with a Degraded status above the Clusters row (2/3 nodes)",
+    "Overview health-signals table renders above the clusters only when the alert engine reports Kubernetes incidents (none in this mock; covered by the contract test)",
+    "Nodes tab desktop: Status column with a Degraded badge for K8s 03 and muted Ready for K8s 01 and 02; node names whole",
+    "Phones: Node, Cluster, CPU, Memory, Capacity as before with whole node names; Status column demoted and the state announced once via a phone-only screen-reader label",
+    "Name clipping at 600-820px measured identical to main (pre-existing tablet band)"
+  ],
+  "interactions": [
+    "Measured name and status cell clipping across 390, 600, 700, 820, 1024 and 1440 px",
+    "Read the accessibility tree of a node row at 390 and 1440 px to confirm the state is exposed once at each width"
+  ]
+}

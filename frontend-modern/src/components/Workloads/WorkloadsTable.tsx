@@ -17,31 +17,23 @@ type WorkloadsTableProps = Pick<
   | 'activeAlerts'
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
-  | 'compactGroupHeaders'
   | 'getGroupLabel'
-  | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
   | 'groupedWindowing'
   | 'groupLabelBadges'
   | 'guestMetadata'
   | 'guestParentNodeMap'
-  | 'groupNodeDrawerMode'
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleSort'
   | 'handleTagClick'
-  | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
-  | 'focusedSummaryWorkloadGroupScope'
-  | 'focusedSummaryWorkloadGroupId'
-  | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
   | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
+  | 'selectedGuestDrawerState'
   | 'selectedGuestId'
-  | 'setFocusedWorkloadGroupScope'
-  | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
   | 'setTableRootRef'
@@ -73,6 +65,7 @@ type WorkloadsTableProps = Pick<
   | 'clearWorkloadColumnWidth'
 > & {
   title?: JSX.Element;
+  actions?: JSX.Element;
 };
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
@@ -84,7 +77,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
-        <TableCardHeader title={props.title} />
+        <TableCardHeader title={props.title} actions={props.actions} />
         <Table
           wrapperRef={props.setTableWrapperRef}
           class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}${props.workloadManualColumnSizing() ? ' workload-table--manual-widths' : ''}`}
@@ -132,30 +125,21 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             activeAlerts={props.activeAlerts}
             alertsEnabled={props.alertsEnabled}
             bottomSpacerHeight={props.bottomSpacerHeight}
-            compactGroupHeaders={props.compactGroupHeaders}
             getGroupLabel={props.getGroupLabel}
-            getNodeTemperatureThresholds={props.getNodeTemperatureThresholds}
             groupedGuests={props.groupedGuests}
             groupedWindowing={props.groupedWindowing}
             groupLabelBadges={props.groupLabelBadges}
             guestMetadata={props.guestMetadata}
             guestParentNodeMap={props.guestParentNodeMap}
-            groupNodeDrawerMode={props.groupNodeDrawerMode}
             groupingMode={props.groupingMode}
             handleCustomUrlUpdate={props.handleCustomUrlUpdate}
             handleTagClick={props.handleTagClick}
-            activeSummaryWorkloadGroupScope={props.activeSummaryWorkloadGroupScope}
             activeSummaryWorkloadId={props.activeSummaryWorkloadId}
-            focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
-            focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
-            hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
-            isMobile={props.isMobile}
             nestedWorkloadContextByGuestId={props.nestedWorkloadContextByGuestId}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
+            selectedGuestDrawerState={props.selectedGuestDrawerState}
             selectedGuestId={props.selectedGuestId}
-            setFocusedWorkloadGroupScope={props.setFocusedWorkloadGroupScope}
-            setHoveredWorkloadGroupScope={props.setHoveredWorkloadGroupScope}
             setHoveredWorkloadId={props.setHoveredWorkloadId}
             setSelectedGuestId={props.setSelectedGuestId}
             setTableBodyRef={props.setTableBodyRef}
@@ -170,7 +154,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             workloadMetricHistory={props.workloadMetricHistory}
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
-            workloadTableVisibleColumns={props.workloadTableVisibleColumns}
             workloadColumnWidths={props.workloadColumnWidths}
           />
         </Table>

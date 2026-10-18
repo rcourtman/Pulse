@@ -20,6 +20,11 @@ import {
   runtimeStatePath,
 } from "./runtime-defaults";
 
+import {
+  defaultMockInventoryReady,
+  defaultMockHistoryReady,
+} from "../scripts/default-mock-readiness.mjs";
+
 const helpersDir = path.dirname(fileURLToPath(import.meta.url));
 
 const runtimePrimaryAPIToken = (): string => {
@@ -156,6 +161,32 @@ export async function waitForAppShell(page: Page, timeoutMs = 20_000) {
     undefined,
     { timeout: timeoutMs },
   );
+}
+
+async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_000) {
+  // A protected URL and a nonempty root also describe pending bootstrap and
+  // Login after a rejected summary request. The app-scroll-shell mounts only
+  // after loading, needsAuth and enhanced-store admission have completed.
+  const outcome = await page.waitForFunction(
+    () => {
+      const visible = (selector: string) => {
+        const element = document.querySelector(selector);
+        return element !== null && element.getClientRects().length > 0 &&
+          getComputedStyle(element).visibility !== "hidden";
+      };
+      if (visible('input[name="username"]')) return "login";
+      return visible(".app-scroll-shell") ? "authenticated" : false;
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+  try {
+    if (await outcome.jsonValue() !== "authenticated") {
+      throw new Error("Shared cookie session was rejected by browser bootstrap");
+    }
+  } finally {
+    await outcome.dispose();
+  }
 }
 
 export async function waitForPulseReady(page: Page, timeoutMs = 120_000) {
@@ -1086,8 +1117,12 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
 export async function ensureAuthenticated(page: Page) {
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
-  if (!(await authenticateWithPrimaryAPIToken(page))) {
+  if (
+    !(await authenticateWithPrimaryAPIToken(page)) &&
+    !(await authenticateWithSharedCookieSession(page))
+  ) {
     await login(page);
+    await rememberSharedCookieSession(page);
   }
   await expect(page).toHaveURL(AUTHENTICATED_URL);
 }
@@ -1117,6 +1152,64 @@ const sharedCookieStatePath = (): string =>
     "shared-cookie-session.json",
   );
 
+const isAuthenticationCookie = (cookie: { name: string }): boolean =>
+  ["pulse_session", "__Host-pulse_session", "pulse_csrf"].includes(cookie.name);
+
+async function authenticateWithSharedCookieSession(page: Page): Promise<boolean> {
+  let cookies: Awaited<ReturnType<ReturnType<Page["context"]>["cookies"]>>;
+  try {
+    const state = JSON.parse(fs.readFileSync(sharedCookieStatePath(), "utf8"));
+    cookies = state.cookies.filter(isAuthenticationCookie);
+  } catch {
+    return false;
+  }
+  if (!cookies.some((cookie) => cookie.name !== "pulse_csrf")) {
+    return false;
+  }
+
+  // Probe the exact saved cookies against this backend, without a primary
+  // token that could hide expiry or revocation. Never import another test's
+  // org selection, localStorage or unrelated cookies into this page.
+  const probe = await playwrightRequest.newContext({
+    baseURL: preferredBrowserBaseURL(),
+    storageState: { cookies, origins: [] },
+  });
+  try {
+    const status = (await probe.get("/api/state")).status();
+    if (status === 401 || status === 403) {
+      return false;
+    }
+    if (status !== 200) {
+      throw new Error(`Shared cookie session probe failed: ${status}`);
+    }
+    await page.context().addCookies(cookies);
+    // Root/login skip protected bootstrap without a per-tab login hint.
+    // Validate the saved cookies through the existing workspace entry, never
+    // by restoring token/tenant storage or falling back after browser refusal.
+    await page.goto("/infrastructure");
+    await waitForAuthenticatedAppShell(page);
+    await expect(page).toHaveURL(AUTHENTICATED_URL);
+    return true;
+  } finally {
+    await probe.dispose();
+  }
+}
+
+async function rememberSharedCookieSession(page: Page): Promise<void> {
+  const cookies = (await page.context().cookies(preferredBrowserBaseURL()))
+    .filter(isAuthenticationCookie);
+  if (!cookies.some((cookie) => cookie.name !== "pulse_csrf")) {
+    throw new Error("Password authentication did not issue a cookie session");
+  }
+  const sharedPath = sharedCookieStatePath();
+  fs.mkdirSync(path.dirname(sharedPath), { recursive: true });
+  const temporaryPath = `${sharedPath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify({ cookies, origins: [] }), {
+    mode: 0o600,
+  });
+  fs.renameSync(temporaryPath, sharedPath);
+}
+
 async function storageStateHasLiveSession(
   browser: Browser,
   statePath: string,
@@ -1140,37 +1233,12 @@ async function storageStateHasLiveSession(
   }
 }
 
-type E2ERuntimeStateResource = {
-  name?: string;
-  sources?: string[];
-  type?: string;
-};
-
-type E2ERuntimeState = {
-  connectedInfrastructure?: Array<{ name?: string }>;
-  resources?: E2ERuntimeStateResource[];
-};
-
-type E2EMetricPoint = {
-  timestamp?: number;
-};
-
-type E2EStorageCharts = {
-  pools?: Record<string, { used?: E2EMetricPoint[] }>;
-  disks?: Record<string, { temperature?: E2EMetricPoint[] }>;
-};
-
 const requiresDefaultMockRuntimeReadiness = (): boolean =>
   ["1", "true", "yes", "on"].includes(
     String(process.env.PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY || "")
       .trim()
       .toLowerCase(),
   );
-
-const resourceHasSource = (
-  resource: E2ERuntimeStateResource,
-  source: string,
-): boolean => resource.sources?.includes(source) === true;
 
 export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
   if (!requiresDefaultMockRuntimeReadiness()) {
@@ -1185,48 +1253,7 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
           return false;
         }
 
-        const state = (await response.json()) as E2ERuntimeState;
-        const resources = Array.isArray(state.resources) ? state.resources : [];
-        const infrastructure = Array.isArray(state.connectedInfrastructure)
-          ? state.connectedInfrastructure
-          : [];
-
-        return (
-          resources.some(
-            (resource) =>
-              resource.name === "nvme-primary" &&
-              resource.type === "storage" &&
-              resourceHasSource(resource, "vmware"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.type === "k8s-cluster" &&
-              resourceHasSource(resource, "kubernetes"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.name === "tank" &&
-              resourceHasSource(resource, "truenas"),
-          ) &&
-          resources.some(
-            (resource) =>
-              (resource.type === "vm" ||
-                resource.type === "system-container") &&
-              resourceHasSource(resource, "proxmox"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.name === "esxi-01.lab.local" &&
-              resource.type === "agent" &&
-              resourceHasSource(resource, "vmware"),
-          ) &&
-          resources.some((resource) => resource.type === "docker-host") &&
-          resources.some((resource) => resource.type === "pbs") &&
-          resources.some((resource) => resource.type === "pmg") &&
-          infrastructure.some(
-            (entry) => entry.name === "esxi-01.lab.local",
-          )
-        );
+        return defaultMockInventoryReady(await response.json());
       },
       {
         message:
@@ -1236,17 +1263,6 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
       },
     )
     .toBe(true);
-
-  const hasDeepSeries = (points: E2EMetricPoint[] | undefined): boolean => {
-    const timestamps = (points ?? [])
-      .map((point) => Number(point.timestamp))
-      .filter(Number.isFinite)
-      .sort((left, right) => left - right);
-    if (timestamps.length < 2) {
-      return false;
-    }
-    return timestamps[timestamps.length - 1] - timestamps[0] > 5 * 24 * 60 * 60 * 1000;
-  };
 
   // Inventory becomes available before the monitor has finished building its
   // historical mock timeline. Do not advertise the shared browser fixture as
@@ -1264,15 +1280,7 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
           return false;
         }
 
-        const charts = (await response.json()) as E2EStorageCharts;
-        return (
-          Object.values(charts.pools ?? {}).some((pool) =>
-            hasDeepSeries(pool.used),
-          ) &&
-          Object.values(charts.disks ?? {}).some((disk) =>
-            hasDeepSeries(disk.temperature),
-          )
-        );
+        return defaultMockHistoryReady(await response.json());
       },
       {
         message:

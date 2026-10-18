@@ -4,12 +4,18 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
-import { WorkloadsSurface } from '../WorkloadsSurface';
+import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
+import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
+import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
+import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
+import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
 import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
 import workloadPanelSource from '../WorkloadPanel.tsx?raw';
+import workloadWebLinksActionSource from '../WorkloadWebLinksAction.tsx?raw';
+import workloadWebLinksStateSource from '../useWorkloadWebLinksState.ts?raw';
 import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import workloadsFilterModelSource from '../workloadsFilterModel.ts?raw';
 import workloadsControlsStateSource from '../useWorkloadsControlsState.ts?raw';
@@ -71,7 +77,6 @@ import {
   computeWorkloadStats,
 } from '../workloadSelectors';
 import { getKubernetesContextKey } from '../workloadTopology';
-import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
@@ -246,10 +251,6 @@ vi.mock('@/components/shared/InfrastructureSelector', () => ({
   ),
 }));
 
-vi.mock('../WorkloadsFilter', () => ({
-  WorkloadsFilter: () => <div data-testid="workloads-filter">filter</div>,
-}));
-
 vi.mock('../GuestDrawer', () => ({
   GuestDrawer: (props: { nestedWorkloadContext?: { label: string; count: number } }) => (
     <div data-testid="guest-drawer">
@@ -347,24 +348,6 @@ const makeGuest = (i: number, overrides?: Record<string, unknown>) => ({
   ...overrides,
 });
 
-const makeResource = (overrides?: Partial<Resource>): Resource => ({
-  id: 'resource-1',
-  type: 'vm',
-  name: 'secret-host-1',
-  displayName: 'secret-host-1',
-  platformId: 'platform-1',
-  platformType: 'proxmox-pve',
-  sourceType: 'api',
-  status: 'running',
-  lastSeen: Date.now(),
-  policy: {
-    sensitivity: 'restricted',
-    routing: { scope: 'local-only', redact: ['hostname'] },
-  },
-  aiSafeSummary: 'Production Host',
-  ...overrides,
-});
-
 const PROFILES = {
   S: 400,
   M: 1500,
@@ -406,6 +389,23 @@ const flushEffects = async () => {
   await Promise.resolve();
   await Promise.resolve();
 };
+
+// Platform pages build the one workload state and pass it to the surface.
+function PageOwnedWorkloadsSurface(
+  props: WorkloadsStateOptions & Omit<WorkloadsSurfaceProps, 'state'>,
+) {
+  const state = useWorkloadsState(props);
+  return (
+    <WorkloadsSurface
+      state={state}
+      forcedPlatform={props.forcedPlatform}
+      forcedViewMode={props.forcedViewMode}
+      emptyStateTitle={props.emptyStateTitle}
+      emptyStateDescription={props.emptyStateDescription}
+      tableTitle={props.tableTitle}
+    />
+  );
+}
 
 describe('Workloads platform-page embed contract', () => {
   it('exposes metric-display-mode + history-range override hooks so platform pages can share the toggle across multiple tables', async () => {
@@ -449,56 +449,28 @@ describe('Workloads platform-page embed contract', () => {
     expect(nodesTableSource).toContain('useWorkloadTableMetricHistory');
     expect(nodesTableSource).toContain('MetricMiniSparkline');
     expect(nodesTableSource).toContain('isSparklineMode');
+    // The hosts table draws node rows only: it polls the infrastructure
+    // summary and leaves guest history to the embedded workloads reader.
+    expect(nodesTableSource).toContain("series: 'nodes',");
   });
 
-  it('exposes compactGroupHeaders so platform pages can strip duplicate host stats from group rows', async () => {
+  it('keeps grouped host rows as dividers and host drawers on the platform hosts table', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).toContain('compactGroupHeaders?: boolean;');
-    expect(stateSource).toContain('compactGroupHeaders: () => props.compactGroupHeaders === true,');
+    expect(stateSource).not.toContain('groupNodeDrawerMode');
+    expect(stateSource).not.toContain('summaryGroupScopes');
 
-    const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
-    expect(tableSource).toContain(`| 'compactGroupHeaders'`);
-    expect(tableSource).toContain('compactGroupHeaders={props.compactGroupHeaders}');
+    const selectionSource = (await import('../useWorkloadSelectionState.ts?raw')).default;
+    expect(selectionSource).not.toContain('hoveredGroupScope');
+    expect(selectionSource).not.toContain('focusedGroupScope');
 
     const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
-    expect(panelSource).toContain(`| 'compactGroupHeaders'`);
-    // When the flag is set the panel falls back to NodeGroupHeader's
-    // colspan layout: no per-column metric cells, no inline node facts.
-    expect(panelSource).toContain(
-      'props.compactGroupHeaders() ? undefined : props.workloadTableVisibleColumns()',
-    );
-    expect(panelSource).toContain(
-      'props.compactGroupHeaders() ? undefined : renderGroupNodeColumnCell',
-    );
-    expect(panelSource).toContain('!props.compactGroupHeaders() &&');
+    expect(panelSource).not.toContain('NodeDrawer');
+    expect(panelSource).not.toContain('handleGroupFocusToggle');
+    expect(panelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
+    expect(panelSource).toContain("trProps={{ 'data-summary-group-id': groupKey }}");
 
-    const proxmoxSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
-      .default;
-    expect(proxmoxSource).toContain('compactGroupHeaders');
-  });
-
-  it('lets platform pages move grouped host drawers to a dedicated host table owner', async () => {
-    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).toContain("groupNodeDrawerMode?: 'inline' | 'disabled';");
-    expect(stateSource).toContain(
-      "groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',",
-    );
-
-    const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
-    expect(tableSource).toContain(`| 'groupNodeDrawerMode'`);
-    expect(tableSource).toContain('groupNodeDrawerMode={props.groupNodeDrawerMode}');
-
-    const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
-    expect(panelSource).toContain("props.groupNodeDrawerMode() === 'inline'");
-    expect(panelSource).toContain(
-      'onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined',
-    );
-
-    const proxmoxPageSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
-      .default;
     const proxmoxNodesSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
       .default;
-    expect(proxmoxPageSource).toContain('groupNodeDrawerMode="disabled"');
     expect(proxmoxNodesSource).toContain('NodeDrawer');
     expect(proxmoxNodesSource).toContain('data-inline-node-detail-for={node.id}');
   });
@@ -547,8 +519,16 @@ describe('Workloads performance contract', () => {
     it('binds every workload toolbar to the complete canonical metric-control contract', () => {
       expect(workloadsFilterModelSource).toContain('getWorkloadsMetricFilterProps');
       expect(workloadsFilterModelSource).toContain('metricHistoryHintVisible');
-      expect(workloadsSource).toContain('{...getWorkloadsMetricFilterProps(state)}');
-      expect(workloadsSource).not.toContain('metricDisplayMode={state.workloadMetricDisplayMode}');
+      // The owning platform pages render the only workload toolbars; the
+      // embedded surface renders none.
+      expect(workloadsSource).not.toContain('<WorkloadsFilter');
+      expect(workloadsSource).not.toContain("from './WorkloadsFilter'");
+      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
+        expect(pageSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
+        expect(pageSource).not.toContain(
+          'metricDisplayMode={workloadsState.workloadMetricDisplayMode}',
+        );
+      }
     });
 
     it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
@@ -558,11 +538,8 @@ describe('Workloads performance contract', () => {
       wsReconnecting = true;
       mockWorkloads = [makeGuest(1, { name: 'route-owned-workload' })];
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
-      await waitFor(() => {
-        expect(document.querySelector('[data-testid="workloads-filter"]')).toBeInTheDocument();
-      });
       await waitFor(() => {
         expect(
           document.querySelector('[data-testid="guest-row-route-owned-workload"]'),
@@ -580,7 +557,7 @@ describe('Workloads performance contract', () => {
         () => new Promise(() => undefined),
       );
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(
@@ -605,7 +582,7 @@ describe('Workloads performance contract', () => {
         ],
       });
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1));
       expect(connectionsApiMocks.list).not.toHaveBeenCalled();
@@ -620,17 +597,12 @@ describe('Workloads performance contract', () => {
             path="/"
             component={() => (
               <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
                 forcedPlatform="proxmox-pve"
                 emptyStateTitle="No Proxmox workloads"
                 emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
                 state={
                   {
                     setClearSurfaceRootRef: vi.fn(),
-                    kioskMode: () => false,
                     surfaceConnected: () => true,
                     surfaceInitialDataReceived: () => true,
                     allGuests: () => [],
@@ -713,14 +685,9 @@ describe('Workloads performance contract', () => {
             path="/"
             component={() => (
               <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
                 state={
                   {
                     setClearSurfaceRootRef: vi.fn(),
-                    kioskMode: () => false,
                     surfaceConnected: () => true,
                     surfaceInitialDataReceived: () => true,
                     allGuests: () => [],
@@ -785,9 +752,7 @@ describe('Workloads performance contract', () => {
         }),
       ];
 
-      const { getByTestId } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { getByTestId } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(getByTestId('guest-row-drawer-regression')).toBeInTheDocument();
@@ -846,7 +811,7 @@ describe('Workloads performance contract', () => {
         }),
       ];
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(screen.getByText('vm-missing-agent')).toBeInTheDocument();
@@ -855,18 +820,6 @@ describe('Workloads performance contract', () => {
       expect(screen.queryByText('2 running workloads have no Pulse Agent')).toBeNull();
       expect(screen.queryByRole('link', { name: 'Install agent' })).toBeNull();
       expect(document.body).not.toHaveTextContent('Add agent for AI actions');
-    });
-
-    it('searches policy-redacted resources by their raw display name in operator-local UI', () => {
-      // owning route search; redaction is a transmission-boundary policy
-      // (docs/PRIVACY.md), so the haystack must use the raw infra name.
-      const resources = [makeResource()];
-
-      const filtered = filterResources(resources, new Set(), new Set(), ['secret-host']);
-      const rawFiltered = filterResources(resources, new Set(), new Set(), ['Production']);
-
-      expect(filtered).toHaveLength(1);
-      expect(rawFiltered).toHaveLength(0);
     });
 
     it('keeps projected pod context keys aligned with the canonical cluster label', () => {
@@ -886,9 +839,7 @@ describe('Workloads performance contract', () => {
       wsConnected = false;
       mockWorkloads = [makeGuest(1, { name: 'first-connect-workload' })];
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -905,9 +856,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [makeGuest(1, { name: 'reconnect-workload' })];
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -954,9 +903,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.M);
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -972,9 +919,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.L);
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -993,9 +938,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.S);
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         const rowCount = getGuestRowCount(container);
@@ -1009,9 +952,7 @@ describe('Workloads performance contract', () => {
       const guests = makeGuests(40);
       mockWorkloads = guests;
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(40);
@@ -1048,9 +989,7 @@ describe('Workloads performance contract', () => {
         mockLocationSearch = `?type=${mode}`;
         mockWorkloads = profileGuests;
 
-        const { container, unmount } = render(() => (
-          <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-        ));
+        const { container, unmount } = render(() => <PageOwnedWorkloadsSurface />);
 
         await waitFor(() => {
           expect(getGuestRowCount(container)).toBe(
@@ -1064,6 +1003,86 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Workload derivation contracts', () => {
+    it.each([false, true])(
+      'keeps Proxmox nodes whose instance and node names join to one string apart (reversed=%s)',
+      (reversed) => {
+        // Two installs: instance "lab-east" + node "pve1" and instance "lab" + node
+        // "east-pve1" both join to "lab-east-pve1". Each guest must resolve to the
+        // node of its own install, whichever order the snapshot lists them in.
+        const makeNode = (
+          id: string,
+          instance: string,
+          node: string,
+          capacity: number,
+          status: string,
+        ) =>
+          ({
+            id,
+            type: 'agent',
+            name: node,
+            platformType: 'proxmox-pve',
+            status,
+            proxmox: { instance, node },
+            memory: { current: 1, total: capacity, used: 1 },
+          }) as Resource;
+        const nodeResources = [
+          makeNode('agent-east-1', 'lab-east', 'pve1', 8, 'online'),
+          makeNode('agent-east-2', 'lab', 'east-pve1', 64, 'offline'),
+        ];
+        mockInfrastructureResources = reversed ? [...nodeResources].reverse() : nodeResources;
+        mockWorkloads = [
+          makeGuest(1, {
+            id: 'raw-a',
+            instance: 'lab-east',
+            node: 'pve1',
+            type: 'vm',
+            workloadType: 'vm',
+          }),
+          makeGuest(2, {
+            id: 'raw-b',
+            instance: 'lab',
+            node: 'east-pve1',
+            type: 'vm',
+            workloadType: 'vm',
+          }),
+        ];
+        function SnapshotNodes() {
+          const state = useWorkloadsState({});
+          return (
+            <pre data-testid="snapshot-node-parents">
+              {JSON.stringify({
+                count: state.infrastructureNodes().length,
+                parents: state.allGuests().map((guest) => {
+                  const parent = state.guestParentNodeMap()[getCanonicalWorkloadId(guest)];
+                  return {
+                    guest: guest.instance,
+                    instance: parent?.instance,
+                    node: parent?.name,
+                    capacity: parent?.memory.total,
+                    status: parent?.status,
+                  };
+                }),
+              })}
+            </pre>
+          );
+        }
+        render(() => <SnapshotNodes />);
+        expect(JSON.parse(screen.getByTestId('snapshot-node-parents').textContent!)).toEqual({
+          count: 2,
+          parents: [
+            {
+              guest: 'lab-east',
+              instance: 'lab-east',
+              node: 'pve1',
+              capacity: 8,
+              status: 'online',
+            },
+            { guest: 'lab', instance: 'lab', node: 'east-pve1', capacity: 64, status: 'offline' },
+          ],
+        });
+      },
+    );
+
     it('normalizes workloads view mode aliases through the shared workload helper', () => {
       expect(normalizeWorkloadViewModeParam('all')).toBe('all');
       expect(normalizeWorkloadViewModeParam('container')).toBe('container');
@@ -1076,15 +1095,19 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }),
-        makeGuest(2, { id: 'raw-b', instance: 'shared', node: 'node-x', vmid: 42 }),
+        makeGuest(2, {
+          id: 'raw-b',
+          canonicalResourceId: 'raw-a',
+          instance: 'shared',
+          node: 'node-x',
+          vmid: 42,
+        }),
       ];
       const canonicalId = getCanonicalWorkloadId(
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }) as any,
       );
 
-      const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -1092,7 +1115,17 @@ describe('Workloads performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(1);
       });
-      expect(canonicalId).toBe('shared:node-x:42');
+      expect(canonicalId).toBe('raw-a');
+    });
+
+    it('keeps distinct canonical resources even when their native coordinates coincide', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [
+        makeGuest(1, { id: 'vm-distinct-a', instance: 'shared', node: 'node-x', vmid: 42 }),
+        makeGuest(2, { id: 'vm-distinct-b', instance: 'shared', node: 'node-x', vmid: 42 }),
+      ];
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
+      await waitFor(() => expect(getGuestRowCount(container)).toBe(2));
     });
 
     it('applies page-owned workload type exclusions before derived row state', async () => {
@@ -1117,11 +1150,7 @@ describe('Workloads performance contract', () => {
       ];
 
       const { container } = render(() => (
-        <WorkloadsSurface
-          vms={[]}
-          containers={[]}
-          nodes={[]}
-          useWorkloads
+        <PageOwnedWorkloadsSurface
           forcedPlatform="proxmox-pve"
           forcedViewMode="container"
           excludedWorkloadTypes={['app-container']}
@@ -1159,8 +1188,19 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).not.toContain('const normalizeOrgScope =');
     });
 
+    it('reads guests and Proxmox nodes only from the workloads query or page snapshot', () => {
+      // The state always runs its workloads query, so its options carry no
+      // enable flag and no caller-supplied guest or node arrays.
+      expect(workloadsStateSource).not.toMatch(/^ {2}(?:vms|containers|nodes|useWorkloads)\??:/m);
+      expect(workloadsStateSource).not.toContain('props.useWorkloads');
+      expect(workloadsStateSource).not.toContain('props.nodes');
+    });
+
     it('keeps hot-path workloads state in the shared workloads state owner', () => {
       expect(workloadsSource).toContain('useWorkloadsState');
+      // The owning page builds the state and the surface requires it; the
+      // overview layout guardrails check the surface imports only its type.
+      expect(workloadsSource).toContain('  state: WorkloadsState;');
       expect(workloadsSource).toContain('WorkloadsTable');
       expect(workloadsSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(workloadsStateSource).toContain('useWorkloadsControlsState');
@@ -1326,7 +1366,6 @@ describe('Workloads performance contract', () => {
       expect(workloadsSelectionStateSource).toContain(
         'const [hoveredWorkloadId, setHoveredWorkloadId]',
       );
-      expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
       expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
       expect(workloadsSelectionStateSource).not.toContain('useNavigate');
       expect(workloadsSelectionStateSource).not.toContain('createRouteStateNavigateScheduler');
@@ -1334,7 +1373,6 @@ describe('Workloads performance contract', () => {
         'resolveWorkloadsSelectionNavigateTarget',
       );
       expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
       expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
@@ -1352,20 +1390,11 @@ describe('Workloads performance contract', () => {
       expect(workloadsSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
       expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
-      expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
       expect(workloadPanelSource).toContain('data-summary-group-id');
-      expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
-      expect(workloadPanelSource).toContain('getGroupedTableRowClass');
-      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).not.toContain('setHoveredWorkloadGroupScope');
       expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-      expect(workloadPanelSource).toContain('? getInteractiveGroupedTableRowClass()');
-      expect(workloadPanelSource).toContain(': getGroupedTableRowClass()');
-      expect(workloadPanelSource).toContain(
-        'onClick={canOpenNodeDrawer() ? handleGroupFocusToggle : undefined}',
-      );
-      expect(workloadPanelSource).toContain(
-        '{...(canOpenNodeDrawer() ? groupRowInteraction : {})}',
-      );
+      expect(workloadPanelSource).toContain('class={getGroupedTableRowClass()}');
+      expect(workloadPanelSource).not.toContain('getInteractiveGroupedTableRowClass');
       expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(workloadsWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
@@ -1388,12 +1417,34 @@ describe('Workloads performance contract', () => {
       expect(workloadsSource).toContain('setClearSurfaceRootRef');
       expect(workloadsSource).toContain('setTableRootRef={state.setTableRootRef}');
       expect(workloadsSource).toContain('data-testid="workloads-interaction-surface"');
-      expect(workloadsSource).toContain('data-summary-clear-ignore');
-      expect(workloadsSource).toContain('onClearPinnedSelection={state.clearPinnedSummaryScope}');
+      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
+        expect(pageSource).toContain(
+          'onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}',
+        );
+      }
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
-      expect(workloadsWorkloadTableSource).toContain('<TableCardHeader title={props.title} />');
+      expect(workloadsWorkloadTableSource).toContain(
+        '<TableCardHeader title={props.title} actions={props.actions} />',
+      );
+      expect(workloadsSource).toContain('<WorkloadWebLinksAction');
+      expect(workloadsSource).toContain('guests: state.filteredGuests,');
+      expect(workloadsSource).toContain("kind: 'workloads',");
+      expect(workloadPanelSource).toContain(
+        'getWorkloadGuestMetadataRecord(guest(), props.guestMetadata())',
+      );
+      // The bulk link panel and its row model load on first open, outside the
+      // WorkloadsSurface chunk, and only mount while the editor is open.
+      expect(workloadWebLinksActionSource).toContain(
+        "lazy(() => import('./WorkloadWebLinksDialog'))",
+      );
+      expect(workloadWebLinksActionSource).toContain('<Show when={open()}>');
+      // Type-only imports are erased, so the row model stays in the lazy chunk.
+      expect(workloadWebLinksActionSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/(workloadWebLinksModel|useWorkloadWebLinksState)';/m,
+      );
+      expect(workloadWebLinksStateSource).toContain('keepStableWorkloadWebLinkRows(');
       expect(workloadsSource).toContain('<TableCardHeader title={props.tableTitle} />');
       expect(workloadsSource).toContain('title={props.tableTitle}');
       expect(workloadsWorkloadTableSource).toContain(
@@ -1436,11 +1487,21 @@ describe('Workloads performance contract', () => {
       expect(workloadsFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
       expect(workloadsStateSource).toContain('range: workloadMetricHistoryRange');
+      // Grouped node rows render no metric cells, so Trends on the Workloads
+      // surface must not poll the infrastructure summary.
+      expect(workloadsStateSource).toContain("series: 'guests',");
       expect(workloadTableMetricHistoryStateSource).toContain(
-        'fetchWorkloadsSummaryAndCache(parsed.range',
+        'ChartsAPI.getWorkloadCharts(parsed.range, signal',
       );
       expect(workloadTableMetricHistoryStateSource).toContain(
-        'fetchInfrastructureSummaryAndCache(parsed.range',
+        'ChartsAPI.getInfrastructureSummaryCharts(parsed.range, signal',
+      );
+      expect(workloadTableMetricHistoryStateSource).not.toContain('localStorage');
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        "if (options.series !== 'guests' || !options.enabled()) return null;",
+      );
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        "options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null",
       );
       expect(
         workloadTableMetricHistoryStateSource.match(/retainPreviousValueOnSourceChange: false/g),
@@ -1593,7 +1654,9 @@ describe('Workloads performance contract', () => {
     it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {
       expect(guestDrawerSource).toContain('useGuestDrawerState');
       expect(guestDrawerSource).toContain('GuestDrawerOverview');
-      expect(guestDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      // The charts live on Overview; there is no History tab to carry a picker.
+      expect(guestDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
+      expect(guestDrawerSource).not.toContain("label: 'History'");
       expect(guestDrawerSource).toContain('ObjectDrawerHeader');
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
@@ -1607,7 +1670,8 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
       expect(guestDrawerHistorySource).not.toContain('relative h-24');
       expect(nodeDrawerSource).toContain('NodeDrawerOverview');
-      expect(nodeDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      expect(nodeDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
+      expect(nodeDrawerSource).not.toContain("label: 'History'");
       expect(nodeDrawerSource).toContain('getNodeDrawerHistoryGroups');
       expect(nodeDrawerOverviewSource).toContain('Hardware');
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
@@ -1615,11 +1679,10 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
       expect(nodeDrawerModelSource).toContain("group.id !== 'disk-io'");
       expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
-      expect(workloadPanelSource).toContain('NodeDrawer');
-      expect(workloadPanelSource).toContain('data-inline-node-detail-for');
-      expect(workloadPanelSource).toContain('const selectedGuestId = props.selectedGuestId()');
-      expect(workloadPanelSource).toContain('props.setSelectedGuestId(null)');
-      expect(workloadPanelSource).toContain('selectedGuestId === null');
+      expect(workloadPanelSource).not.toContain('NodeDrawer');
+      expect(workloadPanelSource).not.toContain('data-inline-node-detail-for');
+      expect(workloadPanelSource).toContain('data-inline-detail-for={guestId()}');
+      expect(workloadPanelSource).toContain('onClose={() => props.setSelectedGuestId(null)}');
       expect(guestDrawerSource).not.toContain('const guestId = () =>');
       expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
       expect(guestDrawerSource).not.toContain('Filesystems');
@@ -1628,14 +1691,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerStateSource).toContain('historyRange');
       expect(guestDrawerStateSource).not.toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).not.toContain("from '@/routing/resourceLinks'");
-      expect(guestDrawerStateSource).toContain("from '@/hooks/createNonSuspendingQuery'");
-      expect(guestDrawerStateSource).toMatch(
-        /createNonSuspendingQuery<\s*ResourceDiscovery \| null/,
-      );
       expect(guestDrawerStateSource).not.toContain('createResource');
       expect(guestDrawerStateSource).toContain("from './workloadTopology'");
       expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
-      expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
       expect(guestDrawerStateSource).toContain('guestOsSummary');
       expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
@@ -1645,19 +1703,32 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
       expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
-      // The shared DetailSectionTable gives the earlier of the last two sections
-      // the wider span, so the longer filesystem list must be declared before the
-      // short tag list for mount points to get the readable panel width.
+      // Linked physical disks load with an open agent guest's drawer, so the
+      // disk presentation module stays out of the WorkloadsSurface chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./GuestPhysicalDisks')");
+      expect(guestDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestPhysicalDisks';/m,
+      );
+      // Filesystems render as their own section in front of the collapsed
+      // Details, so mount points never share a card row with short sections.
+      // Tags render as facts-strip chips, not as a detail section.
       const filesystemsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Filesystems'");
-      const tagsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Tags'");
       expect(filesystemsSectionIndex).toBeGreaterThan(-1);
-      expect(tagsSectionIndex).toBeGreaterThan(-1);
-      expect(filesystemsSectionIndex).toBeLessThan(tagsSectionIndex);
-      // Ordering cannot prevent the compact label column from clipping paths.
+      expect(guestDrawerOverviewSource).not.toContain("label: 'Tags'");
+      expect(guestDrawerOverviewSource).toContain('dataTestId="guest-drawer-filesystems"');
+      // The Overview charts load with an open drawer, outside the table chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./GuestDrawerHistory')");
+      expect(guestDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
+      );
+      expect(nodeDrawerOverviewSource).toContain("import('./GuestDrawerHistory')");
+      expect(nodeDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
+      );
       // Filesystem rows delegate full-path presentation to the shared renderer.
       const filesystemSectionSource = guestDrawerOverviewSource.slice(
         filesystemsSectionIndex,
-        tagsSectionIndex,
+        guestDrawerOverviewSource.indexOf('label:', filesystemsSectionIndex + 1),
       );
       expect(filesystemSectionSource).toContain("layout: 'stacked'");
       expect(filesystemSectionSource).toContain('wrap: true');
@@ -1702,7 +1773,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('<colgroup>');
       expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
       expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
-      expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
+      expect(workloadsWorkloadTableSource).not.toMatch(/from\s+['"]\.\/GuestDrawer['"]/);
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
       expect(workloadTableHeaderSource).toContain('getTableSortIndicator');
@@ -1736,19 +1807,15 @@ describe('Workloads performance contract', () => {
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
-      expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
-      expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
-      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
+      expect(workloadPanelSource).not.toContain('resolveSummaryGroupMemberInteractionState');
       expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
       expect(workloadPanelSource).not.toContain('style={{');
       expect(workloadPanelSource).not.toContain('style={');
       expect(workloadPanelSource).not.toContain('kind="scope"');
       expect(workloadPanelSource).not.toContain('leadingAction={');
-      expect(workloadsSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
-      expect(workloadsSelectionStateSource).toContain('focusedSummaryWorkloadGroupScope');
-      expect(workloadsSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
-      expect(workloadsWorkloadTableSource).toContain('focusedSummaryWorkloadGroupScope');
-      expect(workloadsWorkloadTableSource).toContain('hoveredSummaryWorkloadGroupScope');
+      expect(workloadsSelectionStateSource).not.toContain('WorkloadGroupScope');
+      expect(workloadsWorkloadTableSource).not.toContain('SummaryWorkloadGroupScope');
       expect(workloadPanelSource).not.toContain('TableHead');
     });
 
@@ -1847,5 +1914,28 @@ describe('Workloads performance contract', () => {
       expect(stats.vms + stats.containers + stats.appContainers + stats.pods).toBe(PROFILES.S);
       expect(stats.running + stats.degraded + stats.stopped).toBe(PROFILES.S);
     });
+  });
+});
+
+describe('Workloads Backup column fit', () => {
+  // The backup badge does not truncate: Running is 73px and Unknown 79px with
+  // the shield, plus 8px of cell padding a side. The compact layout starts at a
+  // 900px table, where the Proxmox guest columns all show.
+  const badgeWidth = 79 + 16;
+
+  it('keeps the widest backup badge whole at the narrowest compact table', () => {
+    const proxmoxColumns = ['name', 'type', 'vmid', 'cpu', 'memory', 'disk', 'uptime', 'backup'];
+    const percent = Number.parseFloat(
+      String(getGuestColumnStyle('backup', false, 'compact', proxmoxColumns)?.width),
+    );
+    expect((percent / 100) * WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH).toBeGreaterThanOrEqual(
+      badgeWidth,
+    );
+  });
+
+  it('keeps the widest backup badge whole in the wide layout', () => {
+    expect(
+      Number.parseFloat(String(getGuestColumnStyle('backup', false, 'wide')?.width)),
+    ).toBeGreaterThanOrEqual(badgeWidth);
   });
 });

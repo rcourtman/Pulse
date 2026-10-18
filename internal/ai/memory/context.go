@@ -711,18 +711,15 @@ func (s *ContextStore) ForceSave() error {
 var memoryCounter, incidentMemCounter, patternMemCounter atomic.Int64
 
 func generateMemoryID() string {
-	n := memoryCounter.Add(1)
-	return fmt.Sprintf("mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
+	return nextSequencedID("mem-", &memoryCounter)
 }
 
 func generateIncidentMemoryID() string {
-	n := incidentMemCounter.Add(1)
-	return fmt.Sprintf("inc-mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
+	return nextSequencedID("inc-mem-", &incidentMemCounter)
 }
 
 func generatePatternMemoryID() string {
-	n := patternMemCounter.Add(1)
-	return fmt.Sprintf("pat-mem-%s-%d", time.Now().Format("20060102150405"), n%1000)
+	return nextSequencedID("pat-mem-", &patternMemCounter)
 }
 
 func calculatePatternConfidence(occurrences int) float64 {

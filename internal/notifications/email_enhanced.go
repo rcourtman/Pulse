@@ -6,8 +6,10 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
@@ -84,6 +86,46 @@ func sanitizeEmailHeaderValue(value string) string {
 	clean := strings.ReplaceAll(value, "\r", " ")
 	clean = strings.ReplaceAll(clean, "\n", " ")
 	return strings.TrimSpace(clean)
+}
+
+// RFC 2047 encoding keeps non-ASCII host/resource names readable without
+// requiring SMTPUTF8. Fold only at spaces (including between encoded words),
+// never inside a character or encoded word. Short ASCII subjects are unchanged.
+func emailSubjectHeader(subject string) string {
+	clean := sanitizeEmailHeaderValue(subject)
+	encoded := mime.QEncoding.Encode("UTF-8", clean)
+	if encoded == clean && strings.Contains(clean, "=?") {
+		// The standard encoder leaves printable ASCII unchanged. A literal
+		// encoded-word in a supplied name would then be decoded as syntax by
+		// mail clients, changing the identity. Wrap it once, in <=75-byte
+		// encoded words. This branch is ASCII-only, so byte cuts are safe.
+		var words []string
+		for len(clean) > 0 {
+			end := min(45, len(clean))
+			words = append(words, "=?UTF-8?b?"+base64.StdEncoding.EncodeToString([]byte(clean[:end]))+"?=")
+			clean = clean[end:]
+		}
+		encoded = strings.Join(words, " ")
+	}
+	var header strings.Builder
+	column := len("Subject: ")
+	for i, word := range strings.Split(encoded, " ") {
+		space := ""
+		if i > 0 {
+			space = " "
+		}
+		if column+len(space)+len(word) > 78 {
+			space = "\r\n "
+			column = 1
+		}
+		header.WriteString(space)
+		header.WriteString(word)
+		column += len(word)
+		if space == " " {
+			column++
+		}
+	}
+	return header.String()
 }
 
 type resolvedEmailAddresses struct {
@@ -232,7 +274,7 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 			return nil, fmt.Errorf("write reply-to header: %w", err)
 		}
 	}
-	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", emailSubjectHeader(subject)); err != nil {
 		return nil, fmt.Errorf("write subject header: %w", err)
 	}
 	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {
@@ -291,7 +333,7 @@ func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses,
 			return nil, fmt.Errorf("write reply-to header: %w", err)
 		}
 	}
-	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", emailSubjectHeader(subject)); err != nil {
 		return nil, fmt.Errorf("write subject header: %w", err)
 	}
 	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {
@@ -464,6 +506,14 @@ type RateLimiter struct {
 
 // NewEnhancedEmailManager creates an enhanced email manager
 func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
+	config.EmailConfig = copyEmailConfig(config.EmailConfig)
+	if config.Provider == "" {
+		config.Provider = config.EmailConfig.Provider
+	}
+	// Provider defaults (for example SendGrid's "apikey") are credentials too.
+	// Delivery and connection tests must make the same authentication decision
+	// as validation and negotiateAuth, without rewriting the saved username.
+	config.AuthRequired = config.AuthRequired || (resolveProviderUsername(config) != "" && config.Password != "")
 	return &EnhancedEmailManager{
 		config: config,
 		rateLimit: &RateLimiter{
@@ -490,6 +540,40 @@ func (e *EnhancedEmailManager) SendEmailThreaded(subject, htmlBody, textBody, th
 
 func (e *EnhancedEmailManager) SendEmailWithAttachments(subject, htmlBody, textBody string, attachments []EmailAttachment) error {
 	return e.sendEmailWithOptions(subject, htmlBody, textBody, attachments, "")
+}
+
+// ValidateConfiguration checks delivery inputs without contacting the server or
+// sending mail. Authentication and connectivity are established by a real send.
+func (e *EnhancedEmailManager) ValidateConfiguration() error {
+	if strings.TrimSpace(e.config.SMTPHost) == "" || e.config.SMTPPort < 1 || e.config.SMTPPort > 65535 {
+		return FailfWithClass(NotificationFailureConfiguration, "configure an SMTP server and valid port in email notification settings")
+	}
+	username := resolveProviderUsername(e.config)
+	if (username == "") != (e.config.Password == "") || (e.config.AuthRequired && username == "") {
+		return FailfWithClass(NotificationFailureConfiguration, "complete the email notification credentials")
+	}
+	if _, err := e.resolveEmailAddresses(); err != nil {
+		return FailfWithClass(NotificationFailureConfiguration, "configure valid sender and recipient email addresses")
+	}
+	return nil
+}
+
+// EmailAcceptanceUnconfirmedError means the connection ended while waiting for
+// the completed-message verdict. SMTP may already have accepted the message.
+// Callers must not assume failure is proof that another send is duplicate-free.
+type EmailAcceptanceUnconfirmedError struct{ Err error }
+
+func (e *EmailAcceptanceUnconfirmedError) Error() string {
+	return "mail server acceptance could not be confirmed"
+}
+func (e *EmailAcceptanceUnconfirmedError) Unwrap() error { return e.Err }
+
+func completedEmailError(err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) {
+		return err
+	}
+	return &EmailAcceptanceUnconfirmedError{Err: err}
 }
 
 func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody string, attachments []EmailAttachment, threadID string) error {
@@ -529,7 +613,8 @@ func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody 
 			Str("provider", e.config.Provider).
 			Msg("email send attempt failed")
 
-		if !ClassifyNotificationFailureError(err).Retryable() {
+		var unconfirmed *EmailAcceptanceUnconfirmedError
+		if errors.As(err, &unconfirmed) || !ClassifyNotificationFailureError(err).Retryable() {
 			return fmt.Errorf("email failed after %d attempts: %w", attempt+1, err)
 		}
 	}
@@ -666,7 +751,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte, addresses resolv
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)
@@ -737,7 +822,7 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte, addresses r
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)
@@ -858,7 +943,7 @@ func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte, addresses reso
 
 	err = w.Close()
 	if err != nil {
-		return fmt.Errorf("message close failed: %w", err)
+		return fmt.Errorf("message close failed: %w", completedEmailError(err))
 	}
 
 	finishAcceptedSMTPSession(client)

@@ -121,6 +121,11 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Pulse Assistant should be replaced by", normalized_content)
         self.assertNotIn("MCP replaces Pulse Assistant", normalized_content)
         self.assertNotIn("Assistant can be removed", normalized_content)
+        # The Patrol summary card and its supporting-context section are gone,
+        # so the docs point at where check history actually lives.
+        self.assertIn("Activity > Finding options and history", normalized_content)
+        self.assertNotIn("legacy operational score remain", normalized_content)
+        self.assertNotIn("collapsed supporting-context section", normalized_content)
         self.assertIn("- **Anthropic** (API key)", content)
         self.assertIn("Anthropic OAuth is not a supported runtime authentication method", normalized_content)
         self.assertIn("does not make Anthropic configured", normalized_content)
@@ -150,6 +155,9 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("### Available Tools", content)
         self.assertNotIn("| Tool | Classification | Purpose |", content)
         self.assertNotIn("| `pulse_query`, `pulse_discovery` |", content)
+        # AI Discovery and its pulse_discovery tool were removed on 2026-10-11.
+        self.assertNotIn("pulse_discovery", content)
+        self.assertNotIn("Discovery Before Action", content)
         self.assertNotIn("| `patrol_report_finding` | Patrol |", content)
         self.assertNotIn("active_alert", content)
         self.assertNotIn("auto-recovery", content)
@@ -227,8 +235,8 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         control_doc = read_repo_text("docs/AI_AUTONOMY.md")
         normalized_control = " ".join(control_doc.split())
 
-        self.assertIn("| `MaxEvidenceCalls` | 15 |", overview)
-        self.assertIn("| `MaxTurns` | 17 |", overview)
+        self.assertIn("| `MaxEvidenceCalls` | 10 |", overview)
+        self.assertIn("| `MaxTurns` | 12 |", overview)
         self.assertIn("terminal typed proposal is reserved separately", overview)
         self.assertIn("Maximum evidence-tool calls per investigation", normalized_control)
         self.assertIn("separate model-response safety ceiling", normalized_control)
@@ -281,9 +289,9 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("## Patrol Modes", overview)
         self.assertIn("four modes", overview)
         self.assertIn("**Watch only**", overview)
-        self.assertIn("**Ask before changes**", overview)
-        self.assertIn("**Auto-fix safe issues**", overview)
-        self.assertIn("**Policy autopilot**", overview)
+        self.assertIn("**Ask first**", overview)
+        self.assertIn("**Safe auto-fix**", overview)
+        self.assertIn("**Autopilot**", overview)
         self.assertIn("When a finding is created in a Pro Patrol mode", overview)
         self.assertIn("**Patrol modes (Pro and above)**", overview)
         self.assertIn("**Governed fixes (Pro and above)**", overview)
@@ -304,7 +312,10 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("## Patrol Modes", control_doc)
         self.assertIn("Patrol mode sets how far Pulse can go", control_doc)
         self.assertIn("**UI:** Patrol → Patrol mode", control_doc)
-        self.assertIn("The API keeps the autonomy_level field name for compatibility.", control_doc)
+        self.assertIn(
+            "The API retains `autonomy_level` for compatibility:",
+            " ".join(control_doc.split()),
+        )
         self.assertNotIn("Patrol Control Level", control_doc)
         self.assertNotIn("## Patrol Control Levels", control_doc)
         self.assertNotIn("Patrol control is configured on the **Patrol** page.", control_doc)
@@ -313,6 +324,20 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Patrol Autonomy Levels", control_doc)
         self.assertNotIn("Patrol autonomy controls", control_doc)
         self.assertNotIn("Patrol Autonomy Level", control_doc)
+
+
+    def test_existing_help_matches_planning_boundary(self):
+        for name in ("AI.md", "AI_AUTONOMY.md"):
+            with self.subTest(name=name):
+                text = read_repo_text("docs/" + name)
+                self.assertEqual(text, read_repo_text("frontend-modern/public/docs/" + name))
+                start = text.index("## Assistant Control Levels" if name == "AI_AUTONOMY.md" else "### Control Levels")
+                end = text.index("\n---", start)
+                section = " ".join(text[start:end].split())
+                for retained in ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Never auto-remediate", "has been removed"):
+                    self.assertIn(retained, section)
+                for retired in ("executes commands without prompting", "AI executes actions without prompting", "APPROVAL_REQUIRED", "Approve** to execute"):
+                    self.assertNotIn(retired, section)
 
 
 if __name__ == "__main__":

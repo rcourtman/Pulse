@@ -1,8 +1,15 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { KubernetesPodsTable } from '../KubernetesPodsTable';
+
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
 
 const makeResource = ({
   id,
@@ -104,12 +111,36 @@ describe('KubernetesPodsTable', () => {
     expect(screen.getByText('Image')).toBeInTheDocument();
     expect(screen.getByText('Age')).toBeInTheDocument();
 
-    expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p')).toBeInTheDocument();
-    expect(screen.getByText('prod-euw1/services')).toBeInTheDocument();
-    expect(screen.getByText('prod-euw1-k8s-02')).toBeInTheDocument();
+    expect(screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p'))).toBeInTheDocument();
+    // One cluster in view: the scope cell shows the namespace and keeps the
+    // full cluster/namespace scope on hover.
+    const scopeCell = screen.getByText('services').closest('[data-kubernetes-scope]');
+    expect(scopeCell).toHaveAttribute('title', 'prod-euw1/services');
+    // Assistive technology gets the full scope in place of the shortened text.
+    expect(screen.getByText('services')).toHaveAttribute('aria-hidden', 'true');
+    expect(scopeCell?.querySelector('.sr-only')).toHaveTextContent('prod-euw1/services');
+    expect(screen.getByText(kubernetesName('prod-euw1-k8s-02'))).toBeInTheDocument();
+    // Narrow columns truncate the head and keep the generated tail, so
+    // replicas and nodes stay distinguishable. The title keeps the full name.
+    const podName = screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p'));
+    expect(podName).toHaveAttribute('title', 'checkout-api-6c746d5bcf-c7z2p');
+    expect(podName.querySelector('[data-kubernetes-name-tail]')).toHaveTextContent('-c7z2p');
+    expect(podName.querySelector('.truncate')).toHaveTextContent('checkout-api-6c746d5bcf');
+    expect(
+      screen
+        .getByText(kubernetesName('prod-euw1-k8s-02'))
+        .querySelector('[data-kubernetes-name-tail]'),
+    ).toHaveTextContent('-02');
     // Raw phase is Running, but the metrics-sidecar container is not ready;
-    // the status column shows the mapped label, not the phase.
-    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    // the status column shows the mapped label, not the phase, in the
+    // amber its row dot shows.
+    const status = document.querySelector('[data-kubernetes-pod-status]');
+    expect(status).toHaveTextContent('Not ready');
+    expect(status).toHaveClass('text-amber-700');
+    // A phone hides Status, so the same words read under the pod name there.
+    const phoneStatus = document.querySelector('[data-kubernetes-pod-status-phone]');
+    expect(phoneStatus).toHaveTextContent('Not ready');
+    expect(phoneStatus).toHaveClass('platform-table-phone-only-inline', 'text-amber-700');
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
@@ -123,7 +154,55 @@ describe('KubernetesPodsTable', () => {
         name: 'Open web interface for checkout-api-6c746d5bcf-c7z2p',
       }),
     ).toHaveAttribute('href', 'https://checkout-pod.internal');
-    expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p').closest('a')).toBeNull();
+    expect(
+      screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p')).closest('a'),
+    ).toBeNull();
+  });
+
+  it('copies a generated name without a break between its head and tail', () => {
+    const { container } = render(() => (
+      <KubernetesPodsTable
+        resources={[
+          makeResource({
+            id: 'cron-nightly-backfill-28918234',
+            kubernetes: {
+              clusterId: 'prod-euw1',
+              namespace: 'batch',
+              nodeName: 'prod-euw1-k8s-02',
+              podName: 'cron-nightly-backfill-28918234',
+              podPhase: 'Running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    // Head and tail are flex items, so a browser copy would put a line break
+    // between them; a selection inside one name copies as the name.
+    const podName = screen.getByText(kubernetesName('cron-nightly-backfill-28918234'));
+    expect(podName.querySelector('[data-kubernetes-name-tail]')).toHaveTextContent('-28918234');
+    const copy = (selected: Node) => {
+      const range = document.createRange();
+      range.selectNodeContents(selected);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      const setData = vi.fn();
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData } });
+      podName.dispatchEvent(event);
+      return { setData, prevented: event.defaultPrevented };
+    };
+    const inside = copy(podName);
+    expect(inside.setData).toHaveBeenCalledWith('text/plain', 'cron-nightly-backfill-28918234');
+    expect(inside.prevented).toBe(true);
+    // A selection wider than the name (a whole row) is left to the browser.
+    const wider = copy(container);
+    expect(wider.setData).not.toHaveBeenCalled();
+    expect(wider.prevented).toBe(false);
   });
 
   it('renders pod rows with status mapped from podPhase + container readiness, attention rows first', () => {
@@ -167,8 +246,9 @@ describe('KubernetesPodsTable', () => {
     );
     expect(rows).toEqual(['crashing-pod', 'not-ready-pod', 'happy-pod']);
     // The failure reason is visible cell text, not just a dot tooltip.
-    expect(screen.getByText('CrashLoopBackOff')).toBeInTheDocument();
-    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    // Each label reads twice: the Status column and the phone line under the name.
+    expect(screen.getAllByText('CrashLoopBackOff')).toHaveLength(2);
+    expect(screen.getAllByText('Not ready')).toHaveLength(2);
     expect(
       screen.getAllByTitle('CrashLoopBackOff').some((el) => el.classList.contains('bg-red-500')),
     ).toBe(true);
@@ -178,5 +258,29 @@ describe('KubernetesPodsTable', () => {
     expect(
       screen.getAllByTitle('Running').some((el) => el.classList.contains('bg-emerald-500')),
     ).toBe(true);
+  });
+
+  it('keeps the cluster in the scope cell when several clusters are in view', () => {
+    render(() => (
+      <KubernetesPodsTable
+        resources={[
+          makeResource({
+            id: 'eu-pod',
+            kubernetes: { clusterName: 'prod-eu', namespace: 'services', podName: 'eu-pod' },
+          }),
+          makeResource({
+            id: 'us-pod',
+            kubernetes: { clusterName: 'prod-us', namespace: 'services', podName: 'us-pod' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('prod-eu/services')).toBeInTheDocument();
+    expect(screen.getByText('prod-us/services')).toBeInTheDocument();
   });
 });

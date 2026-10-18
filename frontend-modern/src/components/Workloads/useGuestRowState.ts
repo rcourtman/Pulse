@@ -9,19 +9,20 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import {
   getCanonicalWorkloadId,
   getWorkloadPlatformScopes,
   getWorkloadMetricsKind,
-  hasDiscoverySupportForWorkload,
   isDockerManagedAppContainer,
   resolveWorkloadType,
 } from '@/utils/workloads';
-import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
+  getWorkloadAlertPolicyTags,
   getWorkloadAlertResourceIdCandidates,
   getWorkloadAlertThresholdScope,
   getWorkloadDockerHostId,
@@ -37,6 +38,7 @@ import {
 } from './guestRowModel';
 
 export function useGuestRowState(props: GuestRowProps) {
+  const now = useRelativeTimeNow();
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
 
@@ -60,12 +62,14 @@ export function useGuestRowState(props: GuestRowProps) {
   const alertResourceIdCandidates = createMemo(() =>
     getWorkloadAlertResourceIdCandidates(props.guest),
   );
+  const alertPolicyTags = createMemo(() => getWorkloadAlertPolicyTags(props.guest));
   const metricThresholds = (metric: DisplayMetricType) =>
     createMemo(() =>
       alertsActivation.getMetricThresholds(
         alertThresholdScope(),
         metric,
         alertResourceIdCandidates(),
+        alertPolicyTags(),
       ),
     );
   const cpuThresholds = metricThresholds('cpu');
@@ -91,12 +95,6 @@ export function useGuestRowState(props: GuestRowProps) {
   const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
   const contextLabel = createMemo(() => props.guest.contextLabel?.trim() ?? '');
   const clusterName = createMemo(() => props.guest.clusterName?.trim() ?? '');
-  const discoveryReadinessPresentation = createMemo(() =>
-    getDiscoveryReadinessPresentation(
-      props.guest.discoveryReadiness,
-      hasDiscoverySupportForWorkload(props.guest),
-    ),
-  );
   const isPveWorkload = createMemo(() => {
     const type = workloadType();
     return type === 'vm' || type === 'system-container';
@@ -225,21 +223,21 @@ export function useGuestRowState(props: GuestRowProps) {
     return ((disk.used ?? 0) / total) * 100;
   });
 
+  // The cell's filesystem bars and aggregate follow the drawer's rule: a
+  // linked agent's filesystems follow that agent, Proxmox's its read reason.
+  const diskUsageRead = createMemo(() =>
+    getWorkloadGuestDiskRead(props.guest, workloadType() === 'vm'),
+  );
+
   const hasDiskUsage = createMemo(() => {
     const guest = props.guest;
     if (!guest.disk || guest.telemetryAvailability?.disk === false) return false;
     const total = guest.disk.total ?? 0;
     if (!Number.isFinite(total) || total <= 0) return false;
     // A generic canonical merge can retain the previous numeric metric while
-    // the provider explicitly reports no usable guest reading. Only prev-
-    // reasons allow that number to remain visible as last-known evidence.
-    if (
-      workloadType() === 'vm' &&
-      'diskStatusReason' in guest &&
-      guest.diskStatusReason &&
-      !guest.diskStatusReason.startsWith('prev-')
-    )
-      return false;
+    // its source reports no usable guest reading. Only a last known reading
+    // may keep that number visible.
+    if (diskUsageRead().state === 'unavailable') return false;
     const percent = diskPercent();
     return Number.isFinite(percent) && percent >= 0;
   });
@@ -294,15 +292,20 @@ export function useGuestRowState(props: GuestRowProps) {
     isDockerManagedAppContainer(props.guest) ? getWorkloadDockerHostId(props.guest) : '',
   );
 
-  const availabilityPresentation = createMemo(() =>
-    getAvailabilityProbePresentation({
-      type: props.guest.type as never,
-      platformType: (props.guest.platformType ?? '') as never,
-      status: props.guest.status as never,
-      availability: props.guest.availability,
-      platformData: { availability: props.guest.availability },
-    }),
-  );
+  const availabilityPresentation = createMemo(() => {
+    const availability = props.guest.availability;
+    if (!availability) return null;
+    return getAvailabilityProbePresentation(
+      {
+        type: props.guest.type as never,
+        platformType: (props.guest.platformType ?? '') as never,
+        status: props.guest.status as never,
+        availability,
+        platformData: { availability },
+      },
+      new Date(now()),
+    );
+  });
 
   return {
     appContainerRuntimeBadge,
@@ -312,9 +315,9 @@ export function useGuestRowState(props: GuestRowProps) {
     diskAnomaly,
     diskIOEmphasis,
     diskPercent,
-    discoveryReadinessPresentation,
     diskRead,
     diskThresholds,
+    diskUsageRead,
     diskWrite,
     displayId,
     dockerHostId,

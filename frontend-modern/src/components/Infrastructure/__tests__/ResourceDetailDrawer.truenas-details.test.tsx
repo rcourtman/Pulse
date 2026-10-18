@@ -6,6 +6,7 @@ import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetail
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
+    activeAlerts: {},
     state: { pmg: [] as any[] },
     connected: () => true,
     initialDataReceived: () => true,
@@ -13,10 +14,6 @@ vi.mock('@/contexts/appRuntime', () => ({
     reconnect: vi.fn(),
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/api/resources', () => ({
@@ -65,7 +62,8 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
-  const details = getByTestId('resource-platform-details') as HTMLDetailsElement;
+  // Platform context sits inside the Overview's one Details disclosure.
+  const details = getByTestId('resource-technical-details') as HTMLDetailsElement;
   details.open = true;
   fireEvent(details, new Event('toggle'));
 };

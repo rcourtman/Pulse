@@ -26,6 +26,11 @@ type MonitorAdapter struct {
 	activeAlerts    []models.Alert
 	lastRebuiltAt   time.Time
 	staleThresholds map[DataSource]time.Duration
+	// registryStaleThresholds are the thresholds the current registry
+	// generation was built and judged with. staleThresholds may already hold
+	// newer ones, which reach the registry at the next rebuild.
+	registryStaleThresholds map[DataSource]time.Duration
+	legacyHistory           legacyHistoryBackfill
 
 	overlays overlayReadStateCache
 }
@@ -63,8 +68,9 @@ func NewMonitorAdapterWithStaleThresholds(registry *ResourceRegistry, staleThres
 	}
 
 	return &MonitorAdapter{
-		registry:        registry,
-		staleThresholds: cloneStaleThresholds(staleThresholds),
+		registry:                registry,
+		staleThresholds:         cloneStaleThresholds(staleThresholds),
+		registryStaleThresholds: cloneStaleThresholds(staleThresholds),
 	}
 }
 
@@ -77,6 +83,20 @@ func (a *MonitorAdapter) SetStaleThresholds(staleThresholds map[DataSource]time.
 	a.mu.Lock()
 	a.staleThresholds = cloneStaleThresholds(staleThresholds)
 	a.mu.Unlock()
+}
+
+// StaleThresholds returns the source freshness thresholds the current
+// registry generation was judged by; nil means the registry defaults.
+// Thresholds set since that rebuild are not reported until the next one
+// judges a generation by them.
+func (a *MonitorAdapter) StaleThresholds() map[DataSource]time.Duration {
+	if a == nil {
+		return nil
+	}
+	a.mu.RLock()
+	thresholds := cloneStaleThresholds(a.registryStaleThresholds)
+	a.mu.RUnlock()
+	return thresholds
 }
 
 func (a *MonitorAdapter) currentStaleThresholds() map[DataSource]time.Duration {
@@ -116,7 +136,10 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 		return readState
 	}
 
-	registry := adapter.currentRegistry()
+	// The overlay re-judges the generation's listing, so it takes the
+	// thresholds that generation was judged by, not ones set since: those
+	// cannot clear a stale verdict the listing already carries.
+	registry, thresholds := adapter.currentRegistryAndStaleThresholds()
 	if registry == nil {
 		return readState
 	}
@@ -131,10 +154,9 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 		}
 	}
 
-	cloned := NewRegistry(registry.store)
-	thresholds := adapter.currentStaleThresholds()
+	cloned := newRegistryFrom(registry)
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
-	cloned.ingestRecords(source, records, onlyMissing)
+	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
 	if keyed {
 		adapter.overlays.store(registry, rebuiltAt, key, now, overlay)
@@ -183,6 +205,19 @@ func (c *overlayReadStateCache) store(registry *ResourceRegistry, rebuiltAt time
 	c.overlay = overlay
 }
 
+// currentRegistryAndStaleThresholds reads the current registry generation
+// together with the thresholds it was judged by.
+func (a *MonitorAdapter) currentRegistryAndStaleThresholds() (*ResourceRegistry, map[DataSource]time.Duration) {
+	if a == nil {
+		return nil, nil
+	}
+	a.mu.RLock()
+	registry := a.registry
+	thresholds := cloneStaleThresholds(a.registryStaleThresholds)
+	a.mu.RUnlock()
+	return registry, thresholds
+}
+
 func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 	if a == nil {
 		return nil
@@ -194,14 +229,39 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 	return registry
 }
 
+// GetByReference delegates identity and alias resolution to the current registry.
+func (a *MonitorAdapter) GetByReference(reference string) (*Resource, string, bool) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil, "", false
+	}
+	return registry.GetByReference(reference)
+}
+
 // RecordChange forwards canonical resource-history events into the underlying
-// resource store when monitoring has a durable store attached.
+// resource store when monitoring has a durable store attached. Alert lifecycle
+// events carry source-native references (Proxmox node and guest IDs, agent
+// IDs, Docker host and Swarm service IDs, sub-resource references); they
+// resolve here so history reads by canonical ID include them. PVE disk alert
+// rows are owned row by row instead (proxmoxDiskAlertOwner).
 func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
 		return nil
 	}
 	sourceRef := change.ResourceID
+	if ref, ok := proxmoxDiskAlertRowReference(change); ok {
+		// A PVE disk alert reference never binds: the row goes to the disk its
+		// own hardware identity names, or stays under the reference.
+		if owner := registry.proxmoxDiskAlertOwner(ref, change.Metadata); owner != "" && owner != ref {
+			change.Metadata = cloneChangeMetadata(change.Metadata)
+			change.Metadata[MetadataAlertResourceID] = ref
+			change.ResourceID = owner
+		}
+		return registry.store.RecordChange(change)
+	}
+	history, hasHistory := registry.store.(resourceHistoryIdentityWriter)
+	unbound := false
 	if sourceID, derivedID, ok := legacyDockerHistoryIdentity(sourceRef); ok {
 		// Use exact source identity when inventory is present, including any
 		// canonical identity merge. Full Docker IDs remain derivable after removal.
@@ -212,7 +272,7 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 			change.ResourceID = resolvedID
 		} else {
 			change.ResourceID = derivedID
-			if history, ok := registry.store.(resourceHistoryIdentityWriter); ok {
+			if hasHistory {
 				id, found, err := history.ResolveHistorySourceIdentity(sourceRef)
 				if err != nil {
 					return err
@@ -222,13 +282,34 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 				}
 			}
 		}
-	}
-	if sourceRef != change.ResourceID {
-		if writer, ok := registry.store.(resourceHistoryIdentityWriter); ok {
-			return writer.RecordChangeWithSourceIdentity(change, sourceRef)
+	} else if resolvedID, claimed := registry.resolveHistoryReference(sourceRef); resolvedID != "" {
+		change.ResourceID = resolvedID
+	} else if hasHistory && !isDockerNameHistoryReference(sourceRef) {
+		// A later generation may name the resource or settle a conflict.
+		unbound = true
+		if !claimed {
+			// No resource answers to it: keep the binding an earlier event recorded.
+			id, found, err := history.ResolveHistorySourceIdentity(CanonicalResourceID(sourceRef))
+			if err != nil {
+				return err
+			}
+			if found {
+				change.ResourceID = id
+				unbound = false
+			}
 		}
 	}
-	return registry.store.RecordChange(change)
+	if hasHistory && CanonicalResourceID(sourceRef) != CanonicalResourceID(change.ResourceID) {
+		return history.RecordChangeWithSourceIdentity(change, sourceRef)
+	}
+	if err := registry.store.RecordChange(change); err != nil {
+		return err
+	}
+	// Inventory may name the resource in a later generation; bind the row then.
+	if _, ok := registry.store.(legacyHistoryBinder); unbound && ok {
+		a.legacyHistory.add(CanonicalResourceID(sourceRef), time.Now())
+	}
+	return nil
 }
 
 // GetRecentChanges forwards canonical resource-history reads into the
@@ -334,6 +415,30 @@ func (a *MonitorAdapter) LastRebuiltAt() time.Time {
 	return a.lastRebuiltAt
 }
 
+// RegistryGeneration identifies one generation a MonitorAdapter published:
+// the registry it serves and when that registry last changed. LastRebuiltAt
+// alone does not, since two rebuilds of a snapshot stamped in the future
+// share its time; a rebuild swaps the registry and an incremental update
+// restamps it.
+type RegistryGeneration struct {
+	registry  *ResourceRegistry
+	rebuiltAt int64
+}
+
+// Generation returns the generation the adapter currently publishes.
+func (a *MonitorAdapter) Generation() RegistryGeneration {
+	if a == nil {
+		return RegistryGeneration{}
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	generation := RegistryGeneration{registry: a.registry}
+	if !a.lastRebuiltAt.IsZero() {
+		generation.rebuiltAt = a.lastRebuiltAt.UnixNano()
+	}
+	return generation
+}
+
 // TryReplaceRegistryForRead rebuilds the registry on behalf of a read path
 // (/api/state, websocket hydrate). Unlike the ingest-driven populate methods
 // it never queues behind an in-flight rebuild and skips entirely while the
@@ -391,8 +496,15 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return
 	}
 
-	rebuilt := NewRegistry(registry.store)
+	rebuilt := newRegistryFrom(registry)
 	staleThresholds := a.currentStaleThresholds()
+	// Operator links apply once the snapshot and every record source are in,
+	// so a chain is judged over the whole estate rather than folded as its
+	// members' sources arrive: a fold cannot be undone when a later source
+	// brings a member that outranks the earlier choice. Availability checks
+	// still come after the links, so a check linked to a folded resource
+	// projects onto its primary.
+	rebuilt.deferManualLinks = true
 	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
 	sources := make([]DataSource, 0, len(recordsBySource))
 	for source := range recordsBySource {
@@ -408,12 +520,16 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return string(sources[i]) < string(sources[j])
 	})
 	for _, source := range sources {
+		if source == SourceAvailability {
+			rebuilt.applyDeferredManualLinks(staleThresholds)
+		}
 		records := recordsBySource[source]
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
 		}
-		rebuilt.IngestRecords(source, records)
+		rebuilt.IngestRecordsWithStaleThresholds(source, records, staleThresholds)
 	}
+	rebuilt.applyDeferredManualLinks(staleThresholds)
 	// IngestSnapshot runs its stale pass before the record sources above are
 	// ingested, so record-sourced resources would otherwise keep their
 	// ingest-time "online" stamp regardless of how old their data is.
@@ -434,9 +550,11 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 
 	a.mu.Lock()
 	a.registry = rebuilt
+	a.registryStaleThresholds = staleThresholds
 	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
+	a.bindLegacyHistory(rebuilt, time.Now())
 }
 
 // ShouldSkipAPIPolling returns true when agent coverage indicates API
@@ -494,6 +612,31 @@ func (a *MonitorAdapter) GetAll() []Resource {
 	}
 
 	return registry.List()
+}
+
+// GetAllWithMetricsTargets materializes one complete broadcast read, binding
+// its detached target map to the same registry as its detached resource list.
+// The adapter may publish a replacement immediately after this capture; neither
+// half of the returned read then consults that newer generation.
+func (a *MonitorAdapter) GetAllWithMetricsTargets() ([]Resource, map[string]MetricsTarget) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil, nil
+	}
+	return registry.ListWithMetricsTargets()
+}
+
+// GetAllWithMetricsTargetsAndStaleThresholds is GetAllWithMetricsTargets
+// plus the stale thresholds the listed registry generation was judged by,
+// read with the registry pointer, so a rebuild publishing meanwhile cannot
+// pair one generation's listing with another's thresholds.
+func (a *MonitorAdapter) GetAllWithMetricsTargetsAndStaleThresholds() ([]Resource, map[string]MetricsTarget, map[DataSource]time.Duration) {
+	registry, thresholds := a.currentRegistryAndStaleThresholds()
+	if registry == nil {
+		return nil, nil, nil
+	}
+	resources, targets := registry.ListWithMetricsTargets()
+	return resources, targets, thresholds
 }
 
 func (a *MonitorAdapter) unifiedAIAdapter() *UnifiedAIAdapter {
@@ -609,12 +752,14 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	a.mutationMu.Lock()
 	defer a.mutationMu.Unlock()
 
-	registry := a.currentRegistry()
+	// Records merge into the current generation, so they are judged by the
+	// thresholds it was; thresholds set since wait for the next rebuild.
+	registry, thresholds := a.currentRegistryAndStaleThresholds()
 	if registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return
 	}
 	before := registry.List()
-	registry.IngestRecords(source, records)
+	registry.IngestRecordsWithStaleThresholds(source, records, thresholds)
 	rebuiltAt := time.Now().UTC()
 	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	registry.PersistIdentityPins()

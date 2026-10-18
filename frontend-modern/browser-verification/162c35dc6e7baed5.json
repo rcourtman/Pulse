@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "53e2d27ab420c505f54694b0ccbb7d843ff6eded",
+  "verified_at": "2026-10-05T00:16:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "d1d60dfc1fca8e2cf94c0870ae348ad005e527656e57bac84b304151a87a808b",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "cc59933a4f75515ce1ab075e737fdd26d2523d526455dbd7765d85ce8d8b3fd0",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "9a111deb348d54c2c778595d770d6bf25752067214cec6e4d0cc363cdbd0d321",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "0088db54f683bfb8c5603480f240c05a930248442cb08c6a344db9363d62c08d",
+    "frontend-modern/src/hooks/useWorkloads.ts": "b662ce635aad385ab8e18334874fcc16f324566295d2d2eedfdfb8684c367d5f",
+    "frontend-modern/src/types/workloads.ts": "924235c100c8d78a9546cd566e2d1cf306bf92415f649aa29e0364832d445ca5"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/overview?status=degraded",
+    "/docker/overview",
+    "/vmware/overview",
+    "/kubernetes/workloads"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate with the guest memory threshold lowered to 60% on the private stack so seven running guests carried warning alerts. Before (changes reverted in place): chips read Running 60 / Attention 0 / Stopped 5. After: Running 53 / Attention 7; ?status=degraded lists exactly the seven alerting guests.",
+    "Nodes table: the Cluster column that repeated Production West on every row is gone and the header reads Cluster Production West; it stays visible while searching (Nodes 2 of 5).",
+    "VM disk Unavailable label renders muted slate with the reason as a title tooltip for vm-stopped; permission-denied and agent-error stay amber (component test).",
+    "Other platform chips checked after the change: Docker Healthy 27 / Degraded 10 / Offline 2, vSphere Attention 0, Kubernetes workloads Degraded 2, TrueNAS VMs Attention 0, Machines Degraded 0."
+  ],
+  "interactions": [
+    "Clicked the Attention chip and read the filtered rows; typed a search into the guest search box and confirmed the cluster label; read the disk status title attribute and computed colour."
+  ]
+}

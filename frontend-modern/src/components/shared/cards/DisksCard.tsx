@@ -7,11 +7,22 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
 interface DisksCardProps {
   disks?: Disk[];
+  /**
+   * Why the usage figures are retained rather than current, such as a host
+   * agent past its reporting lease. The card keeps every figure, since a
+   * disk that filled before the machine went quiet is evidence, but reads
+   * them as last known, without threshold colour or usage bars.
+   */
+  lastKnownReason?: string;
 }
 
 export const DisksCard: Component<DisksCardProps> = (props) => {
   if (!props.disks || props.disks.length === 0) return null;
 
+  const lastKnownTitle = () => {
+    const reason = props.lastKnownReason?.trim();
+    return reason ? `Last known reading, not current: ${reason}` : undefined;
+  };
   const aggregateDisk = (): NormalizedDisk | null => {
     const total = props.disks?.reduce((sum, disk) => sum + (disk.total || 0), 0) ?? 0;
     const used = props.disks?.reduce((sum, disk) => sum + (disk.used || 0), 0) ?? 0;
@@ -37,13 +48,28 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
       <Show when={aggregateDisk()}>
         {(aggregate) => (
           <div class="mb-3 space-y-1.5 border-b border-border pb-3" data-testid="disks-card-total">
-            <InfoCardKeyValueRow
-              class="text-[10px]"
-              label="Total Usage"
-              value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
-              valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
-            />
-            <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
+            <Show
+              when={!lastKnownTitle()}
+              fallback={
+                <InfoCardKeyValueRow
+                  class="text-[10px]"
+                  label="Total Usage"
+                  value={`Last known ${aggregateUsagePercent().toFixed(0)}% · ${formatBytes(
+                    aggregate().used,
+                  )} / ${formatBytes(aggregate().total)}`}
+                  valueClass="text-muted"
+                  valueTitle={lastKnownTitle()}
+                />
+              }
+            >
+              <InfoCardKeyValueRow
+                class="text-[10px]"
+                label="Total Usage"
+                value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
+                valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
+              />
+              <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
+            </Show>
           </div>
         )}
       </Show>
@@ -58,14 +84,20 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
             const textColor = getMetricTextColorClass(usagePercent, 'disk');
             return (
               <div class="text-[10px]">
+                {/* A long mountpoint takes its own line on a phone rather
+                    than squeezing the usage figures out of the card. */}
                 <InfoCardKeyValueRow
-                  class="mb-0.5 text-[10px]"
+                  class="mb-0.5 flex-wrap gap-y-0.5 text-[10px]"
                   label={disk.mountpoint}
-                  labelClass="truncate"
+                  labelClass="max-w-full truncate"
                   labelTitle={disk.mountpoint}
+                  valueTitle={lastKnownTitle()}
                   value={
                     <span class="flex items-center gap-1.5">
-                      <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
+                      <span class={`font-medium ${lastKnownTitle() ? 'text-muted' : textColor}`}>
+                        {lastKnownTitle() ? 'Last known ' : ''}
+                        {usagePercent.toFixed(0)}%
+                      </span>
                       <span class="text-muted">·</span>
                       <span class="text-muted">
                         {formatBytes(used)} / {formatBytes(total)}
@@ -73,15 +105,20 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
                     </span>
                   }
                 />
-                <div class="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden">
+                <Show when={!lastKnownTitle()}>
                   <div
-                    class="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, usagePercent))}%`,
-                      'background-color': barColor,
-                    }}
-                  />
-                </div>
+                    class="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden"
+                    data-testid="disks-card-mount-bar"
+                  >
+                    <div
+                      class="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, usagePercent))}%`,
+                        'background-color': barColor,
+                      }}
+                    />
+                  </div>
+                </Show>
               </div>
             );
           }}

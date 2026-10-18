@@ -9,9 +9,9 @@ import { useWebhookConfigState } from './useWebhookConfigState';
 
 export interface WebhookConfigProps {
   webhooks: Webhook[];
-  onAdd: (webhook: Omit<Webhook, 'id'>) => void;
-  onUpdate: (webhook: Webhook) => void;
-  onDelete: (id: string) => void;
+  onAdd: (webhook: Omit<Webhook, 'id'>) => boolean | Promise<boolean>;
+  onUpdate: (webhook: Webhook) => boolean | Promise<boolean>;
+  onDelete: (id: string) => boolean | Promise<boolean>;
   onTest: (id: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testing?: string | null;
 }
@@ -26,14 +26,26 @@ export function WebhookConfig(props: WebhookConfigProps) {
           webhooks={props.webhooks}
           templates={state.templates}
           testing={props.testing}
+          saving={state.saving() || state.adding()}
           allEnabled={state.allEnabled}
           someEnabled={state.someEnabled}
           toggleAllWebhooks={state.toggleAllWebhooks}
-          onToggleWebhook={(webhook) => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
+          onToggleWebhook={state.toggleWebhook}
           onTestWebhook={(webhook) => webhook.id && props.onTest(webhook.id)}
           onEditWebhook={state.editWebhook}
-          onDeleteWebhook={(webhook) => webhook.id && props.onDelete(webhook.id)}
+          onDeleteWebhook={state.deleteWebhook}
         />
+      </Show>
+
+      <Show when={state.saving() && !state.adding()}>
+        <p role="status" class="text-xs text-muted">
+          Saving webhook changes…
+        </p>
+      </Show>
+      <Show when={state.mutationError()}>
+        <p role="alert" class="text-xs text-red-600 dark:text-red-400">
+          {state.mutationError()}
+        </p>
       </Show>
 
       <Show when={state.adding()}>
@@ -58,12 +70,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
           testWebhookForm={state.testWebhookForm}
           saveWebhook={state.saveWebhook}
           testing={props.testing}
+          saving={state.saving}
+          saveError={state.saveError}
         />
       </Show>
 
       <Show when={!state.adding()}>
         <button
           onClick={state.openAddForm}
+          disabled={state.saving()}
           class="min-h-11 w-full border border-dashed border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover sm:min-h-0"
         >
           + {ALERT_WEBHOOK_ADD_LABEL}

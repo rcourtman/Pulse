@@ -687,7 +687,7 @@ func TestEmailTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			subject, htmlBody, textBody := EmailTemplate(tt.alerts, tt.isSingle)
+			subject, htmlBody, textBody := EmailTemplate(tt.alerts, tt.isSingle, "")
 
 			// Check subject contains expected content
 			if !strings.Contains(subject, tt.subjectContains) {
@@ -727,7 +727,7 @@ func TestGroupedEmailTemplatePreservesInformationalSeverity(t *testing.T) {
 		{ID: "info", Level: alerts.AlertLevelInfo, ResourceName: "host", Type: "system_update", StartTime: time.Now()},
 		{ID: "warning", Level: alerts.AlertLevelWarning, ResourceName: "vm", Type: "cpu", StartTime: time.Now()},
 	}
-	subject, htmlBody, textBody := EmailTemplate(alertList, false)
+	subject, htmlBody, textBody := EmailTemplate(alertList, false, "")
 
 	if !strings.Contains(subject, "1 Warning, 1 Info alerts") {
 		t.Fatalf("subject = %q, want both represented severities", subject)
@@ -741,7 +741,7 @@ func TestEmailTemplateFailsUnknownSeveritySafeToWarning(t *testing.T) {
 	t.Parallel()
 
 	alert := &alerts.Alert{ID: "unknown", Level: "unexpected", ResourceName: "host", Type: "system", StartTime: time.Now()}
-	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, "")
 
 	if !strings.Contains(subject, "Warning") || !strings.Contains(htmlBody, "warning Alert") || !strings.Contains(textBody, "WARNING ALERT") {
 		t.Fatalf("unknown severity did not fail safe to warning: subject=%q text=%q", subject, textBody)
@@ -765,7 +765,7 @@ func TestEmailTemplateEscapesHTMLContent(t *testing.T) {
 		StartTime:    time.Now().Add(-5 * time.Minute),
 	}
 
-	_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+	_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, "")
 
 	if strings.Contains(htmlBody, "<script>") {
 		t.Fatalf("html body should escape script tags, got %q", htmlBody)
@@ -798,7 +798,7 @@ func TestEmailTemplatePatrolFindingShowsFindingInsteadOfMetrics(t *testing.T) {
 	}
 
 	t.Run("grouped", func(t *testing.T) {
-		_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, false)
+		_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, false, "")
 
 		if !strings.Contains(htmlBody, alert.Message) {
 			t.Fatalf("grouped HTML omitted finding title: %q", htmlBody)
@@ -818,7 +818,7 @@ func TestEmailTemplatePatrolFindingShowsFindingInsteadOfMetrics(t *testing.T) {
 	})
 
 	t.Run("single", func(t *testing.T) {
-		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, "")
 
 		if !strings.Contains(subject, "Patrol Finding") {
 			t.Fatalf("single subject = %q, want Patrol Finding", subject)
@@ -847,7 +847,7 @@ func TestEmailTemplateGroupedPatrolFindingEscapesFindingContent(t *testing.T) {
 		Metadata:     map[string]interface{}{"category": `<script>alert("category")</script>`},
 	}
 
-	_, htmlBody, _ := EmailTemplate([]*alerts.Alert{alert}, false)
+	_, htmlBody, _ := EmailTemplate([]*alerts.Alert{alert}, false, "")
 	if strings.Contains(htmlBody, "<script>") || strings.Contains(htmlBody, `<img src=x onerror="alert(1)">`) {
 		t.Fatalf("grouped Patrol HTML did not escape finding content: %q", htmlBody)
 	}

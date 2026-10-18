@@ -1,7 +1,11 @@
 import { Show } from 'solid-js';
 
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
-import { getAlertResourceIncidentViewTitle } from '@/utils/alertIncidentPresentation';
+import {
+  getAlertHistoryResourceActionLabel,
+  getAlertHistoryTimelineActionLabel,
+  getAlertResourceIncidentViewTitle,
+} from '@/utils/alertIncidentPresentation';
 
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -19,6 +23,15 @@ interface AlertHistoryItemActionsProps {
 
 export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
   const rowKey = () => props.state.getIncidentRowKey(props.alert);
+  const timelineOpen = () => props.timelineOpen ?? props.state.expandedIncidents().has(rowKey());
+  // Every row repeats the same controls, so each name says which alert.
+  const timelineLabel = () =>
+    getAlertHistoryTimelineActionLabel({
+      open: timelineOpen(),
+      alertTitle: props.alert.title,
+      resourceName: props.alert.resourceName,
+      startedAt: props.state.formatAlertRowTimestamp(props.alert.startTime),
+    });
 
   return (
     <div class={`flex flex-wrap items-center gap-1.5 ${props.class ?? ''}`.trim()}>
@@ -29,6 +42,8 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             props.touchSized ? 'min-h-11' : ''
           }`}
           data-alert-history-action="timeline"
+          aria-label={timelineLabel()}
+          aria-expanded={timelineOpen()}
           onClick={() => {
             if (props.onTimelineClick) {
               props.onTimelineClick();
@@ -41,9 +56,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             );
           }}
         >
-          {(props.timelineOpen ?? props.state.expandedIncidents().has(rowKey()))
-            ? 'Hide'
-            : 'Timeline'}
+          {timelineOpen() ? 'Hide' : 'Timeline'}
         </button>
       </Show>
       <Show when={props.alert.source === 'alert' && props.alert.resourceId}>
@@ -53,6 +66,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             props.touchSized ? 'min-h-11' : ''
           }`}
           data-alert-history-action="resource"
+          aria-label={getAlertHistoryResourceActionLabel(props.alert.resourceName)}
           title={getAlertResourceIncidentViewTitle()}
           onClick={() => {
             if (props.onResourceClick) {
@@ -91,8 +105,11 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             startTime: props.alert.startTime,
             lastSeen: props.alert.startTime,
             acknowledged: props.alert.status === 'acknowledged',
+            metadata: props.alert.systemAlert ? { systemAlert: true } : undefined,
           }}
           resourceType={props.alert.resourceType}
+          subjectLabel={props.alert.title}
+          subjectTime={props.state.formatAlertRowTimestamp(props.alert.startTime)}
           variant="icon"
           size="sm"
           class={props.touchSized ? 'min-h-11 min-w-11' : undefined}

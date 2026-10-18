@@ -46,11 +46,6 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description:
       'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
   },
-  'system-ai-discovery': {
-    title: 'Service Context',
-    description:
-      'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
-  },
   'system-relay': {
     title: 'Pulse Mobile',
     description: RELAY_SETTINGS_DESCRIPTION,
@@ -171,10 +166,6 @@ const SETTINGS_HEADER_META_KEYS = {
   'system-ai-assistant': {
     title: 'settings.header.systemAiAssistant.title',
     description: 'settings.header.systemAiAssistant.description',
-  },
-  'system-ai-discovery': {
-    title: 'settings.header.systemAiDiscovery.title',
-    description: 'settings.header.systemAiDiscovery.description',
   },
   'system-relay': {
     title: 'settings.header.systemRelay.title',

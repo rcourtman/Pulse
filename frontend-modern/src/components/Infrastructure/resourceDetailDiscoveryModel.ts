@@ -1,5 +1,5 @@
 import type { Resource } from '@/types/resource';
-import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
+import { getGuestDrawerGuestReadPrecaution } from '@/components/Workloads/guestDrawerModel';
 import {
   canonicalDiscoveryResourceType,
   isAgentDiscoveryResourceType,
@@ -17,8 +17,11 @@ import {
 import {
   buildAppContainerMetadataId,
   buildKubernetesWorkloadMetadataId,
-  getCanonicalWorkloadIdForResource,
+  getWorkloadMetadataIdForResource,
 } from '@/utils/workloads';
+
+// Resource kinds that carry agent-routed metadata coordinates.
+type DiscoveryResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
@@ -63,6 +66,33 @@ type PlatformData = {
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+// The canonical drawer has both typed and legacy provider facets. A healthy
+// facet cannot cancel a deferral still reported by the other one. Inspect only
+// this VM's own PVE evidence, not its parent, Discovery target or cached version.
+export const getResourceGuestReadPrecaution = (resource: Resource): string | null => {
+  if (resource.type !== 'vm') return null;
+  const legacy = resource.platformData?.proxmox;
+  const facets = [
+    resource.proxmox,
+    legacy && typeof legacy === 'object' && !Array.isArray(legacy)
+      ? (legacy as Record<string, unknown>)
+      : undefined,
+  ];
+  for (const facet of facets) {
+    if (!facet) continue;
+    const precaution = getGuestDrawerGuestReadPrecaution({
+      type: 'vm',
+      platformScopes: ['proxmox-pve'],
+      guestAgentStatus: asString(facet.guestAgentStatus),
+      diskStatusReason: asString(facet.diskStatusReason),
+      lock: asString(facet.lock),
+      backupInProgress: facet.backupInProgress === true,
+    });
+    if (precaution) return precaution;
+  }
+  return null;
+};
 
 const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -161,14 +191,12 @@ const getMetadataTarget = (
     }
   }
 
-  // Guest metadata is keyed by the canonical workload id shared with the
-  // workloads surfaces (`instance:node:vmid` for PVE guests, resource id
-  // otherwise — also the key v5 upgrades carry over). Saving under any other
-  // id (unified resource hash, bare vmid, discovery resource id) strands the
-  // URL where no table reads it.
+  // Guest metadata retains its provider-keyed storage/API compatibility
+  // boundary. Resource identity and routing use the unified resource ID.
+  // Keep this key aligned with the workload metadata reader during migration.
   return {
     metadataKind: 'guest',
-    metadataId: getCanonicalWorkloadIdForResource(resource),
+    metadataId: getWorkloadMetadataIdForResource(resource),
   };
 };
 
@@ -373,7 +401,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: getCanonicalWorkloadIdForResource(resource),
+        metadataId: getWorkloadMetadataIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'system-container':
@@ -387,7 +415,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: getCanonicalWorkloadIdForResource(resource),
+        metadataId: getWorkloadMetadataIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'app-container':

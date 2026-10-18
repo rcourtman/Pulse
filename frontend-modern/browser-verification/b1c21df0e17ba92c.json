@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "25f4131720dad07540378f4d82aa9c33b291e75d",
+  "verified_at": "2026-10-06T09:55:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts": "5471b694198b0477b2736b752a20792c03f23dfd177d98000636c115924612a6"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Alerts > Overview on a private mock stack built from main, with one vSphere VM alarm (finance-jump-01, metadata resourceType vm, incidentProvider vmware, incidentCode vmware_alarm_state, message 'VM vm-205 has VMware alarm ...') appended to the live websocket activeAlerts snapshots, because the mock demo scenario clears VM alarms",
+    "Card More > Monitoring menu with the change: header reads 'VMware vSphere remains the inventory owner' and Retire from monitoring reads 'VMware vSphere keeps the inventory record', at 1440 and 390",
+    "Same menu with main's helper swapped back in under Vite in the same session: both lines read Proxmox at 1440 and 390",
+    "vSphere overview, real mock VM finance-jump-01 (platformType vmware-vsphere, no injection), drawer Manage tab: retirement help reads 'vSphere owns this inventory record ... does not delete anything from vCenter'; with main's helper it read 'Proxmox owns this inventory record ... without deleting it from Proxmox'",
+    "Menu at 390 opens as a body portal below the card and stays inside the viewport"
+  ],
+  "interactions": [
+    "Proxied the real websocket with Playwright routeWebSocket and appended the vSphere VM alarm to each activeAlerts array; also appended it to the /api/alerts/active REST recovery response",
+    "Clicked More, then Monitoring, on the injected alarm card and read the menu header and the Retire from monitoring description",
+    "Opened the finance-jump-01 drawer from the vSphere overview and switched to Manage",
+    "Swapped resourceMonitoringPolicy.ts to main's version under the running Vite for a same-session before, then restored the change and re-ran"
+  ]
+}

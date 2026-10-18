@@ -19,7 +19,7 @@ func (e *PulseToolExecutor) registerAlertsTools() {
 Actions:
 - list: List active threshold alerts (CPU > 80%, disk full, etc.)
 - findings: List AI patrol findings (detected issues)
-- resolved: List recently resolved alerts
+- resolved: List recently resolved alerts; one with a resolution closed without recovering
 - resolve: Mark a finding as resolved
 - dismiss: Dismiss a finding as not an issue
 
@@ -417,7 +417,7 @@ func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args ma
 			break
 		}
 
-		alerts = append(alerts, ResolvedAlertSummary{
+		summary := ResolvedAlertSummary{
 			ID:           alert.ID,
 			Type:         alert.Type,
 			Level:        alert.Level,
@@ -430,7 +430,12 @@ func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args ma
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,
 			ResolvedTime: alert.ResolvedTime,
-		})
+		}
+		if resolution := alert.Resolution; resolution != nil {
+			summary.Resolution = resolution.Summary
+			summary.SuccessorResourceID = resolution.SuccessorResourceID
+		}
+		alerts = append(alerts, summary)
 	}
 
 	if alerts == nil {

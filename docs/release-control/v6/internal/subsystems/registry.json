@@ -26,6 +26,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/api/agentDeploy.ts",
+      "rationale": "the cluster agent deploy client is both the agent lifecycle one-step cluster member install surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/api/agentProfiles.ts",
       "rationale": "the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -130,72 +138,8 @@
       ]
     },
     {
-      "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-      "rationale": "the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
       "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
       "rationale": "resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-      "rationale": "the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-      "rationale": "the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-      "rationale": "the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-      "rationale": "the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-      "rationale": "the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-      "rationale": "unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-      "rationale": "unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -207,22 +151,6 @@
       "subsystems": [
         "frontend-primitives",
         "performance-and-scalability"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-      "rationale": "unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
-      "rationale": "unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
       ]
     },
     {
@@ -557,7 +485,7 @@
     },
     {
       "path": "frontend-modern/src/utils/resourceStateAdapters.ts",
-      "rationale": "canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path",
+      "rationale": "canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -1334,10 +1262,12 @@
         "cmd/pulse-agent/collector_lifecycle.go",
         "cmd/pulse-agent/main.go",
         "cmd/pulse-agent/service_windows.go",
+        "frontend-modern/src/api/agentDeploy.ts",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
         "frontend-modern/src/components/Settings/agentProfileSettings.ts",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+        "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
@@ -1433,7 +1363,7 @@
             "match_files": [
               "cmd/pulse-agent/collector_lifecycle.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/collectorlifecycle/"
             ],
@@ -1456,7 +1386,7 @@
               "internal/hostagent/action_runner_health_persistence_unix.go",
               "internal/hostagent/action_runner_health_persistence_windows.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/actionrunner/"
             ],
@@ -1475,7 +1405,7 @@
             "match_files": [
               "cmd/pulse-agent-helper/main.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/agenthelper/"
             ],
@@ -1746,6 +1676,7 @@
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
               "internal/hostagent/docker_lifecycle_test.go",
+              "internal/hostagent/enroll_test.go",
               "internal/hostagent/issue1595_sas_collection_test.go",
               "internal/hostagent/observer_delivery_test.go",
               "internal/hostagent/package_updates_test.go",
@@ -1820,6 +1751,22 @@
             ]
           },
           {
+            "id": "cluster-agent-deploy-surface",
+            "label": "one-step cluster member agent install proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentDeploy.ts",
+              "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentDeploy.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx"
+            ]
+          },
+          {
             "id": "frontend-install-command-helper",
             "label": "frontend install command helper proof",
             "match_prefixes": [],
@@ -1879,6 +1826,7 @@
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/useNodeModalState.connectionTest.test.ts",
               "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts"
             ]
           },
@@ -2094,6 +2042,7 @@
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/reporting/evidence.go",
+        "pulse-enterprise:internal/investigation/orchestrator.go",
         "scripts/generate-pulse-intelligence-docs.go"
       ],
       "verification": {
@@ -2102,6 +2051,19 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "investigation-followup-context",
+            "label": "Current-occurrence investigation continuity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-enterprise:internal/investigation/orchestrator.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-enterprise:internal/investigation/orchestrator_test.go"
+            ]
+          },
           {
             "id": "legacy-incident-archive",
             "label": "Explicit read-only legacy recording archive proof",
@@ -2140,7 +2102,7 @@
             "match_files": [
               "docs/AI_PATROL_QUALIFICATION.md"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/ai/qualification/"
             ],
@@ -2156,7 +2118,7 @@
               "internal/mutationregistry/"
             ],
             "match_files": [],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/mutationregistry/"
             ],
@@ -2298,6 +2260,7 @@
               "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/patrol_scope_tools_test.go",
               "internal/agentcapabilities/schema_test.go",
               "internal/agentcapabilities/types_test.go",
               "internal/api/agent_capabilities_test.go",
@@ -2465,13 +2428,9 @@
         "tests/integration/scripts/run-alert-qualification.mjs"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/alerts/migration_characterization_test.go",
-          "internal/alerts/specs/evaluator_test.go",
-          "internal/alerts/specs/types_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -2488,6 +2447,7 @@
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-resilience.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/utils/__tests__/alerts.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.branchcov0712c.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.test.ts"
             ]
@@ -2574,8 +2534,13 @@
               "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
               "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/AlertHistoryFrequencyCard.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/AlertHistoryMobileList.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/alertHistoryModel.test.ts",
+              "frontend-modern/src/features/alerts/__tests__/AlertHistoryTableSection.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/AlertIncidentSynthesisSummary.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/AlertOverviewAlertCard.system-scope.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
               "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
@@ -2658,6 +2623,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/stores/__tests__/alertsActivation.test.ts",
               "frontend-modern/src/utils/__tests__/metricThresholds.test.ts"
             ]
           },
@@ -2866,6 +2832,7 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/configapi/setup_script_render.go",
         "internal/config/persistence_metadata_accessors.go",
+        "internal/config/report_schedules.go",
         "internal/websocket/hub.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
@@ -2873,28 +2840,66 @@
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/extensions/audit_admin.go",
+        "pkg/extensions/reporting_admin.go",
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
         "pkg/pulsecli/root.go",
+        "pkg/reporting/backup_health.go",
+        "pkg/reporting/catalog.go",
+        "pkg/reporting/pdf_brand.go",
         "pulse-mobile:config/mobile-api-surface.json",
         "pulse-mobile:src/api/coreMobileContract.ts",
         "pulse-mobile:src/generated/coreCompatibility.ts",
         "scripts/generate-pulse-intelligence-docs.go",
         "scripts/generate-types.go",
         "scripts/release_control/generate_mobile_compatibility.py",
-        "scripts/release_control/mobile_compatibility.py"
+        "scripts/release_control/mobile_compatibility.py",
+        "scripts/repo-boundary-paid-surface.allowlist",
+        "scripts/repo-boundary-regression.py"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
-        "test_prefixes": [
-          "frontend-modern/src/api/__tests__/"
-        ],
-        "exact_files": [
-          "internal/api/contract_test.go"
-        ],
+        "test_prefixes": [],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "reporting-activity",
+            "label": "reporting aggregate outcome proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/reporting_activity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/reporting_activity_test.go"
+            ]
+          },
+          {
+            "id": "client-backup-health-reports",
+            "label": "client-scoped backup health rendering and schedule proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/enterprise_extension_reporting_admin.go",
+              "internal/api/reporting_backup_health.go",
+              "internal/api/reporting_catalog_handlers.go",
+              "pkg/extensions/reporting_admin.go",
+              "pkg/reporting/backup_health.go",
+              "pkg/reporting/catalog.go",
+              "pkg/reporting/pdf_brand.go",
+              "scripts/repo-boundary-paid-surface.allowlist",
+              "scripts/repo-boundary-regression.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/reporting_backup_health_test.go",
+              "internal/api/reporting_boundary_test.go",
+              "scripts/repo-boundary-regression.py"
+            ]
+          },
           {
             "id": "api-reference-docs",
             "label": "canonical and published API reference synchronization proof",
@@ -2965,6 +2970,7 @@
               "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/patrol_scope_tools_test.go",
               "internal/agentcapabilities/schema_test.go",
               "internal/agentcapabilities/types_test.go",
               "internal/api/agent_capabilities_test.go",
@@ -3188,6 +3194,7 @@
             "exact_files": [
               "frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts",
               "frontend-modern/src/types/recovery.ts",
+              "internal/api/investigation_evidence_parity_test.go",
               "internal/api/recovery_handlers_test.go",
               "internal/api/route_inventory_test.go"
             ]
@@ -3261,6 +3268,81 @@
             ]
           },
           {
+            "id": "route-registration-contract",
+            "label": "registered route and authorization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/router_routes_registration.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/route_inventory_test.go"
+            ]
+          },
+          {
+            "id": "scheduled-report-delivery",
+            "label": "scheduled report persistence, delivery and retry proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/report_schedules.go",
+              "internal/config/report_schedules.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/report_schedule_delivery_test.go",
+              "internal/api/report_schedule_inventory_test.go",
+              "internal/api/report_schedules_test.go",
+              "internal/api/reporting_activity_test.go",
+              "internal/api/reporting_backup_health_test.go",
+              "internal/config/report_schedule_delivery_test.go"
+            ]
+          },
+          {
+            "id": "reporting-runtime-reads",
+            "label": "reporting inventory, enrichment and reload proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/metrics_reporting_handlers.go",
+              "internal/api/reporting_availability.go",
+              "internal/api/reporting_inventory_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/report_schedule_inventory_test.go",
+              "internal/api/reporting_activity_test.go",
+              "internal/api/reporting_availability_test.go",
+              "internal/api/reporting_backup_health_test.go",
+              "internal/api/reporting_handlers_test.go",
+              "internal/api/reporting_monitor_reload_test.go",
+              "internal/api/reporting_org_scope_test.go",
+              "internal/api/reporting_runtime_snapshot_test.go"
+            ]
+          },
+          {
+            "id": "router-runtime-wiring",
+            "label": "router dependency replacement proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/router.go",
+              "internal/api/router_helpers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "internal/api/multi_tenant_setters_additional_test.go",
+              "internal/api/recovery_monitor_reload_test.go",
+              "internal/api/reporting_monitor_reload_test.go",
+              "internal/api/router_helpers_more_test.go",
+              "internal/api/router_resource_wiring_test.go",
+              "internal/api/router_set_monitor_agents_test.go",
+              "internal/api/router_webhook_cidr_reload_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
@@ -3283,16 +3365,21 @@
               "internal/api/alerting/notifications_test.go",
               "internal/api/audit_handlers_test.go",
               "internal/api/availability_handlers_test.go",
+              "internal/api/chartapi/history_activity_test.go",
+              "internal/api/configapi/config_handlers_connection_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/docker_container_action_executor_test.go",
               "internal/api/docker_container_action_result_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
+              "internal/api/investigation_evidence_parity_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
+              "internal/api/telemetry_history_reads_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },
@@ -3650,12 +3737,9 @@
         "pulse-pro:scripts/validate_stripe_catalog.py"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/api/contract_test.go",
-          "pkg/licensing/grant_claims_contract_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -4514,6 +4598,7 @@
       "owned_files": [
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+        ".github/PULL_REQUEST_TEMPLATE.md",
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/demo-runtime-transaction.py",
         ".github/scripts/dispatch-demo-runtime.py",
@@ -4546,6 +4631,7 @@
         ".github/workflows/release-dry-run.yml",
         ".github/workflows/release-lifecycle-rehearsal.yml",
         ".github/workflows/retry-release-convergence.yml",
+        ".github/workflows/test-e2e.yml",
         ".github/workflows/update-demo-server.yml",
         ".github/workflows/validate-release-assets.yml",
         "cmd/pulse-control-plane/main.go",
@@ -4571,6 +4657,7 @@
         "frontend-modern/src/api/updates.ts",
         "frontend-modern/src/components/UpdateBanner.tsx",
         "frontend-modern/src/components/WhatsNewCard.tsx",
+        "frontend-modern/src/components/WhatsNewContent.tsx",
         "frontend-modern/src/components/whatsNewModel.ts",
         "frontend-modern/src/utils/localStorage.ts",
         "frontend-modern/vite.config.ts",
@@ -4597,6 +4684,7 @@
         "scripts/build-release-binaries.sh",
         "scripts/build-release.sh",
         "scripts/build-secure-runtime-qualification.sh",
+        "scripts/capture-release-note-visuals.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
         "scripts/com.pulse.hot-dev.plist.template",
@@ -4606,7 +4694,9 @@
         "scripts/dev-deploy-agent.sh",
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
+        "scripts/e2e_test_images.py",
         "scripts/generate-release-notes.sh",
+        "scripts/go-mod-download.sh",
         "scripts/hot-dev-bg.sh",
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
@@ -4615,6 +4705,7 @@
         "scripts/install-mcp.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
+        "scripts/installtests/auto_update_systemd.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
@@ -4658,6 +4749,7 @@
         "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
         "scripts/verify-github-release-integrity.sh",
+        "tests/integration/docker-compose.test.yml",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
@@ -4681,10 +4773,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "scripts/installtests/build_release_assets_test.go",
-          "scripts/installtests/install_docker_sh_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -4745,6 +4834,43 @@
             ]
           },
           {
+            "id": "release-note-presentation",
+            "label": "release highlights and screenshot evidence proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/PULL_REQUEST_TEMPLATE.md",
+              "docs/releases/RELEASE_NOTES_TEMPLATE.md",
+              "frontend-modern/src/components/WhatsNewCard.tsx",
+              "frontend-modern/src/components/WhatsNewContent.tsx",
+              "frontend-modern/src/components/whatsNewModel.ts",
+              "scripts/capture-release-note-visuals.sh",
+              "scripts/generate-release-notes.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/__tests__/WhatsNewCard.test.tsx",
+              "frontend-modern/src/components/__tests__/whatsNewModel.test.ts",
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/release_control/capture_release_note_visuals.test.mjs",
+              "scripts/release_control/release_note_visuals_test.py"
+            ]
+          },
+          {
+            "id": "telemetry-schema-release-disclosures",
+            "label": "telemetry schema release disclosure proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/releases/TELEMETRY_SCHEMA_V19.md",
+              "docs/releases/TELEMETRY_SCHEMA_V20.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/telemetry/telemetry_test.go"
+            ]
+          },
+          {
             "id": "release-promotion-metadata-runtime",
             "label": "release promotion and artifact dispatch proof",
             "match_prefixes": [
@@ -4782,8 +4908,6 @@
               "docs/UPGRADE_v6.md",
               "frontend-modern/public/docs/UPGRADE_v6.md",
               "frontend-modern/src/components/UpdateBanner.tsx",
-              "frontend-modern/src/components/WhatsNewCard.tsx",
-              "frontend-modern/src/components/whatsNewModel.ts",
               "frontend-modern/src/utils/localStorage.ts",
               "pulse-enterprise:.github/workflows/build-pro-release.yml",
               "pulse-enterprise:scripts/validate-pro-release-line.sh",
@@ -4791,7 +4915,6 @@
               "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
               "pulse-pro:scripts/validate_paid_runtime_distribution.py",
               "scripts/check-workflow-dispatch-inputs.py",
-              "scripts/generate-release-notes.sh",
               "scripts/release-preflight-worker.sh",
               "scripts/release_control/customer_promotion_lease.sh",
               "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
@@ -4831,7 +4954,7 @@
           },
           {
             "id": "dependency-advisory-watch",
-            "label": "daily release-line dependency advisory watch proof",
+            "label": "daily main dependency advisory watch proof",
             "match_prefixes": [],
             "match_files": [
               ".github/workflows/dependency-advisory-watch.yml",
@@ -5018,6 +5141,34 @@
             ]
           },
           {
+            "id": "current-source-unattended-systemd",
+            "label": "current-source native updater harness proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/installtests/auto_update_systemd.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/pulse_auto_update_test.go",
+              "scripts/tests/test_auto_update_systemd.py"
+            ]
+          },
+          {
+            "id": "unattended-update-runtime",
+            "label": "unattended updater runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/pulse-auto-update.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/pulse_auto_update_consent_test.go",
+              "scripts/installtests/pulse_auto_update_test.go"
+            ]
+          },
+          {
             "id": "deployment-script-runtime",
             "label": "deployment script runtime proof",
             "match_prefixes": [],
@@ -5026,8 +5177,7 @@
               "install.sh",
               "scripts/install-container-agent.sh",
               "scripts/install-docker.sh",
-              "scripts/install.ps1",
-              "scripts/pulse-auto-update.sh"
+              "scripts/install.ps1"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5188,6 +5338,34 @@
               ".github/scripts/tests/test_demo_runtime_transaction.py",
               "scripts/installtests/demo_transaction_test.go"
             ]
+          },
+          {
+            "id": "go-module-download-runtime",
+            "label": "exact Docker Go module-download recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/go-mod-download.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_go_mod_download.py"
+            ]
+          },
+          {
+            "id": "e2e-image-distribution",
+            "label": "same-run source-bound E2E image distribution proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/test-e2e.yml",
+              "scripts/e2e_test_images.py",
+              "tests/integration/docker-compose.test.yml"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_test_images.py"
+            ]
           }
         ],
         "match_files": null
@@ -5240,8 +5418,12 @@
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/OperationsPanel.tsx",
         "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
+        "frontend-modern/src/components/Settings/ReportingFormField.tsx",
         "frontend-modern/src/components/Settings/ReportingPanel.tsx",
         "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+        "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+        "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
         "frontend-modern/src/components/Settings/ResourcePicker.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
@@ -5280,9 +5462,10 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
-        "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+        "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+        "frontend-modern/src/content/help/updates.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
@@ -5307,11 +5490,11 @@
         "frontend-modern/src/stores/updates.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
-        "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/emptyStatePresentation.ts",
         "frontend-modern/src/utils/environmentLockPresentation.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
         "frontend-modern/src/utils/platformSupportManifest.ts",
+        "frontend-modern/src/utils/proxmoxUpdateEvidence.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/reportingResourceTypes.ts",
@@ -5334,9 +5517,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -5609,8 +5790,12 @@
             "match_files": [
               "frontend-modern/scripts/header-audit.mjs",
               "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
+              "frontend-modern/src/components/Settings/ReportingFormField.tsx",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
+              "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+              "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
               "frontend-modern/src/components/Settings/ResourcePicker.tsx",
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
@@ -5625,29 +5810,21 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/reportingCatalogModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/ReportingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingResourceTypes.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.backupHealth.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingSchedulesModel.delivery.test.ts",
               "frontend-modern/src/components/Settings/__tests__/ResourcePicker.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts",
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/reportingResourceTypes.test.ts"
-            ]
-          },
-          {
-            "id": "compact-info-card-consumers",
-            "label": "compact information card consumer proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
             ]
           },
           {
@@ -5712,19 +5889,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
-            ]
-          },
-          {
-            "id": "discovery-presentation-helper",
-            "label": "discovery presentation helper proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/utils/discoveryPresentation.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/utils/__tests__/discoveryPresentation.test.ts"
             ]
           },
           {
@@ -5903,6 +6067,7 @@
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
             ]
           },
@@ -5950,7 +6115,11 @@
             "match_prefixes": [
               "frontend-modern/src/components/shared/"
             ],
-            "match_files": [],
+            "match_files": [
+              "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+              "frontend-modern/src/content/help/updates.ts",
+              "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+            ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
@@ -5960,6 +6129,7 @@
               "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HelpIcon.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HistoryChart.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/InlineDetailTableRow.test.tsx",
               "frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
@@ -5972,7 +6142,10 @@
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/InlineNotice.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/NodeDrawerOverview.updateEvidence.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
+              "frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts"
             ]
           },
           {
@@ -6023,7 +6196,6 @@
         "internal/fleethealth/",
         "internal/maintenancesentinel/",
         "internal/monitoring/",
-        "internal/servicediscovery/",
         "internal/storagehealth/",
         "internal/truenas/",
         "pkg/agents/filesystem/",
@@ -6061,6 +6233,7 @@
         "pkg/agents/docker/report.go",
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
+        "pkg/proxmox/backup_history.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
@@ -6069,27 +6242,24 @@
         "pkg/tlsutil/certificate.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/unifiedresources/code_standards_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
-            "id": "service-discovery-assurance-runtime",
-            "label": "discovery-led service assurance proposal proof",
-            "match_prefixes": [
-              "internal/servicediscovery/"
+            "id": "backup-history-collection",
+            "label": "paginated backup execution history and collection quality proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/backup_task_history.go",
+              "pkg/proxmox/backup_history.go"
             ],
-            "match_files": [],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/discovery_handlers_test.go",
-              "internal/servicediscovery/availability_suggestion_test.go",
-              "internal/servicediscovery/service_test.go",
-              "internal/servicediscovery/store_test.go"
+              "internal/monitoring/backup_task_history_test.go",
+              "pkg/proxmox/backup_history_test.go"
             ]
           },
           {
@@ -6147,6 +6317,7 @@
               "internal/monitoring/monitor_pbs_coverage_test.go",
               "internal/monitoring/monitor_pmg_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_disk_history_scope_test.go",
               "internal/monitoring/truenas_poller_test.go"
             ]
           },
@@ -6184,6 +6355,7 @@
               "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
+              "internal/truenas/pool_capacity.go",
               "internal/truenas/provider.go",
               "internal/truenas/subscription.go",
               "internal/truenas/telemetry.go",
@@ -6195,12 +6367,17 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/resourceapi/resources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_pool_capacity_test.go",
               "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
               "internal/truenas/core_reporting_test.go",
+              "internal/truenas/disk_history_identity_test.go",
+              "internal/truenas/disk_history_netdata_test.go",
+              "internal/truenas/pool_capacity_test.go",
               "internal/truenas/provider_pool_health_contract_test.go",
               "internal/truenas/provider_test.go",
               "internal/truenas/transport_test.go"
@@ -6216,8 +6393,11 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/api/truenas_disk_history_integration_test.go",
+              "internal/monitoring/disk_drawer_native_history_test.go",
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
-              "internal/monitoring/monitor_metrics_slo_test.go"
+              "internal/monitoring/monitor_metrics_slo_test.go",
+              "internal/monitoring/storage_history_test.go"
             ]
           },
           {
@@ -6350,6 +6530,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
+              "internal/models/converters_additional_test.go",
               "internal/models/deepcopy_test.go",
               "internal/models/host_transient_expiry_test.go",
               "internal/models/issue1639_pbs_collision_test.go",
@@ -6514,6 +6695,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_task_history_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
@@ -6560,6 +6742,20 @@
             ]
           },
           {
+            "id": "unified-read-freshness",
+            "label": "canonical resource freshness and unattended read proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/resource_stale_thresholds.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/resource_stale_thresholds_test.go",
+              "internal/monitoring/unified_inventory_read_refresh_test.go"
+            ]
+          },
+          {
             "id": "monitoring-runtime",
             "label": "monitoring runtime proof",
             "match_prefixes": [
@@ -6574,12 +6770,14 @@
             "exact_files": [
               "internal/config/docker_metadata_test.go",
               "internal/config/guest_metadata_test.go",
+              "internal/config/guest_metadata_writer_test.go",
               "internal/monitoring/availability_poller_test.go",
               "internal/monitoring/availability_probe_agent_test.go",
               "internal/monitoring/availability_udp_test.go",
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/ceph_test.go",
               "internal/monitoring/deadman_test.go",
+              "internal/monitoring/guest_poll_ownership_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/issue1613_contract_test.go",
@@ -6602,6 +6800,7 @@
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
+              "internal/monitoring/recovery_rollups_resilience_test.go",
               "internal/monitoring/reload_test.go",
               "internal/monitoring/truenas_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
@@ -6752,13 +6951,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/api/__tests__/orgs.test.ts",
-          "frontend-modern/src/components/Settings/__tests__/OrganizationAccessPanel.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
-          "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
-          "internal/models/organization_additional_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -6926,6 +7119,9 @@
         "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
         "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
         "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+        "frontend-modern/src/features/patrol/patrolSetupModel.ts",
+        "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx",
+        "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx",
         "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
@@ -6949,12 +7145,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
-          "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
-          "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -6976,6 +7167,8 @@
               "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
               "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
               "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+              "frontend-modern/src/features/patrol/patrolSetupModel.ts",
+              "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx",
               "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
               "frontend-modern/src/pages/AIIntelligence.tsx",
               "frontend-modern/src/stores/aiIntelligence.ts",
@@ -6997,6 +7190,8 @@
               "frontend-modern/src/features/patrol/__tests__/PatrolObjectivesPanel.test.tsx",
               "frontend-modern/src/features/patrol/__tests__/PatrolRecentWorkPanel.test.tsx",
               "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",
+              "frontend-modern/src/features/patrol/__tests__/patrolSetupModel.test.ts",
+              "frontend-modern/src/features/patrol/__tests__/PatrolSetupPanel.render.test.tsx",
               "frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
@@ -7100,6 +7295,19 @@
               "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
             ]
+          },
+          {
+            "id": "patrol-manual-rule-reversal",
+            "label": "Patrol manual-rule reversal proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/patrol/__tests__/PatrolSuppressionRules.test.tsx"
+            ]
           }
         ],
         "match_files": null
@@ -7113,18 +7321,8 @@
         "pkg/metrics/"
       ],
       "owned_files": [
-        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/DiskList.tsx",
         "frontend-modern/src/components/Workloads/diskListModel.ts",
         "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
@@ -7161,6 +7359,7 @@
         "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
         "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
         "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+        "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
         "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
         "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
         "frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts",
@@ -7193,7 +7392,6 @@
         "frontend-modern/src/utils/searchQuery.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/workloads.ts",
-        "frontend-modern/src/utils/workloadsSummaryCache.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go",
@@ -7205,38 +7403,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.branchcov2.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts",
-          "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
-          "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
-          "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
-          "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
-          "internal/api/router_bench_test.go",
-          "internal/api/slo_bench_test.go",
-          "pkg/metrics/store_bench_test.go",
-          "pkg/metrics/store_query_plan_test.go",
-          "pkg/metrics/store_slo_test.go",
-          "pkg/server/gzip_middleware_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -7313,18 +7480,8 @@
             "label": "Workloads hot-path proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Workloads/DiskList.tsx",
               "frontend-modern/src/components/Workloads/diskListModel.ts",
               "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
@@ -7361,6 +7518,7 @@
               "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
               "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
               "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+              "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
               "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
               "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
               "frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts",
@@ -7387,15 +7545,12 @@
               "frontend-modern/src/types/workloads.ts",
               "frontend-modern/src/utils/searchQuery.ts",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
-              "frontend-modern/src/utils/workloads.ts",
-              "frontend-modern/src/utils/workloadsSummaryCache.ts"
+              "frontend-modern/src/utils/workloads.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/useTableWindowing.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/AvailabilityProbeStatusCard.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
@@ -7410,6 +7565,7 @@
               "frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/useWorkloadTableMetricHistory.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.branchcov2.test.ts",
@@ -7434,8 +7590,7 @@
               "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
               "frontend-modern/src/utils/__tests__/searchQuery.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/workloads.test.ts",
-              "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts"
+              "frontend-modern/src/utils/__tests__/workloads.test.ts"
             ]
           },
           {
@@ -7477,30 +7632,9 @@
         "pulse-pro:relay-server/revocation_feed.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/api/relay_mobile_capability_test.go",
-          "internal/config/persistence_relay_test.go",
-          "internal/relay/client_test.go",
-          "internal/relay/encryption_test.go",
-          "internal/relay/protocol_test.go",
-          "internal/relay/push_test.go",
-          "pulse-mobile:src/api/__tests__/coreMobileContract.test.ts",
-          "pulse-mobile:src/relay/__tests__/channel.test.ts",
-          "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
-          "pulse-mobile:src/relay/__tests__/client.test.ts",
-          "pulse-mobile:src/relay/__tests__/encryption.test.ts",
-          "pulse-mobile:src/relay/__tests__/identity.test.ts",
-          "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
-          "pulse-mobile:src/relay/__tests__/protocol.test.ts",
-          "pulse-mobile:src/relay/__tests__/proxy.test.ts",
-          "pulse-pro:relay-server/bridge_test.go",
-          "pulse-pro:relay-server/device_store_test.go",
-          "pulse-pro:relay-server/metrics_test.go",
-          "scripts/release_control/generate_mobile_compatibility_test.py",
-          "scripts/release_control/mobile_compatibility_test.py"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -7652,6 +7786,8 @@
         "internal/cloudcp/auth/magiclink.go",
         "internal/cloudcp/auth/magiclink_store.go",
         "internal/config/config.go",
+        "internal/config/history_read_activity.go",
+        "internal/config/reporting_activity.go",
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/logging/logging.go",
@@ -7668,8 +7804,11 @@
         "pkg/auth/rbac_manager.go",
         "pkg/auth/sqlite_manager.go",
         "pkg/extensions/audit_admin.go",
+        "pkg/securityutil/outbound_http.go",
+        "pkg/securityutil/pinned_dial.go",
         "pkg/server/server.go",
         "pkg/server/service_health.go",
+        "pkg/server/telemetry_licensed_features.go",
         "pkg/server/telemetry_pulse_intelligence.go",
         "pkg/tlsutil/fingerprint.go",
         "scripts/telemetry_adoption_report.py",
@@ -7678,30 +7817,25 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/api/__tests__/security.test.ts",
-          "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-          "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
-          "internal/api/security_regression_test.go",
-          "internal/api/security_status_additional_test.go",
-          "internal/api/security_tokens_lifecycle_test.go",
-          "internal/api/security_tokens_owner_binding_test.go",
-          "internal/api/security_tokens_test.go",
-          "internal/api/system_settings_telemetry_test.go",
-          "internal/cloudcp/auth/magiclink_test.go",
-          "internal/config/config_load_test.go",
-          "internal/config/watcher_test.go",
-          "internal/telemetry/service_health_test.go",
-          "internal/telemetry/telemetry_test.go",
-          "pkg/server/service_health_test.go",
-          "pkg/server/telemetry_pulse_intelligence_test.go",
-          "pkg/tlsutil/tlsutil_test.go",
-          "scripts/tests/test_telemetry_adoption_report.py"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "pinned-outbound-http",
+            "label": "restricted outbound policy and pinned connection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/securityutil/outbound_http.go",
+              "pkg/securityutil/pinned_dial.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/notifications/pinned_connectivity_linux_test.go",
+              "pkg/securityutil/outbound_http_test.go",
+              "pkg/securityutil/pinned_dial_test.go"
+            ]
+          },
           {
             "id": "system-settings-state",
             "label": "system settings state proof",
@@ -7716,16 +7850,43 @@
             ]
           },
           {
+            "id": "server-runtime-wiring",
+            "label": "server runtime wiring proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/server/server.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/system_settings_telemetry_test.go",
+              "internal/api/telemetry_history_reads_test.go",
+              "internal/config/history_read_activity_test.go",
+              "internal/telemetry/service_health_test.go",
+              "internal/telemetry/telemetry_test.go",
+              "pkg/server/reporting_engine_test.go",
+              "pkg/server/server_test.go",
+              "pkg/server/service_health_test.go",
+              "pkg/server/telemetry_licensed_features_test.go",
+              "pkg/server/telemetry_pulse_intelligence_test.go",
+              "scripts/tests/test_telemetry_adoption_report.py",
+              "tests/integration/tests/19-telemetry-disclosure.spec.ts"
+            ]
+          },
+          {
             "id": "privacy-docs-and-telemetry",
             "label": "privacy docs and telemetry proof",
             "match_prefixes": [],
             "match_files": [
               "docs/PRIVACY.md",
               "frontend-modern/public/docs/PRIVACY.md",
+              "internal/config/history_read_activity.go",
+              "internal/config/reporting_activity.go",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
-              "pkg/server/server.go",
               "pkg/server/service_health.go",
+              "pkg/server/telemetry_licensed_features.go",
               "pkg/server/telemetry_pulse_intelligence.go",
               "scripts/telemetry_adoption_report.py",
               "SECURITY.md"
@@ -7734,12 +7895,18 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/reporting_activity_test.go",
               "internal/api/system_settings_telemetry_test.go",
+              "internal/api/telemetry_history_reads_test.go",
+              "internal/config/history_read_activity_test.go",
+              "internal/config/reporting_activity_test.go",
               "internal/telemetry/service_health_test.go",
               "internal/telemetry/telemetry_test.go",
               "pkg/server/service_health_test.go",
+              "pkg/server/telemetry_licensed_features_test.go",
               "pkg/server/telemetry_pulse_intelligence_test.go",
-              "scripts/tests/test_telemetry_adoption_report.py"
+              "scripts/tests/test_telemetry_adoption_report.py",
+              "tests/integration/tests/19-telemetry-disclosure.spec.ts"
             ]
           },
           {
@@ -7817,7 +7984,7 @@
             "match_files": [
               "pkg/extensions/audit_admin.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/api/audit_handlers_test.go",
@@ -7993,9 +8160,7 @@
         "frontend-modern/src/hooks/useProtectionPostures.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/types/recovery.ts",
-        "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
         "frontend-modern/src/utils/recoveryDatePresentation.ts",
-        "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
@@ -8005,10 +8170,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/Storage/code_standards.test.ts",
-          "internal/recovery/recovery_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -8021,11 +8183,13 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/recovery/backup_health_test.go",
               "internal/recovery/idgen/idgen_test.go",
               "internal/recovery/manager/manager_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
               "internal/recovery/posture_test.go",
               "internal/recovery/recovery_test.go",
+              "internal/recovery/store/backup_history_test.go",
               "internal/recovery/store/store_posture_test.go",
               "internal/recovery/store/store_queryplan_test.go",
               "internal/recovery/store/store_rollups_test.go",
@@ -8041,9 +8205,7 @@
               "frontend-modern/src/hooks/useProtectionPostures.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",
               "frontend-modern/src/types/recovery.ts",
-              "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
               "frontend-modern/src/utils/recoveryDatePresentation.ts",
-              "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
               "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
               "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
               "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
@@ -8160,15 +8322,8 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
-        "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
-        "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
-        "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
-        "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-        "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
-        "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -8183,20 +8338,10 @@
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
         "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-        "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
         "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
         "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
@@ -8293,12 +8438,9 @@
         "internal/platformsupport/manifest_generated.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-          "internal/unifiedresources/code_standards_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -8371,15 +8513,8 @@
             "label": "unified resource consumer proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
-              "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
-              "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
-              "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-              "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
-              "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -8394,20 +8529,10 @@
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
               "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-              "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
               "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
               "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
@@ -8483,24 +8608,16 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Discovery/__tests__/AvailabilityProposalCard.test.tsx",
-              "frontend-modern/src/components/Discovery/__tests__/availabilityProposalModel.test.ts",
-              "frontend-modern/src/components/Discovery/__tests__/useDiscoveryFeatureAvailability.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.service-cards.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceFacetSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceOperatorStateSection.test.ts",
-              "frontend-modern/src/components/Infrastructure/__tests__/ResourcePolicySummary.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/features/docker/__tests__/DockerAlertsTable.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerContainerLifecycleActions.test.ts",
@@ -8564,7 +8681,7 @@
               "frontend-modern/src/routing/navigation.ts",
               "frontend-modern/src/routing/routePreload.ts"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "frontend-modern/src/features/actions/__tests__/"
             ],

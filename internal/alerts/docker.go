@@ -80,22 +80,43 @@ func (m *Manager) lookupDockerContainerOverrideNoLock(hostID, containerName, leg
 	return ThresholdConfig{}, false
 }
 
-// DockerResourceID builds a stable identifier for Docker container alerts.
-// Patrol scope resolution registers these forms as known aliases so an
-// alert's resource ID resolves to the collected container or host.
-func DockerResourceID(hostID, containerID string) string {
+// dockerNameReferencePrefix marks the name of a Docker container or Swarm
+// service that has no ID in the slot of an alert reference that otherwise
+// holds the ID. Docker and Swarm IDs never contain a colon, so a name
+// reference can never equal an ID reference or the host's own reference.
+const dockerNameReferencePrefix = "name:"
+
+// DockerHostResourceID builds the reference of a Docker host's own alerts
+// ("docker:<host ID>"). Only the host's connectivity alert uses it. Returns ""
+// without a host ID.
+func DockerHostResourceID(hostID string) string {
 	hostID = strings.TrimSpace(hostID)
-	containerID = strings.TrimSpace(containerID)
-	if containerID == "" {
-		if hostID == "" {
-			return "docker:unknown"
+	if hostID == "" {
+		return ""
+	}
+	return "docker:" + hostID
+}
+
+// DockerContainerResourceID builds the reference of a Docker container's
+// alerts: "docker:<host ID>/<container ID>". A container reported without an
+// ID is referenced by its name, "docker:<host ID>/name:<name>", so it never
+// shares its host's reference or another container's. Returns "" for a
+// container with neither, which has no identity to alert under. Patrol scope
+// resolution registers the same forms as aliases of the collected container.
+func DockerContainerResourceID(hostID, containerID, containerName string) string {
+	hostID = strings.TrimSpace(hostID)
+	ref := strings.TrimSpace(containerID)
+	if ref == "" {
+		name := strings.TrimLeft(strings.TrimSpace(containerName), "/")
+		if hostID == "" || name == "" {
+			return ""
 		}
-		return fmt.Sprintf("docker:%s", hostID)
+		ref = dockerNameReferencePrefix + name
 	}
 	if hostID == "" {
-		return fmt.Sprintf("docker:container/%s", containerID)
+		return fmt.Sprintf("docker:container/%s", ref)
 	}
-	return fmt.Sprintf("docker:%s/%s", hostID, containerID)
+	return fmt.Sprintf("docker:%s/%s", hostID, ref)
 }
 
 func normalizeDockerUpdateTrackingPart(part string) string {
@@ -164,17 +185,18 @@ func dockerServiceDisplayName(service models.DockerService) string {
 	return serviceID
 }
 
-// DockerServiceResourceID builds a stable identifier for Docker Swarm service
-// alerts. Patrol scope resolution registers this form as a known alias on the
-// owning Docker host record so a service alert's resource ID resolves there.
+// DockerServiceResourceID builds the reference of a Docker Swarm service's
+// alerts: "docker:<host ID>/service/<service ID>". A service reported without
+// an ID is referenced by its normalized name, "docker:<host ID>/service/name:<name>",
+// so it never shares another service's ID reference. Returns "" for a service
+// with neither, which has no identity to alert under. Patrol scope resolution
+// registers the same forms as aliases on the owning Docker host record so a
+// service alert's resource ID resolves there.
 func DockerServiceResourceID(hostID, serviceID, serviceName string) string {
 	hostID = strings.TrimSpace(hostID)
 	normalizedServiceID := strings.TrimSpace(serviceID)
 	if normalizedServiceID == "" {
 		name := strings.TrimSpace(serviceName)
-		if name == "" {
-			name = "service"
-		}
 		builder := strings.Builder{}
 		for _, r := range strings.ToLower(name) {
 			switch {
@@ -190,11 +212,12 @@ func DockerServiceResourceID(hostID, serviceID, serviceName string) string {
 		}
 		normalizedServiceID = strings.Trim(builder.String(), "-_")
 		if normalizedServiceID == "" {
-			normalizedServiceID = "service"
+			return ""
 		}
 		if len(normalizedServiceID) > 32 {
 			normalizedServiceID = normalizedServiceID[:32]
 		}
+		normalizedServiceID = dockerNameReferencePrefix + normalizedServiceID
 	}
 	if hostID == "" {
 		return fmt.Sprintf("docker-service:%s", normalizedServiceID)
@@ -272,8 +295,12 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	seen := make(map[string]struct{}, len(host.Containers)+len(host.Services))
 	seenUpdateTracking := make(map[string]struct{}, len(host.Containers))
 	for _, container := range host.Containers {
+		resourceID := DockerContainerResourceID(host.ID, container.ID, container.Name)
+		if resourceID == "" {
+			// Neither an ID nor a name: nothing identifies its alerts.
+			continue
+		}
 		containerName := dockerContainerDisplayName(container)
-		resourceID := DockerResourceID(host.ID, container.ID)
 		updateTrackingKey := dockerUpdateTrackingKey(host, container)
 
 		if matchesDockerIgnoredPrefix(containerName, container.ID, ignoredPrefixes) {
@@ -301,6 +328,9 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 	for _, service := range host.Services {
 		resourceID := DockerServiceResourceID(host.ID, service.ID, service.Name)
+		if resourceID == "" {
+			continue
+		}
 		seen[resourceID] = struct{}{}
 		m.evaluateDockerService(host, service, resourceID)
 	}
@@ -322,8 +352,19 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	resourceType := "app-container"
 	containerTags := dockerLabelTags(container.Labels)
 
+	// Resolve the metric thresholds while the lock is held: the Docker defaults
+	// are fields of m.config, which UpdateConfig replaces, and the override
+	// still points into it. applyThresholdOverride clones what it keeps.
 	m.mu.RLock()
 	overrideConfig, hasOverride := m.lookupDockerContainerOverrideNoLock(host.ID, container.Name, resourceID)
+	thresholds := ThresholdConfig{
+		CPU:    cloneThreshold(&m.config.DockerDefaults.CPU),
+		Memory: cloneThreshold(&m.config.DockerDefaults.Memory),
+		Disk:   cloneThreshold(&m.config.DockerDefaults.Disk),
+	}
+	if hasOverride {
+		thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
+	}
 	m.mu.RUnlock()
 	if hasOverride && overrideConfig.Disabled {
 		// Alerts disabled via override; clear any existing alerts and skip evaluation.
@@ -346,16 +387,6 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 		m.clearDockerContainerMetricAlerts(resourceID, "cpu", "memory", "disk")
 	} else {
 		m.clearDockerContainerStateAlert(resourceID)
-
-		// Use Docker-specific defaults for containers
-		thresholds := ThresholdConfig{
-			CPU:    &m.config.DockerDefaults.CPU,
-			Memory: &m.config.DockerDefaults.Memory,
-			Disk:   &m.config.DockerDefaults.Disk,
-		}
-		if hasOverride {
-			thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
-		}
 
 		if thresholds.CPU != nil {
 			cpuCapacityPercent := models.DockerContainerCPUCapacityPercent(container, host.CPUs)
@@ -656,7 +687,7 @@ func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
 		return
 	}
 
-	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
+	resourceID := DockerHostResourceID(host.ID)
 	alertID := canonicalConnectivityStateID(resourceID)
 
 	m.mu.Lock()
@@ -697,7 +728,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	_, disableDockerHostsOffline := m.alertPolicyTypeSwitchesNoLock("docker-host")
 	m.mu.RUnlock()
 
-	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
+	resourceID := DockerHostResourceID(host.ID)
 	alertID := canonicalConnectivityStateID(resourceID)
 	instanceName := dockerInstanceName(host)
 	nodeName := strings.TrimSpace(host.Hostname)
@@ -793,10 +824,16 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	disableConnectivity := defaultDisable
 	severity := defaultSeverity
 	if hasOverride {
-		if defaultDisable && !override.DisableConnectivity {
-			disableConnectivity = false
-		} else if override.DisableConnectivity {
+		// Same rule as applyThresholdOverride: an override turns state
+		// alerts back on over a disabled default only when it carries the
+		// row's own severity. DisableConnectivity is a plain bool, so an
+		// override saved for a CPU or memory threshold alone reads false
+		// here, and used to re-enable state alerts the operator had turned
+		// off for every container.
+		if override.DisableConnectivity {
 			disableConnectivity = true
+		} else if override.PoweredOffSeverity != "" {
+			disableConnectivity = false
 		}
 
 		if override.PoweredOffSeverity != "" {
@@ -968,17 +1005,18 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 	now := time.Now()
 
-	// Get config values with defaults
-	restartThreshold := m.config.DockerDefaults.RestartCount
-	if restartThreshold == 0 {
-		restartThreshold = 3 // Default: 3 restarts
-	}
-	timeWindow := m.config.DockerDefaults.RestartWindow
-	if timeWindow == 0 {
-		timeWindow = 300 // Default: 5 minutes (300 seconds)
-	}
-
 	m.mu.Lock()
+
+	// NormalizeDockerDefaults owns the factory values; 0 here is the
+	// operator's Off, so either one set to 0 turns restart-loop alerts off.
+	restartThreshold := m.config.DockerDefaults.RestartCount
+	timeWindow := m.config.DockerDefaults.RestartWindow
+	if restartThreshold <= 0 || timeWindow <= 0 {
+		delete(m.dockerRestartTracking, resourceID)
+		m.mu.Unlock()
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-restart-loop"))
+		return
+	}
 
 	record, exists := m.dockerRestartTracking[resourceID]
 	if !exists {
@@ -1134,20 +1172,25 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
 
 	// Get config values with defaults
+	m.mu.RLock()
 	warnThreshold := float64(m.config.DockerDefaults.MemoryWarnPct)
-	if warnThreshold == 0 {
-		warnThreshold = 90.0 // Default: 90%
-	}
 	criticalThreshold := float64(m.config.DockerDefaults.MemoryCriticalPct)
-	if criticalThreshold == 0 {
-		criticalThreshold = 95.0 // Default: 95%
+	m.mu.RUnlock()
+	// NormalizeDockerDefaults owns the factory values; 0 here is the
+	// operator's Off for that level.
+	if warnThreshold <= 0 && criticalThreshold <= 0 {
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-memory-limit"))
+		return
 	}
 
 	// Calculate percentage of limit used
 	limitPercent := (float64(container.MemoryUsage) / float64(container.MemoryLimit)) * 100
 
-	clearThreshold := warnThreshold - 5
-	recovery := clearThreshold
+	activation := warnThreshold
+	if activation <= 0 {
+		activation = criticalThreshold
+	}
+	recovery := activation - 5
 	spec, err := buildCanonicalSeverityThresholdSpecWithRecovery(resourceID+"-memory-limit", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "memory-limit-percent", warnThreshold, criticalThreshold, &recovery, false)
 	if err != nil {
 		log.Warn().
@@ -1369,6 +1412,15 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		return
 	}
 
+	// "No update" is a comparison result only when the agent knew the local
+	// digest. Agents before #2353 compared an empty digest after a failed image
+	// inspect and reported no update, which resolved a pending alert and
+	// restarted its delay. Without a current digest the result is unknown.
+	if !container.UpdateStatus.UpdateAvailable && strings.TrimSpace(container.UpdateStatus.CurrentDigest) == "" {
+		m.touchDockerContainerUpdateAlert(canonicalAlertID)
+		return
+	}
+
 	// Check if an update is available
 	if !container.UpdateStatus.UpdateAvailable {
 		// No update available - clear tracking and alert
@@ -1391,6 +1443,16 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		active.Type == "docker-container-update" && active.ResourceID == resourceID &&
 		!active.StartTime.IsZero() {
 		firstSeen, exists = active.StartTime, true
+	} else if strings.TrimSpace(container.ID) == "" {
+		// A container without an ID used to record its pending update under
+		// its host's reference. Keep that age; the host's report cleanup then
+		// clears the old occurrence.
+		legacyRef := DockerHostResourceID(host.ID)
+		if legacy, ok := m.getActiveAlertNoLock(buildCanonicalStateID(legacyRef, legacyRef+"-image-update")); ok &&
+			isLegacyDockerHostContainerAlert(legacy, host) && legacy.Type == "docker-container-update" &&
+			alertMetadataString(legacy, "containerName") == containerName && !legacy.StartTime.IsZero() {
+			firstSeen, exists = legacy.StartTime, true
+		}
 	}
 	if !exists {
 		firstSeen = time.Now()
@@ -1471,6 +1533,19 @@ func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[
 	m.cleanupDockerContainerAlertsWithTracking(host, seen, nil)
 }
 
+// isLegacyDockerHostContainerAlert reports an alert that a container without
+// an ID on this host raised under the host's own reference, before such
+// containers had a reference of their own. Only the host's connectivity alert
+// belongs there, so no producer refreshes these. The recorded host and empty
+// container ID must match too: an alert restored with a resource ID cut short
+// at a "::" in another host's ID ("<base>::<suffix>") can carry this host's
+// reference.
+func isLegacyDockerHostContainerAlert(alert *Alert, host models.DockerHost) bool {
+	hostRef := DockerHostResourceID(host.ID)
+	return alert != nil && hostRef != "" && alert.ResourceID == hostRef && alert.Type != "docker-host-offline" &&
+		alertMetadataString(alert, "hostId") == strings.TrimSpace(host.ID) && alertMetadataString(alert, "containerId") == ""
+}
+
 func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHost, seen map[string]struct{}, seenUpdateTracking map[string]struct{}) {
 	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(host.ID))
 	updateTrackingPrefix := dockerUpdateTrackingHostPrefix(host)
@@ -1479,6 +1554,10 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 	toClear := make([]string, 0)
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
+		if isLegacyDockerHostContainerAlert(alert, host) {
+			toClear = append(toClear, alertID)
+			continue
+		}
 		if !strings.HasPrefix(alert.ResourceID, prefix) {
 			continue
 		}
@@ -1531,7 +1610,7 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 	toClear := make([]string, 0)
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
-		if strings.HasPrefix(alert.ResourceID, prefix) {
+		if strings.HasPrefix(alert.ResourceID, prefix) || isLegacyDockerHostContainerAlert(alert, host) {
 			toClear = append(toClear, alertID)
 		}
 	}

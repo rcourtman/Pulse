@@ -8,6 +8,7 @@ import { useUnifiedResources } from '../src/hooks/useUnifiedResources';
 import { ProxmoxMailGatewayTable } from '../src/features/proxmox/ProxmoxMailGatewayTable';
 import { DockerContainersTable } from '../src/features/docker/DockerContainersTable';
 import { DockerImagesTable } from '../src/features/docker/DockerImagesTable';
+import { DockerNetworksTable } from '../src/features/docker/DockerNetworksTable';
 import { DockerServicesTable } from '../src/features/docker/DockerServicesTable';
 import { DockerTasksTable } from '../src/features/docker/DockerTasksTable';
 import { StackedDiskBar } from '../src/components/Workloads/StackedDiskBar';
@@ -19,7 +20,12 @@ import { groupStorageRecords } from '../src/features/storageBackups/storageModel
 import { EMPTY_STORAGE_ALERT_STATE } from '../src/features/storageBackups/storageAlertState';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import type { Resource } from '../src/types/resource';
+import { markSystemSettingsLoadedWithDefaults } from '../src/stores/systemSettings';
 import '../src/index.css';
+
+// The app loads system settings before update controls act; this fixture has
+// no app shell, so it states the defaults instead of leaving them loading.
+markSystemSettingsLoadedWithDefaults();
 
 const [wsState, setWsState] = createStore({
   resources: [] as Resource[],
@@ -71,15 +77,17 @@ function Fixture() {
         <main class="min-h-screen space-y-4 bg-surface p-4 text-base-content">
           <h1 class="text-lg font-semibold">Transport facets and operator rows</h1>
           <nav aria-label="Fixture views" class="flex flex-wrap gap-2">
-            {['Mail', 'Storage', 'Containers', 'Images', 'Swarm', 'Disk'].map((name) => (
-              <button
-                type="button"
-                class="min-h-11 rounded border border-border px-3"
-                onClick={() => setView(name)}
-              >
-                {name}
-              </button>
-            ))}
+            {['Mail', 'Storage', 'Containers', 'Images', 'Networks', 'Swarm', 'Disk'].map(
+              (name) => (
+                <button
+                  type="button"
+                  class="min-h-11 rounded border border-border px-3"
+                  onClick={() => setView(name)}
+                >
+                  {name}
+                </button>
+              ),
+            )}
           </nav>
           <p data-fixture-loaded>{rows.resources().length} REST-mapped rows</p>
           <Show when={view() === 'Mail'}>
@@ -121,6 +129,15 @@ function Fixture() {
           <Show when={view() === 'Images'}>
             <section aria-label="Image table">
               <DockerImagesTable resources={ofType('docker-image')} {...nativeProps} />
+            </section>
+          </Show>
+          <Show when={view() === 'Networks'}>
+            <section aria-label="Network table">
+              <DockerNetworksTable
+                resources={ofType('docker-network')}
+                relatedResources={rows.resources()}
+                {...nativeProps}
+              />
             </section>
           </Show>
           <Show when={view() === 'Swarm'}>

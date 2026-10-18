@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "base_sha": "acd1e4e31d666f663b1e25c7da051dee1b860af9",
+  "verified_at": "2026-10-12T18:16:41.185854Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/resources.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts",
+    "frontend-modern/src/utils/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/resources.ts": "7bac38bd0a3d2b0835b5bb8dbf7afcbf6d3af4e3c869120f9c72da5bd6c8e241",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts": "ef0967155b47d927c7788a0529fb73810ba249261d9e1a1721e07a1db076e91a",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "b471805bd3f7b10e0d067d13e26ed1cba4d5eea6257e74cdf55dbeed8276c402",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "c333d8f2ad4e79c8a3a15071da2bba2750aabd7d94f668af96508fa7a8828968",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "e085a4a0c768c95c08f4fcb29b08f3d7d3d9b2e84e4c5837d27218ebde3bb575",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "a328b69f68e75369f89f83312a8fcb03ae2687cedd0add1ac4b269285d1ed74e",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "75b81a2e8b9f5dbf398c79834c52bfddb6690ea2d444d3298c3141361f258ebc",
+    "frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts": "e52ab1e8f235cb8c710992837e0cb2261fcfb2a0bb77af7c8cdbb9c8ddc70e02",
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts": "576064a2b41efca46e1fac359f33a2bbf4385a76d69098eda698577d6be146b4",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "7b3a3e963dd70eb0bbb97e993d3de9bcdb042f677ff3e621dce8f098968819e0",
+    "frontend-modern/src/hooks/useWorkloads.ts": "7312dc374ad4e029802f8979c3fd1daa84a3401ff7c3ba4086f93ce30d1bf4c8",
+    "frontend-modern/src/types/workloads.ts": "bc596272a83bbf19fa7d21746f9b23a2eadb5f530454145f07d5a333a03801f5",
+    "frontend-modern/src/utils/workloads.ts": "3c72776bcee221920140010906040b77279997263a3cb8ef6265e04ddd1d4802"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/overview?type=vm",
+    "/proxmox/overview?type=system-container"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 900,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Current embedded build on private pulse-dev mock-mode server, binary SHA256 920cecf64e0a64836b118958a664a5b81bbda9e3c12eedfef1240cfb76882fff.",
+    "VM and LXC canonical routes and real server resolution of existing instance:node:VMID bookmarks select the exact canonical row.",
+    "Full resource updates move each selected guest to a new parent and node while retaining its open drawer, History tab and 12h range.",
+    "Normal UI web URL writes succeed. The metadata cache refetches its changed native key, retains the saved link and survives reload. The browser GET fixture mirrors accepted server migration, which backend filesystem-barrier tests verify independently.",
+    "Canonical operator policy retains its saved note and never-auto-remediate lock across movement and settled reload. The recurring maintenance editor remains usable and cancels without closing the resource.",
+    "A failed metadata PUT leaves the editable drawer open. Delayed legacy-reference replies cannot replace later manual selection or a newer route, or reopen an escaped selection.",
+    "Unknown and HTTP403-refused references select no unrelated workload. All browser cases report no page errors.",
+    "Actual screenshots inspected at desktop, intermediate and phone widths for both workload kinds, History, saved URL controls and the operator editor. Movement is a controlled publication fixture, not native Proxmox hardware qualification."
+  ],
+  "interactions": [
+    "Open canonical and legacy resource links for VM and LXC",
+    "Save a web interface URL through Manage, focus the saved link, inspect History and select12h",
+    "Publish same-resource node/parent changes, inspect regrouping and retained view, then reload",
+    "Escape, pointer or keyboard reopen, header collapse and default-view reset",
+    "Save operator note and confirm remediation lock, reload, open recurring scheduler and cancel",
+    "Exercise metadata write refusal and delayed reference lookup followed by another selection, Escape or route change",
+    "Refuse a legacy lookup with HTTP403 and inspect unknown-resource selection"
+  ]
+}

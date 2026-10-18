@@ -15,6 +15,7 @@ import {
 } from '@/api/resourceOperatorState';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { ResourceCapability } from '@/types/resource';
 import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
 
@@ -44,6 +45,7 @@ interface ResourceOperatorStateSectionProps {
 export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectionProps> = (
   props,
 ) => {
+  const now = useRelativeTimeNow();
   // Fetch the persisted state via the non-suspending helper so the
   // drawer's parent Suspense boundary does not flicker the page-level
   // fallback while operator-state is in flight. null means "no entry"
@@ -337,16 +339,20 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
   // Compute whether a maintenance window covers `now` so the section
   // can badge it. Distinct from `scheduledMaintenanceWindow` — both
-  // active and future windows are surfaced, with different copy.
+  // active and future windows are surfaced, with different copy. The
+  // shared clock expires local one-off presentation without refetching
+  // persisted state (which would also rehydrate the operator's edits).
+  // Explicit server activity, including recurring windows, stays authoritative:
+  // after its reported end, qualify that verdict rather than infer resumption.
   const activeMaintenanceWindow = createMemo(() => {
     const current = persisted();
     if (current?.maintenanceWindowActive && current.maintenanceActiveEndAt) return current;
     if (!current?.maintenanceStartAt || !current?.maintenanceEndAt) return null;
-    const now = Date.now();
+    const currentTime = now();
     const start = Date.parse(current.maintenanceStartAt);
     const end = Date.parse(current.maintenanceEndAt);
     if (Number.isNaN(start) || Number.isNaN(end)) return null;
-    if (now < start || now >= end) return null;
+    if (currentTime < start || currentTime >= end) return null;
     return current;
   });
 
@@ -356,11 +362,18 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   const scheduledMaintenanceWindow = createMemo(() => {
     const current = persisted();
     if (!current?.maintenanceStartAt || !current?.maintenanceEndAt) return null;
-    const now = Date.now();
+    const currentTime = now();
     const start = Date.parse(current.maintenanceStartAt);
     if (Number.isNaN(start)) return null;
-    if (start <= now) return null;
+    if (start <= currentTime) return null;
     return current;
+  });
+
+  const serverMaintenanceReportEnded = createMemo(() => {
+    const current = persisted();
+    if (!current?.maintenanceWindowActive || !current.maintenanceActiveEndAt) return false;
+    const end = Date.parse(current.maintenanceActiveEndAt);
+    return Number.isFinite(end) && now() >= end;
   });
 
   const hasAnyMaintenanceWindow = createMemo(() =>
@@ -558,8 +571,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div>
           <h3 class="text-sm font-semibold text-base-content">Operator overrides</h3>
           <p class="text-xs text-muted">
-            Control Alerts, Patrol, lifecycle, priority, and automated remediation from one
-            persisted resource policy.
+            How Pulse alerts on, prioritizes and acts on this resource.
           </p>
         </div>
         <Show when={persisted()?.setBy || persisted()?.setAt}>
@@ -568,7 +580,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               <span>Set by {persisted()!.setBy} </span>
             </Show>
             <Show when={persisted()?.setAt}>
-              <span>{formatRelativeTime(persisted()!.setAt, { compact: true })}</span>
+              <span>{formatRelativeTime(persisted()!.setAt, { compact: true, now: now() })}</span>
             </Show>
           </span>
         </Show>
@@ -576,17 +588,28 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={activeMaintenanceWindow()}>
         <div class="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
-          <span class="font-semibold">Maintenance window active.</span> Attention on this resource
+          <span class="font-semibold">
+            {serverMaintenanceReportEnded()
+              ? 'Last reported maintenance window.'
+              : 'Maintenance window active.'}
+          </span>{' '}
+          {serverMaintenanceReportEnded() ? 'Attention was reported paused on' : 'Attention on'}{' '}
+          this resource
           <Show when={activeMaintenanceWindow()!.maintenanceScope === 'resource_and_descendants'}>
             {' '}
             and its descendants
           </Show>{' '}
-          is paused until{' '}
+          {serverMaintenanceReportEnded() ? 'until' : 'is paused until'}{' '}
           {new Date(
             activeMaintenanceWindow()!.maintenanceActiveEndAt ??
               activeMaintenanceWindow()!.maintenanceEndAt!,
           ).toLocaleString()}
           .
+          <Show when={serverMaintenanceReportEnded()}>
+            <span class="block mt-0.5">
+              The reported end has passed. Current maintenance status has not been refreshed.
+            </span>
+          </Show>
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
           </Show>
@@ -661,8 +684,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           <div class="min-w-0 flex-1">
             <span class="text-sm font-medium text-base-content">Maintenance window</span>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
-              Suspend findings on this resource for a defined window. Useful for scheduled upgrades,
-              planned downtime, or reboots where Pulse should stay quiet until the window closes.
+              Silence alerts and dismiss new Patrol findings during planned work, such as upgrades
+              or reboots.
             </p>
           </div>
           <Show
@@ -821,7 +844,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             onChange={(event) =>
               setScheduleScope(event.currentTarget.value as 'resource' | 'resource_and_descendants')
             }
-            help="Descendant scope follows Pulse's canonical inventory hierarchy and covers resources added beneath this one later."
+            help="With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed."
             helpClass="text-[11px] leading-tight"
           >
             <option value="resource">This resource only</option>
@@ -907,7 +930,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                         {capabilityDisplayName(capability.name)}
                       </span>
                       <span class="block text-muted">
-                        {capability.description || 'Backend-governed resource action'}
+                        {capability.description || 'Resource action'}
                       </span>
                       <span class="mt-0.5 block text-muted">
                         {capability.autoAuthorization === 'low_risk'
@@ -1027,9 +1050,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             Never auto-remediate
           </span>
           <p class="text-[11px] text-muted mt-0.5 leading-tight">
-            Refuse all automated remediation against this resource, even with a valid approval. The
-            action broker logs every refused dispatch as a Failed audit record. Use for resources
-            where Pulse must not act under any circumstance.
+            Block every automated fix on this resource, including approved ones. Blocked runs are
+            logged as failed actions.
           </p>
         </div>
         <Toggle
@@ -1041,17 +1063,17 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </div>
 
       <Show when={confirmingLock()}>
-        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900/25 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
+        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
           <p class="font-semibold">Lock this resource against all automated remediation?</p>
           <p class="mt-1 leading-relaxed">
-            Pulse will refuse every dispatch targeting this resource, including approved actions
-            from Patrol or the Assistant. Operators must clear the lock to allow remediation again.
+            Pulse will block every automated fix on this resource, including ones already approved
+            in Patrol or the Assistant, until this is turned off.
           </p>
           <div class="mt-2 flex items-center gap-2">
             <button
               type="button"
               onClick={confirmLockToggle}
-              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900/25 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
+              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
             >
               Lock this resource
             </button>

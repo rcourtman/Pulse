@@ -48,6 +48,9 @@ type ReplicationJob struct {
 // job with status data (last_sync, next_sync, duration, fail_count, state) from
 // /nodes/{node}/replication/{id}/status.
 func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	resp, err := c.get(ctx, "/cluster/replication")
 	if err != nil {
 		return nil, err
@@ -55,30 +58,42 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 	defer resp.Body.Close()
 
 	var raw struct {
-		Data []map[string]json.RawMessage `json:"data"`
+		Data *[]map[string]json.RawMessage `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
 
-	jobs := make([]ReplicationJob, 0, len(raw.Data))
-	for _, entry := range raw.Data {
+	if raw.Data == nil {
+		return nil, fmt.Errorf("replication inventory response is missing a data array")
+	}
+	jobs := make([]ReplicationJob, 0, len(*raw.Data))
+	for _, entry := range *raw.Data {
 		jobs = append(jobs, parseReplicationJob(entry))
 	}
 
 	// Enrich jobs with status data from the per-node status endpoint
 	// The /cluster/replication endpoint only returns config, not status
 	for i := range jobs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		c.enrichReplicationJobStatus(ctx, &jobs[i])
 	}
-
+	// Status enrichment deliberately tolerates individual access errors, but
+	// cancellation invalidates the whole observation, not just one job.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return jobs, nil
 }
 
 // enrichReplicationJobStatus fetches status data for a replication job from
 // /nodes/{node}/replication/{id}/status and merges it into the job struct.
 func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *ReplicationJob) {
+	// The cluster endpoint is configuration, not a fresh status observation.
+	job.LastSyncStatus = ""
 	// Status is stored on the source node
 	sourceNode := job.Source
 	if sourceNode == "" {
@@ -164,7 +179,28 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 				Msg("Replication status response has empty data array")
 			return
 		}
-		status = statusResp.Data[0]
+		// Per-job endpoints normally return one row without an ID. If a
+		// provider returns several rows, bind by job identity rather than
+		// silently taking the first job's health.
+		for _, candidate := range statusResp.Data {
+			candidateID := stringFromAny(firstNonNilRaw(candidate, "id", "jobid"))
+			if candidateID == jobID || (len(statusResp.Data) == 1 && candidateID == "") {
+				if status != nil {
+					return
+				} // Ambiguous duplicate identity.
+				status = candidate
+			}
+		}
+		if status == nil {
+			return
+		}
+	}
+
+	if statusID := stringFromAny(firstNonNilRaw(status, "id", "jobid")); statusID != "" && statusID != jobID {
+		return
+	}
+	if statusSource := stringFromAny(decodeRaw(status["source"])); statusSource != "" && statusSource != sourceNode {
+		return
 	}
 
 	// Parse and merge status fields
@@ -198,6 +234,8 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 		job.Error = errMsg
 	}
 
+	job.LastSyncStatus = replicationSyncOutcome(status)
+
 	log.Debug().
 		Str("jobID", jobID).
 		Str("source", sourceNode).
@@ -205,6 +243,35 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 		Interface("nextSync", job.NextSyncTime).
 		Str("state", job.State).
 		Msg("Successfully enriched replication job with status")
+}
+
+// replicationSyncOutcome describes only the successfully read source-node
+// status. Configuration, a zero-value fail count, and an old display timestamp
+// are not proof of a successful sync. Error evidence wins even with zero fails.
+func replicationSyncOutcome(status map[string]json.RawMessage) string {
+	errMsg := stringFromAny(decodeRaw(status["error"]))
+	if errMsg == "" {
+		errMsg = stringFromAny(decodeRaw(status["last_sync_error"]))
+	}
+	fails, failErr := strconv.ParseInt(stringFromAny(firstNonNilRaw(status, "fail_count", "fail-count")), 10, 64)
+	outcome := strings.ToLower(stringFromAny(firstNonNilRaw(status, "last_sync_status", "last-sync-status", "last_sync_state", "last-sync-state")))
+	state := strings.ToLower(stringFromAny(firstNonNilRaw(status, "state", "status")))
+	if errMsg != "" || (failErr == nil && fails > 0) || outcome == "error" || outcome == "failed" || state == "error" || state == "failed" {
+		return "error"
+	}
+	_, lastSync := parseReplicationTime(decodeRaw(status["last_sync"]))
+	if lastSync <= 0 || failErr != nil || fails != 0 {
+		return ""
+	}
+	// PVE's native status commonly has last_sync/fail_count but no outcome
+	// string. Unknown/running states must not be rewritten as success.
+	if outcome != "" && outcome != "ok" && outcome != "success" && outcome != "completed" {
+		return ""
+	}
+	if state != "" && state != "ok" && state != "success" && state != "completed" && state != "idle" {
+		return ""
+	}
+	return "ok"
 }
 
 func parseReplicationJob(entry map[string]json.RawMessage) ReplicationJob {

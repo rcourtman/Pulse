@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AlertConfig } from '@/types/alerts';
 import {
   buildTrueNASDetailSections,
   buildTrueNASDetailsSummary,
@@ -14,6 +15,7 @@ import type {
   ResourceTrueNASShareMeta,
   ResourceTrueNASVMMeta,
 } from '@/types/resource';
+import { resolveTrueNASDiskTemperatureDisplayThresholds } from '@/utils/metricThresholds';
 
 // Every target helper (except the exported buildTrueNASDetailsSummary) is
 // module-private, so each case drives it through the two public entry points
@@ -830,16 +832,85 @@ describe('buildTrueNASVMSections additional branches', () => {
 // =========================================================================
 
 describe('buildTrueNASDiskSections additional branches', () => {
-  it('sets Temperature tone to warning at 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 55 }), 'Temperature')?.tone).toBe('warning');
+  // The drawer judges heat by the disk type's alert trigger, through the
+  // resolver the alerts store provides; these are the factory triggers.
+  const factoryTriggers: Record<string, number> = { nvme: 70, sas: 65, sata: 55 };
+  const resolveThresholds = (disk: Pick<Resource, 'id' | 'physicalDisk'>) => {
+    const critical = factoryTriggers[(disk.physicalDisk?.diskType ?? '').toLowerCase()] ?? 55;
+    return { warning: critical - 5, critical };
+  };
+  const temperatureTone = (disk: Partial<ResourcePhysicalDiskMeta>) =>
+    buildTrueNASDetailSections(diskRes(disk), resolveThresholds)
+      .flatMap((section) => section.rows)
+      .find((row) => row.label === 'Temperature')?.tone;
+
+  it('sets Temperature tone to warning from the disk type trigger', () => {
+    expect(temperatureTone({ diskType: 'sata', temperature: 55 })).toBe('warning');
+    expect(temperatureTone({ diskType: 'sas', temperature: 65 })).toBe('warning');
+    expect(temperatureTone({ diskType: 'nvme', temperature: 70 })).toBe('warning');
   });
 
-  it('sets Temperature tone to warning above 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 60 }), 'Temperature')?.tone).toBe('warning');
+  it('keeps a reading under its type trigger at default tone', () => {
+    expect(temperatureTone({ diskType: 'nvme', temperature: 60 })).toBe('default');
+    expect(temperatureTone({ diskType: 'sas', temperature: 63 })).toBe('default');
+    expect(temperatureTone({ diskType: 'sata', temperature: 40 })).toBe('default');
   });
 
-  it('sets Temperature tone to default below 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 40 }), 'Temperature')?.tone).toBe('default');
+  it('judges heat by the override and TrueNAS-wide value the disk alert uses', () => {
+    const config = {
+      enabled: true,
+      guestDefaults: {},
+      nodeDefaults: {},
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+      storageDefault: { trigger: 85, clear: 80 },
+      overrides: { 'truenas-resource': { temperature: { trigger: 75, clear: 70 } } },
+    } as AlertConfig;
+    const toneUnder = (cfg: AlertConfig, disk: Partial<ResourcePhysicalDiskMeta>) =>
+      buildTrueNASDetailSections(diskRes(disk), (resource) =>
+        resolveTrueNASDiskTemperatureDisplayThresholds(
+          cfg,
+          resource.physicalDisk?.diskType,
+          resource.id,
+        ),
+      )
+        .flatMap((section) => section.rows)
+        .find((row) => row.label === 'Temperature')?.tone;
+
+    // The drawer's disk carries a 75C override, so 72C is not heat even
+    // though it is past the 70C NVMe trigger.
+    expect(toneUnder(config, { diskType: 'nvme', temperature: 72 })).toBe('default');
+    expect(toneUnder(config, { diskType: 'nvme', temperature: 75 })).toBe('warning');
+    // Another disk's override does not reach it.
+    const otherDisk = {
+      ...config,
+      overrides: { 'other-disk': { temperature: { trigger: 75, clear: 70 } } },
+    } as AlertConfig;
+    expect(toneUnder(otherDisk, { diskType: 'nvme', temperature: 72 })).toBe('warning');
+    // A TrueNAS-wide value replaces the type trigger.
+    const trueNASWide = {
+      ...otherDisk,
+      truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+    } as AlertConfig;
+    expect(toneUnder(trueNASWide, { diskType: 'nvme', temperature: 64 })).toBe('warning');
+    expect(toneUnder(trueNASWide, { diskType: 'nvme', temperature: 60 })).toBe('default');
+    // A muted disk raises no temperature alert, so it is never heat.
+    const muted = {
+      ...trueNASWide,
+      overrides: { 'truenas-resource': { disabled: true } },
+    } as AlertConfig;
+    expect(toneUnder(muted, { diskType: 'nvme', temperature: 90 })).toBe('default');
+  });
+
+  it('judges no heat without thresholds', () => {
+    expect(findRow(diskRes({ diskType: 'sata', temperature: 80 }), 'Temperature')?.tone).toBe(
+      'default',
+    );
+    expect(
+      buildTrueNASDetailSections(diskRes({ diskType: 'sata', temperature: 80 }), () => null)
+        .flatMap((section) => section.rows)
+        .find((row) => row.label === 'Temperature')?.tone,
+    ).toBe('default');
   });
 
   it('formats Wearout percentage for a valid value', () => {

@@ -136,10 +136,15 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 		if vm.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
 			memoryUsage, memoryUsed, diskUsage := historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), vm.Disk.Usage
-			if strings.HasPrefix(vm.DiskStatusReason, "prev-") {
+			// A failed filesystem read can leave a positive cluster allocation,
+			// not just a retained prev- reading. Neither is current usage.
+			if vm.DiskStatusReason != "" {
 				diskUsage = -1
 			}
-			if vm.GuestAgentStatus == "deferred" {
+			// Only legacy unannotated memory needs the diagnostic heuristic.
+			// An explicit observation belongs to the selected source: deferred
+			// filesystem/QGA work cannot disqualify independent current memory.
+			if vm.GuestAgentStatus == "deferred" && vm.Memory.Observation.State == "" {
 				snapshot := m.previousGuestSnapshot(vm.Instance, "qemu", vm.Node, vm.VMID)
 				if snapshot == nil || snapshot.MemorySource == "previous-snapshot" || strings.HasPrefix(CanonicalMemorySource(snapshot.MemorySource), "guest-agent-meminfo") {
 					memoryUsage, memoryUsed = -1, -1
@@ -176,15 +181,18 @@ func guestHistoryRates(diskRead, diskWrite, networkIn, networkOut int64, validit
 	return diskRead, diskWrite, networkIn, networkOut
 }
 
+// Retained numbers remain useful for display, but a newly refreshed guest row
+// cannot turn them into a new percentage or byte observation. The producer owns
+// freshness; ordinary current TTL-cache hits and legacy readings remain valid.
 func historyMemoryUsage(memory models.Memory) float64 {
-	if !memory.HasKnownUsage() {
+	if !memory.HasKnownUsage() || (memory.Observation.State != "" && memory.Observation.State != "current") {
 		return -1
 	}
 	return memory.Usage
 }
 
 func historyMemoryUsed(memory models.Memory) float64 {
-	if !memory.HasKnownUsage() {
+	if !memory.HasKnownUsage() || (memory.Observation.State != "" && memory.Observation.State != "current") {
 		return -1
 	}
 	return float64(memory.Used)

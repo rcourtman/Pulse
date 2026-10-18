@@ -56,9 +56,9 @@ describe('workloadRouteModel', () => {
     ]);
 
     expect(options).toEqual([
-      { value: 'cluster-a-node-a', label: 'node-a (cluster-a)' },
-      { value: 'cluster-b-node-a', label: 'node-a (cluster-b)' },
-      { value: 'cluster-a-node-z', label: 'node-z' },
+      { value: 'node|cluster-a|node-a', label: 'node-a (cluster-a)' },
+      { value: 'node|cluster-b|node-a', label: 'node-a (cluster-b)' },
+      { value: 'node|cluster-a|node-z', label: 'node-z' },
     ]);
   });
 
@@ -72,9 +72,9 @@ describe('workloadRouteModel', () => {
       ],
     );
     expect(options).toEqual([
-      { value: 'cluster-a-empty', label: 'empty' },
-      { value: 'cluster-a-node-a', label: 'node-a (cluster-a)' },
-      { value: 'cluster-b-node-a', label: 'node-a (cluster-b)' },
+      { value: 'node|cluster-a|empty', label: 'empty' },
+      { value: 'node|cluster-a|node-a', label: 'node-a (cluster-a)' },
+      { value: 'node|cluster-b|node-a', label: 'node-a (cluster-b)' },
     ]);
   });
 

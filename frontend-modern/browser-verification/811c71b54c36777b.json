@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "3ca8b9647ab992101adf9153b71b5ef1757ac82f",
+  "verified_at": "2026-10-06T19:34:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "bae52439900c395e8c7d33f87296e6c3d4f449e15fcf1dc69a0137111025d0ab",
+    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "6c8347cb65f80520711f9f4b66b2c46e09c51121bf67e9ec382bce67ca3468a6",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "1b7314213d79cdfbad9f84b854ae8652802ad6c2d51955586c175475a024dbee",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "5b9f10978f2d2d7101f92343e826bef9ae5e2677b36ccf431ff0e6dfa9d676a8"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/history",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (sidecar build, uncommitted generator overlay pinning pve2 CPU temperature; alert level 80\u00b0C, clear level 75\u00b0C, 5 minute recovery delay)",
+    "Alerts overview card, breaching at 95\u00b0C: \"Temperature 95\u00b0C, above the 80\u00b0C alert level\", clear rule detail, \"Alert level 80\u00b0C\" and \"Clear level 75\u00b0C\"",
+    "Alerts overview card, held at 78\u00b0C: \"Temperature 78\u00b0C now, back under the 80\u00b0C alert level\" with hover \"Last reading at or above 80\u00b0C: 95\u00b0C\"; message \"Node temperature at 95.0\u00b0C\" no longer shown",
+    "Alerts overview card, recovering at 72\u00b0C: \"Temperature 72\u00b0C now, recovering\" and \"Clears after 5 minutes at 75\u00b0C or lower, 2 minutes so far.\" at 1280px and 375px (no horizontal scroll)",
+    "Fahrenheit preference: held card reads \"Temperature 172\u00b0F now, back under the 176\u00b0F alert level\", \"Alert level 176\u00b0F\", \"Clear level 167\u00b0F\", hover \"Last reading at or above 176\u00b0F: 203\u00b0F\"",
+    "Mail Gateway queue-age card keeps its message and no longer shows a guessed \"30%\" level; breaching memory card shows \"Memory 85%, above the 85% alert level\" with its levels",
+    "Card layout at 1024px: text column 256px with actions wrapped to two rows (was 110-160px beside one row); a 66-character resource name truncates with no overflow; 1280px unchanged (one row of actions); 768px text 256px, no overflow; 375px stacked, no horizontal scroll",
+    "Card removed after the alert resolved",
+    "History resource incidents panel: the open occurrence whose id and start match the live alert shows the live summary with the breach on hover; a cached open occurrence with an earlier start and closed occurrences keep their recorded messages (incident list extended in-page because mock mode never records open occurrences)",
+    "Patrol inbox row for pve2 shows the held summary from plainLanguageSummary; API shows recovering summary, breaching pve3 keeps its message, resolved pve2 keeps \"Resolved: Node temperature at 72.0\u00b0C\""
+  ],
+  "interactions": [
+    "Walked pve2 temperature 95 -> 78 -> 72 via the control file and reloaded the overview between phases; repeated 95 -> 78 after the final rebuild",
+    "Read card text and hover titles in each phase",
+    "Switched the temperature unit to Fahrenheit (localStorage temperatureUnit) and reloaded",
+    "Measured card column widths and overflow at 1280, 1024, 768 and 375 px, with a long resource name substituted in the DOM",
+    "Opened the pve2 Resource incidents panel from the History table row and pressed Refresh",
+    "Opened Patrol inbox and read the pve2 row"
+  ]
+}

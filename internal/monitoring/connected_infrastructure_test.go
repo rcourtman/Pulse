@@ -400,3 +400,29 @@ func TestBuildConnectedInfrastructure_ResolvesLegacyAgentUpgradePlatform(t *test
 		})
 	}
 }
+
+func TestBuildConnectedInfrastructure_AmbiguousFallbackKeepsEverySurface(t *testing.T) {
+	resources := []unifiedresources.Resource{
+		{ID: "platform-a", Type: unifiedresources.ResourceTypeAgent, Name: "Platform A", Proxmox: &unifiedresources.ProxmoxData{SourceID: "pve-a", NodeName: "tower.lab"}},
+		{ID: "platform-b", Type: unifiedresources.ResourceTypeAgent, Name: "Platform B", Proxmox: &unifiedresources.ProxmoxData{SourceID: "pve-b", NodeName: "tower.lab"}},
+		{ID: "host", Type: unifiedresources.ResourceTypeAgent, Name: "Host", Agent: &unifiedresources.AgentData{AgentID: "host-agent", Hostname: "tower"}},
+	}
+	items := buildConnectedInfrastructure(resources, models.StateSnapshot{})
+	if len(items) != 3 {
+		t.Fatalf("ambiguous hostname attached to arbitrary platform: %d items", len(items))
+	}
+	surfaces := map[string]bool{}
+	for _, item := range items {
+		for _, surface := range item.Surfaces {
+			if surfaces[surface.ID] {
+				t.Fatalf("duplicated surface %q", surface.ID)
+			}
+			surfaces[surface.ID] = true
+		}
+	}
+	for _, id := range []string{"proxmox:pve-a", "proxmox:pve-b", "agent:host-agent"} {
+		if !surfaces[id] {
+			t.Fatalf("ambiguity dropped surface %q (got %v)", id, surfaces)
+		}
+	}
+}

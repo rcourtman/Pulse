@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "1dcf9418aae87f9427dbfc6bcae67dbde114bf8a",
+  "verified_at": "2026-10-05T20:47:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/toggleModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/toggleModel.ts": "141b8981ae6c92eb4a3f3c8d5a82ce9b8a470f675551ec5b93d2638a5330a5d6"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Settings > Patrol with the Container update risk toggle disabled by its plan lock and off (the /api/settings/ai response set to what a free-tier backend returns), light and dark",
+    "Before (main): the disabled toggle's track computed to rgba(0,0,0,0), leaving only a faint half-opacity knob on the card",
+    "After: the track keeps its off colour (rgb(226,232,240) light, rgb(51,65,85) dark) at 50% opacity and reads as a dimmed off switch; enabled toggles beside it are unchanged",
+    "With the dev stack's unmasked response (on), the same disabled toggle reads as a dimmed on switch rather than an empty track",
+    "Phone at 390: same rendering"
+  ],
+  "interactions": [
+    "Compared main (reverse-applied patch) and the change with the settings response intercepted, at 1440 light and dark and 390"
+  ]
+}

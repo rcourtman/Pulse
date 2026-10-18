@@ -428,22 +428,6 @@ func TestBuildSystemPrompt_IncludesSharedPulseIntelligenceOperatingInstructions(
 	}
 }
 
-func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t *testing.T) {
-	svc := &Service{}
-
-	prompt := svc.buildToolGovernancePromptSection()
-
-	// Discovery's run subaction is read-only evidence collection that
-	// updates only the discovery cache, so the mutation-derived action
-	// mode is read (the pre-descriptor manifest declared it mixed).
-	if !strings.Contains(prompt, "pulse_discovery: mode=read") {
-		t.Fatalf("expected fallback governance to classify pulse_discovery as read, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
-		t.Fatalf("expected fallback governance to describe discovery refresh behavior, got %q", prompt)
-	}
-}
-
 func TestBuildToolGovernancePromptSection_FallbackUsesCanonicalRegistry(t *testing.T) {
 	fallback := fallbackAssistantToolGovernance()
 	canonical := tools.CanonicalToolGovernanceForManifestSurface(
@@ -494,10 +478,10 @@ func TestBuildToolGovernancePromptSection_FallbackOfferedNamesUseAssistantAfford
 func TestBuildToolGovernancePromptSection_OfferedToolsUseCanonicalFallback(t *testing.T) {
 	svc := &Service{}
 
-	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_discovery"}})
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_query"}})
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=read; approval=scope_only (no approval required; run uses read-only evidence collection and updates the discovery cache)") {
-		t.Fatalf("expected offered fallback prompt to use canonical discovery governance, got %q", prompt)
+	if !strings.Contains(prompt, "pulse_query: mode=read") {
+		t.Fatalf("expected offered fallback prompt to use canonical query governance, got %q", prompt)
 	}
 	if strings.Contains(prompt, "pulse_control:") {
 		t.Fatalf("expected offered fallback prompt to exclude non-offered control tools, got %q", prompt)
@@ -509,9 +493,9 @@ func TestBuildToolGovernancePromptSection_OfferedToolsUseProviderMetadata(t *tes
 
 	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{
 		{
-			Name: "pulse_discovery",
+			Name: "pulse_query",
 			PulseGovernance: &agentcapabilities.ToolGovernanceDescriptor{
-				Name:            "pulse_discovery",
+				Name:            "pulse_query",
 				Description:     "Discover infrastructure.",
 				ActionMode:      agentcapabilities.ActionModeMixed,
 				ApprovalPolicy:  agentcapabilities.ApprovalPolicyScopeOnly,
@@ -521,7 +505,7 @@ func TestBuildToolGovernancePromptSection_OfferedToolsUseProviderMetadata(t *tes
 		},
 	})
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=mixed; approval=scope_only (metadata-owned approval summary); metadata-owned discovery summary") {
+	if !strings.Contains(prompt, "pulse_query: mode=mixed; approval=scope_only (metadata-owned approval summary); metadata-owned discovery summary") {
 		t.Fatalf("expected offered tool metadata to drive governance prompt, got %q", prompt)
 	}
 	if strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
@@ -1409,3 +1393,42 @@ func TestInvestigationRunRequiresIdentityBeforeStarting(t *testing.T) {
 		t.Fatalf("expected identity precondition error, got %v", err)
 	}
 }
+
+func TestAssistantRuntimeProjectsLegacyLevelAfterResolver(t *testing.T) {
+	for _, saved := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous, "unknown"} {
+		for _, resolved := range []string{"", config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous} {
+			t.Run(saved+"/resolver-"+resolved, func(t *testing.T) {
+				cfg := &config.AIConfig{ControlLevel: saved}
+				var resolver func(*config.AIConfig) string
+				if resolved != "" {
+					resolver = func(*config.AIConfig) string { return resolved }
+				}
+				service := NewService(Config{AIConfig: cfg, ControlLevelResolver: resolver})
+				selected := saved
+				if resolved != "" {
+					selected = resolved
+				}
+				want := tools.ControlLevelReadOnly
+				if selected == config.ControlLevelControlled || selected == config.ControlLevelAutonomous {
+					want = tools.ControlLevelControlled
+				}
+				if got := service.effectiveControlLevelLocked(); got != want {
+					t.Fatalf("interactive resolved level %s; want %s", got, want)
+				}
+				if cfg.ControlLevel != saved {
+					t.Fatal("runtime projection rewrote saved config")
+				}
+				if service.isAutonomousModeEnabled() {
+					t.Fatal("saved Assistant preference removed interactive question tools")
+				}
+				// A request flag may tighten but never widen the projected level.
+				for _, flag := range []*bool{nil, boolPtrProjection(false), boolPtrProjection(true)} {
+					if got := controlLevelForRequestAutonomousMode(service.effectiveControlLevelLocked(), flag); got != want {
+						t.Fatalf("request flag widened level: %s", got)
+					}
+				}
+			})
+		}
+	}
+}
+func boolPtrProjection(v bool) *bool { return &v }

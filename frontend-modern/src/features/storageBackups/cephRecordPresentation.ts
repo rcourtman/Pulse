@@ -7,6 +7,7 @@ import {
   getStorageRecordType,
   getStorageRecordUsagePercent,
 } from './recordPresentation';
+import { getStorageRecordAlertResourceIds } from './storageAlertState';
 
 export const isCephStorageRecord = (record: StorageRecord): boolean => {
   if (isCephType(getStorageRecordType(record))) return true;
@@ -57,6 +58,7 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
 
   const consumedPoolIds = new Set<string>();
   const liftBySiblingId = new Map<string, StorageRecord>();
+  const absorbedAlertIdsBySiblingId = new Map<string, string[]>();
 
   for (const pool of poolRecords) {
     const sibling = records.find(
@@ -68,6 +70,10 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
     );
     if (!sibling) continue;
     consumedPoolIds.add(pool.id);
+    absorbedAlertIdsBySiblingId.set(sibling.id, [
+      ...(absorbedAlertIdsBySiblingId.get(sibling.id) ?? []),
+      ...getStorageRecordAlertResourceIds(pool),
+    ]);
     const existing = liftBySiblingId.get(sibling.id);
     if (!existing || storageHealthRank(pool.health) > storageHealthRank(existing.health)) {
       liftBySiblingId.set(sibling.id, pool);
@@ -81,10 +87,19 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
     .map((record) => {
       const pool = liftBySiblingId.get(record.id);
       if (!pool) return record;
-      if (storageHealthRank(pool.health) <= storageHealthRank(record.health)) return record;
+      const absorbed = {
+        ...record,
+        absorbedAlertResourceIds: Array.from(
+          new Set([
+            ...(record.absorbedAlertResourceIds ?? []),
+            ...(absorbedAlertIdsBySiblingId.get(record.id) ?? []),
+          ]),
+        ),
+      };
+      if (storageHealthRank(pool.health) <= storageHealthRank(record.health)) return absorbed;
       const poolStatus = getRecordStatusDetail(pool) || pool.statusLabel || pool.health;
       return {
-        ...record,
+        ...absorbed,
         health: pool.health,
         statusLabel: poolStatus,
         issueSummary: pool.issueSummary?.trim() || `Ceph reports pool ${pool.name} ${poolStatus}`,

@@ -1,17 +1,60 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	gorillaws "github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
+	const endpoint = "/api/updates/release-notes/assets/v6.6.0/release-note-backups-now.png"
+	for _, tc := range []struct {
+		name, token string
+		scope       string
+		status      int
+	}{
+		{name: "anonymous", status: http.StatusUnauthorized},
+		{name: "agent-only token", token: "screenshot-agent-token.12345678", scope: config.ScopeAgentReport, status: http.StatusForbidden},
+		{name: "monitoring reader", token: "screenshot-monitor-token.12345678", scope: config.ScopeMonitoringRead, status: http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newTestConfigWithTokens(t, newTokenRecord(t, "configured-token.12345678", []string{config.ScopeMonitoringRead}, nil))
+			if tc.token != "" {
+				cfg = newTestConfigWithTokens(t, newTokenRecord(t, tc.token, []string{tc.scope}, nil))
+			}
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+			if tc.token != "" {
+				req.Header.Set("X-API-Token", tc.token)
+			}
+			w := httptest.NewRecorder()
+			router.Handler().ServeHTTP(w, req)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
+	}
+}
 
 func TestRouterRouteInventory(t *testing.T) {
 	literalRoutes, dynamicRoutes, bareLiteralRoutes := parseRouterRoutes(t)
@@ -217,7 +260,7 @@ func isProtectedHandler(expr ast.Expr) bool {
 
 func isAuthWrapper(name string) bool {
 	switch name {
-	case "RequireAuth", "RequireAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin", "RequirePlatformAdmin":
+	case "RequireAuth", "RequireAdmin", "RequireOrgAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin", "RequirePlatformAdmin":
 		return true
 	default:
 		return false
@@ -405,8 +448,6 @@ var allRouteAllowlist = []string{
 	"/api/charts",
 	"/api/charts/workloads",
 	"/api/charts/infrastructure",
-	"/api/charts/storage-summary",
-	"/api/charts/workloads-summary",
 	"/api/metrics-store/stats",
 	"/api/metrics-store/history",
 	"/api/availability-history",
@@ -464,8 +505,11 @@ var allRouteAllowlist = []string{
 	"/api/updates/rollback",
 	"/api/updates/status",
 	"/api/updates/release-notes",
+	"/api/updates/release-notes/assets/",
 	"/api/updates/stream",
 	"/api/updates/plan",
+	"/api/updates/pro-runtime",
+	"/api/updates/pro-runtime/apply",
 	"/api/updates/history",
 	"/api/updates/history/entry",
 	"/api/infra-updates",
@@ -695,14 +739,6 @@ var allRouteAllowlist = []string{
 	"/api/ai/approvals",
 	"/api/ai/approvals/",
 	"/api/ai/question/",
-	"/api/discovery",
-	"/api/discovery/status",
-	"/api/discovery/run",
-	"/api/discovery/settings",
-	"/api/discovery/info/",
-	"/api/discovery/type/",
-	"/api/discovery/agent/",
-	"/api/discovery/",
 	"/api/agent/ws",
 	"POST /api/agent/workflow-prompt-activity",
 	"POST /api/usage/workload-history",
@@ -720,4 +756,157 @@ var allRouteAllowlist = []string{
 	"/api/server/info",
 	"/ws",
 	"/simple-stats",
+}
+
+func TestRegisteredTestNotificationStaysWithRequestOrganization(t *testing.T) {
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	t.Setenv("PULSE_DEV", "true")
+	for _, orgID := range []string{"org-a", "default", ""} {
+		t.Run("org="+orgID, func(t *testing.T) {
+			const writeToken = "notification-write.12345678"
+			const readToken = "notification-read.12345678"
+			writer := newTokenRecord(t, writeToken, []string{config.ScopeSettingsWrite}, nil)
+			reader := newTokenRecord(t, readToken, []string{config.ScopeSettingsRead}, nil)
+			writer.OrgID, reader.OrgID = orgID, orgID
+			cfg := newTestConfigWithTokens(t, writer, reader)
+			if orgID != "" && orgID != "default" {
+				if err := os.MkdirAll(filepath.Join(cfg.DataPath, "orgs", orgID), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			hub := websocket.NewHub(nil)
+			go hub.Run()
+			t.Cleanup(hub.Stop)
+			server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+			t.Cleanup(server.Close)
+			connect := func(org string) *gorillaws.Conn {
+				t.Helper()
+				conn, _, err := gorillaws.DefaultDialer.Dial(
+					"ws"+strings.TrimPrefix(server.URL, "http")+"?org_id="+org,
+					http.Header{"Origin": {server.URL}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { conn.Close() })
+				deadline := time.Now().Add(time.Second)
+				for hub.GetTenantClientCount(org) == 0 {
+					if time.Now().After(deadline) {
+						t.Fatalf("client for %q did not register", org)
+					}
+					time.Sleep(time.Millisecond)
+				}
+				return conn
+			}
+			ownerOrg := orgID
+			if ownerOrg == "" {
+				ownerOrg = "default"
+			}
+			owner, other := connect(ownerOrg), connect("org-b")
+			monitors := monitoring.NewMultiTenantMonitor(cfg, config.NewMultiTenantPersistence(cfg.DataPath), nil)
+			t.Cleanup(monitors.Stop)
+			router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+			for _, tc := range []struct {
+				method, token string
+				status        int
+			}{
+				{http.MethodPost, "", http.StatusUnauthorized},
+				{http.MethodPost, readToken, http.StatusForbidden},
+				{http.MethodGet, writeToken, http.StatusMethodNotAllowed},
+				{http.MethodPost, writeToken, http.StatusOK},
+			} {
+				req := httptest.NewRequest(tc.method, "/api/test-notification", nil)
+				req.Header.Set("X-API-Token", tc.token)
+				if orgID != "" {
+					req.Header.Set("X-Pulse-Org-ID", orgID)
+				}
+				rec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(rec, req)
+				if rec.Code != tc.status {
+					t.Fatalf("%s notification status = %d, want %d: %s", tc.method, rec.Code, tc.status, rec.Body.String())
+				}
+				if tc.status == http.StatusOK {
+					var response map[string]string
+					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response["status"] != "notification sent" {
+						t.Fatalf("notification response = %s, decode error = %v", rec.Body.String(), err)
+					}
+				}
+			}
+			if err := owner.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			var event websocket.Message
+			if err := owner.ReadJSON(&event); err != nil {
+				t.Fatalf("read owning organization's notification: %v", err)
+			}
+			data, ok := event.Data.(map[string]interface{})
+			if event.Type != "node_auto_registered" || !ok || data["host"] != "test-node.example.com" || data["hasToken"] != true || event.Timestamp == "" {
+				t.Fatalf("notification payload = %#v", event)
+			}
+			for _, conn := range []*gorillaws.Conn{owner, other} {
+				if err := conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				if _, data, err := conn.ReadMessage(); err == nil {
+					t.Fatalf("unexpected extra or cross-organization notification: %s", data)
+				} else if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+					t.Fatalf("expected open idle connection, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// The test notification reaches only the request organization's clients, so
+// the route is org-bound: a manager of that organization may send it, a viewer
+// may not.
+func TestRegisteredTestNotificationAdmitsRequestOrganizationManagers(t *testing.T) {
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	t.Setenv("PULSE_DEV", "true")
+
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "platform-admin", AuthPass: hashed}
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-a",
+		DisplayName: "Org A",
+		OwnerUserID: "org-owner",
+		Members: []models.OrganizationMember{
+			{UserID: "org-owner", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+			{UserID: "org-viewer", Role: models.OrgRoleViewer, AddedAt: time.Now()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+	hub := websocket.NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	monitors := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(monitors.Stop)
+	router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+
+	for _, tc := range []struct {
+		user   string
+		status int
+	}{
+		{"org-owner", http.StatusOK},
+		{"org-viewer", http.StatusForbidden},
+	} {
+		session := "test-notification-" + tc.user + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		GetSessionStore().CreateSession(session, time.Hour, "agent", "127.0.0.1", tc.user)
+		req := httptest.NewRequest(http.MethodPost, "/api/test-notification", nil)
+		req.Header.Set("X-CSRF-Token", generateCSRFToken(session))
+		req.Header.Set("X-Pulse-Org-ID", "org-a")
+		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Fatalf("%s test notification status = %d, want %d: %s", tc.user, rec.Code, tc.status, rec.Body.String())
+		}
+	}
 }

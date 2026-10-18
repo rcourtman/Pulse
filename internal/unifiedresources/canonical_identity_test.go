@@ -3,11 +3,49 @@ package unifiedresources
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func TestGuestDiskObservationDoesNotChangeWireOrIdentity(t *testing.T) {
+	vm := models.VM{ID: "pve:node:105", VMID: 105, Name: "guest", Instance: "pve", Node: "node", Type: "qemu", Status: "running", LastSeen: time.Now(),
+		Disk:            models.Disk{Total: 1000, Used: 400, Usage: 40},
+		DiskObservation: models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}}
+	resource, identity := resourceFromVM(vm)
+	wire, err := json.Marshal(resource.Proxmox)
+	if err != nil || strings.Contains(string(wire), "Observation") || strings.Contains(string(wire), "observedAt") {
+		t.Fatalf("internal disk evidence changed the served facet: %s / %v", wire, err)
+	}
+	vm.DiskObservation = models.GuestDiskObservation{}
+	legacyResource, legacyIdentity := resourceFromVM(vm)
+	legacyWire, err := json.Marshal(legacyResource.Proxmox)
+	if err != nil || string(wire) != string(legacyWire) || !reflect.DeepEqual(identity, legacyIdentity) {
+		t.Fatal("internal disk evidence changed guest identity or any public facet byte")
+	}
+}
+
+func TestGuestAgentEvidenceDoesNotChangeWireOrIdentity(t *testing.T) {
+	vm := models.VM{ID: "pve:node:105", VMID: 105, Name: "guest", Instance: "pve", Node: "node", Type: "qemu", Status: "running", LastSeen: time.Now(),
+		GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}}
+	resource, identity := resourceFromVM(vm)
+	wire, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm.GuestAgentEvidence = models.GuestAgentEvidence{}
+	legacyResource, legacyIdentity := resourceFromVM(vm)
+	// Construction captures the wall clock independently; hold that unrelated
+	// timestamp fixed while comparing every public byte of these same inputs.
+	legacyResource.UpdatedAt = resource.UpdatedAt
+	legacyWire, err := json.Marshal(legacyResource)
+	if err != nil || string(wire) != string(legacyWire) || !reflect.DeepEqual(identity, legacyIdentity) {
+		t.Fatal("internal admission evidence changed guest identity or public bytes")
+	}
+}
 
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
 	resource := Resource{
@@ -75,6 +113,49 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 		if got := resource.Canonical.Aliases[i]; got != want {
 			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestDockerChildIdentityDoesNotClaimItsCommandHost(t *testing.T) {
+	for _, kind := range []ResourceType{
+		ResourceTypeAppContainer, ResourceTypeDockerService, ResourceTypeDockerImage,
+		ResourceTypeDockerVolume, ResourceTypeDockerNetwork, ResourceTypeDockerTask,
+		ResourceTypeDockerSwarmNode, ResourceTypeDockerSecret, ResourceTypeDockerConfig,
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			resource := Resource{
+				ID: "child-1", Type: kind, Name: "workload",
+				Identity:        ResourceIdentity{Hostnames: []string{"workload"}},
+				Docker:          &DockerData{HostSourceID: "native-host", AgentID: "native-host", Hostname: "command-host", NodeID: "swarm-node", NodeName: "swarm-worker"},
+				MetricsTarget:   &MetricsTarget{ResourceType: string(kind), ResourceID: "native-child"},
+				DiscoveryTarget: &DiscoveryTarget{ResourceType: string(kind), ResourceID: "workload", AgentID: "native-host", Hostname: "command-host"},
+			}
+			RefreshCanonicalIdentity(&resource)
+			for _, alias := range resource.Canonical.Aliases {
+				if alias == "native-host" || alias == "agent:native-host" || alias == "command-host" || alias == "docker-host:native-host" {
+					t.Fatalf("child claimed parent identity %q: %+v", alias, resource.Canonical)
+				}
+			}
+			if resource.Canonical.PlatformID != "native-child" || resource.Canonical.Hostname != "workload" {
+				t.Fatalf("child presentation borrowed parent placement: %+v", resource.Canonical)
+			}
+			for _, reference := range []string{"child-1", "native-child", "workload", string(kind) + ":native-child"} {
+				if !slices.Contains(resource.Canonical.Aliases, reference) {
+					t.Fatalf("child lost its own reference %q: %+v", reference, resource.Canonical)
+				}
+			}
+			// Losing discovery detail must not turn the child into its parent.
+			resource.MetricsTarget = nil
+			resource.DiscoveryTarget = &DiscoveryTarget{ResourceType: "agent", ResourceID: "native-host", AgentID: "native-host"}
+			resource.Identity = ResourceIdentity{}
+			RefreshCanonicalIdentity(&resource)
+			if resource.Canonical.PrimaryID == "agent:native-host" || resource.Canonical.PrimaryID == "docker-host:native-host" || resource.Canonical.Hostname != "" {
+				t.Fatalf("incomplete child became its parent: %+v", resource.Canonical)
+			}
+			if slices.Contains(resource.Canonical.Aliases, "native-host") {
+				t.Fatalf("parent discovery target became a child alias: %+v", resource.Canonical)
+			}
+		})
 	}
 }
 
@@ -172,6 +253,42 @@ func TestRefreshCanonicalIdentityKeepsProxmoxPresentationSeparateFromNativeAlias
 		}
 		if !found {
 			t.Fatalf("canonical aliases %v missing native identity %q", resource.Canonical.Aliases, want)
+		}
+	}
+}
+
+func TestRefreshCanonicalIdentityKeepsParentNodeIdentityOffProxmoxChildren(t *testing.T) {
+	parentNode := &ProxmoxData{
+		Instance:     "homelab",
+		NodeIdentity: "homelab-minipc",
+		NodeName:     "minipc",
+		NodeAliases:  []string{"minipc-old"},
+	}
+	for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeStorage} {
+		resource := Resource{
+			ID:   string(resourceType) + "-1",
+			Type: resourceType,
+			Name: "cloudflared",
+			Proxmox: &ProxmoxData{
+				SourceID:     "homelab:minipc:104",
+				Instance:     parentNode.Instance,
+				NodeIdentity: parentNode.NodeIdentity,
+				NodeName:     parentNode.NodeName,
+				NodeAliases:  append([]string(nil), parentNode.NodeAliases...),
+			},
+			MetricsTarget: &MetricsTarget{ResourceType: string(resourceType), ResourceID: "homelab:minipc:104"},
+		}
+
+		RefreshCanonicalIdentity(&resource)
+
+		if resource.Canonical == nil {
+			t.Fatalf("%s: canonical identity missing", resourceType)
+		}
+		for _, alias := range resource.Canonical.Aliases {
+			if alias == "homelab-minipc" || alias == "minipc-old" {
+				t.Fatalf("%s carries parent node identity %q as an alias, so node alerts attach to it: %v",
+					resourceType, alias, resource.Canonical.Aliases)
+			}
 		}
 	}
 }
@@ -432,8 +549,6 @@ func TestRefreshCanonicalIdentityUsesDockerSwarmNodeIdentity(t *testing.T) {
 		"docker-swarm-node:cluster-1:node-1",
 		"node-1",
 		"manager-1",
-		"docker-host-1",
-		"docker-host",
 		"docker-swarm-node-resource-1",
 	}
 	if len(resource.Canonical.Aliases) != len(wantAliases) {

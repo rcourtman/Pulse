@@ -3,6 +3,7 @@ package installtests
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,8 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
+	"gopkg.in/yaml.v3"
 )
 
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
@@ -1004,6 +1007,9 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh release upload failed after ${max_attempts} attempts`,
 		`release/release-build-provenance.sigstore.json`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
+		`jq -s -e 'length > 0 and all(.[]; type == "array")' "$RELEASES_FILE"`,
+		`releases listing failed on attempt ${attempt}/${max_attempts}; retrying in ${wait_seconds}s`,
+		`releases listing failed after ${max_attempts} attempts`,
 		`git push origin "refs/tags/${TAG}"`,
 		`--rawfile body "$NOTES_FILE"`,
 		`--input "$RELEASE_PAYLOAD"`,
@@ -1295,11 +1301,6 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if _, _, ok := strings.Cut(version, "-"); !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
-	comparisonVersion, ok := previousPrereleaseVersion(version)
-	if !ok {
-		comparisonVersion = previous
-	}
-
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
 
@@ -1313,16 +1314,23 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The rollback target is stable `v"+previous+"`",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
-	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
 	if version == "6.4.0-rc.10" {
-		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
+		assertFileContainsAllNormalized(t, changelogPath,
+			"The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly.")
+	} else {
+		content, err := os.ReadFile(changelogPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", changelogPath, err)
+		}
+		if !prereleaseChangelogHasSupportedBase(string(content), version, previous) {
+			t.Fatalf("%s must describe changes since the previous numbered prerelease or stable v%s", changelogPath, previous)
+		}
 	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: ",
-		comparisonSummary,
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: ",
 		"no companion mobile build or store rollout is required",
@@ -1349,15 +1357,20 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 			"Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them",
 		)
 	}
+	// The release train's betas point at their packet as "beta", candidates as "release candidate".
+	packetLabel := "release candidate"
+	if strings.Contains(version, "-beta.") {
+		packetLabel = "beta"
+	}
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("docs", "UPGRADE_v6.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "Chart.yaml"),
 		"version: "+version,
@@ -1610,7 +1623,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		"FROM --platform=linux/amd64 node:24-alpine@sha256:" + node24Amd64FrontendDigest + " AS frontend-builder",
-		`FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`,
+		`FROM --platform=linux/amd64 golang:1.26.9-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
 		`AS pulse-runtime-foundation`,
@@ -1645,7 +1658,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		}
 	}
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`, ` AS backend-builder`)
+	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.9-alpine@sha256:`, ` AS backend-builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS agent_runtime`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
@@ -1658,7 +1671,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:24-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.9-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
@@ -3783,6 +3796,106 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+// Documentation drift is deterministic and cheap to reject. It must not wait
+// behind dependency installation or fan out into builds that cannot land.
+func TestCIDocsMirrorPreflight(t *testing.T) {
+	type step struct {
+		Name            string `yaml:"name"`
+		Uses            string `yaml:"uses"`
+		Run             string `yaml:"run"`
+		If              string `yaml:"if"`
+		ContinueOnError bool   `yaml:"continue-on-error"`
+		Directory       string `yaml:"working-directory"`
+	}
+	type job struct {
+		Steps []step `yaml:"steps"`
+	}
+	for _, site := range []struct{ workflow, job string }{
+		{"build-and-test.yml", "changes"},
+		{"test-e2e.yml", "tier-selection"},
+		{"test-e2e.yml", "offline-org-provisioning"},
+		{"test-e2e.yml", "agent-registration"},
+	} {
+		t.Run(site.workflow+"/"+site.job, func(t *testing.T) {
+			content, err := os.ReadFile(repoFile(".github", "workflows", site.workflow))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var workflow struct {
+				Jobs map[string]job `yaml:"jobs"`
+			}
+			if err := yaml.Unmarshal(content, &workflow); err != nil {
+				t.Fatal(err)
+			}
+			steps := workflow.Jobs[site.job].Steps
+			if len(steps) < 2 || !strings.HasPrefix(steps[0].Uses, "actions/checkout@") {
+				t.Fatal("preflight must follow source checkout")
+			}
+			guard := steps[1]
+			if guard.Run != "python3 scripts/check_docs_mirror.py" || guard.If != "" ||
+				guard.ContinueOnError || guard.Directory != "" || guard.Uses != "" {
+				t.Fatal("whole-tree mirror check must be an unconditional blocking step immediately after checkout")
+			}
+			checker, err := os.ReadFile(repoFile("scripts", "check_docs_mirror.py"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, fixture := range []struct {
+				name, source, mirror, diagnostic string
+				wantExit                         int
+			}{
+				{"synced", "# Safe guidance\n", "# Safe guidance\n", "passed (1 shipped docs)", 0},
+				{"stale-shipped-guide", "# Safe guidance\nDo not repeat a guest probe.\n", "# Safe guidance\n", "docs/GUIDE.md and frontend-modern/public/docs/GUIDE.md differ", 1},
+				{"missing-source", "", "# Orphan guide\n", "shipped copy has no repo source docs/GUIDE.md", 1},
+			} {
+				t.Run(fixture.name, func(t *testing.T) {
+					root := t.TempDir()
+					write := func(path string, data []byte) {
+						t.Helper()
+						full := filepath.Join(root, path)
+						if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(full, data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					write("scripts/check_docs_mirror.py", checker)
+					write("frontend-modern/public/docs/GUIDE.md", []byte(fixture.mirror))
+					if fixture.source != "" {
+						write("docs/GUIDE.md", []byte(fixture.source))
+					}
+					// Run the workflow's actual command and a harmless stand-in for
+					// the next dependency step under GitHub's fail-fast shell mode.
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", guard.Run+"\nprintf started > dependency-work")
+					cmd.Dir = root
+					output, err := cmd.CombinedOutput()
+					exit := 0
+					if err != nil {
+						failure, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						exit = failure.ExitCode()
+					}
+					if exit != fixture.wantExit || !strings.Contains(string(output), fixture.diagnostic) {
+						t.Fatalf("exit=%d, want=%d, output=%s", exit, fixture.wantExit, output)
+					}
+					_, markerErr := os.Stat(filepath.Join(root, "dependency-work"))
+					if fixture.wantExit == 0 && markerErr != nil {
+						t.Fatal("synced documentation must allow later dependency work")
+					}
+					if fixture.wantExit != 0 && !os.IsNotExist(markerErr) {
+						t.Fatal("failed preflight must stop before dependency work")
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestProviderPairDockerProofRunsBeforeFreezeAndOnExactCandidate(t *testing.T) {
 	const testName = "TestIntegrationProviderPairNetworkIsolation"
 	const helperImage = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
@@ -3874,6 +3987,38 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	}
 }
 
+// A paired run names each package's cost only when its own budget stops it
+// before the step timeout does, and the step must end inside its job.
+func TestPairedBenchmarksStopInsideTheirBudget(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := workflowJobBlock(t, string(content), "benchmarks")
+	step := workflowStepBlock(t, job, "Paired base and candidate benchmarks (pull requests)")
+	value := func(block, pattern, what string) int {
+		t.Helper()
+		match := regexp.MustCompile(pattern).FindStringSubmatch(block)
+		if match == nil {
+			t.Fatalf("benchmark workflow missing %s", what)
+		}
+		n, err := strconv.Atoi(match[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	jobMinutes := value(job, `(?m)^    timeout-minutes: (\d+)$`, "job timeout")
+	stepMinutes := value(step, `(?m)^        timeout-minutes: (\d+)$`, "paired step timeout")
+	budget := value(step, `(?m)^          PULSE_BENCH_BUDGET_SECONDS: "(\d+)"$`, "paired budget")
+	if budget >= stepMinutes*60 {
+		t.Fatalf("paired budget %ds must stop before the %d-minute step timeout", budget, stepMinutes)
+	}
+	if stepMinutes >= jobMinutes {
+		t.Fatalf("paired step timeout %dm must end inside the %dm job", stepMinutes, jobMinutes)
+	}
+}
+
 func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
 	if err != nil {
@@ -3888,6 +4033,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"name: Backend tests (${{ matrix.shard }})",
 		"shard: [rest-0, rest-1]",
 		"grep -v '/internal/api$'",
+		"python3 .github/scripts/select-go-package-shard.py",
+		`.github/scripts/go-package-test-seconds.txt 2 "$index")`,
+		"set -euo pipefail",
 		"go test -race -timeout 50m $pkgs",
 	} {
 		if !strings.Contains(backend, required) {
@@ -3912,7 +4060,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		"needs: changes",
+		"needs: [changes, test-compile]",
 		"fail-fast: false",
 		// The list comes from the commit under test, so a new test cannot be
 		// missed, and contiguous slices of go test's own order put it in
@@ -3933,6 +4081,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"set -euo pipefail",
 		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
             | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		`printf '%s\n' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"`,
+		`package=$(go list ./internal/api)`,
+		`"$timings/api-${API_SHARD_INDEX}.selected" "$package"`,
 		"if: always() && needs.changes.outputs.code == 'true'",
 		"name: internal-api-test-seconds-${{ matrix.index }}",
 		"path: ${{ runner.temp }}/internal-api-test-seconds/",
@@ -3950,8 +4101,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	if strings.Contains(shards, "sort") {
 		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
 	}
-	if strings.Contains(shards, "\n    if:") {
-		t.Fatal("internal/api shards must expand for every change so the verdict never sees skipped shards")
+	if !strings.Contains(shards, "if: ${{ !cancelled() && needs.changes.result == 'success' }}") ||
+		strings.Contains(shards, "\n    if: needs.changes.outputs.code") {
+		t.Fatal("internal/api shards must expand for documentation-only changes and compilation failures")
 	}
 
 	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
@@ -3982,16 +4134,28 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	t.Helper()
 	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
-	record := func(events string) (string, string, error) {
+	record := func(events string, selected []string) (string, string, map[string]any, error) {
 		out := filepath.Join(t.TempDir(), "seconds.txt")
-		cmd := exec.Command("python3", recorder, out)
+		selection := out + ".selected"
+		if err := os.WriteFile(selection, []byte(strings.Join(selected, "\n")+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("python3", recorder, out, selection, "example/internal/api")
 		cmd.Stdin = strings.NewReader(events)
 		printed, err := cmd.Output()
 		written, readErr := os.ReadFile(out)
 		if readErr != nil {
 			t.Fatalf("recorder wrote no seconds file: %v", readErr)
 		}
-		return string(printed), string(written), err
+		indexBytes, readErr := os.ReadFile(out + ".failures.json")
+		if readErr != nil {
+			t.Fatalf("recorder wrote no failure identity index: %v", readErr)
+		}
+		var index map[string]any
+		if err := json.Unmarshal(indexBytes, &index); err != nil {
+			t.Fatalf("failure index is not JSON: %v", err)
+		}
+		return string(printed), string(written), index, err
 	}
 	const pkg = `"Package":"example/internal/api"`
 	passing := strings.Join([]string{
@@ -4001,7 +4165,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
 		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
 	}, "\n") + "\n"
-	printed, written, err := record(passing)
+	printed, written, index, err := record(passing, []string{"TestQuiet"})
 	if err != nil {
 		t.Fatalf("recorder must pass a passing run: %v", err)
 	}
@@ -4012,6 +4176,11 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		t.Fatalf("recorder seconds file = %q", written)
 	}
 
+	if index["package_terminal_action"] != "pass" ||
+		index["failed_top_level_tests"].(map[string]any)["observed_count"] != float64(0) {
+		t.Fatalf("passing failure identity index = %v", index)
+	}
+
 	failing := strings.Join([]string{
 		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
@@ -4020,7 +4189,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
 	}, "\n") + "\n"
-	printed, written, err = record(failing)
+	printed, written, index, err = record(failing, []string{"TestBroken", "TestHung"})
 	if err == nil {
 		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
 	}
@@ -4031,6 +4200,31 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	}
 	if written != "TestBroken 0.75\n" {
 		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
+	for field, name := range map[string]string{
+		"failed_top_level_tests":     "TestBroken",
+		"unfinished_top_level_tests": "TestHung",
+	} {
+		observation := index[field].(map[string]any)
+		names := observation["names"].([]any)
+		if len(names) != 1 || names[0] != name || observation["omitted_count"] != float64(0) {
+			t.Fatalf("failure index %s = %v", field, observation)
+		}
+	}
+	if index["package_terminal_action"] != nil {
+		t.Fatalf("unfinished stream must not manufacture package completion: %v", index)
+	}
+	// A successful producer alone is not coverage. Require the observed
+	// package completion and every source-selected test, not only emitted names.
+	for _, events := range []string{"", `{"Action":"pass",` + pkg + `}`, passing} {
+		_, _, index, err = record(events, []string{"TestQuiet", "TestMissing"})
+		if err == nil {
+			t.Fatal("recorder accepted missing selected tests or package completion")
+		}
+		missing := index["missing_selected_tests"].(map[string]any)
+		if missing["observed_count"].(float64) < 1 {
+			t.Fatalf("recorder did not retain missing coverage: %v", index)
+		}
 	}
 }
 
@@ -4124,6 +4318,35 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 	}
 }
 
+// Execute the existing CI phase with confined compiler/Git doubles, including
+// every-byte embed admission and terminal build/vet failures. This proves the
+// recipe and workflow wiring, not a real frontend/backend build.
+func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("same-checkout real-embed CI admission controls: %v\n%s", err, out)
+	}
+}
+
+// The post-build root transaction receives only an exact-source identity and
+// synthetic binaries; native failure cannot hide or skip the existing audit.
+func TestFrontendCINativeUpdaterKeepsSecretFreeRequiredVerification(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_systemd.py"), "-v",
+		"NativeContracts.test_exact_workflow_recipe_is_scrubbed_and_propagates_all_failures",
+		"NativeContracts.test_workflow_cannot_hide_or_rebind_native_step",
+		"NativeContracts.test_host_admission_requires_fresh_public_vm_not_worker_or_container")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("secret-free native CI admission controls: %v\n%s", err, out)
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
@@ -4168,7 +4391,8 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	}
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
-		`AUDIT_ARGS=("$@")`,
+		`AUDIT_ARGS=(audit --json "$@")`,
+		`AUDIT_ARGS+=(--omit=dev)`,
 		`if type(value) is int and value >= 0:`,
 		`has_findings = isinstance(findings, dict) and bool(findings)`,
 		`if has_findings or any(count > 0 for count in counts.values()):`,
@@ -4399,8 +4623,19 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 		t.Fatalf("read run-release-backend-tests.sh: %v", err)
 	}
 	backendScript := string(backendScriptBytes)
+	// The credential handoff test builds pulse-agent under a fixed three-minute limit. The
+	// pinned shards would serialize that cold build past it, so the runner must warm the
+	// agent build after compiling the test binary and before any shard starts.
+	compileIndex := strings.Index(backendScript, "go test -c -race")
+	warmIndex := strings.Index(backendScript, "go build -o /dev/null ./cmd/pulse-agent")
+	firstShardIndex := strings.Index(backendScript, `run_api_shard "$shard_index"`)
+	if compileIndex < 0 || warmIndex < compileIndex || firstShardIndex < warmIndex {
+		t.Fatalf("release backend runner must warm the pulse-agent build between compiling the API test binary (%d) and starting the shards (%d); warm-up at %d",
+			compileIndex, firstShardIndex, warmIndex)
+	}
 	for _, needle := range []string{
 		"go test -c -race",
+		"Warming the pulse-agent build cache",
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
@@ -4719,6 +4954,44 @@ func TestCommittedReleaseVisualSidecarsCarrySelectionEvidence(t *testing.T) {
 	}
 }
 
+// Metadata defaults to the previous numbered prerelease. The release train can
+// explicitly select the previous stable for a cumulative changelog instead.
+func prereleaseChangelogHasSupportedBase(content, version, previousStable string) bool {
+	matches := regexp.MustCompile("This changelog describes the changes since `v([^`]+)`").FindAllStringSubmatch(normalizedInstallTestWhitespace(content), -1)
+	if len(matches) != 1 {
+		return false
+	}
+	base := matches[0][1]
+	if base == previousStable {
+		return true
+	}
+	previous, ok := previousPrereleaseVersion(version)
+	return ok && base == previous
+}
+
+func TestPrereleaseChangelogSupportsIncrementalAndCumulativeBases(t *testing.T) {
+	for _, tc := range []struct {
+		name, version, content string
+		want                   bool
+	}{
+		{"incremental beta", "6.6.0-beta.3", "This changelog describes the changes since `v6.6.0-beta.2`", true},
+		{"cumulative beta", "6.6.0-beta.3", "This changelog describes the changes since\n`v6.5.0`", true},
+		{"incremental candidate", "6.6.0-rc.2", "This changelog describes the changes since `v6.6.0-rc.1`", true},
+		{"first beta", "6.6.0-beta.1", "This changelog describes the changes since `v6.5.0`", true},
+		{"unrelated stable", "6.6.0-beta.3", "This changelog describes the changes since `v6.4.0`", false},
+		{"older beta", "6.6.0-beta.3", "This changelog describes the changes since `v6.6.0-beta.1`", false},
+		{"other stage", "6.6.0-rc.2", "This changelog describes the changes since `v6.6.0-beta.1`", false},
+		{"missing comparison", "6.6.0-beta.3", "## Changes", false},
+		{"conflicting comparisons", "6.6.0-beta.3", "This changelog describes the changes since `v6.5.0`\nThis changelog describes the changes since `v6.6.0-beta.2`", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := prereleaseChangelogHasSupportedBase(tc.content, tc.version, "6.5.0"); got != tc.want {
+				t.Fatalf("supported base = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func assertFileContainsAllNormalized(t *testing.T, path string, required ...string) {
 	t.Helper()
 	content, err := os.ReadFile(path)
@@ -4862,5 +5135,413 @@ func TestInstallMCPFreeBSDSHA256Fallback(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install-mcp.sh lost FreeBSD sha256 fallback %q", want)
 		}
+	}
+}
+
+// Exercise the actual workflow shell, not a second implementation of its
+// classifier. The stub supplies only Git's read results; Bash, grep, pipefail
+// and the downstream audit runner remain real.
+func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				ID  string `yaml:"id"`
+				Run string `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(workflowBytes, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	script := ""
+	for _, step := range workflow.Jobs["changes"].Steps {
+		if step.ID == "filter" {
+			script = step.Run
+		}
+	}
+	if script == "" {
+		t.Fatal("actual change-classification shell is missing")
+	}
+	var largeDocs strings.Builder
+	for i := 0; i < 4000; i++ {
+		largeDocs.WriteString("docs/receipts/" + strconv.Itoa(i) + "-" + strings.Repeat("x", 80) + ".md\n")
+	}
+	docs := largeDocs.String()
+	if len(docs) < 256*1024 {
+		t.Fatal("large fixture must exceed the pipe buffer")
+	}
+	cases := []struct {
+		name, files, event, base string
+		missingBase              bool
+		diffStatus               int
+		code, dependencies       string
+		goCompile                bool
+		audit                    bool
+		auditStatus              int
+	}{
+		{name: "docs_only", files: "docs/FAQ.md\nREADME.md\n", code: "false", dependencies: "false"},
+		{name: "unrelated_code", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "manifest", files: "frontend-modern/package.json\n", code: "true", dependencies: "true"},
+		{name: "lock", files: "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "audit_runner", files: "scripts/npm-audit-retry.sh\n", code: "true", dependencies: "true"},
+		{name: "large_manifest_first", files: "frontend-modern/package.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_first", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_runner_first", files: "scripts/npm-audit-retry.sh\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_last", files: docs + "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "large_docs_only", files: docs, code: "false", dependencies: "false"},
+		{name: "large_unrelated_code", goCompile: true, files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\n", code: "true", dependencies: "false"},
+		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
+		{name: "zero_push_base", goCompile: true, base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
+		{name: "missing_base", goCompile: true, missingBase: true, code: "true", dependencies: "true"},
+		{name: "manual_dispatch", goCompile: true, event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
+		{name: "failed_diff", diffStatus: 42},
+		{name: "large_changed_graph_critical_blocks", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true", audit: true, auditStatus: 1},
+		{name: "unchanged_graph_critical_warns", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			directory := t.TempDir()
+			bin := filepath.Join(directory, "bin")
+			if err := os.Mkdir(bin, 0700); err != nil {
+				t.Fatal(err)
+			}
+			files := filepath.Join(directory, "changed")
+			output := filepath.Join(directory, "outputs")
+			if err := os.WriteFile(files, []byte(tc.files), 0600); err != nil {
+				t.Fatal(err)
+			}
+			git := "#!/bin/sh\ncase \"$1\" in\ncat-file) test \"$BASE_MISSING\" != true ;;\ndiff) cat \"$CHANGED_FIXTURE\"; exit \"$DIFF_STATUS\" ;;\n*) exit 97 ;;\nesac\n"
+			if err := os.WriteFile(filepath.Join(bin, "git"), []byte(git), 0700); err != nil {
+				t.Fatal(err)
+			}
+			event := tc.event
+			if event == "" {
+				event = "push"
+			}
+			base := tc.base
+			if base == "" {
+				base = strings.Repeat("a", 40)
+			}
+			if base == "empty" {
+				base = ""
+			}
+			run := strings.NewReplacer(
+				"${{ github.event_name }}", event,
+				"${{ github.event.pull_request.base.sha }}", base,
+				"${{ github.event.before }}", base,
+				"${{ github.sha }}", strings.Repeat("b", 40),
+			).Replace(script)
+			if strings.Contains(run, "${{") {
+				t.Fatal("unresolved workflow expression")
+			}
+			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
+				"CHANGED_FIXTURE="+files, "GITHUB_OUTPUT="+output,
+				"BASE_MISSING="+strconv.FormatBool(tc.missingBase), "DIFF_STATUS="+strconv.Itoa(tc.diffStatus))
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", run)
+			// Actions runs this shell from the checkout root, including its
+			// repo-relative compilation helper. Keep that real execution context.
+			cmd.Dir = repoFile()
+			cmd.Env = env
+			result, commandErr := cmd.CombinedOutput()
+			if tc.diffStatus != 0 {
+				if commandErr == nil {
+					t.Fatal("failed Git diff must fail classification")
+				}
+				if _, err := os.Stat(output); !os.IsNotExist(err) {
+					t.Fatal("failed diff published a passing classification")
+				}
+				return
+			}
+			if commandErr != nil {
+				t.Fatalf("classification failed: %v (%d output bytes)", commandErr, len(result))
+			}
+			valuesBytes, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			values := map[string]string{}
+			for _, line := range strings.Split(strings.TrimSpace(string(valuesBytes)), "\n") {
+				key, value, ok := strings.Cut(line, "=")
+				if !ok {
+					t.Fatalf("invalid output: %q", line)
+				}
+				if _, exists := values[key]; exists {
+					t.Fatalf("duplicate output: %q", key)
+				}
+				values[key] = value
+			}
+			if values["code"] != tc.code || values["frontend_deps"] != tc.dependencies || values["go_compile"] != strconv.FormatBool(tc.goCompile) {
+				t.Errorf("actual classification = %v; want code=%s frontend_deps=%s go_compile=%t (%d changed bytes)", values, tc.code, tc.dependencies, tc.goCompile, len(tc.files))
+			}
+			if !tc.audit {
+				return
+			}
+			// A real finding, supplied offline, must fail the changed graph
+			// and warn only for an unchanged graph. No npm service is queried.
+			finding := `{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":1,"total":1}},"vulnerabilities":{"seroval":{"name":"seroval","severity":"critical"}}}`
+			npm := filepath.Join(bin, "npm")
+			if err := os.WriteFile(npm, []byte("#!/bin/sh\nprintf '%s\\n' '"+finding+"'\nexit 1\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			audit := exec.CommandContext(ctx, "bash", repoFile("scripts", "npm-audit-retry.sh"), "all")
+			audit.Env = append(env, "NPM_AUDIT_CMD="+npm, "NPM_AUDIT_REQUIRE_RESULT="+values["frontend_deps"], "NPM_AUDIT_ATTEMPTS=1", "NPM_AUDIT_RETRY_DELAY=0")
+			auditResult, auditErr := audit.CombinedOutput()
+			auditStatus := 0
+			if auditErr != nil {
+				exit, ok := auditErr.(*exec.ExitError)
+				if !ok {
+					t.Fatal(auditErr)
+				}
+				auditStatus = exit.ExitCode()
+			}
+			if auditStatus != tc.auditStatus {
+				t.Errorf("downstream critical-audit status=%d; want %d: %s", auditStatus, tc.auditStatus, auditResult)
+			}
+			if !strings.Contains(string(auditResult), `"severity": "critical"`) {
+				t.Fatalf("the observed finding disappeared: %s", auditResult)
+			}
+		})
+	}
+}
+
+// Run through the native Bash, including macOS's Bash 3.2. An empty optional
+// argument list must still invoke npm once, preserve its finding and obey the
+// existing strict/inherited verdict split. Quoting and production scope must
+// survive combining the formerly empty arrays into one nonempty argv vector.
+func TestNpmAuditNativeScopeArgumentsPreserveFindings(t *testing.T) {
+	const finding = `{"metadata":{"vulnerabilities":{"critical":1,"total":1}},"vulnerabilities":{"fixture":{"name":"fixture","severity":"critical"}}}`
+	for _, scope := range []string{"all", "production"} {
+		for _, extra := range [][]string{nil, {"--package-lock-only", "--fixture=two words", ""}} {
+			for _, require := range []string{"true", "false"} {
+				t.Run(scope+"/args="+strconv.Itoa(len(extra))+"/strict="+require, func(t *testing.T) {
+					directory := t.TempDir()
+					argvPath := filepath.Join(directory, "argv")
+					npmPath := filepath.Join(directory, "npm")
+					stub := "#!/bin/sh\nprintf '%s\\0' \"$@\" >> \"$AUDIT_ARGV\"\nprintf '%s\\n' '" + finding + "'\nexit 1\n"
+					if err := os.WriteFile(npmPath, []byte(stub), 0700); err != nil {
+						t.Fatal(err)
+					}
+					args := append([]string{repoFile("scripts", "npm-audit-retry.sh"), scope}, extra...)
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", args...)
+					cmd.Env = append(os.Environ(), "AUDIT_ARGV="+argvPath, "NPM_AUDIT_CMD="+npmPath,
+						"NPM_AUDIT_REQUIRE_RESULT="+require, "NPM_AUDIT_ATTEMPTS=1",
+						"NPM_AUDIT_RETRY_DELAY=0", "NPM_AUDIT_ATTEMPT_TIMEOUT=5", "NPM_AUDIT_MAX_SECONDS=10")
+					output, err := cmd.CombinedOutput()
+					status := 0
+					if err != nil {
+						exit, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						status = exit.ExitCode()
+					}
+					wantStatus, annotation := 1, "::error::"
+					if require == "false" {
+						wantStatus, annotation = 0, "::warning::"
+					}
+					if status != wantStatus || !strings.Contains(string(output), annotation) ||
+						!strings.Contains(string(output), `"severity": "critical"`) ||
+						strings.Contains(string(output), "advisory endpoint did not return") {
+						t.Fatalf("native audit lost its finding/verdict: exit=%d want=%d\n%s", status, wantStatus, output)
+					}
+					recorded, err := os.ReadFile(argvPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := append([]string{"audit", "--json"}, extra...)
+					if scope == "production" {
+						want = append(want, "--omit=dev")
+					}
+					if string(recorded) != strings.Join(want, "\x00")+"\x00" {
+						t.Fatalf("npm must run once with exact arguments: got %q want %q", recorded, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
+	runner, err := os.ReadFile(repoFile("scripts", "npm-audit-retry.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := regexp.MustCompile(`(?m)^trap '.*' EXIT$`).FindString(string(runner))
+	if hook == "" {
+		t.Fatal("audit report cleanup hook is missing")
+	}
+	for _, tc := range []struct {
+		name, hook, childSetup string
+		status                 int
+	}{
+		{"actual_parent_owned_hook", hook, "", 0},
+		{"actual_hook_before_subshell_counter_initialization", hook, "BASH_SUBSHELL=0\n", 0},
+		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, "", 23},
+		{"legacy_counter_guard_rejected_before_initialization", `trap 'if [ "$BASH_SUBSHELL" -eq 0 ]; then rm -f "${report_file}"; fi' EXIT`, "BASH_SUBSHELL=0\n", 23},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "report")
+			// Install the exact source hook in the child explicitly to model
+			// the early-signal window, without timing a background process.
+			// It must retain the report there, and still remove it at parent exit.
+			script := "report_file=\"$REPORT_FIXTURE\"\nprintf retained >\"$report_file\"\n" + tc.hook +
+				"\n(\n" + tc.hook + "\n" + tc.childSetup + ")\ntest -f \"$report_file\" || exit 23\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "REPORT_FIXTURE="+path)
+			output, err := cmd.CombinedOutput()
+			status := 0
+			if err != nil {
+				exit, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				status = exit.ExitCode()
+			}
+			if status != tc.status {
+				t.Fatalf("child cleanup verdict=%d want=%d: %s", status, tc.status, output)
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("invoking shell did not clean up its report: %v", err)
+			}
+		})
+	}
+}
+
+func TestCITestCompilationPreservesChecks(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(workflowBytes)
+	for _, required := range []string{
+		"name: Compile backend race tests (no execution)",
+		"run: bash scripts/compile-go-tests.sh",
+		"name: Backend tests (${{ matrix.shard }})",
+		"name: Backend tests (api)",
+		"shard: [rest-0, rest-1]",
+		"index: [0, 1, 2, 3, 4]",
+		"go test -race -timeout 50m",
+		"name: Require frontend dependency audit",
+		"NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("compile admission removed independent CI requirement: %s", required)
+		}
+	}
+	if strings.Count(workflow, "name: Require compiled backend tests") != 2 {
+		t.Fatal("both required backend matrices must report compilation failures")
+	}
+	for _, path := range []string{
+		repoFile("scripts", "compile-go-tests.sh"),
+		repoFile("scripts", "tests", "test_go_test_compilation.py"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestDockerModuleDownloadKeepsPinnedGraphAndBoundedRecovery(t *testing.T) {
+	assertFileContainsAll(t, repoFile("Dockerfile"),
+		"COPY go.mod go.sum ./\nCOPY scripts/go-mod-download.sh /usr/local/bin/pulse-go-mod-download",
+		"--mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod",
+		"sh /usr/local/bin/pulse-go-mod-download",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "go-mod-download.sh"),
+		"timeout -k 5 180 go mod download", "[ \"$attempt\" -eq 3 ]", "INTERNAL_ERROR; received from peer",
+		"exit !(seen && !unknown)",
+	)
+	// The automatic script-smoke discovery must execute the behavioural proof,
+	// not leave Docker's new recovery path guarded only by text assertions.
+	if _, err := os.Stat(repoFile("scripts", "tests", "test_go_mod_download.py")); err != nil {
+		t.Fatalf("missing actual-shell module-download proof: %v", err)
+	}
+}
+
+func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "provider-msp-startup.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Permissions map[string]string `yaml:"permissions"`
+		On          map[string]struct {
+			Branches []string `yaml:"branches"`
+			Paths    []string `yaml:"paths"`
+		} `yaml:"on"`
+		Jobs map[string]struct {
+			RunsOn  string `yaml:"runs-on"`
+			Timeout int    `yaml:"timeout-minutes"`
+			Steps   []struct {
+				Name        string            `yaml:"name"`
+				Uses        string            `yaml:"uses"`
+				Run         string            `yaml:"run"`
+				Dir         string            `yaml:"working-directory"`
+				Env         map[string]string `yaml:"env"`
+				With        map[string]string `yaml:"with"`
+				Tolerant    any               `yaml:"continue-on-error"`
+				Conditional any               `yaml:"if"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(workflow.Jobs) != 1 || len(workflow.On) != 2 {
+		t.Fatal("startup CI must remain one read-only PR/main job")
+	}
+	for _, event := range []string{"push", "pull_request"} {
+		trigger, ok := workflow.On[event]
+		if !ok || len(trigger.Branches) != 1 || trigger.Branches[0] != "main" {
+			t.Fatalf("missing main admission for %s", event)
+		}
+		for _, path := range []string{"internal/cloudcp/**", "cmd/pulse-control-plane/**", "deploy/provider-msp/**", "pkg/licensing/**", "scripts/installtests/provider_msp*", "frontend-modern/**", "go.mod", "go.sum", ".github/workflows/provider-msp-startup.yml"} {
+			found := false
+			for _, actual := range trigger.Paths {
+				found = found || path == actual
+			}
+			if !found {
+				t.Fatalf("%s cannot admit changes to %s", event, path)
+			}
+		}
+	}
+	job := workflow.Jobs["startup"]
+	if job.RunsOn != "ubuntu-24.04" || job.Timeout <= 0 || job.Timeout > 20 {
+		t.Fatal("startup CI must use a bounded disposable hosted runner")
+	}
+	built, accepted, exact := false, false, false
+	for _, step := range job.Steps {
+		if step.Tolerant != nil || step.Conditional != nil {
+			t.Fatalf("startup proof step must not be optional/tolerant: %s", step.Name)
+		}
+		if strings.HasPrefix(step.Uses, "actions/checkout@") {
+			if step.With["persist-credentials"] != "false" || step.With["ref"] != "${{ github.sha }}" {
+				t.Fatal("checkout must be credential-free and exact-source")
+			}
+		}
+		if step.Env["EXPECTED_SOURCE_SHA"] == "${{ github.sha }}" && strings.Contains(step.Run, `test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`) {
+			exact = true
+		}
+		if step.Dir == "frontend-modern" && strings.Contains(step.Run, "npm ci --no-audit && npm run build") {
+			built = true
+		}
+		if step.Env["PULSE_TEST_PROVIDER_MSP_STARTUP"] == "compose" {
+			if !built || !exact || !strings.Contains(step.Run, "set -euo pipefail") || !strings.Contains(step.Run, "go test -count=1 -timeout 12m ./scripts/installtests") || !strings.Contains(step.Run, "-run '^TestProviderMSPProductionStartup$' -v") || !strings.Contains(step.Run, "grep -q '^--- PASS: TestProviderMSPProductionStartup '") {
+				t.Fatal("native acceptance must require real embeds, exact source, Compose execution and an actual PASS (not skip)")
+			}
+			accepted = true
+		}
+	}
+	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
+		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
 	}
 }

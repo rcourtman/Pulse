@@ -188,6 +188,7 @@ func TestPollBackupTasksSynthesizesJobGuestTasks(t *testing.T) {
 			"INFO: Finished Backup of VM 101 (00:02:00)",
 			"INFO: Starting Backup of VM 102 (lxc)",
 			"INFO: Finished Backup of VM 102 (00:01:00)",
+			"TASK OK",
 		),
 	}
 

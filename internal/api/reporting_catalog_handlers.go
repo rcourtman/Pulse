@@ -16,5 +16,7 @@ func (h *ReportingHandlers) HandleGetReportingCatalog(w http.ResponseWriter, r *
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(reporting.DescribeReportingCatalog())
+	catalog := reporting.DescribeReportingCatalog()
+	catalog.BackupHealthAvailable = resolveBackupHealthReportGenerator() != nil
+	_ = json.NewEncoder(w).Encode(catalog)
 }

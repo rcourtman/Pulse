@@ -11,9 +11,12 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
@@ -1763,5 +1766,27 @@ func TestHandleAutoRegisterInstallGrantIsPerCanonicalType(t *testing.T) {
 	}
 	if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
 		t.Fatalf("spent grants created extra sources: %d PVE / %d PBS", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+}
+
+func TestAutoRegistrationEventsStayWithRequestOrganization(t *testing.T) {
+	for _, orgID := range []string{"org-a", "default", ""} {
+		t.Run("org="+orgID, func(t *testing.T) {
+			hub := websocket.NewHub(nil)
+			owner, other := tenantEventConnections(t, hub, orgID)
+			h := NewConfigHandlers(nil, nil, nil, hub, nil, nil, false)
+			monitor, _, _ := newTestMonitor(t)
+			service := discovery.NewService(nil, orgID, time.Hour, "auto", nil)
+			service.Stop()
+			setUnexportedField(t, monitor, "discoveryService", service)
+			h.defaultMonitor = monitor
+			ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
+			req := &AutoRegisterRequest{Type: "pve", Source: "script"}
+			h.notifyAutoRegistrationSuccess(ctx, req, "192.0.2.10", "node-a", "token-id", true)
+			h.notifyAutoRegistrationSuccess(ctx, req, "192.0.2.10", "node-a", "token-id", false)
+			h.notifyAutoUnregisterSuccess(ctx, &AutoUnregisterRequest{Type: "pve"})
+			assertTenantEvents(t, owner, other,
+				"node_auto_registered", "discovery_update", "nodes_changed", "discovery_update", "node_deleted", "discovery_update")
+		})
 	}
 }

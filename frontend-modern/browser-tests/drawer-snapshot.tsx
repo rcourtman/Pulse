@@ -3,12 +3,10 @@ import { render } from 'solid-js/web';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
 import { AvailabilityFleetView } from '../src/features/standalone/AvailabilityFleetView';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
 // Synthetic replacement snapshots; the drawers, API client, fleet and CSS are production code.
-syncAIRuntimeSettings({ discovery_enabled: false });
 const pbs = (current = false, other = false, missing = false): Resource => ({
   id: other ? 'pbs-b' : 'pbs-a',
   name: other ? 'PBS B' : 'PBS A',
@@ -62,7 +60,9 @@ const controls = [
 ] as const;
 render(
   () => (
-    <WebSocketContext.Provider value={{ state: { pmg: [] }, connected: () => true } as any}>
+    <WebSocketContext.Provider
+      value={{ state: { pmg: [] }, activeAlerts: {}, connected: () => true } as any}
+    >
       <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
         <main class="min-h-screen space-y-4 bg-surface p-4 text-base-content">
           <h1>Detail snapshot verification</h1>

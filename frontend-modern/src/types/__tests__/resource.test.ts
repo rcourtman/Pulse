@@ -117,6 +117,20 @@ describe('Resource Type Guards', () => {
     });
   });
 
+  it('keeps agent discovery coordinates without the removed AI Discovery readiness', () => {
+    const resource = createResource({
+      discoveryTarget: { resourceType: 'vm', agentId: 'agent-pve1', resourceId: '101' },
+    });
+
+    expect(resource.discoveryTarget).toEqual({
+      resourceType: 'vm',
+      agentId: 'agent-pve1',
+      resourceId: '101',
+    });
+    // @ts-expect-error AI Discovery readiness left the resource contract with AI Discovery.
+    expect(resource.discoveryReadiness).toBeUndefined();
+  });
+
   it('retains three-state UDP availability evidence on canonical resources', () => {
     const resource = createResource({
       type: 'network-endpoint',
@@ -865,25 +879,6 @@ describe('Resource Interface', () => {
 
     expect(resource.tags).toEqual(['production', 'web']);
     expect(resource.labels).toEqual({ env: 'prod', role: 'frontend' });
-  });
-
-  it('supports alerts array', () => {
-    const resource = createResource({
-      alerts: [
-        {
-          id: 'alert-1',
-          type: 'cpu',
-          level: 'warning',
-          message: 'High CPU usage',
-          value: 85,
-          threshold: 80,
-          startTime: Date.now(),
-        },
-      ],
-    });
-
-    expect(resource.alerts).toHaveLength(1);
-    expect(resource.alerts![0].type).toBe('cpu');
   });
 
   it('supports identity for deduplication', () => {

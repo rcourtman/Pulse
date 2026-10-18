@@ -557,3 +557,41 @@ func TestResetTargetsForRetry_EmptyList(t *testing.T) {
 		t.Fatalf("expected 0, got %d", count)
 	}
 }
+
+func TestUnfinishedJobsForClusterFiltersByOrgClusterAndStatus(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	for i, j := range []struct {
+		id, org, cluster string
+		status           JobStatus
+	}{
+		{"dep-running", "org-1", "lab", JobRunning},
+		{"dep-queued", "org-1", "lab", JobQueued},
+		{"dep-done", "org-1", "lab", JobSucceeded},
+		{"dep-other-cluster", "org-1", "prod", JobRunning},
+		{"dep-other-org", "org-2", "lab", JobRunning},
+	} {
+		created := now.Add(time.Duration(i) * time.Second)
+		if err := s.CreateJob(ctx, &Job{
+			ID: j.id, ClusterID: j.cluster, ClusterName: j.cluster, SourceAgentID: "agent-1",
+			SourceNodeID: "node-1", OrgID: j.org, Status: j.status, MaxParallel: 1,
+			CreatedAt: created, UpdatedAt: created,
+		}); err != nil {
+			t.Fatalf("CreateJob %s: %v", j.id, err)
+		}
+	}
+
+	jobs, err := s.UnfinishedJobsForCluster(ctx, "org-1", "lab")
+	if err != nil {
+		t.Fatalf("UnfinishedJobsForCluster: %v", err)
+	}
+	var ids []string
+	for _, j := range jobs {
+		ids = append(ids, j.ID)
+	}
+	if len(ids) != 2 || ids[0] != "dep-queued" || ids[1] != "dep-running" {
+		t.Fatalf("got %v, want [dep-queued dep-running] (newest first, other org/cluster/finished excluded)", ids)
+	}
+}

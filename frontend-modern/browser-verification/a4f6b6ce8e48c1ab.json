@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "e78de344ea5e2d3211149c2a845cdff90432adf2",
+  "verified_at": "2026-10-06T04:42:13.612566Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/HistoryChartHeader.tsx": "e74f8058a9f26bdd6d906152f2af68139e3b0966f8b6c860e33d3915ad15999e"
+  },
+  "routes": [
+    "Shared History header used by Storage/PBS/NAS metric panels (production-component preview, synthetic state)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 760
+    },
+    {
+      "width": 390,
+      "height": 760
+    }
+  ],
+  "states": [
+    "Two independently scoped named History window groups, exactly one pressed period in each",
+    "Eight existing periods, zero/max summaries and hidden selector",
+    "Phone dark layout wraps without horizontal overflow",
+    "ARIA selection and active styling agree after finite colour transitions"
+  ],
+  "interactions": [
+    "Trusted desktop Enter, Tab and Space; focus retained and second chart unchanged",
+    "Trusted phone CPU 7d and Memory 6h taps; independent selection",
+    "Native form owns zero submissions when period buttons activate"
+  ],
+  "evidence": {
+    "script": "frontend-modern/browser-tests/history-window-controls.cjs",
+    "script_sha256": "c8fe327e9f0d4377008283a76723f14712532af3b8a34af37150794d8ae2b8b8",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "chromium-desktop",
+        "browser": "141.0.7390.37",
+        "width": 1280
+      },
+      {
+        "name": "webkit-phone",
+        "browser": "26.0",
+        "width": 390
+      }
+    ],
+    "captures": [
+      {
+        "file": "chromium-desktop.png",
+        "sha256": "4ddf8126d67b69eec339d13f2701b08fbb722e70baf8bb92b37dc1aed2b6e8b4"
+      },
+      {
+        "file": "webkit-phone.png",
+        "sha256": "06f5c326641853f78153e9404f227f669ab925d10c0e73f181795118a105eaea"
+      }
+    ],
+    "limits": "Production header and CSS with synthetic state. No native PBS/NAS, collector, physical device, assistive-device, installed or release acceptance."
+  }
+}

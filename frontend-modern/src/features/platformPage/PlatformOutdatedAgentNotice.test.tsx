@@ -28,7 +28,7 @@ describe('PlatformOutdatedAgentNotice', () => {
     ));
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent(
-      'tower is running an older Pulse agent (v6.0.0-rc.5). Update it to v6.0.0-rc.6 to see images, networks, and storage for this host.',
+      'tower runs an older Pulse agent (v6.0.0-rc.5), so images, networks, and storage for this host may be missing.',
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
@@ -36,23 +36,7 @@ describe('PlatformOutdatedAgentNotice', () => {
     );
   });
 
-  it('summarises multiple outdated hosts and lists them', () => {
-    render(() => (
-      <PlatformOutdatedAgentNotice
-        hosts={[
-          { name: 'tower', version: 'v6.0.0-rc.5' },
-          { name: 'delly', version: 'v6.0.0-rc.5' },
-        ]}
-        targetVersion="v6.0.0-rc.6"
-        missingLabel="images, networks, and storage"
-      />
-    ));
-    const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('2 hosts are running an older Pulse agent.');
-    expect(notice).toHaveTextContent('Affected: tower, delly.');
-  });
-
-  it('keeps a large affected-host list behind an expandable preview', () => {
+  it('summarises multiple outdated hosts in one line and keeps names behind a toggle', () => {
     render(() => (
       <PlatformOutdatedAgentNotice
         hosts={[
@@ -62,21 +46,31 @@ describe('PlatformOutdatedAgentNotice', () => {
           { name: 'remote', version: 'v6.0.0-rc.5' },
         ]}
         targetVersion="v6.0.0-rc.6"
-        missingLabel="images"
+        missingLabel="images, networks, and storage"
+        actionHref="/settings/infrastructure"
+        actionLabel="Open agent upgrade commands"
       />
     ));
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('Affected: tower, delly, lab, and 1 more.');
-    expect(notice).not.toHaveTextContent('Affected: tower, delly, lab, remote.');
+    expect(notice).toHaveTextContent(
+      '4 hosts run an older Pulse agent, so images, networks, and storage may be missing.',
+    );
+    // Maintenance, not an incident: the info tone, with names on demand.
+    expect(notice.className).toContain('bg-blue-50');
+    expect(notice).not.toHaveTextContent('Affected:');
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
 
-    const toggle = screen.getByRole('button', { name: 'Show all 4 hosts' });
+    const toggle = screen.getByRole('button', { name: 'Which hosts?' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(notice).toHaveTextContent('Affected: tower, delly, lab, remote.');
-    fireEvent.click(screen.getByRole('button', { name: 'Hide affected names' }));
-    expect(notice).not.toHaveTextContent('Affected: tower, delly, lab, remote.');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+    expect(notice).not.toHaveTextContent('Affected:');
   });
 
   it('uses latest-detail copy for hybrid platform pages', () => {
@@ -90,7 +84,7 @@ describe('PlatformOutdatedAgentNotice', () => {
     ));
 
     expect(screen.getByTestId('platform-outdated-agent-notice')).toHaveTextContent(
-      'delly is running an older Pulse agent (v5.1.34). Update it to v6.0.0-rc.6 for the latest agent-contributed platform detail on this host.',
+      'delly runs an older Pulse agent (v5.1.34). Update it to v6.0.0-rc.6 for the latest agent-contributed platform detail.',
     );
   });
 
@@ -135,10 +129,10 @@ describe('PlatformOutdatedAgentNotice', () => {
     ));
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('2 VMs are running an older Pulse agent.');
     expect(notice).toHaveTextContent(
-      'Update them to v6.0.0-rc.6 for the latest in-guest telemetry and command support.',
+      '2 VMs run an older Pulse agent. Update them to v6.0.0-rc.6 for the latest in-guest telemetry and command support.',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Which VMs?' }));
     expect(notice).toHaveTextContent('Affected: app-01, db-01.');
   });
 });

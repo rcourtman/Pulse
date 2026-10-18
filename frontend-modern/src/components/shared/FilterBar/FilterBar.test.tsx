@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilterBar } from './FilterBar';
 import type { FilterDef } from './filterCatalog';
 import { createSignal } from 'solid-js';
+import { setKioskMode } from '@/utils/url';
 
 const search = {
   value: () => '',
@@ -438,5 +439,66 @@ describe('FilterBar', () => {
     expect(
       screen.queryByRole('button', { name: 'Remove search term unmatched prose' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('FilterBar in kiosk mode', () => {
+  afterEach(() => {
+    setKioskMode(false);
+    window.sessionStorage.removeItem('pulse_kiosk_mode');
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('stays unmounted while kiosk mode is on and returns when it ends', () => {
+    setKioskMode(true);
+    const { container } = render(() => (
+      <FilterBar
+        role="group"
+        ariaLabel="Guest filters"
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => false}
+        viewOptions={<span>Bars</span>}
+      />
+    ));
+
+    expect(container.querySelector('.filter-bar')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Type' })).not.toBeInTheDocument();
+
+    setKioskMode(false);
+
+    expect(screen.getByRole('group', { name: 'Guest filters' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Type' })).toBeInTheDocument();
+  });
+
+  it('leaves typed characters alone in kiosk mode instead of filtering the display', async () => {
+    setKioskMode(true);
+    const setValue = vi.fn();
+    render(() => (
+      <>
+        <button type="button">Outside</button>
+        <FilterBar search={{ ...search, setValue }} filters={[]} isMobile={() => false} />
+      </>
+    ));
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    outside.focus();
+
+    fireEvent.keyDown(document, { key: 'q' });
+    // Type-to-search inserts the key from a queued task, so let it run while
+    // kiosk is still on before judging the result.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(setValue).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(outside);
+
+    setKioskMode(false);
+    outside.focus();
+    fireEvent.keyDown(document, { key: 'a' });
+
+    await waitFor(() => expect(setValue).toHaveBeenCalledWith('a'));
+    expect(setValue).not.toHaveBeenCalledWith(expect.stringContaining('q'));
   });
 });

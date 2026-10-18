@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "7606b72a8b85e70696e8bfa52a0792fbb146a34d",
+  "verified_at": "2026-10-08T10:01:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/types/recovery.ts",
+    "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
+    "frontend-modern/src/utils/recoveryDatePresentation.ts",
+    "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts",
+    "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
+    "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "0ec586a6c69aca82bab09d684972700fe5cc2b6f0784f3d0f1a38a802711a661",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "4908cb79fbfb3e8d38a66f835dcc4ed0937f197c69d73828dfa57e69c4e66bc9",
+    "frontend-modern/src/types/recovery.ts": "b88ebc335c77fecc07f0c4e6d02dc6727d53c03ddf817aaf9764f95f459a3aaf",
+    "frontend-modern/src/utils/recoveryArtifactModePresentation.ts": "deleted",
+    "frontend-modern/src/utils/recoveryDatePresentation.ts": "594bcb5679a79d78ef8b62277582be86240f4afc1d8f7bde4f4c5384dc28982f",
+    "frontend-modern/src/utils/recoveryOutcomePresentation.ts": "61df2fb6c642fd7a674160cc62ab467a59163dff522758a73f34521625ca5996",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts": "aa2243a0271cf023a81b9d8abfc41a017754de2dc3486bd886f04e342468c9d6",
+    "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts": "060cc9680ff2560150a9ada0f921732f0c58dcc265ea539001c2d4c53a149f5f",
+    "frontend-modern/src/utils/recoveryTimelinePresentation.ts": "f31112eb1923a0f762f1f72c136e62044159a821b8c956bc03b4089b6065901b"
+  },
+  "routes": [
+    "/truenas/protection",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Before/after pair on pulse-dev: production vite builds of the parent d2ac0c5112 and of this tree, each served with vite preview proxied to the 50-node mock rig on :7699 (which includes the TrueNAS recovery fixtures), driven by the same headless Chromium script at 1440x900 and 390x844.",
+    "TrueNAS Protection: 10 rows in both builds, every row named by its dataset (archive/backups, tank/apps, vault/compliance, tank/photos, tank/media, fast/vm-images) and none by a raw id; the status filter shows All 10, Attention 1, Healthy 8, Warning 0, Failed 1, Running 1, Unknown 0 at desktop; the labels come from display.itemLabel, which the decode produces from the backend display.subjectLabel.",
+    "TrueNAS Protection search for \"backups\" narrows to the same three rows (archive/backups, tank/media, archive/backups) in both builds at both widths; opening the first row shows the identical Protection detail panel (Kind Replication, Outcome Failed, Dataset archive/backups, Host truenas-main, Replication and Target sections) apart from the mock clock minute.",
+    "Proxmox Backups by date: the Activity range group offers 7d 30d 90d 1y and 30 day columns render in both builds; hovering the last active day (Wed, Oct 7: 834 backups) shows the same tooltip (Timeline day; PBS snapshots 267 (32%), PVE backup files 456 (55%), Guest snapshots 111 (13%)); clicking it selects the day (\"selected\" in the column label, Day filter badge, 144 table rows at desktop and 40 at phone, identical in both builds) and clicking again clears it.",
+    "Results JSON: 31 measurements, 29 identical; the two that differ are the TrueNAS detail text, which is identical once the mock clock minute (02:54 vs 02:55) is masked. No failing responses and no console errors in either build; the same /api/recovery/points?platform=truenas and /api/recovery/postures reads are the only recovery requests.",
+    "Dist proof: 189 files each side; 93 byte-identical, 93 differ only in chunk-hash names and SRI strings, 3 differ in code. After normalising hashes and short identifiers, TrueNAS-*.js loses only the display.subjectLabel and subjectRef terms in datasetLabel, truenasPageModel-*.js loses only the subject terms in the search tokens and the sort label, and the CSS loses exactly four unused rules (.bg-gray-400, .min-w-[8px], .min-w-[14px], .min-w-[28px]); no source references those classes any more.",
+    "check-bundle-size.mjs passes on both builds with no chunk renamed and .bundlesize.json unchanged: TrueNAS 16.87 to 16.86 kB gzip, truenasPageModel 5.96 to 5.92 kB, total JS 1367.68 to 1367.63 kB, total CSS 32.15 to 32.13 kB."
+  ],
+  "interactions": [
+    "Sign in with the rig login, load /truenas/protection, read the row labels, status filter options and row count, type \"backups\" into \"Search snapshots or replication\", read the narrowed rows, clear it, expand the first row and read the Protection detail panel; repeat at 390x844.",
+    "Load /proxmox/backups/date, read the activity range options and day-column count, hover the last day column with activity and read the tooltip rows, click it to select the day and read the column label, filter badge and table row count, click again to clear; repeat at 390x844.",
+    "Run the same script against the before and after builds and diff the JSON; screenshots of every state inspected."
+  ]
+}

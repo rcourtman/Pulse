@@ -20,12 +20,16 @@ export interface Resource {
   type?: string;
   resourceType?: string;
   subtitle?: string;
+  /** Explanation beside a non-current reading; not threshold or alert state. */
+  readingMessage?: string;
   thresholds?: AlertResourceThresholdMap;
   defaults?: AlertResourceThresholdMap;
   disabled?: boolean;
   disableConnectivity?: boolean;
   poweredOffSeverity?: 'warning' | 'critical';
   hasOverride?: boolean;
+  /** A Proxmox guest tagged pulse-relaxed; the alert engine raises its CPU/memory/disk triggers. */
+  pulseRelaxed?: boolean;
   status?: string;
   vmid?: number;
   cpu?: number;

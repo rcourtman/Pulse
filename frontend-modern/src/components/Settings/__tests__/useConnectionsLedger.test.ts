@@ -552,6 +552,8 @@ describe('useConnectionsLedger', () => {
       'Rollout pending',
       'Version behind',
     ]);
+    // Version lag rides on the Agent update badge; the problem line names the drift.
+    expect(byID.get('agent:drifted')?.problem?.label).toBe('Config drift');
     // Pull-based API sources (PVE/PBS/etc.) have no Pulse Agent, so agent-fleet
     // governance (rollout/config/version/command-policy) must not surface on
     // them. Only source-agnostic posture like credential health applies; an

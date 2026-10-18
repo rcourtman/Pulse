@@ -375,18 +375,13 @@ func TestDockerInventoryConvertersPreserveNativeRuntimeFields(t *testing.T) {
 	}
 }
 
-func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
-	warning := pveBackupPermissionWarning(&config.PVEInstance{
-		TokenName: "pulse-monitor@pve!pulse-example",
-	})
-
-	for _, snippet := range []string{
-		"pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin",
-		"pveum aclmod /storage -token 'pulse-monitor@pve!pulse-example' -role PVEDatastoreAdmin",
-	} {
-		if !strings.Contains(warning, snippet) {
-			t.Fatalf("expected warning to contain %q, got %q", snippet, warning)
-		}
+func TestPVEBackupPermissionWarningsPreserveNonDestructiveGuidance(t *testing.T) {
+	warning := pveBackupPermissionWarning(&config.PVEInstance{TokenName: "different-reader@pve!manual"})
+	if !strings.Contains(warning, "saved PVE connection") || !strings.Contains(warning, "privilege separation") || !strings.Contains(warning, "rejected endpoint") {
+		t.Fatalf("missing identity/scope guidance: %q", warning)
+	}
+	if strings.Contains(warning, "pveum") || strings.Contains(warning, "PVEDatastoreAdmin") || strings.Contains(warning, "pulse-monitor@pve") {
+		t.Fatalf("unconditional ACL recipe survived: %q", warning)
 	}
 }
 
@@ -498,7 +493,7 @@ func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
 	}
 	source := string(data)
 
-	metricIndex := strings.Index(source, "CheckUnifiedResourceMetricsWithCapacityTrends(resources")
+	metricIndex := strings.Index(source, "CheckUnifiedResourceWithCapacityTrend(input, capacityTrends[input.ID])")
 	incidentIndex := strings.Index(source, "SyncUnifiedResourceIncidents(resources)")
 	if metricIndex < 0 {
 		t.Fatalf("monitor alert sync must run unified resource metric evaluation")
@@ -508,6 +503,47 @@ func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
 	}
 	if metricIndex > incidentIndex {
 		t.Fatalf("unified resource metric evaluation must run before incident sync")
+	}
+}
+
+// Monitor state and live snapshots switch to the fixture graph in mock mode,
+// so a store refresh must take its mock-mode scope before it reads them.
+// Go evaluates call arguments left to right: a scope begun in the argument
+// after the read belongs to the epoch the snapshot may already have left.
+func TestStoreRefreshTakesItsMockModeScopeBeforeReadingState(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("glob monitoring sources: %v", err)
+	}
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, forbidden := range []string{
+			"GetState(), m.mockModeFence.begin()",
+			"GetSnapshot(), m.mockModeFence.begin()",
+		} {
+			if strings.Contains(source, forbidden) {
+				t.Errorf("%s reads state before taking its mock-mode scope (%q); use currentStateWithScope or begin the scope first", file, forbidden)
+			}
+		}
+	}
+
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	if got := strings.Count(source, "m.mockModeFence.advance()\n\tm.alertManager.ClearActiveAlerts()"); got != 1 {
+		t.Fatalf("endMockModeEpoch must end the mock-mode epoch immediately before clearing alerts, found %d", got)
+	}
+	if !strings.Contains(source, "for _, monitor := range monitors {\n\t\tmonitor.endMockModeEpoch(enable)\n\t}") {
+		t.Fatal("SetMockMode must end the epoch of every monitor the switch reaches")
 	}
 }
 
@@ -607,10 +643,13 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	source := string(data)
 
 	for _, snippet := range []string{
-		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
-		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
-		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(",
-		"attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver)",
+		"metricsTargetResolver := unifiedView.metricsTargets",
+		"metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)",
+		"broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources, unifiedView.staleThresholds)",
+		"if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {",
+		"return unifiedresources.CoalescePresentationHostResourcesWithStaleThresholds(resources, staleThresholds)",
+		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)",
+		"attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
 		"frontendState.PolicyCatalog = broadcastCatalogs.policies",
 		"frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries",
@@ -641,6 +680,19 @@ func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("monitor.go must contain %q", snippet)
 		}
+	}
+
+	// The override names one file, so non-default tenants must not inherit it.
+	data, err = os.ReadFile("multi_tenant_monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read multi_tenant_monitor.go: %v", err)
+	}
+	tenantSource := string(data)
+	dataPathIdx := strings.Index(tenantSource, "tenantConfig.DataPath = tenantPersistence.GetConfigDir()")
+	clearIdx := strings.Index(tenantSource, "tenantConfig.MetricsDBPath = \"\"")
+	newIdx := strings.Index(tenantSource, "monitor, err = New(tenantConfig)")
+	if dataPathIdx < 0 || clearIdx < 0 || newIdx < 0 || !(dataPathIdx < clearIdx && clearIdx < newIdx) {
+		t.Fatal("multi_tenant_monitor.go must clear MetricsDBPath for non-default tenants after setting DataPath and before New")
 	}
 }
 
@@ -912,7 +964,7 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			// the resolver must not consult guest RRD between the preferred
 			// guest-agent pass and the retry pass.
 			"// No RRD fallback here: PVE guest rrddata carries only cache-inclusive",
-			"if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
+			"agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)",
 			"memorySource = agentSource",
 			"guestRaw.GuestAgentMemAvailable = agentAvailable",
 			`memorySource = "unavailable"`,
@@ -1085,6 +1137,21 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 	}
 }
 
+func TestGuestDiskObservationContract(t *testing.T) {
+	t.Run("legacy-origin-admission", testGuestDiskLegacyObservationAge)
+	t.Run("original-source-age", testGuestDiskOriginalObservationAge)
+	t.Run("repeated-canonical-polls", testGuestDiskRepeatedPollsAndCanonicalOrigin)
+	t.Run("ordinary-deferral-expiry-recovery", testGuestDiskOrdinaryDeferralExpiryAndRecovery)
+}
+
+func TestGuestAgentAdmissionEvidenceContract(t *testing.T) {
+	t.Run("retained-identity-cannot-renew", testGuestAgentRetainedIdentityCannotRenewAdmission)
+	t.Run("original-age", testGuestAgentEvidenceOriginalAge)
+	t.Run("canonical-continuity", testGuestAgentEvidenceCanonicalContinuity)
+	t.Run("accepted-read-origins", testGuestAgentEvidenceAcceptedReadOrigins)
+	t.Run("config-flag-cannot-renew", testGuestAgentConfigFlagCannotRenewAdmission)
+}
+
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"guest_host_agent_fallback.go": {
@@ -1135,14 +1202,18 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 		},
 		"monitor_pve_guest_poll.go": {
 			"m.CollectProxmoxGuestDockerInventory(enrichmentCtx, allContainers)",
-			"m.state.UpdateGuestsForInstance(instanceName, allVMs, allContainers)",
+			"m.publishPVEGuests(ctx, instanceName, allVMs, allContainers)",
 		},
 		"monitor_polling_containers.go": {
 			"m.CollectProxmoxGuestDockerInventory(ctx, allContainers)",
 			"return allContainers",
 		},
 		"monitor_pve.go": {
-			"m.state.UpdateGuestsForInstance(instanceName, vms, containers)",
+			"m.publishPVEGuests(ctx, instanceName, vms, containers)",
+		},
+		"guest_poll_publication.go": {
+			"func (m *Monitor) publishPVEGuests(",
+			"m.state.UpdateGuestsForInstance(instance, vms, containers)",
 		},
 	}
 
@@ -1626,16 +1697,11 @@ func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
 	}
-	source := string(data)
-	requiredSnippets := []string{
-		"if err := mock.SetEnabled(true); err != nil {",
-		"if err := mock.SetEnabled(false); err != nil {",
-		"return err",
-	}
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor.go must contain %q", snippet)
-		}
+	source := strings.Join(strings.Fields(string(data)), " ")
+	authorize := strings.Index(source, "if err := mock.SetEnabled(enable); err != nil { return err }")
+	reset := strings.Index(source, "monitor.endMockModeEpoch(enable)")
+	if authorize < 0 || reset < 0 || authorize > reset {
+		t.Fatal("SetMockMode must return the mock.SetEnabled error before it ends any monitor's epoch or resets its state")
 	}
 }
 
@@ -1972,7 +2038,7 @@ func TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph(t *testing.T) {
 	requiredSnippets := []string{
 		"version := mock.FixtureDataVersion()",
 		"m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version",
-		"resources, freshness := mock.UnifiedResourceSnapshot()",
+		"resources, freshness := mock.UnifiedResourceSnapshotWithLinks(links)",
 		"view := monitorUnifiedStateViewFromResources(resources, freshness)",
 		"m.mockUnifiedView = view",
 		"m.mockUnifiedViewVersion = version",
@@ -2038,7 +2104,7 @@ func TestHostPhysicalDiskIOMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	requiredSnippets := []string{
 		"m.writeHostPhysicalDiskIOMetrics(host, now)",
 		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {",
-		`resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)`,
+		`resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)`,
 		`m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "disk", busyPct, now)`,
@@ -2123,7 +2189,6 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"if mock.IsMockEnabled() {",
 				"return nil",
 				"func (m *Monitor) prewarmMockDashboardChartCaches() {",
-				"_, _ = m.mockStorageSummaryCapacityTrendCached(24 * time.Hour)",
 			},
 		},
 		{
@@ -2131,8 +2196,7 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			snippets: []string{
 				"func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {",
 				"values := canonicalMetricSeries(resourceType, resourceID, metricType, timestamps)",
-				"return lttb(points, chartDownsampleTarget)",
-				"func (m *Monitor) mockStorageSummaryCapacityTrend(duration time.Duration) []MetricPoint {",
+				"func sampleMetricSeriesOnMockChartGrid(points []MetricPoint, interval time.Duration) []MetricPoint {",
 				`usageValues := canonicalMetricSeries("storage", storageID, "usage", timestamps)`,
 			},
 		},
@@ -2222,7 +2286,7 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor.go",
 			snippets: []string{
-				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {",
+				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host, splits diskAgentSplitStore) []models.PhysicalDisk {",
 				"deriveWearoutFromSMARTAttributes(matched.Attributes)",
 				"storagehealth.RemainingLifeFromPercentageUsed(*attrs.PercentageUsed)",
 				"shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health)",
@@ -2232,8 +2296,9 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor_pve.go",
 			snippets: []string{
-				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)",
-				"m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
+				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts, splits)",
+				"m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])",
+				"m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
 				"func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {",
 			},
 		},
@@ -2591,7 +2656,7 @@ func TestPollersHonorDisabledInstanceFlag(t *testing.T) {
 func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
 	t.Run("falls through to Resource.Uptime when no source carve-out is set", func(t *testing.T) {
 		resource := unifiedresources.Resource{Uptime: 123456}
-		got := monitorUptime(resource)
+		got := monitorUptime(&resource)
 		if got == nil || *got != 123456 {
 			t.Fatalf("monitorUptime() = %v, want 123456 from canonical Resource.Uptime", got)
 		}
@@ -2602,21 +2667,21 @@ func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
 			Uptime: 999999,
 			Agent:  &unifiedresources.AgentData{UptimeSeconds: 100},
 		}
-		got := monitorUptime(resource)
+		got := monitorUptime(&resource)
 		if got == nil || *got != 100 {
 			t.Fatalf("monitorUptime() = %v, want 100 from agent (precedence over canonical Uptime)", got)
 		}
 
 		resource.Agent = nil
 		resource.Proxmox = &unifiedresources.ProxmoxData{Uptime: 200}
-		got = monitorUptime(resource)
+		got = monitorUptime(&resource)
 		if got == nil || *got != 200 {
 			t.Fatalf("monitorUptime() = %v, want 200 from proxmox (precedence over canonical Uptime)", got)
 		}
 	})
 
 	t.Run("returns nil when nothing populates", func(t *testing.T) {
-		if got := monitorUptime(unifiedresources.Resource{}); got != nil {
+		if got := monitorUptime(&unifiedresources.Resource{}); got != nil {
 			t.Fatalf("monitorUptime() = %v, want nil when all sources empty", got)
 		}
 	})
@@ -2841,6 +2906,221 @@ func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
 	}
 }
 
+// Consumers outside the monitor, such as the connections list, judge poll
+// freshness by Monitor.BasePollInterval. It must report the base cadence the
+// scheduler polls each platform at, including runtime polling overrides on a
+// detached tenant config copy (#1619), and must not take m.mu, which the
+// scheduler's poll-provider lookup takes.
+func TestMonitorBasePollIntervalReportsSchedulerBaseCadence(t *testing.T) {
+	newTenantMonitor := func(override time.Duration) *Monitor {
+		base := &config.Config{
+			PVEPollingInterval: 30 * time.Second,
+			PBSPollingInterval: time.Minute,
+			PMGPollingInterval: time.Minute,
+		}
+		monitor := &Monitor{config: base.DeepCopy()}
+		monitor.SetPBSPollingInterval(override)
+		monitor.SetPMGPollingInterval(override)
+		return monitor
+	}
+
+	t.Run("runtime overrides on a detached copy, clamped like the scheduler", func(t *testing.T) {
+		for override, want := range map[time.Duration]time.Duration{
+			5 * time.Second:  10 * time.Second,
+			90 * time.Second: 90 * time.Second,
+			5 * time.Minute:  5 * time.Minute,
+			2 * time.Hour:    time.Hour,
+		} {
+			monitor := newTenantMonitor(override)
+			for _, instanceType := range []InstanceType{InstanceTypePBS, InstanceTypePMG} {
+				if got := monitor.BasePollInterval(instanceType); got != want {
+					t.Errorf("%s base interval = %v for override %v, want %v", instanceType, got, override, want)
+				}
+			}
+			for _, instanceType := range []InstanceType{InstanceTypePVE, InstanceTypePBS, InstanceTypePMG} {
+				if got, scheduled := monitor.BasePollInterval(instanceType), monitor.baseIntervalForInstanceType(instanceType); got != scheduled {
+					t.Errorf("%s base interval = %v for override %v, want the scheduler's %v", instanceType, got, override, scheduled)
+				}
+			}
+		}
+	})
+
+	t.Run("adaptive scheduling keeps the same base", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.scheduler = NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil)
+		if got := monitor.BasePollInterval(InstanceTypePBS); got != 5*time.Minute {
+			t.Fatalf("PBS base interval = %v under adaptive scheduling, want the saved %v", got, 5*time.Minute)
+		}
+	})
+
+	t.Run("does not take the monitor lock", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.mu.Lock()
+		defer monitor.mu.Unlock()
+		done := make(chan time.Duration, 1)
+		go func() { done <- monitor.BasePollInterval(InstanceTypePBS) }()
+		select {
+		case got := <-done:
+			if got != 5*time.Minute {
+				t.Fatalf("PBS base interval = %v, want %v", got, 5*time.Minute)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("BasePollInterval blocked while m.mu was held")
+		}
+	})
+
+	t.Run("unknown cadence reads zero", func(t *testing.T) {
+		var nilMonitor *Monitor
+		for name, got := range map[string]time.Duration{
+			"nil monitor":       nilMonitor.BasePollInterval(InstanceTypePBS),
+			"monitor no config": (&Monitor{}).BasePollInterval(InstanceTypePVE),
+			"availability":      newTenantMonitor(time.Minute).BasePollInterval(InstanceTypeAvailability),
+		} {
+			if got != 0 {
+				t.Errorf("%s base interval = %v, want 0", name, got)
+			}
+		}
+	})
+}
+
+// Non-default tenant monitors poll against a detached config copy (#1619), so
+// a saved PBS or PMG interval reaches them only as a runtime override. The
+// freshness thresholds the monitor publishes must follow the cadence its
+// scheduler polls at, or PBS and PMG rows read stale between real polls.
+func TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides(t *testing.T) {
+	cases := []struct {
+		name          string
+		configured    time.Duration
+		override      time.Duration
+		wantThreshold time.Duration
+		wantStatus    unifiedresources.ResourceStatus
+	}{
+		{
+			name:          "raised interval keeps a sighting inside the new cadence online",
+			configured:    time.Minute,
+			override:      5 * time.Minute,
+			wantThreshold: 10 * time.Minute,
+			wantStatus:    unifiedresources.StatusOnline,
+		},
+		{
+			name:          "lowered interval judges the same sighting stale",
+			configured:    5 * time.Minute,
+			override:      time.Minute,
+			wantThreshold: 2 * time.Minute,
+			wantStatus:    unifiedresources.StatusWarning,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sighting := time.Now().UTC().Add(-3 * time.Minute)
+			state := models.NewState()
+			state.UpdatePBSInstances([]models.PBSInstance{{
+				ID:               "pbs-main",
+				Name:             "pbs-main",
+				Host:             "https://pbs.lab.local:8007",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         sighting,
+			}})
+			state.UpdatePMGInstances([]models.PMGInstance{{
+				ID:               "pmg-main",
+				Name:             "pmg-main",
+				Host:             "https://pmg.lab.local:8006",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         sighting,
+				LastUpdated:      sighting,
+			}})
+
+			base := &config.Config{
+				PVEPollingInterval: 10 * time.Second,
+				PBSPollingInterval: tc.configured,
+				PMGPollingInterval: tc.configured,
+			}
+			monitor := &Monitor{state: state, config: base.DeepCopy()}
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			monitor.SetResourceStore(adapter)
+			monitor.SetPBSPollingInterval(tc.override)
+			monitor.SetPMGPollingInterval(tc.override)
+
+			if got := monitor.baseIntervalForInstanceType(InstanceTypePBS); got != tc.override {
+				t.Fatalf("PBS scheduler interval = %v, want override %v", got, tc.override)
+			}
+			thresholds := monitor.resourceStaleThresholds()
+			for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG} {
+				if got := thresholds[source]; got != tc.wantThreshold {
+					t.Errorf("%s threshold = %v, want %v from the %v runtime interval", source, got, tc.wantThreshold, tc.override)
+				}
+			}
+			if got := thresholds[unifiedresources.SourceProxmox]; got != 60*time.Second {
+				t.Errorf("Proxmox threshold = %v, want the unchanged %v floor", got, 60*time.Second)
+			}
+
+			monitor.updateResourceStore(state.GetSnapshot(), monitor.mockModeFence.begin())
+
+			pbs := adapter.PBSInstances()
+			if len(pbs) != 1 {
+				t.Fatalf("PBS instances = %d, want 1", len(pbs))
+			}
+			if got := pbs[0].Status(); got != tc.wantStatus {
+				t.Fatalf("PBS status = %q, want %q for a 3m-old sighting on a %v cadence", got, tc.wantStatus, tc.override)
+			}
+			pmg := adapter.PMGInstances()
+			if len(pmg) != 1 {
+				t.Fatalf("PMG instances = %d, want 1", len(pmg))
+			}
+			if got := pmg[0].Status(); got != tc.wantStatus {
+				t.Fatalf("PMG status = %q, want %q for a 3m-old sighting on a %v cadence", got, tc.wantStatus, tc.override)
+			}
+		})
+	}
+
+	t.Run("freshness reads the scheduler's clamped interval", func(t *testing.T) {
+		for _, override := range []time.Duration{5 * time.Second, 90 * time.Second, 2 * time.Hour} {
+			base := &config.Config{PBSPollingInterval: time.Minute, PMGPollingInterval: time.Minute}
+			monitor := &Monitor{config: base.DeepCopy()}
+			monitor.SetPBSPollingInterval(override)
+			monitor.SetPMGPollingInterval(override)
+			thresholds := monitor.resourceStaleThresholds()
+			for instanceType, source := range map[InstanceType]unifiedresources.DataSource{
+				InstanceTypePBS: unifiedresources.SourcePBS,
+				InstanceTypePMG: unifiedresources.SourcePMG,
+			} {
+				scheduled := monitor.baseIntervalForInstanceType(instanceType)
+				want := resourceStaleThresholdForPollInterval(scheduled, defaultPlatformResourceStaleThreshold)
+				if got := thresholds[source]; got != want {
+					t.Errorf("%s threshold = %v for override %v, want %v from the scheduler's %v", source, got, override, want, scheduled)
+				}
+			}
+		}
+	})
+
+	// The adaptive scheduler picks intervals from its own bounds and never
+	// reads the per-platform intervals or overrides, so a save must not move
+	// freshness there: it follows the scheduler's maximum interval, which the
+	// 5-minute per-platform interval below would not give (10 minutes).
+	// TestMonitorResourceFreshnessFollowsAdaptiveCadence covers the cadence
+	// itself.
+	t.Run("adaptive scheduling ignores per-platform overrides", func(t *testing.T) {
+		base := &config.Config{PBSPollingInterval: 5 * time.Minute, PMGPollingInterval: 5 * time.Minute}
+		monitor := &Monitor{
+			config:    base.DeepCopy(),
+			scheduler: NewAdaptiveScheduler(SchedulerConfig{MaxInterval: 15 * time.Minute}, nil, nil, nil),
+		}
+		const want = 30 * time.Minute
+		before := monitor.resourceStaleThresholds()
+		monitor.SetPBSPollingInterval(time.Minute)
+		monitor.SetPMGPollingInterval(time.Minute)
+		after := monitor.resourceStaleThresholds()
+		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG, unifiedresources.SourceProxmox} {
+			if before[source] != want || after[source] != want {
+				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v from its 15m maximum throughout",
+					source, before[source], after[source], want)
+			}
+		}
+	})
+}
+
 // Mock history is seeded for a bounded window, so chart ranges longer than the
 // seed fall through to the synthetic generator. That generator must still carry
 // the host-relative `memoryused` byte series, or the workloads memory column in
@@ -2957,7 +3237,7 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 	if !view.freshness.IsZero() {
 		want.LastUpdate = view.freshness.UnixMilli()
 	}
-	got := m.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	got := m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, m.mockModeFence.begin(), func() time.Time { return now })
 	wantJSON, err := json.Marshal(want)
 	if err != nil {
 		t.Fatal(err)
@@ -2978,6 +3258,26 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 // The runtime contract includes both poll builders, protocol admission and truthful History.
 func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
+}
+
+func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
+	t.Run("current-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, false) })
+	t.Run("recent-evidence-without-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, true) })
+}
+
+func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
+	testGuestWindowsMeminfoPolling(t)
+}
+
+func TestGuestWindowsRestartPollingContract(t *testing.T) {
+	t.Run("cold-and-expired", testGuestWindowsBootstrapPolling)
+	t.Run("process-restart", testGuestWindowsBootstrapProcessRestart)
+	t.Run("admission-and-identity", testGuestWindowsBootstrapSafety)
+}
+
+func TestGuestMetadataRejectionRecoveryContract(t *testing.T) {
+	t.Run("typed-rejection", testGuestMetadataRejectedOSInfo)
+	t.Run("ordinary-stopped-agent-recovery", testGuestMetadataStoppedAgentPollingRecovery)
 }
 
 func TestGuestMemoryObservationContract(t *testing.T) {
@@ -3065,6 +3365,10 @@ func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 	}
 }
 
+func TestGuestAgentUnrecognisedHTTPStatusContract(t *testing.T) {
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "conflict response", "too early response", "client closed response")
+}
+
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 	for _, reason := range []string{"agent-redirect", "agent-transport-unverified", "agent-completion-unverified"} {
 		for _, prefix := range []string{"", "prev-"} {
@@ -3078,7 +3382,14 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 			t.Errorf("completed/ordinary error %q became transport uncertainty", reason)
 		}
 	}
-	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "lost reply", "redirect", "server error", "gateway error")
+}
+
+func TestGuestAgentSuccessEnvelopeMonitoringContract(t *testing.T) {
+	// A complete HTTP 200 is not enough to renew guest caches or History when
+	// it only supplies a malformed, ambiguous or prefix-only reply. These
+	// real client/builder controls also keep independent CPU progressing.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "malformed success", "ambiguous success", "trailing success")
 }
 
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
@@ -3095,4 +3406,8 @@ func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 			t.Errorf("%s has %d shared backup evaluations, want %d", path, got, want)
 		}
 	}
+}
+
+func TestGuestMemorySampleCapacityCanonicalProjection(t *testing.T) {
+	testGuestMemorySampleCapacityPolling(t)
 }

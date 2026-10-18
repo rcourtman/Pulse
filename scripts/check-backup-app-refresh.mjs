@@ -266,10 +266,12 @@ try {
   });
   await pbsToggle.focus();
   await pbsToggle.press("Enter");
-  const history = page.getByRole("tab", { name: "History", exact: true });
+  // History charts sit on the Overview tab; keep that tab focused and selected
+  // while socket updates replace the row's data.
+  const history = page.getByRole("tab", { name: "Overview", exact: true });
   await history.click();
   await history.focus();
-  await expect(page.getByTestId("resource-metrics-history-tab")).toBeVisible();
+  await expect(page.getByTestId("resource-metrics-history")).toBeVisible();
   await page.waitForTimeout(500);
   const historyBaseline = await capture();
   const historySamples = [];
@@ -283,7 +285,7 @@ try {
     await expect(history).toHaveAttribute("aria-selected", "true");
     await expect(history).toBeFocused();
     await expect(
-      page.getByTestId("resource-metrics-history-tab"),
+      page.getByTestId("resource-metrics-history"),
     ).toBeVisible();
     const sample = await capture();
     expect(sample.url).toBe(historyBaseline.url);

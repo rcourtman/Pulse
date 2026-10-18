@@ -1,7 +1,15 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { A } from '@solidjs/router';
-import { Show, createMemo, createResource, type Component, type JSX } from 'solid-js';
+import {
+  Show,
+  createMemo,
+  createResource,
+  onCleanup,
+  onMount,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import PlusIcon from 'lucide-solid/icons/plus';
-import SettingsIcon from 'lucide-solid/icons/settings';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -36,15 +44,12 @@ import {
   getAvailabilityProbePresentation,
 } from '@/utils/availabilityProbePresentation';
 import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
-import {
-  buildAvailabilitySettingsPath,
-  buildAvailabilityTargetAddPath,
-} from '@/components/Settings/availabilitySettingsModel';
+import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import {
   getStandaloneResourceStatusIndicator,
   sortStandaloneResourcesByAttention,
 } from './standalonePageModel';
-import { AvailabilityFleetView } from './AvailabilityFleetView';
+import { AvailabilityFleetView, getAvailabilityUptimeCell } from './AvailabilityFleetView';
 
 export type AvailabilityChecksView = 'table' | 'fleet';
 
@@ -77,15 +82,31 @@ const formatTarget = (resource: Resource): string => {
   return getAvailabilityProbeEndpointLabel(availability) || resource.name;
 };
 
-const formatFailures = (availability: ResourceAvailabilityMeta | undefined): string => {
+// "3/2" read as a fraction. Say what it counts and, on hover, when it turns
+// into offline.
+const formatFailures = (
+  availability: ResourceAvailabilityMeta | undefined,
+): { label: string; title?: string } => {
   const failures = availability?.consecutiveFailures;
-  if (typeof failures !== 'number' || !Number.isFinite(failures) || failures <= 0) return '—';
-  const threshold = availability?.failureThreshold;
-  if (typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0) {
-    return `${failures}/${threshold}`;
+  if (typeof failures !== 'number' || !Number.isFinite(failures) || failures <= 0) {
+    return { label: '—' };
   }
-  return String(failures);
+  const threshold = availability?.failureThreshold;
+  const title =
+    typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0
+      ? `${failures} failed ${failures === 1 ? 'check' : 'checks'} in a row. It counts as offline after ${threshold}.`
+      : undefined;
+  return { label: `${failures} in a row`, title };
 };
+
+const AVAILABILITY_HISTORY_REFRESH_MS = 5 * 60 * 1000;
+
+const UPTIME_TONE_CLASS = {
+  default: 'text-base-content',
+  warning: 'text-amber-700 dark:text-amber-300',
+  danger: 'text-red-600 dark:text-red-300',
+  muted: 'text-muted',
+} as const;
 
 export const AvailabilityChecksTable: Component<{
   resources: Resource[];
@@ -102,12 +123,13 @@ export const AvailabilityChecksTable: Component<{
   onExternalStatusChange?: (status: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: (resources, search, status) =>
       filterPlatformResources(resources, search, status, (resource) => {
-        const variant = getStandaloneResourceStatusIndicator(resource).variant;
+        const variant = getStandaloneResourceStatusIndicator(resource, now()).variant;
         if (variant === 'success') return 'online';
         if (variant === 'danger') return 'offline';
         return 'degraded';
@@ -124,16 +146,17 @@ export const AvailabilityChecksTable: Component<{
     }
     tableState.resetFilters();
   };
-  const orderedChecks = createMemo(() => sortStandaloneResourcesByAttention(tableState.filtered()));
+  const orderedChecks = createMemo(() =>
+    sortStandaloneResourcesByAttention(tableState.filtered(), now()),
+  );
   const historyTargetIDs = createMemo(() =>
     props.resources
       .map((resource) => availabilityFor(resource)?.targetId)
       .filter((targetID): targetID is string => Boolean(targetID)),
   );
+  // The table's Uptime 24h column and the fleet view read the same history.
   const historySource = createMemo(() =>
-    (props.view ?? 'table') === 'fleet' && historyTargetIDs().length > 0
-      ? historyTargetIDs().join('\u0000')
-      : undefined,
+    historyTargetIDs().length > 0 ? historyTargetIDs().join('\u0000') : undefined,
   );
   const [history, historyActions] = createResource(historySource, async () => {
     try {
@@ -147,6 +170,14 @@ export const AvailabilityChecksTable: Component<{
         error: error instanceof Error ? error.message : 'Availability history is unavailable',
       };
     }
+  });
+  // Uptime moves as probes run, and a failed read should not stick: refresh
+  // the shared history on a slow cadence while the table is mounted.
+  onMount(() => {
+    const timer = window.setInterval(() => {
+      if (historySource()) void historyActions.refetch();
+    }, AVAILABILITY_HISTORY_REFRESH_MS);
+    onCleanup(() => window.clearInterval(timer));
   });
   const historyByTarget = createMemo(
     () => new Map((history()?.response?.targets ?? []).map((target) => [target.targetId, target])),
@@ -237,10 +268,6 @@ export const AvailabilityChecksTable: Component<{
                     <PlusIcon class="h-3.5 w-3.5" />
                     Add service/device check
                   </A>
-                  <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
-                    <SettingsIcon class="h-3.5 w-3.5" />
-                    Manage
-                  </A>
                 </div>
               }
               tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
@@ -252,12 +279,12 @@ export const AvailabilityChecksTable: Component<{
                     Check
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden platform-table-mobile-w-15 md:w-[12%]`}
                   >
                     Method
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[22%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden platform-table-mobile-w-25 md:w-[22%]`}
                   >
                     Target
                   </TableHead>
@@ -265,6 +292,12 @@ export const AvailabilityChecksTable: Component<{
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[12%]`}
                   >
                     Result
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[9%]`}
+                    title="Share of the last 24 hours the check was reachable"
+                  >
+                    Uptime 24h
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
@@ -282,7 +315,7 @@ export const AvailabilityChecksTable: Component<{
                     Failures
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden 2xl:table-cell 2xl:w-[7%]`}
                   >
                     Interval
                   </TableHead>
@@ -292,15 +325,15 @@ export const AvailabilityChecksTable: Component<{
                 <PlatformWindowedRows items={orderedChecks} estimatedRowHeight={32}>
                   {(check) => {
                     const availability = () => availabilityFor(check);
-                    const probe = () => getAvailabilityProbePresentation(check);
-                    const indicator = () => getStandaloneResourceStatusIndicator(check);
+                    const probe = () => getAvailabilityProbePresentation(check, new Date(now()));
+                    const indicator = () => getStandaloneResourceStatusIndicator(check, now());
                     const method = () =>
                       probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
                     const result = () => probe()?.resultLabel ?? indicator().label;
                     const target = () => formatTarget(check);
                     const probeSource = () =>
                       (availability()?.locations?.length ?? 0) > 1
-                        ? `${availability()?.locations?.length} locations · ${availability()?.reportingLocations ?? 0}/${availability()?.expectedLocations ?? availability()?.locations?.length ?? 0} reporting`
+                        ? `${availability()?.reportingLocations ?? 0}/${availability()?.expectedLocations ?? availability()?.locations?.length ?? 0} locations reporting`
                         : getProbeSourceChipLabel(
                             props.probeAgentOptions ?? [],
                             availability()?.probeAgentId,
@@ -337,13 +370,17 @@ export const AvailabilityChecksTable: Component<{
                               </span>
                             </div>
                           </TableCell>
+                          {/* On a phone the check name needs the room; the method
+                              and target stay in the row drawer. */}
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            {method()}
+                            <span class="block truncate" title={method()}>
+                              {method()}
+                            </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span class="block truncate" title={target()}>
                               {target()}
@@ -352,22 +389,50 @@ export const AvailabilityChecksTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
-                              {result()}
-                            </span>
-                            <Show when={probeSource()}>
-                              {(sourceLabel) => (
-                                <MetadataBadge
-                                  tone="muted"
-                                  size="xs"
-                                  appearance="outline"
-                                  class="mt-0.5 flex"
-                                  data-availability-probe-source={availability()?.probeAgentId}
+                            {/* One line, as the table windows rows at a single
+                                height: the result stays whole at the right edge
+                                and the probe source takes what room is left,
+                                truncating with its full text on hover. */}
+                            <div class="flex min-w-0 items-center justify-end gap-1">
+                              <Show when={probeSource()}>
+                                {(sourceLabel) => (
+                                  <MetadataBadge
+                                    tone="muted"
+                                    size="xs"
+                                    appearance="outline"
+                                    class="min-w-0"
+                                    title={sourceLabel()}
+                                    data-availability-probe-source={availability()?.probeAgentId}
+                                  >
+                                    <span class="truncate">{sourceLabel()}</span>
+                                  </MetadataBadge>
+                                )}
+                              </Show>
+                              <span
+                                class={`shrink-0 ${probe()?.toneClassName ?? ''}`}
+                                title={probe()?.detailLabel}
+                              >
+                                {result()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden tabular-nums lg:table-cell`}
+                          >
+                            {(() => {
+                              const uptime = getAvailabilityUptimeCell(
+                                historyByTarget().get(availability()?.targetId ?? ''),
+                              );
+                              return (
+                                <span
+                                  class={UPTIME_TONE_CLASS[uptime.tone]}
+                                  title={uptime.title}
+                                  data-availability-uptime
                                 >
-                                  {sourceLabel()}
-                                </MetadataBadge>
-                              )}
-                            </Show>
+                                  {uptime.label}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
@@ -388,10 +453,12 @@ export const AvailabilityChecksTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatFailures(availability())}
+                            <span title={formatFailures(availability()).title}>
+                              {formatFailures(availability()).label}
+                            </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content 2xl:table-cell`}
                           >
                             <PlatformTableDurationValue
                               seconds={availability()?.pollIntervalSeconds}
@@ -402,7 +469,7 @@ export const AvailabilityChecksTable: Component<{
                           resource={check}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={8}
+                          colSpan={9}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(check)}
                         />

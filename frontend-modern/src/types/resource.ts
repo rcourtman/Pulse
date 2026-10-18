@@ -16,6 +16,7 @@ import type {
   HostSensorSummary,
   HostRAIDArray,
   Memory,
+  MemoryObservation,
   DockerRuntimeCommand,
   PBSBackupJob,
   PBSGarbageJob,
@@ -119,7 +120,8 @@ export interface ResourceHealth {
 
 // Metric value with optional limits
 export interface ResourceMetric {
-  current: number; // Current value (percentage or bytes)
+  current: number; // Selected numeric value (percentage or bytes), not a freshness assertion.
+  observation?: MemoryObservation;
   total?: number; // Total capacity (bytes) - null for percentages
   used?: number; // Used amount (bytes)
   free?: number; // Free amount (bytes)
@@ -135,17 +137,6 @@ export interface ResourceNetwork {
 export interface ResourceDiskIO {
   readRate?: number; // Observed read rate (bytes/sec), including measured zero.
   writeRate?: number; // Absent directions remain unavailable.
-}
-
-// Alert associated with a resource
-export interface ResourceAlert {
-  id: string;
-  type: string; // cpu, memory, disk, temperature, etc.
-  level: string; // warning, critical
-  message: string;
-  value: number;
-  threshold: number;
-  startTime: number; // Unix milliseconds
 }
 
 // Provider-native incident associated with a unified resource.
@@ -176,27 +167,6 @@ export interface ResourceDiscoveryTarget {
   agentId: string;
   resourceId: string;
   hostname?: string;
-}
-
-export type ResourceDiscoveryReadinessState =
-  'fresh' | 'stale' | 'missing' | 'running' | 'failed' | 'unavailable' | 'unsupported';
-
-export interface ResourceDiscoveryReadiness {
-  state: ResourceDiscoveryReadinessState;
-  reason?: string;
-  source?: string;
-  resourceType?: string;
-  targetId?: string;
-  resourceId?: string;
-  discoveryId?: string;
-  observedAt?: string;
-  generatedAt?: string;
-  ageSeconds?: number;
-  staleAfterSeconds?: number;
-  factCount?: number;
-  serviceName?: string;
-  serviceCategory?: string;
-  confidence?: number;
 }
 
 export interface ResourceCanonicalIdentity {
@@ -782,6 +752,10 @@ export interface ResourceProxmoxMeta {
     available?: boolean;
     legacySensorsFormat?: boolean;
   };
+  // Registry-derived on Proxmox nodes: the legacy setup above is in use and a
+  // SATA/SAS disk under the node has no current temperature. It arrives on the
+  // node so the outdated sensor setup notice never needs the disk inventory.
+  sensorSetupOutdated?: boolean;
 }
 
 export interface ResourceVirtualMachineMeta {
@@ -1657,7 +1631,6 @@ export interface Resource {
   customUrl?: string;
   lastSeen: number; // Unix milliseconds
   health?: ResourceHealth;
-  alerts?: ResourceAlert[];
   incidents?: ResourceIncident[];
   incidentCount?: number;
   incidentCode?: string;
@@ -1675,7 +1648,6 @@ export interface Resource {
 
   // Canonical discovery request coordinates from backend
   discoveryTarget?: ResourceDiscoveryTarget;
-  discoveryReadiness?: ResourceDiscoveryReadiness;
 
   // Metrics history query coordinates from backend
   metricsTarget?: ResourceMetricsTarget;
@@ -1762,7 +1734,6 @@ export interface ResourceFilter {
   statuses?: ResourceStatus[];
   parentId?: string;
   clusterId?: string;
-  hasAlerts?: boolean;
   search?: string;
 }
 

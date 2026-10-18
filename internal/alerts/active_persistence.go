@@ -180,6 +180,10 @@ func (m *Manager) snapshotActiveAlerts() []*Alert {
 		clone := alert.Clone()
 		backfillCanonicalIdentity(clone)
 		clone.ID = exportedAlertID(clone, clone.ID)
+		// The live status changes on every poll while a threshold alert
+		// holds; keeping it out of the checkpoint keeps an unchanged alert
+		// set byte-identical, so the recovery mirror is not rewritten.
+		clone.MetricStatus = nil
 		alerts = append(alerts, clone)
 	}
 	m.mu.RUnlock()
@@ -308,6 +312,7 @@ func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string) {
 	clone := alert.Clone()
 	backfillCanonicalIdentity(clone)
 	clone.ID = exportedAlertID(clone, clone.ID)
+	clone.MetricStatus = nil
 	storageKey := activeAlertStorageKey(clone, fallback)
 	if storageKey == "" {
 		return
@@ -431,6 +436,7 @@ func (m *Manager) restoreActiveAlertSnapshots(alerts []*Alert, source string, re
 	m.mu.Lock()
 	if replace {
 		m.activeAlerts = make(map[string]*Alert)
+		m.restoredBackupNotifications = nil
 		m.activeAlertAlias = make(map[string]string)
 		m.ackState = make(map[string]ackRecord)
 		m.ackStateByCanonical = make(map[string]ackRecord)
@@ -526,7 +532,14 @@ func (m *Manager) restoreActiveAlertSnapshots(alerts []*Alert, source string, re
 		restoredCount++
 
 		if alert.Level == AlertLevelCritical {
-			restoredCritical = append(restoredCritical, alert.Clone())
+			if alert.Type == "backup-age" {
+				if m.restoredBackupNotifications == nil {
+					m.restoredBackupNotifications = make(map[string]time.Time)
+				}
+				m.restoredBackupNotifications[canonicalTrackingKeyForAlert(alert)] = alert.StartTime
+			} else {
+				restoredCritical = append(restoredCritical, alert.Clone())
+			}
 		}
 	}
 	if err := m.loadIntentPendingNoLock(); err != nil {

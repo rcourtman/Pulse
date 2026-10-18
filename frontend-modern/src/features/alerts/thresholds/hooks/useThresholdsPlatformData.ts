@@ -9,6 +9,7 @@ import type { Resource } from '@/types/resource';
 import type { Resource as TableResource } from '../tableTypes';
 import type { Override } from '../types';
 import type { ThresholdsDataInputs } from '../thresholdsResourceModel';
+import { resolveTrueNASDiskTemperatureDefault } from '../trueNASDiskTemperature';
 import {
   createOverridesMap,
   findOverrideByCandidates,
@@ -307,7 +308,18 @@ export function useThresholdsPlatformData(inputs: ThresholdsDataInputs) {
           resource,
           type: 'truenasDisk',
           resourceType: 'TrueNAS Disk',
-          defaults: trueNASDiskDefaults(),
+          // Each disk inherits the trigger saving would apply to it: the
+          // TrueNAS-wide value, else its type's disk temperature trigger.
+          defaults: {
+            temperature: resolveTrueNASDiskTemperatureDefault(
+              trueNASDiskDefaults().temperature,
+              {
+                agentDiskTemperature: props.agentDefaults?.diskTemperature,
+                diskTempByType: props.diskTempByType ?? {},
+              },
+              resource.physicalDisk?.diskType,
+            ),
+          },
           overridesMap,
           node: trueNASSystemName(resource),
           instance: readString(resource.physicalDisk?.diskType) || 'TrueNAS',

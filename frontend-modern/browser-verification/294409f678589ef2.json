@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "41cea2ffab5ca2d39240d14138975bc4e902bb61",
+  "verified_at": "2026-10-07T11:28:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/features/platformPage/sensorSetup.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "e6e8b46a156df4a1d1b391de19f041c0a1f74eb7e2ecdb78fdfa773a4c336262",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "fa1c743eaec09f424c80aa5d3aee9082817e54353a853b542620eb45792f5887",
+    "frontend-modern/src/features/platformPage/sensorSetup.ts": "5b92f1fc07b513a11f0e8f2654b0717baa4b99d742eae76368844731a5f89eb9",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "dd7c5189a950adba606a7ea4d0d40233d158e965883135b6fe82b772a6dcf5cd"
+  },
+  "routes": [
+    "/truenas/storage?kind=disks",
+    "/proxmox/storage",
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Vite dev server on this tree (origin/main 41cea2ffab plus the change) against a private PULSE_MOCK_MODE backend (8-node estate) built with a local-only go build -overlay (never committed). The overlay stamps TrueNAS disk sdb with physicalDisk.temperature 61 and collection.temperature unavailable 'host agent stopped reporting' (the shape a TrueNAS disk merged with a silent host agent row reaches), pins sdd to a current 58, gives pve3 SATA disk /dev/nvme2 the same retained state (51) and marks pve3's sensor payload legacySensorsFormat; /api/resources and the websocket rows carried those states",
+    "Before control in the same session (the four runtime files swapped to origin/main under the running Vite, then restored and compared byte for byte): sdb Temp cell plain 61.0°C sorting first in hottest-first, drawer Temperature row 61°C in the amber warning tone, TrueNAS summary 'SATA, Passed, 16.0 TB, 61°C', History with no smart_temp points showing '-', and no outdated sensor setup notice for pve3",
+    "After, TrueNAS storage disks view: sdb Temp cell '61.0°C' muted (rgb 71,85,105) with a dotted underline, title 'Last known reading, not current: host agent stopped reporting', data-temperature-reading=last-known and screen-reader ', last known'; current disks (sdd 58.0°C, sda 46.0°C) unchanged; no Attention reason for sdb",
+    "After, Temp sort: descending sdd 58, sdf 47, nvme0n1 46, sda 46, sde 42, nvme1n1 41, sdc 39, then sdb last; ascending sdc 39 ... sdd 58, then sdb last (a retained reading sorts as no reading)",
+    "After, sdb row drawer (Platform details > Show TrueNAS): Health Temperature row '61°C (last known)' in text-muted with the reason as its title; the collapsed TrueNAS summary reads 'SATA, Passed, 16.0 TB' with no temperature",
+    "After, sdb drawer History tab: with seeded points the legend shows the stored 53°C and the line 'Disk reading: Last known reading, not current: host agent stopped reporting.'; with the smart_temp series emptied by a Playwright route the legend reads 'Disk 61°C last known' (data-history-last-known=smart_temp, no 'current') with the same line; current disk sdd with no points reads 'Disk 58°C current'",
+    "After, /proxmox/storage: 'pve3 is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures. Re-run the node setup script to upgrade it.' notice shows at both widths (hidden on main); /proxmox Overview loads no physical disks so the notice cannot show there on main or after (pre-existing, chipped separately)",
+    "No page errors at 1440x900 or 390x844",
+    "Re-run after review edits (History model reads a disk's value only from physicalDisk, never a top-level fallback): every reading above was unchanged at both widths"
+  ],
+  "interactions": [
+    "Opened /truenas/storage?kind=disks at 1440x900 and 390x844 and read every disk row's Temp cell (text, title, data attribute, computed colour and decoration)",
+    "Clicked the Temp column header twice at 1440x900 and read the disk row order for descending and ascending",
+    "Opened the sdb row drawer with 'Expand details for sdb', opened Platform details and clicked 'Show TrueNAS', read the summary and the Health Temperature row at both widths",
+    "Opened the drawer History tab with stored points, returned to Overview, then reopened History with the smart_temp series emptied, and read the Temperature legend and reason line at both widths; repeated for current disk sdd",
+    "Opened /proxmox and /proxmox/storage at both widths and read the outdated sensor setup notice",
+    "Ran the same Playwright pass against the origin/main runtime files as the before control, restored the change and confirmed the full git diff was byte-identical"
+  ]
+}

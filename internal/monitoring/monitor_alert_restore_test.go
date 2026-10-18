@@ -134,7 +134,7 @@ func TestResourcePublicationReconcilesRestoredNativeAlertAliases(t *testing.T) {
 	if got := len(manager.GetActiveAlerts()); got != 3 {
 		t.Fatalf("alerts before resource publication = %d, want 3", got)
 	}
-	monitor.updateResourceStore(snapshot)
+	monitor.updateResourceStore(snapshot, monitor.mockModeFence.begin())
 	active := manager.GetActiveAlerts()
 	if len(active) != 1 || active[0].ResourceID != "unaffected" {
 		t.Fatalf("resource publication did not reconcile restored aliases: %+v", active)

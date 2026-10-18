@@ -200,11 +200,11 @@ func probeICMP(ctx context.Context, target config.AvailabilityTarget) error {
 	if details == "" {
 		return fmt.Errorf("icmp probe failed: %w", err)
 	}
-	// Units written before v6.1.0-rc.1 lack AmbientCapabilities=CAP_NET_RAW and
-	// in-place updates never rewrite the unit, so ping fails like this on every
-	// upgraded install (#1554). Point at the unit instead of echoing ping stderr.
+	// The check runs on the selected server or agent, and a permission failure
+	// does not identify a particular unit setting. Keep the guidance within the
+	// agent's 240-byte error limit without recommending privilege escalation.
 	if strings.Contains(details, "Operation not permitted") || strings.Contains(details, "cap_net_raw") {
-		return fmt.Errorf("icmp probe blocked. The Pulse service unit does not grant CAP_NET_RAW, so ping cannot open a socket. Re-run the Pulse installer to regenerate the unit, or add a systemd override with AmbientCapabilities=CAP_NET_RAW and CapabilityBoundingSet=CAP_NET_RAW, then restart the service")
+		return fmt.Errorf("icmp probe blocked by local permissions on the selected observation host (server or agent). See docs/CONFIGURATION.md#icmp-probe-privileges. Preserve NoNewPrivileges and intentional capability/container restrictions.")
 	}
 	if len(details) > 240 {
 		details = details[:240]

@@ -36,6 +36,7 @@ import {
   UPDATES_PANEL_COPY,
 } from '@/utils/updatesPresentation';
 import { updateStore } from '@/stores/updates';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 export interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
@@ -54,6 +55,7 @@ export interface UpdatesSettingsPanelProps {
 }
 
 export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props) => {
+  const now = useRelativeTimeNow();
   const autoUpdateTitleId = `settings-updates-${createUniqueId()}-auto-update-title`;
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
@@ -198,7 +200,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           </p>
                           <Show when={!props.versionInfo()?.isSourceBuild}>
                             <p class="mt-0.5 text-xs text-muted">
-                              {getUpdateCheckedLabel(updateStore.lastCheckedAt())}
+                              {getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())}
                             </p>
                           </Show>
                         </>
@@ -312,7 +314,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
           />
 
           <Show when={isPreviewChannel()}>
-            <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
               <p class="font-medium">{UPDATES_PANEL_COPY.previewChannelTitle}</p>
               <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
                 {UPDATES_PANEL_COPY.previewChannelDescription}

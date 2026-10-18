@@ -145,53 +145,11 @@ func (HeuristicNarrator) Narrate(_ context.Context, in NarrativeInput) (Narrativ
 }
 
 func heuristicHealthStatus(in NarrativeInput) string {
-	criticalAlerts := 0
-	warningAlerts := 0
-	for _, alert := range in.Alerts {
-		if alert.ResolvedTime != nil {
-			continue
-		}
-		if alert.Level == "critical" {
-			criticalAlerts++
-		} else {
-			warningAlerts++
-		}
-	}
-	switch {
-	case criticalAlerts > 0:
-		return "CRITICAL"
-	case warningAlerts > 0:
-		return "WARNING"
-	default:
-		return "HEALTHY"
-	}
+	return assessAlertHealth(in.Alerts).Status
 }
 
 func heuristicHealthMessage(in NarrativeInput) string {
-	criticalAlerts := 0
-	warningAlerts := 0
-	for _, alert := range in.Alerts {
-		if alert.ResolvedTime != nil {
-			continue
-		}
-		if alert.Level == "critical" {
-			criticalAlerts++
-		} else {
-			warningAlerts++
-		}
-	}
-	switch {
-	case criticalAlerts == 1:
-		return "1 critical issue requires immediate attention"
-	case criticalAlerts > 1:
-		return fmt.Sprintf("%d critical issues require immediate attention", criticalAlerts)
-	case warningAlerts == 1:
-		return "1 warning detected - review recommended"
-	case warningAlerts > 1:
-		return fmt.Sprintf("%d warnings detected - review recommended", warningAlerts)
-	default:
-		return "All systems operating normally"
-	}
+	return assessAlertHealth(in.Alerts).Message
 }
 
 // heuristicObservations mirrors the original generateObservations rules.
@@ -273,7 +231,7 @@ func heuristicObservations(in NarrativeInput) []NarrativeBullet {
 
 	resolved := 0
 	for _, alert := range in.Alerts {
-		if alert.ResolvedTime != nil {
+		if alert.Recovered() {
 			resolved++
 		}
 	}
@@ -282,6 +240,17 @@ func heuristicObservations(in NarrativeInput) []NarrativeBullet {
 			Text:     fmt.Sprintf("%d alerts were triggered and resolved during this period", resolved),
 			Severity: NarrativeSeverityInfo,
 		})
+	}
+	// A close that was not a recovery is recorded as what happened. The
+	// health verdict, the active list and the recommendations carry the
+	// warning while the successor's reading is not in this report.
+	for _, alert := range in.Alerts {
+		if alert.ClosedWithoutRecovery() {
+			obs = append(obs, NarrativeBullet{
+				Text:     alert.ResolutionSummary(),
+				Severity: NarrativeSeverityInfo,
+			})
+		}
 	}
 
 	for _, disk := range in.Disks {
@@ -314,19 +283,8 @@ func heuristicObservations(in NarrativeInput) []NarrativeBullet {
 
 // heuristicRecommendations mirrors the original generateRecommendations rules.
 func heuristicRecommendations(in NarrativeInput) []string {
-	criticalAlerts := 0
-	warningAlerts := 0
-	for _, alert := range in.Alerts {
-		if alert.ResolvedTime != nil {
-			continue
-		}
-		if alert.Level == "critical" {
-			criticalAlerts++
-		} else {
-			warningAlerts++
-		}
-	}
-	_ = warningAlerts // retained for future shaping; matches original signature
+	health := assessAlertHealth(in.Alerts)
+	criticalAlerts := health.Critical
 
 	var recs []string
 
@@ -343,6 +301,9 @@ func heuristicRecommendations(in NarrativeInput) []string {
 
 	if criticalAlerts > 0 {
 		recs = append(recs, "Investigate and resolve critical alerts immediately")
+	}
+	for _, successor := range movedAlertSuccessors(health.Unresolved) {
+		recs = append(recs, fmt.Sprintf("Check the current reading on %s - an alert moved there without recovering", successor))
 	}
 
 	if stats, ok := in.MetricStats["memory"]; ok {

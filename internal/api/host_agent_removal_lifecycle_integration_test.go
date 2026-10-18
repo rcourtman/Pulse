@@ -594,6 +594,93 @@ func TestHostAgentFreshInstallTokenReplacesStaleDisabledCommandPolicyOnce(t *tes
 	}
 }
 
+// An agent started with a configured --agent-id presents that ID while Pulse
+// resolves its reports to the machine's host ID, acknowledges that ID, and the
+// agent persists it. Its command channel used to bind the install token to the
+// configured ID on first registration, so the config gate (which judges the
+// resolved ID) turned the operator's commands-enabled install off on the next
+// report, and a restart under the persisted ID was refused for good. The
+// acknowledgement now names the resolved ID as the command identity, the
+// agent's channel binds it, and every later report, restart and gate decision
+// agrees on it.
+func TestHostAgentCommandChannelBindsTheIdentityPulseAcknowledges(t *testing.T) {
+	dataPath := t.TempDir()
+	const adminRaw = "command-identity-admin-token-123.12345678"
+	admin := newTokenRecord(t, adminRaw, []string{config.ScopeWildcard}, nil)
+	if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{admin}); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+	runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{admin})
+	t.Cleanup(runtime.stop)
+
+	installRec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agent-install-command", adminRaw,
+		[]byte(`{"type":"host","enableCommands":true,"name":"configured-agent-id-install"}`))
+	install := decodeHostAgentInstallResponse(t, installRec)
+	if install.Token == "" || install.Record == nil {
+		t.Fatalf("commands-enabled install omitted token record: %+v", install)
+	}
+
+	const (
+		presentedID = "configured-agent-id"
+		machineID   = "machine-configured-agent-id"
+		hostname    = "configured-host"
+	)
+	report := agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: presentedID, Version: "6.5.0", Type: "unified", CommandsEnabled: true},
+		Host:      agentshost.HostInfo{ID: machineID, MachineID: machineID, Hostname: hostname, Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+	}
+	ack := func() map[string]any {
+		t.Helper()
+		body, err := json.Marshal(report)
+		if err != nil {
+			t.Fatalf("marshal report: %v", err)
+		}
+		rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/report", install.Token, body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("report status = %d: %s", rec.Code, rec.Body.String())
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+			t.Fatalf("decode ack: %v", err)
+		}
+		report.Timestamp = report.Timestamp.Add(time.Minute)
+		return decoded
+	}
+
+	first := ack()
+	resolved, _ := first["agentId"].(string)
+	if resolved != machineID {
+		t.Fatalf("ack agentId = %q, want the resolved host ID %q", resolved, machineID)
+	}
+	if got, _ := first["commandAgentId"].(string); got != resolved {
+		t.Fatalf("ack commandAgentId = %v, want the resolved %q", first["commandAgentId"], resolved)
+	}
+
+	// The agent registers its command channel under the named identity, then
+	// restarts under the identity it persisted from the acknowledgement.
+	if _, ok := runtime.router.admitAgentExecToken(install.Token, resolved, hostname); !ok {
+		t.Fatal("first command registration under the named identity was refused")
+	}
+	if _, ok := runtime.router.admitAgentExecToken(install.Token, resolved, hostname); !ok {
+		t.Fatal("restart registration under the acknowledged identity was refused")
+	}
+
+	// The agent still presents its configured ID in reports. The gate keeps
+	// the operator's commands-enabled install on, and Pulse keeps naming the
+	// bound identity.
+	later := ack()
+	if got, _ := later["commandAgentId"].(string); got != resolved {
+		t.Fatalf("later ack commandAgentId = %v, want %q", later["commandAgentId"], resolved)
+	}
+	if cfg, _ := later["config"].(map[string]any); cfg == nil || cfg["commandsEnabled"] != true {
+		t.Fatalf("later ack config = %v, want commands kept enabled", later["config"])
+	}
+	if _, ok := runtime.router.admitAgentExecToken(install.Token, presentedID, hostname); ok {
+		t.Fatal("the install token admitted the presented identity as a second command identity")
+	}
+}
+
 func tokenRecordByID(records []config.APITokenRecord, tokenID string) *config.APITokenRecord {
 	for index := range records {
 		if records[index].ID == tokenID {

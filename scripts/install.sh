@@ -588,7 +588,7 @@ Options:
   --retarget              Point an existing agent at --url using saved identity and token
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
-  --token-file <path>     Read token from file (alternative to --token)
+  --token-file <path>     Read token from a private file; the caller owns its cleanup
   --pulse-url <url>       Alias for --url
   --preflight-only        Run preflight checks and exit (no install)
   --output <format>       Output format: text (default) or json
@@ -1045,10 +1045,74 @@ restart_sysv_agent_service() {
     "$initscript" start
 }
 
+# Destructive systemd teardown needs one complete, diagnostic-free observation,
+# not is-active's conflation of absence and a refused manager connection.
+read_agent_removal_unit_state() {
+    local unit="$1" observation="" line="" load="" active="" enabled=""
+    local load_count=0 active_count=0 enabled_count=0 read_completed="false"
+    # The sentinel prevents command substitution from discarding trailing blank
+    # diagnostics. Success requires the complete three-property response only.
+    observation=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState,ActiveState,UnitFileState 2>&1 &&
+        printf '%s' '__pulse_state_read_completed__') || return 1
+    [[ -n "$observation" ]] || return 1
+    while IFS= read -r line; do
+        [[ "$read_completed" == "false" ]] || return 1
+        case "$line" in
+            LoadState=*) load="${line#LoadState=}"; load_count=$((load_count + 1)) ;;
+            ActiveState=*) active="${line#ActiveState=}"; active_count=$((active_count + 1)) ;;
+            UnitFileState=*) enabled="${line#UnitFileState=}"; enabled_count=$((enabled_count + 1)) ;;
+            __pulse_state_read_completed__) read_completed="true" ;;
+            *) return 1 ;;
+        esac
+    done <<< "$observation"
+    [[ $load_count -eq 1 && $active_count -eq 1 && $enabled_count -eq 1 && "$read_completed" == "true" ]] || return 1
+    if [[ "$load" == not-found ]]; then
+        [[ "$active" == inactive && ( -z "$enabled" || "$enabled" == not-found ) ]] || return 1
+        printf 'not-found inactive -\n'
+        return 0
+    fi
+    case "$load" in loaded|masked) ;; *) return 1 ;; esac
+    case "$active" in active|inactive|failed) ;; *) return 1 ;; esac
+    case "$enabled" in
+        enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient|masked|masked-runtime) ;;
+        *) return 1 ;;
+    esac
+    printf '%s %s %s\n' "$load" "$active" "$enabled"
+}
+
+confirm_agent_unit_quiescent() {
+    local unit="$1" state="" load="" active="" enabled=""
+    state=$(read_agent_removal_unit_state "$unit") || return 1
+    read -r load active enabled <<< "$state"
+    [[ "$active" == inactive ]] || return 1
+    [[ "$load" == not-found ]] && return 0
+    case "$enabled" in disabled|static|indirect|masked|masked-runtime) return 0 ;; esac
+    return 1
+}
+
+quiesce_agent_units_for_removal() {
+    local unit="" state="" load="" active="" enabled=""
+    for unit in "$@"; do
+        state=$(read_agent_removal_unit_state "$unit") || return 1
+        read -r load active enabled <<< "$state"
+        [[ "$load" == not-found ]] && continue
+        if [[ "$active" != inactive ]]; then
+            timeout -k 1 5 systemctl stop "$unit" >/dev/null 2>&1 || return 1
+        fi
+        timeout -k 1 5 systemctl disable "$unit" >/dev/null 2>&1 || return 1
+        confirm_agent_unit_quiescent "$unit" || return 1
+    done
+    # Socket activation or another actor can change an earlier target while a
+    # later stop is in progress. Re-read the entire affected set before erasure.
+    for unit in "$@"; do
+        confirm_agent_unit_quiescent "$unit" || return 1
+    done
+}
+
 teardown_systemd_agent_service() {
     local unit_path="${1:-/etc/systemd/system/${AGENT_NAME}.service}"
-    systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-    systemctl disable "${AGENT_NAME}" 2>/dev/null || true
+    quiesce_agent_units_for_removal "${AGENT_NAME}.service" ||
+        fail "Agent service removal could not confirm a stopped, disabled unit; files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$unit_path"
     systemctl daemon-reload 2>/dev/null || true
 }
@@ -1057,9 +1121,8 @@ teardown_privileged_helper_service() {
     if ! command -v systemctl >/dev/null 2>&1; then
         return 0
     fi
-    systemctl stop "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
-    systemctl stop "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
-    systemctl disable "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
+    quiesce_agent_units_for_removal "${PRIVILEGED_HELPER_NAME}.socket" "${PRIVILEGED_HELPER_NAME}.service" ||
+        fail "Privileged helper removal could not confirm both socket and service quiescent; credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$PRIVILEGED_HELPER_SOCKET_UNIT" "$PRIVILEGED_HELPER_SERVICE_UNIT"
     rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
     rm -rf "$PRIVILEGED_HELPER_CREDENTIAL_DIR"
@@ -1152,8 +1215,10 @@ teardown_action_runner_service() {
 		had_runner_artifact="true"
 	fi
 	if command -v systemctl >/dev/null 2>&1; then
-		systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-		systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+		quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service" ||
+			fail "Action runner removal could not confirm a stopped, disabled unit; credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+	elif [[ "$had_runner_artifact" == "true" ]]; then
+		fail "Action runner removal requires observable systemd state; credentials and files were retained." "$EXIT_GENERAL"
 	fi
 	if [[ "$had_runner_artifact" == "true" ]]; then
 		if revoke_action_runner_credential; then
@@ -1172,55 +1237,449 @@ teardown_action_runner_service() {
 	rm -rf "$ACTION_RUNNER_CONFIG_DIR" "$ACTION_RUNNER_STATE_DIR"
 }
 
+# OpenRC's status command uses 3 for a stopped service. Neither that exit
+# alone nor a failed manager read proves quiescence: retain the complete,
+# colour-free response and require the matching status line as well.
+read_openrc_agent_removal_status() {
+    local observation="" line="" status="" result="" status_count=0 result_count=0
+    observation=$(LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-service "${AGENT_NAME}" status 2>&1 &&
+        printf '%s' '__pulse_openrc_status_exit__=0' || printf '%s' "__pulse_openrc_status_exit__=$?") || return 1
+    while IFS= read -r line; do
+        [[ $result_count -eq 0 ]] || return 1
+        if [[ "$line" =~ ^[[:space:]]*\*[[:space:]]+status:[[:space:]]+(started|stopped)[[:space:]]*$ ]]; then
+            status="${BASH_REMATCH[1]}"
+            status_count=$((status_count + 1))
+        elif [[ "$line" =~ ^__pulse_openrc_status_exit__=([0-9]+)$ ]]; then
+            result="${BASH_REMATCH[1]}"
+            result_count=$((result_count + 1))
+        else
+            return 1
+        fi
+    done <<< "$observation"
+    [[ $status_count -eq 1 && $result_count -eq 1 ]] || return 1
+    if [[ "$status" == started ]]; then
+        [[ "$result" == 0 ]] || return 1
+    else
+        [[ "$result" == 0 || "$result" == 3 ]] || return 1
+    fi
+    printf '%s\n' "$status"
+}
+
+read_openrc_agent_removal_runlevels() {
+    local observation="" line="" name="" levels="" level="" seen=" " count=0 complete="false"
+    local IFS=$' \t\n'
+    local -a row_levels=()
+    observation=$(LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-update show -v 2>&1 &&
+        printf '%s' '__pulse_openrc_runlevels_complete__') || return 1
+    while IFS= read -r line; do
+        [[ "$complete" == false ]] || return 1
+        if [[ "$line" == __pulse_openrc_runlevels_complete__ ]]; then
+            complete="true"
+        elif [[ "$line" =~ ^[[:space:]]*([A-Za-z0-9][A-Za-z0-9_.-]*)[[:space:]]+\|[[:space:]]*(.*)$ ]]; then
+            name="${BASH_REMATCH[1]}"
+            levels="${BASH_REMATCH[2]}"
+            read -r -a row_levels <<< "$levels"
+            # Validate every row, not just a matching substring of diagnostics.
+            for level in "${row_levels[@]}"; do
+                [[ "$level" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && ${#level} -le 64 ]] || return 1
+            done
+            if [[ "$name" == "$AGENT_NAME" ]]; then
+                count=$((count + 1))
+                [[ $count -eq 1 ]] || return 1
+                for level in "${row_levels[@]}"; do
+                    [[ "$seen" != *" $level "* ]] || return 1
+                    seen+="$level "
+                done
+            fi
+        else
+            return 1
+        fi
+    done <<< "$observation"
+    [[ "$complete" == true ]] || return 1
+    if [[ $count -eq 0 ]]; then
+        printf 'absent\n'
+    else
+        printf 'present%s\n' "${seen% }"
+    fi
+}
+
+quiesce_openrc_agent_for_removal() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}" status="" levels="" observation=""
+    # A missing script is a no-op only with a complete manager inventory and
+    # an independent, successful process-absence read. Unknown is not absent.
+    levels=$(read_openrc_agent_removal_runlevels) || return 1
+    if [[ ! -e "$init_path" && ! -L "$init_path" ]]; then
+        [[ "$levels" == absent ]] || return 1
+        observation=$(timeout -k 1 5 pgrep -x "${AGENT_NAME}" 2>&1 &&
+            printf '%s' '__pulse_openrc_process_exit__=0' || printf '%s' "__pulse_openrc_process_exit__=$?") || return 1
+        [[ "$observation" == __pulse_openrc_process_exit__=1 ]] || return 1
+        return 0
+    fi
+    [[ -f "$init_path" && ! -L "$init_path" && -x "$init_path" && "$levels" == present* ]] || return 1
+    status=$(read_openrc_agent_removal_status) || return 1
+    if [[ "$status" != stopped ]]; then
+        LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-service "${AGENT_NAME}" stop >/dev/null 2>&1 || return 1
+    fi
+    if [[ "$levels" != present ]]; then
+        # Custom runlevels can restart an installation too; deleting only the
+        # installer's default link is not sufficient for destructive removal.
+        LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-update del "${AGENT_NAME}" --all >/dev/null 2>&1 || return 1
+    fi
+    levels=$(read_openrc_agent_removal_runlevels) || return 1
+    [[ "$levels" == present ]] || return 1
+    status=$(read_openrc_agent_removal_status) || return 1
+    [[ "$status" == stopped ]]
+}
+
 teardown_openrc_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
-    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
-    rc-update del "${AGENT_NAME}" default 2>/dev/null || true
+    quiesce_openrc_agent_for_removal "$init_path" ||
+        fail "OpenRC removal could not confirm a stopped service with no runlevel activation; credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$init_path"
+}
+
+# Read one complete kernel process inventory. Return only PID/parent/role,
+# never command arguments (which can contain credentials). Both the agent and
+# daemon(8) supervising it must disappear; a stopped-looking rc.d status alone
+# cannot establish that after an ignored signal or lost PID file.
+read_legacy_agent_removal_processes() {
+    local observation="" line="" pid="" parent="" comm="" args="" role=""
+    local bootstrap="${1:-}"
+    local complete="false" count=0 parents=" " seen=" "
+    local -a rows=()
+    observation=$(LC_ALL=C timeout -k 1 5 ps -ax -o pid= -o ppid= -o comm= -o args= 2>&1 &&
+        printf '%s' '__pulse_processes_complete__') || return 1
+    while IFS= read -r line; do
+        [[ "$complete" == false ]] || return 1
+        if [[ "$line" == __pulse_processes_complete__ ]]; then
+            complete="true"
+            continue
+        fi
+        [[ "$line" =~ ^[[:space:]]*([1-9][0-9]*)[[:space:]]+([0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)$ ]] || return 1
+        pid="${BASH_REMATCH[1]}" parent="${BASH_REMATCH[2]}" comm="${BASH_REMATCH[3]}" args="${BASH_REMATCH[4]}"
+        [[ "$seen" != *" $pid "* ]] || return 1
+        seen+="$pid "
+        role="other"
+        if [[ "${comm##*/}" == "$BINARY_NAME" ]]; then
+            role="agent"
+            parents+="$parent "
+        elif [[ "${comm##*/}" == daemon && "$args" =~ (^|[[:space:]/])pulse-agent([[:space:]\[]|$) ]]; then
+            role="supervisor"
+        fi
+        if [[ -n "$bootstrap" && "$args" == *"$bootstrap"* ]]; then role="bootstrap"; fi
+        rows+=("$pid $parent $role ${comm##*/}")
+        count=$((count + 1))
+        [[ $count -le 65536 ]] || return 1
+    done <<< "$observation"
+    [[ "$complete" == true && $count -gt 0 ]] || return 1
+    for line in "${rows[@]}"; do
+        read -r pid parent role comm <<< "$line"
+        if [[ "$comm" == daemon && "$parents" == *" $pid "* ]]; then role="supervisor"; fi
+        printf '%s %s %s\n' "$pid" "$parent" "$role"
+    done
+}
+
+legacy_agent_processes_absent() {
+    [[ "$1" != *' agent'* && "$1" != *' supervisor'* ]]
+}
+
+validate_legacy_agent_removal_pidfiles() {
+    local inventory="$1" path="" pid="" size="" observed="" parent="" role=""
+    shift
+    for path in "$@"; do
+        [[ -e "$path" || -L "$path" ]] || continue
+        [[ -f "$path" && ! -L "$path" && -r "$path" ]] || return 1
+        # Numeric PID records are tiny; refuse oversized files before reading
+        # them into shell memory. Never evaluate their contents.
+        size=$(wc -c < "$path") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 32 ]] || return 1
+        # Preserve trailing diagnostics/extra lines.
+        pid=$(cat "$path" && printf '%s' '__pulse_pid_complete__') || return 1
+        [[ "$pid" =~ ^([1-9][0-9]*)($'\n')?__pulse_pid_complete__$ ]] || return 1
+        pid="${BASH_REMATCH[1]}"
+        while read -r observed parent role; do
+            if [[ "$observed" == "$pid" ]]; then
+                [[ "$role" == agent || "$role" == supervisor ]] || return 1
+            fi
+        done <<< "$inventory"
+    done
+}
+
+read_legacy_agent_removal_status() {
+    local path="$1" platform="$2" verb=status observation="" line="" state="" code="" count=0
+    [[ "$platform" != FreeBSD ]] || verb=onestatus
+    observation=$(LC_ALL=C timeout -k 1 5 "$path" "$verb" 2>&1 &&
+        printf '%s' '__pulse_status_exit__=0' || printf '%s' "__pulse_status_exit__=$?") || return 1
+    while IFS= read -r line; do
+        case "$line" in
+            __pulse_status_exit__=*)
+                [[ "$count" == 1 && -z "$code" ]] || return 1
+                code="${line#__pulse_status_exit__=}" ;;
+            *)
+                [[ "$count" == 0 && -z "$code" ]] || return 1
+                if [[ "$platform" == FreeBSD ]]; then
+                    if [[ "$line" == 'pulse_agent is not running.' ]]; then state=stopped
+                    elif [[ "$line" =~ ^pulse_agent\ is\ running\ as\ (supervisor|child)\ pid\ [1-9][0-9]*(\ with\ child\ pid\ [1-9][0-9]*)?\.$ ||
+                            "$line" =~ ^pulse_agent\ is\ running\ as\ legacy\ child\ pid\ [1-9][0-9]*\ supervised\ by\ pid\ [1-9][0-9]*\.$ ]]; then state=started
+                    else return 1; fi
+                else
+                    if [[ "$line" == "$AGENT_NAME is not running." || "$line" == "$AGENT_NAME is not running (stale PID file)." ]]; then state=stopped
+                    elif [[ "$line" =~ ^pulse-agent\ is\ running\ \(PID\ [1-9][0-9]*\)\.$ ]]; then state=started
+                    else return 1; fi
+                fi
+                count=1 ;;
+        esac
+    done <<< "$observation"
+    [[ "$count" == 1 && -n "$code" ]] || return 1
+    if [[ "$state" == started ]]; then [[ "$code" == 0 ]] || return 1
+    else [[ "$code" == 1 || ( "$platform" != FreeBSD && "$code" == 3 ) ]] || return 1; fi
+    printf '%s\n' "$state"
+}
+
+read_freebsd_agent_removal_enablement() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 sysrc -n pulse_agent_enable 2>&1 &&
+        printf '%s' '__pulse_enablement_complete__') || return 1
+    case "$observation" in
+        $'YES\n__pulse_enablement_complete__') printf 'enabled\n' ;;
+        $'NO\n__pulse_enablement_complete__') printf 'disabled\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+quiesce_freebsd_agent_for_removal() {
+    local service_path="${1:-/usr/local/etc/rc.d/${AGENT_NAME}}" enabled="" inventory="" state=""
+    # TrueNAS's bootstrap re-enables rc.conf and recreates this link. Until its
+    # separate task is observably disabled, ordinary rc.d cannot authorise it.
+    [[ ! -L "$service_path" && ! -e "${TRUENAS_BOOTSTRAP_SCRIPT:-}" ]] || return 1
+    enabled=$(read_freebsd_agent_removal_enablement) || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    validate_legacy_agent_removal_pidfiles "$inventory" /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid || return 1
+    if [[ -e "$service_path" ]]; then
+        [[ -f "$service_path" && -x "$service_path" ]] || return 1
+        state=$(read_legacy_agent_removal_status "$service_path" FreeBSD) || return 1
+        if [[ "$state" == stopped ]]; then legacy_agent_processes_absent "$inventory" || return 1
+        else
+            legacy_agent_processes_absent "$inventory" && return 1
+            LC_ALL=C timeout -k 1 15 "$service_path" onestop >/dev/null 2>&1 || return 1
+        fi
+    else legacy_agent_processes_absent "$inventory" || return 1; fi
+    if [[ "$enabled" != disabled ]]; then
+        LC_ALL=C timeout -k 1 5 sysrc pulse_agent_enable=NO >/dev/null 2>&1 || return 1
+    fi
+    enabled=$(read_freebsd_agent_removal_enablement) || return 1
+    [[ "$enabled" == disabled ]] || return 1
+    if [[ -e "$service_path" ]]; then
+        state=$(read_legacy_agent_removal_status "$service_path" FreeBSD) || return 1
+        [[ "$state" == stopped ]] || return 1
+    fi
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    legacy_agent_processes_absent "$inventory"
 }
 
 teardown_freebsd_agent_service() {
     local service_path="${1:-/usr/local/etc/rc.d/${AGENT_NAME}}"
-
-    # Stop the rc.d supervisor before removing the executable. Killing only the
-    # child is insufficient because daemon(8) immediately restarts it.
-    if [[ -x "$service_path" ]]; then
-        "$service_path" stop 2>/dev/null || true
-    elif command -v service >/dev/null 2>&1; then
-        service "${AGENT_NAME}" stop 2>/dev/null || true
-    fi
-
-    if command -v sysrc >/dev/null 2>&1; then
-        sysrc -x pulse_agent_enable >/dev/null 2>&1 || true
-    else
-        for rc_config in /etc/rc.conf /etc/rc.conf.local; do
-            if [[ -f "$rc_config" ]]; then
-                sed -i '' '/^[[:space:]]*pulse_agent_enable[[:space:]]*=/d' "$rc_config" 2>/dev/null || \
-                    sed -i '/^[[:space:]]*pulse_agent_enable[[:space:]]*=/d' "$rc_config" 2>/dev/null || true
-            fi
-        done
-    fi
-
+    quiesce_freebsd_agent_for_removal "$service_path" ||
+        fail "FreeBSD removal could not confirm rc.d stopped, boot activation disabled and both supervisor and child absent; recovery files were retained. Linked/appliance bootstrap installations need their owning boot task reconciled first. No automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$service_path"
     rm -f /usr/local/etc/rc.d/pulse_agent.sh
     rm -f /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid
 }
 
+# Read every standard/custom rc*.d directory in both common SysV layouts.
+# Only exact service links resolving to this init script are owned. Do not
+# remove another script, a similarly named service or a malformed link.
+read_sysv_agent_removal_links() {
+    local init_path="$1" directory="" link="" name=""
+    for directory in /etc/rc*.d /etc/rc.d/rc*.d; do
+        [[ -e "$directory" || -L "$directory" ]] || continue
+        [[ -d "$directory" && ! -L "$directory" && -r "$directory" && -x "$directory" ]] || return 1
+        for link in "$directory"/*; do
+            name="${link##*/}"
+            case "$name" in
+                [SK]*"$AGENT_NAME")
+                    [[ "$name" =~ ^[SK][0-9][0-9]pulse-agent$ && -L "$link" && "$link" -ef "$init_path" ]] || return 1
+                    printf '%s\n' "$link" ;;
+            esac
+        done
+    done
+    printf '%s\n' '__pulse_sysv_links_complete__'
+}
+
+quiesce_sysv_agent_for_removal() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}" inventory="" state="" links="" link=""
+    [[ ! -L "$init_path" ]] || return 1
+    links=$(read_sysv_agent_removal_links "$init_path") || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    validate_legacy_agent_removal_pidfiles "$inventory" "/var/run/${AGENT_NAME}.pid" || return 1
+    if [[ -e "$init_path" ]]; then
+        [[ -f "$init_path" && -x "$init_path" ]] || return 1
+        state=$(read_legacy_agent_removal_status "$init_path" SysV) || return 1
+        if [[ "$state" == stopped ]]; then legacy_agent_processes_absent "$inventory" || return 1
+        else
+            legacy_agent_processes_absent "$inventory" && return 1
+            LC_ALL=C timeout -k 1 10 "$init_path" stop >/dev/null 2>&1 || return 1
+        fi
+    else
+        [[ "$links" == __pulse_sysv_links_complete__ ]] || return 1
+        legacy_agent_processes_absent "$inventory" || return 1
+        return 0
+    fi
+    if [[ "$links" != __pulse_sysv_links_complete__ ]]; then
+        if command -v update-rc.d >/dev/null 2>&1; then
+            LC_ALL=C timeout -k 1 5 update-rc.d -f "${AGENT_NAME}" remove >/dev/null 2>&1 || return 1
+        elif command -v chkconfig >/dev/null 2>&1; then
+            LC_ALL=C timeout -k 1 5 chkconfig "${AGENT_NAME}" off >/dev/null 2>&1 || return 1
+            LC_ALL=C timeout -k 1 5 chkconfig --del "${AGENT_NAME}" >/dev/null 2>&1 || return 1
+        else
+            while IFS= read -r link; do
+                [[ "$link" != __pulse_sysv_links_complete__ ]] || continue
+                rm -f "$link" || return 1
+            done <<< "$links"
+        fi
+    fi
+    links=$(read_sysv_agent_removal_links "$init_path") || return 1
+    [[ "$links" == __pulse_sysv_links_complete__ ]] || return 1
+    state=$(read_legacy_agent_removal_status "$init_path" SysV) || return 1
+    [[ "$state" == stopped ]] || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    legacy_agent_processes_absent "$inventory"
+}
+
 teardown_sysv_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
-    "$init_path" stop 2>/dev/null || true
-    if command -v update-rc.d >/dev/null 2>&1; then
-        update-rc.d -f "${AGENT_NAME}" remove >/dev/null 2>&1 || true
-    elif command -v chkconfig >/dev/null 2>&1; then
-        chkconfig "${AGENT_NAME}" off >/dev/null 2>&1 || true
-        chkconfig --del "${AGENT_NAME}" >/dev/null 2>&1 || true
-    fi
-    for RL in 0 1 2 3 4 5 6; do
-        rm -f "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
-        rm -f "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
-    done
+    quiesce_sysv_agent_for_removal "$init_path" ||
+        fail "SysV removal could not confirm a stopped process and no runlevel activation; recovery files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$init_path"
     rm -f "/var/run/${AGENT_NAME}.pid"
+}
+
+# DSM 6 uses Upstart, not SysV. A successful stop alone does not disable the
+# syno.network.ready event, and respawn/status errors must not lose recovery.
+read_upstart_agent_removal_status() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 initctl status "$AGENT_NAME" 2>&1 &&
+        printf '%s' '__pulse_upstart_exit__=0' || printf '%s' "__pulse_upstart_exit__=$?") || return 1
+    case "$observation" in
+        "$AGENT_NAME stop/waiting"$'\n__pulse_upstart_exit__=0') printf 'stopped\n' ;;
+        "initctl: Unknown job: $AGENT_NAME"$'\n__pulse_upstart_exit__=1') printf 'absent\n' ;;
+        *)
+            [[ "$observation" =~ ^pulse-agent\ start/running,\ process\ [1-9][0-9]*$'\n'__pulse_upstart_exit__=0$ ]] || return 1
+            printf 'started\n' ;;
+    esac
+}
+
+upstart_agent_removal_paths_safe() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local path="" mode="" size="" content="" line="" exec_count=0
+    # An interrupted config retirement belongs to its previous operation. Do
+    # not delete or overwrite its recovery copy on a later uninstall.
+    for path in "$conf".removal.*; do [[ ! -e "$path" && ! -L "$path" ]] || return 1; done
+    for path in "$conf" "$override"; do
+        [[ -e "$path" || -L "$path" ]] || continue
+        mode=$(portable_path_mode "$path") || return 1
+        [[ "$mode" == 600 || "$mode" == 644 ]] || return 1
+        trusted_lifecycle_regular_file "$path" "$mode" || return 1
+        size=$(wc -c < "$path") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+        content=$(cat "$path" && printf '%s' '__pulse_upstart_file_complete__') || return 1
+        if [[ "$path" == "$override" ]]; then
+            [[ "$content" == $'manual\n__pulse_upstart_file_complete__' ]] || return 1
+        else
+            [[ "$content" == *$'description "Pulse Unified Agent"\n'* && "$content" == *$'author "Pulse"\n'* ]] || return 1
+            while IFS= read -r line; do
+                if [[ "$line" == exec\ * ]]; then
+                    [[ "$line" == "exec ${INSTALL_DIR}/${BINARY_NAME} "* ]] || return 1
+                    exec_count=$((exec_count + 1))
+                fi
+            done <<< "$content"
+            [[ "$exec_count" == 1 ]] || return 1
+        fi
+    done
+}
+
+read_upstart_agent_removal_enablement() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 initctl show-config "$AGENT_NAME" 2>&1 &&
+        printf '%s' '__pulse_upstart_config_complete__') || return 1
+    # The installer renders this single-instance job with a stop condition.
+    # manual removes its start condition from Upstart's effective config.
+    [[ "$observation" == "$AGENT_NAME"$'\n  stop on runlevel [06]\n__pulse_upstart_config_complete__' ]]
+}
+
+quiesce_upstart_agent_for_removal() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local state="" inventory="" pending=""
+    upstart_agent_removal_paths_safe || return 1
+    state=$(read_upstart_agent_removal_status) || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    if [[ ! -e "$conf" ]]; then
+        [[ "$state" == absent ]] && legacy_agent_processes_absent "$inventory"
+        return
+    fi
+    [[ "$state" != absent ]] || return 1
+    if [[ "$state" == stopped ]]; then legacy_agent_processes_absent "$inventory" || return 1
+    else legacy_agent_processes_absent "$inventory" && return 1; fi
+    if [[ ! -e "$override" ]]; then
+        pending=$(mktemp "${override}.XXXXXX") || return 1
+        # The existing installer EXIT trap also owns this non-credential
+        # temporary if a command failure exits before inline cleanup.
+        TMP_FILES+=("$pending")
+        # Link without replacement: an override created concurrently is not
+        # ours to overwrite. The temporary file contains no credential.
+        if ! printf 'manual\n' > "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! chmod 644 "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! ln -T -- "$pending" "$override"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        rm -f -- "$pending" || return 1
+    fi
+    LC_ALL=C timeout -k 1 5 initctl reload-configuration >/dev/null 2>&1 || return 1
+    read_upstart_agent_removal_enablement || return 1
+    if [[ "$state" == started ]]; then
+        LC_ALL=C timeout -k 1 15 initctl stop "$AGENT_NAME" >/dev/null 2>&1 || return 1
+    fi
+    state=$(read_upstart_agent_removal_status) || return 1
+    [[ "$state" == stopped ]] || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    legacy_agent_processes_absent "$inventory"
+}
+
+teardown_upstart_agent_service() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local retired="" state="" inventory="" confirmed=false
+    quiesce_upstart_agent_for_removal ||
+        fail "DSM Upstart removal could not confirm stopped processes and disabled automatic activation; local recovery files were retained. A preceding stop or manual override may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
+    if [[ -e "$conf" ]]; then
+        # Keep the original inode/contents until the manager confirms the job
+        # absent. A failed reload/read restores it without removing manual or
+        # restarting; never clobber a configuration created in the meantime.
+        retired=$(mktemp "${conf}.removal.XXXXXX") || return 1
+        if ! mv -- "$conf" "$retired"; then rm -f -- "$retired"; return 1; fi
+        if LC_ALL=C timeout -k 1 5 initctl reload-configuration >/dev/null 2>&1 &&
+           state=$(read_upstart_agent_removal_status) && [[ "$state" == absent ]] &&
+           inventory=$(read_legacy_agent_removal_processes) && legacy_agent_processes_absent "$inventory"; then
+            confirmed=true
+        fi
+        if [[ "$confirmed" != true ]]; then
+            if [[ ! -e "$conf" && ! -L "$conf" ]]; then
+                # Atomic no-replacement restore, including a target that
+                # becomes a directory after the preceding pathname check.
+                ln -T -- "$retired" "$conf" || return 1
+                rm -f -- "$retired" || return 1
+            fi
+            return 1
+        fi
+        rm -f -- "$retired" || return 1
+    fi
+    rm -f -- "$override" || return 1
 }
 
 enable_sysv_agent_service() {
@@ -1247,6 +1706,132 @@ enable_sysv_agent_service() {
         fi
     done
     log_info "Created rc.d symlinks manually."
+}
+
+# TrueNAS SCALE has a second activation owner: middleware's boot task can
+# recreate and enable the systemd unit even after systemctl disable. Recovered
+# state directories alone are not appliance identity (ordinary Linux has them).
+truenas_scale_agent_removal_present() {
+    [[ "$(uname -s)" == Linux ]] || return 1
+    [[ -e "${TRUENAS_BOOTSTRAP_SCRIPT:-}" || -L "${TRUENAS_BOOTSTRAP_SCRIPT:-}" ||
+       -f /etc/truenas-version || -d /data/ix-applications || -d /etc/ix-apps.d ]] && return 0
+    [[ -f /etc/version ]] && grep -qi truenas /etc/version
+}
+
+read_truenas_agent_removal_tasks() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.query 2>&1 &&
+        printf '\n%s' '__pulse_truenas_tasks_complete__') || return 1
+    # Parse the complete inventory, including indirect/other-install bootstrap
+    # references. No task command, name, argument or credential is returned.
+    python3 -c '
+import json, pathlib, sys
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result: raise ValueError("duplicate field")
+        result[key] = value
+    return result
+def reject_constant(value):
+    raise ValueError("non-JSON constant")
+try:
+    raw = sys.stdin.buffer.read(1048577)
+    suffix = b"\n__pulse_truenas_tasks_complete__\n"
+    if len(raw) > 1048576 or not raw.endswith(suffix): raise ValueError("incomplete inventory")
+    tasks = json.loads(raw[:-len(suffix)].decode("utf-8"), object_pairs_hook=unique_object,
+                       parse_constant=reject_constant)
+    if not isinstance(tasks, list) or len(tasks) > 512: raise ValueError("unbounded inventory")
+    expected, seen, owned = sys.argv[1], set(), []
+    for task in tasks:
+        if not isinstance(task, dict): raise ValueError("invalid task")
+        ident, kind, enabled = task.get("id"), task.get("type"), task.get("enabled")
+        if type(ident) is not int or not 0 < ident <= 2147483647 or ident in seen:
+            raise ValueError("invalid identity")
+        seen.add(ident)
+        if kind not in ("SCRIPT", "COMMAND") or type(enabled) is not bool:
+            raise ValueError("unknown activation")
+        script, command = task.get("script", ""), task.get("command", "")
+        if script is None: script = ""
+        if command is None: command = ""
+        if not isinstance(script, str) or not isinstance(command, str): raise ValueError("invalid activation")
+        if (kind == "SCRIPT" and not script) or (kind == "COMMAND" and not command):
+            raise ValueError("missing activation target")
+        if script == expected:
+            if (kind != "SCRIPT" or command or task.get("when") != "POSTINIT" or
+                    task.get("comment") != "Pulse Agent Bootstrap" or type(task.get("timeout")) is not int or
+                    task["timeout"] != 30): raise ValueError("unowned bootstrap")
+            owned.append((ident, enabled))
+        elif (pathlib.PurePosixPath(script).name == "bootstrap-pulse-agent.sh" or
+              "bootstrap-pulse-agent.sh" in command or "pulse-agent" in command):
+            raise ValueError("indirect or other-install activation")
+    for ident, enabled in sorted(owned): print(ident, "true" if enabled else "false")
+    print("complete")
+except (ValueError, TypeError, KeyError, UnicodeError):
+    print("TrueNAS boot-task inventory is incomplete or not owned; recovery retained.", file=sys.stderr)
+    sys.exit(1)
+' "$TRUENAS_BOOTSTRAP_SCRIPT" <<< "$observation"
+}
+
+quiesce_truenas_agent_boot_tasks_for_removal() {
+    local inventory="" expected="" observed="" ident="" enabled="" mode=""
+    command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 &&
+        command -v timeout >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 || return 1
+    # Do not let a platform marker or an arbitrary saved state path authorise
+    # erasure of a different appliance install. Keep the existing state owner.
+    [[ "$TRUENAS_STATE_DIR" == "$STATE_DIR" &&
+       "${STATE_DIR_REMOVAL_AUTHORITY:-}" == "$STATE_DIR" &&
+       "$TRUENAS_BOOTSTRAP_SCRIPT" == "$STATE_DIR/bootstrap-pulse-agent.sh" ]] || return 1
+    if [[ -e "$TRUENAS_BOOTSTRAP_SCRIPT" || -L "$TRUENAS_BOOTSTRAP_SCRIPT" ]]; then
+        mode=$(portable_path_mode "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+        [[ "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & 0022) == 0 )) || return 1
+        trusted_lifecycle_regular_file "$TRUENAS_BOOTSTRAP_SCRIPT" "$mode" || return 1
+    fi
+    inventory=$(read_truenas_agent_removal_tasks) || return 1
+    while read -r ident enabled; do
+        [[ "$ident" != complete ]] || continue
+        if [[ "$enabled" == true ]]; then
+            LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.update "$ident" '{"enabled":false}' >/dev/null 2>&1 || return 1
+        fi
+        expected+="$ident false"$'\n'
+    done <<< "$inventory"
+    expected+=complete
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == "$expected" ]] || return 1
+    printf '%s\n' "$expected"
+}
+
+confirm_truenas_agent_removal_quiescent() {
+    local unit="" inventory="" observed=""
+    for unit in "${ACTION_RUNNER_NAME}.service" "${PRIVILEGED_HELPER_NAME}.socket" \
+        "${PRIVILEGED_HELPER_NAME}.service" "${AGENT_NAME}.service"; do
+        confirm_agent_unit_quiescent "$unit" || return 1
+    done
+    inventory=$(read_legacy_agent_removal_processes "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+    legacy_agent_processes_absent "$inventory" && [[ "$inventory" != *' bootstrap'* ]] || return 1
+    # The middleware set can change during the preceding systemd operations.
+    # Close it again before remote removal/first deletion, not only afterwards.
+    if [[ $# -gt 0 ]]; then
+        observed=$(read_truenas_agent_removal_tasks) || return 1
+        [[ "$observed" == "$1" ]] || return 1
+    fi
+}
+
+teardown_truenas_agent_boot_tasks() {
+    local expected="$1" observed="" ident="" enabled=""
+    # No newly discovered task is disabled/deleted after remote removal. A
+    # changed set, refused read or concurrent activation retains local recovery.
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == "$expected" ]] || return 1
+    confirm_truenas_agent_removal_quiescent "$expected" || return 1
+    while read -r ident enabled; do
+        [[ "$ident" != complete ]] || continue
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.delete "$ident" >/dev/null 2>&1 || return 1
+    done <<< "$expected"
+    # Close the whole manager/process/task set after the last deletion, while
+    # every credential, bootstrap, stored binary and service file still exists.
+    confirm_truenas_agent_removal_quiescent || return 1
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == complete ]]
 }
 
 write_truenas_bootstrap_script() {
@@ -1449,14 +2034,14 @@ write_action_runner_config() {
           -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
         fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
     fi
-    install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
-    install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
 	action_runner_url_transport_allowed "$PULSE_URL" ||
 		fail "Action runner requires HTTPS/WSS; plaintext HTTP/WS is allowed only for loopback local use" "$EXIT_MISSING_ARGS"
-	if [[ "$INSECURE" == "true" && "$PULSE_URL" =~ ^[Hh][Tt][Tt][Pp][Ss]:// &&
-	      -z "$CURL_CA_BUNDLE" && -z "$SERVER_FINGERPRINT" ]]; then
-		fail "Action runner refuses generic insecure HTTPS; configure a trusted CA bundle or exact server fingerprint" "$EXIT_MISSING_ARGS"
-	fi
+    # INSECURE belongs to collector/download continuity and may be recovered
+    # from an older install even after the host trusts the server certificate.
+    # Runner HTTPS always verifies system/custom roots or the exact pin. Never
+    # turn the collector's bypass into runner authority or reject system trust.
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
 
     if [[ -n "$ACTION_TOKEN" ]]; then
         persist_action_runner_replacement_token "$ACTION_TOKEN" ||
@@ -2757,6 +3342,15 @@ pulse_agent_start()
     fi
 }
 
+pulse_agent_wait_stopped()
+{
+    for attempt in 1 2 3 4 5; do
+        if ! kill -0 "\$1" 2>/dev/null; then return 0; fi
+        sleep 1
+    done
+    ! kill -0 "\$1" 2>/dev/null
+}
+
 pulse_agent_stop()
 {
     supervisor_pid=""
@@ -2784,21 +3378,23 @@ pulse_agent_stop()
 
     if [ -n "\${supervisor_pid}" ] && kill -0 "\${supervisor_pid}" 2>/dev/null; then
         echo "Stopping \${name} supervisor."
-        kill "\${supervisor_pid}" 2>/dev/null || true
+        kill "\${supervisor_pid}" 2>/dev/null || return 1
         sleep 1
         if kill -0 "\${supervisor_pid}" 2>/dev/null; then
-            kill -KILL "\${supervisor_pid}" 2>/dev/null || true
+            kill -KILL "\${supervisor_pid}" 2>/dev/null || return 1
         fi
+        pulse_agent_wait_stopped "\${supervisor_pid}" || return 1
         stopped=1
     fi
 
     if [ -n "\${child_pid}" ] && kill -0 "\${child_pid}" 2>/dev/null; then
         echo "Stopping \${name} child."
-        kill "\${child_pid}" 2>/dev/null || true
+        kill "\${child_pid}" 2>/dev/null || return 1
         sleep 1
         if kill -0 "\${child_pid}" 2>/dev/null; then
-            kill -KILL "\${child_pid}" 2>/dev/null || true
+            kill -KILL "\${child_pid}" 2>/dev/null || return 1
         fi
+        pulse_agent_wait_stopped "\${child_pid}" || return 1
         stopped=1
     fi
 
@@ -4924,6 +5520,8 @@ read_agent_id_file_safely() {
     local lifecycle_binary=""
     local collector_uid=""
     local identity=""
+    local identity_size=""
+    local consumed_bytes=0
     local -a identity_args
 
     [[ -e "$aid_path" || -L "$aid_path" || -p "$aid_path" ]] || return 1
@@ -4944,7 +5542,17 @@ read_agent_id_file_safely() {
     # command. Their parent and file are not writable by the runtime, so a
     # bounded shell read remains a boundary-only compatibility path.
     if trusted_lifecycle_regular_file "$aid_path" 600; then
-        IFS= read -r identity < "$aid_path" || true
+        identity_size=$(stat -c '%s' "$aid_path" 2>/dev/null || stat -f '%z' "$aid_path" 2>/dev/null) || return 1
+        [[ "$identity_size" =~ ^[0-9]+$ && "$identity_size" -ge 1 && "$identity_size" -le 129 ]] || return 1
+        # Accept exactly one bounded ID, with or without its final newline.
+        # Bash read discards NUL bytes and otherwise only reads the first line;
+        # matching all file bytes prevents either from hiding corrupt state.
+        if IFS= read -r -n 130 identity < "$aid_path"; then
+            consumed_bytes=$((${#identity} + 1))
+        else
+            consumed_bytes=${#identity}
+        fi
+        [[ "$identity_size" -eq "$consumed_bytes" ]] || return 1
         if [[ ${#identity} -ge 1 && ${#identity} -le 128 && "$identity" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]]; then
             printf '%s\n' "$identity"
             return 0
@@ -5202,10 +5810,9 @@ if [[ -n "$TOKEN_FILE_PATH" ]]; then
     if [[ -z "$PULSE_TOKEN" ]]; then
         fail "Token file must be a readable private regular file containing one bounded token: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
     fi
-    # Clean up token file after reading in non-interactive mode (deploy bootstrap tokens are one-time use)
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
-        rm -f "$TOKEN_FILE_PATH" 2>/dev/null || true
-    fi
+    # Reading a caller-supplied credential does not grant ownership of its
+    # file. Keep it available after refusal and recovery; callers clean up
+    # their own bootstrap files, while the installer trap owns only TMP_FILES.
 fi
 
 if [[ -n "$ACTION_TOKEN_FILE_PATH" ]]; then
@@ -5517,11 +6124,66 @@ finalize_plist_env_block
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
     local qnap_state_dir=""
+    local uninstall_has_credential="false"
+    local uninstall_legacy_manager=""
+    local uninstall_upstart="false"
+    local uninstall_truenas_scale="false"
+    local uninstall_truenas_tasks=""
+
+    # Validate saved connection availability before stopping a working install.
+    # Stop every systemd activation source before remote removal, process kills
+    # or any local teardown. Unknown/partial stops retain all recovery material.
+    if collector_credential_state_present; then
+        uninstall_has_credential="true"
+        if [[ -z "$PULSE_URL" ]]; then
+            fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
+        fi
+    fi
+    # Middleware can recreate and enable the systemd unit at boot. Disable all
+    # exact owned tasks before stopping services; a partial/refused observation
+    # retains every recovery file and never restores automatic activation.
+    if truenas_scale_agent_removal_present; then
+        uninstall_truenas_scale="true"
+        uninstall_truenas_tasks=$(quiesce_truenas_agent_boot_tasks_for_removal) ||
+            fail "TrueNAS SCALE removal could not confirm every owned boot task disabled; credentials, bootstrap and service files were retained. Reconcile middleware task ownership/state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    # Detect stale DSM 6 jobs even on a DSM 7 host. Another init manager cannot
+    # establish their absence; missing initctl is an explicit safe refusal.
+    if [[ -d /usr/syno ]] && { command -v initctl >/dev/null 2>&1 ||
+        [[ -e "/etc/init/${AGENT_NAME}.conf" || -L "/etc/init/${AGENT_NAME}.conf" ||
+           -e "/etc/init/${AGENT_NAME}.override" || -L "/etc/init/${AGENT_NAME}.override" ]]; }; then
+        uninstall_upstart="true"
+        quiesce_upstart_agent_for_removal ||
+            fail "DSM Upstart removal could not confirm stopped processes and disabled automatic activation; credentials and service files were retained. Reconcile the job and any manual override before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service" \
+            "${PRIVILEGED_HELPER_NAME}.socket" "${PRIVILEGED_HELPER_NAME}.service" "${AGENT_NAME}.service" ||
+            fail "Agent removal could not confirm every systemd unit stopped and disabled; local credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if command -v rc-service >/dev/null 2>&1; then
+        quiesce_openrc_agent_for_removal ||
+            fail "Agent removal could not confirm OpenRC stopped with no runlevel activation; local credentials and files were retained. A preceding stop or disable may have succeeded: reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+
+    if [[ "$(uname -s)" == FreeBSD ]]; then
+        uninstall_legacy_manager=FreeBSD
+        quiesce_freebsd_agent_for_removal ||
+            fail "FreeBSD removal could not confirm stopped rc.d, disabled boot activation and absent supervisor/child; local recovery files were retained. Reconcile linked/appliance boot tasks first when present; no automatic restart was attempted." "$EXIT_GENERAL"
+    elif [[ "$uninstall_upstart" != true ]] && ! command -v systemctl >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]]; then
+        uninstall_legacy_manager=SysV
+        quiesce_sysv_agent_for_removal ||
+            fail "SysV removal could not confirm stopped process and disabled runlevels; local recovery files were retained. A preceding stop or disable may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if [[ "$uninstall_truenas_scale" == true ]]; then
+        confirm_truenas_agent_removal_quiescent "$uninstall_truenas_tasks" ||
+            fail "TrueNAS SCALE removal could not confirm stopped units, collector and bootstrap processes; local recovery was retained. Reconcile stopped/disabled state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
 
     # A credential-bearing install must durably remove its exact server record
     # through the same CA/fingerprint/no-proxy transport used by lifecycle
     # migration before any local credential or service state is deleted.
-    if [[ -n "$PULSE_URL" ]] && collector_credential_state_present; then
+    if [[ "$uninstall_has_credential" == "true" ]]; then
         log_info "Authenticating Pulse server removal before local teardown..."
         if ! uninstall_collector_registration; then
             fail "Pulse did not durably confirm collector removal; local credentials and services were retained. Restore trusted server connectivity and retry uninstall." "$EXIT_GENERAL"
@@ -5529,6 +6191,28 @@ if [[ "$UNINSTALL" == "true" ]]; then
         log_info "Pulse durably removed agent ID: ${AGENT_ID}."
     elif [[ -n "$PULSE_URL" ]]; then
         log_warn "No local collector credential exists; continuing with local-only removal."
+    fi
+    # Reconcile OpenRC once more after the remote operation, while all local
+    # recovery state still exists. A late refusal must not happen only after
+    # remove_agent_state_dir has already erased that state.
+    if command -v rc-service >/dev/null 2>&1; then
+        teardown_openrc_agent_service
+    fi
+
+    # Re-read the selected legacy manager after remote removal, before any
+    # service/PID/credential deletion. Never restart a partially stopped install.
+    if [[ "$uninstall_legacy_manager" == FreeBSD ]]; then
+        teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
+    elif [[ "$uninstall_legacy_manager" == SysV ]]; then
+        teardown_sysv_agent_service "/etc/init.d/${AGENT_NAME}"
+    fi
+    if [[ "$uninstall_upstart" == true ]]; then
+        teardown_upstart_agent_service ||
+            fail "DSM Upstart job retirement was not confirmed; local recovery state was retained. The manual override remains after a partial stop. Reconcile the original config or its .removal recovery copy before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if [[ "$uninstall_truenas_scale" == true ]]; then
+        teardown_truenas_agent_boot_tasks "$uninstall_truenas_tasks" ||
+            fail "TrueNAS SCALE boot-task retirement was not confirmed; local recovery was retained. A preceding task disable/delete or server removal may have succeeded. Reconcile middleware and stopped service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # Kill wrapper scripts first: they are watchdogs, so stopping the agent
@@ -5588,11 +6272,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -f "/etc/systemd/system/${AGENT_NAME}.service" ]]; then
             teardown_systemd_agent_service
         fi
-        # DSM 6.x uses upstart
-        if [[ -f "/etc/init/${AGENT_NAME}.conf" ]]; then
-            initctl stop "${AGENT_NAME}" 2>/dev/null || true
-            rm -f "/etc/init/${AGENT_NAME}.conf"
-        fi
+        # DSM 6.x Upstart retirement was confirmed before recovery erasure.
     fi
 
     # Unraid
@@ -5647,15 +6327,12 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
     fi
 
-    # TrueNAS SCALE/CORE
-    if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; then
-        if [[ "$(uname -s)" == "Linux" ]]; then
-            log_info "Removing TrueNAS SCALE installation..."
-            teardown_systemd_agent_service
-        elif [[ "$(uname -s)" == "FreeBSD" ]]; then
-            log_info "Removing TrueNAS CORE installation..."
-            teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
-        fi
+    # SCALE's task retirement was confirmed above, before authorised state
+    # erasure. A recovered ordinary Linux directory is not a TrueNAS install.
+    # CORE remains behind its existing rc.d/appliance activation refusal; this
+    # SCALE step does not claim CORE boot-task or native platform acceptance.
+    if [[ "$(uname -s)" == "FreeBSD" ]] && { [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; }; then
+        log_info "Removing TrueNAS CORE installation..."
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
             TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
@@ -5665,23 +6342,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
         # Remove state directory
         rm -rf "$TRUENAS_STATE_DIR"
-    fi
-
-    # OpenRC (Alpine, Gentoo, Artix, etc.)
-    if command -v rc-service >/dev/null 2>&1; then
-        teardown_openrc_agent_service
-    fi
-
-    # Vanilla FreeBSD, OPNsense, and pfSense all use the rc.d service rendered
-    # by this installer. This must run even when no TrueNAS marker is present.
-    if [[ "$(uname -s)" == "FreeBSD" ]]; then
-        log_info "Removing FreeBSD rc.d installation..."
-        teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
-    fi
-
-    # SysV init (legacy systems like Asustor, older Debian/RHEL, etc.)
-    if [[ -f "/etc/init.d/${AGENT_NAME}" ]]; then
-        teardown_sysv_agent_service "/etc/init.d/${AGENT_NAME}"
     fi
 
     rm -f "${INSTALL_DIR}/${BINARY_NAME}"
@@ -5954,6 +6614,12 @@ provision_typed_privileged_helper() {
         fail "Failed to enable the typed privileged helper socket" "$EXIT_GENERAL"
     fi
     verify_privileged_helper_socket
+    # Reloading a unit does not replace an already running helper's code.
+    # Activate the verified binary only after the isolated unit and socket
+    # identity have passed the installer-owned boundary checks.
+    if ! systemctl restart "${PRIVILEGED_HELPER_NAME}.service"; then
+        fail "Failed to restart the typed privileged helper with its installer-owned configuration" "$EXIT_GENERAL"
+    fi
     log_info "Typed privileged helper socket active at ${PRIVILEGED_HELPER_SOCKET_PATH} (root:${LEAST_PRIVILEGE_USER} 0660)"
 }
 
@@ -7233,7 +7899,7 @@ do_stop() {
         return 0
     fi
     echo "Stopping $NAME..."
-    kill "$PID"
+    kill "$PID" || return 1
     # Wait for process to stop
     for i in 1 2 3 4 5; do
         if ! kill -0 "$PID" 2>/dev/null; then
@@ -7244,7 +7910,15 @@ do_stop() {
     # Force kill if still running
     if kill -0 "$PID" 2>/dev/null; then
         echo "Force killing $NAME..."
-        kill -9 "$PID" 2>/dev/null || true
+        kill -9 "$PID" 2>/dev/null || return 1
+    fi
+    for i in 1 2 3; do
+        if ! kill -0 "$PID" 2>/dev/null; then break; fi
+        sleep 1
+    done
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Could not confirm $NAME stopped; PID file retained." >&2
+        return 1
     fi
     rm -f "$PIDFILE"
     echo "$NAME stopped."

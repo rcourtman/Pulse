@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "3054621cd81b34e6257b783ed2d7dbc21230bd74",
+  "verified_at": "2026-10-06T10:53:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "18d0cddcbf32eb3cc62ac1b5f26cc80ed6efbd103c7b10c353ee9f4d90fc773c",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "fe2a97ce1cf30a3968ac0c99114ce1cf7763cf7ec43f49463f43d7ac4cf1823a",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "98b2ed6f01124396144c2ae2b6904f1371a320f095d8aff40cc08cf3f2a64b83",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "059dbff6cf2fb7f1191662d693569ea626fa8528bed08ed2523fcc74c5655cdf",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "2992276a8fee32c361e0aa31fc02f35356eb8f06e5d936537b2b1bb7f3e6f9e1"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/health",
+    "/vmware/activity"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1100
+    },
+    {
+      "width": 1024,
+      "height": 1100
+    },
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 1920,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Private mock stack on main af4e6a493c plus #2563 and this change (rebased onto main 3054621cd8, which adds #2563 itself and an LXC collection change touching no file here); the mock has one vCenter connection (Lab vCenter)",
+    "One vCenter: the vCenter column is gone from the Overview health signals, the Overview hosts table, the Health tab and the Activity tab; the Activity row drawer still names Lab vCenter",
+    "Two vCenters (resource API responses rewritten in the browser so the Edge DC hosts, datastores and networks belong to an 'Edge vCenter' connection, websocket held): the column returns on the health signals and hosts with Lab vCenter / Edge vCenter, hosts now reading the connection name with the vCenter host on hover",
+    "Column sweep against the pre-change run: the health-signal table clips less at every narrow width (390: Signal +92 from +116 and Started +15 from +31 with the 66px vCenter column gone; 600: Signal 3 rows from 5; 768: Started +12 from +29); Activity gains about 50px for its sentences at 1440; the hosts table is unchanged apart from the dropped column"
+  ],
+  "interactions": [
+    "Loaded each tab per viewport and measured every visible header and cell for clipping",
+    "Rewrote /api/resources responses via route interception with the websocket held to exercise the two-vCenter layout",
+    "Opened an Activity row drawer and read its vCenter row"
+  ]
+}

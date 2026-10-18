@@ -78,6 +78,15 @@ describe('updatesPresentation', () => {
         'Checked 1 day ago',
       );
     });
+
+    it('measures a held check from the supplied presentation clock', () => {
+      const checkedAt = Date.parse('2026-10-11T04:00:00Z');
+      expect(getUpdateCheckedLabel(checkedAt, checkedAt + 60_000)).toBe('Checked 1 min ago');
+      expect(getUpdateCheckedLabel(checkedAt, checkedAt + 120_000)).toBe('Checked 2 mins ago');
+      expect(getUpdateCheckedLabel(checkedAt, checkedAt - 60_000)).toBe('Checked 0s ago');
+      expect(getUpdateCheckedLabel(null, checkedAt)).toBe('Not checked yet');
+      expect(getUpdateCheckedLabel(NaN, checkedAt)).toBe('Not checked yet');
+    });
   });
 });
 

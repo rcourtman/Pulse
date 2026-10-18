@@ -143,5 +143,10 @@ func redactWebhookTransportError(err error) error {
 
 	redacted := *urlError
 	redacted.URL = RedactWebhookURLSecrets(urlError.URL)
+	if errors.Is(err, errNotificationRedirectOrigin) {
+		// A receiver controls Location and can echo private payloads or keys
+		// into arbitrary paths/query names. None of that URL is diagnostic data.
+		redacted.URL = "[redirect destination withheld]"
+	}
 	return &redacted
 }

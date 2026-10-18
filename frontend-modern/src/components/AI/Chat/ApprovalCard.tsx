@@ -76,7 +76,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
       {/* Command */}
       <div class="px-3 py-3 bg-amber-50 dark:bg-amber-900/25">
         <Show when={props.approval.description}>
-          <p class="mb-3 text-xs leading-relaxed text-amber-900/25 dark:text-amber-100">
+          <p class="mb-3 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
             {props.approval.description}
           </p>
         </Show>

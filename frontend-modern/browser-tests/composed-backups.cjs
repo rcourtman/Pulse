@@ -226,7 +226,7 @@ const { chromium, webkit } = require('playwright');
         await scopedAge.getByText('None', { exact: true }).waitFor();
         assert.ok(
           (await scopedAge.locator('span[title]').getAttribute('title')).includes(
-            'Guest snapshots alone do not prove independent recovery.',
+            'A snapshot is not a separate backup, so it does not count.',
           ),
         );
         checks.push(

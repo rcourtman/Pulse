@@ -365,7 +365,7 @@ export function UpdateBanner() {
                       href={PRO_RELEASE_ACCESS_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="inline-block mt-2 underline hover:text-blue-900/25 dark:hover:text-blue-100"
+                      class="inline-block mt-2 underline hover:text-blue-900 dark:hover:text-blue-100"
                     >
                       Open Private Release Access →
                     </a>

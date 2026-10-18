@@ -21,7 +21,7 @@ import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 // response-handling of the currently-uncovered AIAPI request functions:
 // testConnection, resetCostHistory, exportCostHistory, getAnomalies,
 // getLearningStatus, analyzeKubernetesCluster, approveRemediationPlan,
-// executeRemediationPlan, rollbackRemediationPlan, getCircuitBreakerStatus.
+// executeRemediationPlan, rollbackRemediationPlan.
 // Each test asserts the concrete request (final path + query string + method +
 // body) and the concrete parsed result for happy paths and each optional /
 // default-parameter branch arm.
@@ -419,60 +419,6 @@ describe('AIAPI branch coverage (request shaping + response handling)', () => {
         body: JSON.stringify({ execution_id: 'exec-9' }),
       });
       expect(result).toStrictEqual({ success: false });
-    });
-  });
-
-  // --------------------------------------------
-  // getCircuitBreakerStatus
-  // --------------------------------------------
-  describe('getCircuitBreakerStatus', () => {
-    it('GETs /api/ai/circuit/status and returns a closed-breaker payload verbatim', async () => {
-      const payload = {
-        state: 'closed' as const,
-        can_patrol: true,
-        consecutive_failures: 0,
-        total_successes: 128,
-        total_failures: 1,
-      };
-      apiFetchJSONMock.mockResolvedValueOnce(payload as any);
-
-      const result = await AIAPI.getCircuitBreakerStatus();
-
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/circuit/status');
-      expect(result).toStrictEqual(payload);
-    });
-
-    it('round-trips an open-breaker payload that blocks patrol', async () => {
-      const payload = {
-        state: 'open' as const,
-        can_patrol: false,
-        consecutive_failures: 5,
-        total_successes: 100,
-        total_failures: 10,
-      };
-      apiFetchJSONMock.mockResolvedValueOnce(payload as any);
-
-      const result = await AIAPI.getCircuitBreakerStatus();
-
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/circuit/status');
-      expect(result).toStrictEqual(payload);
-      expect(result.can_patrol).toBe(false);
-    });
-
-    it('round-trips a half-open breaker probe state', async () => {
-      const payload = {
-        state: 'half-open' as const,
-        can_patrol: true,
-        consecutive_failures: 0,
-        total_successes: 100,
-        total_failures: 5,
-      };
-      apiFetchJSONMock.mockResolvedValueOnce(payload as any);
-
-      const result = await AIAPI.getCircuitBreakerStatus();
-
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/circuit/status');
-      expect(result.state).toBe('half-open');
     });
   });
 });

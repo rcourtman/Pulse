@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
@@ -7,19 +8,6 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
-
-const buildVisibleRect = (): DOMRect =>
-  ({
-    x: 0,
-    y: 120,
-    width: 960,
-    height: 32,
-    top: 120,
-    bottom: 152,
-    left: 0,
-    right: 960,
-    toJSON: () => ({}),
-  }) as DOMRect;
 
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -57,6 +45,9 @@ if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
 
 let mockLocationSearch = '';
 let mockLocationPath = '/proxmox/storage';
+// Most tests read a location snapshot; set liveLocation to follow in-app navigation.
+let liveLocation = false;
+const [locationVersion, setLocationVersion] = createSignal(0);
 const navigateSpy = vi.fn();
 
 let wsConnected = true;
@@ -71,6 +62,8 @@ let wsState: any = {
 const reconnectSpy = vi.fn();
 
 let hookResources: Resource[] = [];
+// Bump to deliver hookResources as a live update to an already rendered page.
+const [hookResourcesVersion, setHookResourcesVersion] = createSignal(0);
 let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsDetectionEnabled = true;
@@ -296,7 +289,19 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
-    useLocation: () => ({ pathname: mockLocationPath, search: mockLocationSearch }),
+    useLocation: () =>
+      liveLocation
+        ? {
+            get pathname() {
+              locationVersion();
+              return mockLocationPath;
+            },
+            get search() {
+              locationVersion();
+              return mockLocationSearch;
+            },
+          }
+        : { pathname: mockLocationPath, search: mockLocationSearch },
     useNavigate: () => navigateSpy,
   };
 });
@@ -328,8 +333,12 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     mutate: vi.fn(),
   }),
   useUnifiedResources: (options?: { cacheKey?: string }) => ({
-    resources: () =>
-      options?.cacheKey === 'storage-page' ? [...nodeResources, ...hookResources] : nodeResources,
+    resources: () => {
+      hookResourcesVersion();
+      return options?.cacheKey === 'storage-page'
+        ? [...nodeResources, ...hookResources]
+        : nodeResources;
+    },
     loading: () => (options?.cacheKey === 'storage-page' ? hookLoading : false),
     error: () => (options?.cacheKey === 'storage-page' ? hookError : undefined),
     refetch: vi.fn(),
@@ -388,6 +397,7 @@ describe('Storage', () => {
     fetchMock.mockClear();
     mockLocationPath = '/proxmox/storage';
     mockLocationSearch = '';
+    liveLocation = false;
     navigateSpy.mockReset();
 
     wsConnected = true;
@@ -462,6 +472,65 @@ describe('Storage', () => {
 
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
+  });
+
+  it('gives a platform embed the canonical toolbar with source and node scope locked', async () => {
+    mockLocationSearch = '?node=node-2&source=truenas';
+    hookResources = [
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1', {
+        parentId: 'node-1',
+        parentName: 'pve1',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2', {
+        parentId: 'node-2',
+        parentName: 'pve2',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-3', 'Tank-TrueNAS', 'truenas-1', {
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+      }),
+    ];
+
+    render(() => (
+      <Storage
+        forcedSourceFilter="proxmox-all"
+        suppressNodeFilter
+        filterAriaLabel="Proxmox storage filters"
+        filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
+      />
+    ));
+
+    // No prop opts the embed into the toolbar or keeps it out of the view tabs.
+    expect(screen.getByRole('group', { name: 'Proxmox storage filters' })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search Proxmox storage by pool, datastore, node, or device'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+
+    // The forced source outranks the URL source, and the URL node resets to all.
+    await waitFor(() => {
+      expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
+      expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Tank-TrueNAS')).not.toBeInTheDocument();
+    expect(navigateSpy.mock.calls.some(([path]) => String(path).includes('source='))).toBe(false);
+
+    // Neither lock surfaces as a chip, an Add filter option, or a clear action.
+    expect(queryStorageChip('Source')).toBeNull();
+    expect(queryStorageChip('Node')).toBeNull();
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    expect(within(addFilter).getByRole('option', { name: 'Status: Warning' })).toBeInTheDocument();
+    expect(
+      within(addFilter).queryByRole('option', { name: /^(Source|Node):/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /charts/i })).not.toBeInTheDocument();
+
+    const viewOptions = openStorageViewOptions();
+    expect(within(viewOptions).getByLabelText('Group by')).toBeInTheDocument();
+    expect(within(viewOptions).getByLabelText('Sort by')).toBeInTheDocument();
   });
 
   it('renders per-pool growth from the shared storage summary history contract', async () => {
@@ -783,133 +852,227 @@ describe('Storage', () => {
     expect(queryStorageChip('Node')).toBeNull();
   });
 
-  it('pins storage group scope into the route without conflating it with expansion', async () => {
+  it('toggles a storage group from its header row without pinning a group scope', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),
       buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
     ];
     mockLocationSearch = '?group=node';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
 
     render(() => <Storage />);
 
     await waitFor(() => {
       expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
     });
-
-    let groupRow = document.querySelector(
+    const groupRow = document.querySelector(
       'tr[data-summary-group-id="storage:node:pve1"]',
-    ) as HTMLTableRowElement | null;
-    expect(groupRow).not.toBeNull();
-    if (!groupRow) {
-      return;
-    }
-    Object.defineProperty(groupRow, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => buildVisibleRect(),
-    });
+    ) as HTMLTableRowElement;
+
+    fireEvent.pointerEnter(groupRow, { pointerType: 'mouse' });
+    expect(document.querySelector('tr[data-summary-group-member-active]')).toBeNull();
+    expect(groupRow).not.toHaveAttribute('data-summary-row-active');
 
     fireEvent.click(groupRow);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
     });
-
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
+    expect(screen.getByText('Edge-Store')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
+      within(screen.getByTestId('storage-content-surface')).queryByRole('button', {
+        name: 'Clear selection',
+      }),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(groupRow);
+
+    await waitFor(() => {
+      expect(screen.getByText('Node-Store')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
+    for (const [path] of navigateSpy.mock.calls) {
+      expect(String(path)).not.toContain('summaryGroup');
+    }
   });
 
-  it('clears pinned storage group scope from the content-card header action', async () => {
+  it('keeps an open pool open when another group header is clicked', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+    await waitFor(() => {
+      expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+    });
+
+    fireEvent.click(
+      document.querySelector('tr[data-summary-group-id="storage:node:pve2"]') as HTMLElement,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Edge-Store')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Collapse Node-Store' })).toBeInTheDocument();
+    expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+  });
+
+  it('reopens the collapsed group of a pool focused by an in-app storage link', async () => {
+    liveLocation = true;
+    hookResources = [
+      buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
+        storageType: 'cephfs',
+      }),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Collapse pve1' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Ceph-Link-Store')).not.toBeInTheDocument();
+    });
+
+    mockLocationSearch = '?group=node&resource=storage-ceph-link';
+    setLocationVersion((version) => version + 1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
+      const poolRow = screen.getByText('Ceph-Link-Store').closest('tr[data-summary-series-id]');
+      expect(
+        document
+          .querySelector('tr[data-inline-detail-for]')
+          ?.getAttribute('data-inline-detail-for'),
+      ).toBe(poolRow?.getAttribute('data-summary-series-id'));
+    });
+    expect(screen.getAllByRole('tab', { name: 'Storage' })[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('does not scroll back to an open pool when a live update rebuilds the pools', async () => {
+    const scrollTo = vi.fn();
+    const originalScrollTo = Object.getOwnPropertyDescriptor(window, 'scrollTo');
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollTo });
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    try {
+      render(() => <Storage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+      await waitFor(() => {
+        expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+        expect(scrollTo).toHaveBeenCalled();
+      });
+      // Count only once the reveal's settle frames stop scrolling.
+      let previousScrolls = -1;
+      while (scrollTo.mock.calls.length !== previousScrolls) {
+        previousScrolls = scrollTo.mock.calls.length;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      const scrollsAfterFocus = scrollTo.mock.calls.length;
+
+      hookResources = hookResources.map((resource) => ({ ...resource, lastSeen: Date.now() }));
+      setHookResourcesVersion((version) => version + 1);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(screen.getByRole('button', { name: 'Collapse Node-Store' })).toBeInTheDocument();
+      expect(scrollTo).toHaveBeenCalledTimes(scrollsAfterFocus);
+    } finally {
+      if (originalScrollTo) {
+        Object.defineProperty(window, 'scrollTo', originalScrollTo);
+      }
+    }
+  });
+
+  it('keeps the group of an open pool collapsed across live updates', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+    await waitFor(() => {
+      expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse pve1' }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
+
+    hookResources = hookResources.map((resource) => ({ ...resource, lastSeen: Date.now() }));
+    setHookResourcesVersion((version) => version + 1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
+  });
+
+  it('ignores a summaryGroup param left in a storage URL', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),
       buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
     ];
     mockLocationSearch = '?group=node&summaryGroup=storage%3Anode%3Apve1';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
 
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
+      expect(screen.getByText('Node-Store')).toBeInTheDocument();
     });
-
-    const clearButton = within(screen.getByTestId('storage-content-surface')).getByRole('button', {
-      name: 'Clear selection',
-    });
-    fireEvent.click(clearButton);
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
-    });
+    expect(screen.getByText('Edge-Store')).toBeInTheDocument();
+    expect(document.querySelector('tr[data-summary-group-member-active]')).toBeNull();
+    expect(document.querySelector('tr[data-summary-row-active="true"]')).toBeNull();
+    expect(
+      within(screen.getByTestId('storage-content-surface')).queryByRole('button', {
+        name: 'Clear selection',
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it('uses shared preview and pinned group-member emphasis for storage pool rows', async () => {
-    hookResources = [
-      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
-      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
-    ];
-    mockLocationSearch = '?group=node';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
+  it('keeps a storage pool row closed when a drag selects its text', async () => {
+    hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
 
     render(() => <Storage />);
 
-    await waitFor(() => {
-      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
-    });
-
-    const groupRow = document.querySelector(
-      'tr[data-summary-group-id="storage:node:pve1"]',
-    ) as HTMLTableRowElement | null;
-    expect(groupRow).not.toBeNull();
-    if (!groupRow) {
-      return;
-    }
-
-    fireEvent.pointerEnter(groupRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
-      ).toHaveLength(1);
-    });
-
-    fireEvent.pointerLeave(groupRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
-      ).toHaveLength(0);
-    });
-
-    fireEvent.click(groupRow);
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
-        ROUTE_STATE_REPLACE_OPTIONS,
+    const name = await screen.findByText('Node-Store');
+    const range = document.createRange();
+    range.selectNodeContents(name);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+      fireEvent.mouseDown(name, { clientX: 4, clientY: 8 });
+      fireEvent.click(name, { clientX: 80, clientY: 8 });
+      expect(screen.getByRole('button', { name: 'Expand Node-Store' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
       );
-    });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand pve1' }));
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="pinned"]'),
-      ).toHaveLength(1);
-    });
+      fireEvent.mouseDown(name, { clientX: 40, clientY: 8 });
+      fireEvent.click(name, { clientX: 40, clientY: 8 });
+      expect(await screen.findByRole('button', { name: 'Collapse Node-Store' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    } finally {
+      selection.removeAllRanges();
+    }
   });
 
   it('uses canonical storage metrics target ids for expanded pool history charts', async () => {
@@ -947,7 +1110,6 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand tank' }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
 
     await waitFor(() => {
       expect(metricsHistorySpy).toHaveBeenCalledWith(
@@ -1014,6 +1176,36 @@ describe('Storage', () => {
         'data-resource-highlighted',
         'false',
       );
+    });
+  });
+
+  it('opens a deep-linked pool only once its Storage tab is showing', async () => {
+    // The Proxmox page keeps Storage mounted behind its other tabs, whose
+    // guest links also use ?resource=.
+    hookResources = [
+      buildStorageResource('storage-zfs-link', 'Zfs-Link-Store', 'pve1'),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?resource=storage-zfs-link';
+    const [routeActive, setRouteActive] = createSignal(false);
+
+    render(() => <Storage routeActive={routeActive()} />);
+
+    const poolRow = (await screen.findByText('Zfs-Link-Store')).closest(
+      'tr[data-summary-series-id]',
+    );
+    expect(document.querySelector('tr[data-inline-detail-for]')).toBeNull();
+    expect(poolRow).toHaveAttribute('data-resource-highlighted', 'false');
+
+    setRouteActive(true);
+
+    await waitFor(() => {
+      expect(
+        document
+          .querySelector('tr[data-inline-detail-for]')
+          ?.getAttribute('data-inline-detail-for'),
+      ).toBe(poolRow?.getAttribute('data-summary-series-id'));
+      expect(poolRow).toHaveAttribute('data-resource-highlighted', 'true');
     });
   });
 
@@ -1313,7 +1505,7 @@ describe('Storage', () => {
     );
   });
 
-  it('keeps the storage view selector available in table-only embedding', async () => {
+  it('keeps the storage view selector available in a platform-page embed', async () => {
     mockLocationPath = '/proxmox/storage';
     hookResources = [
       buildPhysicalDiskResource('sda', 'node-1', 'pve1'),

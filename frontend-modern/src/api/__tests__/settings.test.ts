@@ -7,7 +7,8 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 const mockTelemetryPreviewPayload = {
-  schema_version: 4,
+  schema_version: 19,
+  successful_history_reads_over_7d_30d: 7,
   sent_at: '2026-07-23T08:30:00Z',
   install_id: 'preview-install-id',
   version: '6.0.0',
@@ -313,6 +314,7 @@ describe('SettingsAPI', () => {
       const result = await SettingsAPI.getTelemetryPreview();
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/system/settings/telemetry-preview');
+      expect(result.payload.successful_history_reads_over_7d_30d).toBe(7);
       expect(result).toEqual(mockPreview);
     });
   });

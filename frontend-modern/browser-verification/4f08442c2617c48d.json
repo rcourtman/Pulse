@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "ebd6d09337d5e4cd17b327df5a69a58dae739a27",
+  "verified_at": "2026-10-05T15:31:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/shared/Table.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "213ce500ff48a9470fce226cf720393d9eac8eac8465639eca1b2a691625fefa",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "b94b44121f2d8827452b1002742272bd19bf0391a64f7b0f4fe0c76e46b52fdd",
+    "frontend-modern/src/components/shared/Table.tsx": "c75023940e8c93180c32083cad363cd8781def55c20bed0247a5eb2e37ede08d"
+  },
+  "routes": [
+    "/kubernetes/pods",
+    "/docker/containers",
+    "/proxmox/overview",
+    "/proxmox/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack from this tree (backend :7695 in mock mode, Vite :5215 serving this checkout), driven by headless Chromium through Playwright with real mouse down/move/up input, not synthetic events.",
+    "Kubernetes pods (TableRow onClick={() => drawer.toggle(resource)}): after dragging across the pod name cron-nightly-backfill the name stayed selected and the row's detail chevron kept aria-expanded=false with no drawer row inserted. The same drag on the unfixed tree (runtime files reverted to the parent) opened the drawer, as reported.",
+    "Docker containers (drawer.toggle), Proxmox guest rows (custom GuestRow shell) and Proxmox storage pools (custom StoragePoolRow shell): the drag left the drawer closed, and with the drawer open left it open; on the unfixed tree each drag toggled it.",
+    "Proxmox host rows (getPlatformResourceDetailRowInteractionProps): the row click selects that node's guests (data-summary-row-active) rather than opening a drawer; the drag left that selection unset, while on the unfixed tree the drag applied it.",
+    "A plain click on the still-selected name opened the drawer (or applied the node's guest selection) on the first click on every table; Chromium cleared the selection afterwards.",
+    "Phone 390x844 with touch emulation: tapping a pod row and a guest row opened the drawer and a second tap closed it (WebKit-compatible native click marker unchanged). The guest row moves down 52px when its drawer opens, so the second tap must use the row's new position."
+  ],
+  "interactions": [
+    "Dragged across the first selectable text in the first row of each table (pod name, container name, host version, guest type, pool name) at 1440x900 and 768x1024, with the drawer closed and again with it open.",
+    "Clicked in place on the selected text after the drag.",
+    "Clicked the row's detail chevron while text in the row stayed selected; it toggled the drawer each time.",
+    "Focused the chevron and pressed Enter twice; it opened and closed the drawer.",
+    "Tapped pod and guest rows twice with touch emulation at 390x844.",
+    "Repeated the drag and click sequence with the three runtime files reverted to the parent commit to confirm the bug reproduced there."
+  ]
+}

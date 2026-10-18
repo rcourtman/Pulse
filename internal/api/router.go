@@ -49,9 +49,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -85,6 +83,7 @@ type Router struct {
 	monitor                         *monitoring.Monitor            // Legacy/Default support
 	mtMonitor                       *monitoring.MultiTenantMonitor // Multi-tenant manager
 	chartService                    *chartapi.Service
+	chartServiceOnce                sync.Once
 	alertHandlers                   *AlertHandlers
 	configHandlers                  *ConfigHandlers
 	trueNASHandlers                 *TrueNASHandlers
@@ -100,7 +99,6 @@ type Router struct {
 	aiSettingsHandler               *AISettingsHandler
 	attentionHandlers               *AttentionHandlers
 	aiHandler                       *AIHandler // AI chat handler
-	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
 	maintenanceVerificationHandlers *MaintenanceVerificationHandlers
 	maintenanceSentinel             *maintenancesentinel.Sentinel
@@ -112,6 +110,7 @@ type Router struct {
 	monitorResourceAdapter          *unifiedresources.MonitorAdapter
 	monitorResourceAdapters         map[string]*unifiedresources.MonitorAdapter
 	monitorAdapterMu                sync.Mutex
+	monitorSupplementalMu           sync.Mutex // serializes provider updates with complete monitor initialization
 	monitorSupplementalRecords      map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider
 	reportingHandlers               *ReportingHandlers
 	configProfileHandler            *ConfigProfileHandler
@@ -132,12 +131,14 @@ type Router struct {
 	handoffExchangeRateLimiter      *RateLimiter
 	bootstrapTokenValidationLimiter *RateLimiter
 	tenantRateLimiter               *TenantRateLimiter
+	endpointRateLimitConfig         *EndpointRateLimitConfig
 	persistence                     *config.ConfigPersistence
 	multiTenant                     *config.MultiTenantPersistence
 	oidcMu                          sync.Mutex
 	oidcService                     *OIDCService
 	oidcManager                     *OIDCServiceManager
 	samlManager                     *SAMLServiceManager
+	ssoMu                           sync.RWMutex // guards ssoConfig; a published config is never mutated (see commitSSOConfig)
 	ssoConfig                       *config.SSOConfig
 	ssoAuthLoadFailed               atomic.Bool
 	sessionStore                    *SessionStore
@@ -166,6 +167,9 @@ type Router struct {
 	lifecycleCancel           context.CancelFunc
 	lifecycleWG               sync.WaitGroup
 	backgroundWorkersOnce     sync.Once
+	backgroundShutdownOnce    sync.Once
+	lifecycleMu               sync.Mutex
+	lifecycleStopped          bool
 	hostedMode                bool
 	stripeWebhookHandlers     *StripeWebhookHandlers
 	patrolLifecycleMu         sync.Mutex
@@ -234,6 +238,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		wsHub:                           wsHub,
 		reloadFunc:                      reloadFunc,
 		updateManager:                   updateManager,
+		endpointRateLimitConfig:         newEndpointRateLimitConfig(),
 		updateHistory:                   updateHistory,
 		exportLimiter:                   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter:                 NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
@@ -255,7 +260,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		monitorSupplementalRecords:      make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
 		startedPatrolOrgs:               make(map[string]bool),
 	}
-	r.chartService = chartapi.NewService(routerChartMonitorResolver{router: r})
+	r.ensureChartService()
 	if r.wsHub != nil {
 		r.wsHub.SetTrustedProxyChecker(isTrustedProxyIP)
 	}
@@ -350,7 +355,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
 	handler = AuthContextMiddleware(cfg, r.mtMonitor, handler)
 
-	handler = UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+	handler = UniversalRateLimitMiddlewareWithConfig(r.endpointRateLimitConfig, handler)
 	r.wrapped = handler
 	return r
 }
@@ -449,7 +454,7 @@ func (r *Router) setupRoutes() {
 			return service
 		}),
 	)
-	recoveryManager := recoverymanager.New(r.multiTenant)
+	recoveryManager := newRecoveryReadManager(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
 	r.attentionHandlers = NewAttentionHandlers(r.configHandlers.Monitor, recoveryManager)
 	if r.mtMonitor != nil {
@@ -462,28 +467,9 @@ func (r *Router) setupRoutes() {
 	r.trueNASPoller.Start(r.lifecycleCtx)
 	r.vmwarePoller = monitoring.NewVMwarePoller(r.multiTenant, 0)
 	r.vmwarePoller.Start(r.lifecycleCtx)
-	if r.monitor != nil {
-		// Drive the connection-degraded alert off the same aggregator the
-		// HTTP handler uses, so the active-notification stream stays in
-		// lockstep with the Settings → Infrastructure badges. Single-tenant
-		// only for now; multi-tenant per-org wiring is a follow-up.
-		// Capture the constructed runtime owners, not the nil fields that
-		// existed earlier while handlers were being registered. The monitor
-		// may already be running, so publish only this complete snapshot source.
-		getCfg := r.configHandlers.Config
-		getPersist := r.configHandlers.Persistence
-		monitor := r.monitor
-		trueNASPoller := r.trueNASPoller
-		vmwarePoller := r.vmwarePoller
-		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
-			ctx := context.Background()
-			return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, aggregatorRuntimeSources{
-				orgID:         "default",
-				truenasPoller: trueNASPoller,
-				vmwarePoller:  vmwarePoller,
-			})
-		})
-	}
+	// The connection-degraded lister is installed by
+	// configureMonitorDependencies, which runs below for the startup monitor
+	// and again for every monitor a reload or tenant initializer attaches.
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	updateHandlers.SetUpdateReadinessSources(
 		r.updateReadinessConfigSnapshot,
@@ -498,6 +484,7 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers.SetServerVersion(r.serverVersion)
+	r.unifiedAgentHandlers.SetReportedIdentityRecorder(r.recordReportedAgentIdentity)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	r.resourceHandlers.SetOperatorStateChanged(func(_ string, resourceID string) {
@@ -795,37 +782,11 @@ func (r *Router) setupRoutes() {
 	} else {
 		log.Warn().Msg("[Router] unified resource provider is nil, cannot inject unified resource provider")
 	}
-	// Inject tenant-scoped metadata providers for AI URL discovery. Existing
+	// Inject tenant-scoped metadata providers for Assistant URL saves. Existing
 	// tenant services are refreshed when Router.SetMonitor replaces a monitor.
 	r.configureMetadataProviderFactory()
 
-	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
-	// findings provider into reporting. The AI service implements all
-	// three interfaces; when not configured for the tenant the engine
-	// falls back to the heuristic narrators with no findings section.
-	if r.reportingHandlers != nil {
-		settings := r.aiSettingsHandler
-		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
-			if settings == nil {
-				return ai.PatrolDigest{}, false
-			}
-			return settings.BuildPatrolDigest(ctx, days)
-		})
-		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
-			if settings == nil {
-				return nil, nil, nil
-			}
-			svc := settings.GetAIService(ctx)
-			if svc == nil {
-				return nil, nil, nil
-			}
-			cfg := svc.GetAIConfig()
-			if cfg == nil || !cfg.Enabled {
-				return nil, nil, nil
-			}
-			return svc, svc, svc
-		})
-	}
+	r.wireReportingAIResolvers()
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
@@ -884,8 +845,7 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire the per-tenant cost store into chat sessions so user-chat
 	// token usage flows into the same operator-facing dashboard the
-	// rest of the AI runtime uses (patrol, discovery,
-	// report-narrative). No Enabled gate — even when chat ran briefly
+	// rest of the AI runtime uses (patrol, report-narrative). No Enabled gate — even when chat ran briefly
 	// while AI was being configured, those tokens were billed and
 	// should be visible.
 	r.aiHandler.SetCostStoreResolver(func(ctx context.Context) *cost.Store {
@@ -901,13 +861,6 @@ func (r *Router) setupRoutes() {
 	// Mobile polls approvals as part of its normal paired runtime. Keep the
 	// approval store available even when AI chat is disabled or not configured.
 	r.aiHandler.ensureApprovalStore(r.config.DataPath)
-
-	// AI-powered infrastructure discovery handlers
-	// Note: The actual service is wired up later via SetDiscoveryService
-	r.discoveryHandlers = NewDiscoveryHandlers(nil, r.config)
-	if r.resourceHandlers != nil {
-		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
-	}
 
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseHandlers(r.licenseHandlers)
@@ -1023,6 +976,50 @@ func (r *Router) setupRoutes() {
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
+}
+
+// wireReportingAIResolvers connects reporting to the per-tenant AI service.
+func (r *Router) wireReportingAIResolvers() {
+	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
+	// findings provider into reporting. The AI service implements all
+	// three interfaces; when not configured for the tenant the engine
+	// falls back to the heuristic narrators with no findings section.
+	if r.reportingHandlers != nil {
+		settings := r.aiSettingsHandler
+		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
+			if settings == nil {
+				return ai.PatrolDigest{}, false
+			}
+			return settings.BuildPatrolDigest(ctx, days)
+		})
+		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+			if settings == nil {
+				return nil, nil, nil
+			}
+			svc := settings.GetAIService(ctx)
+			if svc == nil {
+				return nil, nil, nil
+			}
+			cfg := svc.GetAIConfig()
+			if cfg == nil || !cfg.Enabled {
+				return nil, nil, nil
+			}
+			return svc, svc, svc
+		})
+		r.reportingHandlers.SetExistingFindingsResolver(func(ctx context.Context) reporting.FindingsProvider {
+			if settings == nil {
+				return nil
+			}
+			svc := settings.ExistingAIService(ctx)
+			if svc == nil {
+				return nil
+			}
+			if cfg := svc.GetAIConfig(); cfg == nil || !cfg.Enabled {
+				return nil
+			}
+			return svc
+		})
+	}
 }
 
 // CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
@@ -1562,6 +1559,11 @@ func (r *Router) startLifecycleWorker(worker func()) {
 	if r == nil || worker == nil {
 		return
 	}
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	if r.lifecycleStopped {
+		return
+	}
 	r.lifecycleWG.Add(1)
 	go func() {
 		defer r.lifecycleWG.Done()
@@ -1853,11 +1855,20 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		return
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
-		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(adapter)
-	}
+	r.monitorSupplementalMu.Lock()
+	defer r.monitorSupplementalMu.Unlock()
+	r.configureMonitorDependenciesLocked(m)
+}
 
+// The caller holds monitorSupplementalMu across reading and applying the
+// registry, not just copying the map: a delayed initializer must not reinstall
+// an old provider after a mock switch or withdrawal has completed.
+func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
+	// Full configuration reloads replace monitors. Their execution evidence
+	// must still reach the same per-organization store used by recovery reads.
+	if r.recoveryHandlers != nil {
+		m.SetRecoveryManager(r.recoveryHandlers.manager)
+	}
 	// Tenant monitors must inherit the persisted instance-wide notification
 	// settings. System settings are stored globally, so without this a tenant
 	// monitor created after the allowlist was saved (or after a restart)
@@ -1867,11 +1878,11 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 	if r.persistence != nil {
 		if settings, err := r.persistence.LoadSystemSettings(); err == nil && settings != nil {
 			if nm := m.GetNotificationManager(); nm != nil {
-				if settings.WebhookAllowedPrivateCIDRs != "" {
-					if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
-						log.Error().Err(err).Msg("Failed to apply webhook allowed private CIDRs to tenant monitor")
-					}
+				if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
+					log.Error().Err(err).Msg("Failed to apply webhook allowed private CIDRs to tenant monitor")
 				}
+				// An empty allowlist revokes old grants. An empty public URL
+				// keeps the notification manager's existing automatic fallback.
 				if settings.PublicURL != "" {
 					nm.SetPublicURL(settings.PublicURL)
 				}
@@ -1881,46 +1892,47 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		}
 	}
 
-	if len(r.monitorSupplementalRecords) == 0 {
-		return
-	}
+	r.installConnectionAlertLister(m)
 
-	keys := make([]string, 0, len(r.monitorSupplementalRecords))
-	for source := range r.monitorSupplementalRecords {
-		keys = append(keys, string(source))
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		source := unifiedresources.DataSource(key)
-		provider := r.monitorSupplementalRecords[source]
-		m.SetSupplementalRecordsProvider(source, provider)
+	// Apply saved notification policy before the first publication, which can
+	// evaluate alerts. The combined boundary avoids one refresh per source.
+	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+		m.SetResourceStoreAndProviders(adapter, r.monitorSupplementalRecords)
+	} else {
+		m.SetSupplementalRecordsProviders(r.monitorSupplementalRecords)
 	}
 }
 
 func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.DataSource, provider monitoring.MonitorSupplementalRecordsProvider) {
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{source: provider})
+}
+
+func (r *Router) setMonitorSupplementalRecordsProviders(providers map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider) {
 	if r == nil {
 		return
 	}
-
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
-		return
-	}
-
-	if r.monitorSupplementalRecords == nil {
-		r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
-	}
-	if provider == nil {
-		delete(r.monitorSupplementalRecords, normalized)
-	} else {
+	r.monitorSupplementalMu.Lock()
+	usable := false
+	for source, provider := range providers {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if normalized == "" {
+			continue
+		}
+		usable = true
+		if r.monitorSupplementalRecords == nil {
+			r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
+		}
+		// Retain explicit nil withdrawals in initializer snapshots. Omitting a
+		// removed source would leave it installed in already-running tenants.
 		r.monitorSupplementalRecords[normalized] = provider
 	}
-
-	if r.monitor != nil {
-		r.monitor.SetSupplementalRecordsProvider(normalized, provider)
+	if usable && r.monitor != nil {
+		r.configureMonitorDependenciesLocked(r.monitor)
 	}
-	if r.mtMonitor != nil {
+	r.monitorSupplementalMu.Unlock()
+	if usable && r.mtMonitor != nil {
+		// Do not hold the router lock while taking the tenant-manager lock.
+		// Its callback obtains a fresh, serialized registry for each monitor.
 		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
 }
@@ -1941,8 +1953,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
 		}
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
+		r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: trueNASAdapter,
+			unifiedresources.SourceVMware:  vmwareAdapter,
+		})
 		return
 	}
 
@@ -1953,8 +1967,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
 	}
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: r.trueNASPoller,
+		unifiedresources.SourceVMware:  r.vmwarePoller,
+	})
 }
 
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.
@@ -2016,45 +2032,6 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	if r.licenseHandlers != nil {
 		r.licenseHandlers.SetConfig(r.config)
 	}
-}
-
-// SetDiscoveryService sets the discovery service for the router.
-func (r *Router) SetDiscoveryService(svc *servicediscovery.Service) {
-	if r.discoveryHandlers != nil {
-		r.discoveryHandlers.SetService(svc)
-	}
-	if r.resourceHandlers != nil && r.discoveryHandlers != nil {
-		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
-	}
-
-	// Wire up WebSocket hub for progress broadcasting
-	if svc != nil && r.wsHub != nil {
-		svc.SetWSHub(&wsHubAdapter{hub: r.wsHub})
-		log.Info().Msg("Discovery: WebSocket hub wired for progress broadcasting")
-	}
-}
-
-// SetDiscoveryAIConfigProvider sets the AI config provider for showing AI provider info in discovery.
-func (r *Router) SetDiscoveryAIConfigProvider(provider AIConfigProvider) {
-	if r.discoveryHandlers != nil {
-		r.discoveryHandlers.SetAIConfigProvider(provider)
-	}
-}
-
-// wsHubAdapter adapts websocket.Hub to the servicediscovery.WSBroadcaster interface.
-type wsHubAdapter struct {
-	hub *websocket.Hub
-}
-
-// BroadcastDiscoveryProgress broadcasts discovery progress to all WebSocket clients.
-func (a *wsHubAdapter) BroadcastDiscoveryProgress(progress *servicediscovery.DiscoveryProgress) {
-	if a.hub == nil || progress == nil {
-		return
-	}
-	a.hub.BroadcastMessage(websocket.Message{
-		Type: "ai_discovery_progress",
-		Data: progress,
-	})
 }
 
 func normalizePatrolOrgID(orgID string) string {
@@ -2182,6 +2159,93 @@ func unifiedFindingFromAI(f *ai.Finding) *unified.UnifiedFinding {
 		TimesRaised:                f.TimesRaised,
 		RemindAt:                   f.RemindAt,
 	}
+}
+
+// canonicalResourceIDResolver is the identity-only reference resolver a
+// monitor's unified read state exposes.
+type canonicalResourceIDResolver interface {
+	ResolveCanonicalResourceID(ref string) (string, bool)
+}
+
+// canonicalResourceAncestorResolver is the live canonical parent chain the
+// same read state exposes, nearest parent first.
+type canonicalResourceAncestorResolver interface {
+	ResolveCanonicalResourceAncestors(ref string) []string
+}
+
+// patrolResourceOperatorStateProvider projects durable operator state onto the
+// resource a Patrol finding names. Findings carry whatever resource ID their
+// producer used: unified-derived findings hold the canonical hash, Patrol
+// guest inventory rows hold the node-scoped Proxmox source ID, and a finding
+// raised before an operator link folded its resource into another keeps the
+// folded ID. Operator state is keyed by canonical ID, so the reference
+// resolves before any read, as the resources API resolves it; reading the
+// exact reference first would let a row left under a folded ID hide the merged
+// resource's maintenance window. The resolver is the monitor's current read
+// state (its published registry with saved hosts that have not reported since
+// a restart overlaid, or the mock estate), the listing the resources API seeds
+// from. It answers from a registry it keeps (a continuity overlay is shared
+// and reused for up to two seconds while nothing it depends on changes), so
+// findings do not each clone the unified listing. Only a reference it cannot
+// resolve is read as given.
+//
+// Maintenance is the active occurrence (one-shot or recurring) covering the
+// resource, resolved by the rule alert intent uses: the resource's own window
+// or an ancestor's window scoped to its descendants, latest end winning. Every
+// other field is the resource's own state; nothing else is inherited.
+func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOperatorStateProvider {
+	return ai.ResourceOperatorStateProviderFunc(
+		func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
+			orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
+			if lookupErr != nil {
+				return ai.ResourceOperatorStateProjection{}, false
+			}
+			canonicalID := resourceRef
+			readState := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState()
+			if resolver, ok := readState.(canonicalResourceIDResolver); ok {
+				if resolvedID, resolved := resolver.ResolveCanonicalResourceID(resourceRef); resolved {
+					canonicalID = resolvedID
+				}
+			}
+			state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
+			if fetchErr != nil {
+				return ai.ResourceOperatorStateProjection{}, false
+			}
+			var own *unifiedresources.ResourceOperatorState
+			var projection ai.ResourceOperatorStateProjection
+			if found {
+				own = &state
+				projection = ai.ResourceOperatorStateProjection{
+					IntentionallyOffline: state.IntentionallyOffline,
+					MonitoringMode:       string(state.MonitoringMode),
+					LifecycleState:       string(state.LifecycleState),
+					NeverAutoRemediate:   state.NeverAutoRemediate,
+					Criticality:          string(state.Criticality),
+				}
+				if state.LifecycleState == unifiedresources.LifecycleStateRetired {
+					projection.NeverAutoRemediate = true
+				}
+			}
+			var ancestorIDs []string
+			if ancestors, ok := readState.(canonicalResourceAncestorResolver); ok {
+				ancestorIDs = ancestors.ResolveCanonicalResourceAncestors(canonicalID)
+			}
+			coverage, covered := unifiedresources.ActiveMaintenanceCoverageAt(now, canonicalID, own, ancestorIDs, func(ancestorID string) (unifiedresources.ResourceOperatorState, bool) {
+				ancestorState, ancestorFound, ancestorErr := orgStore.GetResourceOperatorState(ancestorID)
+				return ancestorState, ancestorErr == nil && ancestorFound
+			})
+			if covered {
+				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
+					StartAt:   coverage.Occurrence.StartAt,
+					EndAt:     coverage.Occurrence.EndAt,
+					Reason:    coverage.Reason,
+					SourceID:  coverage.SourceID,
+					Inherited: coverage.Inherited,
+				}
+			}
+			return projection, found || covered
+		},
+	)
 }
 
 func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
@@ -2451,64 +2515,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			// signals later does not multiply round-trips per finding.
 			// Keeps `internal/ai` clear of an
 			// `internal/unifiedresources` import.
-			patrol.GetFindings().SetResourceOperatorStateProvider(
-				ai.ResourceOperatorStateProviderFunc(
-					func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
-						orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
-						if lookupErr != nil {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						// Findings carry whatever resource ID their
-						// producer used: unified-derived findings hold
-						// the canonical hash, but Patrol guest inventory
-						// rows hold the node-scoped Proxmox source ID.
-						// Operator state is keyed by canonical ID only,
-						// so a reference that misses directly resolves
-						// through the registry before giving up —
-						// otherwise maintenance windows and
-						// intentionally-offline intent silently never
-						// reach guest findings.
-						canonicalID := resourceRef
-						state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
-						if fetchErr != nil {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						if !found {
-							registry, registryErr := r.resourceHandlers.buildRegistry(orgID)
-							if registryErr != nil || registry == nil {
-								return ai.ResourceOperatorStateProjection{}, false
-							}
-							_, resolvedID, resolved := registry.GetByReference(resourceRef)
-							if !resolved || resolvedID == canonicalID {
-								return ai.ResourceOperatorStateProjection{}, false
-							}
-							canonicalID = resolvedID
-							state, found, fetchErr = orgStore.GetResourceOperatorState(canonicalID)
-						}
-						if fetchErr != nil || !found {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						projection := ai.ResourceOperatorStateProjection{
-							IntentionallyOffline: state.IntentionallyOffline,
-							MonitoringMode:       string(state.MonitoringMode),
-							LifecycleState:       string(state.LifecycleState),
-							NeverAutoRemediate:   state.NeverAutoRemediate,
-							Criticality:          string(state.Criticality),
-						}
-						if state.LifecycleState == unifiedresources.LifecycleStateRetired {
-							projection.NeverAutoRemediate = true
-						}
-						if state.IsInMaintenanceAt(now) {
-							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
-								StartAt: *state.MaintenanceStartAt,
-								EndAt:   *state.MaintenanceEndAt,
-								Reason:  state.MaintenanceReason,
-							}
-						}
-						return projection, true
-					},
-				),
-			)
+			patrol.GetFindings().SetResourceOperatorStateProvider(r.patrolResourceOperatorStateProvider(orgID))
 
 			// Wire push notifications: patrol findings → relay client (best-effort)
 			patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
@@ -2574,18 +2581,6 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 
 	// Finally start the actual patrol loop
 	r.aiSettingsHandler.StartPatrol(ctx)
-
-	// Wire up discovery service to the handlers
-	// This enables the /api/discovery endpoints to trigger discovery scans
-	aiService = r.aiSettingsHandler.GetAIService(ctx)
-	if aiService != nil {
-		if discoveryService := aiService.GetDiscoveryService(); discoveryService != nil {
-			r.SetDiscoveryService(discoveryService)
-			log.Info().Msg("Discovery: Service wired to API handlers")
-		}
-		// Wire up AI config provider for showing AI provider info in discovery UI
-		r.SetDiscoveryAIConfigProvider(aiService)
-	}
 
 	return true
 }
@@ -2978,40 +2973,64 @@ func (r *Router) ShutdownRBAC() {
 	}
 }
 
+// ShutdownBackgroundWorkers seals worker admission and joins the workers
+// created by this Router. Call it after HTTP admission is stopped, before
+// closing the monitor and removing its data directory. It does not close
+// resource or RBAC stores; their existing owner shutdown methods still apply.
+func (r *Router) ShutdownBackgroundWorkers() {
+	r.shutdownBackgroundWorkers()
+}
+
 func (r *Router) shutdownBackgroundWorkers() {
-	if r.lifecycleCancel != nil {
-		r.lifecycleCancel()
+	if r == nil {
+		return
 	}
-	if r.updateManager != nil {
-		r.updateManager.Close()
-	}
-	if r.sessionStore != nil {
-		r.sessionStore.Shutdown()
-	}
-	if r.csrfStore != nil {
-		r.csrfStore.Shutdown()
-	}
-	if r.recoveryTokenStore != nil {
-		r.recoveryTokenStore.Shutdown()
-	}
-	if r.aiSettingsHandler != nil {
-		r.aiSettingsHandler.StopServices()
-	}
-	if r.aiHandler != nil {
-		r.aiHandler.clearApprovalStore()
-	}
-	if r.trueNASPoller != nil {
-		r.trueNASPoller.Stop()
-	}
-	if r.vmwarePoller != nil {
-		r.vmwarePoller.Stop()
-	}
-	if r.deployStore != nil {
-		if err := r.deployStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close deploy store")
+	r.backgroundShutdownOnce.Do(func() {
+		r.lifecycleMu.Lock()
+		r.lifecycleStopped = true
+		if r.lifecycleCancel != nil {
+			r.lifecycleCancel()
 		}
-	}
-	r.lifecycleWG.Wait()
+		r.lifecycleMu.Unlock()
+		for _, limiter := range []*RateLimiter{
+			r.exportLimiter, r.downloadLimiter, r.signupRateLimiter,
+			r.handoffExchangeRateLimiter, r.bootstrapTokenValidationLimiter,
+		} {
+			limiter.Stop()
+		}
+		r.endpointRateLimitConfig.Stop()
+		r.tenantRateLimiter.Stop()
+		if r.updateManager != nil {
+			r.updateManager.Close()
+		}
+		if r.sessionStore != nil {
+			r.sessionStore.Shutdown()
+		}
+		if r.csrfStore != nil {
+			r.csrfStore.Shutdown()
+		}
+		if r.recoveryTokenStore != nil {
+			r.recoveryTokenStore.Shutdown()
+		}
+		if r.aiSettingsHandler != nil {
+			r.aiSettingsHandler.StopServices()
+		}
+		if r.aiHandler != nil {
+			r.aiHandler.clearApprovalStore()
+		}
+		if r.trueNASPoller != nil {
+			r.trueNASPoller.Stop()
+		}
+		if r.vmwarePoller != nil {
+			r.vmwarePoller.Stop()
+		}
+		if r.deployStore != nil {
+			if err := r.deployStore.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close deploy store")
+			}
+		}
+		r.lifecycleWG.Wait()
+	})
 }
 
 // StartAIChat starts the AI chat service
@@ -3245,7 +3264,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if monitor != nil {
 		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
 			metricsAdapter := tools.NewMetricsHistoryToolAdapter(
-				&metricsSourceWrapper{history: metricsHistory},
+				&metricsSourceWrapper{history: metricsHistory, monitor: monitor},
 				monitor.GetUnifiedReadState(),
 				monitor.GetMetricsStore(),
 			)
@@ -3332,17 +3351,6 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 			if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
 				service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
 				log.Debug().Msg("AI chat: Knowledge store provider wired")
-			}
-		}
-	}
-
-	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries).
-	if aiService != nil {
-		if discoverySvc := aiService.GetDiscoveryService(); discoverySvc != nil {
-			adapter := servicediscovery.NewToolsAdapter(discoverySvc)
-			if adapter != nil {
-				service.SetDiscoveryProvider(tools.NewDiscoveryToolAdapter(adapter))
-				log.Debug().Msg("AI chat: Discovery provider wired")
 			}
 		}
 	}
@@ -3504,6 +3512,22 @@ func (w *eventCorrelatorProviderWrapper) GetCorrelationsForResource(resourceID s
 // metricsSourceWrapper wraps monitoring.MetricsHistory to implement tools.MetricsSource
 type metricsSourceWrapper struct {
 	history *monitoring.MetricsHistory
+	monitor *monitoring.Monitor
+}
+
+func (w *metricsSourceWrapper) GetStorageMetricHistory(storageID string, duration time.Duration) (map[string][]tools.RawMetricPoint, string, error) {
+	if w.monitor == nil {
+		return nil, "unavailable", fmt.Errorf("storage metrics monitor is not available")
+	}
+	series, source, err := w.monitor.ReadStorageMetricHistory(storageID, duration)
+	if err != nil {
+		return nil, "", err
+	}
+	result := make(map[string][]tools.RawMetricPoint, len(series))
+	for metric, points := range series {
+		result[metric] = convertMetricPoints(points)
+	}
+	return result, source, nil
 }
 
 func (w *metricsSourceWrapper) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []tools.RawMetricPoint {
@@ -6299,6 +6323,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		storageFallbackOnce sync.Once
 		unifiedStorage      []storageMetricFallback
+
+		sightingFallbackOnce sync.Once
+		lapsedRows           map[string]struct{}
 	)
 
 	loadFallbackState := func() {
@@ -6493,17 +6520,113 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
-	findDockerContainer := func(id string) (*models.DockerContainer, int) {
+	findDockerContainer := func(id string) (*models.DockerContainer, *models.DockerHost) {
 		loadFallbackState()
 		for i := range dockerHosts {
 			host := &dockerHosts[i]
 			for j := range host.Containers {
 				if host.Containers[j].ID == id {
-					return &host.Containers[j], host.CPUs
+					return &host.Containers[j], host
 				}
 			}
 		}
-		return nil, 0
+		return nil, nil
+	}
+
+	// The snapshot rows above keep a silent source's last readings as
+	// context: ExpireHostTelemetry keeps an expired agent's telemetry, the
+	// PVE node grace policy keeps an unreachable node's memory and disk, and
+	// guests and Docker hosts keep their last report after the registry marks
+	// that source stale. A live point claims a reading taken now, so it is
+	// built only while a source behind the row is still reporting.
+	loadLapsedSightings := func() {
+		sightingFallbackOnce.Do(func() {
+			lapsedRows = make(map[string]struct{})
+			readState := monitor.GetUnifiedReadStateOrSnapshot()
+			if readState == nil {
+				return
+			}
+			// Index under both IDs a snapshot row can carry.
+			record := func(kind string, lapsed bool, ids ...string) {
+				if !lapsed {
+					return
+				}
+				for _, id := range ids {
+					if id = strings.TrimSpace(id); id != "" {
+						lapsedRows[kind+"\x00"+id] = struct{}{}
+					}
+				}
+			}
+			for _, vm := range readState.VMs() {
+				if vm != nil {
+					record("guest", readingSightingsLapsed(vm.SourceStatus), vm.SourceID(), vm.ID())
+				}
+			}
+			for _, ct := range readState.Containers() {
+				if ct != nil {
+					record("guest", readingSightingsLapsed(ct.SourceStatus), ct.SourceID(), ct.ID())
+				}
+			}
+			for _, node := range readState.Nodes() {
+				if node != nil {
+					record("node", readingSightingsLapsed(node.SourceStatus), node.SourceID(), node.ID())
+				}
+			}
+			// An agent row's own lease decides its status in HostsSnapshot;
+			// integration rows without an agent sighting fall back to their
+			// provider's sightings.
+			for _, host := range readState.Hosts() {
+				if host == nil {
+					continue
+				}
+				if agent, ok := host.SourceStatus(unifiedresources.SourceAgent); ok && !agent.LastSeen.IsZero() {
+					continue
+				}
+				record("host", readingSightingsLapsed(host.SourceStatus), host.AgentID(), host.ID())
+			}
+			// A Docker row's own readings and its containers arrive in the
+			// Docker report, so its Docker sighting decides.
+			for _, host := range readState.DockerHosts() {
+				if host != nil {
+					record("docker", readingSightingsLapsed(func(source unifiedresources.DataSource) (unifiedresources.SourceStatus, bool) {
+						if source != unifiedresources.SourceDocker {
+							return unifiedresources.SourceStatus{}, false
+						}
+						return host.SourceStatus(source)
+					}), host.HostSourceID(), host.ID())
+				}
+			}
+		})
+	}
+	rowLapsed := func(kind, id string) bool {
+		loadLapsedSightings()
+		_, lapsed := lapsedRows[kind+"\x00"+id]
+		return lapsed
+	}
+	// HostsSnapshot reports an agent row past its reporting lease as offline.
+	hostReporting := func(host *models.Host) bool {
+		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("host", host.ID)
+	}
+	// The poller marks a node it cannot reach, or one the cluster lists but
+	// this poll did not observe, offline or unknown and keeps earlier
+	// readings. A warning status alone is not a lapse: a linked agent's
+	// storage risk can set it on a row that is still reporting.
+	nodeReporting := func(node *models.Node) bool {
+		switch strings.ToLower(strings.TrimSpace(node.Status)) {
+		case "offline", "unknown":
+			return false
+		}
+		return !rowLapsed("node", node.ID)
+	}
+	guestReporting := func(id string) bool {
+		return !rowLapsed("guest", id)
+	}
+	// evaluateDockerAgents marks a host offline once its report is overdue.
+	// The registry's stale pass can later show that host as warning, and a
+	// merged agent row keeps the agent's status, so the Docker sighting
+	// decides as well.
+	dockerHostReporting := func(host *models.DockerHost) bool {
+		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("docker", host.ID)
 	}
 
 	findDisk := func(id string) *unifiedresources.Resource {
@@ -6561,7 +6684,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		switch resourceType {
 		case "vm":
 			vm := findVM(resourceID)
-			if vm == nil {
+			if vm == nil || !guestReporting(vm.ID) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(vm.CPU)}
@@ -6575,7 +6698,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(vm.NetworkOut)}
 		case "system-container", "oci-container":
 			ct := findContainer(resourceID)
-			if ct == nil {
+			if ct == nil || !guestReporting(ct.ID) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(ct.CPU)}
@@ -6589,13 +6712,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(ct.NetworkOut)}
 		case "node":
 			node := findNode(resourceID)
-			if node == nil {
+			if node == nil || !nodeReporting(node) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
-			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+			if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "storage":
@@ -6629,7 +6752,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		case "docker-host":
 			host := findDockerHost(resourceID)
-			if host == nil {
+			if host == nil || !dockerHostReporting(host) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
@@ -6640,7 +6763,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
 		case "agent":
+			nodeID := resourceID
 			host := findHost(resourceID)
+			if host != nil && !hostReporting(host) {
+				// A host agent linked to a Proxmox node describes the same
+				// machine; once the agent's lease lapses, the node's poll
+				// still supplies its current readings.
+				if strings.TrimSpace(host.LinkedNodeID) == "" {
+					return points
+				}
+				nodeID, host = host.LinkedNodeID, nil
+			}
 			if host != nil {
 				points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
 				points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
@@ -6649,7 +6782,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					diskPercent = host.Disks[0].Usage
 				}
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
-				if temperature := primaryHostSensorTemperatureCelsius(host.Sensors); temperature != nil {
+				if temperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors); temperature != nil {
 					points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 				}
 				// Note: We intentionally don't include netin/netout here because the host model
@@ -6658,22 +6791,23 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
 				return points
 			}
-			node := findNode(resourceID)
-			if node == nil {
+			node := findNode(nodeID)
+			if node == nil || !nodeReporting(node) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
-			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
+			if temperature := models.PrimaryCPUTemperatureCelsius(node.Temperature); temperature != nil {
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "app-container":
-			container, hostCPUs := findDockerContainer(resourceID)
-			if container == nil {
+			// A container's readings arrive in its Docker host's report.
+			container, host := findDockerContainer(resourceID)
+			if container == nil || !dockerHostReporting(host) {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: models.DockerContainerCPUCapacityPercent(*container, hostCPUs)}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: models.DockerContainerCPUCapacityPercent(*container, host.CPUs)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: container.MemoryPercent}
 			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
 				diskPercent := float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
@@ -6688,7 +6822,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return points
 			}
 			pd := disk.PhysicalDisk
-			if pd.Temperature > 0 {
+			// A retained temperature (standby, a silent host agent) is not a
+			// reading taken now.
+			if diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
 				points["smart_temp"] = monitoring.MetricPoint{Timestamp: now, Value: float64(pd.Temperature)}
 			}
 			if pd.SMART != nil {
@@ -6767,7 +6903,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		if mock.IsMockEnabled() && runtimeResourceType == "disk" {
 			current := 0.0
-			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" {
+			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" &&
+				diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
 				current = float64(disk.PhysicalDisk.Temperature)
 			}
 			if current > 0 || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite" {
@@ -7013,14 +7150,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				response["points"] = apiPoints
 				response["source"] = source
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		} else if apiData, source, ok := fallbackAll(); ok {
 			response["metrics"] = apiData
 			response["source"] = source
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 			return
 		}
 	}
@@ -7076,7 +7213,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"source":       source,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		} else {
@@ -7096,7 +7233,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"source":       source,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
 		}
@@ -7107,6 +7244,37 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			"error": "Persistent metrics store not available",
 		})
 		return
+	}
+
+	// A populated I/O series (or one recent temperature row) must not hide the
+	// native disk-temperature history. The monitor owns local/native selection;
+	// supplement only a better series, after successful store and access checks.
+	// Keep the issued window and ordinary aggregation contract, and never replace
+	// independent metrics or turn a failed store read into a successful fallback.
+	supplementDiskTemperature := func(current []metricstore.MetricPoint) []map[string]interface{} {
+		if !fallbackAllowed || runtimeResourceType != "disk" || mock.IsMockEnabled() {
+			return nil
+		}
+		candidate := monitor.GetDiskMetricsForChart(resourceID, "smart_temp", duration)
+		withinWindow := make([]monitoring.MetricPoint, 0, len(candidate))
+		for _, point := range candidate {
+			if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
+				withinWindow = append(withinWindow, point)
+			}
+		}
+		apiPoints := buildHistoryPoints(withinWindow, stepSecs)
+		if len(apiPoints) == 0 {
+			return nil
+		}
+		var currentSpan int64
+		if len(current) > 1 {
+			currentSpan = current[len(current)-1].Timestamp.UnixMilli() - current[0].Timestamp.UnixMilli()
+		}
+		candidateSpan := apiPoints[len(apiPoints)-1]["timestamp"].(int64) - apiPoints[0]["timestamp"].(int64)
+		if candidateSpan > currentSpan || (candidateSpan == currentSpan && len(apiPoints) > len(current)) {
+			return apiPoints
+		}
+		return nil
 	}
 
 	var response interface{}
@@ -7148,13 +7316,33 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
+		if response == nil && len(points) > 0 && metricType == "smart_temp" {
+			if apiPoints := supplementDiskTemperature(points); len(apiPoints) > 0 {
+				response = map[string]interface{}{
+					"resourceType": responseResourceType,
+					"resourceId":   resourceID,
+					"metric":       metricType,
+					"range":        timeRange,
+					"start":        start.UnixMilli(),
+					"end":          end.UnixMilli(),
+					"points":       apiPoints,
+					"source":       historySourceMemory,
+				}
+			}
+		}
+
 		if response == nil && mock.IsMockEnabled() && runtimeResourceType == "disk" &&
 			(metricType == "smart_temp" || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite") {
 			targetPoints := chartapi.TargetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value
 				if metricType == "smart_temp" {
-					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
+					// Pad a temperature series to now only with a reading
+					// collected now. Without one (retained, absent, or no
+					// such disk) the stored samples stay as they are.
+					current = 0
+					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil &&
+						diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
 						current = float64(disk.PhysicalDisk.Temperature)
 					}
 				}
@@ -7258,6 +7446,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				apiData[metric] = apiPoints
 			}
 
+			if runtimeResourceType == "disk" {
+				if points := supplementDiskTemperature(metricsMap["smart_temp"]); len(points) > 0 {
+					apiData["smart_temp"] = points
+					source = historySourceMemory
+				}
+			}
+
 			// QueryAll can return a non-empty but incomplete mock metric map. Fill
 			// only the absent series from the deterministic chart fallback so one
 			// populated metric cannot suppress entire drawer groups.
@@ -7295,7 +7490,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := r.ensureChartService().WriteHistoryJSON(w, req, response, duration); err != nil {
 		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
@@ -7312,59 +7507,34 @@ func canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID string
 	return trimmed
 }
 
-func primaryHostSensorTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
-	if len(sensors.TemperatureCelsius) == 0 {
-		return nil
-	}
-	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
-		return &value
-	}
-
-	var best float64
-	found := false
-	for key, value := range sensors.TemperatureCelsius {
-		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
-			continue
-		}
-		if !found || value > best {
-			best = value
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
+// liveReadingSources are the sources that supply the readings of the rows
+// liveMetricPoints reads, so their sightings decide whether those readings are
+// current. A PBS sighting can join a host row without supplying its metrics,
+// and availability probes report reachability, not readings.
+var liveReadingSources = []unifiedresources.DataSource{
+	unifiedresources.SourceProxmox,
+	unifiedresources.SourceAgent,
+	unifiedresources.SourceDocker,
+	unifiedresources.SourceVMware,
+	unifiedresources.SourceTrueNAS,
 }
 
-func primaryNodeTemperatureCelsius(temperature *models.Temperature) *float64 {
-	if temperature == nil || !temperature.Available {
-		return nil
-	}
-	if temperature.CPUMax > 0 {
-		value := temperature.CPUMax
-		return &value
-	}
-	if temperature.CPUPackage > 0 {
-		value := temperature.CPUPackage
-		return &value
-	}
-
-	var best float64
-	found := false
-	for _, core := range temperature.Cores {
-		if core.Temp <= 0 {
+// readingSightingsLapsed reports whether a row records at least one reading
+// source and the registry has marked every one of them stale. A sighting that
+// was never delivered (unknown) is not evidence of a lapse.
+func readingSightingsLapsed(sourceStatus func(unifiedresources.DataSource) (unifiedresources.SourceStatus, bool)) bool {
+	recorded := false
+	for _, source := range liveReadingSources {
+		status, ok := sourceStatus(source)
+		if !ok {
 			continue
 		}
-		if !found || core.Temp > best {
-			best = core.Temp
-			found = true
+		if !strings.EqualFold(strings.TrimSpace(status.Status), "stale") {
+			return false
 		}
+		recorded = true
 	}
-	if !found {
-		return nil
-	}
-	return &best
+	return recorded
 }
 
 func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {
@@ -8184,6 +8354,8 @@ func (a mockSupplementalRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []
 	}
 	return mock.SupplementalRecords(a.source)
 }
+
+func (mockSupplementalRecordsAdapter) SupplementalRecordsMockMode() bool { return true }
 
 func (a mockSupplementalRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
 	return a.GetCurrentRecordsForOrg(orgID)

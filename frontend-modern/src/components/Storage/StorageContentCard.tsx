@@ -7,15 +7,16 @@ import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/stora
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
 import { useStorageContentCardModel } from './useStorageContentCardModel';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 type StorageContentCardProps = {
   view: () => StorageView;
   physicalDisks: () => Resource[];
+  getDiskAlertResourceIds: PhysicalDiskAlertResourceIdResolver;
   nodes: () => Resource[];
   sourceFilter: () => string;
   healthFilter: () => StorageHealthFilter;
@@ -35,13 +36,7 @@ type StorageContentCardProps = {
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoadingPools: () => boolean;
-  activeSummaryGroupScope: () => SummarySeriesGroupScope | null;
   clearPinnedSummaryScope: () => void;
-  hoveredSummaryGroupScope: () => SummarySeriesGroupScope | null;
-  focusedSummaryGroupScope: () => SummarySeriesGroupScope | null;
-  focusedSummaryGroupId: () => string | null;
-  onGroupFocusChange: (scope: SummarySeriesGroupScope | null) => void;
-  onGroupHoverChange: (scope: SummarySeriesGroupScope | null) => void;
   highlightedSummaryResourceId: () => string | null;
   hoveredStorageResourceId: () => string | null;
   setTableRootRef: (element: HTMLDivElement | undefined) => void;
@@ -56,8 +51,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
     view: props.view,
     selectedNodeId: props.selectedNodeId,
   });
-  const showClearSelection = () =>
-    Boolean(props.focusedSummaryGroupId() || props.expandedPoolId() || props.selectedDiskId());
+  const showClearSelection = () => Boolean(props.expandedPoolId() || props.selectedDiskId());
 
   return (
     <TableCard
@@ -75,6 +69,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
         <div class={STORAGE_CONTENT_CARD_BODY_CLASS}>
           <DiskList
             disks={props.physicalDisks()}
+            getDiskAlertResourceIds={props.getDiskAlertResourceIds}
             nodes={props.nodes()}
             sourceFilter={props.sourceFilter()}
             healthFilter={props.healthFilter()}
@@ -100,16 +95,11 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           storageGrowthBySeriesId={props.storageGrowthBySeriesId()}
           storageGrowthColumnLabel={props.storageGrowthColumnLabel()}
           physicalDisks={props.physicalDisks()}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           nodeOnlineByLabel={props.nodeOnlineByLabel()}
           highlightedRecordId={props.highlightedRecordId()}
           getRecordAlertState={props.getRecordAlertState}
           isLoading={props.isLoadingPools()}
-          activeSummaryGroupScope={props.activeSummaryGroupScope()}
-          hoveredSummaryGroupScope={props.hoveredSummaryGroupScope()}
-          focusedSummaryGroupScope={props.focusedSummaryGroupScope()}
-          focusedSummaryGroupId={props.focusedSummaryGroupId()}
-          onGroupFocusChange={props.onGroupFocusChange}
-          onGroupHoverChange={props.onGroupHoverChange}
           highlightedSummarySeriesId={props.highlightedSummaryResourceId()}
           onHoverChange={props.setHoveredStorageResourceId}
         />

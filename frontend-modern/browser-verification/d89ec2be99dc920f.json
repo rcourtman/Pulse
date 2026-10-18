@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7e86161e06dfa04957d845331b221d7de29f49b0",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/workloadTopology.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/workloadTopology.ts": "f6535409aba9cf8d5761e348e9e63ef355c2b5c5edecf0c0866ea98226af34ce"
+  },
+  "routes": [
+    "/proxmox?tab=workloads",
+    "/proxmox?tab=workloads&agent=node%7Clab%7Ceast-pve1",
+    "/proxmox?tab=workloads&agent=lab-east-pve1"
+  ],
+  "states": [
+    "Chromium desktop and WebKit phone; light/dark; synthetic legacy guest IDs through actual production useWorkloadsDerivedState and WorkloadsSurface/WorkloadPanel/GuestRow; not authenticated App or native backend proof.",
+    "Same tuple lab-east/pve1, native-a/native-c, offline/online, 8/64 GiB; native-a-101/VMID101, complete/incomplete fields; parent map null and actual host-memory row N/A.",
+    "Unique fallback restored after duplicate removal: 13% of 8 GiB/offline parent; independent node remains 3% of 32 GiB.",
+    "Distinct tuple groups, flat rows, Node filter/reload, missing parent, ambiguous removable bookmark."
+  ],
+  "interactions": [
+    "distinct tuple groups; each row uses its own node power and host-memory denominator",
+    "unique native IDs cannot restore a duplicate tuple: complete/missing instance/missing node/missing both fields; both inventory orders; actual row host memory is N/A",
+    "unique consistent incomplete guest fallback restores 8 GiB denominator and offline parent state without fabricating zero capacity",
+    "inventory order cannot change parent attribution or remount the canonical row",
+    "flat rows retain the same validated parent",
+    "real Node filter selects only its tuple and serialises an unambiguous bookmark",
+    "scoped bookmark survives reload through production URL sync",
+    "missing/duplicated parent withholds host share; exact-parent restoration restores it",
+    "ambiguous legacy bookmark stays a visible removable filter, not a first-node selection or inventory outage; clearing restores both rows",
+    "unambiguous existing node-name hint still selects its node",
+    "All sixteen final captures visually inspected; no horizontal overflow or page/console errors; API stubs only GET; browser/server cleanup observed."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-09T22:00:10.608Z",
+  "playwright": "1.56.1",
+  "browser_versions": {
+    "desktop": "141.0.7390.37",
+    "phone": "26.0"
+  }
+}

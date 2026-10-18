@@ -416,7 +416,34 @@ func (c *Client) queueStateTooLargeLocked(
 	return payloadBytes, true, nil
 }
 
+type preparedStateDelta struct {
+	data []byte
+	err  error
+}
+
+func prepareStateDelta(previous, current *clientStateSnapshot) preparedStateDelta {
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		return preparedStateDelta{err: err}
+	}
+	if len(delta) == 0 {
+		return preparedStateDelta{}
+	}
+	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
+	return preparedStateDelta{data: data, err: err}
+}
+
+// This map belongs to one serial dispatch, never the Hub or a tenant cache.
+// Pointer identity identifies an actually accepted immutable snapshot, not a
+// hash or resource ID. A reconnect/re-hydration gets its own baseline.
+type stateDeltaDispatch map[*clientStateSnapshot]preparedStateDelta
+
 func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool, error) {
+	return c.queueStateDeltaForDispatch(current, nil)
+}
+
+func (c *Client) queueStateDeltaForDispatch(current *clientStateSnapshot, dispatch stateDeltaDispatch) (int, bool, bool, error) {
+
 	if current == nil {
 		return 0, false, false, fmt.Errorf("current state snapshot is nil")
 	}
@@ -438,18 +465,21 @@ func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool,
 		return 0, false, false, nil
 	}
 
-	delta, err := buildClientStateDelta(c.stateSnapshot, current)
-	if err != nil {
-		return 0, true, false, err
+	prepared, found := dispatch[c.stateSnapshot]
+	if !found {
+		prepared = prepareStateDelta(c.stateSnapshot, current)
+		if dispatch != nil {
+			dispatch[c.stateSnapshot] = prepared
+		}
 	}
-	if len(delta) == 0 {
+	if prepared.err != nil {
+		return 0, true, false, prepared.err
+	}
+	if len(prepared.data) == 0 {
 		c.stateSnapshot = current
 		return 0, false, true, nil
 	}
-	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
-	if err != nil {
-		return 0, true, false, err
-	}
+	data := prepared.data
 	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
 		dataLen, sent, markerErr := c.queueStateTooLargeLocked("rawData", current, len(data), limit)
 		return dataLen, true, sent, markerErr
@@ -750,13 +780,12 @@ func (h *Hub) Run() {
 			client.initializeLifecycle()
 			h.mu.Lock()
 			h.clients[client] = true
-			// Also register by tenant if org ID is set
-			if client.orgID != "" {
-				if h.clientsByTenant[client.orgID] == nil {
-					h.clientsByTenant[client.orgID] = make(map[*Client]bool)
-				}
-				h.clientsByTenant[client.orgID][client] = true
+			// Legacy clients belong to the default tenant.
+			orgID := normalizeOrgID(client.orgID)
+			if h.clientsByTenant[orgID] == nil {
+				h.clientsByTenant[orgID] = make(map[*Client]bool)
 			}
+			h.clientsByTenant[orgID][client] = true
 			h.mu.Unlock()
 			log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client connected")
 
@@ -1322,8 +1351,9 @@ func (h *Hub) dispatchCurrentStateSnapshot(state interface{}, orgID string) {
 	}
 	h.mu.RUnlock()
 
+	dispatch := make(stateDeltaDispatch)
 	for _, client := range clients {
-		dataLen, attempted, sent, queueErr := client.queueStateDelta(snapshot)
+		dataLen, attempted, sent, queueErr := client.queueStateDeltaForDispatch(snapshot, dispatch)
 		if queueErr != nil {
 			log.Error().Err(queueErr).Str("client", client.id).Str("org_id", client.orgID).Msg("Failed to marshal WebSocket state delta")
 			continue
@@ -1662,28 +1692,6 @@ func (h *Hub) GetTenantClientCount(orgID string) int {
 	return 0
 }
 
-// BroadcastAlert broadcasts alert to all clients
-func (h *Hub) BroadcastAlert(alert interface{}) {
-	log.Info().Interface("alert", alert).Msg("broadcasting alert to WebSocket clients")
-	msg := Message{
-		Type: "alert",
-		Data: cloneAlertData(alert),
-	}
-	h.BroadcastMessage(msg)
-}
-
-// BroadcastAlertResolved broadcasts alert resolution to all clients
-func (h *Hub) BroadcastAlertResolved(alertID string) {
-	log.Info().Str("alertID", alertID).Msg("broadcasting alert resolved to WebSocket clients")
-	msg := Message{
-		Type: "alertResolved",
-		Data: map[string]string{
-			"alertIdentifier": alertID,
-		},
-	}
-	h.BroadcastMessage(msg)
-}
-
 // BroadcastAlertToTenant broadcasts alert to clients of a specific tenant only.
 // Empty org IDs are normalized to the default tenant.
 func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
@@ -1751,17 +1759,46 @@ func (h *Hub) GetClientCount() int {
 	return len(h.clients)
 }
 
-// Broadcast sends a custom message to all connected clients
-func (h *Hub) Broadcast(data interface{}) {
-	h.BroadcastMessage(Message{
+// BroadcastToTenant sends a custom message to its owning organization.
+func (h *Hub) BroadcastToTenant(orgID string, data interface{}) {
+	h.BroadcastMessageToTenant(orgID, Message{
 		Type:      "custom",
 		Data:      data,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
 }
 
-// BroadcastMessage sends a message to all clients
+// BroadcastMessageToTenant delivers an event only to its owning organization.
+// Empty organization IDs identify the default tenant, including single-tenant installs.
+func (h *Hub) BroadcastMessageToTenant(orgID string, msg Message) {
+	orgID = normalizeOrgID(orgID)
+	if h.isStopping() {
+		return
+	}
+	msg.Data = sanitizeData(msg.Data)
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_message_dropped").Str("org_id", orgID).
+			Str("message_type", msg.Type).Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping event")
+	}
+}
+
+// BroadcastMessage accepts only instance-wide events. Tenant-derived messages
+// must use BroadcastMessageToTenant with the organization owning their data.
 func (h *Hub) BroadcastMessage(msg Message) {
+	switch msg.Type {
+	case "ping", "settingsUpdate", "update:progress":
+		// Heartbeats, shared system theme, and server software update progress
+		// describe the instance rather than any organization's infrastructure.
+	default:
+		log.Error().Str("type", msg.Type).Msg("Refusing unscoped WebSocket event")
+		return
+	}
 	if h.isStopping() {
 		log.Debug().Str("type", msg.Type).Msg("Skipping websocket broadcast while hub is stopping")
 		return

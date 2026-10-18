@@ -149,57 +149,60 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacAdminEndpoints.HandleAdminReset)(w, req)
 	}))
 
-	// Advanced Reporting routes
+	// Advanced Reporting routes. They are org-bound: every report reads only
+	// the request organization's inventory and metrics store, and schedules
+	// live in that organization's config, so an org manager may use them in
+	// their own organization.
 	r.mux.HandleFunc("/api/admin/reports/catalog", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGetReportingCatalog)(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateReport))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate-multi", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateMultiReport))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/inventory/vms/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleExportVMInventory))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/admin/reports/schedules", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingScheduleEndpoints.HandleListReportSchedules))(w, req)
 	}))
 	r.mux.HandleFunc("POST /api/admin/reports/schedules", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleCreateReportSchedule))(w, req)
 	}))
 	r.mux.HandleFunc("PUT /api/admin/reports/schedules/{id}", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleUpdateReportSchedule))(w, req)
 	}))
 	r.mux.HandleFunc("DELETE /api/admin/reports/schedules/{id}", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleDeleteReportSchedule))(w, req)
 	}))
 	r.mux.HandleFunc("POST /api/admin/reports/schedules/{id}/run", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureAdminSession(r.config, w, req) {
+		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleRunReportSchedule))(w, req)

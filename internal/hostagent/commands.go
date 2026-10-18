@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -108,6 +109,7 @@ type CommandClient struct {
 	caCertPath                string
 	serverFingerprint         string
 	deploySSHUser             string
+	guestExecAdmission        *guestExecGuard // nil selects the process-wide local guard
 	commandPolicy             *agentexec.CommandPolicy
 	packageUpdates            *packageUpdateManager
 	storageCleanup            *storageCleanupManager
@@ -145,6 +147,12 @@ type CommandClient struct {
 	healthCapabilities    []string
 	actionActivationNonce string
 	actionHealthWriter    func(bool) error
+	// admission is commandClientPending until Pulse first accepts this
+	// client's registration (commandClientAdmitted), or until the agent
+	// retires it unadmitted under a superseded identity
+	// (commandClientSuperseded). Only an unadmitted client may be retired:
+	// operations arrive only after registration, so it has accepted none.
+	admission atomic.Int32
 }
 
 const maxCancellableRequestsPerConnection = 256
@@ -274,6 +282,7 @@ type registerPayload struct {
 	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
+	GuestExecGuardVersion    int      `json:"guest_exec_guard_version,omitempty"`
 }
 
 type registeredPayload struct {
@@ -290,7 +299,7 @@ type executeCommandPayload struct {
 	TargetID      string                          `json:"target_id,omitempty"`
 	Timeout       int                             `json:"timeout,omitempty"`
 	// Trusted is set by the Pulse server when the command originates from a
-	// vetted internal subsystem (e.g. servicediscovery deep scans whose
+	// vetted internal subsystem (e.g. the Docker-in-guest checker, whose
 	// command catalog is hardcoded in Pulse source). When set, the agent's
 	// policy approval gate is bypassed since the command did not come from
 	// a user-driven path. PolicyBlock is still enforced.
@@ -450,6 +459,9 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	if err := c.waitForRegistration(conn); err != nil {
 		return fmt.Errorf("registration failed: %w", err)
 	}
+	if !c.markAdmitted() {
+		return errCommandClientSuperseded
+	}
 	if c.actionRunnerOnly {
 		if err := c.persistActionRunnerHealth(false); err != nil {
 			return fmt.Errorf("write action-runner health: %w", err)
@@ -538,6 +550,7 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		OperationReceiptVersion:  c.operationReceiptVersion(),
 		ActionPreflightVersion:   agentexec.ActionPreflightProtocolVersion,
 		DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
+		GuestExecGuardVersion:    c.guestExecGuardVersion(),
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)
@@ -550,6 +563,13 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	}
 
 	return conn.WriteJSON(msg)
+}
+
+func (c *CommandClient) guestExecGuardVersion() int {
+	if runtime.GOOS == "linux" && !c.actionRunnerOnly {
+		return agentexec.GuestExecGuardProtocolVersion
+	}
+	return 0
 }
 
 func (c *CommandClient) operationReceiptVersion() int {
@@ -588,6 +608,31 @@ func (c *CommandClient) waitForRegistration(conn *websocket.Conn) error {
 	}
 
 	return nil
+}
+
+const (
+	commandClientPending int32 = iota
+	commandClientAdmitted
+	commandClientSuperseded
+)
+
+var errCommandClientSuperseded = errors.New("command client was retired under a superseded identity before Pulse admitted it")
+
+// markAdmitted records that Pulse accepted this client's registration. It
+// reports false for a client the agent already retired, which must then
+// handle nothing.
+func (c *CommandClient) markAdmitted() bool {
+	if c.admission.CompareAndSwap(commandClientPending, commandClientAdmitted) {
+		return true
+	}
+	return c.admission.Load() == commandClientAdmitted
+}
+
+// retireIfNeverAdmitted retires a client Pulse has never admitted, so a later
+// registration success cannot let it handle anything. It reports false once
+// the client has been admitted.
+func (c *CommandClient) retireIfNeverAdmitted() bool {
+	return c.admission.CompareAndSwap(commandClientPending, commandClientSuperseded)
 }
 
 func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done chan struct{}) {
@@ -1151,8 +1196,14 @@ func (c *CommandClient) replayDockerContainerLifecycle(conn *websocket.Conn, rec
 }
 
 func sanitizeDockerLifecycleError(value string) string {
-	if strings.TrimSpace(value) == "" {
+	switch strings.TrimSpace(value) {
+	case "":
 		return ""
+	case "container lifecycle mutation acknowledgement timed out",
+		"container lifecycle mutation acknowledgement canceled",
+		"container lifecycle mutation acknowledgement unavailable":
+		// Fixed messages retain the cause without daemon output or endpoints.
+		return strings.TrimSpace(value)
 	}
 	return "typed container lifecycle did not complete as requested"
 }
@@ -1556,11 +1607,47 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	var guard *guestExecGuard
+	var vmid string
+	uncertain := false
+	if strings.EqualFold(strings.TrimSpace(payload.TargetType), "vm") {
+		var valid bool
+		vmid, valid = canonicalGuestExecVMID(payload.TargetID)
+		if !valid {
+			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecInvalidTarget).Error()
+			result.ExitCode = -1
+			return result
+		}
+		guard = c.guestExecAdmission
+		if guard == nil {
+			guard = localGuestExecGuard
+		}
+		release, err := guard.acquire(cmdCtx, vmid)
+		if err != nil {
+			result.Error = err.Error()
+			if !agentexec.IsGuestExecDeferred(result.Error) {
+				result.Error = agentexec.GuestExecDeferred("the command was canceled before guest admission").Error()
+			}
+			result.ExitCode = -1
+			return result
+		}
+		defer func() { release(uncertain) }()
+		if err := guard.verifyUnlocked(cmdCtx, vmid); err != nil {
+			result.Error = err.Error()
+			result.ExitCode = -1
+			return result
+		}
+	}
+
 	command := wrapCommand(payload)
 
 	// Execute the command
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+	if guard != nil {
+		// No host-shell or PATH interpretation of the owning VM/CLI. The
+		// guest shell still receives the original, policy-approved command.
+		cmd = execCommandContext(cmdCtx, localGuestExecQM, "guest", "exec", vmid, "--", "sh", "-c", payload.Command)
+	} else if runtime.GOOS == "windows" {
 		cmd = execCommandContext(cmdCtx, "cmd", "/C", command)
 	} else {
 		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
@@ -1585,6 +1672,7 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	cmd.Stderr = stderr
 
 	err := cmd.Run()
+	outputIncomplete := errors.Is(err, exec.ErrWaitDelay)
 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
@@ -1616,6 +1704,35 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	} else {
 		result.ExitCode = 0
 		result.Success = true
+	}
+
+	if guard != nil {
+		guest, terminal := decodeGuestExecOutcome(result.Stdout)
+		// Killing the local qm process does not prove a handed-off guest
+		// command stopped. Never retry it or immediately start the next one.
+		if err != nil || cmdCtx.Err() != nil || outputIncomplete || !terminal {
+			uncertain = true
+			result.Success = false
+			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()
+		} else if err := guard.verifyUnlocked(cmdCtx, vmid); err != nil {
+			uncertain = true
+			result.Success = false
+			result.Error = err.Error()
+		} else {
+			// For verified completion, the command payload describes the
+			// guest, not qm's successful delivery of a failing command.
+			// Wrapper stderr remains diagnostic output, never evidence.
+			if result.Stderr != "" && guest.stderr != "" {
+				guest.stderr += "\n" + result.Stderr
+			} else if result.Stderr != "" {
+				guest.stderr = result.Stderr
+			}
+			result.Stdout, result.Stderr = guest.stdout, guest.stderr
+			result.ExitCode, result.Error = guest.exitCode, guest.error
+			result.Success = guest.error == ""
+		}
+		// Unverified completion/postflight retains the actual CLI exit/output.
+		// Discovery must not treat that raw diagnostic as fresh evidence.
 	}
 
 	return result

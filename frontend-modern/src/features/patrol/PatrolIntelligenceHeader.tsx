@@ -1,5 +1,5 @@
-import { createMemo, Show } from 'solid-js';
-import { A } from '@solidjs/router';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { A, useLocation } from '@solidjs/router';
 import PlayIcon from 'lucide-solid/icons/play';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import DownloadIcon from 'lucide-solid/icons/download';
@@ -13,14 +13,16 @@ import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
 import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
 import { PATROL_CONTROL_ANCHOR, PATROL_OPERATIONS_LOOP_ANCHOR } from '@/routing/resourceLinks';
-import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
 import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
 import { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 import { PATROL_AUTONOMY_EXPERIENCE } from './patrolHomePresentation';
@@ -32,24 +34,10 @@ import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowled
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 
-const isNonEmptyConfigurationDetail = (value?: string | null): value is string =>
-  Boolean(value?.trim());
-
-export function getPatrolConfigurationFailureInlineDetails(
-  failure: PatrolConfigurationFailureInput,
-): string[] {
-  const readiness = failure.readiness ?? null;
-  const codeAndCause = [failure.code, readiness?.cause || failure.blockedCause]
-    .filter(isNonEmptyConfigurationDetail)
-    .join(' · ');
-
-  return [
-    codeAndCause || undefined,
-    readiness?.summary ? `Setup: ${readiness.summary}` : undefined,
-    readiness?.provider ? `Provider: ${readiness.provider}` : undefined,
-    readiness?.model ? `Model: ${readiness.model}` : undefined,
-  ].filter(isNonEmptyConfigurationDetail);
-}
+const PATROL_MODE_ANCHOR_HASHES = new Set([
+  `#${PATROL_CONTROL_ANCHOR}`,
+  `#${PATROL_OPERATIONS_LOOP_ANCHOR}`,
+]);
 
 export function getPatrolAutopilotExpiry(expiresAt?: string | null): Date | null {
   if (!expiresAt?.trim()) return null;
@@ -146,7 +134,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: state.autoFixLocked(),
       upgradePromptsHidden: upgradePromptsHidden(),
-      commercialSurfacesHidden: true,
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
       runtimeCapabilityBlock: state.autoFixCapabilityBlock(),
       runtime: state.licenseRuntimeIdentity(),
       planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),
@@ -230,7 +218,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={showAutonomyAvailabilityPrompt()}>
         <div class="mt-3 flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 dark:border-blue-800 dark:bg-blue-950/40 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-blue-950/25 dark:text-blue-100">
+            <p class="text-sm font-semibold text-blue-950 dark:text-blue-100">
               {autonomyAvailability().title}
             </p>
             <p class="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
@@ -258,7 +246,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={state.requestedAutonomyLevel() !== state.autonomyLevel()}>
         <div
           role="status"
-          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}.
           Effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
@@ -292,6 +280,18 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     </>
   );
 
+  // Patrol mode entry points link to these anchors, so arriving on one opens the
+  // collapsed disclosure and brings the selector into view. This re-runs only
+  // when the hash or the disclosure element changes, so a manual collapse holds.
+  const location = useLocation();
+  const [modeDisclosure, setModeDisclosure] = createSignal<HTMLDetailsElement>();
+  createEffect(() => {
+    const disclosure = modeDisclosure();
+    if (!disclosure || !PATROL_MODE_ANCHOR_HASHES.has(location.hash)) return;
+    disclosure.open = true;
+    requestAnimationFrame(() => disclosure.scrollIntoView({ block: 'center' }));
+  });
+
   return (
     <div class="space-y-4">
       <PatrolAutopilotAcknowledgementDialog state={state} />
@@ -322,7 +322,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-sm font-semibold text-base-content">
-                  {state.patrolEnabledLocal() ? 'Watching your infrastructure' : 'Patrol is off'}
+                  {state.patrolEnabledLocal()
+                    ? state.shouldShowPatrolSetupOnly()
+                      ? 'Patrol is not running yet'
+                      : 'Watching your infrastructure'
+                    : 'Patrol is off'}
                 </h2>
                 <span class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
                   {selectedAutonomyExperience().label}
@@ -390,7 +394,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
         <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
         <Show when={shouldShowAutonomyActionColumn()}>
-          <details class="border-t border-border-subtle px-1 py-1 sm:px-2">
+          <details ref={setModeDisclosure} class="border-t border-border-subtle px-1 py-1 sm:px-2">
             <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
               Mode and automation
             </summary>
@@ -402,6 +406,41 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               })}
             </div>
           </details>
+        </Show>
+        <Show when={state.defaultModeApplied() && !state.autoFixLocked()}>
+          <div
+            role="status"
+            data-testid="patrol-default-mode-notice"
+            class="flex flex-col gap-3 border-t border-border-subtle px-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-2"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-base-content">
+                Pro investigates new warning and critical findings by default.
+              </p>
+              <p class="mt-1 max-w-3xl text-xs leading-5 text-muted">
+                Patrol works out the cause and proposes a fix. Nothing changes without your
+                approval. Investigations use your AI provider and count toward your 30-day budget.
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={state.isUpdatingAutonomy()}
+                onClick={() => void state.handleAutonomyChange('approval')}
+              >
+                Keep Ask first
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={state.isUpdatingAutonomy()}
+                onClick={() => void state.handleAutonomyChange('monitor')}
+              >
+                Switch to Watch only
+              </Button>
+            </div>
+          </div>
         </Show>
       </section>
     </div>

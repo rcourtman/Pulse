@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "base_sha": "914fabfc1fef6d728bf145cf3097557ef82eafe7",
+  "verified_at": "2026-10-05T13:10:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/DockerVolumesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx": "5e5aa4ec47bff613fa1e61fffc6e5f78fbb52a11e74fd692f632f7d9f39c68ed",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "dad1a0a668160d0590d376d35da94f0e2e500965852631fff40e85a09ece62c1",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "a4fbc6cfe58dabb7e453e0e65b6bc6aeb72bcc05945fb68a6571e503f44722c9",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx": "3a68466cc647a84f4bc7cf9d9b6184ebf0476b9f21d05b9329ae400cfd9f7460",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "aa3cf92e9aeb611027cec10dc3596e81907732e20930c06ba5d9275451f42c1e",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "02435077ae71767e6f6db6bc0f3441a585661013dd62c35892e48229cc53e7b6",
+    "frontend-modern/src/features/docker/DockerVolumesTable.tsx": "020345e4bc6c9a4389410cbfbe566aa34dae8ea7c702f65246bdfb75ce9e3e96",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "b16eaab7cc00f13a858b290f453e46ee1886c1e50a9a542999f4568a0d42aead",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "18c6dbea9038cc6561f5f914f61e67954abc4a3a93f83560b76398ae2915b7ba",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "f8f3695bbd200fa8a8f7091ec6431faa1dada5fbdbb98b80b9fc8c5f7ede304b",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "e6caa80836b45e9509d450e6816645062adc1cf6ce29041810e5daf70491ac6f"
+  },
+  "routes": [
+    "/docker/images",
+    "/docker/networks",
+    "/docker/storage",
+    "/docker/swarm",
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage",
+    "/proxmox/mail",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 700,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 1100,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Live DOM probe on main at 700 and 1440 over every changed span (Docker images, networks, volumes, services, tasks, secrets, configs; Proxmox recoverable, coverage Node and restore-evidence Location/Details, Mail Gateway drawer Top domains; vSphere hosts vCenter): all 1000 measured spans are the only child of their cell and every table, including the drawer's Top domains table, computes table-layout fixed",
+    "Main: 66 spans ran past their cell with no ellipsis (Service Image 225px and Secret Labels 184px at 700, Mountpoint 51px and restore-evidence Details 22px at 1440, PMG domains 71px at 700), and every inline-block span sat 2 to 2.5px above the row's text line",
+    "Patched: no span runs past its cell, all 134 truncated values end in an ellipsis inside their own column, and each value sits on the row's text line (0px; the 11px restore-evidence rows read 0.5px)",
+    "Docker service Update cell still wraps Rollback started onto two lines below md (700) and truncates inside its column from md (1440) instead of at a 10rem cap",
+    "Clip sweep (scrollWidth over clientWidth on every cell, screen-reader text excluded) across all eight routes at 390 to 1440: clipped cells 931 on main and 928 patched over 19209 measured cells, no column worse at any width (Secret Labels, Mountpoint and Used by each one better)",
+    "Before and after element screenshots of all eleven affected tables at 700 and 1440 show hard cuts such as registry.exa and mail-relay.customer-opera on main becoming registry... and mail-relay.customer-op... inside the cell, with Created and Mountpoint back on the row line",
+    "Mock PMG reports no domain stats, so the drawer's Top domains table was mounted by adding eight domains (4 to 54 characters) to the real /api/pmg/instances response through a Playwright route intercept"
+  ],
+  "interactions": [
+    "Expanded the first three Proxmox coverage rows to mount the restore-evidence table",
+    "Opened the first Mail Gateway row's drawer to mount the Top domains table",
+    "Loaded each Docker, Proxmox backups (by date and coverage) and vSphere overview tab fresh at every viewport and waited for the row count to settle before measuring"
+  ]
+}

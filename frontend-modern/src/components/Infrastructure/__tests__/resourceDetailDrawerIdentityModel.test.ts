@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildDiscoveryContextSummary,
   buildIdentityMatchInfo,
   buildResourceDebugBundle,
   buildResourceIdentityView,
@@ -25,6 +24,65 @@ const baseResource = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 describe('resourceDetailDrawerIdentityModel', () => {
+  it('filters aliases against the name the drawer header actually shows', () => {
+    const identityView = buildResourceIdentityView(
+      baseResource({
+        displayName: '',
+        name: 'legacy',
+        platformId: 'legacy',
+        canonicalIdentity: {
+          displayName: 'Canonical label',
+          aliases: ['legacy', 'Canonical label'],
+        },
+      } as Partial<Resource>),
+    );
+    // The header reads "Canonical label"; "legacy" is shown nowhere else.
+    expect(identityView.identityAliasValues).toContain('legacy');
+    expect(identityView.identityAliasValues).not.toContain('Canonical label');
+  });
+
+  it('counts a shown Platform ID as identity data', () => {
+    const identityView = buildResourceIdentityView(
+      baseResource({
+        name: 'vm-101',
+        displayName: 'VM 101',
+        platformId: 'qemu-101',
+        canonicalIdentity: { aliases: ['qemu-101'] },
+      } as Partial<Resource>),
+    );
+    expect(identityView.identityAliasValues).toEqual([]);
+    expect(identityView.identityCardHasRichData).toBe(true);
+  });
+
+  it('lists only aliases the drawer does not already show', () => {
+    const identityView = buildResourceIdentityView(
+      baseResource({
+        id: 'agent-acdfdee2953587fb',
+        type: 'agent',
+        name: 'Apollo-114',
+        displayName: 'Apollo-114',
+        platformId: 'host-linux-1',
+        identity: { hostname: 'apollo-114' },
+        discoveryTarget: {
+          resourceType: 'agent',
+          agentId: 'host-linux-1',
+          resourceId: 'host-linux-1',
+        },
+        metricsTarget: { resourceType: 'agent', resourceId: 'host-linux-1' },
+        canonicalIdentity: {
+          aliases: ['agent:host-linux-1', 'host-linux-1', 'apollo-114', 'agent-acdfdee2953587fb'],
+        },
+      } as Partial<Resource>),
+    );
+
+    // Hostname, Primary ID and the Platform ID row already show these.
+    expect(identityView.primaryIdentityRows.map((row) => row.label)).toEqual([
+      'Hostname',
+      'Primary ID',
+    ]);
+    expect(identityView.identityAliasValues).toEqual(['agent-acdfdee2953587fb']);
+  });
+
   it('builds canonical identity card state including alias collapse policy', () => {
     const identityView = buildResourceIdentityView(
       baseResource({
@@ -46,32 +104,6 @@ describe('resourceDetailDrawerIdentityModel', () => {
     expect(identityView.aliasPreviewValues).toEqual(identityView.identityAliasValues.slice(0, 4));
     expect(identityView.hasAliasOverflow).toBe(true);
     expect(identityView.identityCardHasRichData).toBe(true);
-  });
-
-  it('keeps discovery context wording in the canonical identity model', () => {
-    expect(
-      buildDiscoveryContextSummary({
-        resourceType: 'vm',
-        agentId: 'pve-1',
-        resourceId: '101',
-        hostname: 'pve-1.local',
-        metadataKind: 'guest',
-        metadataId: 'resource-1',
-        targetLabel: 'guest',
-      }),
-    ).toBe('vm analysis via pve-1.local');
-
-    expect(
-      buildDiscoveryContextSummary({
-        resourceType: 'agent',
-        agentId: 'host-1',
-        resourceId: 'host-1',
-        hostname: 'host-1.local',
-        metadataKind: 'agent',
-        metadataId: 'host-1',
-        targetLabel: 'agent',
-      }),
-    ).toBeNull();
   });
 
   it('builds resource Assistant handoffs from canonical resource identity without prompt text', () => {
@@ -104,7 +136,6 @@ describe('resourceDetailDrawerIdentityModel', () => {
         node: 'delly',
       },
     ]);
-    expect(context.briefing?.detailLines).toContain('Discovery: system-container:101');
   });
 
   it('builds canonical source sections and identity-match precedence', () => {

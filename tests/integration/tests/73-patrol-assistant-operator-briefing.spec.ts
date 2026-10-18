@@ -13,6 +13,16 @@ type WorkerFixtures = {
 
 const SCREENSHOT_PATH = "/tmp/patrol-assistant-operator-briefing.png";
 
+// Reload by navigating to the current URL. Patrol's workspace views are routes,
+// so opening Activity pushes a history entry. Playwright's WebKit build hits a
+// release assertion in WebCore::Navigation::initializeForNewWindow when a
+// pushState-created entry is reloaded and the page then navigates again, which
+// crashed the second reload on mobile-safari. A fresh navigation to the same
+// URL loads the same document without tripping it.
+async function reloadPage(page: Page) {
+  await page.goto(page.url(), { waitUntil: "domcontentloaded" });
+}
+
 async function openPatrolRecords(page: Page) {
   const activityTab = page.getByRole("tab", {
     name: "Activity",
@@ -293,7 +303,6 @@ test.describe("Patrol Assistant operator briefing", () => {
           model: "openai:gpt-4o-mini",
           chat_model: "",
           control_level: "read_only",
-          discovery_enabled: true,
           patrol_enabled: true,
           patrol_interval_minutes: 360,
           patrol_model: "",
@@ -496,14 +505,6 @@ test.describe("Patrol Assistant operator briefing", () => {
       });
     });
 
-    await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ correlations: [], count: 0 }),
-      });
-    });
-
     await page.route("**/api/ai/intelligence", async (route) => {
       await route.fulfill({
         status: 200,
@@ -535,20 +536,6 @@ test.describe("Patrol Assistant operator briefing", () => {
             correlations_learned: 0,
             incidents_tracked: 0,
           },
-        }),
-      });
-    });
-
-    await page.route("**/api/ai/circuit/status", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          state: "closed",
-          can_patrol: true,
-          consecutive_failures: 0,
-          total_successes: 42,
-          total_failures: 0,
         }),
       });
     });
@@ -753,7 +740,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     );
 
     includePendingApproval = false;
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await reloadPage(page);
     await openPatrolRecords(page);
     const queuedFindingTitle = page.getByText("High CPU usage").first();
     await expect(queuedFindingTitle).toBeVisible();
@@ -784,7 +771,7 @@ test.describe("Patrol Assistant operator briefing", () => {
 
     includeUnifiedInvestigationRecord = false;
     includeInvestigationProposedFix = true;
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await reloadPage(page);
     await openPatrolRecords(page);
     const expiredFindingTitle = page.getByText("High CPU usage").first();
     await expect(expiredFindingTitle).toBeVisible();

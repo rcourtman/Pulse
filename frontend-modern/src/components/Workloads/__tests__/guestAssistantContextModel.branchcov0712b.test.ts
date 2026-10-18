@@ -188,7 +188,7 @@ describe('guestAssistantContextModel (branch coverage)', () => {
         expect(result.handoffResources?.[0]?.name).toBe('web-vm');
       });
 
-      it('falls back to the canonical node-scoped id when name is empty', () => {
+      it('falls back to the supplied resource identity when name is empty', () => {
         const result = buildGuestAssistantContext(
           makeGuest({
             id: 'vm-101',
@@ -201,10 +201,10 @@ describe('guestAssistantContextModel (branch coverage)', () => {
           }),
         );
 
-        // canonicalId = buildCanonicalNodeScopedWorkloadId -> "pve-a:node-a:101"
-        expect(result.targetId).toBe('pve-a:node-a:101');
-        expect(result.briefing?.title).toBe('pve-a:node-a:101');
-        expect(result.handoffResources?.[0]?.name).toBe('pve-a:node-a:101');
+        // Placement coordinates do not replace the supplied resource identity.
+        expect(result.targetId).toBe('vm-101');
+        expect(result.briefing?.title).toBe('vm-101');
+        expect(result.handoffResources?.[0]?.name).toBe('vm-101');
       });
     });
 
@@ -225,16 +225,15 @@ describe('guestAssistantContextModel (branch coverage)', () => {
             agentId: 'agent-1',
             resourceId: 'pve-a:node-a:101',
           },
-          discoveryReadiness: { state: 'fresh', factCount: 5 },
         }),
       );
 
       expect(result).toStrictEqual({
         targetType: 'resource',
-        targetId: 'pve-a:node-a:101',
+        targetId: 'vm-101',
         context: {
           source: 'guest-drawer',
-          resourceId: 'pve-a:node-a:101',
+          resourceId: 'vm-101',
           resourceType: 'vm',
           resourceStatus: 'running',
         },
@@ -242,26 +241,19 @@ describe('guestAssistantContextModel (branch coverage)', () => {
           sourceLabel: 'Pulse resource context',
           title: 'web-vm',
           subject: 'vm / running / proxmox-ve',
-          statusLabel: 'Read-only context attached · Discovery fresh',
-          detailLines: [
-            'Resource ID: pve-a:node-a:101',
-            'Primary identity: vm-101',
-            'Parent: node-a',
-            'Discovery: vm:pve-a:node-a:101',
-            'Discovery data: Discovery fresh, 5 facts',
-          ],
+          statusLabel: 'Read-only context attached',
+          detailLines: ['Resource ID: vm-101', 'Parent: node-a'],
           safetyNote: 'Approval required before any action.',
         },
-        handoffResources: [{ id: 'pve-a:node-a:101', name: 'web-vm', type: 'vm', node: 'node-a' }],
+        handoffResources: [{ id: 'vm-101', name: 'web-vm', type: 'vm', node: 'node-a' }],
         handoffMetadata: { kind: 'resource_context' },
         autonomousMode: false,
       });
     });
 
-    it('omits Primary/Parent/Discovery/readiness lines for a non-discovered app-container', () => {
+    it('omits Primary/Parent lines for a bare app-container', () => {
       // canonicalId === guest.id for app-container, so the Primary identity line
-      // is suppressed; platformType 'kubernetes' is not docker-managed so
-      // resolveDiscoveryTargetForWorkload returns null.
+      // is suppressed.
       const result = buildGuestAssistantContext(
         makeGuest({
           id: 'app-container:sidecar',

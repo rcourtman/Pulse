@@ -374,18 +374,6 @@ type AppContainerReadProvider interface {
 	ReadLogs(ctx context.Context, req AppContainerReadRequest) (*AppContainerReadResult, error)
 }
 
-// DiscoveryProvider provides AI-powered infrastructure discovery
-type DiscoveryProvider interface {
-	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
-	GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
-	ListDiscoveries() ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error)
-	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
-	// TriggerDiscovery initiates discovery for a resource and returns the result
-	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error)
-}
-
 // ResolvedResourceInfo contains the minimal information needed for tool validation.
 // This is an interface to avoid import cycles with the chat package.
 type ResolvedResourceInfo interface {
@@ -407,6 +395,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
+	ResourceID  string   // Canonical registry ID, independent of names and native executor coordinates
 	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "app-container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
@@ -427,6 +416,26 @@ type ResourceRegistration struct {
 
 	// Executor paths
 	Executors []ExecutorRegistration
+}
+
+// ResolvedID preserves the registry identity. The scoped format is retained only
+// for legacy discovery providers that do not supply a canonical registry record.
+func (reg ResourceRegistration) ResolvedID() string {
+	if id := strings.TrimSpace(reg.ResourceID); id != "" {
+		return id
+	}
+	uid := strings.TrimSpace(reg.ProviderUID)
+	if uid == "" {
+		uid = strings.TrimSpace(reg.Name)
+	}
+	host := strings.TrimSpace(reg.HostUID)
+	if host == "" {
+		host = strings.TrimSpace(reg.HostName)
+	}
+	if host != "" {
+		return reg.Kind + ":" + host + ":" + uid
+	}
+	return reg.Kind + ":" + uid
 }
 
 // ExecutorRegistration describes how an executor can reach a resource.
@@ -475,57 +484,17 @@ type ResolvedContextProvider interface {
 // Resources accessed within this window are considered to be from the current turn/exchange.
 const RecentAccessWindow = 30 * time.Second
 
-// ResourceDiscoveryInfo represents discovered information about a resource
-type ResourceDiscoveryInfo struct {
-	ID             string              `json:"id"`
-	ResourceType   string              `json:"resource_type"`
-	ResourceID     string              `json:"resource_id"`
-	TargetID       string              `json:"target_id,omitempty"`
-	AgentID        string              `json:"agent_id,omitempty"`
-	Hostname       string              `json:"hostname"`
-	ServiceType    string              `json:"service_type"`
-	ServiceName    string              `json:"service_name"`
-	ServiceVersion string              `json:"service_version"`
-	Category       string              `json:"category"`
-	CLIAccess      string              `json:"cli_access"`
-	Facts          []DiscoveryFact     `json:"facts"`
-	ConfigPaths    []string            `json:"config_paths"`
-	DataPaths      []string            `json:"data_paths"`
-	LogPaths       []string            `json:"log_paths,omitempty"` // Log file paths or commands (e.g., journalctl)
-	Ports          []DiscoveryPortInfo `json:"ports"`
-	BindMounts     []DiscoveryMount    `json:"bind_mounts,omitempty"` // For Docker: host->container path mappings
-	SuggestedURL   string              `json:"suggested_url,omitempty"`
-	UserNotes      string              `json:"user_notes,omitempty"`
-	Confidence     float64             `json:"confidence"`
-	AIReasoning    string              `json:"ai_reasoning,omitempty"`
-	DiscoveredAt   time.Time           `json:"discovered_at"`
-	UpdatedAt      time.Time           `json:"updated_at"`
-}
-
-// DiscoveryPortInfo represents a listening port discovered on a resource
-type DiscoveryPortInfo struct {
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
-	Process  string `json:"process,omitempty"`
-	Address  string `json:"address,omitempty"`
-}
-
-// DiscoveryMount represents a bind mount (host path -> container path)
-type DiscoveryMount struct {
-	ContainerName string `json:"container_name,omitempty"` // Docker container name (for Docker inside LXC/VM)
-	Source        string `json:"source"`                   // Host path (where to actually write files)
-	Destination   string `json:"destination"`              // Container path (what the service sees)
-	Type          string `json:"type,omitempty"`           // Mount type: bind, volume, tmpfs
-	ReadOnly      bool   `json:"read_only,omitempty"`
-}
-
-// DiscoveryFact represents a discovered fact about a resource
-type DiscoveryFact struct {
-	Category   string  `json:"category"`
-	Key        string  `json:"key"`
-	Value      string  `json:"value"`
-	Source     string  `json:"source,omitempty"`
-	Confidence float64 `json:"confidence,omitempty"` // 0-1 confidence for this fact
+// CanonicalToolResourceType returns the canonical resource type the AI tools
+// layer routes on: Docker containers are "app-container", everything else is
+// its lowercased, trimmed type.
+func CanonicalToolResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker", "app-container":
+		return "app-container"
+	default:
+		return resourceType
+	}
 }
 
 // ExecutorConfig holds all dependencies for the tool executor
@@ -563,9 +532,6 @@ type ExecutorConfig struct {
 	EventCorrelatorProvider EventCorrelatorProvider
 	KnowledgeStoreProvider  KnowledgeStoreProvider
 
-	// Optional providers - discovery
-	DiscoveryProvider DiscoveryProvider
-
 	// Optional providers - unified resources
 	UnifiedResourceProvider    UnifiedResourceProvider
 	AppContainerActionProvider AppContainerActionProvider
@@ -577,9 +543,8 @@ type ExecutorConfig struct {
 	ReadState unifiedresources.ReadState
 
 	// Control settings
-	ControlLevel    ControlLevel
-	ProtectedGuests []string // VMIDs that AI cannot control
-	OrgID           string   // Tenant/org scope for approval records
+	ControlLevel ControlLevel
+	OrgID        string // Tenant/org scope for approval records
 
 	// Optional report-narration providers, used by the pulse_summarize
 	// tool to produce AI-narrated synthesis in chat. When the per-tenant
@@ -631,9 +596,6 @@ type PulseToolExecutor struct {
 	eventCorrelatorProvider EventCorrelatorProvider
 	knowledgeStoreProvider  KnowledgeStoreProvider
 
-	// Discovery provider
-	discoveryProvider DiscoveryProvider
-
 	// Unified resources provider
 	unifiedResourceProvider    UnifiedResourceProvider
 	appContainerActionProvider AppContainerActionProvider
@@ -652,14 +614,12 @@ type PulseToolExecutor struct {
 	readState unifiedresources.ReadState
 
 	// Control settings
-	controlLevel    ControlLevel
-	protectedGuests []string
+	controlLevel ControlLevel
 
 	// Current execution context
-	targetType   string
-	targetID     string
-	isAutonomous bool
-	orgID        string
+	targetType string
+	targetID   string
+	orgID      string
 	// hasExecuteAuthority is request-local transport authority. Control
 	// settings describe operator policy; they never grant a chat-only token
 	// permission to execute infrastructure mutations.
@@ -669,9 +629,7 @@ type PulseToolExecutor struct {
 	// restriction for non-interactive read-only workloads (e.g. Patrol
 	// investigations): every infrastructure-mutating invocation is
 	// blocked by the registry before its handler runs, regardless of
-	// control level or autonomy. Core-owned and never serialized; it is
-	// deliberately separate from isAutonomous, which only suppresses
-	// interactive questions and grants no mutation authority.
+	// control level. Core-owned and never serialized.
 	denyInfrastructureMutations bool
 	// pulseStateAllowlist restricts pulse-state mutations to the named
 	// tools. Nil and an empty map both deny all.
@@ -749,7 +707,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		incidentArchiveProvider:    cfg.IncidentArchiveProvider,
 		eventCorrelatorProvider:    cfg.EventCorrelatorProvider,
 		knowledgeStoreProvider:     cfg.KnowledgeStoreProvider,
-		discoveryProvider:          cfg.DiscoveryProvider,
 		unifiedResourceProvider:    cfg.UnifiedResourceProvider,
 		appContainerActionProvider: cfg.AppContainerActionProvider,
 		appContainerReadProvider:   cfg.AppContainerReadProvider,
@@ -757,7 +714,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		typedActionPlanner:         cfg.TypedActionPlanner,
 		readState:                  cfg.ReadState,
 		controlLevel:               cfg.ControlLevel,
-		protectedGuests:            cfg.ProtectedGuests,
 		orgID:                      normalizeExecutorOrgID(cfg.OrgID),
 		reportNarrator:             cfg.ReportNarrator,
 		reportFleetNarrator:        cfg.ReportFleetNarrator,
@@ -826,7 +782,6 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		incidentArchiveProvider:     e.incidentArchiveProvider,
 		eventCorrelatorProvider:     e.eventCorrelatorProvider,
 		knowledgeStoreProvider:      e.knowledgeStoreProvider,
-		discoveryProvider:           e.discoveryProvider,
 		unifiedResourceProvider:     e.unifiedResourceProvider,
 		appContainerActionProvider:  e.appContainerActionProvider,
 		appContainerReadProvider:    e.appContainerReadProvider,
@@ -834,10 +789,8 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		typedActionPlanner:          e.typedActionPlanner,
 		readState:                   e.readState,
 		controlLevel:                e.controlLevel,
-		protectedGuests:             append([]string(nil), e.protectedGuests...),
 		targetType:                  e.targetType,
 		targetID:                    e.targetID,
-		isAutonomous:                e.isAutonomous,
 		orgID:                       e.orgID,
 		hasExecuteAuthority:         e.hasExecuteAuthority,
 		executeAuthorityBound:       e.executeAuthorityBound,
@@ -902,16 +855,9 @@ func (e *PulseToolExecutor) hasCanonicalReadState() bool {
 }
 
 // SetContext sets the current execution context
-func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous bool) {
+func (e *PulseToolExecutor) SetContext(targetType, targetID string) {
 	e.targetType = targetType
 	e.targetID = targetID
-	e.isAutonomous = autonomous
-}
-
-// SetAutonomousMode updates only the execution mode, preserving any
-// session-scoped target context already attached to this executor clone.
-func (e *PulseToolExecutor) SetAutonomousMode(enabled bool) {
-	e.isAutonomous = enabled
 }
 
 // SetOrgID sets the org scope used when creating approval records.
@@ -930,11 +876,6 @@ func (e *PulseToolExecutor) SetControlLevel(level ControlLevel) {
 func (e *PulseToolExecutor) SetExecuteAuthority(allowed bool) {
 	e.hasExecuteAuthority = allowed
 	e.executeAuthorityBound = true
-}
-
-// SetProtectedGuests updates the protected guests list
-func (e *PulseToolExecutor) SetProtectedGuests(vmids []string) {
-	e.protectedGuests = vmids
 }
 
 // RegisterTool allows tests or extensions to add tools at runtime.
@@ -1030,11 +971,6 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 	e.knowledgeStoreProvider = provider
 }
 
-// SetDiscoveryProvider sets the discovery provider for infrastructure discovery
-func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
-	e.discoveryProvider = provider
-}
-
 // SetUnifiedResourceProvider sets the unified resource provider
 func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceProvider) {
 	e.unifiedResourceProvider = provider
@@ -1062,15 +998,13 @@ func (e *PulseToolExecutor) SetTypedActionPlanner(planner TypedActionPlanner) {
 	e.typedActionPlanner = planner
 }
 
-// SetOnActionCompleted installs a fire-and-forget callback that runs
-// after every terminal-state action audit is persisted (Completed or
-// Failed, including refused-before-dispatch failures with stable
-// `plan_drift:` / `resource_remediation_locked:` error prefixes).
-// Pass nil to disable. Used by the API layer to bridge action
-// completion into the agent SSE stream without coupling the tools
-// package to the api package. The callback runs on its own
-// goroutine; consumers must not assume immediate or in-order
-// delivery relative to subsequent dispatches.
+// SetOnActionCompleted installs the executor-side seam the API layer
+// attaches the agent SSE bridge to. Nothing in the tools package
+// dispatches the callback any more: the Assistant plans typed actions
+// into Pulse Actions instead of executing them, and the dispatcher
+// that used to fire it was removed with the retired execution lanes.
+// action.completed events come from API-owned execution. Pass nil to
+// disable.
 func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord)) {
 	if e == nil {
 		return
@@ -1216,8 +1150,6 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.typedActionPlanner != nil && e.hasReadState()
 	case agentcapabilities.PulseFileEditToolName:
 		return e.agentServer != nil
-	case agentcapabilities.PulseDiscoveryToolName:
-		return e.discoveryProvider != nil
 	case agentcapabilities.PulseKnowledgeToolName:
 		return e.actionAuditStore != nil || e.knowledgeStoreProvider != nil || e.incidentArchiveProvider != nil || e.eventCorrelatorProvider != nil
 	case agentcapabilities.PulsePMGToolName:
@@ -1285,9 +1217,6 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// pulse_control - plan typed resource capabilities only
 	e.registerControlTools()
-
-	// pulse_discovery - get, run, list discoveries
-	e.registerDiscoveryTools()
 
 	// pulse_knowledge - remember, recall, incidents, correlate, relationships
 	e.registerKnowledgeTools()

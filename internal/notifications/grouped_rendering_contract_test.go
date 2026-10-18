@@ -67,7 +67,7 @@ func assertEveryAlertNamed(t *testing.T, surface, rendered string, batch []*aler
 
 func TestContractGroupedEmailRendersEveryAlert(t *testing.T) {
 	batch := contractGroupedAlerts()
-	subject, htmlBody, textBody := groupedAlertTemplate(batch)
+	subject, htmlBody, textBody := groupedAlertTemplate(batch, "")
 	if subject == "" {
 		t.Fatal("grouped email rendered an empty subject")
 	}

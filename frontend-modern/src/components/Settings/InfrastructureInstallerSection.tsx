@@ -5,6 +5,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
 import { getUnifiedAgentLookupStatusPresentation } from '@/utils/unifiedAgentStatusPresentation';
 import {
@@ -130,6 +131,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
   props,
 ) => {
   const state = useInfrastructureOperationsContext();
+  const now = useRelativeTimeNow();
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
   const focus = createMemo<InfrastructureInstallerFocus>(() => props.focus ?? 'agent');
   const presentation = createMemo(() => INSTALLER_FOCUS_PRESENTATION[focus()]);
@@ -155,7 +157,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
     >
       <Show when={state.setupHandoff()}>
         {(handoff) => (
-          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
+          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div class="space-y-2">
                 <p class="font-semibold">
@@ -241,7 +243,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
       </Show>
 
       <div class="space-y-5">
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
+        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
           <p class="font-semibold">{presentation().recommendationTitle}</p>
           <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
             {presentation().recommendationDetail}
@@ -251,7 +253,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         <Show when={focus() === 'agent'}>
           <div
             data-testid="proxmox-api-first-guidance"
-            class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50"
+            class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50"
           >
             <p class="font-semibold">Adding Proxmox? Start with the API connection.</p>
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
@@ -263,19 +265,19 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium">
               <a
                 href={buildInfrastructureOnboardingPath('pve')}
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect Proxmox VE through the API
               </a>
               <a
                 href={buildInfrastructureOnboardingPath('pbs')}
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect PBS through the API
               </a>
               <a
                 href="/docs/PRODUCTION_SECURITY"
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
               >
                 Review the production security model
               </a>
@@ -284,7 +286,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         </Show>
 
         <Show when={focus() === 'docker'}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
             <p class="font-semibold">Docker inside Proxmox LXCs</p>
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
               Install the agent on the Proxmox node, not inside every LXC. In advanced options,
@@ -633,7 +635,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </div>
                   </Show>
 
-                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
                     <span class="font-medium">Config signing (optional)</span> — Require signed
                     remote config payloads with{' '}
                     <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via{' '}
@@ -715,7 +717,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                   title="Copy command"
                                   label={`Copy ${snippet.label} command`}
                                 />
-                                <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                   <code>{copyCommand()}</code>
                                 </pre>
                               </div>
@@ -732,7 +734,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               </For>
             </div>
 
-            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900/25 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
+            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
               <div class="flex items-center justify-between gap-3">
                 <h5 class="text-sm font-semibold">Check installation status</h5>
                 <button
@@ -764,7 +766,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     }
                   }}
                   placeholder="Hostname or agent ID"
-                  class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900/25 shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
+                  class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
                 />
               </div>
               <Show when={state.lookupError()}>
@@ -783,8 +785,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     <div
                       class={`space-y-3 rounded-md border px-3 py-3 text-xs ${
                         isConnected()
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50'
-                          : 'border-blue-200 bg-surface text-blue-900/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50'
+                          : 'border-blue-200 bg-surface text-blue-900 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100'
                       }`}
                     >
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -821,7 +823,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       </div>
                       <div class="space-y-1">
                         <div>
-                          Last seen {formatRelativeTime(agent().lastSeen)} (
+                          Last seen {formatRelativeTime(agent().lastSeen, { now: now() })} (
                           {formatAbsoluteTime(agent().lastSeen)})
                         </div>
                         <Show when={agent().agentVersion}>
@@ -907,7 +909,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           </summary>
           <div class="mt-3 space-y-3">
             <p class="text-xs text-muted">
-              Run the appropriate command on your machine to remove the Pulse agent:
+              Run the appropriate command on the agent's host. Removal uses its saved connection and
+              credentials. You do not need to generate another token.
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
@@ -930,7 +933,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               </div>
             </div>
             <p class="text-xs italic text-muted">
-              If the agent can't reach this server, run directly on the machine:{' '}
+              To use the installer saved on a Unix host, run:{' '}
               <code class="rounded-sm bg-surface-hover px-1 not-italic">
                 sudo bash /var/lib/pulse-agent/install.sh --uninstall
               </code>{' '}
@@ -943,6 +946,11 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 /boot/config/plugins/pulse-agent/install.sh
               </code>
               )
+            </p>
+            <p class="text-xs text-muted">
+              If a Unix install has saved credentials, its server must confirm removal before local
+              credentials and services are deleted. If it is refused, restore trusted connectivity
+              before retrying.
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">

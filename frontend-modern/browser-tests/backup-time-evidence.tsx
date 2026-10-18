@@ -11,11 +11,9 @@ import {
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 type Observation = { timestamp?: string; running?: boolean };
 const initial: Observation = { timestamp: '2026-10-04T06:00:00Z', running: false };
 const params = new URLSearchParams(window.location.search);

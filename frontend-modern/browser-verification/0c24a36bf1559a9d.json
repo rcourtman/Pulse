@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "base_sha": "ebd6d09337d5e4cd17b327df5a69a58dae739a27",
+  "verified_at": "2026-10-05T15:39:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "fa970cac1cde21056bc707a5ec6dc056d9f4dc9362f83a5bf8b59d5c2af1f75f"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 973,
+      "height": 900
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1180,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1513,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, random metrics off) serving this tree on main ebd6d09337; before = main, after = main plus this change, measured in the same session",
+    "Backup badge fit (each label cloned at natural width into the narrowest Backup cell): Running 73px, Unknown 79px, None 58px, 12mo 61px, 21d 52px with the shield. On main the column content box was 33-65px from 1000 to 1600 (compact layout weight 5, wide 72px), so Running and Unknown clipped at every width up to 1600 and None and month ages up to 1440-1513; patched the content box is 81-132px and every label fits at every width where the column shows (1000 to 1920)",
+    "Clip sweep over every cell of the Workloads table and its overflow-hidden or ellipsis descendants, .sr-only excluded, 15 widths 390 to 1920: Proxmox 464 to 452 and vSphere 2 to 1 clipped elements, no column clips more at any width, and the memory and disk used/total sublabels and the CPU core counts are unchanged in every row",
+    "Column widths patched at 1024: Name 259, Type 54, ID 70, CPU 96, Mem 140, Disk 140, Uptime 80, Backup 100 (main 259/70/70/130/140/140/80/50); at 1600 (wide) Name 224, CPU 130, Backup 108, Net I/O and Disk I/O 191 (main 224/157/81/191)",
+    "Before and after element screenshots of the guest table around the Running row at 1024, 1280 and 1600: Running cut inside its pill on main, whole patched"
+  ],
+  "interactions": [
+    "Loaded each route fresh, waited for the row count to settle, resized through every viewport before measuring",
+    "Clicked the Running backup badge at 1024, 1280 and 1600: the Backup status evidence dialog opened (Backup running now\u2026) and Escape closed it",
+    "Clicked a guest row's name cell to open its details on both routes; no console errors"
+  ]
+}

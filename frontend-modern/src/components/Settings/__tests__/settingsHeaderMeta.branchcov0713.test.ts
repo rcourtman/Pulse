@@ -8,11 +8,11 @@
  * The sibling `settingsLocalization.test.ts` suite already exercises:
  *   - getSettingsHeaderMeta('es') for: system-network, system-ai,
  *     system-ai-assistant, system-billing
- *   - getSettingsHeaderMeta('de') for: system-ai, system-ai-discovery,
- *     system-ai-assistant, system-billing
+ *   - getSettingsHeaderMeta('de') for: system-ai, system-ai-assistant,
+ *     system-billing
  *   - getSettingsHeaderMeta() (no-arg via active 'es') for security-auth.title
  *   - getInfrastructureReadOnlyHeaderDescription('es') via .toContain('solo lectura')
- *   - static SETTINGS_HEADER_META spot checks (system-billing, system-ai-discovery)
+ *   - static SETTINGS_HEADER_META spot checks (system-billing)
  *
  * This file pins the UNCOVERED branches of the two target functions:
  *   - English baseline (the getLocaleFallbackChain single-element [en] arm and
@@ -48,7 +48,6 @@ const ALL_TABS: readonly SettingsTab[] = [
   'system-ai',
   'system-ai-patrol',
   'system-ai-assistant',
-  'system-ai-discovery',
   'system-relay',
   'system-billing',
   'support-diagnostics',
@@ -152,14 +151,6 @@ describe('getSettingsHeaderMeta', () => {
         title: 'Assistant',
         description:
           'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
-      });
-    });
-
-    it('localizes system-ai-discovery to the English baseline (sibling only pinned de)', () => {
-      expect(en['system-ai-discovery']).toEqual({
-        title: 'Service Context',
-        description:
-          'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
       });
     });
 
@@ -373,8 +364,8 @@ describe('getSettingsHeaderMeta', () => {
 
   // ---- localized catalogs: uncovered tabs ------------------------------
   describe('German catalog — tabs not pinned by the sibling suite', () => {
-    // Sibling already covers system-ai, system-ai-discovery, system-ai-assistant,
-    // and system-billing in 'de'. Every other tab is pinned here so the German
+    // Sibling already covers system-ai, system-ai-assistant, and system-billing
+    // in 'de'. Every other tab is pinned here so the German
     // fallback chain ([de, en]) resolves to the de override for each key.
     // Computed in beforeAll so the deferred 'de' catalog (loaded asynchronously
     // by setup.ts) is present at evaluation time.
@@ -631,10 +622,6 @@ describe('getSettingsHeaderMeta', () => {
         title: 'Patrol',
         description: 'Configura cuando se ejecuta Patrol, que lo inicia y que modelo usa.',
       });
-    });
-
-    it('localizes system-ai-discovery title (sibling only pinned de for this tab)', () => {
-      expect(es['system-ai-discovery'].title).toBe('Contexto de servicio');
     });
 
     it('localizes system-relay', () => {

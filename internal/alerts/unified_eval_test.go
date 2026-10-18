@@ -2,12 +2,15 @@ package alerts
 
 import (
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func unifiedEvalBaseConfig() AlertConfig {
@@ -422,6 +425,15 @@ func TestCheckUnifiedResourceSupportsKubernetesTrueNASAndVMwareMetricTargets(t *
 			alert := activeAlert(t, m, tt.alertID)
 			if got := alert.Metadata["resourceType"]; got != tt.wantResourceType {
 				t.Fatalf("resourceType metadata = %v, want %s", got, tt.wantResourceType)
+			}
+			// resourceType is a display label, so the owning platform travels separately.
+			wantPlatform := map[string]string{
+				"Kubernetes": "kubernetes",
+				"TrueNAS":    "truenas",
+				"vSphere":    "vmware-vsphere",
+			}[strings.Fields(tt.wantResourceType)[0]]
+			if got := alert.Metadata["platformType"]; got != wantPlatform {
+				t.Fatalf("platformType metadata = %v, want %s", got, wantPlatform)
 			}
 		})
 	}
@@ -890,6 +902,51 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 }
 
+// A guest that drops its last tag leaves none on its open alerts. Config-save
+// reevaluation reads pulse-relaxed back from alert metadata, so a removed tag
+// left behind judged the alert by the relaxed trigger: the save resolved a
+// reading still over the guest's own trigger, and the next poll raised it
+// again.
+func TestCheckGuestDropsRemovedTagsFromOpenAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 102)
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     102,
+		Name:     "app02",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.97,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	alertID := canonicalMetricStateID(guestID, "cpu")
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected CPU alert %q over the relaxed trigger", alertID)
+	}
+
+	vm.Tags = nil
+	vm.CPU = 0.90
+	m.CheckGuest(vm, "pve1")
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RLock()
+	tags, hasTags := alert.Metadata["tags"]
+	m.mu.RUnlock()
+	if hasTags {
+		t.Fatalf("alert metadata tags = %v, want none once the guest dropped them", tags)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected a config save to keep a CPU alert over the guest's own trigger after pulse-relaxed is removed")
+	}
+}
+
 func TestCheckGuestPerDiskCleansUpRemovedDiskAlerts(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
@@ -1276,7 +1333,7 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, "container-1")
+	resourceID := DockerContainerResourceID(host.ID, "container-1", "")
 	alert := activeAlert(t, m, "docker-container-state-"+resourceID)
 	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
 		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)
@@ -1581,5 +1638,392 @@ func TestUnifiedMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T)
 	}
 	if got := alert.Metadata["stabilityWindowSeconds"]; got != defaultNoisyGaugeStabilitySeconds {
 		t.Fatalf("stabilityWindowSeconds = %v, want %d", got, defaultNoisyGaugeStabilitySeconds)
+	}
+}
+
+func TestNodeUsageDispatchPreservesSeparatelyEvaluatedTemperature(t *testing.T) {
+	m, elapsed := continuityManager(t, false)
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.mu.Unlock()
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 85}
+	m.CheckNode(node)
+	elapsed.Store(int64(40 * time.Second))
+	m.CheckNode(node)
+	incident, ok := continuityIncident(m, node.ID, "temperature")
+	if !ok || incident.State != reducer.StatePending {
+		t.Fatal("temperature control did not remain pending")
+	}
+	originalStart := incident.PendingSince
+	elapsed.Store(int64(59 * time.Second))
+	m.CheckNode(node)
+	incident, _ = continuityIncident(m, node.ID, "temperature")
+	if !incident.PendingSince.Equal(originalStart) {
+		t.Fatal("usage dispatch interrupted a separately observed temperature")
+	}
+	elapsed.Store(int64(time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("continuous node temperature did not complete its delay")
+	}
+	node.Temperature = nil
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("actual missing temperature became recovery")
+	}
+}
+
+// metricStatusClock drives a manager's wall and monotonic clocks together so
+// recovery runs measure exactly the time the test advances.
+type metricStatusClock struct {
+	now  time.Time
+	tick time.Duration
+}
+
+func (c *metricStatusClock) advance(d time.Duration) {
+	c.now = c.now.Add(d)
+	c.tick += d
+}
+
+func newMetricStatusTestManager(t *testing.T) (*Manager, *metricStatusClock) {
+	t.Helper()
+	m := newTestManager(t)
+	// Recently-resolved retention prunes against the real clock, so start there.
+	clock := &metricStatusClock{now: time.Now().UTC()}
+	m.now = func() time.Time { return clock.now }
+	m.intentClock = func() time.Duration { return clock.tick }
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	return m, clock
+}
+
+// fireNodeTemperatureAlert holds a breaching reading until the factory
+// stability delay lets the alert open, as a real poll loop would.
+func fireNodeTemperatureAlert(t *testing.T, m *Manager, clock *metricStatusClock, celsius float64) *Alert {
+	t.Helper()
+	for attempt := 0; attempt < 40; attempt++ {
+		checkMetricStatusNode(m, celsius)
+		if alert := activeNodeTemperatureAlert(t, m); alert != nil {
+			return alert
+		}
+		clock.advance(30 * time.Second)
+	}
+	t.Fatalf("%v°C never opened the temperature alert", celsius)
+	return nil
+}
+
+func checkMetricStatusNode(m *Manager, celsius float64) {
+	m.CheckNode(models.Node{
+		ID:       "homelab-minipc",
+		Name:     "minipc",
+		Instance: "homelab",
+		Status:   "online",
+		CPU:      0.2,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Temperature: &models.Temperature{
+			Available:  true,
+			CPUPackage: celsius,
+		},
+	})
+}
+
+func activeNodeTemperatureAlert(t *testing.T, m *Manager) *Alert {
+	t.Helper()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	alert, ok := m.getActiveAlertNoLock(canonicalMetricStateID("homelab-minipc", "temperature"))
+	if !ok {
+		return nil
+	}
+	return alert.Clone()
+}
+
+func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
+	m, clock := newMetricStatusTestManager(t)
+	// Buffered so a dispatch never blocks the evaluator; len() counts sends.
+	notified := make(chan struct{}, 64)
+	m.SetAlertCallback(func(*Alert) { notified <- struct{}{} })
+
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
+	status := fired.MetricStatus
+	if status == nil || status.Phase != models.MetricAlertPhaseBreaching || status.Value != 85 ||
+		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" ||
+		!metricBreachTime(t, status).Equal(fired.LastSeen) {
+		t.Fatalf("breaching status = %+v", status)
+	}
+	if status.RecoveryDelaySeconds <= 0 {
+		t.Fatalf("temperature alerts carry a recovery delay, got %+v", status)
+	}
+	delay := time.Duration(status.RecoveryDelaySeconds) * time.Second
+	firedMessage, firedLastSeen, notifications := fired.Message, fired.LastSeen, len(notified)
+
+	// Between the clear and trigger levels the alert holds. The legacy
+	// snapshot keeps the breach; only the live status moves.
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+	held := activeNodeTemperatureAlert(t, m)
+	if held == nil {
+		t.Fatal("78°C cleared an alert that should hold until 75°C")
+	}
+	if held.Value != 85 || held.Message != firedMessage || !held.LastSeen.Equal(firedLastSeen) {
+		t.Fatalf("hold rewrote the breach snapshot: value=%v message=%q lastSeen=%v", held.Value, held.Message, held.LastSeen)
+	}
+	if got := held.MetricStatus; got == nil || got.Phase != models.MetricAlertPhaseLatched || got.Value != 78 ||
+		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
+		t.Fatalf("latched status = %+v", got)
+	}
+
+	// At or below the recovery level the recovery run starts.
+	clock.advance(30 * time.Second)
+	recoveryStart := clock.now
+	checkMetricStatusNode(m, 72)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseRecovering || got.Value != 72 ||
+		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
+		t.Fatalf("recovery start status = %+v", got)
+	}
+	clock.advance(delay / 2)
+	checkMetricStatusNode(m, 75)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
+		t.Fatalf("recovery progress status = %+v", got)
+	}
+
+	// A reading back above the recovery level resets the run.
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 77)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
+		t.Fatalf("status after recovery reset = %+v", got)
+	}
+	if got := len(notified); got != notifications {
+		t.Fatalf("holding and recovering sent %d notifications", got-notifications)
+	}
+
+	// A full recovery delay at or below 75°C resolves the alert.
+	checkMetricStatusNode(m, 72)
+	clock.advance(delay)
+	checkMetricStatusNode(m, 72)
+	if alert := activeNodeTemperatureAlert(t, m); alert != nil {
+		t.Fatalf("alert still open after a full recovery delay: %+v", alert.MetricStatus)
+	}
+	m.resolvedMutex.RLock()
+	defer m.resolvedMutex.RUnlock()
+	resolved := 0
+	for _, entry := range m.recentlyResolved {
+		if entry == nil || entry.Type != "temperature" {
+			continue
+		}
+		resolved++
+		if entry.MetricStatus != nil {
+			t.Fatalf("resolved record kept the live status of an open alert: %+v", entry.MetricStatus)
+		}
+	}
+	if resolved != 1 {
+		t.Fatalf("resolved temperature records = %d, want 1", resolved)
+	}
+}
+
+func TestBuildMetricAlertStatusCarriesWindowAndMonotonicRecovery(t *testing.T) {
+	observedAt := time.Date(2026, 10, 6, 10, 49, 0, 0, time.UTC)
+	status := buildMetricAlertStatus(metricStatusInput{
+		value:                74,
+		trigger:              80,
+		clear:                75,
+		recoveryDelaySeconds: 300,
+		unit:                 "%",
+		window:               metricWindowObservation{Value: 74, CurrentValue: 91, WindowSeconds: 600, Ready: true},
+		incident: reducer.Incident{
+			RecoverySince:         observedAt.Add(-10 * time.Minute),
+			RecoveryElapsed:       90 * time.Second,
+			RecoveryTicksSupplied: true,
+		},
+		observedAt: observedAt,
+	})
+	if status.Phase != models.MetricAlertPhaseRecovering || status.Value != 74 ||
+		status.RawValue == nil || *status.RawValue != 91 || status.EvaluationWindowSeconds != 600 {
+		t.Fatalf("windowed status = %+v", status)
+	}
+	// Elapsed time comes from the monotonic run, not wall-clock arithmetic.
+	if status.RecoveryElapsedSeconds != 90 {
+		t.Fatalf("recovery elapsed = %d, want 90", status.RecoveryElapsedSeconds)
+	}
+
+	// The reducer clears at the trigger when no clear level is configured.
+	noClear := buildMetricAlertStatus(metricStatusInput{value: 85, triggered: true, trigger: 80, observedAt: observedAt})
+	if noClear.Recovery != 80 || noClear.RawValue != nil {
+		t.Fatalf("status without clear level = %+v", noClear)
+	}
+}
+
+func trueNASTemperatureDisk(device, diskType string, celsius int) unifiedresources.Resource {
+	return unifiedresources.Resource{
+		ID:         "physical-disk:truenas-main/" + device,
+		Type:       unifiedresources.ResourceTypePhysicalDisk,
+		Name:       device,
+		ParentName: "truenas-main",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+			DevPath:     "/dev/" + device,
+			DiskType:    diskType,
+			Temperature: celsius,
+		},
+	}
+}
+
+func trueNASDiskTemperatureAlertID(resource unifiedresources.Resource) string {
+	return canonicalMetricStateID(resource.ID, "temperature")
+}
+
+func checkTrueNASTemperatureDisk(t *testing.T, m *Manager, resource unifiedresources.Resource) {
+	t.Helper()
+	input, ok := UnifiedResourceInputFromResource(resource)
+	if !ok {
+		t.Fatalf("TrueNAS disk %s did not become alert input", resource.ID)
+	}
+	m.CheckUnifiedResource(input)
+}
+
+func trueNASDiskTemperatureAlert(t *testing.T, m *Manager, resource unifiedresources.Resource) (*Alert, bool) {
+	t.Helper()
+	return testLookupActiveAlert(t, m, trueNASDiskTemperatureAlertID(resource))
+}
+
+// TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy pins TrueNAS
+// disk temperature alerts to the disk temperature policy that the TrueNAS
+// storage table, Physical Disks and Patrol judge heat by: per disk type,
+// unless the user saved a TrueNAS-wide value, with a per-disk override first.
+func TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy(t *testing.T) {
+	nvme63 := trueNASTemperatureDisk("nvme0n1", "nvme", 63)
+	nvme72 := trueNASTemperatureDisk("nvme1n1", "nvme", 72)
+	sata56 := trueNASTemperatureDisk("sda", "sata", 56)
+	sata60 := trueNASTemperatureDisk("sdb", "sata", 60)
+
+	tests := []struct {
+		name    string
+		mutate  func(*AlertConfig)
+		disks   []unifiedresources.Resource
+		firing  []unifiedresources.Resource
+		trigger map[string]float64
+	}{
+		{
+			name:    "factory thresholds judge each disk by its type",
+			disks:   []unifiedresources.Resource{nvme63, nvme72, sata56},
+			firing:  []unifiedresources.Resource{nvme72, sata56},
+			trigger: map[string]float64{nvme72.ID: 70, sata56.ID: 55},
+		},
+		{
+			name: "a raised NVMe trigger moves NVMe alerts with it",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 75, Clear: 70}}
+			},
+			disks:  []unifiedresources.Resource{nvme72, sata56},
+			firing: []unifiedresources.Resource{sata56},
+		},
+		{
+			name: "a saved TrueNAS-wide value applies to every TrueNAS disk",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+			},
+			disks:   []unifiedresources.Resource{nvme63, sata60},
+			firing:  []unifiedresources.Resource{nvme63},
+			trigger: map[string]float64{nvme63.ID: 62},
+		},
+		{
+			name: "a per-disk override beats the TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+				cfg.Overrides = map[string]ThresholdConfig{
+					sata56.ID: {Temperature: &HysteresisThreshold{Trigger: 50, Clear: 45}},
+				}
+			},
+			disks:   []unifiedresources.Resource{sata56},
+			firing:  []unifiedresources.Resource{sata56},
+			trigger: map[string]float64{sata56.ID: 50},
+		},
+		{
+			name: "a switched-off agent Disk Temp default switches TrueNAS disks off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+			},
+			disks: []unifiedresources.Resource{nvme72, sata60},
+		},
+		{
+			name: "a saved TrueNAS-wide value still applies when the agent default is off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 58, Clear: 53}
+			},
+			disks:  []unifiedresources.Resource{sata60},
+			firing: []unifiedresources.Resource{sata60},
+		},
+		{
+			name: "a saved TrueNAS-wide off switches TrueNAS disks off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+			},
+			disks: []unifiedresources.Resource{nvme72, sata60},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := unifiedEvalBaseConfig()
+			cfg.TrueNASDiskDefaults = ThresholdConfig{}
+			if tt.mutate != nil {
+				tt.mutate(&cfg)
+			}
+			configureUnifiedEvalManager(t, m, cfg)
+
+			for _, disk := range tt.disks {
+				checkTrueNASTemperatureDisk(t, m, disk)
+			}
+
+			want := make(map[string]bool, len(tt.firing))
+			for _, disk := range tt.firing {
+				want[disk.ID] = true
+			}
+			for _, disk := range tt.disks {
+				alert, firing := trueNASDiskTemperatureAlert(t, m, disk)
+				if firing != want[disk.ID] {
+					t.Fatalf("%s firing = %v, want %v (active: %v)", disk.ID, firing, want[disk.ID], alertKeys(m))
+				}
+				if !firing {
+					continue
+				}
+				if got := alert.Metadata["diskType"]; got != disk.PhysicalDisk.DiskType {
+					t.Fatalf("%s diskType metadata = %v, want %q", disk.ID, got, disk.PhysicalDisk.DiskType)
+				}
+				if trigger, ok := tt.trigger[disk.ID]; ok && alert.Threshold != trigger {
+					t.Fatalf("%s threshold = %v, want %v", disk.ID, alert.Threshold, trigger)
+				}
+			}
+		})
+	}
+}
+
+// A last-known reading the source no longer collects is not evidence of heat.
+func TestTrueNASDiskTemperatureAlertIgnoresRetainedReading(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	disk := trueNASTemperatureDisk("sda", "sata", 80)
+	disk.PhysicalDisk.Collection = &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("truenas", "disk is in standby"),
+	}
+	checkTrueNASTemperatureDisk(t, m, disk)
+	if _, firing := trueNASDiskTemperatureAlert(t, m, disk); firing {
+		t.Fatalf("retained 80C reading raised an alert: %v", alertKeys(m))
 	}
 }

@@ -73,6 +73,7 @@ describe('OverviewTab incident timeline error state', () => {
     render(() => <OverviewTab {...defaultProps()} />);
 
     // Click the Timeline button to expand
+    fireEvent.click(screen.getByText('More'));
     const timelineBtn = screen.getByText('Timeline');
     fireEvent.click(timelineBtn);
 
@@ -91,6 +92,7 @@ describe('OverviewTab incident timeline error state', () => {
     render(() => <OverviewTab {...defaultProps()} />);
 
     // Click Timeline to expand — first call fails
+    fireEvent.click(screen.getByText('More'));
     const timelineBtn = screen.getByText('Timeline');
     fireEvent.click(timelineBtn);
 
@@ -126,6 +128,7 @@ describe('OverviewTab incident timeline error state', () => {
 
     render(() => <OverviewTab {...defaultProps()} />);
 
+    fireEvent.click(screen.getByText('More'));
     const timelineBtn = screen.getByText('Timeline');
     fireEvent.click(timelineBtn);
 
@@ -161,6 +164,7 @@ describe('OverviewTab incident timeline error state', () => {
 
     render(() => <OverviewTab {...defaultProps()} />);
 
+    fireEvent.click(screen.getByText('More'));
     const timelineBtn = screen.getByText('Timeline');
     fireEvent.click(timelineBtn);
 
@@ -198,6 +202,7 @@ describe('OverviewTab incident timeline error state', () => {
 
     render(() => <OverviewTab {...defaultProps()} />);
 
+    fireEvent.click(screen.getByText('Mehr'));
     fireEvent.click(screen.getByText('Zeitleiste'));
 
     await waitFor(() => {

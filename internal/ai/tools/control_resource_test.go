@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -202,5 +203,77 @@ func TestPulseControlAvailabilityUsesPlanner(t *testing.T) {
 				t.Fatalf("offered=%v governed=%v want=%v", offered, governed, tc.want)
 			}
 		})
+	}
+}
+
+func TestAssistantProjectedModesStillOnlyPlanAndRespectExecuteAuthority(t *testing.T) {
+	for _, raw := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous} {
+		for _, authority := range []bool{false, true} {
+			t.Run(raw+map[bool]string{true: "/authorised", false: "/unauthorised"}[authority], func(t *testing.T) {
+				provider := newTrueNASUnifiedQueryProvider(t)
+				canonicalID := ""
+				for _, resource := range provider.GetByType(unifiedresources.ResourceTypeAppContainer) {
+					if strings.EqualFold(resource.Name, "Nextcloud") {
+						if canonicalID != "" {
+							t.Fatal("fixture has ambiguous Nextcloud resources")
+						}
+						canonicalID = resource.ID
+					}
+				}
+				if canonicalID == "" {
+					t.Fatal("fixture has no canonical Nextcloud resource")
+				}
+				native := &stubAppContainerActionProvider{}
+				planned := 0
+				executor := NewPulseToolExecutor(ExecutorConfig{
+					UnifiedResourceProvider: provider, ReadState: provider.ResourceRegistry,
+					AppContainerActionProvider: native,
+					ControlLevel:               ControlLevel(config.AssistantControlLevel(raw)),
+					TypedActionPlanner: typedActionPlannerFunc(func(_ context.Context, org string, req unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+						planned++
+						if org != "lab" || req.ResourceID != canonicalID || req.CapabilityName != "restart" {
+							t.Fatalf("plan lost scope: %q/%s", org, req.ResourceID)
+						}
+						return &unifiedresources.ActionPlan{ActionID: "synthetic-action", Allowed: true, RequiresApproval: true, ApprovalPolicy: unifiedresources.ApprovalAdmin, PlanHash: "synthetic-plan"}, nil
+					}),
+				})
+				executor.SetOrgID("lab")
+				executor.ApplyExecutionProfile(ProfileInteractiveAssistant)
+				executor.SetExecuteAuthority(authority)
+				result, err := executor.ExecuteTool(context.Background(), "pulse_control", map[string]interface{}{"type": "resource", "resource_id": "Nextcloud", "action": "restart"})
+				wantPlan := raw != config.ControlLevelReadOnly && authority
+				if wantPlan {
+					if err != nil || result.IsError {
+						t.Fatalf("expected plan: %v / %+v", err, result)
+					}
+					var payload map[string]any
+					if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
+						t.Fatal(err)
+					}
+					if payload["execution_requested"] != false || payload["requires_approval"] != true || payload["approval_policy"] != string(unifiedresources.ApprovalAdmin) {
+						t.Fatalf("plan granted execution: %+v", payload)
+					}
+					if planned != 1 {
+						t.Fatalf("plans=%d", planned)
+					}
+				} else {
+					// Read-only returns the existing informational disabled-mode reply,
+					// not a failed native action. Unauthorised planning is an error.
+					if raw == config.ControlLevelReadOnly {
+						if err != nil || len(result.Content) != 1 || !strings.Contains(result.Content[0].Text, "Control tools are disabled") {
+							t.Fatalf("missing read-only refusal: %v / %+v", err, result)
+						}
+					} else if err == nil && !result.IsError {
+						t.Fatalf("unauthorised/read-only plan accepted: %+v", result)
+					}
+					if planned != 0 {
+						t.Fatalf("unauthorised plans=%d", planned)
+					}
+				}
+				if len(native.calls) != 0 {
+					t.Fatal("Assistant plan executed against native provider")
+				}
+			})
+		}
 	}
 }

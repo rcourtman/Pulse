@@ -11,7 +11,6 @@ vi.mock('@/api/ai', () => ({
     approvePendingApproval: vi.fn(),
     denyPendingApproval: vi.fn(),
     getIntelligenceSummary: vi.fn(),
-    getCorrelations: vi.fn(),
   },
 }));
 

@@ -375,15 +375,12 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
             "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
             "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
             "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean",
-            "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
-            "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
-            "python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty",
         ]
     )
     if active_target_id == "v6-product-lane-expansion":
-        default_pick_surface = "available_candidate_lane_queue"
+        default_pick_surface = "available_candidate_lane_options"
         selection_rule = (
-            "Pick from available candidate lanes and linked coverage gaps before local prerelease cleanup unless the user overrides the priority or a release-blocking surface needs immediate containment."
+            "Use current user direction and the evidence for available candidate lanes and linked coverage gaps to choose work. Options are listed by stable identifier, with ownership availability, and carry no priority ranking."
         )
     else:
         default_pick_surface = "lanes"
@@ -413,9 +410,6 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         "subsystem_lookup": "scripts/release_control/subsystem_lookup.py",
         "status_lookup": "scripts/release_control/status_lookup.py",
         "work_claim": "scripts/release_control/work_claim.py",
-        "worktree_base": "scripts/release_control/worktree_base.py",
-        "worktree_claim": "scripts/release_control/worktree_claim.py",
-        "worktree_finish": "scripts/release_control/worktree_finish.py",
     }
 
 

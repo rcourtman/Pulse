@@ -8,6 +8,56 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Workloads locked-guest identity on phones
+
+Automated: `GuestRow.test.tsx` lock-label cases and
+`frontend-modern/browser-tests/guest-row-lock-identity.cjs` after precompiling
+with `node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`. The parent
+row is the exact own-parent source, not a replay of a terminated preview. Inspect the real
+name, status/backup indicator, full lock and visible memory-freshness cue at
+320 and 390 px in light/dark bars and sparklines. The backup evidence control sits below the name on phones without shrinking
+its touch target; the lock remains separately visible. Long locks wrap inside the identity cell and long names retain their full title.
+Check that desktop keyboard Enter and the first phone touch open the same guest,
+that drawer safety copy stays intact, and that lock transitions on the same row
+do not renew the original memory timestamp. Wider rows keep their inline layout.
+This fixture uses synthetic data, not installed/native guest recovery proof.
+
+## Workloads memory observation presentation
+
+Automated: `GuestRow.test.tsx` (memory observation provenance),
+`MetricMiniSparkline.test.tsx`, `memoryObservation.test.ts`, and existing
+GuestDrawer/canonical History/selected-source adapter tests. The browser fixture
+`frontend-modern/browser-tests/guest-row-memory-provenance.cjs` exercises the
+production renderer with synthetic last-known, unknown, unavailable, current,
+zero and independent-memory/disk-deferral snapshots on desktop and narrow touch.
+Check source/time labels without hovering, every display mode, host-capacity
+labels, historical path preservation and same-guest updates without remount.
+
+Installed follow-through remains separate: independent thaw, writes to every
+covered filesystem, guest liveness and only-prior-active restoration belong to
+the native safety owners. These presentation checks do not set a release gate,
+prove a safe guest or authorise a diagnostic/restart.
+
+## Canonical guest History filesystem ownership
+
+Automated: `resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts`,
+`ResourceDetailDrawer.history.test.tsx`, the existing workload mapper and
+source-admission controls. Use
+`frontend-modern/browser-tests/linked-guest-history.cjs` to inspect the real
+canonical and Workloads drawers on desktop Chromium and phone WebKit.
+A live linked agent remains current despite a QEMU-only read failure; its
+silent report is explicitly last known even while the platform stays online.
+Check provider-list precedence (including an empty list), source transitions
+on the same mounted drawer, native stopped withdrawal and fresh zero.
+LXC platform storage remains usable independently of in-guest agent state.
+Load stored observations, then change agent freshness and native power without
+removing, relabelling as current or fabricating chart samples.
+
+The fixture's controls and readings are synthetic, not installed guest
+recovery. Native thaw, writes to every covered filesystem, liveness, restart
+and prior-active restoration remain with the native owners; no release gate
+or safe-to-probe verdict follows from presentation proof.
+
 ## How To Use This Matrix
 
 1. Run the automated proof first.

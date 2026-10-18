@@ -107,11 +107,14 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 	case ResourceTypePhysicalDisk:
 		// The agent source must win over platform sources for physical
 		// disks: SMART/temperature metrics are written by the host agent
-		// under the agent's disk source ID (HostSMARTDiskSourceID in
-		// monitor_agents.go). Proxmox API does not expose detailed SMART
-		// data, so preferring its source ID here would point store readers
-		// at a key nothing writes and disk metrics would appear empty
-		// (GitHub issue #1487).
+		// (HostSMARTDiskMetricID in monitor_agents.go). Proxmox API does
+		// not expose detailed SMART data, so preferring its source ID here
+		// would point store readers at a key nothing writes and disk
+		// metrics would appear empty (GitHub issue #1487). The agent's
+		// source ID is host-scoped (HostSMARTDiskSourceID), while its
+		// metrics key is the disk's serial or WWN, so a disk with hardware
+		// identity resolves to that. Only an identity-less disk falls back
+		// to its source ID, which keeps the shape the writer uses.
 		if st, ok := bySource[SourceAgent]; ok {
 			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
 				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}

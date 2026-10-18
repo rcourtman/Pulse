@@ -2,12 +2,10 @@ import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
 // Synthetic snapshots and HTTP responses; production drawer, query/client and CSS.
-syncAIRuntimeSettings({ discovery_enabled: false });
 const resource: Resource = {
   id: 'pbs-a',
   name: 'PBS A',

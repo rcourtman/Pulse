@@ -175,13 +175,14 @@ describe('useInfrastructureOperationsState command-building closures', () => {
     });
   });
 
-  describe('resolvedCommandToken (via getUninstallCommand)', () => {
-    it('requests private input without copying a placeholder when a token is required', async () => {
+  describe('saved-credential removal independent of install token', () => {
+    it('uses saved credentials without prompting when an installation token is required', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTPS_URL);
 
-      expect(state.getUninstallCommand()).toContain('--token-file "$token_file"');
+      expect(state.getUninstallCommand()).not.toContain('--token');
+      expect(state.getUninstallCommand()).not.toContain('Pulse agent token');
       expect(state.getUninstallCommand()).not.toContain('<api-token>');
       dispose();
     });
@@ -193,7 +194,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       await state.handleGenerateToken();
 
       const cmd = state.getUninstallCommand();
-      expect(cmd).toContain('--token-file "$token_file"');
+      expect(cmd).not.toContain('--token');
+      expect(cmd).not.toContain('Pulse agent token');
       expect(cmd).not.toContain('tok-1');
       expect(cmd).not.toContain('<api-token>');
       expect(mocks.showTokenReveal).toHaveBeenCalledWith({
@@ -237,7 +239,7 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       expect(cmd).not.toContain('--token');
       expect(cmd).not.toContain('<api-token>');
       expect(cmd).toContain('--uninstall');
-      expect(cmd).toContain('--url');
+      expect(cmd).not.toContain('--url');
       expect(cmd).toContain('https://pulse.test');
       dispose();
     });
@@ -268,15 +270,15 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       dispose();
     });
 
-    it('appends --insecure for an http:// url even in secure mode (url-driven arm)', async () => {
+    it('does not weaken saved server trust because the download URL is HTTP', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTP_URL);
 
       const cmd = state.getUninstallCommand();
-      // insecureMode is off, so curl stays -fsSL, but the http url forces --insecure.
+      // The download endpoint is not the saved credential-bearing server.
       expect(cmd).toContain('curl -fsSL ');
-      expect(cmd).toContain(' --insecure');
+      expect(cmd).not.toContain(' --insecure');
       expect(cmd).toContain("'http://pulse.test/install.sh'");
       dispose();
     });
@@ -339,72 +341,53 @@ describe('useInfrastructureOperationsState command-building closures', () => {
     });
   });
 
-  describe('getPowerShellTransportEnv (via getWindowsUninstallCommand)', () => {
-    it('produces no transport prefix when insecure mode is off and no CA is set', async () => {
+  describe('Windows saved-state uninstall invocation', () => {
+    it.each([false, true])(
+      'does not read or mint an installation token (minted=%s)',
+      async (minted) => {
+        const { state, dispose } = mountHook();
+        await flushAsync();
+        state.setCustomAgentUrl(HTTPS_URL);
+        if (minted) await state.handleGenerateToken();
+        const issuanceCalls = mocks.createHostAgentInstallToken.mock.calls.length;
+        const cmd = state.getWindowsUninstallCommand();
+        expect(cmd).toContain("-Url '' -Token '' -TokenFile ''");
+        expect(cmd).toContain('-Uninstall $true');
+        expect(cmd).toContain("-AgentId '' -Hostname ''");
+        expect(cmd).not.toContain('PULSE_TOKEN');
+        expect(cmd).not.toContain('tok-1');
+        expect(cmd).not.toContain('<api-token>');
+        expect(cmd).not.toContain('$env:');
+        expect(mocks.createHostAgentInstallToken).toHaveBeenCalledTimes(issuanceCalls);
+        dispose();
+      },
+    );
+
+    it('uses only explicit download trust, leaving saved runtime trust available', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTPS_URL);
-
-      const cmd = state.getWindowsUninstallCommand();
-      expect(cmd.startsWith('$env:PULSE_URL=')).toBe(true);
-      dispose();
-    });
-
-    it('emits only the insecure-skip-verify env when insecure mode is on', async () => {
-      const { state, dispose } = mountHook();
-      await flushAsync();
-      state.setCustomAgentUrl(HTTPS_URL);
-      state.setInsecureMode(true);
-
-      const cmd = state.getWindowsUninstallCommand();
-      expect(cmd).toContain('$env:PULSE_INSECURE_SKIP_VERIFY="true"; $env:PULSE_URL=');
-      // The bootstrap always references $env:PULSE_CACERT in a guard, so assert
-      // the assignment form (`="`) is absent — only transportEnv produces that.
-      expect(cmd).not.toContain('$env:PULSE_CACERT="');
-      dispose();
-    });
-
-    it('emits only the CA cert env when a custom CA path is set', async () => {
-      const { state, dispose } = mountHook();
-      await flushAsync();
-      state.setCustomAgentUrl(HTTPS_URL);
-      state.setCustomCaPath('/etc/ssl/ca.pem');
-
-      const cmd = state.getWindowsUninstallCommand();
-      expect(cmd).toContain('$env:PULSE_CACERT="/etc/ssl/ca.pem"; $env:PULSE_URL=');
-      dispose();
-    });
-
-    it('emits both env assignments when insecure mode and a CA path are set', async () => {
-      const { state, dispose } = mountHook();
-      await flushAsync();
-      state.setCustomAgentUrl(HTTPS_URL);
-      state.setInsecureMode(true);
-      state.setCustomCaPath('/etc/ssl/ca.pem');
-
-      const cmd = state.getWindowsUninstallCommand();
-      expect(cmd).toContain(
-        '$env:PULSE_INSECURE_SKIP_VERIFY="true"; $env:PULSE_CACERT="/etc/ssl/ca.pem"; ',
-      );
-      dispose();
-    });
-
-    it('omits PULSE_TOKEN when no token resolves, and includes it after one is minted', async () => {
-      // resolvedCommandToken only yields a falsy value (no PULSE_TOKEN line)
-      // when no token is required and none has been minted; the placeholder arm
-      // is covered in the resolvedCommandToken group above.
-      mocks.securityGetStatus.mockResolvedValue({
-        requiresAuth: false,
-        hasAuthentication: false,
-        apiTokenConfigured: false,
+      const command = state.getWindowsUninstallCommand({
+        agentActionId: ' canonical ',
+        agentId: 'alias',
+        hostname: " host's-name ",
       });
-      const { state, dispose } = mountHook();
-      await flushAsync();
-      state.setCustomAgentUrl(HTTPS_URL);
-
-      expect(state.getWindowsUninstallCommand()).not.toContain('PULSE_TOKEN');
-      await state.handleGenerateToken();
-      expect(state.getWindowsUninstallCommand()).toContain('$env:PULSE_TOKEN="tok-1"');
+      expect(command).toContain("-Insecure $false -CACertPath '' -ServerFingerprint ''");
+      expect(command).toContain("-AgentId 'canonical' -Hostname 'host''s-name'");
+      expect(command).toContain('if ($false -or');
+      expect(command).toContain(
+        'finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev;',
+      );
+      state.setCustomCaPath("C:\\trust\\host's-ca.pem");
+      expect(state.getWindowsUninstallCommand()).toContain(
+        "-CACertPath 'C:\\trust\\host''s-ca.pem'",
+      );
+      expect(state.getWindowsUninstallCommand()).toContain(
+        "LoadCertificate('C:\\trust\\host''s-ca.pem')",
+      );
+      state.setInsecureMode(true);
+      expect(state.getWindowsUninstallCommand()).toContain('-Insecure $true');
+      expect(state.getWindowsUninstallCommand()).toContain('if ($true -or');
       dispose();
     });
   });

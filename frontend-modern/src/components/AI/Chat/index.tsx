@@ -67,7 +67,6 @@ import {
 } from '@/stores/aiRuntimeState';
 import { logger } from '@/utils/logger';
 import {
-  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_COLLAPSE_TITLE,
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
@@ -77,9 +76,6 @@ import {
   AI_CHAT_COPY_LAST_ANSWER_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
   AI_CHAT_COPY_TRANSCRIPT_LABEL,
-  AI_CHAT_DISCOVERY_HINT_BODY,
-  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
-  AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_EXPORT_TRANSCRIPT_LABEL,
   AI_CHAT_FORK_SESSION_EMPTY_MESSAGE,
@@ -114,7 +110,6 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
-  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL,
@@ -138,12 +133,8 @@ import {
 } from '@/utils/aiProviderPresentation';
 import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
 import type { ModelInfo as RuntimeModelInfo } from '@/types/ai';
-import type { Resource } from '@/types/resource';
-import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
-import {
-  getActionableAgentIdFromResource,
-  isAgentFacetInfrastructureResource,
-} from '@/utils/agentResources';
+import { requiresGovernedResourceDisplay, type Resource } from '@/types/resource';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -243,7 +234,7 @@ const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
-const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
+const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled'];
 const AI_CHAT_COMPACT_SESSION_LABEL = 'Compact session';
 const AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE = 'No Assistant session to compact';
 const AI_CHAT_COMPACT_SESSION_LOADING_MESSAGE =
@@ -379,6 +370,7 @@ const normalizePromptHistoryEntry = (value: unknown): PromptHistoryEntry | null 
             id,
             label,
             type,
+            scope: typeof mentionRecord.scope === 'string' ? mentionRecord.scope : undefined,
             node: typeof mentionRecord.node === 'string' ? mentionRecord.node : undefined,
             status: typeof mentionRecord.status === 'string' ? mentionRecord.status : undefined,
           };
@@ -741,12 +733,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
+  const [controlMenuPlacement, setControlMenuPlacement] = createSignal({ left: 0, width: 240 });
   const [controlSaving, setControlSaving] = createSignal(false);
   const [transcriptCopyFallback, setTranscriptCopyFallback] =
     createSignal<TranscriptCopyFallback | null>(null);
-  const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
-  const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
-  const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
   const [workflowPrompts, setWorkflowPrompts] = createSignal<AgentWorkflowPrompt[]>([]);
   const [renderingWorkflowStarterId, setRenderingWorkflowStarterId] = createSignal('');
   const wsStore = getGlobalWebSocketStore();
@@ -820,6 +810,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     textareaRef.style.height = 'auto';
     textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 160)}px`;
   };
+
+  const selectedMention = (mention: MentionResource) =>
+    mentionResources().find((candidate) => candidate.id === mention.id) || mention;
 
   const cloneMentions = (mentions: MentionResource[]) =>
     mentions.map((mention) => ({ ...mention }));
@@ -895,7 +888,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
         mention.id === other.id &&
         mention.label === other.label &&
         mention.type === other.type &&
-        mention.node === other.node
+        mention.node === other.node &&
+        mention.scope === other.scope
       );
     });
   };
@@ -1498,6 +1492,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const openControlMenuAndFocusSelection = () => {
     if (controlSaving()) return;
+    // A wrapped toolbar can put the trigger at either edge. Keep the whole
+    // review-only menu inside the composer, not clipped by the chat panel.
+    const trigger = controlModeButtonRef?.getBoundingClientRect();
+    const composer = controlModeButtonRef
+      ?.closest('[data-assistant-control-toolbar]')
+      ?.getBoundingClientRect();
+    const leftEdge = Math.max(16, composer?.left ?? 16);
+    const rightEdge = Math.min(window.innerWidth - 16, composer?.right || window.innerWidth - 16);
+    const width = Math.min(240, Math.max(0, rightEdge - leftEdge));
+    const left = Math.max(leftEdge, Math.min(trigger?.left ?? leftEdge, rightEdge - width));
+    setControlMenuPlacement({ left: left - (trigger?.left ?? leftEdge), width });
     setShowControlMenu(true);
     focusCurrentControlModeOption();
   };
@@ -1608,9 +1613,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const sendOptions: SendMessageOptions = {};
     if (request.model) {
       sendOptions.model = request.model;
-    }
-    if (typeof request.autonomousMode === 'boolean') {
-      sendOptions.autonomousMode = request.autonomousMode;
     }
     if (request.handoffContext) {
       sendOptions.handoffContext = request.handoffContext;
@@ -2352,10 +2354,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setDefaultModel(fallback);
     setChatOverrideModel(chatOverride);
     setControlLevel(normalizeAIControlLevel(settings?.control_level));
-    setDiscoveryEnabled(settings?.discovery_enabled ?? false);
   });
 
-  const updateControlLevel = async (nextLevel: 'read_only' | 'controlled' | 'autonomous') => {
+  const updateControlLevel = async (nextLevel: AIControlLevel) => {
     if (controlSaving() || nextLevel === controlLevel()) {
       setShowControlMenu(false);
       return;
@@ -2367,7 +2368,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const resolved = normalizeAIControlLevel(updated.control_level || nextLevel);
       syncAIRuntimeSettings(updated);
       setControlLevel(resolved);
-      if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       notificationStore.success(
         `Assistant chat action mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
         2000,
@@ -2548,7 +2548,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setSessions([]);
         setDefaultModel('');
         setChatOverrideModel('');
-        setDiscoveryEnabled(false);
         setControlLevel('read_only');
         setWorkflowPrompts([]);
         assistantSurfaceToolsRequestId += 1;
@@ -2599,17 +2598,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const contextBriefing = createMemo(() => aiChatStore.context.briefing);
   const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
-  const controlPresentation = createMemo(() =>
-    getAIChatControlLevelPresentation(
-      hasScopedApprovalHandoff() && controlLevel() === 'autonomous' ? 'controlled' : controlLevel(),
-    ),
-  );
-  const autonomousWarningVisible = createMemo(
-    () =>
-      controlLevel() === 'autonomous' &&
-      !autonomousBannerDismissed() &&
-      !hasScopedApprovalHandoff(),
-  );
+  const controlPresentation = createMemo(() => getAIChatControlLevelPresentation(controlLevel()));
   const contextBriefingTitle = createMemo(() => {
     const briefing = contextBriefing();
     if (!briefing) return '';
@@ -2758,7 +2747,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const currentStatusKind = createMemo(() => currentStatus()?.type);
   const currentStatusRowClass = createMemo(() => {
     if (currentStatusKind() === 'retrying') {
-      return 'bg-amber-50/80 text-amber-900/25 dark:bg-amber-950/25 dark:text-amber-100';
+      return 'bg-amber-50/80 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100';
     }
     return '';
   });
@@ -2951,10 +2940,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
         closeSlashCommandAutocomplete({ clearTransientDraft: true });
       }
     };
+    const closeControlMenuOnResize = () => setShowControlMenu(false);
+    window.addEventListener('resize', closeControlMenuOnResize);
     document.addEventListener('click', handleClickOutside);
     onCleanup(() => {
       stashComposerDraftForRemount();
       document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('resize', closeControlMenuOnResize);
       aiChatStore.registerInput?.(null);
       clearInterruptArm();
       if (queuedFollowUpCommandTargetTimeout) {
@@ -3020,23 +3012,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-    const getAgentActionId = (resource: Resource): string => {
-      return getActionableAgentIdFromResource(resource) || resource.id;
-    };
-    const getDockerActionId = (resource: Resource): string => {
-      const platformData = readPlatformData(resource);
-      const platformDocker = asRecord(platformData?.docker);
-      const discoveryTarget = resource.discoveryTarget;
-      return (
-        (isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
-          ? discoveryTarget?.resourceId
-          : undefined) ||
-        asString(platformDocker?.hostSourceId) ||
-        asString(platformData?.hostSourceId) ||
-        discoveryTarget?.agentId ||
-        resource.id
-      );
-    };
+
     const getAppContainerMentionHost = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       const platformDocker = asRecord(platformData?.docker);
@@ -3049,79 +3025,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
         ''
       );
     };
-    const getAppContainerMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('app-container:')) {
-        return resource.id;
-      }
-
-      const host = getAppContainerMentionHost(resource);
-      const platformData = readPlatformData(resource);
-      const platformDocker = asRecord(platformData?.docker);
-      const containerID =
-        asString(platformDocker?.containerId) ||
-        asString(platformDocker?.name) ||
-        asString(resource.canonicalIdentity?.primaryId) ||
-        asString(resource.name) ||
-        asString(resource.id);
-
-      if (host && containerID) {
-        return `app-container:${host}:${containerID}`;
-      }
-
-      return resource.id;
-    };
-
-    const parseLegacyVmid = (
-      platformData: Record<string, unknown> | undefined,
-    ): number | undefined => {
-      const vmidRaw = platformData?.vmid;
-      if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw) && vmidRaw > 0) return vmidRaw;
-      if (typeof vmidRaw === 'string') {
-        const parsed = parseInt(vmidRaw, 10);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
-      }
-      return undefined;
-    };
 
     const getVMMentionNode = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       return (
+        asString(resource.proxmox?.nodeName) ||
+        asString(resource.proxmox?.node) ||
         asString(platformData?.node) ||
         asString(resource.vmware?.runtimeHostName) ||
         asString(resource.vmware?.runtimeHostId) ||
         resource.parentName ||
         ''
       );
-    };
-
-    const getVMMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('vm:')) {
-        return resource.id;
-      }
-
-      const platformData = readPlatformData(resource);
-      const node = getVMMentionNode(resource);
-      const vmid = parseLegacyVmid(platformData);
-      if (node && vmid !== undefined) {
-        return `vm:${node}:${vmid}`;
-      }
-
-      return resource.id;
-    };
-
-    const getSystemContainerMentionId = (resource: Resource): string => {
-      if (resource.id.startsWith('system-container:')) {
-        return resource.id;
-      }
-
-      const platformData = readPlatformData(resource);
-      const node = asString(platformData?.node) || resource.parentName || '';
-      const vmid = parseLegacyVmid(platformData);
-      if (node && vmid !== undefined) {
-        return `system-container:${node}:${vmid}`;
-      }
-
-      return resource.id;
     };
 
     const getStorageMentionNode = (resource: Resource): string => {
@@ -3144,41 +3059,52 @@ export const AIChat: Component<AIChatProps> = (props) => {
     );
     const mentionCandidates: MentionResource[] = [];
 
+    const mentionScope = (resource: Resource): string | undefined => {
+      if (requiresGovernedResourceDisplay(resource.policy)) return undefined;
+      return asString(resource.proxmox?.instance) || asString(resource.vmware?.connectionName);
+    };
+
     // Add VMs
     for (const vm of vms) {
       const node = getVMMentionNode(vm);
       mentionCandidates.push({
-        id: getVMMentionId(vm),
+        id: vm.id,
+        scope: mentionScope(vm),
         label: getPreferredResourceDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
-        node,
+        node: requiresGovernedResourceDisplay(vm.policy) ? undefined : node,
       });
     }
 
     // Add LXC/system containers (includes OCI containers).
     for (const container of containers) {
       const platformData = readPlatformData(container);
-      const node = asString(platformData?.node) || container.parentName || '';
+      const node =
+        asString(container.proxmox?.nodeName) ||
+        asString(container.proxmox?.node) ||
+        asString(platformData?.node) ||
+        container.parentName ||
+        '';
       mentionCandidates.push({
-        id: getSystemContainerMentionId(container),
+        id: container.id,
+        scope: mentionScope(container),
         label: getPreferredResourceDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
-        node,
+        node: requiresGovernedResourceDisplay(container.policy) ? undefined : node,
       });
     }
 
     // Add container runtimes
     for (const runtime of dockerHosts) {
-      const dockerActionId = getDockerActionId(runtime);
       const label = getPreferredResourceDisplayName(runtime);
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
           ? 'online'
           : runtime.status || 'online';
       mentionCandidates.push({
-        id: `agent:${dockerActionId}`,
+        id: runtime.id,
         label,
         type: 'agent',
         status: runtimeStatus,
@@ -3190,28 +3116,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // the same mention contract as Docker-backed workloads.
     for (const container of appContainers) {
       mentionCandidates.push({
-        id: getAppContainerMentionId(container),
+        id: container.id,
         label: getPreferredResourceDisplayName(container),
         type: 'app-container',
         status: container.status === 'running' ? 'running' : 'exited',
-        node: getAppContainerMentionHost(container),
+        node: requiresGovernedResourceDisplay(container.policy)
+          ? undefined
+          : getAppContainerMentionHost(container),
       });
     }
 
     for (const storage of storageResources) {
       mentionCandidates.push({
         id: storage.id,
+        scope: mentionScope(storage),
         label: getPreferredResourceDisplayName(storage),
         type: 'storage',
         status: storage.status,
-        node: getStorageMentionNode(storage),
+        node: requiresGovernedResourceDisplay(storage.policy)
+          ? undefined
+          : getStorageMentionNode(storage),
       });
     }
 
     // Add nodes
     for (const node of nodes) {
       mentionCandidates.push({
-        id: `node:${node.platformId || ''}:${node.name}`,
+        id: node.id,
+        scope: mentionScope(node),
         label: getPreferredResourceDisplayName(node),
         type: 'agent',
         status: node.status,
@@ -3220,14 +3152,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add standalone agents
     for (const agentResource of agentResources) {
-      const agentActionId = getAgentActionId(agentResource);
       const label = getPreferredResourceDisplayName(agentResource);
       const agentStatus =
         agentResource.status === 'online' || agentResource.status === 'running'
           ? 'online'
           : agentResource.status;
       mentionCandidates.push({
-        id: `agent:${agentActionId}`,
+        id: agentResource.id,
+        scope: mentionScope(agentResource),
         label,
         type: 'agent',
         status: agentStatus,
@@ -3504,9 +3436,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
         ? sendOptionsFromRestoredRequest(restoredDraft.request)
         : {};
     if (!queuedDraft && !restoredDraft) {
-      if (typeof ctx.autonomousMode === 'boolean') {
-        sendOptions.autonomousMode = ctx.autonomousMode;
-      }
       if (ctx.handoffContext && ctx.handoffContext.trim()) {
         sendOptions.handoffContext = ctx.handoffContext;
       }
@@ -3522,7 +3451,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     const hasSendOptions =
       Boolean(sendOptions.model) ||
-      typeof sendOptions.autonomousMode === 'boolean' ||
       Boolean(sendOptions.handoffContext) ||
       Boolean(sendOptions.handoffResources?.length) ||
       Boolean(sendOptions.handoffActions?.length) ||
@@ -4787,7 +4715,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <Show when={transcriptCopyFallback()}>
             {(fallback) => (
               <section
-                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-100"
+                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-100"
                 aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}
               >
                 <div class="mb-2 flex items-center justify-between gap-2">
@@ -4924,40 +4852,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
             )}
           </Show>
 
-          {/* Discovery hint - show when discovery is disabled */}
-          <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
-            <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/25 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
-              <div class="flex items-center gap-2">
-                <svg
-                  class="w-4 h-4 text-cyan-500 dark:text-cyan-400 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span>
-                  <span class="font-medium">{AI_CHAT_DISCOVERY_HINT_TITLE}</span>{' '}
-                  {AI_CHAT_DISCOVERY_HINT_BODY}
-                </span>
-              </div>
-              <ActionIconButton
-                onClick={() => setDiscoveryHintDismissed(true)}
-                tone="infoGhost"
-                size="xs"
-                title={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
-                label={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
-              >
-                <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-              </ActionIconButton>
-            </div>
-          </Show>
-
           <Show when={contextBriefing()}>
             <section
               class="border-b border-border bg-surface px-4 py-2.5"
@@ -5030,13 +4924,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
-            <Show
-              when={
-                currentStatus() ||
-                autonomousWarningVisible() ||
-                activityDockQueuedFollowUpCount() > 0
-              }
-            >
+            <Show when={currentStatus() || activityDockQueuedFollowUpCount() > 0}>
               <div
                 class="mb-2 overflow-hidden rounded-md border border-border bg-surface-alt text-base-content shadow-xs"
                 data-testid="assistant-activity-dock"
@@ -5069,16 +4957,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
                       <span class="flex shrink-0 gap-0.5" aria-hidden="true">
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 0ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:0ms] ${currentStatusDotClass()}`}
                         />
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 150ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:150ms] ${currentStatusDotClass()}`}
                         />
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 300ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:300ms] ${currentStatusDotClass()}`}
                         />
                       </span>
                     </div>
@@ -5111,48 +4996,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </ActionIconButton>
                   </div>
                 </Show>
-                <Show when={autonomousWarningVisible()}>
-                  <div
-                    class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-200 ${
-                      currentStatus() ? 'border-t border-border/70' : ''
-                    }`}
-                    role="status"
-                    aria-label="Assistant chat actions warning"
-                    aria-live="polite"
-                  >
-                    <span
-                      class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 dark:bg-red-300"
-                      aria-hidden="true"
-                    />
-                    <span class="min-w-0 flex-1 font-medium leading-4 sm:truncate">
-                      Chat-only actions are allowed.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => updateControlLevel('controlled')}
-                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900/25 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
-                      aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
-                    >
-                      Switch to Ask first
-                    </button>
-                    <ActionIconButton
-                      onClick={() => setAutonomousBannerDismissed(true)}
-                      tone="danger"
-                      size="xs"
-                      title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                      label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                    >
-                      <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </ActionIconButton>
-                  </div>
-                </Show>
                 <Show when={activityDockQueuedFollowUpCount() > 0}>
                   <div
-                    class={`px-2.5 py-1.5 ${
-                      currentStatus() || autonomousWarningVisible()
-                        ? 'border-t border-border/70'
-                        : ''
-                    }`}
+                    class={`px-2.5 py-1.5 ${currentStatus() ? 'border-t border-border/70' : ''}`}
                     role="status"
                     aria-label="Queued follow-up messages"
                   >
@@ -5194,7 +5040,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           };
                           return (
                             <div
-                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900/25 outline-hidden transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
+                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-hidden transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
                               classList={{
                                 'bg-blue-50 ring-2 ring-blue-500/60 dark:bg-blue-800/50':
                                   queuedFollowUpCommandTargetId() === queued.id,
@@ -5330,6 +5176,57 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </For>
               </div>
             </Show>
+            <Show when={accumulatedMentions().length > 0}>
+              <div
+                class="mb-2 flex min-w-0 flex-wrap items-center gap-1.5"
+                aria-label="Selected resources"
+              >
+                <For each={accumulatedMentions()}>
+                  {(mention) => (
+                    <div class="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface-alt pl-2 pr-0.5 text-xs text-base-content">
+                      <span class="min-w-0 break-words py-1">
+                        {selectedMention(mention).label}
+                        <Show when={selectedMention(mention).scope}>
+                          {' · '}
+                          {selectedMention(mention).scope}
+                        </Show>
+                        <Show
+                          when={
+                            selectedMention(mention).node &&
+                            selectedMention(mention).node !== selectedMention(mention).scope
+                          }
+                        >
+                          {' · '}
+                          {selectedMention(mention).node}
+                        </Show>
+                      </span>
+                      <ActionIconButton
+                        onClick={() => {
+                          setAccumulatedMentions((previous) =>
+                            previous.filter((resource) => resource.id !== mention.id),
+                          );
+                          focusComposer();
+                        }}
+                        tone="muted"
+                        size="2xs"
+                        label={[
+                          'Remove resource',
+                          selectedMention(mention).label,
+                          selectedMention(mention).scope,
+                          selectedMention(mention).node !== selectedMention(mention).scope
+                            ? selectedMention(mention).node
+                            : undefined,
+                        ]
+                          .filter(Boolean)
+                          .join(': ')}
+                      >
+                        <XIcon class="h-3 w-3" aria-hidden="true" />
+                      </ActionIconButton>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
             <Show when={pastedBlocks().length > 0}>
               <div
                 class="mb-2 flex min-w-0 flex-wrap items-center gap-1.5"
@@ -5445,6 +5342,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <div
                 class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1"
                 data-testid="assistant-composer-route-controls"
+                data-assistant-control-toolbar
               >
                 <ModelSelector
                   models={aiRuntimeModels()}
@@ -5560,7 +5458,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <Show when={showControlMenu()}>
                     <div
-                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      class="absolute bottom-full z-50 mb-2 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      style={{
+                        left: `${controlMenuPlacement().left}px`,
+                        width: `${controlMenuPlacement().width}px`,
+                      }}
                       role="menu"
                       aria-label={AI_CHAT_CONTROL_MODE_MENU_LABEL}
                     >
@@ -5601,24 +5503,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         </div>
                         <div class="text-[11px] text-muted">
                           {getAIChatControlLevelPresentation('controlled').description}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        ref={(button) => {
-                          controlModeOptionRefs.set('autonomous', button);
-                        }}
-                        role="menuitemradio"
-                        aria-checked={controlLevel() === 'autonomous'}
-                        class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
-                        onKeyDown={(event) => handleControlModeOptionKeyDown(event, 'autonomous')}
-                        onClick={() => updateControlLevel('autonomous')}
-                      >
-                        <div class="font-medium text-base-content">
-                          {getAIChatControlLevelPresentation('autonomous').label}
-                        </div>
-                        <div class="text-[11px] text-muted">
-                          {getAIChatControlLevelPresentation('autonomous').description}
                         </div>
                       </button>
                     </div>

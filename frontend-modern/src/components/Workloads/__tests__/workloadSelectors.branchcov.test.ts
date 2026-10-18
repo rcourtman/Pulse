@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
-  buildWorkloadSummaryGroupScope,
-  buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   getDiskUsagePercent,
@@ -38,39 +35,39 @@ const makeGuest = (i: number, overrides?: Partial<WorkloadGuest>): WorkloadGuest
   ...overrides,
 });
 
-const makeNode = (id: string, instance: string, name: string): Node => ({
-  id,
-  name,
-  displayName: name,
-  instance,
-  host: `${name}.local`,
-  status: 'online',
-  type: 'pve',
-  cpu: 0,
-  memory: { total: 1, used: 0, free: 1, usage: 0 },
-  disk: { total: 1, used: 0, free: 1, usage: 0 },
-  uptime: 1,
-  loadAverage: [0, 0, 0],
-  kernelVersion: 'test',
-  pveVersion: 'test',
-  cpuInfo: { model: 'test', cores: 1, sockets: 1, mhz: '1' },
-  lastSeen: new Date().toISOString(),
-  connectionHealth: 'online',
-});
-
 describe('workloadSelectors (branch coverage)', () => {
   describe('createWorkloadSortComparator', () => {
-    it('sorts by memory usage in both directions and falls back to 0 for null memory', () => {
+    it('sorts current memory in both directions and keeps missing memory last', () => {
       const guests = [
         makeGuest(1, {
           id: 'high',
           name: 'high-mem',
-          memory: { total: 100, used: 80, free: 20, usage: 0.8 },
+          memory: {
+            total: 100,
+            used: 80,
+            free: 20,
+            usage: 80,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'low',
           name: 'low-mem',
-          memory: { total: 100, used: 10, free: 90, usage: 0.1 },
+          memory: {
+            total: 100,
+            used: 10,
+            free: 90,
+            usage: 10,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(3, {
           id: 'null',
@@ -85,24 +82,44 @@ describe('workloadSelectors (branch coverage)', () => {
       expect(memAsc).not.toBeNull();
       expect(memDesc).not.toBeNull();
 
-      // null-mem (0) < low-mem (0.1) < high-mem (0.8)
-      expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['null', 'low', 'high']);
+      // Missing is not a measured zero, in either direction.
+      expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['low', 'high', 'null']);
       expect([...guests].sort(memDesc!).map((g) => g.id)).toEqual(['high', 'low', 'null']);
     });
 
-    it('treats memory.usage of 0 as 0 via the || fallback', () => {
+    it('preserves a current measured zero', () => {
       const guests = [
         makeGuest(1, {
           id: 'a',
           name: 'alpha',
           cpu: 0.5,
-          memory: { total: 100, used: 0, free: 100, usage: 0 },
+          memory: {
+            total: 100,
+            used: 0,
+            free: 100,
+            usage: 0,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'b',
           name: 'beta',
           cpu: 0.5,
-          memory: { total: 100, used: 50, free: 50, usage: 0.5 },
+          memory: {
+            total: 100,
+            used: 50,
+            free: 50,
+            usage: 0.5,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
 
@@ -115,12 +132,32 @@ describe('workloadSelectors (branch coverage)', () => {
         makeGuest(1, {
           id: 'large-allocation',
           name: 'large-allocation',
-          memory: { total: 100, used: 60, free: 40, usage: 60 },
+          memory: {
+            total: 100,
+            used: 60,
+            free: 40,
+            usage: 60,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'large-host-share',
           name: 'large-host-share',
-          memory: { total: 100, used: 20, free: 80, usage: 20 },
+          memory: {
+            total: 100,
+            used: 20,
+            free: 80,
+            usage: 20,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
       const hostShare = new Map([
@@ -544,13 +581,13 @@ describe('workloadSelectors (branch coverage)', () => {
       ).toBe(100);
     });
 
-    it('returns 0 for usage of 0 and clamps negative usage to 0', () => {
+    it('keeps a reported zero but treats negative usage as unavailable', () => {
       expect(
         getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 0, free: 100, usage: 0 } })),
       ).toBe(0);
       expect(
         getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 0, free: 100, usage: -5 } })),
-      ).toBe(0);
+      ).toBeNull();
     });
 
     it('falls back to used/total when usage is non-finite (Infinity)', () => {
@@ -605,7 +642,7 @@ describe('workloadSelectors (branch coverage)', () => {
         instance: 'inst-1',
         node: 'node-1',
       });
-      expect(getWorkloadGroupKey(guest)).toBe('inst-1-node-1');
+      expect(getWorkloadGroupKey(guest)).toBe('node|inst-1|node-1');
     });
 
     it('falls back through contextLabel -> node -> instance -> namespace -> id', () => {
@@ -703,139 +740,6 @@ describe('workloadSelectors (branch coverage)', () => {
     });
   });
 
-  describe('buildWorkloadSummaryGroupScope', () => {
-    it('returns null when all guests produce empty canonical IDs', () => {
-      const guest = makeGuest(1, { id: '', type: 'app-container', workloadType: 'app-container' });
-      expect(buildWorkloadSummaryGroupScope('grp', [guest], { type: 'T', name: 'N' })).toBeNull();
-    });
-
-    it('builds singular label for a single guest', () => {
-      const guest = makeGuest(1, {
-        id: 'cid-1',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('grp', [guest], {
-        type: 'Container',
-        name: 'frigate',
-      });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('frigate · Container (1 workload)');
-      expect(scope!.seriesIds).toEqual(['cid-1']);
-    });
-
-    it('builds plural label and deduplicates canonical IDs for multiple guests', () => {
-      const guests = [
-        makeGuest(1, { id: 'dup-id', type: 'app-container', workloadType: 'app-container' }),
-        makeGuest(2, { id: 'dup-id', type: 'app-container', workloadType: 'app-container' }),
-      ];
-      const scope = buildWorkloadSummaryGroupScope('grp', guests, { type: 'C', name: 'host' });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('host · C (2 workloads)');
-      expect(scope!.seriesIds).toEqual(['dup-id']); // deduped
-    });
-
-    it('uses workload count alone when label name and type are both empty', () => {
-      const guest = makeGuest(1, {
-        id: 'x-1',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('grp', [guest], { type: '', name: '' });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('1 workload');
-    });
-
-    it('trims the groupId for the scope id', () => {
-      const guest = makeGuest(1, {
-        id: 'x-2',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('  padded-grp  ', [guest], {
-        type: 'T',
-        name: 'N',
-      });
-      expect(scope).not.toBeNull();
-      expect(scope!.id).toBe('padded-grp');
-    });
-  });
-
-  describe('buildWorkloadSummaryGroupScopeMap', () => {
-    it('returns an empty map when groupingMode is flat', () => {
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests: [makeGuest(1)],
-        nodes: [],
-        groupingMode: 'flat',
-        sortComparator: null,
-      });
-      expect(result.size).toBe(0);
-    });
-
-    it('resolves node display name via buildNodeByInstance for the group label', () => {
-      const guests = [
-        makeGuest(1, { type: 'vm', workloadType: 'vm', instance: 'cluster-a', node: 'node-a' }),
-      ];
-      const nodes = [makeNode('n1', 'cluster-a', 'node-a')];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes,
-        groupingMode: 'grouped',
-        sortComparator: null,
-      });
-
-      // groupKey = 'cluster-a-node-a' matches node via instance-name key
-      // getNodeDisplayName -> 'node-a' -> label includes it
-      const scope = result.get('cluster-a-node-a');
-      expect(scope).toBeDefined();
-      expect(scope!.label).toBe('node-a (1 workload)');
-      expect(scope!.seriesIds).toEqual(['cluster-a:node-a:101']);
-    });
-
-    it('falls back to lowercase badge key when exact-case lookup misses', () => {
-      const guests = [
-        makeGuest(1, {
-          id: 'c-1',
-          name: 'frigate',
-          type: 'app-container',
-          workloadType: 'app-container',
-          contextLabel: 'Frigate', // capital F -> groupKey 'app-container:Frigate'
-        }),
-      ];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-        groupLabelBadges: {
-          'app-container:frigate': { label: 'Docker' }, // lowercase key
-        },
-      });
-
-      // badge found via lowercase fallback -> label includes 'Docker'
-      const scope = result.get('app-container:Frigate');
-      expect(scope).toBeDefined();
-      expect(scope!.label).toBe('Frigate · Docker (1 workload)');
-    });
-
-    it('omits groups whose scope is null (empty canonical IDs)', () => {
-      const guests = [
-        makeGuest(1, { id: '', type: 'app-container', workloadType: 'app-container' }),
-      ];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-      });
-
-      expect(result.size).toBe(0);
-    });
-  });
-
   describe('groupWorkloads', () => {
     it('sorts the single flat group when a comparator is provided', () => {
       const guests = [
@@ -886,9 +790,9 @@ describe('workloadSelectors (branch coverage)', () => {
 
       const result = groupWorkloads(guests, 'grouped', null);
 
-      expect(Object.keys(result)).toEqual(['inst-nd']);
+      expect(Object.keys(result)).toEqual(['node|inst|nd']);
       // Original insertion order preserved (no comparator)
-      expect(result['inst-nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
+      expect(result['node|inst|nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
     });
 
     it('returns an empty object for empty guests in grouped mode', () => {

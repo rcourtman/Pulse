@@ -47,4 +47,32 @@ describe('SecurityPostureSummary', () => {
 
     expect(screen.getByText('Weak')).toBeInTheDocument();
   });
+
+  it('only calls plain HTTP critical once the instance is publicly reachable', () => {
+    const status = {
+      hasAuthentication: true,
+      ssoEnabled: false,
+      hasProxyAuth: false,
+      apiTokenConfigured: false,
+      exportProtected: true,
+      unprotectedExportAllowed: false,
+      hasHTTPS: false,
+      hasAuditLogging: false,
+      requiresAuth: true,
+    };
+    const { unmount } = render(() => (
+      <SecurityPostureSummary status={{ ...status, publicAccess: false, isPrivateNetwork: true }} />
+    ));
+    // Private network: HTTPS is a recommended step, so no Critical tag and the
+    // critical share of the score is complete (0.7 + 2 of 7 x 0.3 = 79).
+    expect(screen.queryByText('Critical')).toBeNull();
+    expect(screen.getByText('79%')).toBeInTheDocument();
+    unmount();
+
+    render(() => (
+      <SecurityPostureSummary status={{ ...status, publicAccess: true, isPrivateNetwork: false }} />
+    ));
+    expect(screen.getByText('Critical')).toBeInTheDocument();
+    expect(screen.getByText('55%')).toBeInTheDocument();
+  });
 });

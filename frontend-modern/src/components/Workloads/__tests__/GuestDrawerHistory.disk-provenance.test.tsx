@@ -1,12 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { WorkloadGuest } from '@/types/workloads';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { getGuestDrawerCurrentMetrics, getGuestDrawerDeferredMetrics } from '../guestDrawerModel';
 import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -14,11 +15,23 @@ vi.mock('@/stores/license', () => ({
   isRangeLocked: () => false,
 }));
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
 });
+
+// The charts have no manual refresh while reads succeed; tests drive the
+// 30-second poll on a fake interval clock (timeouts stay real for waitFor).
+const settledHistory = () =>
+  waitFor(() => {
+    expect(ChartsAPI.getMetricsHistory).toHaveBeenCalled();
+    expect(screen.queryByText('Loading history')).not.toBeInTheDocument();
+  });
 
 const guest = (reason: string, usage = 50): WorkloadGuest => ({
   id: 'fixture:pve-a:101',
@@ -30,7 +43,13 @@ const guest = (reason: string, usage = 50): WorkloadGuest => ({
   status: 'running',
   cpu: 0.1,
   cpus: 2,
-  memory: { total: 100, used: 25, free: 75, usage: 25 },
+  memory: {
+    total: 100,
+    used: 25,
+    free: 75,
+    usage: 25,
+    observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T03:00:00Z' },
+  },
   disk: { total: 100, used: usage, usage },
   networkIn: 100,
   networkOut: 200,
@@ -73,6 +92,47 @@ const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 // Actual backend provenance remains authoritative. Removing a VM lock alone
 // cannot turn retained readings into current data or prove native thaw.
 describe('GuestDrawerHistory filesystem provenance', () => {
+  it('withdraws the current stopped-VM carrier but keeps real stored History', async () => {
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValue(response({ disk: [point(start, 25), point(end, 50)] }));
+    const [value, setValue] = createSignal(guest('', 90));
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(90);
+    mount(value);
+    const chart = utilization();
+    await waitFor(() =>
+      expect(chart.querySelectorAll('path[data-history-series]').length).toBeGreaterThan(0),
+    );
+    const paths = () =>
+      Array.from(chart.querySelectorAll('path[data-history-series]'), (item) =>
+        item.getAttribute('d'),
+      );
+    const storedPaths = paths();
+    setValue({ ...value(), status: 'stopped', diskStatusReason: undefined });
+    expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest filesystem stats unavailable while the VM is stopped.',
+    );
+    expect(paths()).toEqual(storedPaths);
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBeUndefined();
+    setValue(guest('prev-agent-busy', 90));
+    expect(getGuestDrawerDeferredMetrics(value()).disk.lastKnownValue).toBe(90);
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'earlier guest request',
+    );
+    expect(chart).toHaveTextContent('Disk50.0%');
+    expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(paths()).toEqual(storedPaths);
+    setValue(guest('', 30));
+    expect(utilization()).toBe(chart);
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(30);
+    expect(chart).toHaveTextContent('Disk50.0%');
+    expect(paths()).toEqual(storedPaths);
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each(guestDiskDeferrals)(
     'labels retained %s as last known without creating a stored observation',
     async (reason, message) => {
@@ -86,7 +146,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       const retained = chart.querySelector('[data-history-last-known="disk"]')!;
       expect(retained).toHaveTextContent('Disk50.0%last known');
       expect(retained).toHaveAccessibleDescription(
-        `Disk live reading: Using last known disk stats. ${message}`,
+        `Disk reading: Using last known disk stats. ${message}`,
       );
       expect(chart.querySelector('[data-history-deferred="disk"]')).toBeVisible();
       expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
@@ -95,7 +155,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
         'Memory25.0%current',
       );
-      expect(chart.querySelector('path')).toBeNull();
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(chart.querySelector('[data-history-observation]')).toBeNull();
       expect(fetch).toHaveBeenCalledTimes(1);
     },
@@ -157,7 +217,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     }
     const value = guest('private transport error');
     expect(getGuestDrawerDeferredMetrics(value).disk.message).toBe(
-      'Disk stats unavailable. Guest agent may not be installed.',
+      'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
     );
     expect(getGuestDrawerCurrentMetrics(value).disk).toBeUndefined();
   });
@@ -170,7 +230,9 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       }),
     );
     mount(() => guest('prev-agent-timeout'));
-    await waitFor(() => expect(utilization().querySelectorAll('path')).toHaveLength(2));
+    await waitFor(() =>
+      expect(utilization().querySelectorAll('path[data-history-series]')).toHaveLength(2),
+    );
     const chart = utilization();
     expect(chart).toHaveTextContent('Disk30.0%');
     expect(chart.querySelector('[data-history-last-known]')).toBeNull();
@@ -199,16 +261,20 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     const slider = screen.getByRole('slider');
     slider.focus();
     fireEvent.input(slider, { target: { value: '0' } });
-    expect(utilization()).toHaveTextContent('Disk-');
+    expect(utilization()).toHaveTextContent('Diskno reading');
     expect(utilization().querySelector('[data-history-last-known]')).toBeNull();
     expect(slider).toHaveAttribute(
       'aria-valuetext',
       expect.stringContaining('Disk no observation.'),
     );
     fireEvent.blur(slider);
-    expect(utilization().querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
-      '50.0%last known',
+    expect(utilization().querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(utilization()).toHaveTextContent('Diskno reading');
+    expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveAttribute(
+      'datetime',
+      new Date(end).toISOString(),
     );
+    expect(utilization().querySelector('[data-history-deferred="disk"]')).toBeVisible();
   });
 
   it('withdraws retained context only with fresh same-source data, without refetch or remount', async () => {
@@ -239,13 +305,8 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       .mockRejectedValueOnce(Object.assign(new Error('private refusal'), { status: 403 }))
       .mockResolvedValueOnce(response());
     mount(() => guest('prev-vm-locked'));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Refresh history' })).toHaveAttribute(
-        'aria-busy',
-        'false',
-      ),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await settledHistory();
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Retry history' })).toBeInTheDocument(),
     );

@@ -23,6 +23,11 @@ type MetricReportRequest struct {
 	Title        string
 	Branding     ReportBranding
 
+	// OrgID is the organization the report is generated for. An engine that
+	// resolves metrics per organization reads only this organization's
+	// metrics store and refuses a request that leaves it empty.
+	OrgID string
+
 	// MetricsResourceID overrides ResourceID for metrics-store queries.
 	// The v6 API addresses resources by canonical unified ID while the
 	// metrics store is keyed by each platform's native source ID (the
@@ -115,6 +120,28 @@ type AlertInfo struct {
 	StartTime    time.Time
 	ResolvedTime *time.Time // nil if still active
 	Acknowledged bool
+	// ResourceID is the resource the alert was raised on, so an alert that
+	// moved can find the alert its successor raised for the same metric.
+	ResourceID string
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, such as a node alert handed to its Pulse agent. A report
+	// never counts such an alert as resolved.
+	Resolution *AlertResolution
+}
+
+// AlertResolution says why an alert closed without its condition clearing.
+// It mirrors models.AlertResolution so this package stays free of internal
+// dependencies.
+type AlertResolution struct {
+	// Reason is the alert engine's reason code, such as
+	// AlertResolutionMovedToAgent.
+	Reason              string
+	SuccessorResourceID string
+	SuccessorName       string
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: check the agent for the
+	// current reading."
+	Summary string
 }
 
 // BackupInfo contains backup information for VMs/containers
@@ -153,6 +180,12 @@ type DiskInfo struct {
 	Health      string // PASSED, FAILED, UNKNOWN
 	Temperature int    // Celsius
 	WearLevel   int    // 0-100, percentage of life REMAINING (100 = healthy, 0 = end of life, -1 = unknown)
+	// TemperatureWarning and TemperatureCritical are the disk's alert disk
+	// temperature thresholds in Celsius (the clear value and the trigger). The
+	// reading is amber from Warning and red from Critical, as in the Physical
+	// Disks Temp column. A zero Critical leaves the reading uncoloured.
+	TemperatureWarning  float64
+	TemperatureCritical float64
 }
 
 // MultiReportRequest defines the parameters for generating a multi-resource report.
@@ -164,6 +197,10 @@ type MultiReportRequest struct {
 	Title      string
 	MetricType string
 	Branding   ReportBranding
+
+	// OrgID is the organization the report is generated for. It applies to
+	// every resource in Resources, overriding any OrgID they carry.
+	OrgID string
 
 	// Optional fleet-level narrative interpretation. When FleetNarrator is
 	// non-nil the engine builds a FleetNarrativeInput from the queried

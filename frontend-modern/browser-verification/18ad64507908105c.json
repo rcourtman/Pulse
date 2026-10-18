@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "362ab2f235ca1f82e51cbe960d1ce04219ffb62b",
+  "verified_at": "2026-10-06T14:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "2084327e67ed183015dcae2f3b6594896f265a1afc3e5b8a288e54ae51ff2b72",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "dc45b46be78052d29b0560dce529d5368cd3100df277dd555f3acbf7ef7d83d4",
+    "frontend-modern/src/utils/alerts.ts": "65f4d4c09dea426255c394cb5d0713212f80abb1076ffae16d418c0e7ee0e061"
+  },
+  "routes": ["/docker/overview", "/standalone/machines", "/alerts"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack serving an embedded build of this tree (base da3fcf69f7, PR 2575; rebased unchanged onto its merge 362ab2f235) on its own port; mock mode skips CheckHost, so the private binary added that call through a go build overlay of internal/monitoring/monitor_alerts.go that is not part of this commit",
+    "Docker hosts: Ops Services 01 (hostname ops-services-01, Docker host source orion-2-mock) row tinted red with three open docker-service-health alerts (two critical, one warning) that its drawer lists; the previous id + display-name match tinted nothing for this host",
+    "Docker hosts: auth-service-01 row red with the one container-health alert its drawer lists; Edge Apps 01 and edge-proxy-01 untinted with no Needs attention section in their drawers",
+    "Machines: Apollo-114 row tinted red for a backend-raised agent:host-linux-1 memory alert (per-host memory trigger lowered to 5% on the private stack) that its drawer lists; Spectrum-709 untinted with no drawer alerts",
+    "Every Docker host and machine row checked against its own drawer: tinted exactly when the drawer lists an unacknowledged alert",
+    "After acknowledging the Apollo-114 alert, its row is untinted while its drawer still lists the alert as Acknowledged",
+    "Light and dark themes at 1440px and 390px: red-50 / red-950/25 row backgrounds on the alerted rows only",
+    "No page errors"
+  ],
+  "interactions": [
+    "Open Docker overview and expand then collapse each host row drawer, reading its Needs attention list",
+    "Open Machines and expand then collapse each machine row drawer, reading its Needs attention list",
+    "Acknowledge the Apollo-114 memory alert from its Alerts page card, return to Machines and expand its drawer",
+    "Repeat the row tint checks at the 390px viewport and in dark mode"
+  ]
+}

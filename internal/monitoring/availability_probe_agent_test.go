@@ -165,6 +165,91 @@ func TestMultiLocationAvailabilityTreatsLapsedPathAsUnknownCoverage(t *testing.T
 	}
 }
 
+// The local twin of the lapsed-path case. A local observation that stopped
+// running keeps its last outcome, and a check with several locations takes the
+// newest location's freshness, so a failing edge report used to keep vouching
+// for a local pass from an hour ago: the check read available with current
+// evidence, which the registry takes as proof that its target answers.
+func TestMultiLocationAvailabilityAgesOutALocalPathThatStopped(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:                     "service",
+		Name:                   "Customer API",
+		Address:                "api.service.local",
+		Protocol:               config.AvailabilityProbeHTTPS,
+		Enabled:                true,
+		PollIntervalSecs:       60,
+		FailureThreshold:       2,
+		ObservationLocationIDs: []string{config.AvailabilityObservationLocationLocal, config.AvailabilityAgentObservationLocationID("edge-1")},
+	})
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+	old := now.Add(-time.Hour)
+	monitor.applyAvailabilityObservation(target, "local-ok", old, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "", time.Time{})
+	for attempt := 0; attempt < 2; attempt++ {
+		at := now.Add(time.Duration(attempt) * time.Second)
+		monitor.applyAvailabilityObservation(target, "edge-fail-"+string(rune('a'+attempt)), at, 30*time.Millisecond, AvailabilityProbeUnreachable, context.DeadlineExceeded, nil, "edge-1", at)
+	}
+
+	readAt := now.Add(2 * time.Second)
+	status := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, readAt)[target.ID]
+	if status.Available || status.AggregateState != AvailabilityAggregateUnknown {
+		t.Fatalf("aggregate status = %+v, want unknown coverage rather than an available check", status)
+	}
+	if status.ReportingLocations != 1 || status.ExpectedLocations != 2 {
+		t.Fatalf("coverage = %d/%d, want the stopped local path excluded", status.ReportingLocations, status.ExpectedLocations)
+	}
+	local := status.Locations[0]
+	if local.LocationID != config.AvailabilityObservationLocationLocal || !local.Stale ||
+		local.Outcome != string(AvailabilityProbeIndeterminate) || local.LastError != availabilityLocalCheckStaleError {
+		t.Fatalf("local location = %+v, want stale unknown evidence", local)
+	}
+	resource, _ := availabilityResourceFromTarget(target, status, "", readAt)
+	if resource.Availability.Available || resource.Status != unifiedresources.StatusWarning || len(resource.Incidents) != 0 {
+		t.Fatalf("resource = available %v status %q incidents %+v, want an unproven check and no outage", resource.Availability.Available, resource.Status, resource.Incidents)
+	}
+
+	monitor.applyAvailabilityObservation(target, "local-ok-again", readAt, 9*time.Millisecond, AvailabilityProbeReachable, nil, nil, "", time.Time{})
+	status = monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, readAt)[target.ID]
+	if !status.Available || status.AggregateState != AvailabilityAggregateDegraded || status.Locations[0].Stale {
+		t.Fatalf("aggregate status = %+v, want a current local pass to make the check available again", status)
+	}
+}
+
+// An available check's evidence lasts as long as its newest reachable path. A
+// registry that re-reads this generation later judges the check at its own
+// time, so evidence anchored on a fresher failing path would keep proving the
+// target answers after the only passing path had aged out.
+func TestMultiLocationAvailableEvidenceLastsAsLongAsItsReachablePath(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:                     "service",
+		Name:                   "Customer API",
+		Address:                "api.service.local",
+		Protocol:               config.AvailabilityProbeHTTPS,
+		Enabled:                true,
+		PollIntervalSecs:       60,
+		FailureThreshold:       2,
+		ObservationLocationIDs: []string{config.AvailabilityObservationLocationLocal, config.AvailabilityAgentObservationLocationID("edge-1")},
+	})
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+	passedAt := now.Add(-4 * time.Minute)
+	monitor.applyAvailabilityObservation(target, "local-ok", passedAt, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "", time.Time{})
+	monitor.applyAvailabilityObservation(target, "edge-fail", now, 30*time.Millisecond, AvailabilityProbeUnreachable, context.DeadlineExceeded, nil, "edge-1", now)
+
+	status := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, now)[target.ID]
+	if !status.Available || status.AggregateState != AvailabilityAggregateDegraded {
+		t.Fatalf("aggregate status = %+v, want an available check with one failing path", status)
+	}
+	resource, _ := availabilityResourceFromTarget(target, status, "", now)
+	evidence := resource.Availability.Evidence
+	want := passedAt.Add(availabilityProbeStaleWindow(target))
+	if evidence == nil || evidence.ValidUntil == nil || !evidence.ValidUntil.Equal(want) {
+		t.Fatalf("evidence = %+v, want it valid until %s, one window after the reachable path", evidence, want)
+	}
+}
+
 func licenseWithExternalProbe(enabled bool) func(string) bool {
 	return func(feature string) bool {
 		return enabled && feature == pkglicensing.FeatureExternalProbe
@@ -234,6 +319,74 @@ func TestAvailabilityPollProviderSkipsProbeAssignedTargetsAndResumesOnLapse(t *t
 	}
 	if _, err := (availabilityPollProvider{}).BuildPollTask(monitor, "remote"); err != nil {
 		t.Fatalf("BuildPollTask(remote) after lapse error = %v", err)
+	}
+}
+
+// When the entitlement lapses, a remote check's last result stands in as the
+// local location's until the local poller runs. A local location's check time
+// is its freshness, so the agent's clock must not carry over: a result checked
+// a day ahead would otherwise read current, and keep its target answering, for
+// a day without a local execution.
+func TestAvailabilityLapseAdoptsARemoteResultAtItsReceiptTime(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(probeAgentTarget("remote", "agent-1"))
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+	receivedAt := now.Add(-time.Minute)
+	agentClock := now.Add(24 * time.Hour)
+	monitor.applyAvailabilityObservation(target, "remote-ok", agentClock, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "agent-1", receivedAt)
+
+	monitor.SetLicenseChecker(licenseWithExternalProbe(false))
+	status := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, now)[target.ID]
+	if status.ProbeAgentID != "" || !status.LastChecked.Equal(receivedAt) {
+		t.Fatalf("adopted status = %+v, want a local result checked at the server receipt time", status)
+	}
+	resource, _ := availabilityResourceFromTarget(target, status, "", now)
+	evidence := resource.Availability.Evidence
+	want := receivedAt.Add(2 * time.Duration(target.EffectivePollIntervalSecs()) * time.Second)
+	if evidence == nil || evidence.ValidUntil == nil || !evidence.ValidUntil.Equal(want) {
+		t.Fatalf("evidence = %+v, want it valid until %s", evidence, want)
+	}
+}
+
+// The stored result of a check with several locations is an aggregate, whose
+// freshness may be one path's and whose availability another's. After a lapse
+// it must not stand in for the local location: one path passing an hour ago
+// and another failing now would read as a current local pass.
+func TestAvailabilityLapseNeverAdoptsAMultiLocationAggregate(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:               "service",
+		Name:             "Customer API",
+		Address:          "api.service.local",
+		Protocol:         config.AvailabilityProbeHTTPS,
+		Enabled:          true,
+		PollIntervalSecs: 60,
+		FailureThreshold: 2,
+		ObservationLocationIDs: []string{
+			config.AvailabilityAgentObservationLocationID("edge-1"),
+			config.AvailabilityAgentObservationLocationID("edge-2"),
+		},
+	})
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+	passedAt := now.Add(-time.Hour)
+	monitor.applyAvailabilityObservation(target, "edge-1-ok", passedAt, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "edge-1", passedAt)
+	monitor.applyAvailabilityObservation(target, "edge-2-fail", now, 30*time.Millisecond, AvailabilityProbeUnreachable, context.DeadlineExceeded, nil, "edge-2", now)
+
+	monitor.SetLicenseChecker(licenseWithExternalProbe(false))
+	status, ok := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, now)[target.ID]
+	if !ok || status.Available || !status.LastChecked.IsZero() || status.AggregateState != "" {
+		t.Fatalf("status after the lapse = %+v (present %v), want a never-checked target", status, ok)
+	}
+	if resource, _ := availabilityResourceFromTarget(target, status, "", now); resource.Status != unifiedresources.StatusUnknown {
+		t.Fatalf("check row status = %q, want unknown like any never-checked target", resource.Status)
+	}
+	// An absent entry would let connection health fall back to the last
+	// cached state, which still says connected.
+	connected, reported := availabilityPollProvider{}.ConnectionStatuses(monitor)[availabilityConnectionKey(target.ID)]
+	if !reported || connected {
+		t.Fatalf("connection status = %v (reported %v), want not connected", connected, reported)
 	}
 }
 

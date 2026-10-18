@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "5572159e140794200e4c7e9c7129050c7afe6770",
+  "result": "passed",
+  "verified_at": "2026-10-10T00:28:53Z",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "6c85f884a5a5ccc70eeeffba1371779e60ca11e0c2886d6a016b48a1a84e197c",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "60e426b86e0f3cb657117f9b2bf28dc894784c8605c78eb7b596b0a534c5b27b"
+  },
+  "routes": [
+    "Existing Settings/Chat/Docs in local /browser-tests/assistant-control-compatibility.html fixture",
+    "/settings/ai/assistant",
+    "/docs/AI#control-levels",
+    "/docs/AI_AUTONOMY#assistant-control-levels"
+  ],
+  "states": [
+    "Five raw saved modes without preference/policy rewrites",
+    "Legacy protected list value and accessible no-plan-exclusion limitation",
+    "Read-only and Ask first, saved-error preservation, explicit opt-out",
+    "Scoped alert identity and false-autonomy/approval context",
+    "Chromium desktop light and WebKit 390px dark/320px light"
+  ],
+  "interactions": [
+    "51 assertion groups including keyboard menu focus/wrap/Escape, writes, popup composer/viewport bounds and resize-close/reopen",
+    "19 inspected captures; byte-identical prior inspections are hash-bound",
+    "Actual Docs links, planning/approval/legacy limits and local table scroll"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "notes": "Playwright 1.56.1 matches integration lock. Chromium 141.0.7390.37; WebKit 26.0. Public Chat still saves typed plans only. Legacy data, authenticated Actions approval/run, raw-command gates and Patrol policy unchanged. Browser/server closed. Synthetic transport, no inference/action/native or release acceptance."
+}

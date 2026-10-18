@@ -5,6 +5,76 @@ import (
 	"time"
 )
 
+func TestInterruptDiscreteRun(t *testing.T) {
+	t.Run("pending confirmation and grace restart for the exact key", func(t *testing.T) {
+		state := NewState()
+		rule := DiscreteRule{Confirmations: 3, Intent: &DiscreteIntent{Explicit: true, GraceSeconds: 120}}
+		signal := discreteSignalAt(true, SeverityWarning, 0)
+		state.ApplyDiscrete(signal, rule)
+		signal.ObservedAt = signal.ObservedAt.Add(time.Minute)
+		state.ApplyDiscrete(signal, rule)
+		other := signal
+		other.Key = "other-condition"
+		state.ApplyDiscrete(other, rule)
+		other.ResourceID = "node-10"
+		state.ApplyDiscrete(other, rule)
+		if !state.InterruptDiscreteRun("node-1", "connectivity") {
+			t.Fatal("pending run was not interrupted")
+		}
+		if _, ok := state.Incident("node-1", "connectivity"); ok {
+			t.Fatal("pending run survived interruption")
+		}
+		for _, id := range []string{"node-1", "node-10"} {
+			if _, ok := state.Incident(id, "other-condition"); !ok {
+				t.Fatalf("interruption removed unrelated key for %s", id)
+			}
+		}
+		if state.InterruptDiscreteRun("node-1", "connectivity") {
+			t.Fatal("absent run reported an interruption")
+		}
+		signal.ObservedAt = signal.ObservedAt.Add(time.Hour)
+		events := state.ApplyDiscrete(signal, rule)
+		incident, ok := state.Incident(signal.ResourceID, signal.Key)
+		if len(events) != 1 || events[0].Type != EventPending || !ok || incident.Confirmations != 1 || !incident.PendingSince.Equal(signal.ObservedAt) {
+			t.Fatalf("activation did not restart: events=%+v incident=%+v", events, incident)
+		}
+	})
+
+	t.Run("firing occurrence and acknowledgement survive a recovery gap", func(t *testing.T) {
+		state := NewState()
+		rule := DiscreteRule{Confirmations: 1, RecoveryConfirmations: 3}
+		signal := discreteSignalAt(true, SeverityCritical, 0)
+		state.ApplyDiscrete(signal, rule)
+		if !state.Acknowledge(signal.ResourceID, signal.Key, "test-operator", signal.ObservedAt) {
+			t.Fatal("acknowledgement failed")
+		}
+		signal.Matched = false
+		state.ApplyDiscrete(signal, rule)
+		state.ApplyDiscrete(signal, rule)
+		before, _ := state.Incident(signal.ResourceID, signal.Key)
+		if before.RecoveryCount != 2 || !state.InterruptDiscreteRun(signal.ResourceID, signal.Key) {
+			t.Fatal("recovery run was not interrupted")
+		}
+		want := before
+		want.RecoveryCount = 0
+		got, ok := state.Incident(signal.ResourceID, signal.Key)
+		if !ok || got != want {
+			t.Fatalf("interruption changed the firing occurrence: got=%+v want=%+v", got, want)
+		}
+		if len(state.resolved) != 0 || len(state.acks) != 1 || state.InterruptDiscreteRun(signal.ResourceID, signal.Key) {
+			t.Fatal("interruption manufactured resolution, lost acknowledgement or was not idempotent")
+		}
+		for range 2 {
+			if events := state.ApplyDiscrete(signal, rule); len(events) != 0 {
+				t.Fatalf("non-consecutive recovery emitted %+v", events)
+			}
+		}
+		if events := state.ApplyDiscrete(signal, rule); len(events) != 1 || events[0].Type != EventResolved {
+			t.Fatalf("fresh recovery did not resolve: %+v", events)
+		}
+	})
+}
+
 func discreteSignalAt(matched bool, severity Severity, offset time.Duration) DiscreteSignal {
 	return DiscreteSignal{
 		ResourceID: "node-1",

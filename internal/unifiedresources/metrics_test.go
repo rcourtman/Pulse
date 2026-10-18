@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -573,5 +574,92 @@ func TestGuestMemoryMetricObservationFollowsSelectedSource(t *testing.T) {
 	merged := mergeMetrics(&platform, agent, platform.Metrics, SourceProxmox, time.Now(), nil, nil)
 	if merged.Memory == nil || merged.Memory.Observation.State != "current" || merged.Memory.Observation.Source != "agent" || !merged.Memory.Observation.ObservedAt.Equal(at) || *merged.Memory.Used != 40 {
 		t.Fatalf("cross-source selection lost agent receipt or trusts supplied provenance: %+v", merged.Memory)
+	}
+}
+
+func TestGuestMemoryEvidenceQualification(t *testing.T) {
+	now := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	for _, source := range []string{"available-field", "derived-free-buffers-cached", "guest-agent-meminfo", "guest-agent-meminfo-derived", "agent"} {
+		for _, percent := range []float64{0, 24, 96, 100} {
+			e := QualifyGuestMemory(percent, models.MemoryObservation{State: "current", Source: source, ObservedAt: at}, true, true, now)
+			if !e.Available || !e.PressureKnown || e.Source != source || e.ObservedAt != at || e.MayIncludeCache {
+				t.Errorf("current measured control rejected: %s/%g: %+v", source, percent, e)
+			}
+		}
+	}
+	for _, source := range []string{"status-mem", "status-freemem", "cluster-resources", "derived-total-minus-used", "previous-snapshot", "unrecognised-source"} {
+		e := QualifyGuestMemory(96, models.MemoryObservation{State: "current", Source: source, ObservedAt: at}, true, true, now)
+		if !e.Available || e.PressureKnown || !strings.Contains(e.Format(96), "guest pressure unknown") {
+			t.Errorf("unqualified source became pressure: %s: %+v", source, e)
+		}
+		if source == "unrecognised-source" && e.Source != "" {
+			t.Fatal("unknown source text leaked into context")
+		}
+	}
+	for _, percent := range []float64{-1, 101, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		e := QualifyGuestMemory(percent, models.MemoryObservation{State: "current", Source: "agent", ObservedAt: at}, true, true, now)
+		if e.Available || e.PressureKnown || e.State != "unavailable" {
+			t.Errorf("invalid percentage became evidence: %+v", e)
+		}
+	}
+	for _, badTime := range []time.Time{{}, time.Unix(0, 0), now.Add(time.Second)} {
+		e := QualifyGuestMemory(24, models.MemoryObservation{State: "current", Source: "agent", ObservedAt: badTime}, true, true, now)
+		if e.PressureKnown || !e.ObservedAt.IsZero() || e.State != "unknown" {
+			t.Errorf("invalid origin became current: %+v", e)
+		}
+	}
+	for _, state := range []string{"last-known", "", "future-state", "unavailable"} {
+		e := QualifyGuestMemory(24, models.MemoryObservation{State: state, Source: "agent", ObservedAt: at}, true, true, now)
+		if e.PressureKnown {
+			t.Errorf("unqualified state became current: %s: %+v", state, e)
+		}
+	}
+	legacy := QualifyGuestMemory(24, models.MemoryObservation{}, true, false, now)
+	if !legacy.Available || !legacy.PressureKnown || legacy.Format(24) != "24%" {
+		t.Fatal("other platform contract changed")
+	}
+}
+
+// Proxmox's listing mem is page-cache-excluded cgroup usage for an LXC
+// (PVE::CGroup::get_memory_stat) but the host's view of guest RAM for QEMU.
+func TestGuestMemoryClusterResourcesIsTypeAware(t *testing.T) {
+	now := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	current := models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: at}
+	ct := QualifyGuestMemoryForKind(97, current, true, GuestMemoryProxmoxContainer, now)
+	if !ct.PressureKnown || ct.MayIncludeCache || ct.Source != "cluster-resources" || !strings.Contains(ct.Format(97), "cache-aware guest usage") {
+		t.Errorf("LXC listing memory lost its pressure meaning: %+v", ct)
+	}
+	if e := QualifyGuestMemoryForKind(97, current, true, GuestMemoryProxmoxVM, now); e.PressureKnown || !e.MayIncludeCache {
+		t.Errorf("QEMU listing memory became pressure: %+v", e)
+	}
+	if e := QualifyGuestMemory(97, current, true, true, now); e.PressureKnown || !e.MayIncludeCache {
+		t.Errorf("type-unknown Proxmox guest dropped the conservative reading: %+v", e)
+	}
+	for _, state := range []string{"last-known", ""} {
+		obs := current
+		obs.State = state
+		if e := QualifyGuestMemoryForKind(97, obs, true, GuestMemoryProxmoxContainer, now); e.PressureKnown {
+			t.Errorf("retained LXC listing reading became current: %s: %+v", state, e)
+		}
+	}
+	for _, source := range []string{"status-mem", "status-freemem", "derived-total-minus-used"} {
+		obs := current
+		obs.Source = source
+		if e := QualifyGuestMemoryForKind(97, obs, true, GuestMemoryProxmoxContainer, now); e.PressureKnown || !e.MayIncludeCache {
+			t.Errorf("container kind widened %s: %+v", source, e)
+		}
+	}
+	// Typed read state picks the kind from the resource type.
+	for _, tc := range []struct {
+		typ  ResourceType
+		want bool
+	}{{ResourceTypeSystemContainer, true}, {ResourceTypeVM, false}} {
+		r := &Resource{Type: tc.typ, Proxmox: &ProxmoxData{VMID: 101},
+			Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 97, Source: SourceProxmox, Observation: current}}}
+		if e := GuestMemoryEvidenceForResource(r, now); e.PressureKnown != tc.want {
+			t.Errorf("%s listing memory pressure=%t, want %t", tc.typ, e.PressureKnown, tc.want)
+		}
 	}
 }

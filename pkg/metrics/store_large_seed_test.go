@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Exercise the ingestion shape from the workloads-summary benchmark without
-// its HTTP, reflection or monitor fixtures. A historical benchmark crashed in
+// Exercise the ingestion shape from the retired workloads-summary benchmark
+// without its HTTP, reflection or monitor fixtures. A historical benchmark crashed in
 // SQLite during the second synchronous seed; this is a diagnostic invariant,
 // not a reproducer or a claim that the unexplained crash has been repaired.
 func TestStoreLargeSummarySeedSurvivesReopen(t *testing.T) {

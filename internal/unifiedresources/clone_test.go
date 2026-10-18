@@ -13,6 +13,10 @@ import (
 func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 	// Registry mutation paths can leave derived metadata stale until the next
 	// read. Keep refresh on every clone, including after source/tag edits.
+	observation := models.MemoryObservation{
+		State: "last-known", Source: "guest-agent-meminfo",
+		ObservedAt: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC),
+	}
 	original := &Resource{
 		ID: "app-container:lab", Type: ResourceTypeAppContainer,
 		Sources:        []DataSource{SourceDocker, SourceAgent, SourceDocker},
@@ -21,6 +25,9 @@ func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 		Docker:         &DockerData{HostSourceID: "proxmox-lxc-docker:lab:node:100"},
 		Policy:         &ResourcePolicy{Sensitivity: ResourceSensitivityRestricted},
 		AISafeSummary:  "stale",
+		Metrics: &ResourceMetrics{Memory: &MetricValue{
+			Percent: 50, Source: SourceProxmox, Observation: observation,
+		}},
 	}
 	for _, test := range []struct {
 		name        string
@@ -44,6 +51,14 @@ func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 			}
 			cloned.PlatformScopes[0] = "mutated"
 			cloned.Policy.Sensitivity = ResourceSensitivityPublic
+			if cloned.Metrics == original.Metrics || cloned.Metrics.Memory == original.Metrics.Memory || cloned.Metrics.Memory.Observation != observation || cloned.Metrics.Memory.Source != SourceProxmox {
+				t.Fatal("metadata read aliased or renewed the selected memory observation")
+			}
+			cloned.Metrics.Memory.Observation.State = "current"
+			cloned.Metrics.Memory.Observation.ObservedAt = observation.ObservedAt.Add(time.Hour)
+			if original.Metrics.Memory.Observation != observation {
+				t.Fatal("borrowed metadata readers lost detached metric ownership")
+			}
 			if !reflect.DeepEqual(original.PlatformScopes, []string{"stale"}) || original.Policy.Sensitivity != ResourceSensitivityRestricted || original.AISafeSummary != "stale" {
 				t.Fatal("clone modified the original derived metadata")
 			}
@@ -206,11 +221,17 @@ func TestCloneResource_MutateSourceStatusMap(t *testing.T) {
 		ID: "r-1",
 		SourceStatus: map[DataSource]SourceStatus{
 			SourceProxmox: {Status: "online", ExpectedUpdateIntervalSeconds: 300},
+			SourceAgent:   {Status: "stale", reported: StatusOffline},
 		},
 	}
 	cloned := cloneResource(original)
 	if cloned.SourceStatus[SourceProxmox].ExpectedUpdateIntervalSeconds != 300 {
 		t.Fatal("clone lost collector cadence")
+	}
+	// A clone that dropped the source verdict would aggregate a silent agent
+	// back to warning.
+	if cloned.SourceStatus[SourceAgent].reported != StatusOffline {
+		t.Fatal("clone lost the agent's offline verdict")
 	}
 
 	cloned.SourceStatus[SourceDocker] = SourceStatus{Status: "online"}
@@ -245,6 +266,31 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	cloned.parentBySource[SourceAgent] = "parent-agent"
 	if _, exists := original.parentBySource[SourceAgent]; exists {
 		t.Error("mutating cloned parentBySource should not affect original")
+	}
+}
+
+// Operator link folds ride clones, so a registry seeded from another
+// registry's listing can name each link's pair, and stay detached from them.
+func TestCloneResource_CarriesLinkFolds(t *testing.T) {
+	original := &Resource{
+		ID: "vm-1",
+		linkFolds: []ManualLinkFold{{
+			HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent},
+			HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceAgent},
+		}},
+	}
+	cloned := cloneResource(original)
+	if len(cloned.linkFolds) != 1 || cloned.linkFolds[0].FoldedID != "agent-1" {
+		t.Fatalf("clone lost link folds: %+v", cloned.linkFolds)
+	}
+
+	cloned.linkFolds[0].Sources[0] = SourceDocker
+	cloned.linkFolds[0].HolderOwn[0] = SourceDocker
+	cloned.linkFolds[0].FoldedOwn[0] = SourceDocker
+	cloned.linkFolds[0].FoldedID = "MUTATED"
+	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" ||
+		original.linkFolds[0].HolderOwn[0] != SourceProxmox || original.linkFolds[0].FoldedOwn[0] != SourceAgent {
+		t.Errorf("mutating cloned link folds affected the original: %+v", original.linkFolds)
 	}
 }
 
@@ -494,6 +540,25 @@ func TestCloneProxmoxData_TemperatureIsolation(t *testing.T) {
 	cloned.LoadAverage[0] = 99.0
 	if original.LoadAverage[0] != 1.0 {
 		t.Error("mutating cloned LoadAverage should not affect original")
+	}
+}
+
+// List and presentation readers get detached clones of a node, so the
+// registry-derived sensor setup verdict travels with the clone and stays put
+// when the live node's verdict changes afterwards.
+func TestCloneProxmoxDataKeepsDerivedSensorSetupVerdict(t *testing.T) {
+	outdated := true
+	original := &ProxmoxData{NodeName: "pve", SensorSetupOutdated: &outdated}
+	cloned := cloneProxmoxData(original)
+	if cloned.SensorSetupOutdated == nil || !*cloned.SensorSetupOutdated {
+		t.Fatal("clone dropped the derived sensor setup verdict")
+	}
+	if cloned.SensorSetupOutdated == original.SensorSetupOutdated {
+		t.Fatal("clone shares the live node's verdict pointer")
+	}
+	*original.SensorSetupOutdated = false
+	if !*cloned.SensorSetupOutdated {
+		t.Fatal("changing the live node's verdict changed a clone already handed out")
 	}
 }
 
@@ -964,5 +1029,45 @@ func TestCloneResource_PreservesActionReadinessDetail(t *testing.T) {
 	cloned := cloneResource(original)
 	if len(cloned.ActionReadiness) != 1 || cloned.ActionReadiness[0] != original.ActionReadiness[0] {
 		t.Fatalf("clone dropped action readiness diagnostics: %#v", cloned.ActionReadiness)
+	}
+}
+
+func TestCloneMaterializedResourceDetachesCanonicalPolicy(t *testing.T) {
+	original := &Resource{ID: "agent:synthetic", Type: ResourceTypeAgent, Name: "synthetic", Sources: []DataSource{SourceAgent}, Tags: []string{"customer-data"}, Agent: &AgentData{AgentID: "synthetic", Hostname: "synthetic.example.test"}, Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.1"}}, SupersededCanonicalIDs: []string{"agent:old-synthetic"}}
+	RefreshCanonicalMetadata(original)
+	copied := cloneMaterializedResource(original)
+	if !reflect.DeepEqual(copied, cloneResource(original)) {
+		t.Fatal("materialized copy differs from arbitrary-input refreshed clone")
+	}
+	copied.Canonical.Aliases[0] = "changed"
+	copied.Canonical.SupersededIDs[0] = "changed"
+	copied.Policy.Routing.Redact[0] = "changed"
+	copied.Policy.Sensitivity = ResourceSensitivityPublic
+	copied.PlatformScopes[0] = "changed"
+	if original.Canonical.Aliases[0] == "changed" || original.Canonical.SupersededIDs[0] == "changed" || original.Policy.Routing.Redact[0] == "changed" || original.Policy.Sensitivity != ResourceSensitivityRestricted || original.PlatformScopes[0] == "changed" {
+		t.Fatal("bulk resource copy aliases canonical identity or policy")
+	}
+	original.Tags = []string{"public"}
+	refreshed := cloneResource(original)
+	if refreshed.Policy.Sensitivity != ResourceSensitivityPublic {
+		t.Fatal("arbitrary clone trusted stale materialized policy")
+	}
+	if cloneMaterializedResource(nil).ID != "" || cloneMaterializedResourcePtr(nil) != nil {
+		t.Fatal("nil materialized clone changed absence")
+	}
+}
+
+// The resources API seeds its registry from the monitor's read state, so the
+// marker on a row saved-host continuity introduced must ride the clone, or the
+// API's link pass would fold the saved agent into its linked guest.
+func TestCloneResourceKeepsContinuityMarker(t *testing.T) {
+	saved := Resource{ID: "agent-saved", Type: ResourceTypeAgent, continuityOnly: true}
+	if clone := cloneResource(&saved); !clone.continuityOnly {
+		t.Fatal("clone dropped the continuity marker")
+	}
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{saved})
+	if seeded, ok := rr.Get(saved.ID); !ok || !seeded.continuityOnly {
+		t.Fatalf("seeded row = %+v (listed=%v), want the continuity marker kept", seeded, ok)
 	}
 }

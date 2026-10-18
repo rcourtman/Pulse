@@ -1,12 +1,15 @@
 package installtests
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {
@@ -76,7 +79,7 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 		`ensure_update_disk_headroom()`,
 		`UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))`,
 		`UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))`,
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`prefetch_pulse_archive_for_container()`,
 		`download_release_archive()`,
 		`install_pulse_archive()`,
@@ -109,10 +112,9 @@ func TestRootInstallSystemdServiceExposesOnlyPulseOwnedSubscriptionCLIHome(t *te
 func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
 	orderedSteps := []string{
-		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`,
 		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
 		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
-		`safe_systemctl stop "$EXISTING_SERVICE"`,
 		`install_pulse_archive "$archive_path" "$expected_release"`,
 	}
 
@@ -126,6 +128,54 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 			t.Fatalf("download_pulse update safety steps are out of order at: %s", step)
 		}
 		previous = position
+	}
+	if strings.Contains(downloadPulse, "stop_pulse_for_replacement") {
+		t.Fatal("download_pulse must not stop Pulse before archive admission")
+	}
+	archiveInstall := extractRootInstallShellFunction(t, "install_pulse_archive")
+	previous = -1
+	for _, step := range []string{
+		`verify_release_signature "$archive_path"`,
+		`tar --no-same-owner --no-overwrite-dir -xzf`,
+		`validate_pulse_binary_architecture "$pulse_binary_path"`,
+		`cp "$pulse_binary_path" "$binary_stage/pulse"`,
+		`timeout 5 "$binary_stage/pulse" --version`,
+		`stop_pulse_for_replacement "$service_name"`,
+		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
+	} {
+		position := strings.Index(archiveInstall, step)
+		if position <= previous {
+			t.Fatalf("archive admission/replacement steps are out of order or missing at %s", step)
+		}
+		previous = position
+	}
+	if strings.Contains(archiveInstall, "pulse.old") || strings.Contains(archiveInstall, "temp_extract2") {
+		t.Fatal("archive replacement must not move/delete the old binary or blindly re-extract")
+	}
+	sourceInstall := extractRootInstallShellFunction(t, "build_from_source")
+	previous = -1
+	for _, step := range []string{
+		`make build`,
+		`mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"`,
+		`cp pulse "$binary_stage/pulse"`,
+		`chmod 755 "$binary_stage/pulse"`,
+		`chown pulse:pulse "$binary_stage/pulse"`,
+		`timeout 5 "$binary_stage/pulse" --version`,
+		`source_revision=$(git rev-parse --short HEAD)`,
+		`stop_pulse_for_replacement "$service_name"`,
+		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
+	} {
+		position := strings.Index(sourceInstall, step)
+		if position <= previous {
+			t.Fatalf("source admission/replacement steps are out of order or missing at %s", step)
+		}
+		previous = position
+	}
+	if strings.Contains(sourceInstall, "pulse.old") || strings.Contains(sourceInstall, `cp pulse "$INSTALL_DIR/bin/pulse"`) {
+		t.Fatal("source replacement must not move/delete the old binary or copy onto the live path")
+	}
+	if !strings.Contains(sourceInstall, `recover_pulse_after_failed_replacement "$service_name"`) {
+		t.Fatal("failed source rename must use prior-active-only recovery")
 	}
 }
 
@@ -487,7 +537,7 @@ func TestRootInstallScriptDiscardsUnneededConfigBackup(t *testing.T) {
 // backups while the filesystem is short of space (#2127).
 func TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails(t *testing.T) {
 	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
-	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`)
+	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"`)
 	discard := strings.Index(downloadPulse, `discard_last_config_backup`)
 	if headroom < 0 || discard < 0 {
 		t.Fatalf("download_pulse must check staging headroom and discard the unneeded config backup (headroom=%d discard=%d)", headroom, discard)
@@ -746,7 +796,9 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 		`Update to $RC_VERSION (prerelease preview)`,
 		`--rc, --pre        Install latest prerelease preview version`,
 		`Prerelease channel detected in configuration`,
-		`Prerelease channel: get latest release (including prereleases, but skip drafts)`,
+		// Bind the menu to the complete server-release selector rather than
+		// requiring a removed, non-user-facing implementation comment.
+		`RC_VERSION=$(resolve_latest_release_tag_for_channel rc 2>/dev/null || true)`,
 	}
 	for _, needle := range requiredInstall {
 		if !strings.Contains(installScript, needle) {
@@ -770,8 +822,8 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 		t.Fatalf("read pulse-auto-update.sh: %v", err)
 	}
 	autoUpdateScript := string(autoUpdate)
-	if !strings.Contains(autoUpdateScript, `Prerelease channel detected; unattended auto-updates run only on stable`) {
-		t.Fatalf("pulse-auto-update.sh missing prerelease channel log message")
+	if !strings.Contains(autoUpdateScript, `Non-stable channel detected; unattended auto-updates run only on stable`) {
+		t.Fatalf("pulse-auto-update.sh missing non-stable channel log message")
 	}
 	if strings.Contains(autoUpdateScript, `RC channel detected; unattended auto-updates run only on stable`) {
 		t.Fatalf("pulse-auto-update.sh preserved stale release-candidate channel log message")
@@ -975,14 +1027,27 @@ func TestRootInstallUninstallCleansLegacySensorProxy(t *testing.T) {
 		SENSOR_PROXY_LOG_DIR="` + filepath.Join(tmp, "log") + `"
 		SENSOR_PROXY_SERVICE_USER="pulse-sensor-proxy-test"
 		SENSOR_PROXY_AUTHORIZED_KEYS_PATH="` + authKeys + `"
-		systemctl() { return 0; }
+		timeout() { shift 3; "$@"; }
+        systemctl() {
+            if [[ "$1" == "show" ]]; then
+                case "$3" in
+                    --property=LoadState) echo loaded ;;
+                    --property=ActiveState) echo inactive ;;
+                    --property=UnitFileState) echo disabled ;;
+                    *) return 1 ;;
+                esac
+            fi
+        }
 		userdel() { echo "userdel $*" >>"` + marker + `"; return 0; }
 		groupdel() { echo "groupdel $*" >>"` + marker + `"; return 0; }
 		id() { return 0; }
 		getent() { return 0; }
 	`
 
-	funcs := extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
+	funcs := extractRootInstallShellFunction(t, "confirm_pulse_unit_removable") + "\n" +
+		extractRootInstallShellFunction(t, "stop_pulse_unit_for_removal") + "\n" +
+		`print_error() { echo "$*" >&2; }` + "\n" +
+		extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
 		extractRootInstallShellFunction(t, "remove_local_sensor_proxy_managed_keys") + "\n" +
 		extractRootInstallShellFunction(t, "cleanup_local_sensor_proxy")
 
@@ -2194,6 +2259,28 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 		[]byte("#!/usr/bin/env bash\necho repaired-helper\n"), 0755); err != nil {
 		t.Fatalf("write release helper: %v", err)
 	}
+	// This is an asset-rendering/re-entry fixture, not admission to the host
+	// service manager. Supply a successful exact unmasked inventory and record
+	// the only permitted manager operation. Whole-installer controls exercise
+	// failed reads and effective masks using real fixture-root inventories.
+	toolsDir := filepath.Join(tmpDir, "tools")
+	if err := os.MkdirAll(toolsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	callsPath := filepath.Join(tmpDir, "systemctl-calls")
+	stub := `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "` + callsPath + `"
+case "$*" in
+    'list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service')
+        printf 'pulse-update.timer disabled enabled\npulse-update.service disabled enabled\n' ;;
+    daemon-reload) : ;;
+    *) echo "Unexpected fixture manager operation: $*" >&2; exit 97 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(toolsDir, "systemctl"), []byte(stub), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	installer, err := filepath.Abs(filepath.Join("..", "..", "install.sh"))
 	if err != nil {
@@ -2201,6 +2288,8 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 	}
 	cmd := exec.Command("bash", installer, "--repair-auto-update-units")
 	cmd.Env = append(os.Environ(),
+		"PATH="+toolsDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"PULSE_SERVICE_NAME=pulse",
 		"PULSE_INSTALL_DIR="+installDir,
 		"PULSE_CONFIG_DIR="+configDir,
 		"PULSE_AUTO_UPDATE_DEST="+autoUpdateDest,
@@ -2211,6 +2300,10 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("install.sh --repair-auto-update-units failed: %v\n%s", err, out)
+	}
+	calls, err := os.ReadFile(callsPath)
+	if err != nil || string(calls) != "list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service\ndaemon-reload\n" {
+		t.Fatalf("repair did not inspect both units before its only manager operation: %v\n%s", err, calls)
 	}
 
 	helper, err := os.ReadFile(autoUpdateDest)
@@ -2256,14 +2349,13 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 // must recreate the config dir and the unit, and start_pulse must fail
 // loudly when the unit does not exist at all.
 func TestRootInstallScriptUpdateFlowsRepairHalfRemovedInstall(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_repair.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("read root install.sh: %v", err)
-	}
-
-	wired := regexp.MustCompile(`(?m)^\s*download_pulse\n(?:\s*#[^\n]*\n)*\s*setup_directories\n\s*setup_update_command\n\s*ensure_systemd_service_installed$`)
-	if got := len(wired.FindAll(content, -1)); got != 2 {
-		t.Fatalf("expected both update flows (--version and menu update) to run setup_directories and ensure_systemd_service_installed after download_pulse, found %d", got)
+		t.Fatalf("half-removed installer update/repair controls: %v\n%s", err, out)
 	}
 }
 
@@ -2453,5 +2545,178 @@ func TestRootInstallPctExecCommandsResolveOnPctExecPath(t *testing.T) {
 			continue
 		}
 		t.Fatalf("install.sh:%d runs %q through pct exec by bare name, which is not on PATH=/sbin:/bin:/usr/sbin:/usr/bin: %s", i+1, command, strings.TrimSpace(line))
+	}
+}
+
+// Failures must propagate even when the cleanup is called from a conditional
+// (where Bash disables errexit); a failed key replacement cannot claim success.
+func TestRootInstallSensorProxyCleanupRejectsFailedKeyReplacement(t *testing.T) {
+	dir := t.TempDir()
+	installer, err := filepath.Abs(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := filepath.Join(dir, "authorized_keys")
+	original := "ssh-ed25519 TEST keep-admin\nssh-ed25519 OLD # pulse-managed-key\n"
+	if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+source "$INSTALLER_UNDER_TEST"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$KEYS_UNDER_TEST"
+mv() { return 1; }
+if remove_local_sensor_proxy_managed_keys; then
+    echo UNEXPECTED_COMPLETION
+    exit 1
+fi
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "INSTALLER_UNDER_TEST="+installer, "KEYS_UNDER_TEST="+keys)
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.Contains(string(out), "Removed legacy") {
+		t.Fatalf("failed replacement was accepted: %v\n%s", err, out)
+	}
+	got, err := os.ReadFile(keys)
+	if err != nil || string(got) != original {
+		t.Fatalf("key replacement failure changed original: %v", err)
+	}
+}
+
+func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) {
+	for _, name := range []string{"reset_pulse", "read_pulse_reset_unit_state", "confirm_pulse_reset_unit_stopped"} {
+		body := extractRootInstallShellFunction(t, name)
+		for _, line := range strings.Split(body, "\n") {
+			if strings.Contains(line, "systemctl ") && !strings.Contains(line, "timeout -k 1 5 systemctl ") {
+				t.Fatalf("%s has unbounded systemctl call: %s", name, line)
+			}
+		}
+	}
+}
+
+// Server update staging lives under the install directory (#2785), which keeps
+// an interrupted run's ~1 GB extract across reboots. The sweep removes only
+// owner-only staging directories older than any live run, never symlinks,
+// files, look-alike names or anything else in the install directory.
+func TestRootInstallScriptSweepsOnlyStaleServerStaging(t *testing.T) {
+	installDir := filepath.Join(t.TempDir(), "install")
+	outside := filepath.Join(t.TempDir(), "outside")
+	for _, dir := range []string{
+		filepath.Join(installDir, "bin"),
+		filepath.Join(installDir, ".pulse-extract-AbC123", "bin"),
+		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789"),
+		filepath.Join(installDir, ".pulse-extract-toolong1"),
+		outside,
+	} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := []string{
+		filepath.Join(installDir, ".pulse-extract-AbC123", "bin", "pulse"),
+		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789", "pulse-v6.6.0-linux-amd64.tar.gz"),
+		filepath.Join(installDir, ".pulse-extract-file01"),
+		filepath.Join(installDir, "bin", "pulse"),
+		filepath.Join(outside, "keep"),
+	}
+	for _, file := range files {
+		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(installDir, ".pulse-extract-link01")); err != nil {
+		t.Fatal(err)
+	}
+
+	sweep := func(minutes string) {
+		t.Helper()
+		script := `
+			set -euo pipefail
+			print_warn() { echo "$*" >&2; }
+			INSTALL_DIR="$1"
+			SERVER_STAGING_STALE_MINUTES="$2"
+` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
+` + extractRootInstallShellFunction(t, "sweep_stale_server_staging") + `
+			sweep_stale_server_staging
+		`
+		if out, err := exec.Command("bash", "-c", script, "bash", installDir, minutes).CombinedOutput(); err != nil {
+			t.Fatalf("sweep: %v\n%s", err, out)
+		}
+	}
+
+	// A live run's staging is fresh: the production age keeps it.
+	sweep("360")
+	for _, file := range files {
+		if _, err := os.Stat(file); err != nil {
+			t.Fatalf("fresh staging or unrelated file removed: %s", file)
+		}
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	sweep("0")
+	for _, removed := range []string{".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789"} {
+		if _, err := os.Lstat(filepath.Join(installDir, removed)); !os.IsNotExist(err) {
+			t.Fatalf("stale staging %s was not removed (err=%v)", removed, err)
+		}
+	}
+	for _, kept := range []string{".pulse-extract-toolong1", ".pulse-extract-file01", ".pulse-extract-link01", "bin/pulse"} {
+		if _, err := os.Lstat(filepath.Join(installDir, kept)); err != nil {
+			t.Fatalf("sweep removed non-staging entry %s: %v", kept, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
+		t.Fatalf("sweep followed a staging-named symlink: %v", err)
+	}
+}
+
+// The recursive pulse ownership pass must not hand root-consumed update
+// staging (verified archive, extracted payload) to the service account, and
+// every recursive install-dir chown goes through that one helper.
+func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if regexp.MustCompile(`chown -R [^\n]*"\$INSTALL_DIR"`).Match(content) {
+		t.Fatal(`install.sh must use chown_install_dir_for_pulse, not chown -R on "$INSTALL_DIR"`)
+	}
+
+	installDir := filepath.Join(t.TempDir(), "install")
+	for _, dir := range []string{"bin", "scripts", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
+		if err := os.MkdirAll(filepath.Join(installDir, dir), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v6.6.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := filepath.Join(t.TempDir(), "calls")
+	script := `
+		set -euo pipefail
+		INSTALL_DIR="$1"
+		CALLS="$2"
+		chown() { printf '%s\n' "$*" >> "$CALLS"; }
+` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
+` + extractRootInstallShellFunction(t, "chown_install_dir_for_pulse") + `
+		chown_install_dir_for_pulse
+	`
+	if out, err := exec.Command("bash", "-c", script, "bash", installDir, calls).CombinedOutput(); err != nil {
+		t.Fatalf("chown_install_dir_for_pulse: %v\n%s", err, out)
+	}
+	recorded, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(recorded)), "\n")
+	want := []string{
+		"pulse:pulse " + installDir,
+		"-R pulse:pulse " + filepath.Join(installDir, "VERSION"),
+		"-R pulse:pulse " + filepath.Join(installDir, "bin"),
+		"-R pulse:pulse " + filepath.Join(installDir, "scripts"),
+		"-R pulse:pulse " + filepath.Join(installDir, ".hidden"),
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("ownership calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

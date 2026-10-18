@@ -100,7 +100,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
       <Show when={modalProps.nodeType === 'pve'}>
         <div class="space-y-3 text-xs">
           <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <h5 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-3 flex items-center gap-2">
+            <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
               <svg
                 width="16"
                 height="16"
@@ -165,7 +165,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                     Run this command on your Proxmox VE node:
                   </p>
-                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                     <button
                       type="button"
                       disabled={state.loadingAgentCommand() || setupHandoffDisabled()}
@@ -279,7 +279,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                       <button
                         type="button"
                         onClick={async () => {
@@ -329,7 +329,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
                           <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900/25 dark:text-blue-100">
+                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
                             {state.quickSetupTokenHint()}
                           </code>
                           <Show when={state.quickSetupExpiry()}>
@@ -584,7 +584,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </div>
 
                     <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-2">
-                      <p class="text-sm font-medium text-green-900/25 dark:text-green-100 mb-1">
+                      <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
                         4. Add to Pulse with:
                       </p>
                       <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
@@ -611,7 +611,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
       <Show when={modalProps.nodeType === 'pbs'}>
         <div class="space-y-3 text-xs">
           <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <h5 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-3 flex items-center gap-2">
+            <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
               <svg
                 width="16"
                 height="16"
@@ -653,7 +653,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
                     Run this command on your PBS node:
                   </p>
-                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                     <button
                       type="button"
                       onClick={() =>
@@ -750,7 +750,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                       <Show when={state.formData().host && state.formData().host.trim() !== ''}>
                         <button
                           type="button"
@@ -802,7 +802,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
                           <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900/25 dark:text-blue-100">
+                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
                             {state.quickSetupTokenHint()}
                           </code>
                           <Show when={state.quickSetupExpiry()}>
@@ -1053,7 +1053,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </div>
 
                     <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-2">
-                      <p class="text-sm font-medium text-green-900/25 dark:text-green-100 mb-1">
+                      <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
                         4. Add to Pulse with:
                       </p>
                       <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">

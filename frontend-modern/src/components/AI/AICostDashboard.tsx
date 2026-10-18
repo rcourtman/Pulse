@@ -340,14 +340,14 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={summary()?.truncated}>
-          <div class="text-xs px-3 py-2 rounded-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25 text-blue-900/25 dark:text-blue-100">
+          <div class="text-xs px-3 py-2 rounded-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25 text-blue-900 dark:text-blue-100">
             Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}
             -day retention window.
           </div>
         </Show>
 
         <Show when={isOverBudget()}>
-          <div class="text-xs px-3 py-2 rounded-sm border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-900/25 dark:text-red-100">
+          <div class="text-xs px-3 py-2 rounded-sm border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-900 dark:text-red-100">
             Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget (
             {formatUSD(budgetForRange() ?? 0)}).
           </div>
@@ -357,7 +357,7 @@ export const AICostDashboard: Component = () => {
           <div
             role="alert"
             aria-live="polite"
-            class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-sm border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100"
+            class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-sm border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900 dark:text-amber-100"
           >
             <div class="truncate">Couldn’t refresh. Showing last loaded data. {loadError()}</div>
             <button

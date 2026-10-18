@@ -231,6 +231,7 @@ describe('storagePoolDetailPresentation', () => {
         state: 'online',
         sizeLabel: '1000 B',
         diskType: '',
+        alertResourceIds: [],
         temperature: 44,
         hasIssue: true,
         spunDown: false,
@@ -299,6 +300,13 @@ describe('storagePoolDetailPresentation', () => {
           sizeBytes: 6_000,
           temperature: 32,
           spunDown: true,
+          collection: {
+            temperature: {
+              state: 'unavailable',
+              source: 'unraid',
+              reason: 'disk is reported spun down',
+            },
+          },
           readCount: 10,
           writeCount: 20,
           errorCount: 16,
@@ -306,13 +314,20 @@ describe('storagePoolDetailPresentation', () => {
       },
     ] as Resource[];
 
-    const linkedDisks = getStoragePoolLinkedDisks(record, disks);
+    const linkedDisks = getStoragePoolLinkedDisks(record, disks, (disk) => [`owner-of-${disk.id}`]);
 
     expect(linkedDisks.map((disk) => disk.role)).toEqual(['parity', 'data']);
+    // Each linked disk carries the override keys its Temp colour is judged under.
+    expect(linkedDisks.map((disk) => disk.alertResourceIds)).toEqual(
+      linkedDisks.map((disk) => [`owner-of-${disk.id}`]),
+    );
+    expect(linkedDisks[0].temperatureLastKnownTitle).toBeUndefined();
     expect(linkedDisks[1]).toEqual(
       expect.objectContaining({
         devPath: '/dev/sdc',
         sizeLabel: '5.86 KB',
+        temperature: 32,
+        temperatureLastKnownTitle: 'Last known reading, not current: disk is reported spun down',
         spunDown: true,
         errorCount: 16,
         ioLabel: 'R 10 / W 20',

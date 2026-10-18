@@ -7,19 +7,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -94,9 +99,10 @@ func normalizeReportResourceType(raw string) (string, error) {
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor                 *monitoring.MultiTenantMonitor
+	mtMonitor                 atomic.Pointer[monitoring.MultiTenantMonitor]
 	recoveryManager           *recoverymanager.Manager
 	narratorResolver          func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+	existingFindingsResolver  func(ctx context.Context) reporting.FindingsProvider
 	settingsStore             reportingSystemSettingsStore
 	scheduleRunMu             sync.Mutex
 	commercialLicenseResolver func(ctx context.Context) *licenseService
@@ -159,11 +165,36 @@ func (h *ReportingHandlers) requireCommercialFeature(ctx context.Context, featur
 	return service.RequireFeature(feature)
 }
 
+// resolveNarrator returns the AI narrators and findings provider for a
+// request. A caller that may not spend AI budget (see reportCallerMayUseAI)
+// gets no narrator and only the findings of an AI service that is already
+// running, and the resolver, which can construct a tenant AI service, is never
+// called. Every report path goes through here, so none can skip the check.
 func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 	if h == nil || h.narratorResolver == nil {
 		return nil, nil, nil
 	}
+	if !reportCallerMayUseAI(ctx) {
+		return nil, nil, h.resolveExistingFindings(ctx)
+	}
 	return h.narratorResolver(ctx)
+}
+
+// SetExistingFindingsResolver wires the Patrol findings lookup that GET reports
+// use. Unlike the narrator resolver it must return only an AI service that is
+// already running, never construct one.
+func (h *ReportingHandlers) SetExistingFindingsResolver(resolver func(ctx context.Context) reporting.FindingsProvider) {
+	if h == nil {
+		return
+	}
+	h.existingFindingsResolver = resolver
+}
+
+func (h *ReportingHandlers) resolveExistingFindings(ctx context.Context) reporting.FindingsProvider {
+	if h == nil || h.existingFindingsResolver == nil {
+		return nil
+	}
+	return h.existingFindingsResolver(ctx)
 }
 
 func (h *ReportingHandlers) resolveReportBranding(ctx context.Context) reporting.ReportBranding {
@@ -298,28 +329,33 @@ func normalizePerformanceReportTimeRange(
 	return start, end, nil
 }
 
-func decodeMultiReportRequestBody(w http.ResponseWriter, r *http.Request) (multiReportRequestBody, bool) {
+// decodeReportingRequestBody strictly decodes one JSON report request body:
+// at most 1MB, no unknown fields, no trailing payload.
+func decodeReportingRequestBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, reportingMultiReportBodyMax)
 
-	var body multiReportRequestBody
+	var body, zero T
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
+	err := decoder.Decode(&body)
+	if err == nil {
+		// Anything after the value is invalid, and reading past it can also
+		// hit the size cap.
+		if trailing := decoder.Decode(&struct{}{}); trailing != io.EOF {
+			err = errors.New("trailing payload")
+			if trailing != nil {
+				err = trailing
+			}
+		}
+	}
+	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			writeErrorResponse(w, http.StatusBadRequest, "body_too_large", "Request body must be 1MB or less", nil)
-			return multiReportRequestBody{}, false
+			return zero, false
 		}
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
-	}
-	if decoder.More() {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
+		return zero, false
 	}
 
 	return body, true
@@ -333,6 +369,9 @@ type reportingEnrichmentSnapshot struct {
 	RecentlyResolved []models.ResolvedAlert
 	LegacyBackups    models.PVEBackups
 	Resources        []unifiedresources.Resource
+	// alertManager supplies the tenant's disk temperature thresholds. Nil
+	// means the factory alert configuration.
+	alertManager *alerts.Manager
 }
 
 func emptyReportingEnrichmentSnapshot() reportingEnrichmentSnapshot {
@@ -373,19 +412,34 @@ func (s *reportingEnrichmentSnapshot) normalizeCollections() {
 
 // NewReportingHandlers creates a new ReportingHandlers
 func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
-	return &ReportingHandlers{
-		mtMonitor:       mtMonitor,
-		recoveryManager: recoveryManager,
+	h := &ReportingHandlers{recoveryManager: recoveryManager}
+	h.SetMultiTenantMonitor(mtMonitor)
+	return h
+}
+
+// SetMultiTenantMonitor replaces the runtime dependency after a configuration
+// reload. Scheduled and on-demand reads may overlap the replacement.
+func (h *ReportingHandlers) SetMultiTenantMonitor(manager *monitoring.MultiTenantMonitor) {
+	if h != nil {
+		h.mtMonitor.Store(manager)
 	}
+}
+
+func (h *ReportingHandlers) reportMonitorManager() *monitoring.MultiTenantMonitor {
+	if h == nil {
+		return nil
+	}
+	return h.mtMonitor.Load()
 }
 
 func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, orgID string) (reportingEnrichmentSnapshot, bool) {
 	_ = ctx
-	if h == nil || h.mtMonitor == nil {
+	manager := h.reportMonitorManager()
+	if manager == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
 
-	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	monitor, err := manager.GetMonitor(orgID)
 	if err != nil || monitor == nil {
 		return emptyReportingEnrichmentSnapshot(), false
 	}
@@ -404,6 +458,7 @@ func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, 
 		RecentlyResolved: monitor.RecentlyResolvedSnapshot(),
 		LegacyBackups:    monitor.PVEBackupsSnapshot(),
 		Resources:        unifiedResources,
+		alertManager:     monitor.GetAlertManager(),
 	}
 	snapshot.normalizeCollections()
 	return snapshot, true
@@ -533,9 +588,95 @@ func (h *ReportingHandlers) listBackupsForReport(ctx context.Context, orgID stri
 	return out
 }
 
-// HandleGenerateReport generates a report
+// singleReportRequestBody carries the single-resource report fields. POST
+// sends them as a JSON body; GET sends the same names as query parameters.
+type singleReportRequestBody struct {
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
+	Format       string `json:"format"`
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	Title        string `json:"title"`
+	MetricType   string `json:"metricType"`
+}
+
+func singleReportRequestFromQuery(q url.Values) singleReportRequestBody {
+	return singleReportRequestBody{
+		ResourceType: q.Get("resourceType"),
+		ResourceID:   q.Get("resourceId"),
+		Format:       q.Get("format"),
+		Start:        q.Get("start"),
+		End:          q.Get("end"),
+		Title:        q.Get("title"),
+		MetricType:   q.Get("metricType"),
+	}
+}
+
+// reportGETNarrativeNote takes the place of the PDF's "Configure Pulse
+// Assistant" tip on a GET report, which stays deterministic whatever the
+// Assistant settings.
+const reportGETNarrativeNote = "Tip: This report was requested with GET, which never uses Pulse Assistant. Generate it from Settings, or request it with POST, to include AI narration when Pulse Assistant is configured."
+
+// reportScopeNarrativeNote replaces the "Configure Pulse Assistant" tip on a
+// POST report requested with an API token that may not spend AI budget.
+const reportScopeNarrativeNote = "Tip: This report was requested with an API token that does not hold the ai:execute scope, so Pulse Assistant was not used. Use a token with ai:execute, or generate the report from Settings, to include AI narration when Pulse Assistant is configured."
+
+// reportCallerMayUseAI reports whether the caller of a report request may
+// spend the tenant's AI budget on narration. Narration is a paid provider call
+// recorded in the cost ledger, so an API token needs ai:execute for it, as
+// every other AI-spending route does; settings:read is not enough. Callers that
+// are not tokens (browser sessions, scheduled reports) are unaffected.
+func reportCallerMayUseAI(ctx context.Context) bool {
+	record, ok := internalauth.GetAPIToken(ctx).(*config.APITokenRecord)
+	if !ok || record == nil {
+		return true
+	}
+	return record.HasScope(config.ScopeAIExecute)
+}
+
+// scopeLimitedReportNarrator narrates reports requested by a token without
+// ai:execute with the deterministic summary and never calls an AI provider.
+type scopeLimitedReportNarrator struct{}
+
+func (scopeLimitedReportNarrator) Narrate(ctx context.Context, in reporting.NarrativeInput) (reporting.Narrative, error) {
+	out, err := reporting.HeuristicNarrator{}.Narrate(ctx, in)
+	out.Source = reporting.NarrativeSourceHeuristic
+	out.Disclaimer = reportScopeNarrativeNote
+	return out, err
+}
+
+// getReportNarrator narrates GET single-resource reports with the
+// deterministic summary and never calls an AI provider.
+type getReportNarrator struct{}
+
+func (getReportNarrator) Narrate(ctx context.Context, in reporting.NarrativeInput) (reporting.Narrative, error) {
+	out, err := reporting.HeuristicNarrator{}.Narrate(ctx, in)
+	out.Source = reporting.NarrativeSourceHeuristic
+	out.Disclaimer = reportGETNarrativeNote
+	return out, err
+}
+
+// HandleGenerateReport generates a single-resource report. POST with a JSON
+// body is the canonical transport, used by the settings UI, and the only one
+// that may narrate a PDF with the tenant's Pulse Assistant, which spends AI
+// budget and records usage in the cost ledger. GET takes the same fields as
+// query parameters and always narrates deterministically: GET passes the
+// demo-mode guard and the CSRF check, and SameSite=Lax session cookies ride
+// cross-site top-level GET navigations, so a link must not be able to spend
+// that budget.
 func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	var params singleReportRequestBody
+	switch r.Method {
+	case http.MethodGet:
+		params = singleReportRequestFromQuery(r.URL.Query())
+	case http.MethodPost:
+		body, ok := decodeReportingRequestBody[singleReportRequestBody](w, r)
+		if !ok {
+			return
+		}
+		params = body
+	default:
+		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -547,15 +688,14 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	}
 
 	definition := performanceReportDefinition()
-	q := r.URL.Query()
-	format, err := normalizePerformanceReportFormat(q.Get("format"), definition)
+	format, err := normalizePerformanceReportFormat(params.Format, definition)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
 		return
 	}
 
-	resourceTypeRaw := q.Get("resourceType")
-	resourceID := q.Get("resourceId")
+	resourceTypeRaw := params.ResourceType
+	resourceID := params.ResourceID
 	if resourceTypeRaw == "" || resourceID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_params", "resourceType and resourceId are required", nil)
 		return
@@ -578,8 +718,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 
 	metricType, title, err := normalizePerformanceReportOptionalFields(
 		definition,
-		q.Get("metricType"),
-		q.Get("title"),
+		params.MetricType,
+		params.Title,
 	)
 	if err != nil {
 		code := "invalid_metric_type"
@@ -593,8 +733,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 
 	start, end, err := normalizePerformanceReportTimeRange(
 		definition,
-		q.Get("start"),
-		q.Get("end"),
+		params.Start,
+		params.End,
 		time.Now(),
 	)
 	if err != nil {
@@ -602,7 +742,9 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
 	req := reporting.MetricReportRequest{
+		OrgID:        orgID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		MetricType:   metricType,
@@ -613,18 +755,38 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		Branding:     h.resolveReportBranding(r.Context()),
 	}
 
-	// Enrich with resource data if monitor is available
-	orgID := GetOrgID(r.Context())
-	if snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID); ok {
-		h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
+	// The resource must belong to the requesting organization; the engine
+	// then reads only that organization's metrics store.
+	snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID)
+	if !ok {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "inventory_unavailable", "Resource inventory for this organization is not available", nil)
+		return
 	}
+	if !reportSubjectInInventory(resourceID, snapshot) {
+		writeErrorResponse(w, http.StatusNotFound, "resource_not_found", "Resource not found in this organization", nil)
+		return
+	}
+	h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
 
 	// Wire the per-tenant AI narrator and Patrol findings provider when
 	// configured. Both are nil-safe at the engine layer; absence falls
 	// back to the heuristic narrator with no findings section. Single-
-	// resource reports do not use the FleetNarrator.
-	narrator, _, findings := h.resolveNarrator(r.Context())
-	req.Narrator = narrator
+	// resource reports do not use the FleetNarrator. Only POST resolves the
+	// AI service; GET narrates deterministically and reads findings only
+	// from an AI service that is already running.
+	var narrator reporting.Narrator
+	var findings reporting.FindingsProvider
+	if r.Method == http.MethodPost {
+		narrator, _, findings = h.resolveNarrator(r.Context())
+		req.Narrator = narrator
+		if !reportCallerMayUseAI(r.Context()) {
+			// resolveNarrator withheld the AI narrator; say why in the report.
+			req.Narrator = scopeLimitedReportNarrator{}
+		}
+	} else {
+		findings = h.resolveExistingFindings(r.Context())
+		req.Narrator = getReportNarrator{}
+	}
 	req.FindingsProvider = findings
 
 	data, contentType, err := engine.Generate(req)
@@ -641,6 +803,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	log.Info().
 		Str("event", "reporting.single.generated").
 		Str("org_id", orgID).
+		Str("method", r.Method).
 		Str("resource_type", resourceType).
 		Str("metric_type", metricType).
 		Str("format", string(format)).
@@ -657,7 +820,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	safeResourceID := sanitizeFilename(resourceID)
 	filename := definition.SingleAttachmentFilename(safeResourceID, time.Now().UTC(), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	w.Write(data)
+	written, writeErr := w.Write(data)
+	h.recordReportingDownload(r, config.ReportScheduleKindResources, written, writeErr, len(data))
 }
 
 // sanitizeFilename removes or replaces characters that could cause issues in filenames or headers
@@ -688,6 +852,10 @@ func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID strin
 		h.enrichVMReport(ctx, orgID, req, snapshot, start, end)
 	case "system-container", "oci-container":
 		h.enrichContainerReport(ctx, orgID, req, snapshot, start, end)
+	case "agent":
+		h.enrichAgentReport(req, snapshot, start, end)
+	default:
+		attachReportAlerts(req, snapshot, reportAlertScopeFor(req, findReportSubjectResource(req, snapshot)), start, end)
 	}
 }
 
@@ -713,8 +881,8 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 		// it explicitly, so ask the tenant monitor first and fall back to
 		// the struct field.
 		var target *unifiedresources.MetricsTarget
-		if h != nil && h.mtMonitor != nil {
-			if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+		if manager := h.reportMonitorManager(); manager != nil {
+			if monitor, err := manager.GetMonitor(orgID); err == nil && monitor != nil {
 				target = monitor.MetricsTargetForResource(req.ResourceID)
 			}
 		}
@@ -736,6 +904,38 @@ func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.Me
 	}
 }
 
+// reportSubjectInInventory reports whether resourceID names a resource in an
+// organization's inventory snapshot: a canonical unified resource ID, or the
+// legacy state-model ID of one of its nodes, VMs or containers, which the
+// report enrichment also accepts. A report is only generated for a resource
+// the requesting organization owns.
+func reportSubjectInInventory(resourceID string, snapshot reportingEnrichmentSnapshot) bool {
+	if resourceID == "" {
+		return false
+	}
+	for i := range snapshot.Resources {
+		if snapshot.Resources[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Nodes {
+		if snapshot.Nodes[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.VMs {
+		if snapshot.VMs[i].ID == resourceID {
+			return true
+		}
+	}
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].ID == resourceID {
+			return true
+		}
+	}
+	return false
+}
+
 // reportSubjectIDMatches reports whether a legacy state-model ID refers to
 // the report subject. Legacy snapshots (and the alerts raised on them) are
 // keyed by the metrics-target ID, while the request carries the canonical
@@ -748,6 +948,37 @@ func reportSubjectIDMatches(req *reporting.MetricReportRequest, candidateID stri
 		return true
 	}
 	return req.MetricsResourceID != "" && candidateID == req.MetricsResourceID
+}
+
+// reportActiveAlertInfo is the report row for an open alert.
+func reportActiveAlertInfo(alert models.Alert) reporting.AlertInfo {
+	return reporting.AlertInfo{
+		Type:       alert.Type,
+		Level:      alert.Level,
+		Message:    alert.Message,
+		Value:      alert.Value,
+		Threshold:  alert.Threshold,
+		StartTime:  alert.StartTime,
+		ResourceID: alert.ResourceID,
+	}
+}
+
+// reportResolvedAlertInfo is the report row for a recently resolved alert. It
+// keeps the alert's resolution, so a node alert that moved to its Pulse agent
+// is never reported as a recovery.
+func reportResolvedAlertInfo(resolved models.ResolvedAlert) reporting.AlertInfo {
+	info := reportActiveAlertInfo(resolved.Alert)
+	resolvedTime := resolved.ResolvedTime
+	info.ResolvedTime = &resolvedTime
+	if resolution := resolved.Resolution; resolution != nil {
+		info.Resolution = &reporting.AlertResolution{
+			Reason:              resolution.Reason,
+			SuccessorResourceID: resolution.SuccessorResourceID,
+			SuccessorName:       resolution.SuccessorName,
+			Summary:             resolution.Summary,
+		}
+	}
+	return info
 }
 
 // enrichNodeReport adds node-specific data to the report request
@@ -791,29 +1022,13 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 	// Find alerts for this node
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) || alert.Node == node.Name {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if (reportSubjectIDMatches(req, resolved.ResourceID) || resolved.Node == node.Name) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -828,41 +1043,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 			if storageNode != node.Name {
 				continue
 			}
-
-			var total, used, available int64
-			var usagePerc float64
-			if r.Metrics != nil && r.Metrics.Disk != nil {
-				if r.Metrics.Disk.Total != nil {
-					total = *r.Metrics.Disk.Total
-				}
-				if r.Metrics.Disk.Used != nil {
-					used = *r.Metrics.Disk.Used
-				}
-				if total > 0 {
-					available = total - used
-				}
-				usagePerc = r.Metrics.Disk.Percent
-				if usagePerc == 0 && total > 0 {
-					usagePerc = (float64(used) / float64(total)) * 100
-				}
-			}
-
-			var storageType, content string
-			if r.Storage != nil {
-				storageType = r.Storage.Type
-				content = r.Storage.Content
-			}
-
-			req.Storage = append(req.Storage, reporting.StorageInfo{
-				Name:      r.Name,
-				Type:      storageType,
-				Status:    string(r.Status),
-				Total:     total,
-				Used:      used,
-				Available: available,
-				UsagePerc: usagePerc,
-				Content:   content,
-			})
+			req.Storage = append(req.Storage, reportStorageInfo(r))
 		case unifiedresources.ResourceTypePhysicalDisk:
 			if r.PhysicalDisk == nil {
 				continue
@@ -874,19 +1055,37 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 			if diskNode != node.Name {
 				continue
 			}
-			pd := r.PhysicalDisk
-			req.Disks = append(req.Disks, reporting.DiskInfo{
-				Device:      pd.DevPath,
-				Model:       pd.Model,
-				Serial:      pd.Serial,
-				Type:        pd.DiskType,
-				Size:        pd.SizeBytes,
-				Health:      pd.Health,
-				Temperature: pd.Temperature,
-				WearLevel:   pd.Wearout,
-			})
+			req.Disks = append(req.Disks, reportDiskInfo(*r.PhysicalDisk, snapshot.alertManager))
 		}
 	}
+}
+
+// reportDiskTemperatureThresholds returns the alert disk temperature thresholds
+// a report colours a disk reading by: the clear value and the trigger, from
+// the same policy as disk temperature alerts and the Physical Disks Temp
+// column. Zero means disk temperature alerting is off for the disk.
+func reportDiskTemperatureThresholds(manager *alerts.Manager, diskType string) (float64, float64) {
+	threshold := manager.DiskTemperatureThreshold(diskType)
+	if threshold == nil || threshold.Trigger <= 0 {
+		return 0, 0
+	}
+	warning := threshold.Clear
+	if warning <= 0 || warning > threshold.Trigger {
+		warning = threshold.Trigger
+	}
+	return warning, threshold.Trigger
+}
+
+// reportDiskTemperature returns the disk temperature a report may tabulate:
+// one the current observation collected. Normalization may keep a last-known
+// temperature it did not collect (a disk in standby, a host agent past its
+// reporting lease); a report presents its values as measured, so that one is
+// left out (0, rendered as no reading) rather than shown as current.
+func reportDiskTemperature(pd unifiedresources.PhysicalDiskMeta) int {
+	if !diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
+		return 0
+	}
+	return pd.Temperature
 }
 
 // enrichVMReport adds VM-specific data to the report request
@@ -922,29 +1121,13 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	// Find alerts for this VM
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -992,6 +1175,8 @@ type generatedMultiReport struct {
 	Start         time.Time
 	End           time.Time
 	ResourceCount int
+	DataState     string
+	DataMessage   string
 }
 
 type reportingRequestError struct {
@@ -1061,7 +1246,9 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_time_range", message: err.Error()}
 	}
 
+	orgID := GetOrgID(ctx)
 	multiReq := reporting.MultiReportRequest{
+		OrgID:      orgID,
 		Format:     format,
 		Start:      start,
 		End:        end,
@@ -1070,8 +1257,14 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		Branding:   h.resolveReportBranding(ctx),
 	}
 
-	orgID := GetOrgID(ctx)
 	snapshot, hasSnapshot := h.getReportingEnrichmentSnapshot(ctx, orgID)
+	if !hasSnapshot {
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusServiceUnavailable,
+			code:    "inventory_unavailable",
+			message: "Resource inventory for this organization is not available",
+		}
+	}
 	for _, res := range body.Resources {
 		if !validResourceID.MatchString(res.ResourceType) || len(res.ResourceType) > 64 {
 			return generatedMultiReport{}, &reportingRequestError{
@@ -1092,7 +1285,16 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_resource_type", message: err.Error()}
 		}
 
+		if !reportSubjectInInventory(res.ResourceID, snapshot) {
+			return generatedMultiReport{}, &reportingRequestError{
+				status:  http.StatusNotFound,
+				code:    "resource_not_found",
+				message: fmt.Sprintf("Resource not found in this organization: %s", res.ResourceID),
+			}
+		}
+
 		req := reporting.MetricReportRequest{
+			OrgID:        orgID,
 			ResourceType: resourceType,
 			ResourceID:   res.ResourceID,
 			MetricType:   metricType,
@@ -1102,9 +1304,7 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 			Title:        title,
 			Branding:     multiReq.Branding,
 		}
-		if hasSnapshot {
-			h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
-		}
+		h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 
@@ -1151,7 +1351,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	body, ok := decodeMultiReportRequestBody(w, r)
+	body, ok := decodeReportingRequestBody[multiReportRequestBody](w, r)
 	if !ok {
 		return
 	}
@@ -1166,7 +1366,8 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", report.ContentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", report.Filename))
-	w.Write(report.Data)
+	written, writeErr := w.Write(report.Data)
+	h.recordReportingDownload(r, config.ReportScheduleKindResources, written, writeErr, len(report.Data))
 }
 
 // enrichContainerReport adds container-specific data to the report request
@@ -1201,29 +1402,13 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	// Find alerts for this container
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 

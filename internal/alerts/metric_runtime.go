@@ -51,7 +51,7 @@ func metricStabilityFor(metricType string, delaySeconds int) metricStabilityPoli
 
 func isMetricThresholdAlertType(metricType string) bool {
 	switch metricType {
-	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "diskTemperature", "usage":
 		return true
 	default:
 		return false
@@ -77,21 +77,13 @@ func getThresholdForMetric(config ThresholdConfig, metricType string) *Hysteresi
 		return config.NetworkOut
 	case "temperature":
 		return config.Temperature
+	case "diskTemperature":
+		return config.DiskTemperature
 	case "usage":
 		return config.Usage
 	default:
 		return nil
 	}
-}
-
-// getThresholdForMetricFromConfig returns the threshold for a specific metric type from a ThresholdConfig
-// ensuring hysteresis is properly set.
-func getThresholdForMetricFromConfig(config ThresholdConfig, metricType string) *HysteresisThreshold {
-	th := getThresholdForMetric(config, metricType)
-	if th == nil {
-		return nil
-	}
-	return ensureHysteresisThreshold(th)
 }
 
 // getTimeThreshold determines the delay to apply for a metric/resource combination.
@@ -271,6 +263,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 	windowed := m.evaluateMetricWindow(resourceID, resourceType, metricType, value, m.policyNow())
 	if !windowed.Ready {
+		m.interruptMetricRunIDs(resourceID, canonicalSpecID, canonicalStateID)
 		return
 	}
 	value = windowed.Value

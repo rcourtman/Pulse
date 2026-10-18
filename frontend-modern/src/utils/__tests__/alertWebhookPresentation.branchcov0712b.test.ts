@@ -235,7 +235,7 @@ describe('alertWebhookPresentation (branch coverage 2)', () => {
   describe('getAlertWebhooksSectionDescription', () => {
     it('returns the canonical section description', () => {
       expect(getAlertWebhooksSectionDescription()).toBe(
-        'Push alerts to chat apps or automation systems.',
+        'Discord, Telegram, Slack, Teams, ntfy, Gotify, Pushover, PagerDuty or any HTTP endpoint.',
       );
     });
   });

@@ -585,3 +585,138 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     });
   });
 });
+
+describe('disk observation decorations', () => {
+  const neutral = 'rgba(148, 163, 184, 0.5)';
+  const message = 'Using last known disk stats. Guest reads paused during a backup.';
+  const disks = [
+    makeDisk({ used: 95, free: 5, usage: 95 }),
+    makeDisk({ mountpoint: '/data', total: 200, used: 180, free: 20, usage: 90 }),
+  ];
+
+  it.each([undefined, 'aggregate', 'stacked', 'mini', 'vertical-bars'] as const)(
+    'keeps last-known %s values inspectable without live health colours or anomaly',
+    (mode) => {
+      const props = { disks, mode, anomaly: makeAnomaly(), summaryStrategy: 'max' as const };
+      const current = buildStackedDiskBarPresentation(props, 400);
+      const retained = buildStackedDiskBarPresentation(
+        { ...props, reading: { state: 'last-known', message } },
+        400,
+      );
+      expect(retained.displayPercentValue).toBe(current.displayPercentValue);
+      expect(retained.barPercent).toBe(current.barPercent);
+      expect(retained.displaySublabel).toBe(current.displaySublabel);
+      expect(retained.segments.map((item) => item.widthPercent)).toEqual(
+        current.segments.map((item) => item.widthPercent),
+      );
+      expect(retained.miniDisks.map((item) => item.percent)).toEqual(
+        current.miniDisks.map((item) => item.percent),
+      );
+      expect(retained.verticalBars.map((item) => item.fillPercent)).toEqual(
+        current.verticalBars.map((item) => item.fillPercent),
+      );
+      expect(retained.barColor).toBe(neutral);
+      for (const item of [
+        ...retained.segments,
+        ...retained.miniDisks,
+        ...retained.verticalBars,
+        ...retained.tooltipContent,
+      ])
+        expect(item.color).toBe(neutral);
+      expect(retained.anomalyDescription).toBeUndefined();
+      expect(retained.anomalyRatio).toBe('');
+      expect(retained.tooltipMessage).toBe(message);
+      expect(retained.tooltipTitle).toMatch(/Last known/i);
+      expect(retained.miniDisks.every((item) => item.title.startsWith('Last known'))).toBe(true);
+      expect(retained.verticalBars.every((item) => item.title.startsWith('Last known'))).toBe(true);
+    },
+  );
+
+  it('keeps a retained aggregate-only value neutral, and config-only capacity unknown', () => {
+    const aggregate = buildStackedDiskBarPresentation(
+      { aggregateDisk: disks[0], reading: { state: 'last-known', message } },
+      400,
+    );
+    expect(aggregate.displayPercentValue).toBe(95);
+    expect(aggregate.barColor).toBe(neutral);
+    expect(aggregate.tooltipContent[0]).toMatchObject({ percent: '95%', color: neutral });
+    const mixed = buildStackedDiskBarPresentation(
+      {
+        disks: [...disks, makeDisk({ mountpoint: '/config', total: 300, usage: -1 })],
+        reading: { state: 'last-known', message },
+      },
+      400,
+    );
+    expect(mixed.miniDisks).toHaveLength(2);
+    expect(mixed.tooltipContent[2]).toMatchObject({
+      label: '/config',
+      percent: '—',
+      used: '?',
+      total: '300 B',
+      color: neutral,
+    });
+  });
+
+  it.each([undefined, 'aggregate', 'stacked', 'mini', 'vertical-bars'] as const)(
+    'withholds unavailable %s usage and anomaly despite numeric carriers',
+    (mode) => {
+      const p = buildStackedDiskBarPresentation(
+        {
+          disks,
+          aggregateDisk: disks[0],
+          mode,
+          anomaly: makeAnomaly(),
+          reading: { state: 'unavailable', message: 'Filesystem usage is unavailable.' },
+        },
+        400,
+      );
+      expect(p.unavailable).toBe(true);
+      expect(p.displayLabel).toBe('N/A');
+      expect(p.displayPercentValue).toBe(0);
+      expect(p.barPercent).toBe(0);
+      expect(p.segments).toEqual([]);
+      expect(p.miniDisks).toEqual([]);
+      expect(p.verticalBars).toEqual([]);
+      expect(p.displaySublabel).toBe('');
+      expect(p.anomalyDescription).toBeUndefined();
+      expect(p.anomalyRatio).toBe('');
+      expect(
+        p.tooltipContent.every(
+          (item) => item.percent === '—' && item.used === '?' && item.color === neutral,
+        ),
+      ).toBe(true);
+      expect(p.tooltipContent.map((item) => item.total)).toEqual(['100 B', '200 B']);
+    },
+  );
+
+  it('does not fabricate zero usage for unavailable aggregate-only capacity', () => {
+    const p = buildStackedDiskBarPresentation(
+      { aggregateDisk: disks[0], reading: { state: 'unavailable', message: 'No reading.' } },
+      400,
+    );
+    expect(p.tooltipContent).toEqual([
+      { label: 'Total', percent: '—', used: '?', total: '100 B', color: neutral },
+    ]);
+    expect(p.displayLabel).toBe('N/A');
+  });
+
+  it('preserves measured current zero and unannotated callers; advisory text alone is not freshness', () => {
+    const base = { disks, anomaly: makeAnomaly(), statusMessage: 'Advisory text' };
+    const legacy = buildStackedDiskBarPresentation(base, 400);
+    const current = buildStackedDiskBarPresentation(
+      { ...base, reading: { state: 'current', message: null } },
+      400,
+    );
+    expect(current).toEqual(legacy);
+    expect(current.barColor).toBe(CRITICAL);
+    expect(current.anomalyDescription).toBe('Disk usage spike');
+    const zero = buildStackedDiskBarPresentation(
+      { disks: [makeDisk()], reading: { state: 'current', message: null } },
+      400,
+    );
+    expect(zero.displayLabel).toBe('0%');
+    expect(zero.barColor).toBe(NORMAL);
+    expect(zero.tooltipContent[0].percent).toBe('0%');
+    expect(zero.unavailable).toBe(false);
+  });
+});

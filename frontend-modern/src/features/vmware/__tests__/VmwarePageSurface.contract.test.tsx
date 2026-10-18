@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { VmwarePageSurface } from '../VmwarePageSurface';
@@ -76,7 +77,9 @@ vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: () => <div data-testid="workloads-surface" />,
+  WorkloadsSurface: (props: { tableTitle?: JSX.Element }) => (
+    <div data-testid="workloads-surface">{props.tableTitle}</div>
+  ),
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
@@ -131,6 +134,7 @@ describe('VmwarePageSurface contract', () => {
       surfaceConnected: () => false,
       surfaceInitialDataReceived: () => false,
       allGuests: () => [],
+      filteredGuests: () => [],
       search: () => '',
       setSearch: vi.fn(),
     });
@@ -147,6 +151,63 @@ describe('VmwarePageSurface contract', () => {
     expect(vmwarePageSurfaceSource).not.toContain(
       'metricDisplayMode={workloadsState.workloadMetricDisplayMode}',
     );
+  });
+
+  it('renders the one workload toolbar above the VM table once workload state is ready', () => {
+    setResources([makeResource({ id: 'vm-app-01', type: 'vm' })]);
+
+    render(() => <VmwarePageSurface />);
+    expect(screen.queryByTestId('workloads-filter')).not.toBeInTheDocument();
+    cleanup();
+
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: () => true,
+      surfaceInitialDataReceived: () => true,
+      allGuests: () => [{ id: 'vm-app-01' }],
+      filteredGuests: () => [{ id: 'vm-app-01' }],
+      search: () => '',
+      setSearch: vi.fn(),
+    });
+    render(() => <VmwarePageSurface />);
+    expect(screen.getAllByTestId('workloads-filter')).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId('workloads-filter')
+        .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('titles the VM table through the tableTitle slot and counts the filtered rows', () => {
+    setResources([makeResource({ id: 'vm-app-01', type: 'vm' })]);
+    const [ready, setReady] = createSignal(false);
+    const [filtered, setFiltered] = createSignal([{ id: 'vm-app-01' }, { id: 'vm-app-02' }]);
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: ready,
+      surfaceInitialDataReceived: ready,
+      allGuests: () => [{ id: 'vm-app-01' }, { id: 'vm-app-02' }, { id: 'vm-app-03' }],
+      filteredGuests: filtered,
+      search: () => 'app',
+      setSearch: vi.fn(),
+    });
+
+    // The mocked surface renders the slot unconditionally; the real one renders
+    // it with the table or the empty card. Kiosk unmounts the filter bar that
+    // otherwise introduces the table, so the title has to carry the name.
+    render(() => <VmwarePageSurface />);
+    const heading = () =>
+      within(screen.getByTestId('workloads-surface')).getByRole('heading', { level: 2 });
+    expect(heading()).toHaveTextContent(/^VMs$/);
+
+    // Once the toolbar is ready the count is the filtered rows (2), not the
+    // inventory (3), and it keeps following them.
+    setReady(true);
+    expect(heading()).toHaveTextContent(/^VMs\s*2$/);
+    setFiltered([{ id: 'vm-app-01' }]);
+    expect(heading()).toHaveTextContent(/^VMs\s*1$/);
+    setFiltered([]);
+    expect(heading()).toHaveTextContent(/^VMs\s*0$/);
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
   it('surfaces stale in-guest agents on correlated vSphere VMs', () => {
@@ -178,12 +239,56 @@ describe('VmwarePageSurface contract', () => {
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('hosts-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('app-01 is running an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent('latest in-guest telemetry and command support on this VM');
+    expect(notice).toHaveTextContent('app-01 runs an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('latest fixes and VM details.');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-app-01',
     );
+  });
+
+  it('leads the overview with vCenter health signals only when vCenter reports any', () => {
+    const host = makeResource({
+      id: 'esxi-host-1',
+      type: 'agent',
+      vmware: { entityType: 'host', managedObjectId: 'host-1' },
+    });
+    const alarmedDatastore = makeResource({
+      id: 'datastore-1',
+      type: 'storage',
+      vmware: { entityType: 'datastore', managedObjectId: 'datastore-1' },
+      incidents: [{ code: 'vmware_alarm', severity: 'warning', summary: 'Datastore latency' }],
+    } as Partial<Resource> & Pick<Resource, 'id' | 'type'>);
+    // Each query gets its own fixture so the test proves the signals come
+    // from the Health query while the overview model keeps its own resources.
+    const byCacheKey = (healthResources: Resource[]) =>
+      mockUseUnifiedResources.mockImplementation((options: { cacheKey?: string }) => {
+        const resources = options.cacheKey === 'vmware-health' ? healthResources : [host];
+        return {
+          resources: () => resources,
+          loading: () => false,
+          error: () => null,
+          refetch: vi.fn().mockResolvedValue(resources),
+        };
+      });
+
+    byCacheKey([host]);
+    const { unmount } = render(() => <VmwarePageSurface />);
+    expect(screen.queryByTestId('alerts-table')).not.toBeInTheDocument();
+    unmount();
+
+    byCacheKey([host, alarmedDatastore]);
+    render(() => <VmwarePageSurface />);
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('alerts-table')).toBeInTheDocument();
+    expect(screen.getByTestId('hosts-table')).toHaveAttribute('data-rows', '1');
+    expect(
+      mockUseUnifiedResources.mock.calls.some(
+        ([options]) =>
+          (options as { cacheKey?: string }).cacheKey === 'vmware-health' &&
+          (options as { enabled: () => boolean }).enabled(),
+      ),
+    ).toBe(true);
   });
 
   it('reuses the source-scoped page snapshot for the vSphere workload surface', async () => {

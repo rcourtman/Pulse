@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "1dcf9418aae87f9427dbfc6bcae67dbde114bf8a",
+  "verified_at": "2026-10-05T21:16:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AISettings.tsx",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AISettings.tsx": "d3966224e497b9f8f3cd701bea1661212c5f32c9cc15ff795c4001f851fae6ca",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts": "240fe0f1988d881da4344811aa3fdcc8e452182da24414ca6c941ea72e8e545f"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private stacks built from this tree: community runtime (7782/5282), community DEMO_MODE runtime (7783/5283) and a Pro runtime built from pulse-enterprise against this tree (7784/5284), mock data, dev-signed Pro and Enterprise licences. Playwright Chromium at 1280x900 dark and 390x844 light, plus the in-app browser pane.",
+    "Free community install (no licence, hideUpgrade true, hideCommercial false, ai_alerts absent, /api/settings/ai alert_triggered_analysis false via a real persisted save): switch disabled and off, card reads 'Higher license plan required. This install's plan does not include container update risk.' with no link; the switch's aria-describedby points at that line.",
+    "Unlicensed Pro runtime (prompts allowed, ai_alerts not granted, backend licence checker masks the setting to false): same plan-lock line plus a Plans & Billing link to /settings/pulse-intelligence/billing/plan.",
+    "Pro licence on the community runtime (ai_alerts blocked as paid_runtime_required): 'Pulse Pro runtime required. This install is running Pulse Community runtime. Install the Pulse Pro runtime to use container update risk.' plus Open Pro downloads (https://pulserelay.pro/download.html, new tab, noopener).",
+    "Hidden commercial surfaces via DEMO_MODE (hideCommercial and hideUpgrade true; read-only demo, so GET /api/settings/ai intercepted to alert_triggered_analysis false): 'Not available. This install does not include container update risk.' with no plan or Pro wording and no link.",
+    "Enterprise licence on the community runtime (white-label, hideCommercial true, ai_alerts runtime-blocked): runtime lock copy without the download link, which is the canonical runtime-before-commercial precedence shared with Patrol mode.",
+    "Pro licence on the Pro runtime: switch enabled, no lock line, no aria-describedby. No horizontal overflow and no page errors in any state; the disabled track styling is the pre-#2535 shared Toggle and is unchanged here."
+  ],
+  "interactions": [
+    "Clicked the Plans & Billing link from the locked card in the browser pane; it routed in-app to /settings/pulse-intelligence/billing/plan.",
+    "On the licensed Pro runtime, turned the container update risk switch on and saved Patrol settings; GET /api/settings/ai then returned alert_triggered_analysis true.",
+    "Switched licence state live (activate Pro, activate Enterprise, clear) against the same backend and reloaded the page for each state."
+  ]
+}

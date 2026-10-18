@@ -23,10 +23,9 @@ type Resource struct {
 	UpdatedAt  time.Time       `json:"updatedAt,omitempty"`
 	Health     *ResourceHealth `json:"health,omitempty"`
 
-	DiscoveryTarget    *DiscoveryTarget            `json:"discoveryTarget,omitempty"`
-	DiscoveryReadiness *ResourceDiscoveryReadiness `json:"discoveryReadiness,omitempty"`
-	MetricsTarget      *MetricsTarget              `json:"metricsTarget,omitempty"`
-	Canonical          *CanonicalIdentity          `json:"canonicalIdentity,omitempty"`
+	DiscoveryTarget *DiscoveryTarget   `json:"discoveryTarget,omitempty"`
+	MetricsTarget   *MetricsTarget     `json:"metricsTarget,omitempty"`
+	Canonical       *CanonicalIdentity `json:"canonicalIdentity,omitempty"`
 	// SupersededCanonicalIDs carries retired canonical IDs that are known to
 	// identify this same resource. Providers declare them on IngestRecord when
 	// an identity derivation changes; the registry retains them so alert
@@ -57,6 +56,16 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
+
+	// continuityOnly marks a row saved-host continuity introduced: a machine
+	// no source has reported since a restart. It rides in-memory clones, so
+	// a registry seeded from a continuity read state still holds the row out
+	// of operator-link folds (holdLinkedResourceLocked). An observation that
+	// later merges into the row clears it.
+	continuityOnly bool
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`
@@ -124,42 +133,6 @@ type DiscoveryTarget struct {
 	ResourceID   string `json:"resourceId"`
 	Hostname     string `json:"hostname,omitempty"`
 }
-
-// ResourceDiscoveryReadiness summarizes whether service discovery has useful,
-// recent grounding for a resource. It is intentionally metadata-only: raw
-// command output, environment variables, config files, and secrets do not
-// belong in this projection.
-type ResourceDiscoveryReadiness struct {
-	State             ResourceDiscoveryReadinessState `json:"state"`
-	Reason            string                          `json:"reason,omitempty"`
-	Source            string                          `json:"source,omitempty"`
-	ResourceType      string                          `json:"resourceType,omitempty"`
-	TargetID          string                          `json:"targetId,omitempty"`
-	ResourceID        string                          `json:"resourceId,omitempty"`
-	DiscoveryID       string                          `json:"discoveryId,omitempty"`
-	ObservedAt        *time.Time                      `json:"observedAt,omitempty"`
-	GeneratedAt       time.Time                       `json:"generatedAt"`
-	AgeSeconds        int64                           `json:"ageSeconds,omitempty"`
-	StaleAfterSeconds int64                           `json:"staleAfterSeconds,omitempty"`
-	FactCount         int                             `json:"factCount,omitempty"`
-	ServiceName       string                          `json:"serviceName,omitempty"`
-	ServiceCategory   string                          `json:"serviceCategory,omitempty"`
-	Confidence        float64                         `json:"confidence,omitempty"`
-}
-
-// ResourceDiscoveryReadinessState is the canonical state vocabulary shared by
-// API payloads, Assistant handoffs, and frontend badges.
-type ResourceDiscoveryReadinessState string
-
-const (
-	ResourceDiscoveryReadinessFresh       ResourceDiscoveryReadinessState = "fresh"
-	ResourceDiscoveryReadinessStale       ResourceDiscoveryReadinessState = "stale"
-	ResourceDiscoveryReadinessMissing     ResourceDiscoveryReadinessState = "missing"
-	ResourceDiscoveryReadinessRunning     ResourceDiscoveryReadinessState = "running"
-	ResourceDiscoveryReadinessFailed      ResourceDiscoveryReadinessState = "failed"
-	ResourceDiscoveryReadinessUnavailable ResourceDiscoveryReadinessState = "unavailable"
-	ResourceDiscoveryReadinessUnsupported ResourceDiscoveryReadinessState = "unsupported"
-)
 
 // MetricsTarget describes the resource type and ID to use when querying
 // the metrics history endpoint for this unified resource.
@@ -291,10 +264,20 @@ const (
 
 // SourceStatus describes the freshness of data from a source.
 type SourceStatus struct {
+	// Status describes delivery, not the resource: "online" means the source
+	// delivered recently, "stale" that it has gone quiet.
 	Status                        string    `json:"status"` // online, stale, offline
 	LastSeen                      time.Time `json:"lastSeen"`
 	Error                         string    `json:"error,omitempty"`
 	ExpectedUpdateIntervalSeconds int64     `json:"expectedUpdateIntervalSeconds,omitempty"` // Collector-authored cadence, zero uses source default
+
+	// reported is the status this source itself delivered for the resource:
+	// a node the cluster reports offline, a host agent past its reporting
+	// lease, a stopped guest. Status aggregation reads this verdict, so a
+	// source that delivered recently does not make the resource online. A
+	// facet sighting (the PBS association, an availability check) carries
+	// none; see aggregateStatus.
+	reported ResourceStatus
 }
 
 // ResourceIdentity holds identifiers used for matching.
@@ -403,7 +386,21 @@ type ProxmoxData struct {
 	// Reclaimable buff/cache split out of the memory metric's free bytes.
 	MemoryCache int64          `json:"memoryCache,omitempty"`
 	Memory      *models.Memory `json:"memory,omitempty"`
-	Lock        string         `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+
+	// Original QGA filesystem evidence survives internal clone/merge/previous
+	// state, never JSON. Source identity or UpdatedAt cannot renew it.
+	DiskObservation    models.GuestDiskObservation `json:"-"`
+	GuestAgentEvidence models.GuestAgentEvidence   `json:"-"`
+
+	Lock string `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	// SensorSetupOutdated is derived by the registry, never ingested: the
+	// node's SSH temperature monitoring still runs the pre-rc.6 setup and a
+	// disk under it waits on a SMART temperature that setup cannot deliver
+	// (refreshProxmoxSensorSetupLocked). Every Proxmox node carries an
+	// explicit true or false, so clients that merge facets field by field
+	// replace a cleared verdict instead of keeping an earlier true; other
+	// resources omit it.
+	SensorSetupOutdated *bool `json:"sensorSetupOutdated,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }
@@ -537,6 +534,11 @@ type PhysicalDiskMeta struct {
 	Collection           *diskinventory.CollectionStatus `json:"collection,omitempty"`
 	SMART                *SMARTMeta                      `json:"smart,omitempty"`
 	Risk                 *PhysicalDiskRisk               `json:"risk,omitempty"`
+
+	// temperatureReadings is the registry's merge-time record of each row's
+	// own temperature reading. It is never serialized; see
+	// physicalDiskTemperatureReadings.
+	temperatureReadings *physicalDiskTemperatureReadings
 }
 
 // PhysicalDiskIOMeta preserves the cumulative kernel counters attributed to a
@@ -944,8 +946,10 @@ type AgentData struct {
 	// offline by the staleness evaluator) even though the row itself may stay
 	// online via another source such as the Proxmox API poll. It lets the UI
 	// present the agent and its version as not-reporting instead of a
-	// healthy-looking stale value.
-	Stale bool `json:"stale,omitempty"`
+	// healthy-looking stale value. It is always sent: browsers merge agent
+	// facets field by field, so an omitted false would keep a resumed agent
+	// marked as stopped reporting.
+	Stale bool `json:"stale"`
 	// LastReportAt is the agent's own last successful report time. On a
 	// multi-source row (for example a Proxmox node also polled over the PVE
 	// API) this differs from the row's LastSeen, which reflects the freshest

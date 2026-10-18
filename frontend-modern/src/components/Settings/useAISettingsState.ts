@@ -2,7 +2,6 @@ import { createEffect, createMemo, createSignal, on, onCleanup, onMount } from '
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
-import { runDiscoveryRefresh } from '@/api/discovery';
 import { runPatrolModelReadiness, type PatrolModelReadinessResponse } from '@/api/patrol';
 import { getPatrolCostPreview, getPatrolModelGuidance } from '@/api/aiPatrolCost';
 import {
@@ -282,7 +281,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [patrolModelReadinessResult, setPatrolModelReadinessResult] =
     createSignal<PatrolModelReadinessResponse | null>(null);
   let patrolModelReadinessAbortController: AbortController | null = null;
-  const [discoveryRunRunning, setDiscoveryRunRunning] = createSignal(false);
 
   const hydratePatrolModelReadinessFromSettings = (data: AISettingsType | null) => {
     setPatrolModelReadinessResult(data?.patrol_model_readiness ?? null);
@@ -358,7 +356,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     }, 150);
   };
 
-  type ModelFormKey = 'model' | 'chatModel' | 'patrolModel' | 'discoveryModel';
+  type ModelFormKey = 'model' | 'chatModel' | 'patrolModel';
   // Model picks made by the operator (as opposed to loads and resets) are
   // the only moment the schedule may be defaulted for a per-token model.
   const handleModelSelection = (formKey: ModelFormKey, modelId: string) => {
@@ -374,7 +372,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
   const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
-  const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
   const [showChatMaintenance, setShowChatMaintenance] = createSignal(false);
 
   const [form, setForm] = createStore({
@@ -382,7 +379,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     model: '',
     chatModel: '',
     patrolModel: '',
-    discoveryModel: '',
     autoFixModel: '',
     authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360,
@@ -416,9 +412,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
     controlLevel: 'read_only' as AIControlLevel,
-    protectedGuests: '' as string,
-    discoveryEnabled: false,
-    discoveryIntervalHours: 0,
   });
 
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
@@ -485,7 +478,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         model: '',
         chatModel: '',
         patrolModel: '',
-        discoveryModel: '',
         autoFixModel: '',
         authMethod: 'api_key',
         patrolIntervalMinutes: 360,
@@ -519,9 +511,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
         controlLevel: 'read_only',
-        protectedGuests: '',
-        discoveryEnabled: false,
-        discoveryIntervalHours: 0,
       });
       return;
     }
@@ -534,7 +523,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       model: data.model || '',
       chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
-      discoveryModel: data.discovery_model || '',
       autoFixModel: data.auto_fix_model || '',
       authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360,
@@ -573,9 +561,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
       controlLevel: normalizeAIControlLevel(data.control_level),
-      protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
-      discoveryEnabled: data.discovery_enabled ?? false,
-      discoveryIntervalHours: data.discovery_interval_hours ?? 0,
     });
 
     const configured = new Set<AIProvider>();
@@ -660,13 +645,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   };
 
   const selectedModelForProviderTest = (provider: AIProvider): string | undefined =>
-    compactUnique([
-      form.patrolModel,
-      form.chatModel,
-      form.discoveryModel,
-      form.autoFixModel,
-      form.model,
-    ]).find((model) => getProviderFromModelId(model) === provider);
+    compactUnique([form.patrolModel, form.chatModel, form.autoFixModel, form.model]).find(
+      (model) => getProviderFromModelId(model) === provider,
+    );
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
@@ -989,13 +970,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [
-          form.model,
-          form.chatModel,
-          form.patrolModel,
-          form.discoveryModel,
-          form.autoFixModel,
-        ],
+        models: [form.model, form.chatModel, form.patrolModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -1121,9 +1096,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (form.patrolModel !== (settings()?.patrol_model || '')) {
         payload.patrol_model = form.patrolModel;
       }
-      if (form.discoveryModel !== (settings()?.discovery_model || '')) {
-        payload.discovery_model = form.discoveryModel;
-      }
       if (form.autoFixModel !== (settings()?.auto_fix_model || '')) {
         payload.auto_fix_model = form.autoFixModel;
       }
@@ -1204,24 +1176,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (form.requestTimeoutSeconds !== (settings()?.request_timeout_seconds ?? 300)) {
         payload.request_timeout_seconds = form.requestTimeoutSeconds;
       }
-      if (form.controlLevel !== (settings()?.control_level || 'read_only')) {
+      if (form.controlLevel !== normalizeAIControlLevel(settings()?.control_level)) {
         payload.control_level = form.controlLevel;
       }
-
-      const currentProtected = settings()?.protected_guests || [];
-      const newProtected = form.protectedGuests
-        .split(',')
-        .map((value: string) => value.trim())
-        .filter((value: string) => value.length > 0);
-      const protectedChanged =
-        newProtected.length !== currentProtected.length ||
-        newProtected.some((guest: string, index: number) => guest !== currentProtected[index]);
-      if (protectedChanged) {
-        payload.protected_guests = newProtected;
-      }
-
-      payload.discovery_enabled = form.discoveryEnabled;
-      payload.discovery_interval_hours = form.discoveryIntervalHours;
 
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
@@ -1246,13 +1203,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [
-          selectedModel,
-          form.chatModel,
-          form.patrolModel,
-          form.discoveryModel,
-          form.autoFixModel,
-        ],
+        models: [selectedModel, form.chatModel, form.patrolModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -1281,33 +1232,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       notificationStore.error(error instanceof Error ? error.message : 'Connection test failed');
     } finally {
       setTesting(false);
-    }
-  };
-
-  const handleRunDiscoveryRefresh = async () => {
-    setDiscoveryRunRunning(true);
-    try {
-      const result = await runDiscoveryRefresh();
-      if (result.failed_count > 0) {
-        notificationStore.warning(
-          `Discovery refresh finished: ${result.discovered_count} refreshed, ${result.failed_count} failed.`,
-        );
-      } else if (result.candidate_count === 0) {
-        notificationStore.info(
-          'Discovery refresh finished: no new, changed, stale, or repairable workloads.',
-        );
-      } else {
-        notificationStore.success(
-          `Discovery refresh finished: ${result.discovered_count} workload${result.discovered_count === 1 ? '' : 's'} refreshed.`,
-        );
-      }
-    } catch (error) {
-      logger.error('[AISettings] Discovery refresh failed:', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Unable to run discovery refresh.',
-      );
-    } finally {
-      setDiscoveryRunRunning(false);
     }
   };
 
@@ -1459,7 +1383,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     chatSessions,
     chatSessionsError,
     chatSessionsLoading,
-    discoveryRunRunning,
     effectivePatrolModel,
     expandedProviders,
     form,
@@ -1469,7 +1392,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     handleCloseSetupModal,
     handleEnableRequest,
     handleEnabledToggle,
-    handleRunDiscoveryRefresh,
     handleSave,
     handleSessionSummarize,
     handleSetupSubmit,
@@ -1510,7 +1432,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setSetupProvider,
     setShowAdvancedModels,
     setShowChatMaintenance,
-    setShowDiscoverySettings,
     setShowSetupModal,
     settings,
     settingsReadiness,
@@ -1520,7 +1441,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setupSaving,
     showAdvancedModels,
     showChatMaintenance,
-    showDiscoverySettings,
     showSetupModal,
     showUpgradePrompts,
     testing,

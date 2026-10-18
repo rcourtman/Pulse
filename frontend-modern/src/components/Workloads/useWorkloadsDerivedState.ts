@@ -290,7 +290,7 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
   });
 
   const workloadViewport = useWorkloadViewportSync({
-    expandedDetailActive: () => selectedGuestIndex() !== null && selectedDetailHeight() > 0,
+    expandedDetailActive: () => selectedGuestIndex() !== null,
     filteredGuestCount: () => filteredGuests().length,
     groupedWindowing,
     onExpandedDetailHeightChange: (height) => {

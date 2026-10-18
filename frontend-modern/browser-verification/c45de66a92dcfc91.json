@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "base_sha": "bc3f4d81d14873caae6f769dfa670d16fa13d518",
+  "verified_at": "2026-10-04T20:32:45.762Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "2e93209a2b3830f77a0ad94d02bd59ea01509932f8d51e594d60f55d1f5895d0",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts": "e600bb993b80e85b6df48a9e070f1bc2db51d7bb8e5ffd6216e3861d610def14"
+  },
+  "routes": [
+    "/browser-tests/guest-discovery-safety.html: production Workloads row, GuestDrawer and DiscoveryTab with synthetic canonical snapshots",
+    "/browser-tests/discovery-outcome-ownership.html: reused production DiscoveryTab/state, synthetic per-guest APIs and production event-bus progress"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Guest operation lock and all current guest-read deferrals with/without retained data; healthy explicit action",
+    "Original HTTP result retained after a same-target precaution without cancellation or another scan",
+    "Background completed-with-error retains an accessible failed outcome and saved evidence",
+    "Late old-target HTTP result cannot overwrite the current guest or stop its manual request",
+    "Scanner completion during HTTP does not claim saved success; later terminal event cannot strand earlier success",
+    "Current explicit failure remains visible without an automatic retry"
+  ],
+  "interactions": [
+    "Keyboard and touch drawer expansion, Discovery tabs, explicit enabled runs and associated disabled reasons",
+    "No POST on blocked/unlock/tab/snapshot change and exactly one target/body POST per explicit healthy action",
+    "Keyboard-labelled error dismissal with saved content preserved",
+    "Change target during an in-flight request, deliver the old and current responses independently and inspect original ownership",
+    "Render desktop light/dark and WebKit 390px/320px, inspect wrapping and all 24 captures"
+  ],
+  "script": "frontend-modern/browser-tests/guest-discovery-completion.cjs",
+  "browsers": [
+    {
+      "name": "desktop-light",
+      "browser": "141.0.7390.37",
+      "width": 1365,
+      "dark": false
+    },
+    {
+      "name": "desktop-dark",
+      "browser": "141.0.7390.37",
+      "width": 1365,
+      "dark": true
+    },
+    {
+      "name": "phone-dark",
+      "browser": "26.0",
+      "width": 390,
+      "dark": true
+    },
+    {
+      "name": "narrow-light",
+      "browser": "26.0",
+      "width": 320,
+      "dark": false
+    }
+  ],
+  "limitations": [
+    "Synthetic inputs and API responses, not native QGA, backup or automatic poller acceptance.",
+    "Vite-transformed production components. Exact production build is checked separately in the source-proof VM.",
+    "No original freeze cause, independent thaw, covered-filesystem writes, installed use, physical phone or containing release is established."
+  ]
+}

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
-  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
@@ -15,9 +14,6 @@ import {
   AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
   AI_CHAT_COPY_LAST_ANSWER_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
-  AI_CHAT_DISCOVERY_HINT_BODY,
-  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
-  AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_LAUNCHER_ARIA_LABEL,
@@ -49,7 +45,6 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
-  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE,
   AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE,
   AI_CHAT_UNDO_LAST_TURN_LABEL,
@@ -64,10 +59,6 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_DRAWER_TITLE).toBe('Pulse Assistant');
     expect(AI_CHAT_DRAWER_SUBTITLE).toBe(
       'Observed context, provider-backed reasoning, and governed actions.',
-    );
-    expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Discovery is off.');
-    expect(AI_CHAT_DISCOVERY_HINT_BODY).toBe(
-      'Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details.',
     );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
     expect(AI_CHAT_NEW_SESSION_BUTTON_TITLE).toBe('Start new Assistant session');
@@ -94,11 +85,8 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Ask Pulse Assistant about this view');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
-    expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss chat actions warning');
-    expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
     expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant chat action mode');
     expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant chat action options');
-    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant chat actions to Ask first');
     expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_BUTTON_LABEL).toBe('Open Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_CLOSE_LABEL).toBe('Close Assistant commands');

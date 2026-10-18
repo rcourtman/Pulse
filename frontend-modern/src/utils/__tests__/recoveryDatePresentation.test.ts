@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  formatRecoveryTimeOnly,
   getRecoveryCompactAxisLabel,
   getRecoveryFilterDateLabel,
   getRecoveryFullDateLabel,
   getRecoveryNiceAxisMax,
   getRecoveryPrettyDateLabel,
-  normalizeRecoveryDateSearchText,
   parseRecoveryDateKey,
   recoveryDateKeyFromTimestamp,
-  resolveRecoveryDateSearchKey,
 } from '@/utils/recoveryDatePresentation';
 
 describe('recoveryDatePresentation', () => {
@@ -37,24 +34,10 @@ describe('recoveryDatePresentation', () => {
     expect(getRecoveryCompactAxisLabel(key, 90)).toBe('3/9');
   });
 
-  it('formats time-only and nice axis max values', () => {
-    expect(formatRecoveryTimeOnly(null)).toBe('—');
-    expect(formatRecoveryTimeOnly(Date.UTC(2026, 2, 9, 7, 5, 0))).toMatch(/\d{2}:\d{2}/);
+  it('formats nice axis max values', () => {
     expect(getRecoveryNiceAxisMax(0)).toBe(1);
     expect(getRecoveryNiceAxisMax(3)).toBe(3);
     expect(getRecoveryNiceAxisMax(37)).toBe(50);
     expect(getRecoveryNiceAxisMax(101)).toBe(200);
-  });
-
-  it('resolves clear date search text to recovery day keys', () => {
-    const candidateKeys = ['2026-02-13', '2026-02-14'];
-
-    expect(normalizeRecoveryDateSearchText('Friday, Feb 14th')).toBe('friday feb 14');
-    expect(resolveRecoveryDateSearchKey('2026-02-14', candidateKeys)).toBe('2026-02-14');
-    expect(resolveRecoveryDateSearchKey('Feb 14', candidateKeys)).toBe('2026-02-14');
-    expect(resolveRecoveryDateSearchKey('February 14, 2026', candidateKeys)).toBe('2026-02-14');
-    expect(resolveRecoveryDateSearchKey('Feb 14', [], new Date(2026, 4, 14))).toBe('2026-02-14');
-    expect(resolveRecoveryDateSearchKey('VM 123', candidateKeys)).toBeNull();
-    expect(resolveRecoveryDateSearchKey('Feb', candidateKeys)).toBeNull();
   });
 });

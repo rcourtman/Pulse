@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  shouldConfirmAlertsLeave,
   ALERT_CONFIG_COOLDOWN_DESCRIPTION,
   ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP,
   ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL,
@@ -63,6 +64,9 @@ import {
   getAlertConfigEscalationNotifyLabel,
   getAlertConfigQuietHourSuppressOptions,
   getAlertConfigLeaveConfirmation,
+  getAlertConfigLoadError,
+  getAlertConfigLoadingLabel,
+  getAlertConfigReloadLabel,
   getAlertConfigReloadFailure,
   getAlertConfigRecoveryHelp,
   getAlertConfigResetDefaultsLabel,
@@ -83,6 +87,23 @@ import {
 } from '@/utils/alertConfigPresentation';
 
 describe('alertConfigPresentation', () => {
+  it('explains that a failed saved-settings read is not an editable default configuration', () => {
+    expect(getAlertConfigLoadError()).toBe(
+      'Saved alert settings could not be loaded. Reload them before editing or saving.',
+    );
+    expect(getAlertConfigLoadingLabel()).toBe('Loading saved alert settings…');
+    expect(getAlertConfigReloadLabel()).toBe('Reload settings');
+  });
+
+  it('distinguishes a pending save from accepted settings with newer unsaved edits', () => {
+    expect(getAlertConfigSaveChangesLabel(true)).toBe('Saving…');
+    expect(getAlertConfigSaveChangesLabel(false)).toBe('Save Changes');
+    expect(getAlertConfigSaveSuccess(true)).toBe(
+      'Settings from this save were accepted. Your newer changes are still unsaved.',
+    );
+    expect(getAlertConfigSaveSuccess(false)).toBe(ALERT_CONFIG_SAVE_SUCCESS);
+  });
+
   it('returns canonical alert config shell vocabulary', () => {
     expect(ALERT_CONFIG_UNSAVED_CHANGES).toBe('You have unsaved changes');
     expect(ALERT_CONFIG_SAVE_CHANGES).toBe('Save Changes');
@@ -226,5 +247,16 @@ describe('alertConfigPresentation', () => {
     expect(getAlertConfigSummaryAllDisabled()).toBe(
       '• All notification controls are disabled - alerts will be sent immediately',
     );
+  });
+  // The thresholds search lives in the route, so every keystroke navigates
+  // within the page; only leaving the page should ask about unsaved edits.
+  it('asks before leaving unsaved settings for another page, not for same-page narrowing', () => {
+    const page = '/alerts/thresholds/proxmox';
+    expect(shouldConfirmAlertsLeave(`${page}?q=web`, page, true)).toBe(false);
+    expect(shouldConfirmAlertsLeave(`${page}#backups`, page, true)).toBe(false);
+    expect(shouldConfirmAlertsLeave('/alerts/thresholds/docker?q=web', page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave('/proxmox/overview', page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave(-1, page, true)).toBe(true);
+    expect(shouldConfirmAlertsLeave('/proxmox/overview', page, false)).toBe(false);
   });
 });

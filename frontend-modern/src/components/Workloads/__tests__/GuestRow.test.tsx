@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -76,8 +76,12 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
 }));
 
 vi.mock('../StackedDiskBar', () => ({
-  StackedDiskBar: (props: { statusMessage?: string }) => (
-    <div data-testid="disk-bar" data-status-message={props.statusMessage} />
+  StackedDiskBar: (props: { reading?: { state: string; message: string | null } }) => (
+    <div
+      data-testid="disk-bar"
+      data-reading-state={props.reading?.state}
+      data-reading-message={props.reading?.message}
+    />
   ),
 }));
 
@@ -86,6 +90,7 @@ vi.mock('../StackedMemoryBar', () => ({
     used: number;
     total: number;
     unavailable?: boolean;
+    reading?: { state: string; message: string } | null;
     comparisonTotalLabel?: string;
     tooltipTitle?: string;
   }) => (
@@ -94,6 +99,8 @@ vi.mock('../StackedMemoryBar', () => ({
       data-used={props.used}
       data-total={props.total}
       data-unavailable={props.unavailable}
+      data-reading-state={props.reading?.state}
+      data-reading-message={props.reading?.message}
       data-comparison-total-label={props.comparisonTotalLabel}
       data-tooltip-title={props.tooltipTitle}
     />
@@ -126,6 +133,8 @@ vi.mock('@/components/shared/workloadTypeBadges', () => ({
 }));
 
 vi.mock('../workloadTopology', () => ({
+  getWorkloadAlertPolicyTags: (guest: WorkloadGuest) =>
+    Array.isArray(guest.tags) ? guest.tags : [],
   getWorkloadAlertResourceIdCandidates: (guest: WorkloadGuest) => [guest.id],
   getWorkloadAlertThresholdScope: (guest: WorkloadGuest) =>
     guest.workloadType === 'app-container' ? 'docker' : 'guest',
@@ -265,7 +274,7 @@ describe('GuestRow', () => {
     });
 
     it('renders unknown canonical telemetry as unavailable instead of reported zero', () => {
-      renderGuestRow({
+      const { container } = renderGuestRow({
         guest: makeGuest({
           cpu: 0,
           networkIn: 0,
@@ -286,7 +295,10 @@ describe('GuestRow', () => {
       });
 
       expect(screen.queryByTestId('cpu-bar')).toBeNull();
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      const memoryCell = container.querySelector('[data-workload-col="memory"]')!;
+      expect(memoryCell).toHaveAttribute('title', 'Unavailable.');
+      expect(memoryCell).toHaveTextContent(/^-/);
       expect(screen.queryByText('0 B/s')).toBeNull();
       expect(screen.queryByText('0s')).toBeNull();
       expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
@@ -348,7 +360,18 @@ describe('GuestRow', () => {
         ],
       );
       renderGuestRow({
-        guest: makeGuest({ memory: makeMemory({ used: 2 * 1024 ** 3, total: 4 * 1024 ** 3 }) }),
+        guest: makeGuest({
+          memory: makeMemory({
+            used: 2 * 1024 ** 3,
+            total: 4 * 1024 ** 3,
+            // A current reading: the chart keeps its own title on hover.
+            observation: {
+              state: 'current',
+              source: 'guest-agent-meminfo',
+              observedAt: '2026-09-30T11:00:00Z',
+            },
+          }),
+        }),
         visibleColumnIds: ['name', 'memory'],
         memoryDisplayBasis: 'host',
         parentMemoryTotal: 16 * 1024 ** 3,
@@ -379,7 +402,8 @@ describe('GuestRow', () => {
         memoryDisplayBasis: 'host',
       });
 
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      expect(screen.getByTitle('Host memory total unavailable')).toHaveTextContent('-');
     });
 
     it('does not inflate a sub-one-percent host memory share', () => {
@@ -541,9 +565,15 @@ describe('GuestRow', () => {
       expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
     });
 
-    it('keeps Net I/O and Disk I/O live labels out of sparkline table cells', () => {
+    it('pairs Net I/O and Disk I/O sparklines with compact current rates', () => {
       renderGuestRow({
-        guest: makeGuest({ name: 'spark-io-vm', networkIn: 1024, networkOut: 2048 }),
+        guest: makeGuest({
+          name: 'spark-io-vm',
+          networkIn: 3.32 * 1024 * 1024,
+          networkOut: 512 * 1024,
+          diskRead: 0,
+          diskWrite: 2048,
+        }),
         visibleColumnIds: ['name', 'netIo', 'diskIo'],
         metricDisplayMode: 'sparklines',
         metricHistory: {
@@ -565,11 +595,204 @@ describe('GuestRow', () => {
       const sparklines = screen.getAllByTestId('metric-mini-sparkline');
       expect(sparklines).toHaveLength(2);
       expect(sparklines.map((sparkline) => sparkline.dataset.valueLabelMode)).toEqual([
-        'tooltip',
-        'tooltip',
+        'inline',
+        'inline',
       ]);
-      expect(screen.queryByText('1.00 KB/s / 2.00 KB/s')).toBeNull();
+      // The full pair does not fit beside a chart; the compact pair does, and
+      // its glyphs double as the legend for the two lines.
+      expect(sparklines.map((sparkline) => sparkline.textContent)).toEqual([
+        '↓3.3M↑512K',
+        'R0W2.0K',
+      ]);
+      expect(screen.queryByText('3.32 MB/s / 512 KB/s')).toBeNull();
+      expect(
+        sparklines.map((sparkline) => sparkline.querySelector('svg')?.getAttribute('aria-label')),
+      ).toEqual([
+        'spark-io-vm network I/O history, current 3.32 MB/s / 512 KB/s',
+        'spark-io-vm disk I/O history, current 0 B/s / 2.00 KB/s',
+      ]);
     });
+
+    it('swaps Net I/O and Disk I/O readouts into the row history lens', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'io-lens-vm', networkIn: 2048, networkOut: 4096 }),
+        visibleColumnIds: ['name', 'cpu', 'netIo', 'diskIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      expect(screen.getByText('2.00 KB/s')).toBeInTheDocument();
+      expect(screen.getByText('4.00 KB/s')).toBeInTheDocument();
+
+      const row = screen.getByText('io-lens-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      const lensCharts = screen.getAllByTestId('metric-mini-sparkline');
+      expect(
+        lensCharts.map((chart) => chart.querySelector('svg')?.getAttribute('aria-label')),
+      ).toEqual([
+        'io-lens-vm CPU history, current 25%',
+        'io-lens-vm network I/O history, current 2.00 KB/s / 4.00 KB/s',
+        'io-lens-vm disk I/O history, current 500 B/s / 600 B/s',
+      ]);
+      expect(screen.queryByText('2.00 KB/s')).toBeNull();
+      expect(lensCharts[1].textContent).toBe('↓2.0K↑4.0K');
+      expect(lensCharts[1].parentElement).toHaveClass('h-4', 'motion-reduce:animate-none');
+
+      const cpuSvg = lensCharts[0].querySelector('svg') as SVGSVGElement;
+      cpuSvg.getBoundingClientRect = () =>
+        ({
+          bottom: 18,
+          height: 18,
+          left: 0,
+          right: 96,
+          top: 0,
+          width: 96,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      fireEvent.mouseMove(cpuSvg, { clientX: 48, clientY: 8 });
+      expect(lensCharts.every((chart) => chart.querySelector('[data-metric-history-cursor]'))).toBe(
+        true,
+      );
+
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+      expect(screen.getByText('2.00 KB/s')).toBeInTheDocument();
+    });
+
+    it('keeps lens charts mounted across live updates so scrub state survives', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ name: 'live-lens-vm', cpu: 0.2, networkIn: 2048, networkOut: 4096 }),
+      );
+      renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name', 'cpu', 'netIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const row = screen.getByText('live-lens-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+      const [cpuChart, netChart] = screen.getAllByTestId('metric-mini-sparkline');
+
+      setGuest(makeGuest({ name: 'live-lens-vm', cpu: 0.4, networkIn: 8192, networkOut: 1024 }));
+
+      // A websocket snapshot while the operator is reading a chart must update
+      // its values in place: a remount drops the chart's open scrub tooltip.
+      const [nextCpuChart, nextNetChart] = screen.getAllByTestId('metric-mini-sparkline');
+      expect(nextCpuChart).toBe(cpuChart);
+      expect(nextNetChart).toBe(netChart);
+      expect(nextNetChart.textContent).toBe('↓8.0K↑1.0K');
+      expect(nextCpuChart.querySelector('svg')).toHaveAttribute(
+        'aria-label',
+        'live-lens-vm CPU history, current 40%',
+      );
+      expect(nextNetChart.querySelector('svg')).toHaveAttribute(
+        'aria-label',
+        'live-lens-vm network I/O history, current 8.00 KB/s / 1.00 KB/s',
+      );
+    });
+
+    it('leaves stopped guests on the I/O dash while the lens charts the rest of the row', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'io-stopped-vm', status: 'stopped' }),
+        visibleColumnIds: ['name', 'cpu', 'netIo', 'diskIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const row = screen.getByText('io-stopped-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      expect(screen.getAllByTestId('metric-mini-sparkline')).toHaveLength(1);
+      expect(row.querySelector('[data-metric-rate-pair]')).toBeNull();
+    });
+
+    it.each(['bars', 'sparklines'] as const)(
+      'withdraws stopped VM filesystem usage in %s even without a read reason',
+      (mode) => {
+        const [guest, setGuest] = createSignal(makeGuest());
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        setGuest(makeGuest({ status: 'stopped', diskStatusReason: undefined }));
+        const cell = container.querySelector('[data-workload-col="disk"]')!;
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        // A stopped VM has no filesystem reading to give: the dash says so,
+        // and the reason is the title and assistive text, not a caption.
+        expect(cell.querySelector('[data-workload-disk-read-status]')).toHaveClass('sr-only');
+        expect(cell.querySelector('[aria-hidden="true"]')).toBeNull();
+        expect(cell).toHaveTextContent(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
+        expect(cell).toHaveAccessibleDescription();
+        expect(cell.getAttribute('title')).toBe(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
+        const chart = cell.querySelector('[role="img"]');
+        if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/current 50%/);
+        setGuest(makeGuest({ disk: makeDisk({ usage: 0, used: 0 }) }));
+        expect(container.querySelector('tr')).toBe(row);
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+        else
+          expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(
+            /current 0%/,
+          );
+      },
+    );
 
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
@@ -672,6 +895,30 @@ describe('GuestRow', () => {
   });
 
   describe('visible filesystem read provenance', () => {
+    it('forwards source classification without withdrawing an independent agent reading', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ diskStatusReason: 'agent-cooldown', disksFromAgent: true, agentStale: false }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr');
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+      setGuest({ ...guest(), agentStale: true });
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'last-known');
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+        'data-reading-message',
+        'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+      );
+      setGuest({ ...guest(), agentStale: false });
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+      expect(container.querySelector('tr')).toBe(row);
+    });
+
     const history = {
       getGuestMetricSeries: () => [
         {
@@ -698,7 +945,7 @@ describe('GuestRow', () => {
           });
           expect(screen.queryByTestId('disk-bar')).toBeNull();
           const cell = container.querySelector('[data-workload-col="disk"]')!;
-          expect(cell).toHaveTextContent('Unavailable');
+          expect(cell.querySelector('[data-workload-disk-read-status]')).toHaveClass('sr-only');
           const chart = cell.querySelector('[role="img"]');
           if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
         },
@@ -753,6 +1000,16 @@ describe('GuestRow', () => {
           expect(notice).toHaveTextContent(`Using last known disk stats. ${message}`);
           expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
           expect(notice).not.toHaveAttribute('tabindex');
+          if (mode === 'bars') {
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-state',
+              'last-known',
+            );
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-message',
+              `Using last known disk stats. ${message}`,
+            );
+          }
         },
       );
 
@@ -769,11 +1026,50 @@ describe('GuestRow', () => {
             metricDisplayMode: mode,
           });
           const notice = container.querySelector('[data-workload-disk-read-status]');
-          expect(notice).toHaveTextContent('Unavailable');
+          // A deferral is not a fault the user can fix, so no visible caption.
+          expect(notice).toHaveClass('sr-only');
           expect(notice).toHaveTextContent(message);
           expect(notice).not.toHaveTextContent('Last known');
+          // The reason is on hover too, not only for screen readers.
+          expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+            'title',
+            message,
+          );
+          if (mode === 'sparklines')
+            expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute('title', message);
         },
       );
+
+      it(`captions only a broken ${mode} read, in amber, and leaves a setup gap to the dash`, () => {
+        const render = (diskStatusReason: string) =>
+          renderGuestRow({
+            guest: makeGuest({
+              diskStatusReason,
+              disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+              disks: [],
+            }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          }).container.querySelector('[data-workload-disk-read-status]');
+        for (const reason of ['vm-stopped', 'agent-disabled', 'agent-not-running']) {
+          const notice = render(reason);
+          expect(notice).toHaveClass('sr-only');
+          expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+        }
+        const denied = render('permission-denied');
+        expect(denied?.className).toContain('text-amber-700');
+        expect(denied?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^No permission$/);
+        expect(denied?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
+        const agentError = render('agent-error');
+        expect(agentError?.className).toContain('text-amber-700');
+        expect(agentError?.querySelector('[aria-hidden="true"]')).toHaveTextContent(
+          /^Agent error$/,
+        );
+        // A retained reading says so first; its reason stays amber.
+        const retained = render('prev-agent-error');
+        expect(retained?.className).toContain('text-amber-700');
+        expect(retained?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Last known$/);
+      });
 
       it(`withdraws the ${mode} notice only on a fresh same-VM observation`, () => {
         const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-vm-locked' }));
@@ -872,10 +1168,19 @@ describe('GuestRow', () => {
         }),
       );
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('N/A');
-      expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice).toHaveTextContent(
         'Guest reads paused while Proxmox reports a VM operation lock',
       );
+      setGuest(
+        makeGuest({
+          diskStatusReason: 'permission-denied',
+          disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+        }),
+      );
+      notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Denied$/);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
     });
 
     it('leaves independent fresh data and non-VM rows unmarked', () => {
@@ -901,6 +1206,589 @@ describe('GuestRow', () => {
       );
       expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
     });
+
+    it("follows a linked agent's filesystems, not the Proxmox read reason", () => {
+      // Proxmox has no guest filesystems, so the agent's fill in while
+      // Proxmox still reports its own agent-not-running.
+      const agentGuest = (overrides: Partial<WorkloadGuest> = {}) =>
+        makeGuest({
+          diskStatusReason: 'agent-not-running',
+          disksFromAgent: true,
+          disks: [makeDisk({ mountpoint: '/' })],
+          ...overrides,
+        });
+      const [guest, setGuest] = createSignal(agentGuest());
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+          </tbody>
+        </table>
+      ));
+      expect(screen.getByTestId('disk-bar')).not.toHaveAttribute('data-reading-message');
+      expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+
+      const lastKnown =
+        'Using last known disk stats. The Pulse Agent in this guest stopped reporting.';
+      setGuest(agentGuest({ agentStale: true }));
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-message', lastKnown);
+      let notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
+      expect(notice).toHaveAttribute('title', lastKnown);
+      expect(notice?.className).toContain('text-muted');
+
+      setGuest(agentGuest({ agentStale: true, status: 'stopped', diskStatusReason: 'vm-stopped' }));
+      expect(screen.queryByTestId('disk-bar')).toBeNull();
+      notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice).toHaveTextContent(
+        'Guest filesystem stats unavailable while the VM is stopped.',
+      );
+      expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+        'title',
+        'Guest filesystem stats unavailable while the VM is stopped.',
+      );
+    });
+
+    it("does not announce a silent linked agent's sparkline reading as current", () => {
+      renderGuestRow({
+        guest: makeGuest({
+          diskStatusReason: 'agent-not-running',
+          disksFromAgent: true,
+          agentStale: true,
+        }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode: 'sparklines',
+      });
+      expect(
+        screen.getByRole('img', { name: 'test-vm disk usage history, last known 50%' }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe('memory observation provenance', () => {
+    const observedAt = '2026-09-30T11:00:00Z';
+    const observation = (state: string, date = observedAt, source = 'guest-agent-meminfo') =>
+      makeMemory({ observation: { state, source, observedAt: date } });
+    const noticeSelector = '[data-workload-memory-read-status]';
+    const history = {
+      getGuestMetricSeries: vi.fn(() => [
+        {
+          id: 'memory',
+          label: 'Memory',
+          color: '#f59e0b',
+          points: [
+            { timestamp: 1_000, value: 25 },
+            { timestamp: 2_000, value: 50 },
+          ],
+        },
+      ]),
+      getNodeMetricSeries: () => [],
+    };
+
+    beforeEach(() => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-01T12:00:00Z'));
+    });
+
+    for (const mode of ['bars', 'sparklines'] as const) {
+      it(`labels retained memory in ${mode} without hover or a guest check`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ memory: observation('last-known'), lastSeen: '2026-10-01T12:00:00Z' }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('Last known');
+        expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+          'Last known. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC. Not a current measurement.',
+        );
+        expect(notice).not.toHaveTextContent('2026-10-01');
+        expect(notice).not.toHaveAttribute('tabindex');
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+          expect(screen.queryByRole('img', { name: /current/ })).not.toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'false');
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-message',
+            'Last known. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC. Not a current measurement.',
+          );
+        }
+      });
+
+      it.each(['qemu', 'lxc'])(
+        `labels unannotated Proxmox %s memory freshness in ${mode}`,
+        (type) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ type, diskStatusReason: 'prev-vm-locked' }),
+            metricDisplayMode: mode,
+            visibleColumnIds: ['name', 'memory'],
+          });
+          expect(container.querySelector(noticeSelector)).toHaveTextContent('Freshness unknown');
+          expect(container.querySelector(noticeSelector)).toHaveTextContent(
+            'Observation time unknown',
+          );
+          if (mode === 'sparklines') {
+            expect(
+              screen.getByRole('img', { name: 'test-vm memory history, freshness unknown 50%' }),
+            ).toBeInTheDocument();
+          } else {
+            expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+              'data-reading-state',
+              'unknown',
+            );
+          }
+        },
+      );
+
+      it.each(['', 'not-a-date', '9999-01-01T00:00:00Z'])(
+        `does not qualify memory using an unusable current timestamp (%s) in ${mode}`,
+        (date) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ memory: observation('current', date) }),
+            metricDisplayMode: mode,
+            visibleColumnIds: ['name', 'memory'],
+          });
+          expect(container.querySelector(noticeSelector)).toHaveTextContent('Freshness unknown');
+          expect(container.querySelector(noticeSelector)).toHaveTextContent(
+            'Observation time unknown',
+          );
+          expect(container.querySelector(noticeSelector)).not.toHaveTextContent(
+            date || 'not-a-date',
+          );
+        },
+      );
+
+      it(`hides an unavailable numeric carrier without removing recorded history in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ memory: observation('unavailable') }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          metricHistory: history,
+        });
+        // No number is shown, so a visible "Unavailable" would only repeat
+        // the empty cell; the reason stays assistive text and the cell title.
+        const notice = container.querySelector(noticeSelector);
+        expect(notice).toHaveClass('sr-only');
+        expect(notice).toHaveTextContent(
+          'Unavailable. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC.',
+        );
+        expect(container.querySelector('[data-workload-col="memory"]')).toHaveAttribute(
+          'title',
+          notice?.textContent ?? '',
+        );
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, unavailable N/A' }),
+          ).toBeInTheDocument();
+          // The chart fills the cell, so it carries the reason on hover too.
+          expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+            'title',
+            notice?.textContent ?? '',
+          );
+          expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
+          expect(screen.queryByText('50%')).not.toBeInTheDocument();
+        } else {
+          // An empty bar reading N/A becomes the dash the disk cell uses.
+          expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+          expect(container.querySelector('[data-workload-col="memory"]')).toHaveTextContent('-');
+          expect(screen.queryByText('50%')).not.toBeInTheDocument();
+        }
+      });
+
+      it(`says a high current VM reading from a cache-inclusive source may include cache in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.8 * 4294967296,
+              usage: 80,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('May include cache');
+        const message = notice?.querySelector('.sr-only');
+        expect(message).toHaveTextContent('Current. Source: Proxmox. Observed: 2026-09-30');
+        expect(message).toHaveTextContent(
+          'a high percentage alone does not mean it is short of memory',
+        );
+        expect(message).toHaveTextContent('Pulse agent in the VM');
+        if (mode === 'sparklines') {
+          // The value itself is a current reading; only its source is qualified.
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 80%' }),
+          ).toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-reading-state', 'current');
+        }
+      });
+
+      it(`leaves a normal cache-inclusive VM reading unlabelled in ${mode}`, () => {
+        // Nothing reads as pressure below the guest's warning threshold, so
+        // the caveat stays in the bar tooltip and drawer.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation('current', observedAt, 'status-mem'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice).toHaveClass('sr-only');
+        expect(notice).toHaveTextContent('may include cached memory');
+        expect(container.querySelector('[data-workload-col="memory"]')).toHaveAttribute(
+          'title',
+          notice?.textContent ?? '',
+        );
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar').getAttribute('data-reading-message')).toContain(
+            'may include cached memory',
+          );
+        } else {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+        }
+      });
+
+      it(`captions a cache reading by the configured warning and the guest's bytes in ${mode}`, () => {
+        // The mocked guest thresholds warn at 70%, below the 75% default, and
+        // the bar is coloured by used/total, not a disagreeing usage field.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.72 * 4294967296,
+              usage: 40,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(
+          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
+        ).toHaveTextContent('May include cache');
+      });
+
+      it(`keeps a high container cache reading free of a ${mode} caption`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.9 * 4294967296,
+              usage: 90,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+      });
+
+      it(`adds and withdraws the ${mode} cache caption as the same guest crosses warning`, () => {
+        const memoryAt = (percent: number) => ({
+          ...observation('current', observedAt, 'status-mem'),
+          used: (percent / 100) * 4294967296,
+          usage: percent,
+        });
+        const [guest, setGuest] = createSignal(makeGuest({ type: 'qemu', memory: memoryAt(50) }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                metricDisplayMode={mode}
+                visibleColumnIds={['name', 'memory']}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        const caption = () => container.querySelector(`${noticeSelector} [aria-hidden]`);
+        expect(caption()).toBeNull();
+        setGuest(makeGuest({ type: 'qemu', memory: memoryAt(90) }));
+        expect(caption()).toHaveTextContent('May include cache');
+        setGuest(makeGuest({ type: 'qemu', memory: memoryAt(30) }));
+        expect(caption()).toBeNull();
+        expect(container.querySelector(noticeSelector)).toHaveClass('sr-only');
+        expect(container.querySelector('tr')).toBe(row);
+      });
+
+      it(`judges the cache cue by the guest's own memory in host-share ${mode}`, () => {
+        // 80% of a 4 GiB guest is a small share of a 64 GiB host, but the bar
+        // is coloured by the guest's own figure, and so is the cue.
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: {
+              ...observation('current', observedAt, 'status-mem'),
+              used: 0.8 * 4294967296,
+              usage: 80,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          memoryDisplayBasis: 'host',
+          parentMemoryTotal: 64 * 1024 ** 3,
+        });
+        expect(
+          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
+        ).toHaveTextContent('May include cache');
+      });
+
+      it(`keeps a container's cache caveat out of the ${mode} row label`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: observation('current', observedAt, 'status-mem'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        // Nothing for the user to set up on a container, so no label per row.
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'bars') {
+          const message = screen.getByTestId('memory-bar').getAttribute('data-reading-message');
+          expect(message).toContain('cached memory the container can reuse');
+          expect(message).toContain('Pulse agent in the container');
+          expect(message).not.toContain('QEMU');
+        }
+      });
+
+      it(`reads a container's own ${mode} listing value as cache-excluded`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: {
+              ...observation('current', observedAt, 'cluster-resources'),
+              used: 0.9 * 4294967296,
+              usage: 90,
+            },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        expect(container.querySelector('[data-workload-col="memory"]')).not.toHaveTextContent(
+          /cache/i,
+        );
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar')).not.toHaveAttribute('data-reading-message');
+        }
+      });
+
+      it(`adds no cache cue to a cache-aware ${mode} reading`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation('current', observedAt, 'guest-agent-meminfo'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'sparklines')
+          expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+            'title',
+            'test-vm memory history',
+          );
+      });
+
+      it(`withdraws the ${mode} cue only for a qualified same-guest reading`, () => {
+        const [guest, setGuest] = createSignal(makeGuest({ memory: observation('last-known') }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                metricDisplayMode={mode}
+                visibleColumnIds={['name', 'memory']}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        setGuest({
+          ...guest(),
+          lastSeen: '2026-10-01T12:00:00Z',
+          backupInProgress: false,
+          lock: '',
+        });
+        expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+        setGuest({ ...guest(), memory: observation('current') });
+        expect(container.querySelector('tr')).toBe(row);
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar')).not.toHaveAttribute('data-reading-state');
+        }
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+        }
+      });
+
+      it(`keeps a qualified independent memory reading current while disk reads defer in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            memory: observation('current', observedAt, 'agent'),
+            diskStatusReason: 'prev-vm-locked',
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+      });
+
+      it(`keeps measured zero, original source and host-share freshness in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            memory: { ...observation('last-known', observedAt, 'status-mem'), used: 0, usage: 0 },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          memoryDisplayBasis: 'host',
+          parentMemoryTotal: 8_589_934_592,
+        });
+        expect(container.querySelector(noticeSelector)).toHaveTextContent(
+          'Last known. Source: Proxmox',
+        );
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm host memory share history, last known 0%' }),
+          ).toBeInTheDocument();
+        else expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'false');
+      });
+    }
+
+    it('keeps original freshness across the real hover lens and preserves historical points', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('last-known') }),
+        metricDisplayMode: 'bars',
+        visibleColumnIds: ['name', 'memory'],
+        metricHistory: history,
+      });
+      const row = container.querySelector('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+      expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+      ).toBeInTheDocument();
+      expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+    });
+
+    it.each([
+      ['last-known', 'Prior'],
+      ['future-state', 'Unknown'],
+    ])('fits compact %s copy without losing the accessible source and time', (state, label) => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation(state) }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('QEMU guest agent');
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('2026-09-30 11:00:00 UTC');
+      expect(notice).not.toHaveTextContent('future-state');
+    });
+
+    it('keeps a compact unavailable reading to the dash and its accessible reason', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('unavailable') }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice).toHaveClass('sr-only');
+      expect(notice).toHaveTextContent('QEMU guest agent');
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+    });
+
+    it('fits the compact cache cue without losing the accessible caveat', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({
+          type: 'qemu',
+          memory: {
+            ...observation('current', observedAt, 'cluster-resources'),
+            used: 0.9 * 4294967296,
+            usage: 90,
+          },
+        }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(/^Cache\?$/);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');
+    });
+
+    it.each([
+      ['last-known', 'observed', 'Last known'],
+      ['current', 'not-a-date', 'Freshness unknown'],
+      ['future-state', 'observed', 'Freshness unknown'],
+    ])(
+      'keeps a %s cache-inclusive reading under its freshness label, not the current cue',
+      (state, time, label) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation(state, time === 'observed' ? observedAt : time, 'status-mem'),
+          }),
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+        expect(notice).not.toHaveTextContent('May include cache');
+        // The caveat still reaches the user, beside the freshness warning.
+        expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');
+      },
+    );
+
+    it('does not expose unknown provider labels or borrow disk provenance', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('private-state', observedAt, 'private-source') }),
+        visibleColumnIds: ['name', 'memory'],
+      });
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Unknown source');
+      expect(container.querySelector(noticeSelector)).not.toHaveTextContent('private-');
+    });
+
+    it.each([
+      { type: 'vm', platformScopes: ['vmware-vsphere' as const] },
+      { type: 'docker', workloadType: 'app-container' as const, vmid: 0 },
+    ])('preserves unannotated unrelated platform memory ($type)', (scope) => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(scope),
+        visibleColumnIds: ['name', 'memory'],
+        metricDisplayMode: 'sparklines',
+      });
+      expect(container.querySelector(noticeSelector)).toBeNull();
+      expect(
+        screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe('lock label', () => {
@@ -915,7 +1803,7 @@ describe('GuestRow', () => {
           'title',
           expected,
         );
-        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', expected);
+        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-message', expected);
       },
     );
 
@@ -940,6 +1828,79 @@ describe('GuestRow', () => {
     it('shows lock label when guest is locked', () => {
       renderGuestRow({ guest: makeGuest({ lock: 'migrate' }) });
       expect(screen.getByText(/Lock:.*migrate/)).toBeTruthy();
+    });
+
+    it.each(['narrow', 'phone'] as const)(
+      'keeps a %s lock below the identity without changing row activation',
+      (layout) => {
+        const onClick = vi.fn();
+        const { container } = renderGuestRow({
+          guest: makeGuest({ name: 'backup-guest', lock: 'backup' }),
+          workloadTableLayoutMode: layout,
+          onClick,
+        });
+        const lock = screen.getByTitle('Guest is locked (backup)');
+        const name = screen.getByText('backup-guest');
+        expect(lock.parentElement).toHaveClass('flex-col', 'items-start', 'min-w-0');
+        expect(lock.parentElement).toContainElement(name);
+        expect(name.parentElement).toHaveClass('w-full');
+        expect(name.parentElement?.parentElement).toHaveClass('flex-col', 'items-start');
+        expect(name.parentElement?.parentElement?.parentElement).toHaveClass('w-full');
+        expect(lock).toHaveClass('whitespace-normal', 'break-words', 'max-w-full');
+        expect(lock).not.toHaveAttribute('tabindex');
+        fireEvent.click(lock);
+        expect(onClick).toHaveBeenCalledTimes(1);
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Expand backup-guest' }), {
+          key: 'Enter',
+        });
+        expect(onClick).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('tr')).not.toHaveAttribute('tabindex');
+      },
+    );
+
+    it.each(['mobile', 'tablet', 'compact', 'wide'] as const)(
+      'preserves inline identity and lock at the %s table layout',
+      (layout) => {
+        renderGuestRow({
+          guest: makeGuest({ lock: 'migrate' }),
+          workloadTableLayoutMode: layout,
+        });
+        const lock = screen.getByTitle('Guest is locked (migrate)');
+        expect(lock.parentElement).toHaveClass('items-center');
+        expect(lock.parentElement).not.toHaveClass('flex-col');
+        expect(lock).toHaveClass('whitespace-nowrap');
+      },
+    );
+
+    it('updates a lock on the same guest without renewing retained memory', () => {
+      const initial = makeGuest({
+        lock: 'backup',
+        memory: makeMemory({
+          observation: {
+            state: 'last-known',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-09-30T11:00:00Z',
+          },
+        }),
+      });
+      const [guest, setGuest] = createSignal(initial);
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} workloadTableLayoutMode="phone" />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr');
+      const notice = container.querySelector('[data-workload-memory-read-status]');
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+      setGuest({ ...initial, lock: 'snapshot-delete' });
+      expect(screen.getByTitle('Guest is locked (snapshot-delete)')).toBeVisible();
+      setGuest({ ...initial, lock: '', lastSeen: '2026-10-06T10:00:00Z' });
+      expect(screen.queryByTitle('Guest is locked (snapshot-delete)')).toBeNull();
+      expect(container.querySelector('tr')).toBe(row);
+      expect(container.querySelector('[data-workload-memory-read-status]')).toBe(notice);
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
     });
 
     it('does not show lock label when not locked', () => {
@@ -1066,6 +2027,33 @@ describe('GuestRow', () => {
       const tr = container.querySelector('tr')!;
       fireEvent.click(tr);
       expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it('does not open the guest for a drag that selects row text', () => {
+      const onClick = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        onClick,
+      });
+      const cell = container.querySelector('td[data-workload-col="vmid"]')!;
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const selection = document.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      try {
+        fireEvent.mouseDown(cell, { clientX: 4, clientY: 8 });
+        fireEvent.click(cell, { clientX: 30, clientY: 8 });
+        expect(onClick).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Expand test-vm' }));
+        expect(onClick).toHaveBeenCalledTimes(1);
+
+        fireEvent.mouseDown(cell, { clientX: 12, clientY: 8 });
+        fireEvent.click(cell, { clientX: 12, clientY: 8 });
+        expect(onClick).toHaveBeenCalledTimes(2);
+      } finally {
+        selection.removeAllRanges();
+      }
     });
 
     it('marks only actionable guest rows as native touch click targets', () => {
@@ -1436,6 +2424,78 @@ describe('GuestRow', () => {
 
       expect(disclosureButton.className).not.toContain('sr-only');
     });
+
+    // jsdom has no layout, so this pins the classes that decide phone
+    // geometry. On a 375px mock stack a 44px name-cell backup indicator
+    // covered the lower left of every row (the row is the phone disclosure
+    // target) and grew rows from 33.5px to 63.5px; at 24px rows are 43.5px
+    // and a tap beside the shield opens the guest drawer.
+    it('regression: keeps the phone name-cell backup indicator to a 24px target', () => {
+      const onClick = vi.fn();
+      const guest = makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.now() - 3_600_000,
+      });
+      renderGuestRow({
+        guest,
+        isGroupedView: true,
+        workloadTableLayoutMode: 'phone',
+        visibleColumnIds: ['name', 'cpu'],
+        onClick,
+      });
+      const disclosure = screen.getByRole('button', { name: `Expand ${guest.name}` });
+      const indicator = screen.getByRole('button', { name: /^Last backup:/ });
+      const indicatorClasses = indicator.className.split(/\s+/);
+
+      expect(disclosure.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-9', 'w-9']));
+      expect(indicatorClasses).toEqual(
+        expect.arrayContaining(['min-h-6', 'min-w-6', 'sm:min-h-0', 'sm:min-w-0']),
+      );
+      expect(indicatorClasses).not.toContain('min-h-11');
+      expect(indicatorClasses).not.toContain('min-w-11');
+
+      fireEvent.click(indicator);
+      expect(
+        screen.getByRole('dialog', { name: `Backup status details for ${guest.name}` }),
+      ).toBeVisible();
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    // #2858: the amber shield names the operator's own limits (this mock's
+    // stale limit is 48 hours, not the 72-hour default) and links to them.
+    it('says which backup age limit a row crossed and links to where it is set', () => {
+      const guest = makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.now() - 60 * 3_600_000,
+      });
+      renderGuestRow({ guest, visibleColumnIds: ['name', 'backup'] });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Backup status: overdue/ }));
+      const dialog = screen.getByRole('dialog', {
+        name: `Backup status details for ${guest.name}`,
+      });
+      expect(dialog).toHaveTextContent(
+        'Shown amber: more than 1 day old (Fresh Hours). Also past Stale Hours (2 days).',
+      );
+      expect(
+        screen.getByRole('link', { name: 'Change when backups count as old' }),
+      ).toHaveAttribute('href', '/alerts/thresholds/proxmox#backups');
+    });
+
+    it('keeps the 44px touch target on the Backup column badge', () => {
+      renderGuestRow({
+        guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: Date.now() }),
+        workloadTableLayoutMode: 'phone',
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const badge = screen.getByRole('button', { name: /^Backup status:/ });
+
+      expect(badge.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['min-h-11', 'min-w-11']),
+      );
+    });
   });
 
   describe('custom URL on the name cell', () => {
@@ -1574,8 +2634,8 @@ describe('GuestRow', () => {
 describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
     // name, runtime, type, info, vmid, cpu, memory, disk, ip, uptime, node,
-    // image, namespace, context, aiContext, backup, tags, os, netIo, diskIo, update
-    expect(GUEST_COLUMNS.length).toBe(22);
+    // image, namespace, context, backup, tags, os, netIo, diskIo, update
+    expect(GUEST_COLUMNS.length).toBe(21);
   });
 
   it('has name as the first column', () => {
@@ -1607,7 +2667,7 @@ describe('GUEST_COLUMNS', () => {
     expect(toggleableIds).toContain('ip');
     expect(toggleableIds).toContain('uptime');
     expect(toggleableIds).toContain('node');
-    expect(toggleableIds).toContain('aiContext');
+    expect(toggleableIds).not.toContain('aiContext');
     expect(toggleableIds).toContain('backup');
     expect(toggleableIds).toContain('tags');
     expect(toggleableIds).toContain('os');
@@ -1619,7 +2679,6 @@ describe('GUEST_COLUMNS', () => {
     const nameColumn = GUEST_COLUMNS.find((column) => column.id === 'name');
     const runtimeColumn = GUEST_COLUMNS.find((column) => column.id === 'runtime');
     const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
-    const aiContextColumn = GUEST_COLUMNS.find((column) => column.id === 'aiContext');
     const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
     const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
     const updateColumn = GUEST_COLUMNS.find((column) => column.id === 'update');
@@ -1631,8 +2690,6 @@ describe('GUEST_COLUMNS', () => {
     expect(runtimeColumn?.minWidth).toBe('96px');
     expect(runtimeColumn?.maxWidth).toBe('112px');
     expect(typeColumn?.width).toBe('60px');
-    expect(aiContextColumn?.defaultHidden).toBe(true);
-    expect(aiContextColumn?.width).toBe('92px');
     expect(netIoColumn?.width).toBe('170px');
     expect(netIoColumn?.minWidth).toBe('170px');
     expect(diskIoColumn?.width).toBe('170px');
@@ -1732,7 +2789,6 @@ describe('GUEST_COLUMNS', () => {
       'memory',
       'disk',
       'uptime',
-      'aiContext',
       'backup',
     ]);
 
@@ -1751,7 +2807,7 @@ describe('GUEST_COLUMNS', () => {
         'compact',
         compactColumns.map((column) => column.id),
       ),
-    ).toEqual({ width: '25.2427%' });
+    ).toEqual({ width: '27.6596%' });
   });
 
   it('normalizes compact widths for workload view modes with different column sets', () => {
@@ -1759,17 +2815,9 @@ describe('GUEST_COLUMNS', () => {
     const compactPodColumns = getWorkloadVisibleColumnsForLayout(podColumns, 'compact');
     const compactPodColumnIds = compactPodColumns.map((column) => column.id);
 
-    expect(compactPodColumnIds).toEqual([
-      'name',
-      'cpu',
-      'memory',
-      'image',
-      'namespace',
-      'context',
-      'aiContext',
-    ]);
+    expect(compactPodColumnIds).toEqual(['name', 'cpu', 'memory', 'image', 'namespace', 'context']);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '25%',
+      width: '28.3843%',
     });
   });
 
@@ -1788,7 +2836,7 @@ describe('GUEST_COLUMNS', () => {
     expect(
       getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
     ).toEqual({
-      width: '8.9286%',
+      width: '9.2081%',
     });
   });
 
@@ -1844,12 +2892,6 @@ describe('VIEW_MODE_COLUMNS', () => {
 
   it('all mode includes info column (merged identifier)', () => {
     expect(VIEW_MODE_COLUMNS.all!.has('info')).toBe(true);
-  });
-
-  it('all view modes expose the hidden AI Context column', () => {
-    for (const [, cols] of Object.entries(VIEW_MODE_COLUMNS)) {
-      if (cols) expect(cols.has('aiContext')).toBe(true);
-    }
   });
 
   it('all mode does not include vmid (uses info instead)', () => {
@@ -2294,4 +3336,29 @@ describe('app-container update button visibility', () => {
     });
     expect(screen.queryByTestId('update-button')).toBeNull();
   });
+});
+
+describe('GuestRow backup evidence disclosure', () => {
+  it.each([{ columns: ['name', 'backup'] }, { columns: ['name'] }])(
+    'opens read-only evidence without triggering the enclosing row for columns %j',
+    ({ columns }) => {
+      const onClick = vi.fn();
+      renderGuestRow({
+        guest: makeGuest({ lastBackup: Date.now() - 3600000 }),
+        visibleColumnIds: columns,
+        onClick,
+      });
+      const trigger = screen.getByRole('button', {
+        name: columns.includes('backup') ? /^Backup status:/ : /^Last backup:/,
+      });
+      fireEvent.click(trigger);
+      expect(
+        screen.getByRole('dialog', { name: 'Backup status details for test-vm' }),
+      ).toHaveTextContent('Last completed backup');
+      expect(onClick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -5,7 +5,6 @@ import {
   getContainerRuntimeBadgeForRuntime,
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
-  getInfrastructureSystemIdentitySortLabel,
   getPlatformBadge,
   getTypeBadge,
   getUnifiedSourceBadges,
@@ -131,16 +130,8 @@ describe('resourceBadgePresentation — dead-arm reachability characterization (
     expect(badges.map((b) => b.label)).toEqual(['Docker / Podman']);
   });
 
-  it('getInfrastructureSystemIdentitySortLabel derives a platform label for an unknown platformType, so the L701 truthy-stop of the `||` chain cannot fire', () => {
-    // Reaching the L701 operand requires the identity badge list to be empty
-    // (badges[0]?.label falsy). But the list is only empty when no identity at
-    // all resolves — which requires platformType to be absent/falsy (a non-empty
-    // platformType always yields a platform badge at L690). With a falsy
-    // platformType, getPlatformBadge returns null, so L701's `?.label` is
-    // always falsy when reached and never stops the chain. A non-empty (even
-    // unknown) platformType instead produces a non-empty identity list, so the
-    // sort label resolves at L700 and L701 is never reached.
-    const label = getInfrastructureSystemIdentitySortLabel(
+  it('getInfrastructureSystemIdentityBadges derives a platform badge for an unknown platformType', () => {
+    const badges = getInfrastructureSystemIdentityBadges(
       makeResource({
         type: 'vm',
         platformType: 'fictional-hypervisor-xyz' as Resource['platformType'],
@@ -148,7 +139,7 @@ describe('resourceBadgePresentation — dead-arm reachability characterization (
         sources: [],
       }),
     );
-    expect(label).toBe('Fictional Hypervisor Xyz');
+    expect(badges.map((b) => b.label)).toEqual(['Fictional Hypervisor Xyz']);
   });
 
   it('treats a whitespace-only agent.platform as absent, so the `if (!normalized) return null` guards at L271/L287 in the host-identity helpers cannot fire', () => {

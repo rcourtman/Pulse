@@ -19,6 +19,9 @@ type StorageProps = {
   filterSearchPlaceholder?: string;
   filterSearchEmptyMessage?: string;
   resourceSource?: StoragePageResourceSource;
+  // False while the platform page shows another tab; `?resource=` links
+  // then belong to that tab.
+  routeActive?: boolean;
 };
 
 const Storage: Component<StorageProps> = (props) => {
@@ -51,12 +54,9 @@ const Storage: Component<StorageProps> = (props) => {
     sourceFilterOptions,
     nodeFilterOptions,
     clearPinnedSummaryScope,
-    activeSummaryStorageGroupScope,
     activeSummaryStorageResourceId,
-    focusedSummaryStorageGroupScope,
-    focusedSummaryStorageGroupId,
-    hoveredSummaryStorageGroupScope,
     physicalDisks,
+    getDiskAlertResourceIds,
     nodes,
     groupedRecords,
     expandedGroups,
@@ -72,14 +72,13 @@ const Storage: Component<StorageProps> = (props) => {
     isLoadingPools,
     selectedDiskId,
     setClearSurfaceRootRef,
-    setFocusedStorageGroupScope,
-    setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
   } = useStoragePageModel({
     forcedSourceFilter: () => props.forcedSourceFilter,
     resourceSource: props.resourceSource,
+    routeActive: () => props.routeActive ?? true,
   });
 
   createEffect(() => {
@@ -139,6 +138,7 @@ const Storage: Component<StorageProps> = (props) => {
         <StorageContentCard
           view={view}
           physicalDisks={physicalDisks}
+          getDiskAlertResourceIds={getDiskAlertResourceIds}
           nodes={nodes}
           sourceFilter={sourceFilter}
           healthFilter={healthFilter}
@@ -158,13 +158,7 @@ const Storage: Component<StorageProps> = (props) => {
           highlightedRecordId={highlightedRecordId}
           getRecordAlertState={getRecordAlertState}
           isLoadingPools={isLoadingPools}
-          activeSummaryGroupScope={activeSummaryStorageGroupScope}
           clearPinnedSummaryScope={clearPinnedSummaryScope}
-          hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
-          focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
-          focusedSummaryGroupId={focusedSummaryStorageGroupId}
-          onGroupFocusChange={setFocusedStorageGroupScope}
-          onGroupHoverChange={setHoveredStorageGroupScope}
           highlightedSummaryResourceId={activeSummaryStorageResourceId}
           hoveredStorageResourceId={hoveredStorageResourceId}
           setTableRootRef={setSummaryTableRootRef}

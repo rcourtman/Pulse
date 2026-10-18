@@ -13,10 +13,18 @@ import {
   getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookTestFailure,
   getAlertWebhookTestSuccess,
+  getAlertWebhooksSectionDescription,
   normalizeAlertWebhookCustomFields,
 } from '@/utils/alertWebhookPresentation';
 
 describe('alertWebhookPresentation', () => {
+  it('names the services webhooks reach instead of the transport', () => {
+    // Users look for Discord or Telegram, not "webhook".
+    expect(getAlertWebhooksSectionDescription()).toBe(
+      'Discord, Telegram, Slack, Teams, ntfy, Gotify, Pushover, PagerDuty or any HTTP endpoint.',
+    );
+  });
+
   it('advertises translation-ready generic webhook variables', () => {
     expect(ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER).toContain(
       '"message_key": "{{.MessageKey}}"',

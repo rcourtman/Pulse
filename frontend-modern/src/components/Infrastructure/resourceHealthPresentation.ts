@@ -1,4 +1,5 @@
 import type { Resource, ResourceStorageRisk } from '@/types/resource';
+import { getTrueNASDatasetStateSummary } from '@/utils/truenasDatasetState';
 
 export interface ResourceHealthIssuePresentation {
   primary: string;
@@ -65,7 +66,9 @@ export const getResourceHealthIssuePresentation = (
   const summaries: string[] = [];
 
   pushUnique(summaries, resource.incidentSummary);
-  pushUnique(summaries, resource.incidentLabel);
+  // The rollup names only the top incident, so the drawer would otherwise
+  // drop the rest (a pool carries its own alert and its disks' alerts).
+  for (const incident of resource.incidents ?? []) pushUnique(summaries, incident.summary);
 
   pushUnique(summaries, resource.storage?.postureSummary);
   pushUnique(summaries, resource.storage?.riskSummary);
@@ -84,6 +87,14 @@ export const getResourceHealthIssuePresentation = (
   pushUnique(summaries, agent?.unraid?.protectionSummary);
   pushUnique(summaries, agent?.unraid?.rebuildSummary);
   pushRiskReasons(summaries, agent?.unraid?.risk);
+
+  if (resource.storage?.topology === 'dataset') {
+    pushUnique(summaries, getTrueNASDatasetStateSummary(resource.tags));
+  }
+
+  // The rollup's category label (Resource Health Issue, Capacity Pressure)
+  // says less than any summary above, so it only stands in when there is none.
+  if (summaries.length === 0) pushUnique(summaries, resource.incidentLabel);
 
   if (summaries.length === 0 || !ATTENTION_STATUSES.has(status)) {
     return null;

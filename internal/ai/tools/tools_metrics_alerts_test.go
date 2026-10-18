@@ -215,6 +215,49 @@ func TestExecuteListResolvedAlerts(t *testing.T) {
 	if len(resp.Alerts) != 1 || resp.Alerts[0].ID != "a1" {
 		t.Fatalf("unexpected resolved alerts: %+v", resp)
 	}
+	if resp.Alerts[0].Resolution != "" || resp.Alerts[0].SuccessorResourceID != "" {
+		t.Fatalf("a recovery must not carry a resolution: %+v", resp.Alerts[0])
+	}
+}
+
+// A node alert handed to its Pulse agent closes without recovering, so the
+// assistant must see that, and where the condition went, instead of a plain
+// resolve it would read as the node being healthy again.
+func TestExecuteListResolvedAlertsReportsHandover(t *testing.T) {
+	alertProv := &mockAlertProvider{}
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	executor.alertProvider = alertProv
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	alertProv.On("GetRecentlyResolved", 24*60).Return([]models.ResolvedAlert{{
+		Alert: models.Alert{
+			ID:           "pve1-memory",
+			Type:         "memory",
+			Level:        "warning",
+			ResourceID:   "pve1",
+			ResourceName: "pve1",
+			Message:      "Memory usage at 95%",
+			StartTime:    now.Add(-time.Hour),
+			Resolution: &models.AlertResolution{
+				Reason:              "moved_to_agent",
+				SuccessorResourceID: "agent-pve1",
+				SuccessorName:       "pve1 (Host Agent)",
+				Summary:             summary,
+			},
+		},
+		ResolvedTime: now,
+	}})
+
+	result, _ := executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
+	var resp ResolvedAlertsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode resolved alerts: %v", err)
+	}
+	if len(resp.Alerts) != 1 ||
+		resp.Alerts[0].Resolution != summary ||
+		resp.Alerts[0].SuccessorResourceID != "agent-pve1" {
+		t.Fatalf("resolved alerts = %+v, want the handover and its successor", resp.Alerts)
+	}
 }
 
 func TestExecuteListAlertsAndFindings(t *testing.T) {

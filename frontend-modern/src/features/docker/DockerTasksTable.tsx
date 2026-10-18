@@ -2,6 +2,7 @@ import { Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import {
   PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -27,6 +28,7 @@ import {
   DockerResourceNameCell,
   dockerNumberValue,
   dockerResourceName,
+  dockerStateTextToneClass,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -73,6 +75,17 @@ const getDockerTaskSortValue = (
       key satisfies never;
       return null;
   }
+};
+
+// Why a task failed or what Docker last said about it, for a phone that
+// cannot hover the Current cell.
+const taskReasonFields = (resource: Resource): (readonly [string, string])[] => {
+  const fields: (readonly [string, string])[] = [];
+  const error = asTrimmedString(resource.docker?.error);
+  const message = asTrimmedString(resource.docker?.message);
+  if (error) fields.push(['Error', error]);
+  if (message) fields.push(['Message', message]);
+  return fields;
 };
 
 export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
@@ -232,20 +245,30 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            {dockerTextValue(resource.docker?.desiredState)}
+                            {/* Read as words beside Current; Docker's token on hover. */}
+                            <span title={dockerTextValue(resource.docker?.desiredState)}>
+                              {titleCaseDelimitedLabel(resource.docker?.desiredState, {
+                                fallback: '—',
+                              })}
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
+                            {/* The dot's own words and colour; Docker's raw state, error
+                                or message stays on hover. */}
                             <span
-                              class="inline-block max-w-56 truncate"
+                              class={`block truncate ${dockerStateTextToneClass(
+                                mapDockerTaskStatus(resource).variant,
+                              )}`}
                               title={dockerTextValue(
                                 resource.docker?.error ||
                                   resource.docker?.message ||
                                   resource.docker?.currentState,
                               )}
+                              data-docker-task-state={mapDockerTaskStatus(resource).variant}
                             >
-                              {dockerTextValue(resource.docker?.currentState)}
+                              {mapDockerTaskStatus(resource).label}
                             </span>
                           </TableCell>
                           <TableCell
@@ -283,6 +306,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                                   ),
                                 ],
                                 ['Started', dockerTextValue(resource.docker?.startedAt)],
+                                ...taskReasonFields(resource),
                               ]}
                             />
                           </InlineDetailTableRow>

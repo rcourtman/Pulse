@@ -1463,9 +1463,24 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
+			if suppressLeakedToolContent && isPatrolInvestigationExecution(a.currentExecutionProfile()) {
+				// The model serialized a tool call as prose instead of concluding,
+				// so the clean prefix is intent ("next I will check..."), not a
+				// conclusion. The orchestrator would read that unmarked prose as
+				// NEEDS_ATTENTION, which is terminal. Drop it and take the same
+				// bounded summary turn and failure receipt as an empty final turn.
+				// Interactive chat keeps the prefix it already streamed.
+				log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Investigation turn leaked a tool call instead of concluding")
+				if len(resultMessages) > 0 {
+					resultMessages[len(resultMessages)-1].Content = ""
+				}
+				if len(providerMessages) > 0 {
+					providerMessages[len(providerMessages)-1].Content = ""
+				}
+			}
+
 			log.Debug().Msg("agentic loop complete - no tool calls")
-			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
-			return resultMessages, nil
+			return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 		}
 
 		// === Execute tool calls (three-phase pipeline) ===
@@ -1954,6 +1969,5 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	}
 
 	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
-	resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
-	return resultMessages, nil
+	return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 }

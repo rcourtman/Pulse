@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { createSignal } from 'solid-js';
+import { formatBytes } from '@/utils/format';
 import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
 import type { Disk } from '@/types/api';
 import type { AnomalyReport } from '@/types/aiIntelligence';
@@ -629,5 +631,49 @@ describe('StackedDiskBar', () => {
 
       expect(container.querySelector('[data-stacked-disk-max-label]')).toBeNull();
     });
+  });
+});
+
+describe('reactive disk reading decorations', () => {
+  it('updates an open last-known tooltip and mounted shell through fresh and unavailable replacement', async () => {
+    const message = 'Using last known disk stats. Guest reads paused during a backup.';
+    const [reading, setReading] = createSignal<{
+      state: 'last-known' | 'current' | 'unavailable';
+      message: string | null;
+    }>({ state: 'last-known', message });
+    const [disk, setDisk] = createSignal(
+      makeDisk({ used: 102005473280, free: 5368709120, usage: 95 }),
+    );
+    const { container } = render(() => (
+      <StackedDiskBar disks={[disk()]} reading={reading()} anomaly={makeAnomaly()} />
+    ));
+    const shell = container.firstElementChild;
+    expect(getSingleBarFill(container)).toHaveAttribute('fill', 'rgba(148, 163, 184, 0.5)');
+    expect(container.querySelector('.animate-pulse')).toBeNull();
+    fireEvent.mouseEnter(getBarTrigger(container));
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.getByText('Last known disk usage')).toHaveClass('text-base-content');
+    expect(document.querySelector('[data-stacked-disk-fill="tooltip"]')).toHaveAttribute(
+      'fill',
+      'rgba(148, 163, 184, 0.5)',
+    );
+    setReading({ state: 'current', message: null });
+    expect(container.firstElementChild).toBe(shell);
+    expect(screen.queryByText(message)).toBeNull();
+    expect(getSingleBarFill(container)).toHaveAttribute('fill', 'rgba(239, 68, 68, 0.6)');
+    expect(container.querySelector('.animate-pulse')).not.toBeNull();
+    setReading({ state: 'unavailable', message: 'No filesystem usage reading.' });
+    expect(container.firstElementChild).toBe(shell);
+    expect(container.querySelector('[data-stacked-disk-unavailable]')).toHaveTextContent('N/A');
+    expect(container.querySelector('[data-stacked-disk-fill]')).toBeNull();
+    expect(container.querySelector('.animate-pulse')).toBeNull();
+    expect(screen.queryByText('95%')).toBeNull();
+    expect(screen.getByText(`?/${formatBytes(disk().total ?? 0)}`)).toBeVisible();
+    setDisk(makeDisk({ used: 0, usage: 0 }));
+    setReading({ state: 'current', message: null });
+    expect(container.firstElementChild).toBe(shell);
+    expect(getSingleBarFill(container)).toHaveAttribute('width', '0');
+    expect(getSingleBarFill(container)).toHaveAttribute('fill', 'rgba(34, 197, 94, 0.6)');
+    fireEvent.mouseLeave(getBarTrigger(container));
   });
 });

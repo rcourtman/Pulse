@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "e25472feab5b9bcc8acdfea3f946c675475fe7cd",
+  "verified_at": "2026-10-06T19:31:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "f050360724c96235f134ed79aa96436a8c414a7d1f96722bb008efa141b2e0fb"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Merged types/api.ts is the union of this branch's Alert.metricStatus/MetricAlertStatus declarations and main's Alert.resolution/AlertResolution declarations; it emits no runtime code",
+    "vite build with main's types/api.ts and with the merged file produce byte-identical output (diff -rq over every emitted asset)",
+    "tsc --noEmit passes on the merged tree; alert presentation, guardrail, Proxmox nodes table, guest drawer, assistant handoff, storage headline and temperature suites pass (7 files, 300 tests)",
+    "Rendered surfaces were verified live earlier on this branch (receipts 4766668c29936861 and 68deecd720b4873b); no runtime bytes changed since"
+  ],
+  "interactions": [
+    "Built frontend-modern with vite using main's and the merged types/api.ts and compared every output file",
+    "Ran tsc and the alert-related vitest suites on the merged tree"
+  ]
+}

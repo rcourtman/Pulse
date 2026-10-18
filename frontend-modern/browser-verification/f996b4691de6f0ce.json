@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "104af6eb6e6894055bfff2b6dc8cc9e046920735",
+  "verified_at": "2026-10-06T19:21:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "a5666d3229bf78cc04eb16dd85c1b13ec3617e74d938ea08ac8d40a97bcf7ccb"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined content of PatrolAttentionWorkbench.tsx after merging origin/main (with #2591, moved-alert presentation) into this branch (relative-time clock for the open attention detail)",
+    "Private mock stack (backend :7731, Vite :5251 serving the merged tree) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled",
+    "Patrol inbox: opened the first attention item; injected acknowledgement, timeline and evidence times 3, 5 and 7 minutes before load read 'Acknowledged by admin 3m ago' and 3m/5m/7m, then 13m/15m/17m after ten held minutes, at 1440 and 390",
+    "No page errors at either viewport; Patrol, Alerts and run history suites (106 files) pass on the merged tree"
+  ],
+  "interactions": [
+    "Loaded /patrol, opened the first attention detail, held the stream and advanced the page clock ten one-minute steps, at both viewports"
+  ]
+}

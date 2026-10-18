@@ -1045,10 +1045,26 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
-// RequireAdmin middleware checks for authentication and admin privileges.
-// Proxy-auth users must have the configured admin role. Session/OIDC users
-// must match the configured admin identity.
+// RequireAdmin middleware checks for authentication and instance admin
+// privileges. Proxy-auth users must have the configured admin role. Session and
+// OIDC users must be instance administrators (ensureAdminSession); an
+// organization's owner or admin is refused, and so is an API token bound to a
+// tenant organization, whatever scopes it holds.
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
+	return requireAdminSession(cfg, ensureAdminSession, handler)
+}
+
+// RequireOrgAdmin is RequireAdmin for routes whose handlers act only on the
+// request organization's own config and monitor state. Session users who can
+// manage that organization are admitted as well (ensureOrgAdminSession), and
+// tokens bound to it are judged by the route's scope alone. Use it
+// only after checking that the handler cannot reach instance-wide state or
+// another organization's data.
+func RequireOrgAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
+	return requireAdminSession(cfg, ensureOrgAdminSession, handler)
+}
+
+func requireAdminSession(cfg *config.Config, sessionCheck func(*config.Config, http.ResponseWriter, *http.Request) bool, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)
 		if adminBypassAppliesToRequest(r) {
@@ -1092,8 +1108,8 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 			}
 		}
 
-		// Enforce configured admin identity for session-based auth.
-		if !ensureAdminSession(cfg, w, r) {
+		// Enforce the route's admin identity rule for session-based auth.
+		if !sessionCheck(cfg, w, r) {
 			return
 		}
 

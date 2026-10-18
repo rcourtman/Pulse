@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "base_sha": "b69258f14f5c6174f7b979dac07e0c218b372403",
+  "verified_at": "2026-10-05T09:28:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNameText.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "3425465b2ef094146ac94e6b4ab2833e6601713a59200a3140d555d17e28e4e5",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "9a577f0f8cbe0437b80255a1a2ea41dd0c7e32b1c588464a4b89c0501d64a897",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "d4e9b2f2e83ef93fcc84946ea544dacb703e48dc2e181c2f66ae718af90af2c1",
+    "frontend-modern/src/features/kubernetes/KubernetesNameText.tsx": "d83694187f8d68d194e2474372f5d362b29f0baf5083edec1a057a327de05da2",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "4102884da1e308d07892ac25058f6e57831ecc20c6f4cd5da56171c42e8d55d5",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "82a32f2247138e7fb2db75bdc9efecb22249dd51b69f14aa98023f247a118c6c",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "22bddd9ff855dcce7a3d280688f8251d341ad77b7ca74bdbe901bd87f985dc20",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "0ab832b8c131ad9ae695c72e44cfbc92fcc37b0243217acba776b4af4ba5115e",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx": "f7b31d83a0c3377b32c7f893e0255221d075acb55654800d3a769c87358b3d71",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "1b84a2da0935626bdaf6819ca633cb4b1e2de1cf6d67d362081813c2f4b73277",
+    "frontend-modern/src/index.css": "cc901783e7da07494d095b45d791e414803c659583ac5a1b447e1a38bf2c379c"
+  },
+  "routes": [
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/storage",
+    "/vmware/hosts",
+    "/docker/hosts",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 700,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 820,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 1100,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Clip sweep (scrollWidth over clientWidth on every cell, every Kubernetes tab, 600 to 1440 wide): identity-column clips fall from 284 to 186, most of the rest being pod heads that now truncate by design with the generated tail kept",
+    "Nodes at 700: Prod Euw1 K8s 03 reads in full, where main showed Pr..., and the Nodes table has no name clipping at any width from 600 to 1440 and no clipping at all at 1100 and 1440 (Capacity, Runtime and Roles fit)",
+    "Workloads at 700: deployment names read in full (main cut them to two letters such as ac... and ch...), pods read checkout-a...-c7z2p and the Node column prod...-02",
+    "Other platforms between 600 and 700: TrueNAS storage and vSphere resource name clips go from 14 to 0, Docker and vSphere host tables keep their names whole at about 37 percent, with no new clipping in any column; widths at 768 and up are unchanged there",
+    "A ten-digit node tail forced into the Pods Node cell at 600 and 700 stays inside the cell and ends in an ellipsis"
+  ],
+  "interactions": [
+    "Ran the clip sweep on main and on the change across seven widths",
+    "Injected an oversized tail into a live Node cell and measured it"
+  ]
+}

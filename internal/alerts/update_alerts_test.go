@@ -280,6 +280,74 @@ func TestCheckDockerContainerImageUpdate(t *testing.T) {
 		}
 	})
 
+	// Agents before #2353 reported "no update" with no current digest when an
+	// image inspect failed. That is not a comparison, so it must not resolve the
+	// alert and restart a whole delay window.
+	t.Run("no update without a current digest preserves existing alert and tracking", func(t *testing.T) {
+		testResourceID := "docker:" + hostID + "/container-no-local-digest"
+		container := models.DockerContainer{
+			ID:    "container-no-local-digest",
+			Name:  "no-local-digest-container",
+			Image: "mongo:7",
+			UpdateStatus: &models.DockerContainerUpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now(),
+			},
+		}
+		trackingKey := dockerUpdateTrackingKey(host, container)
+		firstSeen := time.Now().Add(-25 * time.Hour)
+		m.mu.Lock()
+		m.dockerUpdateFirstSeen[testResourceID] = firstSeen
+		m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
+		m.mu.Unlock()
+
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "no-local-digest-container", instanceName, nodeName)
+		canonicalAlertID := buildCanonicalStateID(testResourceID, testResourceID+"-image-update")
+		m.mu.RLock()
+		alert := testRequireActiveAlert(t, m, canonicalAlertID)
+		if alert == nil {
+			m.mu.RUnlock()
+			t.Fatalf("expected update alert %q to be active", canonicalAlertID)
+		}
+		startTime := alert.StartTime
+		m.mu.RUnlock()
+
+		container.UpdateStatus = &models.DockerContainerUpdateStatus{
+			UpdateAvailable: false,
+			LatestDigest:    "sha256:new",
+			LastChecked:     time.Now(),
+		}
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "no-local-digest-container", instanceName, nodeName)
+
+		m.mu.RLock()
+		alert = testRequireActiveAlert(t, m, canonicalAlertID)
+		var stillStarted time.Time
+		if alert != nil {
+			stillStarted = alert.StartTime
+		}
+		trackedAge := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+		m.mu.RUnlock()
+		if alert == nil {
+			t.Fatal("a no-update report without a current digest resolved the alert")
+		}
+		if !stillStarted.Equal(startTime) || !trackedAge.Equal(firstSeen) {
+			t.Fatalf("pending age restarted: alert start %s -> %s, tracking %s", startTime, stillStarted, trackedAge)
+		}
+
+		container.UpdateStatus = &models.DockerContainerUpdateStatus{
+			UpdateAvailable: false,
+			CurrentDigest:   "sha256:new",
+			LatestDigest:    "sha256:new",
+			LastChecked:     time.Now(),
+		}
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "no-local-digest-container", instanceName, nodeName)
+		if hasAlertWithPrefix(m.GetActiveAlerts(), canonicalAlertID) {
+			t.Fatal("a real comparison showing the image current did not resolve the alert")
+		}
+	})
+
 	t.Run("update detection errors preserve existing alert and tracking", func(t *testing.T) {
 		testResourceID := "docker:" + hostID + "/container-error-status"
 		container := models.DockerContainer{
@@ -401,7 +469,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	newHost.ID = "docker-host-new"
 	newHost.DisplayName = "New Docker Host"
 
-	oldResourceID := DockerResourceID(oldHost.ID, container.ID)
+	oldResourceID := DockerContainerResourceID(oldHost.ID, container.ID, "")
 	m.checkDockerContainerImageUpdate(oldHost, container, oldResourceID, "web", "docker-instance", "docker.local")
 
 	firstSeen := time.Now().Add(-25 * time.Hour)
@@ -411,7 +479,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
 	m.mu.Unlock()
 
-	newResourceID := DockerResourceID(newHost.ID, container.ID)
+	newResourceID := DockerContainerResourceID(newHost.ID, container.ID, "")
 	m.checkDockerContainerImageUpdate(newHost, container, newResourceID, "web", "docker-instance", "docker.local")
 
 	alertID := "docker-container-update-" + newResourceID
@@ -571,7 +639,7 @@ func TestUpdateConfigClearsDockerContainerUpdateAlertsWhenDisabled(t *testing.T)
 		Name:  "/frontend",
 		Image: "nginx:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-48 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -609,7 +677,7 @@ func TestUpdateConfigKeepsDockerContainerUpdateAlertsWhenStillEnabled(t *testing
 		Name:  "/api",
 		Image: "ghcr.io/example/api:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-30 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -655,7 +723,7 @@ func TestEvaluateDockerContainerClearsUpdateAlertWhenOverrideDisabled(t *testing
 		Name:  "/worker",
 		Image: "ghcr.io/example/worker:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-36 * time.Hour)
 	alertID, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -816,7 +884,7 @@ func TestDockerUpdateRestartRestoresActivePendingAge(t *testing.T) {
 					}
 					container := models.DockerContainer{ID: "container", Name: "web", Image: "mongo:7", State: "running", UpdateStatus: pending}
 					host := models.DockerHost{ID: "host", AgentID: "agent", Hostname: "host", Containers: []models.DockerContainer{container}}
-					resourceID := DockerResourceID(host.ID, container.ID)
+					resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 					canonicalID := buildCanonicalStateID(resourceID, resourceID+"-image-update")
 					trackingKey := dockerUpdateTrackingKey(host, container)
 					first := time.Now().Add(-time.Duration(delay+2) * time.Hour)
@@ -910,7 +978,7 @@ func TestDockerUpdateRestartRestoresActivePendingAge(t *testing.T) {
 
 					// Explicit recovery retires age; another pending update must wait
 					// its normal delay rather than reuse the resolved occurrence.
-					host.Containers[0].UpdateStatus = &models.DockerContainerUpdateStatus{LastChecked: time.Now()}
+					host.Containers[0].UpdateStatus = &models.DockerContainerUpdateStatus{CurrentDigest: "sha256:new", LatestDigest: "sha256:new", LastChecked: time.Now()}
 					restarted.CheckDockerHost(host)
 					if len(restarted.GetActiveAlerts()) != 0 || resolutions.Load() != 1 {
 						t.Fatal("affirmative recovery did not resolve exactly once")

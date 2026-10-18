@@ -25,45 +25,44 @@ describe('alertOverviewPresentation coverage', () => {
       const presentation = getAlertOverviewCardPresentation('critical', true, false);
 
       expect(presentation.cardClassName).toBe(
-        'border rounded-md p-3 sm:p-4 transition-all opacity-60 border-border bg-surface-alt',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all opacity-60 border-border border-l-border bg-surface-alt',
       );
       expect(presentation.iconClassName).toBe(
-        'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400',
+        'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400',
       );
       expect(presentation.resourceClassName).toBe(
-        'text-sm font-medium truncate text-red-700 dark:text-red-400',
+        'text-sm font-semibold truncate text-base-content',
       );
     });
 
     it('projects an unacknowledged warning onto the warning palette', () => {
       const presentation = getAlertOverviewCardPresentation('warning', false, false);
 
+      // Severity rides on the left edge and icon; the card itself stays neutral.
       expect(presentation.cardClassName).toBe(
-        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-yellow-500 dark:border-l-yellow-400 bg-surface',
       );
       expect(presentation.iconClassName).toBe(
-        'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400',
+        'mr-2.5 mt-0.5 shrink-0 transition-all text-yellow-600 dark:text-yellow-400',
       );
       expect(presentation.resourceClassName).toBe(
-        'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
+        'text-sm font-semibold truncate text-base-content',
       );
     });
 
     it('projects an unacknowledged informational alert onto the informational palette', () => {
       const presentation = getAlertOverviewCardPresentation('info', false, false);
 
-      expect(presentation.cardClassName).toContain('border-blue-300');
+      expect(presentation.cardClassName).toContain('border-l-blue-500');
       expect(presentation.iconClassName).toContain('text-blue-600');
-      expect(presentation.resourceClassName).toContain('text-blue-700');
     });
 
     it('fails safe to warning for an unrecognized severity string', () => {
       const presentation = getAlertOverviewCardPresentation('notice', false, false);
 
-      expect(presentation.cardClassName).toContain('border-yellow-300');
-      expect(presentation.cardClassName).not.toContain('border-red-300');
+      expect(presentation.cardClassName).toContain('border-l-yellow-500');
+      expect(presentation.cardClassName).not.toContain('border-l-red-500');
       expect(presentation.iconClassName).toContain('text-yellow-600');
-      expect(presentation.resourceClassName).toContain('text-yellow-700');
     });
   });
 

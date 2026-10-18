@@ -52,6 +52,79 @@ const DEFAULT_GENERIC_THRESHOLDS: MetricDisplayThresholds = {
 
 const DEFAULT_HYSTERESIS_MARGIN = 5;
 
+/**
+ * Proxmox guest tag that lifts the guest's CPU, memory and disk alert triggers
+ * to a floor, mirroring `applyRelaxedGuestThresholds` in
+ * `internal/alerts/guest.go`. The alert engine reads Pulse control tags only
+ * from Proxmox VMs and LXCs, so callers pass a guest's tags only for those.
+ */
+const PULSE_RELAXED_GUEST_TAG = 'pulse-relaxed';
+
+const PULSE_RELAXED_GUEST_TRIGGER_FLOORS: Readonly<Record<MetricType, number>> = {
+  cpu: 95,
+  memory: 92,
+  disk: 95,
+};
+
+// The backend fills a missing clear point with a fixed 5-point margin, not
+// the configured hysteresis margin.
+const RELAXED_GUEST_CLEAR_MARGIN = 5;
+
+export const hasPulseRelaxedGuestTag = (tags?: readonly unknown[] | null): boolean =>
+  (tags ?? []).some(
+    (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === PULSE_RELAXED_GUEST_TAG,
+  );
+
+const isRelaxedGuestMetric = (metric: DisplayMetricType): metric is MetricType =>
+  metric === 'cpu' || metric === 'memory' || metric === 'disk';
+
+/**
+ * The alert trigger a pulse-relaxed guest uses for `metric`, given the
+ * trigger its configuration resolves to. Unset gets the floor, a trigger
+ * below the floor is raised to it, and Off (`<= 0`) stays Off (null): the
+ * tag never turns on an alert the configuration switched off.
+ */
+export const getPulseRelaxedGuestTrigger = (
+  metric: MetricType,
+  configuredTrigger: number | undefined,
+): number | null => {
+  const floor = PULSE_RELAXED_GUEST_TRIGGER_FLOORS[metric];
+  if (configuredTrigger === undefined) {
+    return floor;
+  }
+  if (!Number.isFinite(configuredTrigger) || configuredTrigger <= 0) {
+    return null;
+  }
+  return Math.max(configuredTrigger, floor);
+};
+
+// Applies the relaxed floor to one resolved threshold value, step for step
+// with the backend: a missing clear point (or a legacy bare trigger number)
+// is filled five below the configured trigger before the trigger is lifted,
+// and the clear only moves when it would reach the lifted trigger.
+const relaxGuestThresholdValue = (
+  metric: MetricType,
+  value: number | HysteresisThreshold | undefined,
+): number | HysteresisThreshold | undefined => {
+  if (value === undefined) {
+    const floor = PULSE_RELAXED_GUEST_TRIGGER_FLOORS[metric];
+    return { trigger: floor, clear: floor - RELAXED_GUEST_CLEAR_MARGIN };
+  }
+  const configuredTrigger = toFiniteNumber(isHysteresisThreshold(value) ? value.trigger : value);
+  if (configuredTrigger === null || configuredTrigger <= 0) {
+    return value;
+  }
+  let clear = isHysteresisThreshold(value) ? toFiniteNumber(value.clear) : null;
+  if (clear === null || clear <= 0) {
+    clear = configuredTrigger - RELAXED_GUEST_CLEAR_MARGIN;
+  }
+  const trigger = getPulseRelaxedGuestTrigger(metric, configuredTrigger) ?? configuredTrigger;
+  if (clear >= trigger) {
+    clear = trigger - RELAXED_GUEST_CLEAR_MARGIN;
+  }
+  return { trigger, clear: Math.max(0, clear) };
+};
+
 const DISPLAY_METRIC_DEFAULT_SCOPES: Record<DisplayMetricType, AlertThresholdScope> = {
   cpu: 'guest',
   memory: 'guest',
@@ -251,38 +324,43 @@ export const getDefaultDisplayMetricThresholds = (
 ): MetricDisplayThresholds | null =>
   resolveThreshold(undefined, getFallbackCritical(scope, metric), DEFAULT_HYSTERESIS_MARGIN);
 
+/**
+ * Resolve display thresholds the way the alert engine resolves the trigger:
+ * the per-resource override, then the scope default, then the factory
+ * default. `guestTags` are the tags the engine reads for a guest-scope
+ * resource; a `pulse-relaxed` tag lifts CPU, memory and disk to the relaxed
+ * floor, so the bar turns critical where the alert would fire.
+ */
 export const resolveMetricDisplayThresholds = (
   config: AlertConfig | null,
   scope: AlertThresholdScope,
   metric: DisplayMetricType,
   resourceIds?: string | string[],
+  guestTags?: readonly string[] | null,
 ): MetricDisplayThresholds | null => {
   const margin = normalizeMargin(config?.hysteresisMargin);
   const scopeThresholds = getScopeThresholds(config, scope);
   const override = findOverride(config?.overrides, resourceIds);
   const overrideValue = getOverrideValue(override, metric);
   const baseValue = getBaseThresholdValue(scopeThresholds, metric);
-  return resolveThreshold(overrideValue ?? baseValue, getFallbackCritical(scope, metric), margin);
+  let value = overrideValue ?? baseValue;
+  if (scope === 'guest' && isRelaxedGuestMetric(metric) && hasPulseRelaxedGuestTag(guestTags)) {
+    value = relaxGuestThresholdValue(metric, value);
+  }
+  return resolveThreshold(value, getFallbackCritical(scope, metric), margin);
 };
 
-/**
- * Resolve display thresholds for a physical disk's SMART temperature.
- * Mirrors the backend precedence: an explicit diskTemperature override on the
- * host (or inherited linked resource) wins, then the per-type map
- * (diskTempByType: nvme/sas/sata), then the global agent default.
- */
-export const resolveDiskTemperatureDisplayThresholds = (
+// The disk temperature policy for a disk type, with no host override: the
+// type's diskTempByType entry, else the agent Disk Temp default. A switched-off
+// Disk Temp default switches every type off.
+const resolveDiskTemperatureTypePolicy = (
   config: AlertConfig | null,
-  diskType: string | null | undefined,
-  resourceIds?: string | string[],
+  normalizedType: string,
+  margin: number,
 ): MetricDisplayThresholds | null => {
-  const margin = normalizeMargin(config?.hysteresisMargin);
-  const normalizedType = (diskType ?? '').trim().toLowerCase();
-
-  const override = findOverride(config?.overrides, resourceIds);
-  const overrideValue = getOverrideValue(override, 'diskTemperature');
-  if (overrideValue !== undefined) {
-    return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
+  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
+  if (baseValue !== undefined && resolveThreshold(baseValue, undefined, margin) === null) {
+    return null;
   }
 
   const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
@@ -293,12 +371,77 @@ export const resolveDiskTemperatureDisplayThresholds = (
     }
   }
 
-  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
   return resolveThreshold(
     baseValue,
     byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,
     margin,
   );
+};
+
+/**
+ * Resolve display thresholds for a physical disk's SMART temperature.
+ * Mirrors the backend precedence: an explicit diskTemperature override on the
+ * host (or inherited linked resource) wins, then the per-type map
+ * (diskTempByType: nvme/sas/sata), then the global agent default. A
+ * switched-off agent default switches every type off, as disk temperature
+ * alerts do, and so does an override (or agent default) that switches the
+ * host's alerts off. Null means disk temperature alerting is off for this
+ * disk. `resourceIds` are the alert override keys of the machine whose agent
+ * reports the disk, in the order the backend reads them.
+ */
+export const resolveDiskTemperatureDisplayThresholds = (
+  config: AlertConfig | null,
+  diskType: string | null | undefined,
+  resourceIds?: string | string[],
+): MetricDisplayThresholds | null => {
+  const margin = normalizeMargin(config?.hysteresisMargin);
+  const normalizedType = (diskType ?? '').trim().toLowerCase();
+
+  const override = findOverride(config?.overrides, resourceIds);
+  if (override?.disabled || config?.agentDefaults?.disabled === true) {
+    return null;
+  }
+  const overrideValue = getOverrideValue(override, 'diskTemperature');
+  if (overrideValue !== undefined) {
+    return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
+  }
+
+  return resolveDiskTemperatureTypePolicy(config, normalizedType, margin);
+};
+
+/**
+ * Resolve display thresholds for a TrueNAS disk's temperature by the tiers its
+ * temperature alert resolves (backend `trueNASDiskTemperatureDefaultNoLock`
+ * under `effectiveAlertPolicyNoLock`): the disk's own temperature override,
+ * stored under its resource ID, then a TrueNAS-wide value saved under TrueNAS
+ * Disks, then the disk temperature policy for its type. An override or a
+ * TrueNAS Disks default that switches alerts off, or a value of 0 at either
+ * explicit tier, means off (null). No host agent reports a TrueNAS disk, so
+ * host overrides and the agent default's alert switch do not reach it; only
+ * the agent Disk Temp value does, through the per-type tier.
+ */
+export const resolveTrueNASDiskTemperatureDisplayThresholds = (
+  config: AlertConfig | null,
+  diskType: string | null | undefined,
+  resourceId: string | null | undefined,
+): MetricDisplayThresholds | null => {
+  const margin = normalizeMargin(config?.hysteresisMargin);
+
+  const override = findOverride(config?.overrides, resourceId ?? undefined);
+  if (override?.disabled || config?.truenasDiskDefaults?.disabled === true) {
+    return null;
+  }
+  const overrideValue = getOverrideValue(override, 'temperature');
+  if (overrideValue !== undefined) {
+    return resolveThreshold(overrideValue, undefined, margin);
+  }
+
+  const trueNASWideValue = getBaseThresholdValue(config?.truenasDiskDefaults, 'temperature');
+  if (trueNASWideValue !== undefined) {
+    return resolveThreshold(trueNASWideValue, undefined, margin);
+  }
+
+  return resolveDiskTemperatureTypePolicy(config, (diskType ?? '').trim().toLowerCase(), margin);
 };
 
 const getFallbackSeverityThresholds = (metric: DisplayMetricType): MetricDisplayThresholds => {

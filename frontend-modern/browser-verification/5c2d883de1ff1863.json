@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a82a8e04747263f5c49083f4c537e03040ba3c62",
+  "verified_at": "2026-10-05T04:30:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "77f6f24d33113906bfeba21b64a7f6e2bbc94a38e1710b63e5e1a27ab5519627",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "6caefd3a0129be4c55e28e44ddb6c78852b7687220968f3c55d363fe392e81e0",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "e4f00d6188940447fb69a0aa35812874f9bffaa24bb1fcd9e9766ecc599fa792",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "51d47d8341e489103e5a4330c1c02e2b9c62919bf7da475490eb28eb19aa5a32"
+  },
+  "routes": [
+    "/settings/monitoring/availability",
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Settings summary 3 need attention \u00b7 1 offline \u00b7 7 enabled now matches the Machines availability summary (1 check offline, 3 need attention); before Settings said 2 down \u00b7 7 enabled",
+    "Solar inverter (503, 1 of 2 failures) shows an amber pill with hover text 1 failed check in a row. It counts as offline after 2; Workshop door controller (timed out, 3 in a row) stays red",
+    "Machines availability table at 1440: Check, Method, Target, Result, Uptime 24h, Checked, Last healthy, Failures; failures read 3 in a row / 1 in a row with the threshold on hover; Interval returns only on tables at least 104rem wide (verified at 1900)",
+    "Machines availability toolbar keeps Add service/device check; the duplicate Manage link is gone, Manage checks stays in the summary card",
+    "Phone 390: unchanged five-column projection"
+  ],
+  "interactions": [
+    "Compared Settings and Machines summaries and pill colours live",
+    "Measured column visibility at 1440, 1700 and 1900 px"
+  ]
+}

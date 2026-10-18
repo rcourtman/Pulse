@@ -1,16 +1,22 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -21,10 +27,40 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *testing.T) {
+	c := &guestPollOwnershipClient{cpu: .1}
+	m := guestPollOwnershipMonitor(t, c)
+	m.state.UpsertHost(models.Host{ID: "independent", Hostname: "agent", Status: "online", LastSeen: time.Now(), Memory: models.Memory{Total: 1000, Used: 300, Free: 700, Usage: 30}})
+	hosts := m.state.GetSnapshot().Hosts
+	key := guestMetadataCacheKey("site-a", "node", 105)
+	metadata := guestMetadataCacheEntry{osName: "OpenBSD", osInfoFailureCount: guestAgentOSInfoFailureThreshold, osInfoSkip: true, fetchedAt: time.Now().Add(-time.Minute)}
+	m.guestMetadataCache = map[string]guestMetadataCacheEntry{key: metadata}
+	memKey := guestMemoryCacheKey("site-a", "node", 105)
+	memory := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now().Add(-time.Minute)}
+	m.vmAgentMemCache = map[string]agentMemCacheEntry{memKey: memory}
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", c)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	stagePVEGuestEffect(ctx, func() { m.recordGuestSnapshot("site-a", "qemu", "node", 105, GuestMemorySnapshot{Name: "obsolete"}) })
+	m.setRuntimeContext(context.Background(), nil)
+	m.publishPVEGuests(ctx, "site-a", nil, nil)
+	if owner.ctx.Err() == nil || len(m.GetDiagnosticSnapshots().Guests) != 0 || !reflect.DeepEqual(m.state.GetSnapshot().Hosts, hosts) {
+		t.Fatal("runtime withdrawal admitted obsolete guest evidence or withdrew independent agent memory")
+	}
+	if !reflect.DeepEqual(m.guestMetadataCache[key], metadata) || m.vmAgentMemCache[memKey] != memory {
+		t.Fatal("runtime withdrawal erased OS-command safety or renewed accepted cache age")
+	}
+}
 
 func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
 	monitor, err := New(&config.Config{DataPath: t.TempDir()})
@@ -273,6 +309,83 @@ func TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable(t *testing.
 	// independently; it must not travel inside aliases.
 	if _, ok := aliasSet["agent-core2026"]; ok {
 		t.Fatalf("aliases = %v, must not duplicate the wire id", canonical.Aliases)
+	}
+}
+
+// The broadcast coalesces an agent that keeps its own registry row into its
+// Proxmox node by hostname, and picks each reading's source by freshness
+// judged by the configured thresholds, as the registry's own merges are. A
+// node polled every two minutes, read ninety seconds after its poll, shows its
+// own readings rather than those of its agent, silent for seventy-five
+// seconds. Polled at the default cadence, the node is stale at ninety seconds
+// too, so the agent's readings stand.
+func TestBroadcastCoalescedHostJudgesFreshnessByConfiguredThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name        string
+		interval    time.Duration
+		cpu, memory float64
+	}{
+		{"two-minute polls", 2 * time.Minute, 20, 12.5},
+		{"default polls", 10 * time.Second, 70, 62.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &Monitor{state: models.NewState(), config: &config.Config{PVEPollingInterval: tc.interval}}
+			m.state.UpdateNodesForInstance("homelab", []models.Node{{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: now.Add(-90 * time.Second),
+			}})
+			m.state.UpsertHost(models.Host{
+				ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3", Status: "online", CPUUsage: 70,
+				Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+				LastSeen: now.Add(-75 * time.Second), IntervalSeconds: 30,
+			})
+			m.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+
+			var rows []models.ResourceFrontend
+			for _, resource := range m.BuildBroadcastFrontendState().Resources {
+				if resource.Name == "pve3" {
+					rows = append(rows, resource)
+				}
+			}
+			if len(rows) != 1 {
+				t.Fatalf("broadcast shows %d pve3 rows, want the node and its agent coalesced into one", len(rows))
+			}
+			if rows[0].CPU == nil || rows[0].Memory == nil {
+				t.Fatalf("pve3 lost its readings: cpu %+v memory %+v", rows[0].CPU, rows[0].Memory)
+			}
+			if rows[0].CPU.Current != tc.cpu || rows[0].Memory.Current != tc.memory {
+				t.Fatalf("pve3 cpu %.1f%%, memory %.1f%%; want %.1f%% and %.1f%%",
+					rows[0].CPU.Current, rows[0].Memory.Current, tc.cpu, tc.memory)
+			}
+		})
+	}
+}
+
+// A monitor view pairs its listing with the thresholds that registry
+// generation was judged by. Thresholds set on the store since its last
+// rebuild belong to the next generation, so the view and the seed it hands
+// the resources API keep the ones the listing was judged by.
+func TestUnifiedViewCarriesItsGenerationsStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	m := &Monitor{state: models.NewState(), config: &config.Config{PVEPollingInterval: 2 * time.Minute}}
+	m.state.UpdateNodesForInstance("homelab", []models.Node{{
+		ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+		Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+		LastSeen: now.Add(-90 * time.Second),
+	}})
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	m.SetResourceStore(adapter)
+	adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+	adapter.SetStaleThresholds(map[unifiedresources.DataSource]time.Duration{unifiedresources.SourceProxmox: time.Minute})
+
+	resources, _, thresholds := m.UnifiedResourceSnapshotWithStaleThresholds()
+	if got := thresholds[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+		t.Fatalf("seed thresholds = %v, want the four minutes its generation was judged by", thresholds)
+	}
+	if len(resources) != 1 || resources[0].SourceStatus[unifiedresources.SourceProxmox].Status != "online" {
+		t.Fatalf("seed = %+v, want pve2 with the Proxmox sighting its generation judged online", resources)
 	}
 }
 
@@ -645,7 +758,7 @@ func TestSnapshotBackedUnifiedReadStateUsesConfiguredStaleThreshold(t *testing.T
 		state: state,
 	}
 
-	readState := monitor.snapshotBackedUnifiedReadState()
+	readState := monitor.snapshotBackedAgentLookupReadState()
 	if readState == nil {
 		t.Fatal("expected snapshot-backed read state")
 	}
@@ -969,6 +1082,39 @@ func TestApplyHostReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) 
 		}
 	}
 	t.Fatal("accepted host report did not refresh the canonical headless read state")
+}
+
+// An agent reports its Proxmox cluster siblings' sensors by bare node name,
+// which another connection's node can share. Ingest records the reporting
+// agent, so the readings serve only nodes of that agent's own connection.
+func TestApplyHostReportScopesClusterSensorsToReportersConnection(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.clusterSensorsCache = make(map[string]clusterSensorsCacheEntry)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+	monitor.state.UpdateNodesForInstance("siteA", []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2")})
+	monitor.state.UpdateNodesForInstance("siteB", []models.Node{readStateTestNode("siteB", "px1")})
+	adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
+
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent:          agentshost.AgentInfo{ID: "agent-px2", IntervalSeconds: 30},
+		Host:           agentshost.HostInfo{ID: "machine-px2", Hostname: "px2", Platform: "linux"},
+		ClusterSensors: clusterSensorReport("px1", 88),
+		Timestamp:      time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.LinkedNodeID != "siteA-px2" {
+		t.Fatalf("reporting agent linked to %q, want siteA-px2", host.LinkedNodeID)
+	}
+
+	if temp := monitor.getHostAgentTemperatureForNode(readStateTestNode("siteA", "px1")); temp == nil || temp.CPUPackage != 88 {
+		t.Fatalf("siteA px1 temperature = %#v, want the sibling reading 88", temp)
+	}
+	if temp := monitor.getHostAgentTemperatureForNode(readStateTestNode("siteB", "px1")); temp != nil {
+		t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
+	}
 }
 
 func TestApplyHostReportProjectsAndPreservesLibvirtInventory(t *testing.T) {
@@ -1731,7 +1877,7 @@ func TestApplyHostReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T)
 		t.Fatalf("host LastSeen followed skewed agent timestamp %s: got %s", agentClock, host.LastSeen)
 	}
 
-	readState := monitor.snapshotBackedUnifiedReadState()
+	readState := monitor.snapshotBackedAgentLookupReadState()
 	if readState == nil {
 		t.Fatal("expected snapshot-backed read state")
 	}
@@ -2981,6 +3127,71 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	}
 }
 
+// An Unraid member the agent sends no SMART row for (a --disk-exclude match)
+// still shows the temperature its Unraid inventory row reports, so the report
+// charts it under the disk's serial. A disk with its own SMART reading keeps
+// it, and a spun-down member's leftover reading is not charted.
+func TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART(t *testing.T) {
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-tower", Version: "1.0.0", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "machine-tower", Hostname: "tower", MachineID: "machine-tower"},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{Device: "/dev/sda", Model: "IronWolf", Serial: "SERIAL-TOWER-1", Temperature: 41},
+			},
+		},
+		Unraid: &agentshost.UnraidStorage{ArrayStarted: true, Disks: []agentshost.UnraidDisk{
+			{Name: "disk1", Device: "sda", Role: "data", Status: "online", Serial: "SERIAL-TOWER-1", Temperature: 40},
+			{Name: "disk2", Device: "sdb", Role: "data", Status: "online", Serial: "SERIAL-TOWER-2", Temperature: 36},
+			{Name: "disk3", Device: "sdc", Role: "data", Status: "online", Serial: "SERIAL-TOWER-3", Temperature: 34, SpunDown: true},
+		}},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	points := waitForStoredDiskMetric(t, store, "SERIAL-TOWER-2", "smart_temp")
+	if len(points) != 1 || points[0].Value != 36 {
+		t.Fatalf("SERIAL-TOWER-2 smart_temp = %+v, want the Unraid reading 36", points)
+	}
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_temp")
+	if len(points) != 1 || points[0].Value != 41 {
+		t.Fatalf("SERIAL-TOWER-1 smart_temp = %+v, want its own SMART reading 41", points)
+	}
+	now := time.Now().UTC()
+	points, err = store.Query("disk", "SERIAL-TOWER-3", "smart_temp", now.Add(-time.Hour), now.Add(time.Hour), 60)
+	if err != nil {
+		t.Fatalf("Query smart_temp: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("spun-down SERIAL-TOWER-3 smart_temp = %+v, want none", points)
+	}
+}
+
 func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	t.Helper()
 
@@ -3041,6 +3252,61 @@ func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	historyPoints := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)["temperature"]
 	if len(historyPoints) == 0 || historyPoints[len(historyPoints)-1].Value != 62.5 {
 		t.Fatalf("expected in-memory temperature 62.5, got %+v", historyPoints)
+	}
+}
+
+// An agent-linked node's drawer headlines the unified resource temperature and
+// draws the agent's "temperature" history beneath it; both must come from one
+// rule. The node's own Temperature, built from the same sensors, must agree
+// too, because node alerts, the node table and node history read it.
+func TestApplyHostReportChartsThePrimaryCPUTemperatureEverySurfaceShows(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sensors map[string]float64
+		want    float64
+	}{
+		// Package above every core: the node's CPUMax (built from cores)
+		// sits below the package, which once split node and agent history.
+		{name: "package hottest", sensors: map[string]float64{"cpu_package": 61, "cpu_core_0": 55, "cpu_core_1": 57}, want: 61},
+		// A core above the package: the agent rule once kept the package.
+		{name: "core hottest", sensors: map[string]float64{"cpu_package": 60, "cpu_core_0": 66, "cpu_core_1": 58}, want: 66},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := &Monitor{
+				state:             models.NewState(),
+				alertManager:      alerts.NewManager(),
+				hostTokenBindings: make(map[string]string),
+				config:            &config.Config{},
+				rateTracker:       NewRateTracker(),
+				metricsHistory:    NewMetricsHistory(10, time.Hour),
+			}
+			t.Cleanup(func() { monitor.alertManager.Stop() })
+
+			host, err := monitor.ApplyHostReport(agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "agent-primary-temp", Version: "1.0.0", IntervalSeconds: 30},
+				Host:      agentshost.HostInfo{ID: "machine-primary-temp", Hostname: "primary-temp", MachineID: "machine-primary-temp"},
+				Metrics:   agentshost.Metrics{CPUUsagePercent: 10},
+				Sensors:   agentshost.Sensors{TemperatureCelsius: tc.sensors},
+				Timestamp: time.Now().UTC(),
+			}, nil)
+			if err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+
+			points := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)["temperature"]
+			if len(points) == 0 || points[len(points)-1].Value != tc.want {
+				t.Fatalf("agent temperature history = %+v, want last point %v", points, tc.want)
+			}
+			// The unified resource's agent.temperature (the drawer headline).
+			if got := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors); got == nil || *got != tc.want {
+				t.Fatalf("agent resource temperature = %v, want %v", got, tc.want)
+			}
+			// The linked node's Temperature, as the poller builds it from these sensors.
+			nodeTemperature := convertHostSensorsToTemperature(host.Sensors, host.LastSeen)
+			if got := models.PrimaryCPUTemperatureCelsius(nodeTemperature); got == nil || *got != tc.want {
+				t.Fatalf("linked node temperature = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -3513,6 +3779,49 @@ func TestHostDiskIOMetricResourceIDFallbacks(t *testing.T) {
 	got = hostDiskIOMetricResourceID(host, ioNoSMART, proxmoxDisks)
 	if got != "SATA-SERIAL-456" {
 		t.Fatalf("proxmox fallback: expected SATA-SERIAL-456, got %q", got)
+	}
+
+	// The disk resource carries the serial the host's Unraid inventory reports
+	// when no SMART reading names the disk, so its I/O is filed under it.
+	// Controller members behind one block device keep their own identity, so
+	// the device's counter belongs to no member, even while one is in standby.
+	// Two inventory rows on one device name no single disk. A legacy SMART
+	// device label still names its block device.
+	host.Sensors.SMART = append(host.Sensors.SMART,
+		models.HostDiskSMART{Device: "sdb"},
+		models.HostDiskSMART{Device: "sdc", Serial: "STANDBY-SERIAL", Standby: true},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,1"},
+		models.HostDiskSMART{Device: "sdg", WWN: "5000c500a1b2c3e0", Controller: "ctrl1", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "/dev/sdg", WWN: "5000c500a1b2c3e1", Controller: "ctrl1", Target: "megaraid,1", Standby: true},
+		models.HostDiskSMART{Device: "sdh [sat]", Serial: "LEGACY-LABEL-SERIAL"},
+	)
+	host.Unraid = &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+		{Device: "sda", Serial: "UNRAID-SERIAL-A"},
+		{Device: "sdb", Serial: "UNRAID-SERIAL-B"},
+		{Device: "sdc", Serial: "UNRAID-SERIAL-C"},
+		{Device: "sdd"},
+		{Device: "sde", Serial: "UNRAID-SERIAL-E"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F1"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F2"},
+	}}
+	for _, tc := range []struct {
+		device string
+		want   string
+	}{
+		{"sda", "UNRAID-SERIAL-A"},
+		{"sdb", "UNRAID-SERIAL-B"},
+		{"sdc", "UNRAID-SERIAL-C"},
+		{"sdd", "myhost:sdd"},
+		{"sde", ""},
+		{"sdf", "myhost:sdf"},
+		{"sdg", ""},
+		{"sdh", "LEGACY-LABEL-SERIAL"},
+		{"nvme0n1", "NVME-SERIAL-123"},
+	} {
+		if got := hostDiskIOMetricResourceID(host, models.DiskIO{Device: tc.device}, proxmoxDisks); got != tc.want {
+			t.Fatalf("device %s: expected %q, got %q", tc.device, tc.want, got)
+		}
 	}
 }
 
@@ -5574,6 +5883,693 @@ func TestMockModeDropsRealHostContinuity(t *testing.T) {
 	}
 }
 
+// TestMockUnifiedViewAppliesOperatorManualLinks pins operator links on the
+// mock-mode unified view. The fixture graph is built without the link store,
+// so a standalone agent linked into a VM showed merged in the resources API,
+// which re-seeds through the store-backed registry, but stayed a separate row
+// in the websocket broadcast and /api/state. The view applies the links the
+// monitor's resource store last loaded, rebuilds when they change without
+// waiting for a fixture tick, and never forwards fixture data to the store.
+func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	if previous {
+		mustSetMockEnabled(t, false)
+	}
+	// Hold the fixture graph still, so only the link can change the view.
+	testConfig := previousConfig
+	testConfig.UpdateInterval = 5 * time.Minute
+	mock.SetMockConfig(testConfig)
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		mustSetMockEnabled(t, previous)
+	})
+
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	unlinked := m.currentUnifiedStateView()
+	var vmID, agentID string
+	for _, resource := range unlinked.resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	version := mock.FixtureDataVersion()
+
+	// The broadcast's read-path refresh rebuilds the resource store, which
+	// loads the link; the mock view must follow it within the same build.
+	frontend := m.BuildBroadcastFrontendState()
+	if got := mock.FixtureDataVersion(); got != version {
+		t.Fatalf("fixture data version moved from %d to %d; the link alone must refresh the view", version, got)
+	}
+	var vmRow *models.ResourceFrontend
+	for i := range frontend.Resources {
+		switch frontend.Resources[i].ID {
+		case vmID:
+			vmRow = &frontend.Resources[i]
+		case agentID:
+			t.Fatalf("broadcast still lists the linked agent %s as its own row", agentID)
+		}
+	}
+	if vmRow == nil || len(vmRow.Agent) == 0 {
+		t.Fatalf("broadcast VM row %s = %+v, want it to carry the linked agent's facet", vmID, vmRow)
+	}
+
+	linked := m.currentUnifiedStateView()
+	if linked.readState == unlinked.readState {
+		t.Fatal("expected the view to rebuild when the operator links changed")
+	}
+	// The resources API keys its registry cache on this freshness, so a
+	// link change must advance it even though no fixture tick did.
+	if !linked.freshness.After(unlinked.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on the link change", linked.freshness, unlinked.freshness)
+	}
+	if again := m.currentUnifiedStateView(); again.readState != linked.readState {
+		t.Fatal("expected the linked view to stay cached while neither the fixtures nor the links change")
+	}
+
+	// The resources API re-seeds the same snapshot through a registry backed
+	// by the link store. Both payloads must list the same rows.
+	seed, _ := m.UnifiedResourceSnapshot()
+	rest := unifiedresources.NewRegistry(store)
+	rest.IngestResources(seed)
+	viewIDs := make([]string, 0, len(linked.resources))
+	for _, resource := range linked.resources {
+		viewIDs = append(viewIDs, resource.ID)
+	}
+	restIDs := make([]string, 0, len(seed))
+	for _, resource := range rest.List() {
+		restIDs = append(restIDs, resource.ID)
+	}
+	slices.Sort(viewIDs)
+	slices.Sort(restIDs)
+	if !slices.Equal(viewIDs, restIDs) {
+		t.Fatalf("mock view and resources API disagree:\nview %v\nrest %v", viewIDs, restIDs)
+	}
+
+	// The view's registry has no store: history recorded through the read
+	// state it hands out must not land fixture rows in the operator's store.
+	recorder, ok := linked.readState.(interface {
+		RecordChange(unifiedresources.ResourceChange) error
+	})
+	if !ok {
+		t.Fatalf("mock view read state %T does not record changes", linked.readState)
+	}
+	before, err := store.GetRecentChanges(vmID, time.Time{}, 1000)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if err := recorder.RecordChange(unifiedresources.ResourceChange{
+		ID:         "mock-view-probe",
+		ObservedAt: time.Now().UTC(),
+		ResourceID: vmID,
+		Kind:       unifiedresources.ChangeStateTransition,
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+	after, err := store.GetRecentChanges(vmID, time.Time{}, 1000)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("mock view wrote %d change rows into the durable store", len(after)-len(before))
+	}
+
+	// Reconcile the mock link proposal with the current latest-decision
+	// rule: a fresh monitor must restore the link, and unlink/relink must
+	// invalidate the seed cache without a fixture tick. Mock seeds retain
+	// their own default thresholds, not the live adapter's configured ones.
+	restarted := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(restarted.alertManager.Stop)
+	adapter := restarted.resourceStore.(*unifiedresources.MonitorAdapter)
+	assertMockLink := func(wantLinked bool) time.Time {
+		t.Helper()
+		frontend := restarted.BuildBroadcastFrontendState()
+		var vmFound, agentFound, vmHasAgent bool
+		for _, resource := range frontend.Resources {
+			if resource.ID == vmID {
+				vmFound, vmHasAgent = true, len(resource.Agent) > 0
+			}
+			if resource.ID == agentID {
+				agentFound = true
+			}
+		}
+		if !vmFound || vmHasAgent != wantLinked || agentFound == wantLinked {
+			t.Fatalf("mock link=%t: vm=%t vmAgent=%t standaloneAgent=%t", wantLinked, vmFound, vmHasAgent, agentFound)
+		}
+		seed, freshness, thresholds := restarted.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(thresholds) != 0 {
+			t.Fatalf("mock seed borrowed live thresholds: %v", thresholds)
+		}
+		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+			t.Fatalf("live adapter threshold = %v, want configured four minutes", got)
+		}
+		rest := unifiedresources.NewRegistryWithStaleThresholds(store, thresholds)
+		rest.IngestResources(seed)
+		_, hasStandaloneAgent := rest.Get(agentID)
+		if hasStandaloneAgent == wantLinked {
+			t.Fatalf("REST seed link=%t: standalone agent=%t", wantLinked, hasStandaloneAgent)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture version moved from %d to %d during operator lifecycle", version, got)
+		}
+		return freshness
+	}
+	restartFreshness := assertMockLink(true)
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: vmID, ResourceB: agentID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	// Reads deliberately reuse a generation younger than two seconds.
+	// Apply the owning ingest/rebuild boundary instead of waiting for that
+	// throttle or claiming a recorded decision changes a previous listing.
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	unlinkFreshness := assertMockLink(false)
+	if !unlinkFreshness.After(restartFreshness) {
+		t.Fatal("unlink must advance the mock seed's freshness")
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	if relinkFreshness := assertMockLink(true); !relinkFreshness.After(unlinkFreshness) {
+		t.Fatal("relink must advance the mock seed's freshness")
+	}
+}
+
+// TestMockUnifiedViewFollowsALinkCreationTimeChange pins the creation time as
+// part of the mock view's cache key. Among otherwise equal candidates a chain
+// of links folds into the primary of its earliest-created link, so a link list
+// that differs from the cached one only in a creation time can leave a
+// different row standing: in a cycle of a Proxmox storage, a TrueNAS VM and a
+// vSphere VM the storage never competes, and the TrueNAS VM keeps its row
+// while its link is older than the vSphere VM's and gives it to the vSphere VM
+// once it is newer. The cache compared resource pairs and primaries only, so
+// with the fixture data version held it kept serving the row the old times
+// chose while the live rebuild, which reloads the links from the store, served
+// the new one. Both readers of the key are held to it: the structure view
+// (cachedMockStructureView) and the data-version view
+// (currentUnifiedStateView).
+func TestMockUnifiedViewFollowsALinkCreationTimeChange(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	soleSource := func(resource unifiedresources.Resource, source unifiedresources.DataSource) bool {
+		return len(resource.Sources) == 1 && resource.Sources[0] == source
+	}
+	var storageID, nasVMID, guestID string
+	for _, resource := range m.currentUnifiedStateView().resources {
+		switch {
+		case storageID == "" && resource.Type == unifiedresources.ResourceTypeStorage &&
+			soleSource(resource, unifiedresources.SourceProxmox):
+			storageID = resource.ID
+		case nasVMID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+			soleSource(resource, unifiedresources.SourceTrueNAS):
+			nasVMID = resource.ID
+		case guestID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+			soleSource(resource, unifiedresources.SourceVMware):
+			guestID = resource.ID
+		}
+	}
+	if storageID == "" || nasVMID == "" || guestID == "" {
+		t.Fatalf("fixture graph needs a Proxmox storage, a TrueNAS VM and a vSphere VM, got storage=%q nas=%q guest=%q",
+			storageID, nasVMID, guestID)
+	}
+
+	created := time.Date(2026, time.October, 1, 9, 0, 0, 0, time.UTC)
+	// The link whose primary is the TrueNAS VM is the last of the three, so
+	// replacing it keeps the list's order and changes only its creation time.
+	cycle := func(nasLinkCreated time.Time) []unifiedresources.ResourceLink {
+		return []unifiedresources.ResourceLink{
+			{ResourceA: nasVMID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created.Add(time.Minute)},
+			{ResourceA: storageID, ResourceB: guestID, PrimaryID: guestID, CreatedAt: created.Add(2 * time.Minute)},
+			{ResourceA: guestID, ResourceB: nasVMID, PrimaryID: nasVMID, CreatedAt: nasLinkCreated},
+		}
+	}
+	oldest, newest := created, created.Add(3*time.Minute)
+	setNasLinkCreated := func(at time.Time) {
+		t.Helper()
+		for _, link := range cycle(at) {
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("AddLink: %v", err)
+			}
+		}
+		// Reads deliberately reuse a generation younger than two seconds, so
+		// apply the rebuild boundary that loads the links instead of waiting.
+		m.updateResourceStore(m.currentStateWithScope())
+	}
+
+	// cycleRows is what is left of the three members: ID and sources.
+	cycleRows := func(resources []unifiedresources.Resource) []string {
+		var rows []string
+		for _, resource := range resources {
+			if resource.ID != storageID && resource.ID != nasVMID && resource.ID != guestID {
+				continue
+			}
+			sources := make([]string, 0, len(resource.Sources))
+			for _, source := range resource.Sources {
+				sources = append(sources, string(source))
+			}
+			slices.Sort(sources)
+			rows = append(rows, fmt.Sprintf("%s %v", resource.ID, sources))
+		}
+		return rows
+	}
+	// mockRows is the reference: the linked build the view is made of.
+	mockRows := func(links []unifiedresources.ResourceLink) []string {
+		resources, _ := mock.UnifiedResourceSnapshotWithLinks(links)
+		return cycleRows(resources)
+	}
+	wantNas, wantGuest := mockRows(cycle(oldest)), mockRows(cycle(newest))
+	if slices.Equal(wantNas, wantGuest) || len(wantNas) != 1 || len(wantGuest) != 1 ||
+		!strings.HasPrefix(wantNas[0], nasVMID+" ") || !strings.HasPrefix(wantGuest[0], guestID+" ") {
+		t.Fatalf("a creation time alone must move the cycle between the TrueNAS VM %s and the vSphere VM %s; got %v then %v",
+			nasVMID, guestID, wantNas, wantGuest)
+	}
+	version := mock.FixtureDataVersion()
+	assertLinksDifferOnlyInTime := func(before, after []unifiedresources.ResourceLink) {
+		t.Helper()
+		if len(before) != len(after) || len(before) != 3 {
+			t.Fatalf("link lists %+v and %+v need three links each", before, after)
+		}
+		differing := 0
+		for i := range before {
+			if before[i].ResourceA != after[i].ResourceA || before[i].ResourceB != after[i].ResourceB ||
+				before[i].PrimaryID != after[i].PrimaryID {
+				t.Fatalf("link %d changed its pair or primary: %+v -> %+v", i, before[i], after[i])
+			}
+			if !before[i].CreatedAt.Equal(after[i].CreatedAt) {
+				differing++
+			}
+		}
+		if differing != 1 {
+			t.Fatalf("%d links changed their creation time, want exactly one: %+v -> %+v", differing, before, after)
+		}
+	}
+	assertRows := func(label string, view monitorUnifiedStateView, want []string) {
+		t.Helper()
+		if got := cycleRows(view.resources); !slices.Equal(got, want) {
+			t.Fatalf("%s kept %v, want the row a linked mock build keeps: %v", label, got, want)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture data version moved from %d to %d; a creation time alone must refresh the view", version, got)
+		}
+	}
+
+	setNasLinkCreated(oldest)
+	first := m.currentUnifiedStateView()
+	assertRows("view with the TrueNAS VM's link oldest", first, wantNas)
+	firstLinks := m.resourceStoreManualLinks()
+
+	// The link list changes in its creation time alone. The structure reader
+	// answers from the cached view while the list is unchanged, so it must
+	// notice before anything else rebuilds the view.
+	setNasLinkCreated(newest)
+	assertLinksDifferOnlyInTime(firstLinks, m.resourceStoreManualLinks())
+	structure := m.currentStructureUnifiedStateView()
+	if structure.readState == first.readState {
+		t.Fatal("structure view served the view built before the creation time changed")
+	}
+	assertRows("structure view after the creation time changed", structure, wantGuest)
+	second := m.currentUnifiedStateView()
+	assertRows("view after the creation time changed", second, wantGuest)
+	if !second.freshness.After(first.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on a creation time change", second.freshness, first.freshness)
+	}
+
+	// And back: the data-version reader is held to the key on its own, with
+	// the structure reader no longer the one that rebuilt the view.
+	setNasLinkCreated(oldest)
+	assertLinksDifferOnlyInTime(m.resourceStoreManualLinks(), cycle(newest))
+	third := m.currentUnifiedStateView()
+	if third.readState == second.readState {
+		t.Fatal("view served the build made before the creation time changed back")
+	}
+	assertRows("view after the creation time changed back", third, wantNas)
+	if !third.freshness.After(second.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on a creation time change", third.freshness, second.freshness)
+	}
+	if again := m.currentUnifiedStateView(); again.readState != third.readState {
+		t.Fatal("expected the view to stay cached while neither the fixtures nor the links change")
+	}
+}
+
+// Alert evaluation resolves a target per resource and windowed metric on every
+// pass. A metric tick moves the fixture's data version, not what resources
+// exist, so a lookup after a tick must be served from the cached view instead
+// of building an estate. Before this was pinned, every lookup after a tick
+// rebuilt the view, and a process too starved to finish one build within a tick
+// rebuilt it for every lookup of the pass: startup never reached its listener.
+func TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 4, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	ids := resourceIDsWithTargets(t, warm)
+
+	waitForFixtureTicks(t, 2)
+
+	for _, id := range ids {
+		want := warm.metricsTargets.MetricsTargetForResource(id)
+		got := m.MetricsTargetForResource(id)
+		if !sameMetricsTarget(got, want) {
+			t.Fatalf("MetricsTargetForResource(%q) = %+v after fixture ticks, want %+v", id, got, want)
+		}
+	}
+
+	after, ok := publishedMockView(m)
+	if !ok || after.readState != warm.readState {
+		t.Fatal("target lookups rebuilt the unified view after a metric tick; they must reuse the view built for the current fixture structure")
+	}
+}
+
+// The reused view answers for the estate it was built from. A structural
+// change (here a larger estate) must reach the lookup, not keep serving the
+// old resource set.
+func TestMockMetricsTargetFollowsAStructuralFixtureChange(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	before := m.currentUnifiedStateView()
+	known := make(map[string]struct{}, len(before.resources))
+	for _, resource := range before.resources {
+		known[resource.ID] = struct{}{}
+	}
+
+	grown := mock.GetConfig()
+	grown.NodeCount++
+	mock.SetMockConfig(grown)
+
+	// Another monitor's view of the grown estate names the resources the
+	// first one lacks. The first monitor has not been asked for a view since
+	// the change, so the lookup itself has to notice the structure moved.
+	var added string
+	for _, resource := range newMockEstateMonitor().currentUnifiedStateView().resources {
+		if _, ok := known[resource.ID]; !ok && resource.Type == unifiedresources.ResourceTypeAgent {
+			added = resource.ID
+			break
+		}
+	}
+	if added == "" {
+		t.Fatal("the larger fixture estate lists no agent the first one did not")
+	}
+	if target := m.MetricsTargetForResource(added); target == nil {
+		t.Fatalf("MetricsTargetForResource(%q) = nil after the fixture grew; the cached view outlived its structure", added)
+	}
+}
+
+// Reusing a view across ticks must not change an answer: every resource
+// resolves to what the view's own registry resolves, and an ID the estate does
+// not list resolves to nothing without building a view for it.
+func TestMockMetricsTargetMatchesTheRegistryResolution(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	view := m.currentUnifiedStateView()
+	registryResolver, ok := view.readState.(MetricsTargetResourceStore)
+	if !ok {
+		t.Fatalf("mock view read state %T does not resolve metrics targets", view.readState)
+	}
+	for _, resource := range view.resources {
+		want := registryResolver.MetricsTargetForResource(resource.ID)
+		got := m.MetricsTargetForResource(resource.ID)
+		if !sameMetricsTarget(got, want) {
+			t.Fatalf("MetricsTargetForResource(%q) = %+v, want the registry's %+v", resource.ID, got, want)
+		}
+		if padded := m.MetricsTargetForResource("  " + resource.ID + " "); !sameMetricsTarget(padded, want) {
+			t.Fatalf("MetricsTargetForResource(%q padded) = %+v, want the canonical ID's %+v", resource.ID, padded, want)
+		}
+	}
+	if got := m.MetricsTargetForResource("not-a-mock-resource"); got != nil {
+		t.Fatalf("MetricsTargetForResource(unknown) = %+v, want nil", got)
+	}
+	if after, _ := publishedMockView(m); after.readState != view.readState {
+		t.Fatal("resolving an unknown ID rebuilt the cached view")
+	}
+}
+
+// A lookup for an ID the estate does not list must stay cheap after a tick
+// too: the view has no more to say about it than the one it replaces.
+func TestMockMetricsTargetForUnknownIDDoesNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 3, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 2)
+	for i := 0; i < 50; i++ {
+		if got := m.MetricsTargetForResource(fmt.Sprintf("unknown-%d", i)); got != nil {
+			t.Fatalf("MetricsTargetForResource(unknown) = %+v, want nil", got)
+		}
+	}
+	if after, _ := publishedMockView(m); after.readState != warm.readState {
+		t.Fatal("unknown-ID lookups rebuilt the unified view after a metric tick")
+	}
+}
+
+// An operator link folds one resource into another, which changes what the
+// folded ID resolves to. Whatever rebuilds the view first, a lookup after the
+// resource store applied the link must not resolve the folded resource.
+func TestMockMetricsTargetFollowsAnOperatorLink(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	var vmID, agentID string
+	for _, resource := range m.currentUnifiedStateView().resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+	if m.MetricsTargetForResource(agentID) == nil || m.MetricsTargetForResource(vmID) == nil {
+		t.Fatal("expected the unlinked VM and agent to resolve metrics targets")
+	}
+
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	// Rebuild the resource store so it loads the link, without asking for a
+	// mock view: the lookup itself has to see the link list change.
+	m.updateResourceStore(models.StateSnapshot{}, m.mockModeFence.begin())
+
+	if got := m.MetricsTargetForResource(agentID); got != nil {
+		t.Fatalf("MetricsTargetForResource(folded agent) = %+v after the operator link, want nothing", got)
+	}
+	if m.MetricsTargetForResource(vmID) == nil {
+		t.Fatal("the linked VM lost its metrics target")
+	}
+}
+
+// The reused view was built under one link list; once the resource store
+// applies a different one, a lookup must rebuild rather than answer from it.
+// A rebuild by any other consumer would hide a missing check, so the list the
+// view was built under is changed directly.
+func TestMockMetricsTargetRebuildsWhenTheLinkListMoves(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	id := resourceIDsWithTargets(t, warm)[0]
+
+	m.mockUnifiedViewMu.Lock()
+	m.mockUnifiedViewLinks = []unifiedresources.ResourceLink{{ResourceA: "stale-a", ResourceB: "stale-b", PrimaryID: "stale-a"}}
+	m.mockUnifiedViewMu.Unlock()
+
+	if m.MetricsTargetForResource(id) == nil {
+		t.Fatalf("MetricsTargetForResource(%q) = nil", id)
+	}
+	after, _ := publishedMockView(m)
+	if after.readState == warm.readState {
+		t.Fatal("a lookup answered from a view built under a different operator link list")
+	}
+}
+
+// The estate view is keyed on the fixture data version, which advances on
+// every metric tick, and a build costs about half a second of CPU on an idle
+// core (several seconds on a starved process). Callers that read the estate's
+// identity and topology only share the view built for the current fixture
+// structure instead (currentStructureUnifiedStateView); startup runs every one
+// of them before the listener opens, and on a starved process each used to
+// build its own estate.
+func TestMockStructureConsumersDoNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 4, time.Second)
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 2)
+
+	consumers := []struct {
+		name string
+		run  func()
+	}{
+		{"structure read state", func() { m.GetUnifiedStructureReadState() }},
+		{"mode structure read state", func() { m.currentModeStructureReadState() }},
+		{"structure node listing", func() { m.structureNodes() }},
+		{"docker alert prune", func() { m.pruneStaleDockerAlerts() }},
+		{"host agent evaluation", func() { m.evaluateHostAgents(time.Now()) }},
+		{"chart cache prewarm", func() { m.prewarmMockDashboardChartCaches() }},
+		{"host agent evaluation with an offline linked host", func() {
+			m.state.UpsertHost(models.Host{ID: "offline-agent", Hostname: "offline-agent", LinkedNodeID: "pve1-node", Status: "online", LastSeen: time.Now().Add(-24 * time.Hour)})
+			m.evaluateHostAgents(time.Now())
+		}},
+	}
+	for _, consumer := range consumers {
+		consumer.run()
+		after, ok := publishedMockView(m)
+		if !ok || after.readState != warm.readState {
+			t.Fatalf("%s rebuilt the unified view after a metric tick; it only reads identity and topology, which the view built for the current fixture structure holds", consumer.name)
+		}
+	}
+}
+
+// The host-agent evaluation lists nodes only for a host that names a linked
+// node, and only when it has to.
+func TestSharedSystemAlertCorrelationForHostLazyListsNodesOnDemand(t *testing.T) {
+	listed := 0
+	nodes := func() []models.Node {
+		listed++
+		return []models.Node{{ID: "node-1", Instance: "lab", LinkedAgentID: "host-1"}}
+	}
+
+	if got := sharedSystemAlertCorrelationForHostLazy(models.Host{ID: "host-1"}, nodes); got != nil || listed != 0 {
+		t.Fatalf("an unlinked host listed nodes %d times and correlated %v", listed, got)
+	}
+	if got := sharedSystemAlertCorrelationForHostLazy(models.Host{LinkedNodeID: "node-1"}, nodes); got != nil || listed != 0 {
+		t.Fatalf("a host without an ID listed nodes %d times and correlated %v", listed, got)
+	}
+	got := sharedSystemAlertCorrelationForHostLazy(models.Host{ID: "host-1", LinkedNodeID: "node-1"}, nodes)
+	if listed != 1 {
+		t.Fatalf("a linked host listed nodes %d times, want once", listed)
+	}
+	want := sharedSystemAlertCorrelationForHost(models.Host{ID: "host-1", LinkedNodeID: "node-1"}, nodes())
+	if got == nil || want == nil || got.Key != want.Key {
+		t.Fatalf("a linked host correlated %+v, want %+v", got, want)
+	}
+}
+
+// The data-version view must keep serving the callers that read values: a
+// consumer of statuses, sensors and metrics must see the tick, so the
+// structure view cannot have replaced it.
+func TestMockDataVersionViewStillRebuildsAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 3, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 1)
+
+	if m.GetUnifiedReadStateOrSnapshot() == warm.readState {
+		t.Fatal("GetUnifiedReadStateOrSnapshot served the view from before a metric tick")
+	}
+}
+
+// The structure view answers for the estate it was built from. A structural
+// change must reach its callers, not keep serving the old resource set.
+func TestMockStructureReadStateFollowsAStructuralFixtureChange(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	before := m.GetUnifiedStructureReadState()
+	if before == nil || len(before.Nodes()) == 0 {
+		t.Fatal("the mock estate lists no nodes")
+	}
+
+	grown := mock.GetConfig()
+	grown.NodeCount++
+	mock.SetMockConfig(grown)
+
+	after := m.GetUnifiedStructureReadState()
+	if after == before {
+		t.Fatal("the structure view outlived a structural fixture change")
+	}
+	if len(after.Nodes()) <= len(before.Nodes()) {
+		t.Fatalf("the structure view lists %d nodes after the estate grew from %d", len(after.Nodes()), len(before.Nodes()))
+	}
+}
+
+// An operator link folds one resource into another; the structure view must
+// stop listing the folded resource once the resource store applies the link.
+func TestMockStructureReadStateFollowsAnOperatorLink(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	var vmID, agentID string
+	for _, resource := range m.currentStructureUnifiedStateView().resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	m.updateResourceStore(models.StateSnapshot{}, m.mockModeFence.begin())
+
+	for _, resource := range m.currentStructureUnifiedStateView().resources {
+		if resource.ID == agentID {
+			t.Fatalf("the structure view still lists the agent %q the operator folded into %q", agentID, vmID)
+		}
+	}
+}
+
 // TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
 // room. Mock mode already suspends pull-based PVE/PBS/PMG collection, but a
 // real agent keeps POSTing regardless; ingesting those reports lands a real
@@ -5639,6 +6635,66 @@ func TestMockModeDiscardsRealHostReports(t *testing.T) {
 			t.Fatalf("real mode must still ingest host reports, got %#v", got)
 		}
 	})
+}
+
+// Report ingest records an agent's identity on its token only for a host the
+// monitor resolved and holds under that token, judged on the report's own
+// hostname. That rests on three properties of the returned host, pinned here:
+// an applied report carries the token's ID, a report the ordering watermark
+// rejects returns the stored host with the stored hostname rather than its
+// own, and mock mode's discard acknowledgement carries no token at all.
+func TestApplyHostReportStampsTheTokenOnlyOnHostsItHolds(t *testing.T) {
+	token := &config.APITokenRecord{ID: "token-a", Name: "agent token"}
+	newMonitor := func(t *testing.T) *Monitor {
+		t.Helper()
+		return &Monitor{
+			state:               models.NewState(),
+			resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+			hostContinuityStore: config.NewHostContinuityStore(t.TempDir(), nil),
+			rateTracker:         NewRateTracker(),
+		}
+	}
+	report := func(hostname string, at time.Time) agentshost.Report {
+		return agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: "machine-a", Version: "6.5.0", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: "machine-a", MachineID: "machine-a", Hostname: hostname, Platform: "linux"},
+			Timestamp: at,
+		}
+	}
+
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	m := newMonitor(t)
+	start := time.Now().UTC().Add(-time.Minute)
+	first := report("node.site-b", start)
+	applied, err := m.ApplyHostReport(first, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if applied.ID != "machine-a" || applied.TokenID != token.ID || applied.Hostname != "node.site-b" {
+		t.Fatalf("applied host = %q token %q hostname %q, want machine-a under %q as node.site-b", applied.ID, applied.TokenID, applied.Hostname, token.ID)
+	}
+	if _, err := m.ApplyHostReport(report("node", start.Add(30*time.Second)), token); err != nil {
+		t.Fatalf("ApplyHostReport newer: %v", err)
+	}
+	replayed, err := m.ApplyHostReport(first, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport replay: %v", err)
+	}
+	if replayed.TokenID != token.ID || replayed.Hostname != "node" {
+		t.Fatalf("replayed report returned token %q hostname %q, want the stored host under %q as node", replayed.TokenID, replayed.Hostname, token.ID)
+	}
+
+	mustSetMockEnabled(t, true)
+	discarded, err := newMonitor(t).ApplyHostReport(report("node", time.Now().UTC()), token)
+	if err != nil {
+		t.Fatalf("mock mode ApplyHostReport: %v", err)
+	}
+	if discarded.ID != "machine-a" || discarded.TokenID != "" {
+		t.Fatalf("mock acknowledgement = %q token %q, want the echoed ID with no token", discarded.ID, discarded.TokenID)
+	}
 }
 
 // The agent-authored privilege profile must survive ingest into model state
@@ -6718,6 +7774,14 @@ func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource 
 	s.reads++
 	return s.MonitorAdapter.GetAll()
 }
+func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget) {
+	s.reads++
+	return s.MonitorAdapter.GetAllWithMetricsTargets()
+}
+func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargetsAndStaleThresholds() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget, map[unifiedresources.DataSource]time.Duration) {
+	s.reads++
+	return s.MonitorAdapter.GetAllWithMetricsTargetsAndStaleThresholds()
+}
 func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
 	return false
 }
@@ -6759,6 +7823,10 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	if row == nil || row.CPU.Current != 77 || len(row.Tags) != 1 || row.Tags[0] != "new-tag" {
 		t.Fatalf("mutable row was stale: %#v", row)
 	}
+	var health unifiedresources.ResourceHealth
+	if err := json.Unmarshal(row.Health, &health); err != nil || health.Verdict != unifiedresources.HealthCritical {
+		t.Fatalf("live critical alert did not reach the freshly projected row: %s (%v)", row.Health, err)
+	}
 	if first.Resources[0].CPU.Current != oldCPU {
 		t.Fatal("later projection mutated an accepted baseline")
 	}
@@ -6773,5 +7841,827 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 	if !foundIgnored {
 		t.Fatal("removed host lifecycle surface disappeared")
+	}
+}
+
+func TestAgentLXCPartialInventoryPreservesSuccessAndInvalidatesOmissions(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a", LinkedAgentID: "agent-a"}})
+	m := &Monitor{state: state}
+	now := time.Date(2026, 10, 5, 16, 0, 0, 0, time.UTC)
+	row := func(vmid int) agentshost.ProxmoxLXCContainer {
+		return agentshost.ProxmoxLXCContainer{VMID: vmid, Name: "web", Disks: []agentshost.Disk{{Type: "rootfs", Device: "local:disk", Mountpoint: "/", TotalBytes: 4096, UsedBytes: 1024, FreeBytes: 3072}}}
+	}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete", Containers: []agentshost.ProxmoxLXCContainer{row(100), row(102)}}, now, 30)
+	foreignKey := agentLXCFilesystemCacheKey("pve-b", "node-a", 102)
+	m.proxmoxLXCFilesystemsCache[foreignKey] = agentLXCFilesystemCacheEntry{agentID: "agent-b", name: "foreign", expiresAt: now.Add(time.Hour)}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "partial", Containers: []agentshost.ProxmoxLXCContainer{row(100)}, OmittedVMIDs: []int{102}}, now.Add(time.Minute), 30)
+	if _, ok := m.proxmoxLXCFilesystemsCache[agentLXCFilesystemCacheKey("pve-a", "node-a", 102)]; ok {
+		t.Fatal("omitted guest kept a usable prior agent reading")
+	}
+	if _, ok := m.proxmoxLXCFilesystemsCache[foreignKey]; !ok {
+		t.Fatal("foreign instance cache was invalidated")
+	}
+	guest := models.Container{VMID: 100, Name: "web", Status: "running"}
+	m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, now.Add(time.Minute))
+	if len(guest.Disks) != 1 || guest.Disks[0].Used != 1024 {
+		t.Fatalf("successful partial guest=%+v", guest)
+	}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete"}, now.Add(2*time.Minute), 30)
+	if _, ok := m.proxmoxLXCFilesystemsCache[agentLXCFilesystemCacheKey("pve-a", "node-a", 100)]; ok {
+		t.Fatal("complete empty collection retained a removed/stopped guest reading")
+	}
+	if _, ok := m.proxmoxLXCFilesystemsCache[foreignKey]; !ok {
+		t.Fatal("complete empty collection cleared a foreign instance")
+	}
+}
+
+func TestAgentLXCMalformedPartialInventoryCannotRenewOrInvalidate(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a", LinkedAgentID: "agent-a"}})
+	m := &Monitor{state: state}
+	now := time.Now()
+	key := agentLXCFilesystemCacheKey("pve-a", "node-a", 100)
+	original := agentLXCFilesystemCacheEntry{agentID: "agent-a", name: "web", expiresAt: now.Add(time.Minute)}
+	m.proxmoxLXCFilesystemsCache = map[string]agentLXCFilesystemCacheEntry{key: original}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete", OmittedVMIDs: []int{100}}, now, 30)
+	got := m.proxmoxLXCFilesystemsCache[key]
+	if !got.expiresAt.Equal(original.expiresAt) || got.name != "web" {
+		t.Fatal("malformed completeness changed cache")
+	}
+}
+
+func TestAgentLXCPartialWireReportReachesLinkedGuestWithoutStaleOmission(t *testing.T) {
+	m := newTestMonitor(t)
+	m.state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a"}})
+	row := func(vmid int) agentshost.ProxmoxLXCContainer {
+		return agentshost.ProxmoxLXCContainer{VMID: vmid, Name: "web", Disks: []agentshost.Disk{{
+			Type: "rootfs", Device: "local:disk", Mountpoint: "/", TotalBytes: 4096, UsedBytes: 1024, FreeBytes: 3072,
+		}}}
+	}
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-a", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "agent-a", MachineID: "agent-a", Hostname: "node-a", Platform: "linux"},
+		ProxmoxLXC: &agentshost.ProxmoxLXCInventory{
+			Status: agentshost.ProxmoxLXCCollectionComplete, Containers: []agentshost.ProxmoxLXCContainer{row(100), row(102)},
+		},
+	}
+	applyWire := func(sequence uint64) models.Host {
+		t.Helper()
+		report.Timestamp = time.Now().UTC()
+		report.SequenceID = agentshost.FormatReportSequenceID("partial-wire-test", sequence)
+		encoded, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded agentshost.Report
+		if err := json.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		host, err := m.ApplyHostReport(decoded, &config.APITokenRecord{ID: "partial-wire-token"})
+		if err != nil || host.LinkedNodeID != "node-id" {
+			t.Fatalf("wire report did not reach linked node: host=%+v err=%v", host, err)
+		}
+		return host
+	}
+	applyWire(1)
+	report.ProxmoxLXC.Status = agentshost.ProxmoxLXCCollectionPartial
+	report.ProxmoxLXC.Containers = []agentshost.ProxmoxLXCContainer{row(100)}
+	report.ProxmoxLXC.OmittedVMIDs = []int{102}
+	report.Agent.Modules = []agentshost.ModuleStatus{{Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded", LastError: "proxmox.lxc_filesystems: helper Proxmox LXC filesystem inventory is incomplete"}}
+	host := applyWire(2)
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "degraded" {
+		t.Fatalf("wire report lost partial helper health: %+v", host.AgentModules)
+	}
+	for _, vmid := range []int{100, 102} {
+		guest := models.Container{VMID: vmid, Name: "web", Status: "running"}
+		m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, time.Now())
+		if vmid == 100 && (len(guest.Disks) != 1 || guest.Disks[0].Used != 1024) {
+			t.Fatalf("successful wire reading was lost: %+v", guest.Disks)
+		}
+		if vmid == 102 && len(guest.Disks) != 0 {
+			t.Fatalf("omitted wire guest kept a prior reading: %+v", guest.Disks)
+		}
+	}
+	report.ProxmoxLXC = &agentshost.ProxmoxLXCInventory{Status: agentshost.ProxmoxLXCCollectionComplete}
+	report.Agent.Modules[0].State, report.Agent.Modules[0].LastError = "running", ""
+	host = applyWire(3)
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "running" || host.AgentModules[0].LastError != "" {
+		t.Fatalf("wire recovery did not clear partial helper health: %+v", host.AgentModules)
+	}
+	guest := models.Container{VMID: 100, Name: "web", Status: "running"}
+	m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, time.Now())
+	if len(guest.Disks) != 0 {
+		t.Fatal("complete empty wire report retained a stopped guest reading")
+	}
+}
+
+// presentationFixtureStore keeps the fixture registry: the broadcast's read
+// refresh would otherwise rebuild it from the empty snapshot.
+type presentationFixtureStore struct {
+	*unifiedresources.MonitorAdapter
+}
+
+func (presentationFixtureStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+// A host pair the operator split (unlink or report-merge) must be two
+// broadcast rows exactly when the resources API lists two. The broadcast used
+// to coalesce without the store's exclusions, so the websocket folded the
+// pair the API kept apart.
+func TestBroadcastPresentationCoalesceHonoursMergeExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{
+			ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent:    &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"},
+		},
+		{
+			ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker:   &unifiedresources.DockerData{Hostname: "alpha"},
+		},
+	}
+	for _, split := range []bool{false, true} {
+		store := unifiedresources.NewMemoryStore()
+		if split {
+			if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		registry := unifiedresources.NewRegistry(store)
+		registry.IngestResources(resources)
+		adapter := unifiedresources.NewMonitorAdapter(registry)
+		m := &Monitor{resourceStore: presentationFixtureStore{adapter}}
+
+		state := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), m.mockModeFence.begin(), func() time.Time { return now })
+		broadcastRows := 0
+		for _, resource := range state.Resources {
+			if resource.Name == "alpha" {
+				broadcastRows++
+			}
+		}
+
+		// The resources API seeds a store-backed registry from the monitor's
+		// listing and presents it through ListForPresentation.
+		rest := unifiedresources.NewRegistry(store)
+		rest.IngestResources(adapter.GetAll())
+		restRows := len(rest.ListForPresentation())
+
+		want := 1
+		if split {
+			want = 2
+		}
+		if broadcastRows != want || restRows != want {
+			t.Fatalf("split=%v: broadcast rows=%d REST rows=%d, want %d on both", split, broadcastRows, restRows, want)
+		}
+	}
+}
+
+// The rows a broadcast coalesces were listed by its view's read state, such as
+// a host-continuity overlay that loaded the store's exclusions afresh, so its
+// exclusions decide even when the resource store's generation predates them.
+func TestBroadcastPresentationCoalescePrefersTheListingReadState(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent: &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"}},
+		{ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker: &unifiedresources.DockerData{Hostname: "alpha"}},
+	}
+	store := unifiedresources.NewMemoryStore()
+	base := unifiedresources.NewRegistry(store)
+	base.IngestResources(resources)
+	m := &Monitor{resourceStore: unifiedresources.NewMonitorAdapter(base)}
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	overlay := unifiedresources.NewRegistry(store)
+	overlay.IngestResources(resources)
+	listing := unifiedresources.NewMonitorAdapter(overlay)
+	if got := len(m.coalesceResourcesForPresentation(listing, listing.GetAll(), nil)); got != 2 {
+		t.Fatalf("coalesced %d rows with the listing's exclusion, want 2", got)
+	}
+	if got := len(m.coalesceResourcesForPresentation(nil, listing.GetAll(), nil)); got != 1 {
+		t.Fatalf("without a listing read state the store generation decides: %d rows, want 1", got)
+	}
+
+	// The mock view lists through a store-less registry, which carries no
+	// operator decisions, so the resource store's adapter supplies them.
+	mockView := monitorUnifiedStateViewFromResources(resources, now)
+	withSplit := &Monitor{resourceStore: listing}
+	if got := len(withSplit.coalesceResourcesForPresentation(mockView.readState, mockView.resources, mockView.staleThresholds)); got != 2 {
+		t.Fatalf("mock-style view coalesced %d rows, want the store's split to keep 2", got)
+	}
+}
+
+// A host agent linked to a Proxmox node merges into one read-state row that
+// every PVE poll keeps online and fresh. Once the agent stops reporting, its
+// retained filesystem summary must stop standing in for the node's disk (and
+// through it disk alerts and history), and the projected agent must read as
+// offline with its own last report, so its connection shows the missed
+// heartbeat instead of the PVE poll time.
+func TestSilentLinkedAgentStopsFeedingNodeDisk(t *testing.T) {
+	state := models.NewState()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{config: &config.Config{}, state: state, resourceStore: adapter}
+
+	node := models.Node{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		ConnectionHealth: "healthy", LinkedAgentID: "agent-1",
+	}
+	rootFS := &proxmox.NodeStatus{RootFS: &proxmox.RootFS{Total: 200, Used: 50, Free: 150}}
+	// poll records a PVE poll that just saw the node, with the agent as of its
+	// last report, and resolves the node's disk the way pollPVENode does.
+	poll := func(agentLastReport time.Time) (models.Disk, string, models.Host) {
+		t.Helper()
+		polledNode := node
+		polledNode.LastSeen = time.Now()
+		state.UpdateNodes([]models.Node{polledNode})
+		state.UpsertHost(models.Host{
+			ID: "agent-1", Hostname: "node1", Status: "online", LinkedNodeID: node.ID,
+			IntervalSeconds: 30, LastSeen: agentLastReport,
+			Disks: []models.Disk{{Mountpoint: "/", Type: "ext4", Total: 1000, Used: 900, Free: 100, Usage: 90}},
+		})
+		m.evaluateHostAgents(time.Now())
+		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+
+		disk, source := m.resolveNodeDisk("pve1", node.ID, node.Name, proxmox.Node{Node: node.Name}, rootFS)
+		for _, host := range m.HostsSnapshot() {
+			if host.ID == "agent-1" {
+				return disk, source, host
+			}
+		}
+		t.Fatal("HostsSnapshot does not list agent-1")
+		return disk, source, models.Host{}
+	}
+
+	agentReport := time.Now().Add(-10 * time.Second)
+	disk, source, host := poll(agentReport)
+	if source != "agent" || disk.Used != 900 {
+		t.Fatalf("reporting agent: node disk = %+v from %q, want the agent's summary", disk, source)
+	}
+	if host.Status != "online" || !host.LastSeen.Equal(agentReport) {
+		t.Fatalf("reporting agent projected as %q last seen %s, want online at its report %s", host.Status, host.LastSeen, agentReport)
+	}
+
+	silentSince := time.Now().Add(-hostAgentHealthWindow(30) - time.Minute)
+	disk, source, host = poll(silentSince)
+	if source != "node-status-rootfs" || disk.Used != 50 {
+		t.Fatalf("silent agent: node disk = %+v from %q, want Proxmox rootfs", disk, source)
+	}
+	if linked := m.linkedHostForNode("pve1", node.ID, node.Name); linked != nil {
+		t.Fatalf("silent agent still linked to the node for disk and dataset data: %+v", linked)
+	}
+	if host.Status != "offline" || !host.LastSeen.Equal(silentSince) {
+		t.Fatalf("silent agent projected as %q last seen %s, want offline at its last report %s", host.Status, host.LastSeen, silentSince)
+	}
+
+	disk, source, host = poll(time.Now())
+	if source != "agent" || disk.Used != 900 || host.Status != "online" {
+		t.Fatalf("agent reporting again: node disk = %+v from %q, agent %q; want the agent's summary and online", disk, source, host.Status)
+	}
+}
+
+// A disk swapped into a slot must not take its identity from the linked host
+// agent's row for the slot's previous occupant. A silent agent keeps its last
+// rows, and that row used to match the replacement by device path alone: it
+// filled a serial Proxmox reported as "unknown" (recorded as unreported, so
+// the agent can fill it) or, for SAS, promoted its serial over the SAS address
+// Proxmox reports, and the registry joined a SAS replacement to the agent's
+// disk on the same path. Either way the replacement took the old disk's
+// serial, canonical resource and history, temperature and failed health.
+func TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity(t *testing.T) {
+	const (
+		oldSerial   = "ZA1OLD0001"
+		oldAgentWWN = "5-c50-aaaa0001" // smartctl's NAA field spelling
+		oldPVEWWN   = "0x5000c500aaaa0001"
+		newPVEWWN   = "0x5000c500bbbb0002"
+	)
+	for _, transport := range []struct {
+		agentType string
+		// pveSerial is what Proxmox reports for a disk with the given WWN.
+		pveSerial func(wwn string) string
+		// replacementSerial is the serial the replacement's record keeps.
+		replacementSerial string
+		serialState       diskinventory.FieldState
+	}{
+		{
+			agentType:         "sata",
+			pveSerial:         func(string) string { return "unknown" },
+			replacementSerial: "",
+			serialState:       diskinventory.FieldMissing,
+		},
+		{
+			agentType:         "sas",
+			pveSerial:         func(wwn string) string { return strings.TrimPrefix(wwn, "0x") },
+			replacementSerial: strings.TrimPrefix(newPVEWWN, "0x"),
+			serialState:       diskinventory.FieldAvailable,
+		},
+	} {
+		t.Run(transport.agentType, func(t *testing.T) {
+			t.Setenv("PULSE_DATA_DIR", t.TempDir())
+			now := time.Now()
+			state := models.NewState()
+			state.UpdateNodesForInstance("pve1", []models.Node{{
+				ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+				LastSeen: now, LinkedAgentID: "agent-1",
+			}})
+			state.UpsertHost(models.Host{
+				ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1",
+				Status: "online", IntervalSeconds: 30, LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device: "/dev/sdb", Serial: oldSerial, WWN: oldAgentWWN, Type: transport.agentType,
+					Health: "FAILED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Serial:      diskinventory.Available("smartctl"),
+						Temperature: diskinventory.Available("smartctl"),
+					},
+				}}},
+			})
+			alertManager := alerts.NewManager()
+			t.Cleanup(alertManager.Stop)
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m := &Monitor{
+				state: state, resourceStore: adapter, alertManager: alertManager,
+				metricsHistory: NewMetricsHistory(100, time.Hour),
+				startTime:      now.Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+			}
+			client := &slotDiskPVEClient{}
+			pveDisk := func(wwn string) proxmox.Disk {
+				return proxmox.Disk{
+					DevPath: "/dev/sdb", Model: "ST4000NM000A", Serial: transport.pveSerial(wwn), WWN: wwn,
+					Type: "hdd", Health: "PASSED", Wearout: 100, Size: 4000787030016,
+				}
+			}
+			poll := func() (models.PhysicalDisk, *unifiedresources.PhysicalDiskView) {
+				t.Helper()
+				adapter.PopulateFromSnapshot(state.GetSnapshot())
+				started := time.Now()
+				delete(m.lastPhysicalDiskPoll, "pve1")
+				m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client,
+					[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+				deadline := time.Now().Add(3 * time.Second)
+				for {
+					if disks := state.GetSnapshot().PhysicalDisks; len(disks) == 1 && !disks[0].LastChecked.Before(started) {
+						adapter.PopulateFromSnapshot(state.GetSnapshot())
+						var proxmoxViews []*unifiedresources.PhysicalDiskView
+						for _, view := range adapter.PhysicalDisks() {
+							if _, ok := view.SourceStatus(unifiedresources.SourceProxmox); ok {
+								proxmoxViews = append(proxmoxViews, view)
+							}
+						}
+						if len(proxmoxViews) != 1 {
+							t.Fatalf("canonical Proxmox physical disks = %d, want one", len(proxmoxViews))
+						}
+						return disks[0], proxmoxViews[0]
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("physical disk poll did not land in state")
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+
+			client.setDisk(pveDisk(oldPVEWWN))
+			original, originalView := poll()
+			if original.Serial != oldSerial || originalView.Serial() != oldSerial ||
+				original.Collection == nil || original.Collection.Serial.State != diskinventory.FieldAvailable {
+				t.Fatalf("agent serial not merged into the disk it describes: state %q, canonical %q, collection %+v",
+					original.Serial, originalView.Serial(), original.Collection)
+			}
+
+			// The agent stops reporting, keeping its rows, and the disk is replaced.
+			state.TouchHost("agent-1", now.Add(-hostAgentHealthWindow(30)-time.Minute))
+			m.evaluateHostAgents(now)
+			client.setDisk(pveDisk(newPVEWWN))
+			for round := 1; round <= 2; round++ {
+				got, view := poll()
+				if got.Serial != transport.replacementSerial || view.Serial() == oldSerial {
+					t.Fatalf("poll %d: replacement took the retained row's serial: state %q, canonical %q",
+						round, got.Serial, view.Serial())
+				}
+				if view.ID() == originalView.ID() {
+					t.Fatalf("poll %d: replacement took over the old disk's canonical resource %q", round, view.ID())
+				}
+				if got.Temperature != 0 || got.Health != "PASSED" || view.Temperature() != 0 || view.Health() != "PASSED" {
+					t.Fatalf("poll %d: replacement took the old disk's readings: state %d/%q, canonical %d/%q",
+						round, got.Temperature, got.Health, view.Temperature(), view.Health())
+				}
+				if got.WWN != newPVEWWN ||
+					got.Collection == nil || got.Collection.Serial.State != transport.serialState {
+					t.Fatalf("poll %d: replacement wwn %q, serial collection %+v", round, got.WWN, got.Collection)
+				}
+			}
+		})
+	}
+}
+
+// A Pulse agent linked into a VM fills the guest disk metric when Proxmox has
+// no guest filesystems. The next poll must not carry that agent reading
+// forward as Proxmox's own last known guest read: with Proxmox outranking the
+// agent on guests, the carried copy would freeze over the agent's live disk.
+func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
+	now := time.Now()
+	view := func(source unifiedresources.DataSource) *unifiedresources.VMView {
+		used, total := int64(400), int64(1000)
+		v := unifiedresources.NewVMView(&unifiedresources.Resource{
+			ID:       "vm-pve-node1-101",
+			Type:     unifiedresources.ResourceTypeVM,
+			Name:     "app-101",
+			LastSeen: now,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance:         "pve",
+				NodeName:         "node1",
+				VMID:             101,
+				RuntimeStatus:    "running",
+				DiskStatusReason: "agent-not-running",
+				DiskObservation:  models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-time.Minute)},
+			},
+			// The linked agent's addresses count as recent guest evidence.
+			Identity: unifiedresources.ResourceIdentity{IPAddresses: []string{"10.0.0.5"}},
+			Metrics: &unifiedresources.ResourceMetrics{
+				Disk: &unifiedresources.MetricValue{Used: &used, Total: &total, Percent: 40, Source: source},
+			},
+		})
+		return &v
+	}
+	carry := func(source unifiedresources.DataSource) (float64, string) {
+		prev := previousVMFromView(view(source))
+		_, _, _, usage, _, reason := stabilizeGuestLowTrustDisk(
+			&prev, "running", 32<<30, 0, 32<<30, -1, nil, "agent-not-running", false, now,
+		)
+		return usage, reason
+	}
+
+	if usage, reason := carry(unifiedresources.SourceAgent); usage != -1 || reason != "agent-not-running" {
+		t.Fatalf("linked agent disk carried as Proxmox's: usage=%v reason=%q", usage, reason)
+	}
+	if usage, reason := carry(unifiedresources.SourceProxmox); usage != 40 || reason != "prev-agent-not-running" {
+		t.Fatalf("Proxmox's own guest disk not carried: usage=%v reason=%q", usage, reason)
+	}
+}
+
+// Endpoint hints are deliberately absent: an operator-saved FQDN endpoint
+// does not establish the agent's guest hostname. Test that attribution keeps
+// full provider/agent names distinct while preserving short-name compatibility.
+func TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs(t *testing.T) {
+	for _, kind := range []string{"node", "vm", "container"} {
+		t.Run(kind, func(t *testing.T) {
+			m := &Monitor{state: models.NewState()}
+			setNames := func(names ...string) {
+				nodes, vms, containers := []models.Node{}, []models.VM{}, []models.Container{}
+				for i, name := range names {
+					id, instance := "home", "Home"
+					if i > 0 {
+						id, instance = "remote", "Remote"
+					}
+					switch kind {
+					case "node":
+						nodes = append(nodes, models.Node{ID: id, Name: name, Instance: instance})
+					case "vm":
+						vms = append(vms, models.VM{ID: id, Name: name, Instance: instance, VMID: 100})
+					case "container":
+						containers = append(containers, models.Container{ID: id, Name: name, Instance: instance, VMID: 100})
+					}
+				}
+				m.state.UpdateNodes(nodes)
+				m.state.UpdateVMs(vms)
+				m.state.UpdateContainers(containers)
+			}
+			check := func(hostname, want string) {
+				t.Helper()
+				node, vm, container := m.findLinkedProxmoxEntity(hostname)
+				got := map[string]string{"node": node, "vm": vm, "container": container}
+				for k, id := range got {
+					expected := ""
+					if k == kind {
+						expected = want
+					}
+					if id != expected {
+						t.Errorf("hostname %q: %s=%q, want %q", hostname, k, id, expected)
+					}
+				}
+			}
+			setNames("docker.home.example")
+			check("docker.home.example", "home")
+			check("  DOCKER.HOME.EXAMPLE.  ", "home")
+			check("docker.remote.example", "") // A sole unrelated FQDN is not identity.
+			check("docker", "home")
+			setNames("docker.home.example", "docker.remote.example")
+			check("docker.home.example", "home")
+			check("docker.remote.example", "remote")
+			check("docker", "") // Bare name still cannot choose between estates.
+			check("docker.third.example", "")
+			setNames("docker")
+			check("docker.home.example", "home") // Legacy short provider name remains usable.
+		})
+	}
+}
+
+// The poller records the hostname a PBS node reports about itself so the
+// connections ledger can group the host agent running on that machine under
+// the PBS connection, even when the connection was configured by IP or DNS
+// alias. The ledger reads the name back through PBSInstancesSnapshot, which
+// rebuilds each instance from the unified read state; a conversion that
+// drops the name leaves the agent as a separate row with no error anywhere.
+func TestMonitorPBSInstancesSnapshotCarriesReportedNodeName(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-1",
+			Name:     "backup",
+			Host:     "https://192.0.2.40:8007",
+			NodeName: "pbs01",
+			Status:   "online",
+			LastSeen: time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC),
+		}},
+	})
+
+	// The unified resource holds the name, so a missing value below is lost
+	// in the conversion, not at ingest.
+	resources := registry.ListByType(unifiedresources.ResourceTypePBS)
+	if len(resources) != 1 || resources[0].PBS == nil || resources[0].PBS.NodeName != "pbs01" {
+		t.Fatalf("expected the PBS resource to keep the reported node name, got %+v", resources)
+	}
+
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	instances := m.PBSInstancesSnapshot()
+	if len(instances) != 1 {
+		t.Fatalf("expected one PBS instance, got %d", len(instances))
+	}
+	if instances[0].NodeName != "pbs01" {
+		t.Fatalf("PBSInstancesSnapshot()[0].NodeName = %q, want the reported node name %q", instances[0].NodeName, "pbs01")
+	}
+}
+
+func TestGuestMetadataIdleCleanupContract(t *testing.T) {
+	now := time.Now()
+	stale := now.Add(-3 * guestMetadataCacheTTL)
+	suppressed := guestMetadataCacheEntry{osInfoFailureCount: guestAgentOSInfoFailureThreshold, osInfoSkip: true}
+	retained := suppressed
+	retained.osName, retained.windowsGuest = "Microsoft Windows", true
+	retained.fetchedAt, retained.osInfoObservedAt = stale, stale
+	m := &Monitor{
+		guestMetadataCache: map[string]guestMetadataCacheEntry{
+			"active-empty":    suppressed,
+			"active-retained": retained,
+			"inactive":        suppressed,
+			"legacy-fresh":    metadataObservationFixture(now),
+			"legacy-stale":    metadataObservationFixture(stale),
+			"inflight":        suppressed,
+		},
+		guestMetadataLastAccess: map[string]time.Time{"active-empty": now, "active-retained": now, "inactive": stale, "only-active": now, "only-idle": stale, "inflight": stale},
+		guestMetadataLimiter:    map[string]time.Time{"active-empty": now.Add(time.Minute), "inactive": stale, "inflight": stale},
+		guestMetadataInFlight:   map[string]*guestMetadataFetch{"inflight": {}},
+	}
+	m.cleanupGuestMetadataCache(now)
+	for _, key := range []string{"active-empty", "active-retained", "legacy-fresh", "inflight"} {
+		if _, exists := m.guestMetadataCache[key]; !exists {
+			t.Errorf("live cache %s pruned", key)
+		}
+	}
+	for _, key := range []string{"inactive", "legacy-stale"} {
+		if _, exists := m.guestMetadataCache[key]; exists {
+			t.Errorf("idle cache %s retained", key)
+		}
+	}
+	for _, key := range []string{"inactive", "only-idle"} {
+		if _, exists := m.guestMetadataLastAccess[key]; exists {
+			t.Errorf("idle bookkeeping %s retained", key)
+		}
+	}
+	if !m.guestMetadataLastAccess["only-active"].Equal(now) || !m.guestMetadataLimiter["active-empty"].Equal(now.Add(time.Minute)) || !m.guestMetadataLimiter["inflight"].Equal(stale) || m.guestMetadataInFlight["inflight"] == nil {
+		t.Error("janitor changed current activity, backoff or in-flight ownership")
+	}
+	empty := m.guestMetadataCache["active-empty"]
+	old := m.guestMetadataCache["active-retained"]
+	if !reflect.DeepEqual(empty, suppressed) || !reflect.DeepEqual(old, retained) {
+		t.Error("retention changed safety or observation state")
+	}
+	// Evidence consumers use actual observation age, never the activity clock.
+	key := guestMetadataCacheKey("activity", "node", 105)
+	m.guestMetadataCache[key] = retained
+	m.guestMetadataLastAccess[key] = now
+	m.cleanupGuestMetadataCache(now)
+	if m.hasRecentGuestMetadataEvidence("activity", "node", 105, now) || m.guestWindowsMeminfoUnsupported("activity", "node", 105, now) || !m.guestMetadataEvidenceTime("activity", "node", 105).Equal(stale) {
+		t.Error("activity invented a useful/Windows OS observation")
+	}
+	delete(m.guestMetadataInFlight, "inflight")
+	m.cleanupGuestMetadataCache(now)
+	if _, exists := m.guestMetadataCache["inflight"]; exists {
+		t.Error("completed idle owner retained cache")
+	}
+	if _, exists := m.guestMetadataLastAccess["inflight"]; exists {
+		t.Error("completed idle owner retained bookkeeping")
+	}
+	if _, exists := m.guestMetadataLimiter["inflight"]; exists {
+		t.Error("completed idle owner retained obsolete deadline")
+	}
+}
+
+func TestGuestMetadataActivityInvalidationContract(t *testing.T) {
+	key := guestMetadataCacheKey("activity", "node", 105)
+	sibling := guestMetadataCacheKey("activity-elsewhere", "node", 105)
+	m := &Monitor{
+		guestMetadataCache:      map[string]guestMetadataCacheEntry{key: {osInfoSkip: true}, sibling: {osInfoSkip: true}},
+		guestMetadataLimiter:    map[string]time.Time{key: time.Now().Add(time.Hour), sibling: time.Now().Add(time.Hour)},
+		guestMetadataLastAccess: map[string]time.Time{key: time.Now(), sibling: time.Now()},
+		guestMetadataInFlight:   map[string]*guestMetadataFetch{key: {}},
+	}
+	m.clearGuestMetadataCache("activity", "node", 105)
+	if _, exists := m.guestMetadataCache[key]; exists {
+		t.Error("explicit invalidation retained metadata")
+	}
+	if _, exists := m.guestMetadataLimiter[key]; exists {
+		t.Error("explicit invalidation retained deadline")
+	}
+	if _, exists := m.guestMetadataLastAccess[key]; exists {
+		t.Error("explicit invalidation retained activity")
+	}
+	if m.guestMetadataInFlight[key] == nil || !m.guestMetadataInFlight[key].invalidated || !m.guestMetadataCache[sibling].osInfoSkip || m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataLimiter[sibling].IsZero() {
+		t.Error("invalidation discarded ownership or another instance")
+	}
+	m.guestMetadataLastAccess[key] = time.Now()
+	m.guestMetadataLastAccess[guestMetadataCacheKey("activity", "node", 106)] = time.Now()
+	m.retirePVEInstanceRuntime("activity")
+	for remaining := range m.guestMetadataLastAccess {
+		if strings.HasPrefix(remaining, "activity|") {
+			t.Error("retired instance retained activity bookkeeping")
+		}
+	}
+	if m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataInFlight[key] == nil || !m.guestMetadataInFlight[key].invalidated {
+		t.Error("retirement crossed instance scope or discarded active ownership")
+	}
+}
+
+func TestGuestMetadataActivityConcurrentCleanupContract(t *testing.T) {
+	const instance = "activity"
+	key := guestMetadataCacheKey(instance, "node", 105)
+	old := metadataObservationFixture(time.Now().Add(-3 * guestMetadataCacheTTL))
+	old.osInfoFailureCount, old.osInfoSkip = guestAgentOSInfoFailureThreshold, true
+	m := &Monitor{guestMetadataCache: map[string]guestMetadataCacheEntry{key: old}}
+	m.recordGuestMetadataAccess(key, time.Now())
+	// An active backup blocks commands, not cache use. Touches and the janitor
+	// must coordinate without extending the old useful/OS observation timestamps.
+	status := &proxmox.VMStatus{Lock: "backup"}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			_, _, name, version, agent, deferred := m.fetchGuestAgentMetadata(context.Background(), nil, instance, "node", "guest", 105, status, false)
+			if name != old.osName || version != old.osVersion || agent != old.agentVersion || deferred {
+				t.Error("locked activity changed retained identity or invented a command deferral")
+			}
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		m.cleanupGuestMetadataCache(time.Now())
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cache activity and cleanup did not finish")
+	}
+	m.guestMetadataMu.RLock()
+	retained := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if retained.osName != old.osName || retained.osInfoSkip != old.osInfoSkip || retained.osInfoFailureCount != old.osInfoFailureCount || !retained.fetchedAt.Equal(old.fetchedAt) || !retained.osInfoObservedAt.Equal(old.osInfoObservedAt) || m.hasRecentGuestMetadataEvidence(instance, "node", 105, time.Now()) {
+		t.Error("concurrent cleanup lost suppression or renewed stale useful evidence")
+	}
+}
+
+func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
+	const instance = "site"
+	entry := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now()}
+	host := models.Host{ID: "independent-host", LastSeen: time.Now(), Memory: models.Memory{Total: 8192, Used: 1024, Free: 7168, Usage: 12.5}}
+	m := &Monitor{state: models.NewState(), vmAgentMemCache: map[string]agentMemCacheEntry{
+		guestMemoryCacheKey(instance, "node", 105):     entry,
+		guestMemoryCacheKey(instance, "other", 106):    entry,
+		guestMemoryCacheKey("site/other", "node", 105): entry,
+		guestMemoryCacheKey("site-other", "node", 105): entry,
+	}}
+	m.state.UpsertHost(host)
+	before := m.state.GetSnapshot().Hosts // Compare stored, cloned telemetry, not its pre-normalisation input.
+	m.retirePVEInstanceRuntime(instance)
+	if len(m.vmAgentMemCache) != 2 || m.vmAgentMemCache[guestMemoryCacheKey("site/other", "node", 105)] != entry || m.vmAgentMemCache[guestMemoryCacheKey("site-other", "node", 105)] != entry {
+		t.Error("connection retirement retained its own QGA memory or erased a different connection")
+	}
+	if got := m.state.GetSnapshot().Hosts; !reflect.DeepEqual(got, before) {
+		t.Error("QGA memory retirement changed independent Pulse-agent reports")
+	}
+	id := makeGuestID(instance, "node", 105)
+	total, used, source, deferred := m.resolveGuestStatusMemory(context.Background(), nil, instance, "guest", "node", 105, id, &proxmox.VMStatus{MaxMem: 8192, Mem: 8192}, map[string]models.Host{id: host}, 8192, "", nil)
+	if total != 8192 || used != 1024 || source != "agent" || deferred {
+		t.Errorf("independent linked-agent fallback changed after QGA retirement: %d/%d/%s/%t", total, used, source, deferred)
+	}
+}
+
+func TestMonitorDiscoveryEventsStayWithOwningOrganization(t *testing.T) {
+	for _, start := range []string{"startup", "explicit"} {
+		for _, orgID := range []string{"org-a", "default", ""} {
+			t.Run(start+"/org="+orgID, func(t *testing.T) {
+				hub := websocket.NewHub(nil)
+				go hub.Run()
+				t.Cleanup(hub.Stop)
+				server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+				t.Cleanup(server.Close)
+				connect := func(org string) *gorillaws.Conn {
+					t.Helper()
+					conn, _, err := gorillaws.DefaultDialer.Dial(
+						"ws"+strings.TrimPrefix(server.URL, "http")+"?org_id="+org,
+						http.Header{"Origin": {server.URL}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { conn.Close() })
+					deadline := time.Now().Add(time.Second)
+					for hub.GetTenantClientCount(org) == 0 {
+						if time.Now().After(deadline) {
+							t.Fatalf("client for %q did not register", org)
+						}
+						time.Sleep(time.Millisecond)
+					}
+					return conn
+				}
+				ownerOrg := orgID
+				if ownerOrg == "" {
+					ownerOrg = "default"
+				}
+				owner, other := connect(ownerOrg), connect("org-b")
+				const subnet = "127.0.0.1/32"
+				monitor := &Monitor{config: &config.Config{DiscoveryEnabled: true, DiscoverySubnet: subnet}}
+				monitor.SetOrgID(orgID)
+				t.Cleanup(monitor.StopDiscoveryService)
+				// A canceled scan still emits its start/completion envelopes but
+				// cannot probe hosts. Exercise the real monitor/service/hub wiring.
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				if start == "startup" {
+					monitor.startModeRuntime(ctx, hub, false)
+				} else {
+					monitor.StartDiscoveryService(ctx, hub, subnet)
+				}
+				if monitor.GetDiscoveryService() == nil {
+					t.Fatal("discovery service was not initialized")
+				}
+				if err := owner.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+					t.Fatal(err)
+				}
+				readDiscoveryEvent := func() (string, map[string]interface{}) {
+					t.Helper()
+					var message websocket.Message
+					if err := owner.ReadJSON(&message); err != nil {
+						t.Fatalf("read discovery event for %q: %v", ownerOrg, err)
+					}
+					envelope, ok := message.Data.(map[string]interface{})
+					if message.Type != "custom" || !ok {
+						t.Fatalf("discovery envelope = %#v", message)
+					}
+					kind, ok := envelope["type"].(string)
+					if !ok {
+						t.Fatalf("discovery event type = %#v", envelope["type"])
+					}
+					data, ok := envelope["data"].(map[string]interface{})
+					if !ok {
+						t.Fatalf("discovery event payload = %#v", envelope["data"])
+					}
+					return kind, data
+				}
+				kind, data := readDiscoveryEvent()
+				if kind != "discovery_started" || data["subnet"] != subnet || data["scanning"] != true {
+					t.Fatalf("discovery start = %q %#v", kind, data)
+				}
+				for {
+					kind, data = readDiscoveryEvent()
+					if kind == "discovery_complete" {
+						if data["scanning"] != false {
+							t.Fatalf("discovery completion = %#v", data)
+						}
+						break
+					}
+				}
+				if err := other.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				if _, data, err := other.ReadMessage(); err == nil {
+					t.Fatalf("other organization received discovery event: %s", data)
+				} else if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+					t.Fatalf("expected open idle connection, got %v", err)
+				}
+			})
+		}
 	}
 }

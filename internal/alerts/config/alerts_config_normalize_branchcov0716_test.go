@@ -248,17 +248,10 @@ func TestBranchCovNormalizeDockerDefaults(t *testing.T) {
 		if !htEq(d.Disk, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}) {
 			t.Fatalf("Disk = %+v, want {0 0} (Trigger==0 disabled path, NOT seeded)", d.Disk)
 		}
-		if d.RestartCount != 3 {
-			t.Fatalf("RestartCount = %d, want 3", d.RestartCount)
-		}
-		if d.RestartWindow != 300 {
-			t.Fatalf("RestartWindow = %d, want 300", d.RestartWindow)
-		}
-		if d.MemoryWarnPct != 90 {
-			t.Fatalf("MemoryWarnPct = %d, want 90", d.MemoryWarnPct)
-		}
-		if d.MemoryCriticalPct != 95 {
-			t.Fatalf("MemoryCriticalPct = %d, want 95", d.MemoryCriticalPct)
+		// 0 is Off for the restart and memory-limit thresholds, as for the
+		// CPU/Memory/Disk triggers above; only unset values take defaults.
+		if d.RestartCount != 0 || d.RestartWindow != 0 || d.MemoryWarnPct != 0 || d.MemoryCriticalPct != 0 {
+			t.Fatalf("restart/memory-limit = %d/%d/%d/%d, want Off (0) kept", d.RestartCount, d.RestartWindow, d.MemoryWarnPct, d.MemoryCriticalPct)
 		}
 		if d.ServiceWarnGapPct != 10 {
 			t.Fatalf("ServiceWarnGapPct = %d, want 10", d.ServiceWarnGapPct)
@@ -271,6 +264,33 @@ func TestBranchCovNormalizeDockerDefaults(t *testing.T) {
 		}
 		if d.UpdateAlertDelayHours != 24 {
 			t.Fatalf("UpdateAlertDelayHours = %d, want 24", d.UpdateAlertDelayHours)
+		}
+	})
+
+	t.Run("unset restart and memory-limit thresholds take canonical defaults", func(t *testing.T) {
+		cfg := &alertconfig.AlertConfig{
+			DockerDefaults: alertconfig.DockerThresholdConfig{
+				RestartCount:      alertconfig.ThresholdCountUnset,
+				RestartWindow:     alertconfig.ThresholdCountUnset,
+				MemoryWarnPct:     alertconfig.ThresholdCountUnset,
+				MemoryCriticalPct: alertconfig.ThresholdCountUnset,
+			},
+		}
+		alertconfig.NormalizeDockerDefaults(cfg)
+		d := cfg.DockerDefaults
+		if d.RestartCount != 3 || d.RestartWindow != 300 || d.MemoryWarnPct != 90 || d.MemoryCriticalPct != 95 {
+			t.Fatalf("restart/memory-limit = %d/%d/%d/%d, want 3/300/90/95", d.RestartCount, d.RestartWindow, d.MemoryWarnPct, d.MemoryCriticalPct)
+		}
+	})
+
+	t.Run("negative restart and memory-limit thresholds are stored as Off", func(t *testing.T) {
+		cfg := &alertconfig.AlertConfig{
+			DockerDefaults: alertconfig.DockerThresholdConfig{RestartCount: -1, RestartWindow: 120, MemoryWarnPct: -1, MemoryCriticalPct: 97},
+		}
+		alertconfig.NormalizeDockerDefaults(cfg)
+		d := cfg.DockerDefaults
+		if d.RestartCount != 0 || d.RestartWindow != 120 || d.MemoryWarnPct != 0 || d.MemoryCriticalPct != 97 {
+			t.Fatalf("restart/memory-limit = %d/%d/%d/%d, want 0/120/0/97", d.RestartCount, d.RestartWindow, d.MemoryWarnPct, d.MemoryCriticalPct)
 		}
 	})
 
@@ -491,19 +511,23 @@ func TestBranchCovNormalizeDiskFillByType(t *testing.T) {
 		}
 	})
 
-	t.Run("positive trigger with non-positive clear resets to default", func(t *testing.T) {
+	t.Run("positive trigger with non-positive clear keeps trigger and derives clear", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			DiskFillByType: map[string]alertconfig.HysteresisThreshold{
 				"sata": {Trigger: 88, Clear: 0},
 				"hdd":  {Trigger: 80, Clear: -3},
+				"nvme": {Trigger: 0, Clear: 0},
 			},
 		}
 		alertconfig.NormalizeDiskFillByType(cfg)
-		if sata := cfg.DiskFillByType["sata"]; !htEq(sata, alertconfig.HysteresisThreshold{Trigger: 90, Clear: 85}) {
-			t.Fatalf("sata = %+v, want default {90 85}", sata)
+		if sata := cfg.DiskFillByType["sata"]; !htEq(sata, alertconfig.HysteresisThreshold{Trigger: 88, Clear: 83}) {
+			t.Fatalf("sata = %+v, want {88 83}", sata)
 		}
-		if hdd := cfg.DiskFillByType["hdd"]; !htEq(hdd, alertconfig.HysteresisThreshold{Trigger: 85, Clear: 80}) {
-			t.Fatalf("hdd = %+v, want default {85 80}", hdd)
+		if hdd := cfg.DiskFillByType["hdd"]; !htEq(hdd, alertconfig.HysteresisThreshold{Trigger: 80, Clear: 75}) {
+			t.Fatalf("hdd = %+v, want {80 75}", hdd)
+		}
+		if nvme := cfg.DiskFillByType["nvme"]; !htEq(nvme, alertconfig.HysteresisThreshold{Trigger: 92, Clear: 87}) {
+			t.Fatalf("nvme = %+v, want default {92 87}", nvme)
 		}
 	})
 

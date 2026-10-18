@@ -13,6 +13,7 @@ import (
 const privilegeHelperOperationDeadline = 30 * time.Second
 
 var errPrivilegeHelperProxmoxInventoryUnavailable = errors.New("helper returned no Proxmox LXC filesystem inventory")
+var errPrivilegeHelperProxmoxInventoryPartial = errors.New("helper Proxmox LXC filesystem inventory is incomplete")
 
 // PrivilegedTelemetry is the collector-side view of the no-network helper.
 // It intentionally exposes complete typed snapshots rather than commands,
@@ -91,19 +92,36 @@ func (c *privilegeHelperTelemetry) ProxmoxLXCFilesystems(ctx context.Context) (*
 	var response struct {
 		Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`
 	}
+	ctx, cancel := context.WithTimeout(ctx, privilegeHelperOperationDeadline)
+	defer cancel()
 	_, err := c.client.Call(
 		ctx,
 		agenthelper.OperationProxmoxLXCFilesystems,
-		agenthelper.OperationVersion1,
+		agenthelper.OperationVersion2,
 		privilegeHelperOperationDeadline,
 		struct{}{},
 		&response,
 	)
+	legacy := false
+	var remote *agenthelper.RemoteError
+	if errors.As(err, &remote) && remote.Code == agenthelper.ErrorUnsupportedOperation {
+		// Narrow compatibility only: an older helper explicitly rejects v2.
+		// Do not fall back on transport, provider, malformed-result or peer errors.
+		legacy = true
+		_, err = c.client.Call(ctx, agenthelper.OperationProxmoxLXCFilesystems,
+			agenthelper.OperationVersion1, privilegeHelperOperationDeadline, struct{}{}, &response)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if response.Inventory == nil {
 		return nil, errPrivilegeHelperProxmoxInventoryUnavailable
+	}
+	if err := response.Inventory.ValidateCollection(); err != nil {
+		return nil, err
+	}
+	if !legacy && response.Inventory.Status == "" {
+		return nil, errors.New("helper v2 inventory has no completeness status")
 	}
 	return response.Inventory, nil
 }
@@ -121,7 +139,16 @@ func (a *Agent) collectProxmoxLXCFilesystemsForReport(ctx context.Context) *agen
 		a.recordPrivilegeHelperOperation(privilegeHelperOperationProxmoxFilesystems, nil)
 		return nil
 	}
-	a.recordPrivilegeHelperOperation(privilegeHelperOperationProxmoxFilesystems, err)
+	if err == nil && inventory != nil {
+		if validationErr := inventory.ValidateCollection(); validationErr != nil {
+			err = validationErr
+		}
+	}
+	statusErr := err
+	if statusErr == nil && inventory != nil && inventory.Status == agentshost.ProxmoxLXCCollectionPartial {
+		statusErr = errPrivilegeHelperProxmoxInventoryPartial
+	}
+	a.recordPrivilegeHelperOperation(privilegeHelperOperationProxmoxFilesystems, statusErr)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Typed helper could not collect Proxmox LXC filesystems")
 		return nil

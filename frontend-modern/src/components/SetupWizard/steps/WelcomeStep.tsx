@@ -176,20 +176,20 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
           <div class="mb-5 space-y-2">
             <For each={bootstrapCommands()}>
               {(item) => (
-                <div class="bg-base rounded-md border border-border-subtle px-3 py-2.5">
+                <div class="bg-page rounded-md border border-border-subtle px-3 py-2.5">
                   <div class="mb-1.5 text-[11px] font-semibold text-muted">{item.label}</div>
-                  <div class="flex items-center justify-between gap-3 font-mono text-sm text-emerald-400">
+                  <div class="flex items-center justify-between gap-3 font-mono text-sm text-emerald-700 dark:text-emerald-400">
                     <div class="flex min-w-0 items-center space-x-3 overflow-x-auto scrollbar-hide">
                       <Terminal class="h-4 w-4 shrink-0" />
                       <code class="whitespace-nowrap select-all">{item.command}</code>
                     </div>
                     <button
                       onClick={() => void copyCommand(item.id, item.command)}
-                      class="shrink-0 rounded-md bg-surface p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:outline-hidden focus:ring-0"
+                      class="shrink-0 rounded-md bg-surface p-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-0"
                       title={`${t('setup.welcome.copyCommandTitle')}: ${item.label}`}
                     >
                       <Show when={copiedCommand() === item.id} fallback={<Copy class="h-4 w-4" />}>
-                        <Check class="h-4 w-4 text-emerald-400" />
+                        <Check class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       </Show>
                     </button>
                   </div>
@@ -220,7 +220,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
             <p class="text-xs text-muted">{t('setup.welcome.tokenHelp.afterVerify')}</p>
             <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
-              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 {snapshotPasteHelp()}
               </p>
             </Show>

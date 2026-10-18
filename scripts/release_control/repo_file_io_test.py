@@ -117,6 +117,37 @@ class RepoFileIoTest(unittest.TestCase):
                     self.assertEqual(read_repo_text(rel, staged=True), '{"version": "temporary-index"}\n')
                     self.assertEqual(load_repo_json(rel, staged=True), {"version": "temporary-index"})
 
+    def test_revision_reads_ignore_the_index_and_working_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            rel = "docs/release-control/v6/internal/subsystems/registry.json"
+            path = repo_root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            identity = ("-c", "user.name=Pulse Test", "-c", "user.email=pulse-test@example.invalid")
+
+            self.git(repo_root, "init")
+            path.write_text('{"version": "evaluated"}\n', encoding="utf-8")
+            self.git(repo_root, "add", rel)
+            self.git(repo_root, *identity, "commit", "-q", "-m", "evaluated")
+            evaluated = self.git_stdout(repo_root, "rev-parse", "HEAD")
+            path.write_text('{"version": "later"}\n', encoding="utf-8")
+            self.git(repo_root, "add", rel)
+            self.git(repo_root, *identity, "commit", "-q", "-m", "later")
+            path.write_text('{"version": "staged"}\n', encoding="utf-8")
+            self.git(repo_root, "add", rel)
+            path.write_text('{"version": "working-tree"}\n', encoding="utf-8")
+
+            with patch("repo_file_io.REPO_ROOT", repo_root):
+                self.assertEqual(load_repo_json(rel, revision=evaluated), {"version": "evaluated"})
+                self.assertEqual(
+                    load_repo_json(rel, staged=True, revision="HEAD"),
+                    {"version": "later"},
+                )
+                # A file the commit lacks fails closed rather than reading
+                # another tree's copy.
+                with self.assertRaisesRegex(FileNotFoundError, "missing .* at revision"):
+                    read_repo_text("docs/absent.json", revision=evaluated)
+
     def test_strict_staged_read_rejects_worktree_only_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)

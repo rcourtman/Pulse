@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "337e908b3577351ece5c4ffdf51ff17380e09b4e",
+  "verified_at": "2026-10-06T19:43:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "022a2f4b9412890a66420f18bda6105400c29c6deedf185dc102eccc063323d0"
+  },
+  "routes": [
+    "/alerts/destinations"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7731, Vite :5251 serving this branch, merged with main 9aaac4d3e5) with Playwright page.clock installed before load and every /api/alerts/deadman/status read held until the script answers it",
+    "Reads slower than the poll: each poll starts a read while the previous is pending; answers applied in order (10 mins ago -> 3 mins ago -> 1 min ago), and an older read answered after a newer one did not overwrite it (stayed 1 min ago); every poll tick issued a read (no tick skipped to timer jitter)",
+    "A Refresh that never settles, followed by a background read that also never settles: Refresh showed Refreshing\u2026 disabled, then was enabled again at the first poll after it had been pending a full interval, and a second Refresh applied the fresh status",
+    "Earlier hang case still holds: with a hung background read, Refresh applies the fresh status and the hung read's late 2-hour-old answer is discarded",
+    "Control with the previous loader under the running Vite: slow reads never showed a status (every answer discarded) and the hung Refresh stayed disabled",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded /alerts/destinations at 1440x900 and 390x844, ran the page clock in 30-second steps answering held reads in and out of order",
+    "Clicked Refresh with the read held, ran the clock 61 seconds, clicked Refresh again and answered it",
+    "Repeated with the previous loader as the control"
+  ]
+}

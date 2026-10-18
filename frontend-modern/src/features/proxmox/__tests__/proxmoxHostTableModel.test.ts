@@ -19,6 +19,16 @@ describe('proxmoxHostTableModel', () => {
     expect(getProxmoxHostColumnWidthStyle('uptime', 'narrow', ids)).toEqual({ width: '15%' });
   });
 
+  it('drops the cluster column when every node shares one cluster', () => {
+    const wide = getProxmoxHostVisibleColumnsForLayout('wide').map((column) => column.id);
+    const single = getProxmoxHostVisibleColumnsForLayout('wide', { singleCluster: true }).map(
+      (column) => column.id,
+    );
+    expect(wide).toContain('cluster');
+    expect(single).not.toContain('cluster');
+    expect(single).toEqual(wide.filter((id) => id !== 'cluster'));
+  });
+
   it('matches the guest table columns and keeps node names whole at phone width', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('phone');
     const ids = columns.map((column) => column.id);

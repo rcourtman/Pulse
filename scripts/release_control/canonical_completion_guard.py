@@ -20,7 +20,7 @@ from typing import Dict, List, Sequence, Set
 
 import browser_verification_guard
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import load_repo_json
+from repo_file_io import git_env, load_repo_json, merged_in_paths
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 
 
@@ -58,7 +58,7 @@ def prettier_only_contract_neutral_reason(
     if not commit:
         return None
 
-    impacted = infer_impacted_subsystems(staged_files)
+    impacted = infer_impacted_subsystems(staged_files, revision=commit)
     runtime_paths = {
         path
         for data in impacted.values()
@@ -121,8 +121,8 @@ def validate_verification_policy(
             raise ValueError(f"subsystem {subsystem_id} {context} missing {field}")
 
 
-def load_subsystem_rules(*, staged: bool = False) -> List[dict]:
-    payload = load_repo_json(SUBSYSTEM_REGISTRY, staged=staged)
+def load_subsystem_rules(*, staged: bool = False, revision: str | None = None) -> List[dict]:
+    payload = load_repo_json(SUBSYSTEM_REGISTRY, staged=staged, revision=revision)
     rules = list(payload.get("subsystems", []))
     for rule in rules:
         subsystem_id = str(rule.get("id"))
@@ -165,8 +165,11 @@ def git_staged_files() -> List[str]:
         check=True,
         capture_output=True,
         text=True,
+        env=git_env(REPO_ROOT),
     )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    inherited = merged_in_paths(paths, commit=None, repo_root=REPO_ROOT)
+    return [path for path in paths if path not in inherited]
 
 
 def stdin_files(stdin: Sequence[str]) -> List[str]:
@@ -300,9 +303,10 @@ def infer_impacted_subsystems(
     staged_files: Sequence[str],
     *,
     use_staged_registry: bool = False,
+    revision: str | None = None,
 ) -> Dict[str, dict]:
     impacted: Dict[str, dict] = {}
-    rules = load_subsystem_rules(staged=use_staged_registry)
+    rules = load_subsystem_rules(staged=use_staged_registry, revision=revision)
     rules_by_id = {str(rule["id"]): rule for rule in rules}
 
     for path in staged_files:
@@ -320,6 +324,13 @@ def infer_impacted_subsystems(
                     "touched_runtime_files": [],
                     "cycle_artifact_files": [],
                     "verification": dict(rule.get("verification", {})),
+                    # Ownership travels with the entry because the guards pass
+                    # this entry, not the registry rule, as the `rule` argument
+                    # of staged_verification_files_for_requirement; without it
+                    # a requirement's allow_same_subsystem_tests could never
+                    # match while subsystem_lookup reported that it did.
+                    "owned_prefixes": list(rule.get("owned_prefixes", [])),
+                    "owned_files": list(rule.get("owned_files", [])),
                 },
             )
             entry["touched_runtime_files"].append(path)
@@ -352,10 +363,15 @@ def required_contract_updates(
     impacted: Dict[str, dict] | None = None,
     *,
     use_staged_contract_index: bool = False,
+    revision: str | None = None,
 ) -> Dict[str, dict]:
-    impacted_subsystems = impacted if impacted is not None else infer_impacted_subsystems(staged_files)
+    impacted_subsystems = (
+        impacted
+        if impacted is not None
+        else infer_impacted_subsystems(staged_files, revision=revision)
+    )
     required: Dict[str, dict] = {}
-    contract_index = load_contract_index(staged=use_staged_contract_index)
+    contract_index = load_contract_index(staged=use_staged_contract_index, revision=revision)
 
     for subsystem_id, data in impacted_subsystems.items():
         # Contract update requirement triggers on non-cycle-artifact touches
@@ -519,17 +535,18 @@ def contract_texts_have_substantive_change(base_text: str, staged_text: str) -> 
     return False
 
 
-def resolve_diff_base(ref: str) -> str:
-    """Resolve a diff-base ref to its merge base with HEAD.
+def resolve_diff_base(ref: str, revision: str = "HEAD") -> str:
+    """Resolve a diff-base ref to its merge base with the evaluated revision.
 
-    CI passes the push/PR range base, and the changed-file list is computed
-    with a three-dot diff (`base...head`), which diffs from the merge base.
+    A caller may pass a range base whose changed-file list was computed with
+    a three-dot diff (`base...revision`), which diffs from the merge base.
     Using the same anchor here keeps the contract-text comparison consistent
-    with the file list. Falls back to the raw ref when the merge base cannot
-    be resolved (e.g. a zero SHA on branch creation).
+    with the file list; for the per-commit form (`<commit>^` against
+    `<commit>`) it is simply the parent. Falls back to the raw ref when the
+    merge base cannot be resolved (e.g. a zero SHA on branch creation).
     """
     result = subprocess.run(
-        ["git", "merge-base", ref, "HEAD"],
+        ["git", "merge-base", ref, revision],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -539,14 +556,24 @@ def resolve_diff_base(ref: str) -> str:
     return merge_base if result.returncode == 0 and merge_base else ref
 
 
-def staged_contract_has_substantive_change(path: str, diff_base: str | None = None) -> bool:
+def staged_contract_has_substantive_change(
+    path: str,
+    diff_base: str | None = None,
+    revision: str = "HEAD",
+) -> bool:
     """Return True if the contract's change includes a substantive section edit.
 
-    Without a diff base this compares HEAD against the index — the pre-commit
-    mode, where the pending change is staged. With a diff base (CI mode) it
-    compares the base commit against HEAD: in a CI checkout the index equals
-    HEAD, so the index comparison is always empty there and would misreport
-    every contract update as insubstantial.
+    Both modes compare the evaluated change against its own parent. Without a
+    diff base this compares HEAD against the index — the pre-commit mode,
+    where the pending change is staged. With a diff base (CI mode) it compares
+    the base against `revision`, the commit whose file list is being checked:
+    in a CI checkout the index equals HEAD, so the index comparison is always
+    empty there and would misreport every contract update as insubstantial.
+    HEAD is the right new side only when the evaluated commit is checked out.
+    CI and the pre-push check walk a branch's commits with HEAD at its tip,
+    where comparing against HEAD judged each commit by the whole branch: a
+    later commit reverting a contract paragraph blocked the commit that wrote
+    it, and a later contract update let an earlier bare runtime change pass.
     """
     if diff_base is None:
         return contract_texts_have_substantive_change(
@@ -555,7 +582,7 @@ def staged_contract_has_substantive_change(path: str, diff_base: str | None = No
         )
     return contract_texts_have_substantive_change(
         git_blob_text(f"{diff_base}:{path}"),
-        git_blob_text(f"HEAD:{path}"),
+        git_blob_text(f"{revision}:{path}"),
     )
 
 
@@ -655,14 +682,26 @@ def check_staged_contracts(
     staged_files: Sequence[str],
     *,
     diff_base: str | None = None,
+    revision: str = "HEAD",
     inferred_override_reason: str | None = None,
 ) -> int:
     staged_set: Set[str] = set(staged_files)
-    impacted = infer_impacted_subsystems(staged_files, use_staged_registry=True)
+    # Judge the change by the rules it was written under: the staged registry
+    # and contracts before a commit exists, the evaluated commit's own after.
+    # Reading HEAD's in CI let a later commit on the branch (or main merged
+    # under it) add or drop ownership and contract references for an
+    # earlier commit, so its verdict depended on what came after it.
+    governance_revision = revision if diff_base is not None else None
+    impacted = infer_impacted_subsystems(
+        staged_files,
+        use_staged_registry=True,
+        revision=governance_revision,
+    )
     required_contracts = required_contract_updates(
         staged_files,
         impacted,
         use_staged_contract_index=True,
+        revision=governance_revision,
     )
     missing_contracts = {
         contract_path: data
@@ -673,7 +712,7 @@ def check_staged_contracts(
         contract_path: data
         for contract_path, data in required_contracts.items()
         if contract_path in staged_set
-        if not staged_contract_has_substantive_change(contract_path, diff_base)
+        if not staged_contract_has_substantive_change(contract_path, diff_base, revision)
     }
     missing_verification: Dict[str, dict] = {}
     for subsystem_id, data in impacted.items():
@@ -749,16 +788,19 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help=(
             "Commit-ish to compare contract texts against instead of the index. "
             "Use in CI, where nothing is staged and the changed-file list comes "
-            "from a commit range; requires --files-from-stdin."
+            "from a commit range; requires --files-from-stdin. Pass --commit "
+            "too unless HEAD is the commit being evaluated."
         ),
     )
     parser.add_argument(
         "--commit",
         default=None,
         help=(
-            "Committed revision represented by the changed-file list. In CI this "
-            "permits a fail-closed byte comparison for mechanically verified "
-            "Prettier-only frontend reformats."
+            "Committed revision represented by the changed-file list. With "
+            "--diff-base, contract texts are compared against this revision "
+            "instead of HEAD. In CI this also permits a fail-closed byte "
+            "comparison for mechanically verified Prettier-only frontend "
+            "reformats."
         ),
     )
     args = parser.parse_args(list(argv))
@@ -771,13 +813,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(argv or ()))
-    diff_base = resolve_diff_base(args.diff_base) if args.diff_base else None
+    revision = args.commit or "HEAD"
+    diff_base = resolve_diff_base(args.diff_base, revision) if args.diff_base else None
     if args.files_from_stdin:
         files = stdin_files(sys.stdin)
         inferred_reason = prettier_only_contract_neutral_reason(files, commit=args.commit)
         return check_staged_contracts(
             files,
             diff_base=diff_base,
+            revision=revision,
             inferred_override_reason=inferred_reason,
         )
     return check_staged_contracts(git_staged_files())

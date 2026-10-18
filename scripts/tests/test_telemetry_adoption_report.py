@@ -24,6 +24,95 @@ import telemetry_adoption_report as report
 
 
 class TelemetryAdoptionReportTest(unittest.TestCase):
+    def test_reporting_usage_requires_measurement_and_counts_latest_only(self) -> None:
+        now = datetime(2026, 10, 17, 12, tzinfo=timezone.utc)
+        base = {"received_at": "2026-10-17 11:00:00", "version": "6.6.0",
+                "monitoring_active": 1, "schema_version": 20, "paid_license": 1,
+                **dict.fromkeys(report.REPORTING_USAGE_COUNT_FIELDS, 0),
+                "reporting_telemetry_available": 1, "reporting_observation_days": 30,
+                "reporting_generated_backup_health_30d": 4,
+                "reporting_backup_health_active_days_30d": 2,
+                "reporting_successful_backup_health_periods_30d": 2,
+                "reporting_repeat_backup_health_periods_30d": 1}
+        rows = [{**base, "install_id": "measured"},
+                {**base, "install_id": "measured", "received_at": "2026-10-16 11:00:00", "reporting_generated_backup_health_30d": 3},
+                {**base, "install_id": "new", "reporting_observation_days": 1, "reporting_backup_health_active_days_30d": 1},
+                {**base, "install_id": "legacy", "schema_version": 19},
+                {**base, "install_id": "unavailable", "reporting_telemetry_available": 0},
+                {**base, "install_id": "inactive", "monitoring_active": 0},
+                {**base, "install_id": "dev", "version_is_development": 1}]
+        summary = report.summarize_rows({}, rows, {"6.6.0"}, now=now)
+        usage = summary["reporting_usage_7d"]
+        cohort = usage["cohorts"]["nonfree"]
+        self.assertEqual((cohort["covered_ids"], cohort["unmeasured_ids"]), (2, 2))
+        self.assertEqual((cohort["full_30d_observation_ids"], cohort["partial_observation_ids"]), (1, 1))
+        self.assertEqual(cohort["counts"]["reporting_generated_backup_health_30d"], 8)
+        self.assertEqual(cohort["ids_with_repeat_periods"], 2)
+        self.assertEqual(cohort["ids_with_multiple_generation_days"], 1)
+        generation_only = {**base, "install_id": "generation-only",
+                           "reporting_successful_backup_health_periods_30d": 0,
+                           "reporting_repeat_backup_health_periods_30d": 0,
+                           "reporting_delivery_failed_30d": 4}
+        activity_cohort = report.summarize_reporting_usage(
+            {"generation-only": generation_only}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(activity_cohort["ids_with_repeat_periods"], 0)
+        self.assertEqual(activity_cohort["ids_with_multiple_generation_days"], 1)
+        self.assertNotIn("ids_with_repeat_use", activity_cohort)
+        same_day_periods = {**base, "reporting_backup_health_active_days_30d": 1}
+        periods_cohort = report.summarize_reporting_usage(
+            {"same-day-periods": same_day_periods}, {"6.6.0"}, now=now)["cohorts"]["nonfree"]
+        self.assertEqual(periods_cohort["ids_with_repeat_periods"], 1)
+        self.assertEqual(periods_cohort["ids_with_multiple_generation_days"], 0)
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("generating on multiple days", text)
+        self.assertIn("Cross-day generation may include retries", text)
+        self.assertNotIn("with repeat use", text)
+        self.assertEqual(usage["excluded_ids"], 2)
+        unavailable = report.summarize_rows({}, rows, {"6.6.0"}, now=now,
+            unavailable_columns=["reporting_saved_30d"])["reporting_usage_7d"]
+        self.assertFalse(unavailable["source_available"])
+        self.assertEqual(unavailable["cohorts"]["nonfree"]["covered_ids"], 0)
+
+    def test_extended_history_reports_coverage_and_latest_rolling_count(self) -> None:
+        now = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
+        base = {"received_at": "2026-10-16 11:00:00", "version": "6.6.0",
+                "monitoring_active": 1, "schema_version": 19, "paid_license": 1,
+                "successful_history_reads_over_7d_30d": 4}
+        rows = [{**base, "install_id": "nonfree"},
+                {**base, "install_id": "nonfree", "received_at": "2026-10-15 11:00:00", "successful_history_reads_over_7d_30d": 3},
+                {**base, "install_id": "legacy", "schema_version": 18, "successful_history_reads_over_7d_30d": 99},
+                {**base, "install_id": "zero", "successful_history_reads_over_7d_30d": 0},
+                {**base, "install_id": "free", "paid_license": 0, "successful_history_reads_over_7d_30d": 2},
+                {**base, "install_id": "inactive", "monitoring_active": 0},
+                {**base, "install_id": "dev", "version_is_development": 1},
+                {**base, "install_id": "mock", "kubernetes_pods": 120, "vmware_hosts": 7},
+                {**base, "install_id": "stale", "received_at": "2026-10-01 11:00:00"}]
+        summary = report.summarize_rows({}, rows, {"6.6.0"}, now=now)
+        usage = summary["extended_history_usage_7d"]
+        self.assertEqual(usage["cohorts"]["nonfree"], {
+            "reporting_ids": 3, "covered_ids": 2, "unmeasured_ids": 1,
+            "ids_with_reads": 1, "successful_reads_30d": 4})
+        self.assertEqual(usage["cohorts"]["free"]["successful_reads_30d"], 2)
+        self.assertEqual(usage["excluded_ids"], 2)
+        unavailable = report.summarize_rows({}, rows, {"6.6.0"}, now=now,
+            unavailable_columns=["successful_history_reads_over_7d_30d"])
+        self.assertEqual(unavailable["extended_history_usage_7d"]["cohorts"]["nonfree"]["covered_ids"], 0)
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("2 measured, 1 unmeasured, 1 with reads, 4 successful reads", text)
+        self.assertIn("not zero use", text)
+        self.assertIn("does not verify paying customers", text)
+
+    def test_local_report_old_receiver_marks_new_history_field_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "telemetry.sqlite")
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("CREATE TABLE telemetry_pings (received_at TEXT, install_id TEXT, version TEXT)")
+                conn.execute("INSERT INTO telemetry_pings VALUES (datetime('now'), 'fixture', '6.6.0')")
+            source = report.fetch_rows_local(db_path, 7)
+            self.assertIn("successful_history_reads_over_7d_30d", source["unavailable_columns"])
+            self.assertIn("reporting_telemetry_available", source["unavailable_columns"])
+            self.assertEqual(source["rows"][0]["successful_history_reads_over_7d_30d"], 0)
+
     def test_normalize_reported_version_strips_v_prefix(self) -> None:
         self.assertEqual(report.normalize_reported_version("v6.0.0-rc.1"), "6.0.0-rc.1")
 
@@ -887,13 +976,40 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             REPO_ROOT / "frontend-modern/public/docs/SECURITY.md",
         )
 
+        self.assertEqual(security_docs[0].read_bytes(), security_docs[1].read_bytes())
+
+        def check(content):
+            self.assertIn("Settings → Infrastructure → Install on a host", content)
+            self.assertNotIn("Settings → Agents → Installation commands", content)
+            self.assertNotIn("Settings -> Agents -> Installation commands", content)
+            # The current guide uses the safe host-install surface and
+            # instance-served manual route, not the old alternate page label.
+            # Retain each safety distinction in that actual migration section.
+            migration = " ".join(content.split("Preferred option (no SSH keys, no proxy wiring):", 1)[1]
+                                 .split("Legacy sensor proxy (removed):", 1)[0].split())
+            for boundary in (
+                "separately revealed credential out of the copied command",
+                "silent prompt on that host", "private token-file route",
+                "agent installer served by your Pulse instance",
+                "verified HTTPS address", "`--token-file` and `--enable-proxmox`",
+                "installs the server, not the agent",
+                "Do not pipe an unchecked HTTP response into a privileged shell",
+                "or disable certificate verification",
+            ):
+                self.assertIn(boundary, migration)
+
         for path in security_docs:
             with self.subTest(path=path.relative_to(REPO_ROOT)):
                 content = path.read_text(encoding="utf-8")
-                self.assertIn("Settings → Infrastructure → Install on a host", content)
-                self.assertIn("Proxmox or Machines page", content)
-                self.assertNotIn("Settings → Agents → Installation commands", content)
-                self.assertNotIn("Settings -> Agents -> Installation commands", content)
+                check(content)
+                for boundary in ("Settings → Infrastructure → Install on a host",
+                                 "agent installer served by your", "verified HTTPS address",
+                                 "`--token-file`", "separately", "Do not pipe an unchecked HTTP response"):
+                    with self.subTest(removed=boundary):
+                        changed = content.replace(boundary, "removed safety boundary")
+                        self.assertNotEqual(changed, content)
+                        with self.assertRaises(AssertionError):
+                            check(changed)
 
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -2120,6 +2236,76 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     expected_signal_conversion,
                 )
 
+    def test_pulse_intelligence_sparse_rows_parse_only_supplied_signals(self) -> None:
+        row = {
+            "install_id": "synthetic",
+            "received_at": "2026-07-23 12:00:00",
+            "paid_license": False,
+            "pulse_intelligence_loop_configured": "yes",
+            "pulse_intelligence_patrol_new_findings_30d": "2",
+            "pulse_intelligence_approved_action_successes_30d": "invalid",
+            "unrelated": 99,
+        }
+        # Full projections include explicit nulls; sparse older exports omit
+        # them. Neither should spend parser calls on unavailable signals.
+        projected = dict.fromkeys(report.REPORT_ROW_COLUMNS)
+        projected.update(row)
+        for supplied in (row, projected):
+            with self.subTest(projected=len(supplied) > len(row)):
+                with mock.patch.object(
+                    report, "parse_optional_bool", wraps=report.parse_optional_bool
+                ) as parse_bool, mock.patch.object(
+                    report,
+                    "parse_optional_nonnegative_int",
+                    wraps=report.parse_optional_nonnegative_int,
+                ) as parse_count:
+                    actual = report.pulse_intelligence_row_analysis_keys(supplied)
+                self.assertEqual(parse_bool.call_args_list, [mock.call("yes")])
+                self.assertCountEqual(
+                    parse_count.call_args_list, [mock.call("2"), mock.call("invalid")]
+                )
+                expected_cohorts = {
+                    key for key, _, bool_fields, count_fields
+                    in report.PULSE_INTELLIGENCE_OUTCOME_COHORTS
+                    if report.pulse_intelligence_row_matches_cohort(
+                        row, bool_fields, count_fields
+                    )
+                }
+                expected_groups = report.pulse_intelligence_row_signal_groups(row)
+                self.assertEqual(actual[0], expected_cohorts)
+                self.assertEqual(
+                    report.pulse_intelligence_derive_signal_groups(actual[1]),
+                    expected_groups,
+                )
+
+    def test_pulse_intelligence_sparse_analysis_preserves_all_field_coercions(self) -> None:
+        values = (None, True, False, 0, 1, -1, 0.5, "2", "yes", "no", " ", "bad", [], {})
+        fields = set(report.PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS) | set(
+            report.PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS
+        )
+        # The independent helpers walk the declared cohorts/groups, not the
+        # optimized field maps. Cover every field, including group-only fields.
+        for field in sorted(fields):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    row = {field: value, "undeclared_signal": True}
+                    expected_cohorts = {
+                        key for key, _, bool_fields, count_fields
+                        in report.PULSE_INTELLIGENCE_OUTCOME_COHORTS
+                        if report.pulse_intelligence_row_matches_cohort(
+                            row, bool_fields, count_fields
+                        )
+                    }
+                    expected_groups = report.pulse_intelligence_row_signal_groups(row)
+                    actual_cohorts, actual_groups = (
+                        report.pulse_intelligence_row_analysis_keys(row)
+                    )
+                    self.assertEqual(actual_cohorts, expected_cohorts)
+                    self.assertEqual(
+                        report.pulse_intelligence_derive_signal_groups(actual_groups),
+                        expected_groups,
+                    )
+
     def test_pulse_intelligence_production_scale_performance_guard(self) -> None:
         now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
         rows: list[dict[str, object]] = []
@@ -2149,12 +2335,21 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 latest_by_install[install_id] = row
 
         original_parse_received_at = report.parse_received_at
+        parse_calls = 0
+
+        def counting_parse_received_at(value):
+            nonlocal parse_calls
+            parse_calls += 1
+            return original_parse_received_at(value)
+
         started = time.perf_counter()
+        # Count the invariant without timing/retaining 120,000 Mock call
+        # records. Keep the real parser, dataset, aggregation and time budget.
         with mock.patch.object(
             report,
             "parse_received_at",
-            wraps=original_parse_received_at,
-        ) as parse_received_at:
+            new=counting_parse_received_at,
+        ):
             analyses = report.analyze_pulse_intelligence_rows(rows)
             report.summarize_pulse_intelligence_outcome_cohorts(
                 rows,
@@ -2171,7 +2366,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         elapsed = time.perf_counter() - started
 
         self.assertEqual(len(analyses), install_count)
-        self.assertEqual(parse_received_at.call_count, len(rows))
+        self.assertEqual(parse_calls, len(rows))
         self.assertLess(
             elapsed,
             8.0,

@@ -18,6 +18,7 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -32,7 +33,10 @@ import {
   kubernetesScopeLabel,
   mapKubernetesPodStatus,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
+import { KubernetesNameText } from './KubernetesNameText';
 
 const podName = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.podName) ||
@@ -142,6 +146,7 @@ export const KubernetesPodsTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -231,15 +236,18 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-phone-hidden md:w-[13%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Node
                 </PlatformSortableTableHead>
+                {/* Status names the failure ("CrashLoopBackOff", about 115px
+                    with padding), so it takes room from Node, Restarts and
+                    Image, which truncate harmlessly. */}
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="status"
-                  class="platform-table-phone-hidden md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Status
                 </PlatformSortableTableHead>
@@ -255,7 +263,7 @@ export const KubernetesPodsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="restarts"
-                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
+                  class="platform-table-mobile-w-10 md:w-[7%] platform-table-narrow-hidden"
                 >
                   Restarts
                 </PlatformSortableTableHead>
@@ -271,7 +279,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="image"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Image
                 </PlatformSortableTableHead>
@@ -291,7 +299,6 @@ export const KubernetesPodsTable: Component<{
                   {(resource) => {
                     const indicator = () => mapKubernetesPodStatus(resource);
                     const name = () => podName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const node = () => formatPlatformTableTextValue(resource.kubernetes?.nodeName);
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);
@@ -320,27 +327,40 @@ export const KubernetesPodsTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={resource.customUrl}
-                                class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
-                              />
+                              <div class="flex min-w-0 flex-col">
+                                <ResourceNameWithWebInterfaceLink
+                                  name={name()}
+                                  url={resource.customUrl}
+                                  class="min-w-0"
+                                  nameClass="flex min-w-0 font-semibold text-base-content"
+                                >
+                                  <KubernetesNameText name={name()} />
+                                </ResourceNameWithWebInterfaceLink>
+                                {/* A phone hides the Status column, and its dot can be
+                                    neither hovered nor read aloud, so the reason
+                                    ("CrashLoopBackOff") reads under the name there. */}
+                                <span
+                                  class={`platform-table-phone-only-inline min-w-0 max-w-full ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  data-kubernetes-pod-status-phone={indicator().variant}
+                                >
+                                  <span class="min-w-0 truncate">{indicator().label}</span>
+                                </span>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="block max-w-full truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block max-w-full truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span class="block max-w-full truncate" title={node()}>
-                              {node()}
-                            </span>
+                            <KubernetesNameText name={node()} class="max-w-full" />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
@@ -348,7 +368,11 @@ export const KubernetesPodsTable: Component<{
                             {/* The mapped label carries the container failure reason
                               (CrashLoopBackOff, ImagePullBackOff, ...) where the raw
                               phase would still read "Running". */}
-                            <span class="block max-w-full truncate" title={indicator().label}>
+                            <span
+                              class={`block max-w-full truncate ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                              title={indicator().label}
+                              data-kubernetes-pod-status={indicator().variant}
+                            >
                               {indicator().label}
                             </span>
                           </TableCell>

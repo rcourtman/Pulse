@@ -214,7 +214,7 @@ func TestAppriseValidationAndRedirectConfidentiality(t *testing.T) {
 			}
 			if err != nil {
 				assertAppriseConfidential(t, err.Error())
-				if !strings.Contains(err.Error(), "link-local addresses are not allowed") {
+				if !strings.Contains(err.Error(), "configured origin") {
 					t.Error("actionable redirect refusal was lost")
 				}
 			}

@@ -1,11 +1,12 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { getAlertStyles } from '@/utils/alerts';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -40,6 +41,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesNodes,
   filterKubernetesResources,
+  getKubernetesNodeAttentionRank,
   kubernetesClusterLabel,
   mapKubernetesNodeStatus,
   type KubernetesResourceStatusFilter,
@@ -64,6 +66,7 @@ const formatRoles = (roles: string[] | undefined): string => {
 
 const KUBERNETES_NODE_SORT_KEYS = [
   'node',
+  'status',
   'cluster',
   'roles',
   'kubelet',
@@ -86,6 +89,11 @@ const getKubernetesNodeSortValue = (
   switch (key) {
     case 'node':
       return asTrimmedString(node.name) || node.id;
+    case 'status': {
+      // Ascending puts NotReady first, then cordoned or degraded, then Ready.
+      const variant = mapKubernetesNodeStatus(node).variant;
+      return variant === 'danger' ? 0 : variant === 'warning' ? 1 : variant === 'success' ? 3 : 2;
+    }
     case 'cluster':
       return kubernetesClusterLabel(node) || null;
     case 'roles': {
@@ -124,6 +132,8 @@ export const KubernetesNodesTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  /** Persisted sort slot; a second instance (the Overview attention list) needs its own. */
+  sortStorageKey?: string;
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
@@ -136,19 +146,27 @@ export const KubernetesNodesTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   // User-controlled sorting layered over the attention-first default: rows
-  // are pre-sorted by the status compare, so a user sort keeps that order
-  // for ties and the table falls straight back to it when the sort clears.
+  // are pre-sorted by attention (status and open alerts), then the status
+  // compare, so a user sort keeps that order for ties and the table falls
+  // straight back to it when the sort clears.
   const sort = createPlatformTableSortState({
-    storageKey: 'kubernetesNodes',
+    storageKey: props.sortStorageKey ?? 'kubernetesNodes',
     sortKeys: KUBERNETES_NODE_SORT_KEYS,
     descendingFirst: ['cpu', 'memory', 'uptime', 'capacity'],
   });
-  const sortedRows = createMemo(() =>
-    sort.sortRows(
-      [...tableState.filtered()].sort(compareKubernetesNodes),
+  const sortedRows = createMemo(() => {
+    const rows = tableState.filtered();
+    const enabled = alertsEnabled();
+    const ranks = new Map(
+      rows.map((node) => [node.id, getKubernetesNodeAttentionRank(node, activeAlerts, enabled)]),
+    );
+    return sort.sortRows(
+      [...rows].sort(
+        (a, b) => (ranks.get(a.id) ?? 2) - (ranks.get(b.id) ?? 2) || compareKubernetesNodes(a, b),
+      ),
       getKubernetesNodeSortValue,
-    ),
-  );
+    );
+  });
 
   return (
     <Show
@@ -199,25 +217,50 @@ export const KubernetesNodesTable: Component<{
                     Desktop widths: Node gets headroom for cluster-style
                     names, Runtime gets room for "containerd://1.7.20"
                     -style values, Capacity gets room for "6 cores /
-                    51.0 GB / 110 pods" strings, CPU and Memory bars share
-                    an equal slice, and the short-text columns (Cluster,
-                    Roles, Kubelet, Uptime) trim accordingly. Wide
+                    51.0 GB / 110 pods" strings, and the short-text columns
+                    (Cluster, Roles, Kubelet, Uptime) trim accordingly. Wide
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
+                    The Status badge must not clip: Degraded and NotReady
+                    need about 64px and Unschedulable about 89px. Status
+                    takes its md room from CPU, whose bar never shows a
+                    sublabel, so every other column keeps its width and
+                    Memory keeps room for its used/total sublabel.
+                    Unschedulable fits from a ~800px table and from 1280px,
+                    where Kubelet, Runtime and Uptime appear. bandWidth sizes
+                    the tablet band for each header and for Degraded at a
+                    34rem table.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-mobile-w-30 md:w-[15%]"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
+                  bandWidth={30}
                 >
                   Node
+                </PlatformSortableTableHead>
+                {/*
+                  Status sits beside the name, as in kubectl get nodes: the
+                  dot alone made "why is this node amber" a hover. On phones
+                  the dot carries the state (and names it to assistive tech),
+                  so the column is desktop-only.
+                */}
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="status"
+                  class="platform-table-phone-hidden md:w-[10.5%]"
+                  bandWidth={14.6}
+                >
+                  Status
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  bandWidth={12.1}
                 >
                   <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
                 </PlatformSortableTableHead>
@@ -225,7 +268,8 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="platform-table-phone-hidden md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
+                  bandWidth={9.2}
                 >
                   <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
@@ -233,7 +277,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kubelet"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Kubelet
                 </PlatformSortableTableHead>
@@ -241,7 +285,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="runtime"
-                  class="hidden md:table-cell md:w-[15%]"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Runtime
                 </PlatformSortableTableHead>
@@ -249,7 +293,8 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[7.5%]"
+                  bandWidth={9.2}
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -257,7 +302,8 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-15 md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  bandWidth={11.8}
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -273,7 +319,8 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="platform-table-mobile-w-10 md:w-[14%]"
+                  class="platform-table-mobile-w-10 md:w-[16%]"
+                  bandWidth={13.1}
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
@@ -329,8 +376,12 @@ export const KubernetesNodesTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(node);
                     const isExpanded = () => drawer.isExpanded(node);
+                    // The same open alerts the node's drawer lists: a node that
+                    // runs a Pulse agent has its alerts keyed on the agent and
+                    // labelled with its hostname, so matching the row's id or
+                    // display name finds none of them.
                     const nodeAlertStyles = createMemo(() =>
-                      getAlertStyles(node.id, activeAlerts, alertsEnabled(), name()),
+                      getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled()),
                     );
                     const nodeAlertBg = () => {
                       const s = nodeAlertStyles();
@@ -342,7 +393,9 @@ export const KubernetesNodesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${nodeAlertBg()}`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                            isExpanded() ? '' : nodeAlertBg()
+                          }`}
                           data-kubernetes-node-row={node.id}
                           onClick={() => drawer.toggle(node)}
                         >
@@ -366,7 +419,25 @@ export const KubernetesNodesTable: Component<{
                                 class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
                               />
+                              {/* Phones demote the Status column; announce the state there only. */}
+                              <span class="sr-only platform-table-phone-only-inline">
+                                {indicator().label}
+                              </span>
                             </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                          >
+                            <Show
+                              when={indicator().variant !== 'success'}
+                              fallback={<span class="text-muted">{indicator().label}</span>}
+                            >
+                              <StatusIndicatorBadge
+                                variant={indicator().variant}
+                                label={indicator().label}
+                                size="xs"
+                              />
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -386,7 +457,7 @@ export const KubernetesNodesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-40" title={runtime()}>
+                            <span class="block truncate" title={runtime()}>
                               {runtime()}
                             </span>
                           </TableCell>
@@ -434,7 +505,7 @@ export const KubernetesNodesTable: Component<{
                           resource={node}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={9}
+                          colSpan={10}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(node)}
                         />

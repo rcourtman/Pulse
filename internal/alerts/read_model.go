@@ -196,6 +196,24 @@ func metadataStringValue(metadata map[string]interface{}, key string) string {
 	}
 }
 
+// metadataStringsValue reads a string list from alert metadata. A live alert
+// holds a []string; one reloaded from disk holds a []interface{}.
+func metadataStringsValue(metadata map[string]interface{}, key string) ([]string, bool) {
+	switch values := metadata[key].(type) {
+	case []string:
+		return append([]string(nil), values...), true
+	case []interface{}:
+		result := make([]string, 0, len(values))
+		for _, value := range values {
+			if s, ok := value.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, true
+	}
+	return nil, false
+}
+
 func metadataBoolValue(metadata map[string]interface{}, key string) bool {
 	if metadata == nil {
 		return false
@@ -301,12 +319,27 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 				StartTime:       exported.StartTime,
 				Acknowledged:    exported.Acknowledged,
 				// exported is a deep clone, so the map is already private.
-				Metadata: exported.Metadata,
+				Metadata:   exported.Metadata,
+				Resolution: modelAlertResolution(exported.Resolution),
 			},
 			ResolvedTime: alert.ResolvedTime,
 		})
 	}
 	return resolved
+}
+
+// modelAlertResolution projects a non-recovery close into the state model, so
+// snapshot and assistant readers can tell a handover from a recovery.
+func modelAlertResolution(resolution *AlertResolution) *models.AlertResolution {
+	if resolution == nil {
+		return nil
+	}
+	return &models.AlertResolution{
+		Reason:              string(resolution.Reason),
+		SuccessorResourceID: resolution.SuccessorResourceID,
+		SuccessorName:       resolution.SuccessorName,
+		Summary:             resolution.Summary(),
+	}
 }
 
 // GetResolvedAlert returns a copy of a recently resolved alert by ID.

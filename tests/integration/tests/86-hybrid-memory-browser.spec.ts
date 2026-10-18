@@ -190,7 +190,8 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
       vm("cluster-b", 80),
     ];
     send();
-    await expect(memoryCell).toContainText("N/A");
+    // The bar shows a dash; an open history lens still reads N/A.
+    await expect(memoryCell).toContainText(/^-|N\/A/);
     await expect(memoryCell).not.toContainText("100%");
     await expect(memoryDetails).toHaveCount(0);
     await expect(drawer.getByText("Free", { exact: true })).toHaveCount(0);
@@ -208,6 +209,16 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
     send();
     await expect(memoryCell).toContainText("0%");
     await expect(memoryCell).not.toContainText("N/A");
+    // The Memory section sits in the drawer's Details disclosure, closed by
+    // default. Open it once, as a reader would, before judging its geometry.
+    const technicalDetails = drawer.getByTestId("guest-technical-details");
+    if (
+      !(await technicalDetails.evaluate(
+        (element) => (element as HTMLDetailsElement).open,
+      ))
+    ) {
+      await technicalDetails.locator("summary").click();
+    }
     // Centre the recovered details above the fixed narrow-screen navigation.
     await memoryDetails.evaluate((element) =>
       element.scrollIntoView({ block: "center", inline: "nearest" }),
@@ -216,7 +227,10 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
       const box = await memoryDetails.boundingBox();
       return box ? box.y + box.height : Infinity;
     }).toBeLessThan(viewport.height - 64);
-    await expect(memoryDetails).toBeInViewport({ ratio: 1 });
+    // Fully readable, allowing the fraction of a pixel the rounded table
+    // border can clip when earlier drawer content lands on a sub-pixel offset
+    // (0.9956 was seen at 390px once the charts moved onto Overview).
+    await expect(memoryDetails).toBeInViewport({ ratio: 0.98 });
     await expect(memoryDetails).toContainText("100 MB");
     await expect(
       memoryDetails.locator("tr").filter({

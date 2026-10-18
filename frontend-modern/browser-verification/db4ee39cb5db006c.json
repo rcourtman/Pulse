@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "base_sha": "1a094646d7f21217eda051af6ba0252e208f283e",
+  "verified_at": "2026-10-07T22:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectionModel.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "b345738d55505aeffb16b20f104f8010008e9fcc73fafe084c7e75dbc8138e1a",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "a8b2e107f2143d01f3cb038d29526a9d38d35dcc6df5cdac076c02aa143b3e5f",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "e48d1be3998e7e3ece47d9eb01673872e74f0f46e0cc242142898af3f2eea80d",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "2742be27628c947aac825ca70af4f19b7518931d3629e6bf3b9068cc98eae19e",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "e7bd98fc4a091ee66595b59d2407b7ea9cca9e52f1df2b7527ff41cfdecc99b9",
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts": "2c99c812cb19b6c31b376ec5db56c3ec16403d8556fbe5f9028fd9018e310915",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "5ac8410704ad9fbcf8237291432a30d16a31527b38fd34f0179eb57b90b92ca4",
+    "frontend-modern/src/components/Workloads/workloadSelectionModel.ts": "82b8f740e51630aba916d7ae617cd57213f4c910d17e843ea378384b63f9ffe9",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "3b39341dc6e068db4bc84a5745f6a8508454b0019a84c7abfd8c6ee826d8ed93",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "f2ec48c3f9932d4e17410cda69c2cc4452c8d11fe3d6d120940cbe8ced40c6bd",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "561645e9b339738484a53a0c044721d69831ce6812d721d826233443efb0f0e1",
+    "frontend-modern/src/routing/resourceLinks.ts": "7b3a287fb80c7aa66aea6a40a3433662f99460888e734950ea3b455a04f3d53a"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/overview?resource=Analytics%3Apve31%3A675",
+    "/proxmox/overview?summaryGroup=Analytics-pve31",
+    "/vmware/overview",
+    "/vmware/overview?summaryGroup=etl-batch-01-esxi-01.lab.local"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded build of this exact tree (fingerprinted runtime files checked by sha256 on the test host) on a mock DEMO_MODE stack on pulse-dev; baseline is an embedded build of origin/main 36d3f8c557 run with the same probe script (group interaction code is unchanged on main since)",
+    "Proxmox overview grouped by node: 8 group dividers, static (no aria-expanded, cursor auto, no inline node drawer in the guests table), same as baseline",
+    "vSphere overview grouped by host: 18 group dividers in the current mock estate, static, same as baseline",
+    "Group-row attributes this change removes are absent: data-summary-group-series-count (baseline 18) and data-summary-row-active (baseline \"false\"); data-summary-group-id kept",
+    "Hand-typed ?summaryGroup=Analytics-pve31 on Proxmox: baseline pinned 18 member rows and highlighted the group row; now 0 rows pinned and no group highlight. vSphere ?summaryGroup= pinned 0 rows on both",
+    "Proxmox nodes table NodeDrawer still opens from its own row toggle (aria-expanded true, one inline node detail row)",
+    "?resource= deep link opens the matching guest drawer",
+    "Phone 390x844 Proxmox: tapping a group divider pins nothing and opens no node drawer; tapping a guest opens its drawer",
+    "No page errors at either width"
+  ],
+  "interactions": [
+    "Hover the first group divider (right half, away from the node link): 0 preview member rows",
+    "Click the first group divider: 0 pinned rows, 0 inline node drawers",
+    "Open the first guest drawer, then click a group divider: drawer stays open 5/5 on Proxmox and 5/5 on vSphere (baseline the same); Escape closes it",
+    "Hover a guest row: exactly one guest row carries data-summary-row-active=true",
+    "Toggle the first Proxmox nodes table row disclosure: NodeDrawer opens, then closes",
+    "Load the ?summaryGroup= and ?resource= URLs above and count pinned rows and open drawers",
+    "Phone width: tap a group divider, then tap a guest row"
+  ]
+}

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -19,7 +20,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		if alert == nil {
 			return true
 		}
-		lastSeen := alert.LastSeen
+		lastSeen := alert.lastObservedAt()
 		if lastSeen.IsZero() {
 			lastSeen = alert.StartTime
 		}
@@ -264,6 +265,15 @@ func shouldPreserveAlertOutsideNodeCleanup(alertID string, alert *Alert) bool {
 	if alert.CanonicalKind == string(alertspecs.AlertSpecKindProviderIncident) {
 		return true
 	}
+	// Kubernetes, TrueNAS and vSphere metric alerts carry a display label such
+	// as "TrueNAS Disk" or "Kubernetes Pod" in resourceType, which the platform
+	// words below never matched, and a cluster or host in Node rather than a
+	// Proxmox node. Every Proxmox poll used to delete them silently, and the
+	// next evaluation raised them again as new alerts.
+	if metadataStringValue(alert.Metadata, alertPlatformTypeKey) != "" ||
+		isUnifiedModernPlatformAlertType(alertconfig.CanonicalAlertResourceType(alertMetadataResourceType(alert))) {
+		return true
+	}
 
 	switch alertMetadataResourceType(alert) {
 	case string(unifiedresources.ResourceTypeAgent),
@@ -336,13 +346,17 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 // ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
-	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 {
+	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 && len(m.hostDiskTempPendingContexts) == 0 {
 		m.mu.Unlock()
 		return
 	}
 	m.activeAlerts = make(map[string]*Alert)
+	m.restoredBackupNotifications = nil
 	m.activeAlertAlias = make(map[string]string)
-	m.core.Reset()
+	for _, state := range m.mirrorStatesNoLock() {
+		state.Reset()
+	}
+	m.hostDiskTempPendingContexts = nil
 	m.intentPending = make(map[string]IntentPendingState)
 	m.intentRuntimeTicks = make(map[string]time.Duration)
 	m.recentAlerts = make(map[string]*Alert)

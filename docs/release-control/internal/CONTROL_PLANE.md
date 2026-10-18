@@ -134,19 +134,13 @@ model that active and future release profiles reuse.
    and deciding whether a claim or contract update is required are normally
    internal behaviors. Surface those mechanics only when they materially affect
    blockers, scope, cross-repo impact, or the user's next decision.
-16. Use worktrees when a mutating slice needs physical isolation.
-   Claims and lookup tools reduce logical overlap, but they do not isolate
-   hooks, formatters, staged reads, or unrelated dirty state. Use a dedicated
-   worktree when a slice requires that isolation — a shared checkout is fine
-   for normal single-session work.
-   The canonical helper trio is `worktree_base.py` to ensure the clean landing
-   worktree exists, `worktree_claim.py` to start isolated work, and
-   `worktree_finish.py` to land a finished isolated slice back onto the clean
-   base-branch worktree.
+16. Checkout isolation and landing follow the repository's current branch policy.
+    Use the available Git tools when a slice needs physical isolation.
+    Reserve its governed claim in the checkout where the work will run.
 17. Lane-expansion targets must steer slice selection.
    When the active target is a lane-expansion or bridge-foundation target and
-   `status_audit.py --pretty` exposes an `available_candidate_lane_queue`,
-   agents should choose from that queue before local cleanup, bounded
+   `status_audit.py --pretty` exposes `available_candidate_lane_options`,
+   agents should assess those scope and ownership facts before local cleanup, bounded
    stabilization residue, or presentation-only polish unless the user
    explicitly overrides the priority or a release-blocking surface needs
    immediate containment.
@@ -262,10 +256,11 @@ user language should update the control plane.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
-8. The v6 profile defaults to `main`; explicit version overrides in
-   `control_plane.json` bind existing releases to `release/v6.4` and
-   `release/v6.5`. A new checkpoint's mapping is verified during governed
-   preparation, not inferred from the profile default or this page.
+8. The v6 profile defaults to `main`, where the release train cuts every new
+   release. Legacy version overrides in `control_plane.json` keep the
+   historical `6.4.x` releases bound to `release/v6.4`. A new checkpoint's
+   mapping is verified during governed preparation, not inferred from the
+   profile default or this page.
 9. Legacy maintenance releases that still feed governed automation outside the
    active v6 line must also resolve through `control_plane.json`.
    Right now the remaining `5.1.x` stable maintenance line resolves to `main`
@@ -282,14 +277,8 @@ user language should update the control plane.
     commands such as `status_audit.py --pretty` and targeted lookup helpers.
     `status_lookup.py` is the id-scoped helper for candidate lanes, coverage
     gaps, lanes, assertions, gates, followups, and work claims.
-    `work_claim.py` is the shared-checkout claim helper for reserving or
+    `work_claim.py` is the canonical claim helper for reserving or
     releasing exactly one governed slice before mutation.
-    `worktree_base.py` ensures the canonical clean landing worktree exists for
-    the base branch.
-    `worktree_claim.py` is the canonical helper for pairing a mutating claim
-    with a dedicated worktree when a slice requires physical isolation.
-    `worktree_finish.py` is the canonical helper for landing an isolated
-    finished slice back onto the base branch worktree.
     It should not require agents to ingest raw `status.json` or `registry.json`
     in full at startup unless the current task genuinely needs to drill into
     those surfaces.

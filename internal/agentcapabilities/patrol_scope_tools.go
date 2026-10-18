@@ -11,7 +11,6 @@ import "strings"
 func IsPatrolInfrastructureEvidenceToolName(name string) bool {
 	switch strings.TrimSpace(name) {
 	case PulseQueryToolName,
-		PulseDiscoveryToolName,
 		PulseMetricsToolName,
 		PulseStorageToolName,
 		PulseDockerToolName,
@@ -74,9 +73,14 @@ func patrolEvidenceToolNamesForResourceTypes(resourceTypes []string, includeDeep
 			add(PulseKubernetesToolName)
 		case "pmg":
 			add(PulsePMGToolName)
-		case "network-endpoint", "endpoint", "discovery":
-			add(PulseDiscoveryToolName)
-		case "agent", "host", "truenas", "node", "vm", "system-container", "container", "service":
+		case "network-endpoint", "endpoint":
+			// pulse_query and pulse_read already cover endpoint evidence.
+		case "vm", "system-container", "container":
+			add(PulseMetricsToolName)
+			// Guest findings can concern backup attempts and restore points.
+			// Those are collected evidence, independent of command access.
+			add(PulseStorageToolName)
+		case "agent", "host", "truenas", "node", "service":
 			add(PulseMetricsToolName)
 		default:
 			return nil, false

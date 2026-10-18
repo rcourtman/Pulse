@@ -21,11 +21,16 @@ if (root) {
     logger.debug('[Index] Render call completed');
   } catch (error) {
     logger.error('[Index] Render error', error);
-    // Show error on page
-    root.innerHTML = `<div style="color: red; padding: 20px;">
-      <h1>Error Loading App</h1>
-      <pre>${error}</pre>
-    </div>`;
+    // Show error on page. Built with DOM nodes and classes: the production CSP
+    // refuses inline style attributes, and the error text is not markup.
+    const fallback = document.createElement('div');
+    fallback.className = 'p-5 text-red-600';
+    const heading = document.createElement('h1');
+    heading.textContent = 'Error Loading App';
+    const detail = document.createElement('pre');
+    detail.textContent = String(error);
+    fallback.append(heading, detail);
+    root.replaceChildren(fallback);
   }
 } else {
   logger.error('[Index] Root element not found', new Error('root element missing'));

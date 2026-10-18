@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "19a0ff9b96ccd128c57b563030ebef034633119e",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/utils/memoryObservation.ts",
+    "frontend-modern/src/utils/searchQuery.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "942fa16b2a0b4d441a30792ab4cbffd1ba7af330c1b13ca53bda49b1279cd30e",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "d3bb79cc24977f1697ed4c7671c7034108007a6701ebe747395bc3375bbdb5ad",
+    "frontend-modern/src/utils/memoryObservation.ts": "dd3893b35623a3fa098b252a29c6c8201bd8834788e924b54e5f7f571addd79d",
+    "frontend-modern/src/utils/searchQuery.ts": "56f908833ff3a13fddd4270221f8ce881056082937c56b73143983a034260b2c"
+  },
+  "routes": [
+    "/proxmox?tab=workloads (synthetic canonical snapshot through production useWorkloads/useWorkloadsState/WorkloadsSurface/SearchInput/GuestRow at /tmp/memory-selection/index.html)"
+  ],
+  "states": [
+    "Current QEMU, Proxmox and linked-agent memory; measured zero; last-known, unavailable, missing and unannotated legacy memory",
+    "Guest/host display bases; absent host capacity; independent QEMU disk deferral; original observation unchanged by Last seen; same-identity fresh replacement"
+  ],
+  "interactions": [
+    "Production memory header sort ascending/descending using pointer and touch; only current readings precede retained/missing values",
+    "Numeric high/zero filters, name and OR inventory access, focused Escape reset",
+    "Host-capacity sorting through the real page-owned callback: missing capacity is last; numeric search still uses guest percent",
+    "Original observation and stable identity preserved on refresh; a fresh observation restores numeric membership and keeps input focus"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-09T15:55:20.856475Z",
+  "browsers": [
+    {
+      "engine": "desktop",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "phone",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "evidence": {
+    "result": "Retained lane outcome: evidence/browser-result.json",
+    "screenshots": "Eight inspected desktop/phone captures in evidence/BROWSER.tar.xz",
+    "limits": "Synthetic canonical snapshot, production useWorkloads mapper, useWorkloadsState host-capacity comparator, WorkloadsSurface/GuestRow/header/SearchInput and CSS. Memory-basis control and snapshot replacements are fixture inputs. No authenticated App, live guest, thaw, native collector, installed/released or physical-device acceptance."
+  }
+}

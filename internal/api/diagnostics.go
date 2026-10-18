@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/user"
@@ -815,7 +816,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 
 	if ok && !cachedEntry.cachedAt.IsZero() && now.Sub(cachedEntry.cachedAt) <= diagnosticsCacheTTL {
 		diagnosticsCacheHits.Inc()
-		writeDiagnosticsResponse(w, cachedEntry.diag, cachedEntry.cachedAt)
+		writeDiagnosticsResponse(w, r.diagnosticsForCaller(req, cachedEntry.diag), cachedEntry.cachedAt)
 		return
 	}
 
@@ -856,7 +857,23 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	})
 
 	result := v.(diagResult)
-	writeDiagnosticsResponse(w, result.diag, result.cachedAt)
+	writeDiagnosticsResponse(w, r.diagnosticsForCaller(req, result.diag), result.cachedAt)
+}
+
+// diagnosticsForCaller adapts a cached diagnostics result to the caller. The
+// cache holds one result per organization scope, built for the instance, and
+// is shared by every caller, so per-caller filtering happens here, after the
+// cache. The API token section lists credentials, so an API-token caller sees
+// only the tokens it may manage (see callerTokenMayManage); instance-wide
+// tokens and browser sessions get the full section.
+func (r *Router) diagnosticsForCaller(req *http.Request, diag DiagnosticsInfo) DiagnosticsInfo {
+	caller := getAPITokenRecordFromRequest(req)
+	if caller == nil || tokenHasInstanceWideAuthority(caller) || diag.APITokens == nil {
+		return diag
+	}
+	view := diag
+	view.APITokens = buildAPITokenDiagnostic(r.config, r.monitor, caller)
+	return view
 }
 
 func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cachedAt time.Time) {
@@ -929,6 +946,33 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 	}
 	lower := strings.ToLower(raw)
 
+	// A stopped handshake is not evidence that a certificate is wrong. Check
+	// typed causes before text, which also contains the requested URL and can
+	// mention "certificate" or "TLS" in an otherwise ordinary endpoint name.
+	if errors.Is(err, context.Canceled) {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_failed",
+			message:         "Connection check was cancelled",
+			troubleshooting: "The diagnostic request was cancelled; no certificate-trust failure was established. Keep the saved TLS settings.",
+		}
+	}
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &networkError) && networkError.Timeout()) ||
+		strings.Contains(lower, "context deadline exceeded") ||
+		strings.Contains(lower, "client.timeout exceeded") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "tls handshake timeout") ||
+		strings.Contains(lower, "tls: handshake timeout") ||
+		strings.Contains(lower, "timeout awaiting response headers") ||
+		strings.Contains(lower, "connection timed out") {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_timeout",
+			message:         "Connection timed out",
+			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
+		}
+	}
+
 	if strings.Contains(lower, "invalid") && strings.Contains(lower, "host") {
 		return diagnosticsConnectionFailure{
 			kind:            "invalid_host_url",
@@ -968,7 +1012,7 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 		return diagnosticsConnectionFailure{
 			kind:            "tls_certificate_mismatch",
 			message:         "TLS certificate mismatch or untrusted certificate",
-			troubleshooting: "Update the stored certificate fingerprint, fix the node certificate, or disable verification only on a trusted network.",
+			troubleshooting: "Check the configured endpoint's certificate hostname, expiry and trusted chain. If a fingerprint is needed or has changed, independently verify the certificate's identity and add or update the saved fingerprint only after that verification. Do not disable verification or switch to HTTP to diagnose the failure.",
 		}
 	}
 	if strings.Contains(lower, "authentication") ||
@@ -985,18 +1029,6 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 			troubleshooting: "Rotate the node credentials in Settings, then verify the user or token has the required Proxmox permissions.",
 		}
 	}
-	if strings.Contains(lower, "context deadline exceeded") ||
-		strings.Contains(lower, "client.timeout exceeded") ||
-		strings.Contains(lower, "i/o timeout") ||
-		strings.Contains(lower, "tls handshake timeout") ||
-		strings.Contains(lower, "timeout awaiting response headers") {
-		return diagnosticsConnectionFailure{
-			kind:            "connection_timeout",
-			message:         "Connection timed out",
-			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
-		}
-	}
-
 	if fallbackMessage == "" {
 		fallbackMessage = "Connection check failed"
 	}
@@ -1063,7 +1095,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	runtime.ReadMemStats(&memStats)
 	diag.System = buildSystemDiagnostic(memStats, currentProcessRSS(), debug.SetMemoryLimit(-1))
 
-	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
+	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor, nil)
 	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)
 
 	// Test each configured node
@@ -1306,14 +1338,30 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *APITokenDiagnostic {
+// buildAPITokenDiagnostic summarises the token inventory. A nil caller sees
+// every token; an API-token caller sees only the tokens callerTokenMayManage
+// allows, and the counts, notes and usage are computed over that view. It
+// reads a snapshot taken under config.Mu, so callers must not hold that lock.
+func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor, caller *config.APITokenRecord) *APITokenDiagnostic {
 	if cfg == nil {
 		return nil
 	}
 
+	inventory := snapshotAPITokenRecords(cfg)
+	records := make([]config.APITokenRecord, 0, len(inventory))
+	visibleIDs := make(map[string]struct{}, len(inventory))
+	for i := range inventory {
+		record := &inventory[i]
+		if !callerTokenMayManage(caller, record) {
+			continue
+		}
+		records = append(records, *record)
+		visibleIDs[record.ID] = struct{}{}
+	}
+
 	diag := &APITokenDiagnostic{
-		Enabled:    cfg.HasAPITokens(),
-		TokenCount: len(cfg.APITokens),
+		Enabled:    len(inventory) > 0,
+		TokenCount: len(records),
 	}
 
 	appendNote := func(note string) {
@@ -1323,15 +1371,15 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
+	diag.RecommendTokenSetup = len(inventory) == 0
 
 	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
 	}
 
-	tokens := make([]APITokenSummary, 0, len(cfg.APITokens))
+	tokens := make([]APITokenSummary, 0, len(records))
 	unusedCount := 0
-	for _, record := range cfg.APITokens {
+	for _, record := range records {
 		summary := APITokenSummary{
 			ID:   record.ID,
 			Name: record.Name,
@@ -1364,8 +1412,8 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	diag.Tokens = tokens
 	diag.UnusedTokenCount = unusedCount
 
-	if len(cfg.APITokens) > 0 {
-		if unusedCount == len(cfg.APITokens) {
+	if len(records) > 0 {
+		if unusedCount == len(records) {
 			appendNote("Configured API tokens have not been used yet. Update your agents or automations to switch to the new tokens.")
 		} else if unusedCount > 0 {
 			appendNote(fmt.Sprintf("%d API token(s) have never been used. Remove unused tokens or update the corresponding agents.", unusedCount))
@@ -1381,6 +1429,9 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 					continue
 				}
 				tokenID := strings.TrimSpace(host.TokenID())
+				if _, visible := visibleIDs[tokenID]; !visible {
+					continue
+				}
 				tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 			}
 		}

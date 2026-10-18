@@ -1,12 +1,21 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+
+import { Dialog } from '@/components/shared/Dialog';
+import {
+  EXTERNAL_TEXT_LINK_BASE_CLASS,
+  EXTERNAL_TEXT_LINK_VARIANT_CLASSES,
+} from '@/components/shared/ExternalTextLink';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
 import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
+import { ALERT_BACKUP_THRESHOLDS_PATH } from '@/routing/resourceLinks';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
+  getWorkloadsGuestBackupAgeRule,
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
@@ -46,40 +55,32 @@ function BackupShieldIcon(props: { icon: 'check' | 'warning' | 'x' | 'running'; 
 function BackupIndicator(props: {
   lastBackup: string | number | null | undefined;
   isTemplate: boolean;
+  guestName?: string;
   backupRunning?: boolean;
 }) {
   if (props.isTemplate) return null;
 
-  const alertsActivation = useAlertsActivation();
-  const backupInfo = createMemo(() =>
-    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
-  );
-  const displayStatus = createMemo<WorkloadsGuestBackupDisplayStatus>(() =>
-    props.backupRunning ? 'running' : backupInfo().status,
-  );
-  const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(displayStatus()));
-
-  const tooltipText = createMemo(() => {
-    const info = backupInfo();
-    return getWorkloadsGuestBackupTooltip(info.status, info.ageFormatted, props.backupRunning);
-  });
-
   return (
-    <span class={`shrink-0 ${config().color}`} title={tooltipText()} aria-label={tooltipText()}>
-      <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
-    </span>
+    <BackupStatusCell
+      lastBackup={props.lastBackup}
+      backupRunning={props.backupRunning}
+      guestName={props.guestName}
+      indicator
+    />
   );
 }
 
 function getBackupAgeBadgeLabel(
   lastBackup: string | number | null | undefined,
   info: BackupInfo,
+  now: number,
 ): string {
   if (info.status === 'never') return 'None';
   if (info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
     emptyText: 'Unknown',
+    now,
   });
   if (compact === 'just now') return 'Now';
   return compact.replace(/\s+ago$/, '');
@@ -316,12 +317,17 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
 function BackupStatusCell(props: {
   lastBackup: string | number | null | undefined;
   backupRunning?: boolean;
+  indicator?: boolean;
+  guestName?: string;
 }) {
+  const now = useRelativeTimeNow();
   const tip = useTooltip();
+  const [detailsOpen, setDetailsOpen] = createSignal(false);
+  let trigger: HTMLButtonElement | undefined;
 
   const alertsActivation = useAlertsActivation();
   const info = createMemo(() =>
-    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
+    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds(), now()),
   );
   // The badge shows "running" while a backup is underway: green would claim
   // a completed backup that does not exist yet, and the age states would
@@ -332,11 +338,23 @@ function BackupStatusCell(props: {
   );
   const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(displayStatus()));
   const badgeLabel = createMemo(() =>
-    displayStatus() === 'running' ? 'Running' : getBackupAgeBadgeLabel(props.lastBackup, info()),
+    displayStatus() === 'running'
+      ? 'Running'
+      : getBackupAgeBadgeLabel(props.lastBackup, info(), now()),
   );
   const hasCompletedBackup = createMemo(() => info().ageMs !== null);
+  const ageRule = createMemo(() =>
+    getWorkloadsGuestBackupAgeRule(info().status, alertsActivation.getBackupThresholds()),
+  );
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
+    if (props.indicator) {
+      return getWorkloadsGuestBackupTooltip(
+        currentInfo.status,
+        currentInfo.ageFormatted,
+        props.backupRunning,
+      );
+    }
     if (currentInfo.status === 'unknown') {
       return `Backup status: ${props.backupRunning ? 'backup running now, ' : ''}${currentInfo.ageFormatted}`;
     }
@@ -349,61 +367,132 @@ function BackupStatusCell(props: {
     return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
   });
 
-  return (
-    <>
-      <span
-        class={getBackupAgeBadgeClass(displayStatus())}
-        onMouseEnter={tip.onMouseEnter}
-        onMouseLeave={tip.onMouseLeave}
-        aria-label={ariaLabel()}
-      >
-        <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
-        <Show when={displayStatus() !== 'fresh'}>
-          <span>{badgeLabel()}</span>
-        </Show>
-      </span>
-
-      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
-        <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
-            Backup Status
-          </div>
-          <Show when={props.backupRunning}>
-            <div class="py-0.5 text-blue-400">Backup running now…</div>
+  // Both entry points reveal the same retained completion evidence. Hover
+  // stays a shortcut on a fine pointer; the native button opens a read-only
+  // dialog for keyboard/touch without stealing the enclosing row action.
+  const Evidence = (evidenceProps: { ruleLink?: boolean }) => (
+    <div class="space-y-2 text-xs">
+      <Show when={props.guestName}>
+        <p class="font-medium text-base-content wrap-break-word">{props.guestName}</p>
+      </Show>
+      <Show when={props.backupRunning}>
+        <p class="text-blue-600 dark:text-blue-400">Backup running now…</p>
+      </Show>
+      <Show when={hasCompletedBackup()}>
+        <div class="space-y-1">
+          <div class="text-muted">Last completed backup</div>
+          <time
+            class="block font-medium text-base-content"
+            dateTime={new Date(props.lastBackup!).toISOString()}
+          >
+            {new Date(props.lastBackup!).toLocaleDateString(undefined, {
+              weekday: 'short',
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })}
+            {' · '}
+            {new Date(props.lastBackup!).toLocaleTimeString()}
+          </time>
+          <div class="text-base-content">{info().ageFormatted}</div>
+          <Show when={ageRule()}>
+            {(rule) => (
+              <p class="text-muted" data-backup-age-rule>
+                {rule()}
+              </p>
+            )}
           </Show>
-          <Show when={hasCompletedBackup()}>
-            <div class="py-0.5">
-              <div class="text-slate-400">
-                {props.backupRunning ? 'Last completed backup' : 'Last backup'}
-              </div>
-              <div class="text-base-content font-medium">
-                {new Date(props.lastBackup!).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </div>
-              <div class="text-slate-300">{new Date(props.lastBackup!).toLocaleTimeString()}</div>
-            </div>
-            <div class="pt-1 mt-1 border-t border-border">
-              <span class={getWorkloadsGuestBackupStatusPresentation(info().status).color}>
-                {info().ageFormatted}
-              </span>
-            </div>
-          </Show>
-          <Show when={info().status === 'unknown'}>
-            <div class="py-0.5 text-amber-400">{info().ageFormatted}</div>
-          </Show>
-          <Show when={info().status === 'never'}>
-            <div class="py-0.5 text-red-400">
-              {props.backupRunning
-                ? 'No completed backup yet - the first backup is running now.'
-                : 'No backup has ever been recorded for this guest.'}
-            </div>
+          <Show when={evidenceProps.ruleLink && ageRule()}>
+            <a
+              href={ALERT_BACKUP_THRESHOLDS_PATH}
+              class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
+              onClick={() => setDetailsOpen(false)}
+            >
+              Change when backups count as old
+            </a>
           </Show>
         </div>
+      </Show>
+      <Show when={info().status === 'unknown'}>
+        <p class="text-amber-700 dark:text-amber-300">{info().ageFormatted}</p>
+      </Show>
+      <Show when={info().status === 'never'}>
+        <p class="text-red-600 dark:text-red-400">
+          {props.backupRunning
+            ? 'No completed backup yet - the first backup is running now.'
+            : 'No backup has ever been recorded for this guest.'}
+        </p>
+      </Show>
+    </div>
+  );
+  const focusClass =
+    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+
+  // The indicator sits in the guest name cell, where on phones the whole row
+  // is the disclosure target (the expand chevron is screen-reader only). Keep
+  // its touch target at the 24px minimum: a 44px box covered most of the
+  // name cell's row-tap area and doubled every phone row's height. The
+  // backup-column badge owns its own cell, so it keeps the 44px target.
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        class={
+          props.indicator
+            ? `inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm sm:min-h-0 sm:min-w-0 ${config().color} ${focusClass}`
+            : `${getBackupAgeBadgeClass(displayStatus())} min-h-11 min-w-11 sm:min-h-0 ${focusClass}`
+        }
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
+        onClick={(event) => {
+          event.stopPropagation();
+          tip.onMouseLeave();
+          setDetailsOpen(true);
+        }}
+        aria-label={ariaLabel()}
+        title={props.indicator ? ariaLabel() : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={detailsOpen()}
+      >
+        <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
+        <Show when={!props.indicator && displayStatus() !== 'fresh'}>
+          <span>{badgeLabel()}</span>
+        </Show>
+      </button>
+
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[140px] max-w-[280px]">
+          <div class="mb-1 border-b border-border pb-1 font-medium text-base-content">
+            Backup status
+          </div>
+          <Evidence />
+        </div>
       </TooltipPortal>
+      <Show when={detailsOpen()}>
+        <Dialog
+          isOpen
+          ariaLabel={`Backup status details${props.guestName ? ` for ${props.guestName}` : ''}`}
+          onClose={() => setDetailsOpen(false)}
+          returnFocus={() => trigger}
+          panelClass="max-w-sm"
+        >
+          <div class="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+            <h2 class="text-sm font-semibold text-base-content">Backup status</h2>
+            <button
+              type="button"
+              aria-label="Close backup details"
+              class="min-h-11 rounded-sm px-3 text-xs text-muted hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={() => setDetailsOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div class="overflow-y-auto p-4">
+            <Evidence ruleLink />
+          </div>
+        </Dialog>
+      </Show>
     </>
   );
 }

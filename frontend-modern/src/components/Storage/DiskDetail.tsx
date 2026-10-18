@@ -1,9 +1,18 @@
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+} from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
 import {
@@ -17,14 +26,16 @@ import {
   DISK_DETAIL_HEALTH_SUMMARY_CLASS,
   DISK_DETAIL_HISTORY_RANGE_OPTIONS,
   DISK_DETAIL_LIVE_CHARTS,
-  getDiskAttributeValueTextClass,
+  getDiskAttributeCardValueTextClass,
   getDiskDetailHistoryFallbackMessage,
   getDiskDetailLiveBadgeLabel,
+  getDiskDetailPhonePinnedChartLabels,
 } from '@/features/storageBackups/diskDetailPresentation';
 import {
   STORAGE_DETAIL_BADGE_CLASS,
   STORAGE_DETAIL_CARD_CLASS,
   STORAGE_DETAIL_EMPTY_CLASS,
+  STORAGE_DETAIL_HEADER_ROW_CLASS,
   STORAGE_DISK_DETAIL_ATTRIBUTE_GRID_CLASS,
   STORAGE_DISK_DETAIL_HEADER_CLASS,
   STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS,
@@ -46,12 +57,13 @@ import { useDiskDetailModel } from './useDiskDetailModel';
 interface DiskDetailProps {
   disk: Resource;
   nodes: Resource[];
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: string[];
+  /** False pauses this disk's chart reads, e.g. while a drawer tab is hidden. */
+  historyEnabled?: boolean;
 }
 
-type DiskDetailTab = 'overview' | 'history';
-
 export const DiskDetail: Component<DiskDetailProps> = (props) => {
-  const [activeTab, setActiveTab] = createSignal<DiskDetailTab>('overview');
   const {
     chartRange,
     setChartRange,
@@ -65,16 +77,39 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     liveIOAvailable,
   } = useDiskDetailModel({
     disk: () => props.disk,
+    alertResourceIds: () => props.alertResourceIds,
   });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(DISK_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
   );
-  const hasHistory = createMemo(
-    () => Boolean(historyResourceId()) || Boolean(metricResourceId() && liveIOAvailable()),
-  );
   const hasOverviewDetails = createMemo(
     () => collectionMessages().length > 0 || attributeCards().length > 0,
   );
+
+  // On a phone five stacked charts push everything after them off screen: show
+  // the first chart and any whose SMART card is out of bounds, fold the rest
+  // behind one button. A pinned chart stays pinned after its card recovers, so
+  // a reader mid-inspection does not lose it. Folded charts read nothing.
+  const { isBelow } = useBreakpoint();
+  const chartsId = createUniqueId();
+  const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
+  const pinnedLabels = new Set<string>();
+  const phonePinned = createMemo(() => {
+    for (const label of getDiskDetailPhonePinnedChartLabels(historyCharts(), attributeCards())) {
+      pinnedLabels.add(label);
+    }
+    return new Set(pinnedLabels);
+  });
+  const foldedOnPhone = (label: string) => !showAllOnPhone() && !phonePinned().has(label);
+  const showLiveIO = () => Boolean(metricResourceId() && liveIOAvailable());
+  const phoneFoldedLabels = createMemo(() =>
+    [
+      ...historyCharts().map((chart) => chart.label),
+      ...(showLiveIO() ? DISK_DETAIL_LIVE_CHARTS.map((chart) => chart.label) : []),
+    ].filter(foldedOnPhone),
+  );
+  const chartReads = (label: string) =>
+    props.historyEnabled !== false && !(isBelow('sm') && foldedOnPhone(label));
 
   createEffect(() => {
     const nextRange = resolveHistoryRangeWithinLimit(
@@ -84,12 +119,6 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     );
     if (nextRange !== chartRange()) {
       setChartRange(nextRange);
-    }
-  });
-
-  createEffect(() => {
-    if (activeTab() === 'history' && !hasHistory()) {
-      setActiveTab('overview');
     }
   });
 
@@ -125,34 +154,9 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </div>
       </div>
 
-      <Subtabs
-        class="mb-1"
-        ariaLabel="Physical disk detail sections"
-        value={activeTab()}
-        onChange={(value) => setActiveTab(value as DiskDetailTab)}
-        tabs={[
-          { value: 'overview', label: 'Overview' },
-          ...(hasHistory() ? [{ value: 'history', label: 'History' } satisfies SubtabOption] : []),
-        ]}
-        trailing={
-          <Show when={activeTab() === 'history'}>
-            <FormSelect
-              label="Disk history range"
-              labelClass="sr-only"
-              fieldBaseClass="contents"
-              value={chartRange()}
-              onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
-              selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-            >
-              <For each={rangeOptions()}>
-                {(option) => <option value={option.value}>{option.label}</option>}
-              </For>
-            </FormSelect>
-          </Show>
-        }
-      />
-
-      <div class={activeTab() === 'overview' ? 'space-y-3' : 'hidden'}>
+      {/* One view: the SMART evidence behind the health verdict, then its
+          trend and live I/O. There is no separate History tab. */}
+      <div id={chartsId} class="space-y-3">
         <Show when={collectionMessages().length > 0}>
           <div class={STORAGE_DETAIL_EMPTY_CLASS} role="status">
             <For each={collectionMessages()}>{(message) => <p>{message}</p>}</For>
@@ -166,7 +170,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                 <StorageDetailMetricCard
                   label={card.label}
                   value={card.value}
-                  valueClass={getDiskAttributeValueTextClass(card.ok)}
+                  valueClass={getDiskAttributeCardValueTextClass(card)}
                 />
               )}
             </For>
@@ -178,84 +182,109 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             Detailed SMART attributes are not available for this disk.
           </div>
         </Show>
-      </div>
 
-      <div
-        class={activeTab() === 'history' ? 'space-y-3' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <Show when={activeTab() === 'history'}>
-          <Show when={metricResourceId() && liveIOAvailable()}>
-            <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-              <h4
-                class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
+        <Show
+          when={historyResourceId()}
+          fallback={
+            <div class={STORAGE_DETAIL_EMPTY_CLASS}>{getDiskDetailHistoryFallbackMessage()}</div>
+          }
+        >
+          <div class={STORAGE_DISK_DETAIL_SECTION_CLASS} data-testid="disk-detail-history">
+            <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
+              <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>History</h4>
+              <FormSelect
+                label="Disk history range"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
+                value={chartRange()}
+                onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
+                selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
               >
-                Live I/O (30m)
-                <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
-              </h4>
-              <HistoryChartHoverGroup>
-                <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
-                  <For each={DISK_DETAIL_LIVE_CHARTS}>
-                    {(chart) => (
-                      <div class={STORAGE_DETAIL_CARD_CLASS}>
-                        <HistoryChart
-                          resourceType="disk"
-                          resourceId={metricResourceId()!}
-                          metric={
-                            chart.series === 'read'
-                              ? 'diskread'
-                              : chart.series === 'write'
-                                ? 'diskwrite'
-                                : 'disk'
-                          }
-                          label={chart.label}
-                          unit={chart.unit}
-                          range="30m"
-                          hideSelector
-                          hideLock
-                          height={120}
-                          compact={true}
-                        />
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </HistoryChartHoverGroup>
+                <For each={rangeOptions()}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </FormSelect>
             </div>
-          </Show>
+            <HistoryChartHoverGroup>
+              <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
+                <For each={historyCharts()}>
+                  {(chart) => (
+                    <div
+                      class={`${STORAGE_DETAIL_CARD_CLASS} ${foldedOnPhone(chart.label) ? 'max-sm:hidden' : ''}`}
+                      data-phone-collapsed={foldedOnPhone(chart.label) ? 'true' : undefined}
+                    >
+                      <HistoryChart
+                        resourceType="disk"
+                        resourceId={historyResourceId()!}
+                        metric={chart.metric}
+                        label={chart.label}
+                        unit={chart.unit}
+                        height={120}
+                        color={chart.color}
+                        range={chartRange()}
+                        hideSelector={true}
+                        compact={true}
+                        hideLock={true}
+                        enabled={chartReads(chart.label)}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </HistoryChartHoverGroup>
+          </div>
+        </Show>
 
-          <Show
-            when={historyResourceId()}
-            fallback={
-              <div class={STORAGE_DETAIL_EMPTY_CLASS}>{getDiskDetailHistoryFallbackMessage()}</div>
-            }
+        <Show when={showLiveIO()}>
+          <div
+            class={`${STORAGE_DISK_DETAIL_SECTION_CLASS} ${showAllOnPhone() ? '' : 'max-sm:hidden'}`}
+            data-phone-collapsed={showAllOnPhone() ? undefined : 'true'}
           >
-            <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-              <HistoryChartHoverGroup>
-                <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
-                  <For each={historyCharts()}>
-                    {(chart) => (
-                      <div class={STORAGE_DETAIL_CARD_CLASS}>
-                        <HistoryChart
-                          resourceType="disk"
-                          resourceId={historyResourceId()!}
-                          metric={chart.metric}
-                          label={chart.label}
-                          unit={chart.unit}
-                          height={120}
-                          color={chart.color}
-                          range={chartRange()}
-                          hideSelector={true}
-                          compact={true}
-                          hideLock={true}
-                        />
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </HistoryChartHoverGroup>
-            </div>
-          </Show>
+            <h4
+              class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
+            >
+              Live I/O (30m)
+              <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
+            </h4>
+            <HistoryChartHoverGroup>
+              <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
+                <For each={DISK_DETAIL_LIVE_CHARTS}>
+                  {(chart) => (
+                    <div class={STORAGE_DETAIL_CARD_CLASS}>
+                      <HistoryChart
+                        resourceType="disk"
+                        resourceId={metricResourceId()!}
+                        metric={
+                          chart.series === 'read'
+                            ? 'diskread'
+                            : chart.series === 'write'
+                              ? 'diskwrite'
+                              : 'disk'
+                        }
+                        label={chart.label}
+                        unit={chart.unit}
+                        range="30m"
+                        hideSelector
+                        hideLock
+                        height={120}
+                        compact={true}
+                        enabled={chartReads(chart.label)}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </HistoryChartHoverGroup>
+          </div>
+        </Show>
+        <Show when={historyResourceId()}>
+          <PhoneChartsToggle
+            hiddenLabels={phoneFoldedLabels()}
+            expanded={showAllOnPhone()}
+            onToggle={() => setShowAllOnPhone((open) => !open)}
+            controls={chartsId}
+            testId="disk-detail-phone-toggle"
+          />
         </Show>
       </div>
     </div>

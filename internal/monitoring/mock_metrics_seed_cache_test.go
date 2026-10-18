@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -52,7 +53,8 @@ func TestPrepareMockMetricsHistoryReusesRevisionSeedWithIndependentHistories(t *
 		},
 	})
 
-	first, firstCacheHit := prepareMockMetricsHistory(
+	first, firstCacheHit, _ := prepareMockMetricsHistory(
+		context.Background(),
 		graph,
 		fixtureRevision,
 		now,
@@ -64,7 +66,8 @@ func TestPrepareMockMetricsHistoryReusesRevisionSeedWithIndependentHistories(t *
 	if firstCacheHit {
 		t.Fatal("first seed unexpectedly reported a cache hit")
 	}
-	second, secondCacheHit := prepareMockMetricsHistory(
+	second, secondCacheHit, _ := prepareMockMetricsHistory(
+		context.Background(),
 		graph,
 		fixtureRevision,
 		now,
@@ -84,7 +87,8 @@ func TestPrepareMockMetricsHistoryReusesRevisionSeedWithIndependentHistories(t *
 	firstGeneration := mockMetricsSeedCache.generation
 	mockMetricsSeedCache.Unlock()
 
-	_, revisionCacheHit := prepareMockMetricsHistory(
+	_, revisionCacheHit, _ := prepareMockMetricsHistory(
+		context.Background(),
 		graph,
 		fixtureRevision+1,
 		now,
@@ -163,7 +167,7 @@ func TestPrepareMockMetricsHistoryBoundsFullDemoEstateBeforeCaching(t *testing.T
 	}
 
 	now := time.Now().UTC().Truncate(time.Minute)
-	history, cacheHit := prepareMockMetricsHistory(full, 99, now, time.Hour, time.Minute, 3500, nil)
+	history, cacheHit, _ := prepareMockMetricsHistory(context.Background(), full, 99, now, time.Hour, time.Minute, 3500, nil)
 	if cacheHit {
 		t.Fatal("first full-estate seed unexpectedly reported a cache hit")
 	}

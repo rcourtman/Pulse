@@ -3,6 +3,7 @@ package monitoring
 import (
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -26,7 +27,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if readState == nil {
 		return ctx
 	}
@@ -43,8 +44,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)
 		if guestID != "" {
 			ctx.vmsByID[guestID] = modelVM
-			if memory, ok := vm.LinkedAgentMemory(); ok {
-				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			agent := models.Host{LinkedVMID: guestID, Status: "online"}
+			memory, hasMemory := vm.LinkedAgentMemory()
+			agent.Memory = memory
+			disks, observedAt, hasDisks := vm.LinkedAgentDisks()
+			agent.Disks, agent.LastSeen = guestDisksFromReadStateView(disks), observedAt
+			if hasMemory || hasDisks {
+				ctx.hostAgentsByVMID[guestID] = agent
 			}
 		}
 	}
@@ -61,8 +67,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(container.Instance, container.Node, container.VMID)
 		if guestID != "" {
 			ctx.containersByID[guestID] = container
-			if memory, ok := ct.LinkedAgentMemory(); ok {
-				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			agent := models.Host{LinkedContainerID: guestID, Status: "online"}
+			memory, hasMemory := ct.LinkedAgentMemory()
+			agent.Memory = memory
+			disks, observedAt, hasDisks := ct.LinkedAgentDisks()
+			agent.Disks, agent.LastSeen = guestDisksFromReadStateView(disks), observedAt
+			if hasMemory || hasDisks {
+				ctx.hostAgentsByVMID[guestID] = agent
 			}
 		}
 		if container.VMID > 0 && (strings.EqualFold(strings.TrimSpace(container.Type), "oci") || container.IsOCI) {
@@ -71,13 +82,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 	}
 
 	for _, host := range readState.Hosts() {
-		if host == nil {
+		// Only an online, guest-linked host can contribute to this input.
+		// Check the view before projecting it: projection clones the complete
+		// disk inventory, twice, even for unrelated hosts we would discard.
+		if host == nil || host.Status() != unifiedresources.StatusOnline || (host.LinkedVMID() == "" && host.LinkedContainerID() == "") {
 			continue
 		}
 		modelHost := previousHostFromView(host)
-		if modelHost.Status != "online" {
-			continue
-		}
 		if modelHost.LinkedVMID != "" {
 			ctx.hostAgentsByVMID[modelHost.LinkedVMID] = modelHost
 		}
@@ -89,24 +100,31 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 	return ctx
 }
 
-func (m *Monitor) previousNodesForInstance(instanceName string) (map[string]models.Memory, []models.Node) {
-	prevNodeMemory := make(map[string]models.Memory)
+func (m *Monitor) previousNodesForInstance(instanceName string) []models.Node {
 	prevInstanceNodes := make([]models.Node, 0)
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if readState == nil {
-		return prevNodeMemory, prevInstanceNodes
+		return prevInstanceNodes
 	}
 
+	// The registry keeps no copy of the identity stamps pollPVENode derives
+	// from configuration, so restore them the same way. Nodes preserved through
+	// an instance outage are written back to state, and without these the
+	// registry would derive a different canonical identity for them.
+	instanceCfg := m.getInstanceConfig(instanceName)
+	providerScoped := m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg)
 	for _, existingNode := range readState.Nodes() {
 		if existingNode == nil || existingNode.Instance() != instanceName {
 			continue
 		}
 		modelNode := previousNodeFromView(existingNode)
-		prevNodeMemory[modelNode.ID] = modelNode.Memory
+		modelNode.ProviderScopedIdentity = providerScoped
+		modelNode.NativeNameAliases = config.PVEClusterNodeNativeAliases(instanceCfg, modelNode.Name)
+		modelNode.TLSFingerprint = pveNodeTLSFingerprint(instanceCfg, modelNode.Name)
 		prevInstanceNodes = append(prevInstanceNodes, modelNode)
 	}
-	return prevNodeMemory, prevInstanceNodes
+	return prevInstanceNodes
 }
 
 func previousVMFromView(vm *unifiedresources.VMView) models.VM {
@@ -116,29 +134,38 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 	instance := vm.Instance()
 	node := vm.Node()
 	vmid := vm.VMID()
-	return models.VM{
-		ID:           makeGuestID(instance, node, vmid),
-		Instance:     instance,
-		Node:         node,
-		VMID:         vmid,
-		Name:         vm.Name(),
-		Type:         "qemu",
-		Status:       vm.RuntimeStatus(),
-		IPAddresses:  vm.IPAddresses(),
-		OSName:       vm.OSName(),
-		OSVersion:    vm.OSVersion(),
-		AgentVersion: vm.AgentVersion(),
-		Lock:         vm.Lock(),
-		Disk: models.Disk{
+	// Only Proxmox's own guest disk reading may be carried forward as last
+	// known. A linked agent's disk that filled in stays the agent's, or the
+	// carry would relabel it as Proxmox's and freeze it over the agent's.
+	var disk models.Disk
+	if !vm.DiskFromLinkedAgent() {
+		disk = models.Disk{
 			Used:  vm.DiskUsed(),
 			Total: vm.DiskTotal(),
 			Free:  max(0, vm.DiskTotal()-vm.DiskUsed()),
 			Usage: vm.DiskPercent(),
-		},
-		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
-		Disks:             guestDisksFromReadStateView(vm.Disks()),
-		DiskStatusReason:  vm.DiskStatusReason(),
-		LastSeen:          vm.LastSeen(),
+		}
+	}
+	return models.VM{
+		ID:                 makeGuestID(instance, node, vmid),
+		Instance:           instance,
+		Node:               node,
+		VMID:               vmid,
+		Name:               vm.Name(),
+		Type:               "qemu",
+		Status:             vm.RuntimeStatus(),
+		IPAddresses:        vm.IPAddresses(),
+		OSName:             vm.OSName(),
+		OSVersion:          vm.OSVersion(),
+		AgentVersion:       vm.AgentVersion(),
+		Lock:               vm.Lock(),
+		Disk:               disk,
+		NetworkInterfaces:  guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
+		Disks:              guestDisksFromReadStateView(vm.Disks()),
+		DiskStatusReason:   vm.DiskStatusReason(),
+		DiskObservation:    vm.DiskObservation(),
+		GuestAgentEvidence: vm.GuestAgentEvidence(),
+		LastSeen:           vm.LastSeen(),
 	}
 }
 
@@ -179,14 +206,19 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 	if host == nil {
 		return models.Host{}
 	}
+	disks, _, _ := host.CurrentAgentDisks()
+	observedAt := host.LastSeen()
+	if status, ok := host.SourceStatus(unifiedresources.SourceAgent); ok {
+		observedAt = status.LastSeen
+	}
 	return models.Host{
 		ID:                host.ID(),
 		Hostname:          host.Hostname(),
 		Status:            string(host.Status()),
 		LinkedVMID:        host.LinkedVMID(),
 		LinkedContainerID: host.LinkedContainerID(),
-		LastSeen:          host.LastSeen(),
-		Disks:             guestDisksFromReadStateView(host.Disks()),
+		LastSeen:          observedAt,
+		Disks:             guestDisksFromReadStateView(disks),
 		Memory: models.Memory{
 			Used:  host.MemoryUsed(),
 			Total: host.MemoryTotal(),
@@ -199,20 +231,33 @@ func previousNodeFromView(node *unifiedresources.NodeView) models.Node {
 	if node == nil {
 		return models.Node{}
 	}
+	// The poller keys nodes by their Proxmox source ID (nodeLastOnline, the
+	// temperature carry, state writes). The unified resource ID is a separate
+	// registry key, so returning it would match nothing, and writing it back
+	// during an outage would re-key the node on every failed poll.
+	id := node.SourceID()
+	if id == "" {
+		id = node.ID()
+	}
 	return models.Node{
-		ID:                node.ID(),
+		ID:                id,
+		NodeIdentity:      id,
 		Name:              node.NodeName(),
 		DisplayName:       node.Name(),
 		Instance:          node.Instance(),
 		Host:              node.HostURL(),
 		Status:            string(node.Status()),
+		Type:              "node",
 		Uptime:            node.Uptime(),
 		IsClusterMember:   node.IsClusterMember(),
+		ClusterName:       node.ClusterName(),
 		LastSeen:          node.LastSeen(),
 		LoadAverage:       node.LoadAverage(),
 		PVEVersion:        node.PVEVersion(),
 		KernelVersion:     node.KernelVersion(),
 		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(node.NetworkInterfaces()),
+		Temperature:       node.TemperatureDetails(),
+		LinkedAgentID:     node.LinkedAgentID(),
 		Memory: models.Memory{
 			Used:  node.MemoryUsed(),
 			Total: node.MemoryTotal(),

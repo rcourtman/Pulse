@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "base_sha": "bea0cec8b9c5bcc009b1d7a06c8a02d7458a459d",
+  "verified_at": "2026-10-07T08:00:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx",
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/ThresholdSlider.tsx",
+    "frontend-modern/src/components/shared/HelpIcon.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/index.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx": "65cd98df1d0403de7e11c5a12eaeb919d0dd0af63c2889890bedd7d91a52831a",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "bda296d1b6618237c1d358cf02974101b37325642fa85f13b8ecf9f8a4158b0c",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "9e7ee3e3cbb5f8da38cf43e0aaecd105f43333d16df7338e849d3ccaf6804d8f",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "0e0c2c3e924f81edb50afc07f35d8c15206d317a2cda73472444b958483fd5ca",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "891929182a286d0082aafe604eb5357e394dca1f33aefc684ffa03fd14eb98f2",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "604deee9674aa3d97e45ccf7bc5b8c5dda27017dee2f235c107750911d2981b7",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "060b6f94c7a1750219171188dcc016b17cc74b5459192d667c7995a4a9302380",
+    "frontend-modern/src/components/Workloads/ThresholdSlider.tsx": "1fcc6a5ad0c265a121c3b884744fc2b2925952aba81f99b56c144f91d9f8b046",
+    "frontend-modern/src/components/shared/HelpIcon.tsx": "dd8a0440ebac1c897fe9f14c3377ba3f0b7a261defc9f11ee4c74812532d4021",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "e51a8a54858a5be8f31ed5aecaab1fe651925d29df0c411b76d95241611dee7d",
+    "frontend-modern/src/index.tsx": "2e05e71fa386dd56cc5d7ae74429e147a29fa79b71fb83e3464f5aab309cd72c"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/docker/images",
+    "/docker",
+    "/proxmox",
+    "/proxmox/storage",
+    "/proxmox/storage?tab=disks",
+    "/alerts/thresholds",
+    "/settings/system-updates"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production build of this tree (vite build embedded into go build ./cmd/pulse) on origin/main bea0cec8b9, served by a private PULSE_MOCK_MODE backend without FRONTEND_DEV_SERVER, so every page carried the production CSP style-src 'self' 'nonce-...'; a second backend served the origin/main build as the before case",
+    "Before (origin/main build): opening a row's inline detail logged 8 style-src-attr CSP violations on /standalone/machines and /docker/images, 3 on a Docker host and 3 on a Proxmox guest, all from the vendor-solid template code; the HelpIcon popover logged 1 and the Assistant typing dots 5",
+    "After: 0 CSP console errors and 0 securitypolicyviolation events on every one of those opens at 1440x900 and 390x844, on the HelpIcon popover and on both sets of Assistant typing dots",
+    "Drawer tab panels have no style attribute and still compute overflow-anchor: none from the [overflow-anchor:none] class (8 panels on machines and images, 3 on a Docker host, 2 on a Proxmox guest); the origin/main build already computed none in Chromium despite the violations",
+    "Proxmox node drawer (opened from the host row chevron, 3 panels), storage pool detail on /proxmox/storage (2 panels) and physical disk detail History tab (1 panel): no style attribute, overflow-anchor none, 0 CSP events at 1440x900 and 390x844",
+    "Below the fold: rows opened at 785px and 778px of 900 (1440 wide) and 729px of 844 (390 wide) put the drawer 215 to 351px past the fold, and the clicked row did not move (0px drift over 2.5s) in either build",
+    "Alert threshold slider (desktop thresholds table at 1920 and 2560 wide, after clicking a CPU metric cell): the range inputs carry touch-none and no style attribute, compute touch-action none, and log 0 CSP events; the origin/main build put touch-action:none in a style attribute and logged 1 violation",
+    "HelpIcon popover on /settings/system-updates computes min-width 200px from the min-w-[200px] class while its dynamic top, left and max-width still apply through CSSOM",
+    "Assistant typing dots keep their stagger from classes: 0s, 0.12s and 0.24s on the first-token indicator, and 0s, 0.15s and 0.3s with 1s duration on the active-turn status bar",
+    "Pre-existing and identical in both builds, not changed here: a Docker host drawer opened near the page bottom moves its tab bar 73 to 93px when switching to the shorter History tab, and a Proxmox guest row scrolls 489px on open",
+    "No other console errors in any run"
+  ],
+  "interactions": [
+    "Playwright Chromium 1440x900 and 390x844 (mobile emulation) against both backends: on each route, picked the lowest fully visible row in the lower half of the viewport, clicked it, sampled the row's top every 25ms for 2.5s, counted CSP console errors and securitypolicyviolation events, and read computed overflow-anchor on every drawer tab panel",
+    "Scrolled the drawer tab bar to 140px from the top, clicked History then Overview, and sampled the tab bar position after each click",
+    "Opened the Proxmox node drawer by its chevron, a storage pool row on /proxmox/storage, and the first physical disk on the Physical Disks tab followed by its History tab, reading each tab panel's style attribute, computed overflow-anchor and CSP events",
+    "On /alerts/thresholds expanded all sections and clicked a row's CPU metric cell to open the slider editor, then read the range inputs' style attribute, class and computed touch-action",
+    "Opened the update channel HelpIcon on /settings/system-updates and read the popover's style attribute and computed min-width",
+    "Opened the Assistant on /proxmox, sent a question, and read the computed animation delay, duration and style attribute of each typing dot while waiting for the first token",
+    "WebKit probe of the origin/main build: no CSP events, and overflow-anchor is unsupported there"
+  ]
+}

@@ -1,3 +1,5 @@
+import { readMemoryObservation } from '@/utils/memoryObservation';
+import type { MemoryObservation } from '@/types/api';
 import { onCleanup, createEffect, createSignal, untrack, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
@@ -9,22 +11,18 @@ import {
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import {
-  buildCanonicalNodeScopedWorkloadId,
   getWorkloadCPUFraction,
   isDockerManagedAppContainer,
   resolveWorkloadTypeFromString,
 } from '@/utils/workloads';
-import {
-  getPreferredResourceClusterName,
-  getPreferredResourceKubernetesContext,
-} from '@/utils/resourceIdentity';
+import { getPreferredResourceKubernetesContext } from '@/utils/resourceIdentity';
+import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { HostRAIDArray } from '@/types/api';
 import type {
   Resource,
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
-  ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourceVMwareTag,
@@ -40,6 +38,7 @@ const WORKLOADS_MAX_PAGES = 100;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
 
 type APIMetricValue = {
+  observation?: MemoryObservation;
   value?: number;
   used?: number;
   total?: number;
@@ -69,6 +68,7 @@ type APIResource = {
   type?: string;
   name?: string;
   status?: string;
+  health?: { verdict?: string; reasons?: Array<{ code?: string; detail?: string }> };
   uptime?: number;
   lastSeen?: string;
   sources?: string[];
@@ -132,6 +132,7 @@ type APIResource = {
     vcpus?: number;
   };
   agent?: {
+    agentId?: string;
     hostname?: string;
     uptimeSeconds?: number;
     osName?: string;
@@ -140,6 +141,7 @@ type APIResource = {
     networkInterfaces?: APINetworkInterface[];
     disks?: APIDiskInfo[];
     raid?: HostRAIDArray[];
+    stale?: boolean;
   };
   docker?: {
     containerId?: string;
@@ -184,7 +186,6 @@ type APIResource = {
     resourceId?: string;
     hostname?: string;
   };
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   availability?: ResourceAvailabilityMeta;
   availabilityChecks?: ResourceAvailabilityMeta[];
   actionReadiness?: ResourceActionReadiness[];
@@ -444,13 +445,20 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     resource.parentName ??
     '';
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
-  const preferredClusterName = getPreferredResourceClusterName(resource);
+  // The preferred helper falls back to the resource's own name, which is the
+  // right label for a cluster resource but not for a workload: a vSphere VM
+  // or a standalone Proxmox guest would otherwise be labelled as its own
+  // cluster. Only an explicit cluster may become the workload's cluster.
+  const workloadClusterName =
+    (platformType === 'vmware-vsphere'
+      ? resource.vmware?.clusterName?.trim() || undefined
+      : undefined) ?? getExplicitResourceClusterName(resource);
   const instance =
     vmwareInstance ??
     resource.instance ??
     resource.proxmox?.instance ??
     kubernetesContext ??
-    preferredClusterName ??
+    workloadClusterName ??
     '';
   const vmid =
     typeof resource.vmid === 'number'
@@ -509,30 +517,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   // runtime ids such as Docker container ids must stay separate so workload
   // routing, discovery, anomalies, and drawer selection align with the shared
   // resource model.
-  const guestId = (() => {
-    if (workloadType === 'vm' || workloadType === 'system-container') {
-      const canonicalId = buildCanonicalNodeScopedWorkloadId({
-        instance,
-        node,
-        vmid,
-      });
-      if (canonicalId) {
-        return canonicalId;
-      }
-    }
-    if (workloadType === 'pod') {
-      const clusterId = resource.kubernetes?.clusterId;
-      const podUid = resource.kubernetes?.podUid;
-      if (clusterId && podUid) {
-        return `k8s:${clusterId}:pod:${podUid}`;
-      }
-    }
-    return resource.id;
-  })();
+  const guestId = resource.id;
 
   return {
     id: guestId,
     canonicalResourceId: resource.id,
+    parentResourceId: resource.parentId?.trim() || undefined,
     alertResourceIds: buildAlertResourceIds(resource),
     metricsTarget: resource.metricsTarget,
     vmid: Number.isFinite(vmid) ? vmid : 0,
@@ -546,6 +536,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
     ),
     resourceStatus: (resource.status || '').trim().toLowerCase() || undefined,
+    hasOpenAlert: (resource.health?.reasons ?? []).some(
+      (reason) => reason.code === 'warning_alert' || reason.code === 'critical_alert',
+    ),
     type:
       workloadType === 'vm'
         ? 'vm'
@@ -559,8 +552,10 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);
       const cache = resource.proxmox?.memoryCache ?? 0;
+      const observation = readMemoryObservation(resource.metrics?.memory?.observation);
       return {
         ...base,
+        ...(observation ? { observation } : {}),
         usageUnavailable: !memoryAvailable,
         // buildMetric derives free as total-used (available); carve the
         // reclaimable cache back out so free means truly-free pages.
@@ -573,6 +568,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     })(),
     disk: buildMetric(resource.metrics?.disk),
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
+    disksFromAgent: (resource.proxmox?.disks == null && resource.agent?.disks != null) || undefined,
     // Both the API and owning platform snapshot pass through this mapper.
     // A retained numeric metric must not lose the provider's read deferral.
     diskStatusReason: resource.proxmox?.diskStatusReason,
@@ -590,8 +586,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
     agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
+    agentId: resource.agent?.agentId,
     agentRaid: resource.agent?.raid,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
+    // A linked agent past its reporting lease keeps its last report on the
+    // resource, so its RAID, network and filesystem rows are not current.
+    agentStale: resource.agent?.stale === true || undefined,
     networkIn: finiteMetricNumber(resource.metrics?.netIn?.value) ?? 0,
     networkOut: finiteMetricNumber(resource.metrics?.netOut?.value) ?? 0,
     diskRead: finiteMetricNumber(resource.metrics?.diskRead?.value) ?? 0,
@@ -633,7 +633,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'vm' || workloadType === 'system-container'
         ? node
           ? (() => {
-              const cluster = preferredClusterName || '';
+              const cluster = workloadClusterName || '';
               if (cluster && cluster !== node) return `${node} (${cluster})`;
               if (instance && instance !== node) return `${node} (${instance})`;
               return node;
@@ -642,9 +642,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : workloadType === 'app-container'
           ? resource.parentName || resource.docker?.hostname
           : workloadType === 'pod'
-            ? preferredClusterName
+            ? workloadClusterName
             : undefined,
-    clusterName: preferredClusterName || undefined,
+    clusterName: workloadClusterName || undefined,
     containerRuntime:
       workloadType === 'app-container'
         ? (resource.docker?.runtime || '').trim() || undefined
@@ -669,7 +669,6 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       uptime: uptime !== undefined,
     },
     discoveryTarget,
-    discoveryReadiness: resource.discoveryReadiness,
     vmware:
       platformType === 'vmware-vsphere' && resource.vmware
         ? {
@@ -688,6 +687,7 @@ const metricToAPI = (metric?: Resource['cpu']): APIMetricValue | undefined =>
   metric
     ? {
         percent: metric.current,
+        ...(metric.observation ? { observation: metric.observation } : {}),
         used: metric.used,
         total: metric.total,
       }
@@ -704,6 +704,7 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     type: resource.type,
     name: resource.name,
     status: resource.status,
+    health: resource.health,
     uptime: resource.uptime,
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,
@@ -744,7 +745,6 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
       : undefined,
     vmware: resource.vmware ? (resource.vmware as unknown as APIResource['vmware']) : undefined,
     discoveryTarget: resource.discoveryTarget,
-    discoveryReadiness: resource.discoveryReadiness,
     availability: resource.availability,
     availabilityChecks: resource.availabilityChecks,
     actionReadiness: resource.actionReadiness,

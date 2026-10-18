@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,47 @@ import (
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestRecoveryPointsSourceUsesCurrentGraphAndCanonicalSubject(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+	var expected []recovery.RecoveryPoint
+	var subjectID string
+	for _, point := range CurrentFixtureGraph().RecoveryPoints() {
+		if point.Provider == recovery.ProviderProxmoxPVE && point.Outcome == recovery.OutcomeFailed && strings.HasPrefix(point.ID, "pve-task:") {
+			subjectID = point.SubjectResourceID
+			break
+		}
+	}
+	if subjectID == "" {
+		t.Fatal("fixture has no failed guest backup")
+	}
+	for _, point := range CurrentFixtureGraph().RecoveryPoints() {
+		if point.Provider == recovery.ProviderProxmoxPVE && point.Outcome == recovery.OutcomeFailed && point.SubjectResourceID == subjectID {
+			expected = append(expected, point)
+		}
+	}
+	source := RecoveryPointsSource{}
+	opts := recovery.ListPointsOptions{Provider: recovery.ProviderProxmoxPVE, Outcome: recovery.OutcomeFailed, SubjectResourceID: subjectID, Page: 1, Limit: 1}
+	points, total, err := source.ListPoints(context.Background(), "default", opts)
+	if err != nil || total != len(expected) || len(points) != 1 || points[0].ID != expected[0].ID {
+		t.Fatalf("canonical page = %v, total %d, error %v; expected %v", points, total, err, expected)
+	}
+	opts.Page = int(^uint(0) >> 1)
+	points, total, err = source.ListPoints(context.Background(), "default", opts)
+	if err != nil || len(points) != 0 || total != len(expected) {
+		t.Fatalf("out-of-range page = %v, total %d, error %v", points, total, err)
+	}
+	// A composed reader must consult the current graph, not preserve old demo
+	// evidence after demo mode is disabled.
+	mustSetEnabled(t, false)
+	opts.Page = 1
+	points, total, err = source.ListPoints(context.Background(), "default", opts)
+	if err != nil || len(points) != 0 || total != 0 {
+		t.Fatalf("disabled demo leaked old evidence: %v, %d, %v", points, total, err)
+	}
+}
 
 func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 	previous := IsMockEnabled()

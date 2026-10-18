@@ -15,6 +15,40 @@
 
 ## Purpose
 
+### Reporting measurement precedes commercial feature decisions
+
+Schema-v20 reporting usage exports only aggregate generation by closed report
+kind, distinct successful-generation days for manual and scheduled use, file-save
+and SMTP outcomes, backup source-data states, distinct successful
+saved-schedule periods and repeat periods, plus measurement availability and
+elapsed observation days. The receiver admits these fields only for schema v20
+or later with an available tally and positive observation days. It bounds counts
+and repeat/success relationships without changing billing, pricing, grants,
+customer entitlements or existing opt-out behavior.
+
+The public adoption report uses each recent active published non-mock rotating
+ID's latest rolling counts. Old senders, missing receiver columns and unavailable
+tallies are unmeasured, not zero usage. Partial elapsed observation is explicit.
+Neither rotating installation IDs nor the coarse nonfree flag establish paying
+customer identity, demand or willingness to pay. No join to license keys,
+accounts, purchases or support is introduced. `pulse-pro:license-server/telemetry_test.go`
+verifies receiver round-trip, schema/availability gates and bounds. Public
+snapshot, privacy and adoption-query tests verify the shared semantics. Receiver
+deployment and a client release are necessary before collecting fleet evidence.
+
+
+### Opt-in confirmed-operation transport keeps paid contexts unchanged
+
+The shared frontend client adds expectedOrgID and retry:false for the existing
+Patrol manual-rule reversal flow. It binds confirmed reads/deletion to the
+selected organisation and stops automatic auth, invalid-org, CSRF and
+rate-limit replay only when requested. Paid APIs retain their existing default
+request behaviour, tenant enforcement and entitlement boundaries. The strict
+consumer rechecks context after CSRF preparation and discards stale responses;
+this adds no paid endpoint, cross-tenant fallback or scope expansion. Shared
+client tests cover unchanged defaults and explicit one-attempt context binding.
+
+
 Own cloud plan/version semantics, entitlement limits, hosted billing/runtime
 agreement, the Pulse Cloud control plane, provider-hosted MSP account
 bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement
@@ -137,6 +171,31 @@ The self-hosted External Probes offer is an agent-originated availability
 contract: an agent outside the monitored site performs the check and reports
 its result to Pulse, while Pulse remains the alerting authority. Commercial
 copy must not imply that the external agent independently sends alerts.
+
+### Provider-hosted production evaluation and renewal startup
+
+A provider-hosted MSP control plane may start in production without a host
+licence only on `msp_eval` (two client workspaces). Unsigned environment settings
+cannot select paid limits. Pulse-hosted MSP production still requires its licence
+path. Explicit empty, truncated, oversized or invalid licence files are not an
+invitation to evaluate. Existing valid-renewal precedence, signature/MSP-tier and
+lease-key binding checks, lapse behaviour, Stripe exclusions and tenant isolation
+are unchanged.
+
+A provider that first ran unlicensed must read its persisted signed renewal on
+restart even when the original host secret remains unused. An invalid persisted
+renewal with no host licence refuses startup rather than silently dropping to
+evaluation. This is the existing refresh/startup path, not a new purchase or
+entitlement surface.
+
+`TestLoadConfig_ProviderHostedMSPUnlicensedProduction`, the explicit-invalid and
+renewal controls, plus `TestProviderMSPProductionStartup` cover these boundaries.
+The opt-in daemon test builds the actual release command with an ephemeral test
+issuer and checks private status, plan/limit readback, account/owner persistence,
+readiness across restarts and graceful stop. Hosted Compose execution additionally
+checks the real `/dev/null` placeholder and signed-file mounts, refused startup,
+and owned container/network/volume cleanup. Process-only VM execution does not
+establish Compose mounts, tenant provisioning or installed provider recovery.
 
 ## Canonical Files
 
@@ -1161,19 +1220,21 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     absent platform families must not render as disabled placeholders in the
     paid or hosted app shell. Infrastructure is not an equal primary tab in
     that list. Workloads, Storage, and Recovery are not standalone aggregate
-    workspace tabs; their component surfaces remain reusable inside platform
-    pages via embedded `tableOnly` surfaces. Platform primary-tab settings
+    workspace tabs. Workload and storage rows render inside platform pages,
+    through the canonical `WorkloadsSurface` or `StorageSurface` where a page
+    embeds one and through platform-owned tables elsewhere; recovery rows
+    render only in platform-owned tabs such as Proxmox Backups and TrueNAS
+    Protection, because no Recovery surface exists. Platform primary-tab settings
     handoffs in `AppLayout.tsx` must target the canonical
     `/settings/infrastructure` workspace and must not retain retired settings
     aliases such as `/settings/workloads/docker` or nested
-    `/settings/infrastructure/platforms/*` paths. Each platform page must
-    remain chrome-only: routing plus sub-tab navigation that embeds the
-    canonical `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
-    `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
-    platform/source filter. The shell must not introduce dashboard cards,
-    bespoke per-family tables, synthetic placeholder data, or reintroduce
-    Infrastructure as a primary navigation entry without a governed contract
-    decision recorded by the frontend-primitives owner.
+    `/settings/infrastructure/platforms/*` paths. Which platform tabs embed a
+    canonical surface and which render platform-owned tables is the
+    frontend-primitives platform-page rule; cloud-paid must not carry a
+    second copy of it. The paid or hosted shell must not introduce dashboard
+    cards, synthetic placeholder data, or forked per-family table primitives,
+    or reintroduce Infrastructure as a primary navigation entry, without a
+    governed contract decision recorded by the frontend-primitives owner.
     The presence of the user-facing `Machines` tab, backed by the internal
     `standalone` route/id, is not a new commercial usage unit: hosted and paid
     surfaces continue to meter the governed monitored-system grouping result
@@ -1584,9 +1645,10 @@ follow the same canonical home. The hosted bootstrap / activation / recovery
 routes (`/pricing`, `/preview/setup-complete`, `/login`, settings panels
 under `/settings/...`) are unchanged. Pricing-handoff and hosted-signup
 upgrade paths must use platform routes as their canonical "back to product"
-destination instead of the retired top-level Infrastructure route; aggregate
-Workloads / Storage / Recovery pages are product workspaces, not hosted
-acquisition destinations. The Docker / Podman runtime route remains `/docker`
+destination instead of the retired top-level Infrastructure route. Platform
+pages are product workspaces, not hosted acquisition destinations, and the
+retired aggregate Workloads / Storage / Recovery pages are not destinations at
+all. The Docker / Podman runtime route remains `/docker`
 for search familiarity, but the shell may label the
 destination as Docker so it reads as the recognizable container runtime lens
 rather than an owning infrastructure platform.
@@ -3652,3 +3714,30 @@ Mobile settings gate and Alerts push panel carry no upgrade prompt. The
 `relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
 provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
 until then licensed instances keep pairing and push unchanged.
+
+### Extended history measurement does not establish customer identity
+
+The license server accepts schema-v19 `successful_history_reads_over_7d_30d`
+as a nonnegative aggregate integer, migrates storage without rewriting older
+rows, and resets pre-v19 supplied values to zero. The public reporter treats
+older schemas or missing receiver columns as unmeasured. Current coarse
+`paid_license` posture is not a paying-subscription census and must not be
+joined to billing accounts. This adds no price, entitlement, refund or billing
+behavior. Receiver intake and migration tests pin the additive schema boundary.
+Deploying the compatible receiver and release adoption remain separate from
+source verification. Count and disclosure semantics belong to security-privacy.
+
+### Business backup health report renderer
+
+New backup health PDF/CSV rendering lives in pulse-enterprise's reportingadmin
+package behind `GenerateBackupHealthReportFunc`. BusinessHooks installs that
+private callback without forking the canonical reporting handlers, scheduler or
+delivery system. Public code owns task collection, retained evidence, tenant
+scope, effective branding and the shared rendering contract. The public adapter
+fails explicitly when the private renderer is absent.
+
+Existing advanced-reporting and branding entitlements, pricing, grants and
+metric/recovery retention remain unchanged. This source change does not deploy
+a runtime or change customer subscriptions. Private renderer tests cover formats,
+missing/observed-zero distinction, formula-safe CSV and PDF generation. Runtime
+hook tests and final-source Pro browser delivery qualify registration/composition.

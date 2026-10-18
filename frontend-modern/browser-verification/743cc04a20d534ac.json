@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "53e2d27ab420c505f54694b0ccbb7d843ff6eded",
+  "verified_at": "2026-10-04T23:36:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "f46e070a2fad03d7fe30103a8f5a9a6412604a810b3b4b65c56071baeaf6198c",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx": "85af2231815206c30c34671af4b358cb9e4243df4a1fa54e7f9968491cc668fa",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "ea5b51e677ccb2a8deaeb51e18068ef7c4dd4a956f0004b4afb373e67708985a",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "d7d54e85014320bf46a3a19fd0ac47d12de3341580bd368643a9a0edc56232bc",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts": "cec219e47e3bf46487fccdac46535cb6ae0301b5e3e165970d0bf3946f9179e8"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox?agent=Production+West-pve2"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (backend :7701, Vite :5221, 3 nodes, 31 Proxmox guests) with five guests already carrying saved web-interface URLs.",
+    "Guests table header shows an 'Edit links' action beside the guest count at 1280, 1024 and 375 widths without horizontal overflow; it opens a right-hand panel listing all 31 guests in the filtered view, name-sorted, each with type, ID and node, the saved URL or an IP-based placeholder, and a label tied to its input.",
+    "Node-scoped view (Show guests on West Production B) limits the editor to that node's 8 guests; the 'Without a link' filter shows the 25 guests with no saved link, including one whose link was just removed.",
+    "Phone 375x812: full-height sheet, name above a 44px input, footer pinned, no horizontal overflow (dark theme). Light theme checked at 1280.",
+    "Invalid entry 'auth14 admin page' blocked the whole save with the shared validator's message on that row and aria-invalid; native browser URL validation is disabled so Pulse's message shows. GET /api/guests/metadata confirmed nothing was written.",
+    "Valid save of one addition, one correction and one removal wrote all three through PUT /api/guests/metadata, showed 'Saved 3 links.', closed the panel, returned focus to the trigger, and the table link icons updated without reload. This is not physical-device, vSphere-estate or release acceptance.",
+    "Re-checked after renaming the row-reuse helper (identifier only): the editor opened with 31 rows, a draft survived three seconds of live ticks, and submitting saved docs-wiki-01 through PUT /api/guests/metadata and closed the panel."
+  ],
+  "interactions": [
+    "Clicked Edit links; typed into three inputs over several live inventory ticks without losing focus or values; footer counted 3 unsaved changes and the trigger showed (unsaved).",
+    "Pressed Enter to submit with one invalid value, corrected it, pressed Enter again; toggled All / Without a link; closed via the header button and reopened.",
+    "Selected a node's guests from the nodes table, then reopened the editor to confirm scope follows the table filter."
+  ]
+}

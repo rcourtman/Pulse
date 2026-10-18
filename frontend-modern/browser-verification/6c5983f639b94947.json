@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "efe6fc21ae10a6bf173cc17e6203aaf6c97dc130",
+  "verified_at": "2026-10-05T00:25:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "cab90be0a9a6868aebac459576f63b93cd4700a8c08fc3ddae4092b7e1fc04bf"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/health"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock Lab vCenter with five warning signals (two datastores, one host, two networks). Before: the Overview showed only hosts and VMs, esxi-07 tinted yellow with no reason; the alarms lived on the fourth tab.",
+    "After at 1440: a Health Signals table (Resource, Severity, Signal, vCenter, Entity, Started) leads the Overview above Hosts, with no filter toolbar; the yellow esxi-07 row is explained by the Host has VMware overall status yellow signal.",
+    "Phone 390x844: the same table shows Resource, Signal, VC and Age above the hosts table; rows open the existing detail drawer."
+  ],
+  "interactions": [
+    "Loaded the Overview and Health tabs signed in at both widths and inspected the screenshots; component tests cover the toolbar-less table and the overview hydrating the Health query only on Overview and Health."
+  ]
+}

@@ -5,8 +5,6 @@ import {
   getContainerRuntimeBadgeForRuntime,
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
-  getInfrastructureSystemIdentitySortLabel,
-  getInfrastructureSystemTitleBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -19,8 +17,8 @@ import {
 // `getHostIdentityAgentProfile`, `getHostIdentityPlatform`, `getAgentSystemIdentityBadge`,
 // `getDockerHostOsIdentityBadge`, `getAvailabilitySystemIdentityBadge`,
 // `getStorageSystemIdentityBadge`, `getStoragePlatformSource`, `getSystemSourceVersion`,
-// `getVersionedSourceBadge`, `proxmoxLxcDockerBadge`, `proxmoxLxcDockerVmid`,
-// `badgeIdentityLabels`) are exercised transitively through the exported entry points
+// `getVersionedSourceBadge`, `proxmoxLxcDockerBadge`, `proxmoxLxcDockerVmid`) are
+// exercised transitively through the exported entry points
 // below, asserting on their observable outputs.
 
 const makeResource = (overrides: Partial<Resource> = {}): Resource =>
@@ -208,28 +206,6 @@ describe('dedupeResourceBadges — branch coverage', () => {
         undefined,
       ]),
     ).toEqual([{ label: 'PVE', classes: 'c' }]);
-  });
-});
-
-describe('badgeIdentityLabels via getInfrastructureSystemTitleBadges — branch coverage', () => {
-  it('treats a system badge with no title as its label-only identity (value ? ... : "" arm)', () => {
-    // badgeIdentityLabels maps [badge.label, badge.title]; when title is undefined
-    // the `(value ? normalizeBadgeIdentityLabel(value) : '')` ternary takes the ""
-    // arm and the entry is dropped by filter(Boolean). The label identity survives,
-    // so a source badge sharing it is deduped away.
-    const result = getInfrastructureSystemTitleBadges(
-      [{ label: 'PVE', classes: 'type-cls' }],
-      [{ label: 'pve', classes: 'type-cls', title: 'pve' }],
-    );
-    expect(result).toEqual([{ label: 'PVE', classes: 'type-cls' }]);
-  });
-
-  it('retains a source badge whose identity is absent from the system identity set', () => {
-    const result = getInfrastructureSystemTitleBadges(
-      [{ label: 'PVE', classes: 'type-cls' }],
-      [{ label: 'K8s', classes: 'type-cls', title: 'K8s' }],
-    );
-    expect(result.map((b) => b.label)).toEqual(['PVE', 'K8s']);
   });
 });
 
@@ -921,38 +897,5 @@ describe('getInfrastructureSystemIdentityBadges — end-to-end branch coverage',
       sources: [],
     });
     expect(getInfrastructureSystemIdentityBadges(resource)).toEqual([]);
-  });
-});
-
-describe('getInfrastructureSystemIdentitySortLabel — branch coverage', () => {
-  it('returns the first identity badge label when one resolves', () => {
-    const resource = makeResource({
-      type: 'k8s-node',
-      platformType: 'kubernetes',
-      sourceType: 'api',
-      sources: ['kubernetes'],
-      platformData: { sources: ['kubernetes'], kubernetes: { version: '1.28.4' } },
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('K8s 1.28.4');
-  });
-
-  it('returns the platform badge label when no system identity is found', () => {
-    const resource = makeResource({
-      type: 'agent',
-      platformType: 'truenas',
-      sourceType: 'agent',
-      platformData: { sources: ['agent'] },
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('TrueNAS');
-  });
-
-  it('returns "" when no identity, no platform badge, and no platformType resolve', () => {
-    const resource = makeResource({
-      type: 'storage',
-      platformType: '' as Resource['platformType'],
-      sourceType: 'agent',
-      sources: [],
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('');
   });
 });

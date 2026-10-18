@@ -20,7 +20,6 @@ import type {
 } from '@/types/ai';
 import type {
   AnomaliesResponse,
-  CorrelationsResponse,
   IntelligenceSummary,
   LearningStatusResponse,
   ResourceIntelligence,
@@ -154,13 +153,6 @@ export class AIAPI {
     return (await this.fetchIntelligence(resourceId)) as ResourceIntelligence;
   }
 
-  static async getCorrelations(resourceId?: string): Promise<CorrelationsResponse> {
-    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
-    return apiFetchJSON(
-      `${this.baseUrl}/ai/intelligence/correlations${params}`,
-    ) as Promise<CorrelationsResponse>;
-  }
-
   // Analyze a Kubernetes cluster with AI
   static async analyzeKubernetesCluster(clusterId: string): Promise<AIExecuteResponse> {
     return apiFetchJSON(`${this.baseUrl}/ai/kubernetes/analyze`, {
@@ -282,11 +274,6 @@ export class AIAPI {
       method: 'POST',
       body: JSON.stringify({ execution_id: executionId }),
     }) as Promise<{ success: boolean }>;
-  }
-
-  // Circuit breaker status
-  static async getCircuitBreakerStatus(): Promise<CircuitBreakerStatus> {
-    return apiFetchJSON(`${this.baseUrl}/ai/circuit/status`) as Promise<CircuitBreakerStatus>;
   }
 
   // ============================================
@@ -573,14 +560,6 @@ export interface RemediationExecutionResult {
   step_results?: StepResult[];
   started_at?: string;
   completed_at?: string;
-}
-
-export interface CircuitBreakerStatus {
-  state: 'closed' | 'open' | 'half-open';
-  can_patrol: boolean;
-  consecutive_failures: number;
-  total_successes: number;
-  total_failures: number;
 }
 
 // ============================================

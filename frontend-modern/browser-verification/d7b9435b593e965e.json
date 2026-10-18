@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "b81f0478d3d779f8c6e2be856f1e2b99acfc6437",
+  "verified_at": "2026-10-06T19:52:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "ba80adc764c5b0e8055345654bf4fb0bf0aaeb17338ad0c0f5be820ff680dea5"
+  },
+  "routes": [
+    "/alerts/destinations"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7731, Vite :5251 serving this branch) with Playwright page.clock installed before load and every /api/alerts/deadman/status read held until the script answers it, with a status or an HTTP 500",
+    "Failures slower than the poll: with two reads in flight the older one fails, and the badge changes from Heartbeat healthy to Status unavailable; the newest read then fails and an older read succeeds late, and the badge stays Status unavailable (no false recovery)",
+    "Successes slower than the poll still apply in order (10 mins ago -> 3 mins ago -> 1 min ago) and an older late success does not overwrite a newer one",
+    "A hung Refresh followed by a hung background read: the button is enabled again at the first poll after a full interval, and a second Refresh applies",
+    "Control with the previous loader under the running Vite: the slow failure was hidden and the badge stayed Heartbeat healthy",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded /alerts/destinations at 1440x900 and 390x844, ran the page clock in 30-second steps answering held reads in and out of order with successes and HTTP 500s",
+    "Clicked Refresh with the read held, ran the clock 61 seconds, clicked Refresh again",
+    "Repeated with the previous loader as the control"
+  ]
+}

@@ -299,6 +299,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 
 	containers := make([]agentsdocker.Container, 0, len(list))
 	active := make(map[string]struct{}, len(list))
+	activeImages := make(map[string]struct{}, len(list))
 	for _, summary := range list {
 		if len(a.allowedStates) > 0 {
 			if _, ok := a.allowedStates[strings.ToLower(string(summary.State))]; !ok {
@@ -312,6 +313,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		}
 
 		active[summary.ID] = struct{}{}
+		activeImages[summary.ImageID] = struct{}{}
 
 		container, err := a.collectContainer(ctx, summary)
 		if err != nil {
@@ -322,6 +324,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	}
 	a.pruneStaleCPUSamples(active)
 	a.pruneInactiveContainerInspectCache(active)
+	a.registryChecker.pruneLocalImages(activeImages)
 	return containers, nil
 }
 
@@ -596,20 +599,17 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			return agentsdocker.Container{}, fmt.Errorf("read stats: %w", err)
 		}
 
-		stats, podmanCPUPercent, err := decodeContainerStatsPayload(payload)
+		stats, err := decodeContainerStatsPayload(payload)
 		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 		}
 
-		// Keep a baseline even when Podman supplies a percentage: one-shot
-		// compatibility responses can report cpu:0 while total_usage advances.
-		// Preserve positive native percentages (and their units, #1391), but
-		// use our interval delta for an absent, zero or invalid percentage.
+		// Podman's compatibility cpu percentage is not tied to the interval
+		// between our one-shot reads. Use consecutive counter/read pairs for
+		// every Podman sample, including idle and rebaseline samples. The result
+		// stays on the 100%-per-core scale (#1391), as for Docker; only the server
+		// converts it into a share of host capacity.
 		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats, parseTime(inspect.State.StartedAt))
-		if a.runtime == RuntimePodman && podmanCPUPercent != nil &&
-			*podmanCPUPercent > 0 && !math.IsInf(*podmanCPUPercent, 0) {
-			cpuPercent = *podmanCPUPercent
-		}
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
 		networkRX, networkTX = summarizeNetworkIO(stats)
@@ -618,6 +618,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		delete(a.prevContainerCPU, summary.ID)
 		a.cpuMu.Unlock()
 	}
+	a.logger.Debug().
+		Str("container_id", summary.ID).
+		Str("runtime", string(a.runtime)).
+		Float64("cpu_percent", cpuPercent).
+		Msg("Container CPU selected for report")
 
 	createdAt := time.Unix(summary.Created, 0)
 
@@ -779,7 +784,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
 		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
 		// We also get the architecture details to correctly resolve manifest lists from the registry.
-		currentDigests, arch, os, variant := a.getImageRepoDigests(containerCtx, summary.ImageID, summary.Image)
+		local, localKnown := a.localImageDigestsForUpdateCheck(containerCtx, summary.ImageID, summary.Image)
+		currentDigests, arch, os, variant := local.digests, local.arch, local.os, local.variant
 		digestForComparison := ""
 		if len(currentDigests) > 0 {
 			digestForComparison = currentDigests[0]
@@ -806,6 +812,15 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 				Error:           "digest-pinned image",
 			}
 			// Skip to end of update check block - don't call registry
+		} else if !localKnown {
+			// Without the local digest no comparison is possible. Comparing an
+			// empty digest reports "no update", which the server takes as an
+			// affirmative clear: a pending update alert resolved and re-fired a
+			// full delay later (#2353). Leave the status unknown this cycle.
+			a.logger.Debug().
+				Str("container", container.Name).
+				Str("image", imageToCheck).
+				Msg("Skipping update check: local image digest unavailable")
 		} else {
 			a.logger.Debug().
 				Str("container", container.Name).
@@ -982,6 +997,31 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 // tag and a platform manifest), so an update check must treat the whole set as
 // the local identity rather than trusting one arbitrary entry (#2110).
 func (a *Agent) getImageRepoDigests(ctx context.Context, imageID, imageName string) ([]string, string, string, string) {
+	local, err := a.inspectLocalImageDigests(ctx, imageID, imageName)
+	if err != nil {
+		return nil, "", "", ""
+	}
+	return local.digests, local.arch, local.os, local.variant
+}
+
+// localImageDigestsForUpdateCheck returns the local digests to compare against
+// the registry. Image inspect shares the per-container collection budget, so it
+// can time out on a busy host; the last successful inspect of the same image
+// ID stands in, since an image ID names immutable content. known is false only
+// when neither is available.
+func (a *Agent) localImageDigestsForUpdateCheck(ctx context.Context, imageID, imageName string) (localImageDigests, bool) {
+	local, err := a.inspectLocalImageDigests(ctx, imageID, imageName)
+	if err == nil {
+		a.registryChecker.rememberLocalImage(imageID, local)
+		return local, true
+	}
+	return a.registryChecker.lastLocalImage(imageID)
+}
+
+// inspectLocalImageDigests is getImageRepoDigests with the inspect failure
+// kept distinct from an image that simply has no RepoDigests (a locally built
+// image), so update checks can treat the first as unknown.
+func (a *Agent) inspectLocalImageDigests(ctx context.Context, imageID, imageName string) (localImageDigests, error) {
 	imageInspect, _, err := a.docker.ImageInspectWithRaw(ctx, imageID)
 	if err != nil {
 		a.logger.Debug().
@@ -989,16 +1029,18 @@ func (a *Agent) getImageRepoDigests(ctx context.Context, imageID, imageName stri
 			Str("imageID", imageID).
 			Str("imageName", imageName).
 			Msg("Failed to inspect image for RepoDigest")
-		return nil, "", "", ""
+		return localImageDigests{}, err
 	}
 
-	arch := imageInspect.Architecture
-	os := imageInspect.Os
-	variant := imageInspect.Variant
+	local := localImageDigests{
+		arch:    imageInspect.Architecture,
+		os:      imageInspect.Os,
+		variant: imageInspect.Variant,
+	}
 
 	if len(imageInspect.RepoDigests) == 0 {
 		// Locally built images won't have RepoDigests
-		return nil, arch, os, variant
+		return local, nil
 	}
 
 	matched := make([]string, 0, len(imageInspect.RepoDigests))
@@ -1020,7 +1062,8 @@ func (a *Agent) getImageRepoDigests(ctx context.Context, imageID, imageName stri
 		}
 	}
 
-	return append(matched, unmatched...), arch, os, variant
+	local.digests = append(matched, unmatched...)
+	return local, nil
 }
 
 func addrString(addr netip.Addr) string {
@@ -1122,24 +1165,12 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	return meta
 }
 
-type podmanCompatStatsProbe struct {
-	CPUStats struct {
-		CPU *float64 `json:"cpu"`
-	} `json:"cpu_stats"`
-}
-
-func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, *float64, error) {
+func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, error) {
 	var stats containertypes.StatsResponse
 	if err := json.Unmarshal(payload, &stats); err != nil {
-		return containertypes.StatsResponse{}, nil, err
+		return containertypes.StatsResponse{}, err
 	}
-
-	var probe podmanCompatStatsProbe
-	if err := json.Unmarshal(payload, &probe); err != nil {
-		return stats, nil, nil
-	}
-
-	return stats, probe.CPUStats.CPU, nil
+	return stats, nil
 }
 
 func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse, startedAt time.Time) float64 {
@@ -1160,6 +1191,12 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 	// (from container start) and producing a constant lifetime-average CPU%
 	// instead of a current value.
 	prev, ok := a.prevContainerCPU[containerID]
+	if a.runtime == RuntimePodman && ok && !prev.startedAt.IsZero() && !current.startedAt.IsZero() && !current.startedAt.Equal(prev.startedAt) {
+		// A new lifetime must establish its own baseline even if the runtime's
+		// clock has moved back. Timestamp ordering only compares one lifetime.
+		a.prevContainerCPU[containerID] = current
+		return 0
+	}
 	if a.runtime == RuntimePodman && ok && !prev.read.IsZero() && !current.read.IsZero() && !current.read.After(prev.read) {
 		// Repeated or out-of-order responses must not move the baseline back
 		// and manufacture usage in the next interval.
@@ -1182,10 +1219,8 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 
 	// We have a previous sample - update it after calculation
 	a.prevContainerCPU[containerID] = current
-	if a.runtime == RuntimePodman && (current.totalUsage < prev.totalUsage ||
-		(!prev.startedAt.IsZero() && !current.startedAt.IsZero() && !current.startedAt.Equal(prev.startedAt))) {
-		// A restart is not an interval sample, even if the new lifetime counter
-		// has already exceeded the old one. Start again from this baseline.
+	if a.runtime == RuntimePodman && current.totalUsage < prev.totalUsage {
+		// A counter reset is not an interval sample. Start again from this baseline.
 		return 0
 	}
 

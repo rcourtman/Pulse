@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "9ef92f0ccf2d914b0f54b21124ff9292bf2e4925",
+  "verified_at": "2026-10-11T21:19:06.076269Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/agentInstallCommand.ts": "a8fca39fd0a21eb22601d827e8e8189ceadf852bf27c694049adff06a2ee1231",
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx": "0ad6e29ec582e1e1af099d53ff25afd508fa76e8c40c1f4779e7ef91bd7f0e97",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "ee5554185fd1adfc740d0bd4b8c94f2f650c2c4b8f5ac138df5d5b20fddcd86e",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "c494f0758e8b8c65bce9c2ee26074ba73b7517cd495c5d8ac194a5abf0badd77",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "69597f5def093a847663126667a81c9fc9b5caae85c507858ba1ba6fc39def00"
+  },
+  "routes": [
+    "Existing Infrastructure installer, source management and removed Agent Doctor handoffs in /browser-tests/agent-uninstall.html; synthetic production component/router fixtures, not an application route"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 desktop light and touch-phone WebKit 26.0 dark. Exact base and final runtime hashes checked; all twenty matrix screenshots and two final conditional-guidance screenshots inspected.",
+    "The retained complete parent cohorts reproduce Unix private-input prompting and Windows placeholder/new installation-token injection on both viewports. Final cohorts pass twelve copied-command observations each across installer, removed Doctor and source manager before/after token generation, custom CA/identity and optional authentication. Copy/display parity, keyboard activation, no removal issuance, install gate/private-input separation and no page overflow hold.",
+    "An initial load timeout, unexpanded Doctor copy timeout and colliding synthetic Doctor connection IDs were retained. A fourth-run checker incorrectly treated the Unix child-only unset PULSE_TOKEN as credential injection; the complete parents remain valid but that run exited one. Corrected final-only cohorts passed, with no source-runtime correction hidden in the checker change.",
+    "A later wording-only qualification limits Unix confirmation-before-erasure guidance to installs with saved credentials. Its exact final InstallerSection hash and both fresh desktop/phone renders/copies pass separately; the four other runtime hashes match the full final matrix unchanged.",
+    "Only explicit synthetic installation generation posts once per full cohort; removal posts/mints nothing. No unexpected read, off-origin request, page or console error. Browser/server close. No commands, native uninstall, physical device, installed recovery, publication or release acceptance is claimed."
+  ],
+  "interactions": [
+    "Expand Uninstall agent without unlocking installation, focus each copy button and use Enter; compare displayed/copy text.",
+    "Expand removed Linux and Windows Doctor rows and copy canonical host-local handoffs.",
+    "Explicitly generate a synthetic install token, dismiss reveal and copy uninstall again; set explicit download URL/CA and observe token-free canonical output.",
+    "Reload optional-auth controls without minting; open actual source manager Manage dialog and copy both uninstall families."
+  ]
+}

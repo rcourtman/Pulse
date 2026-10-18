@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -25,7 +26,7 @@ type EnhancedWebhookConfig struct {
 	RetryCount      int                    `json:"retryCount"`
 	FilterRules     WebhookFilterRules     `json:"filterRules"`
 	CustomFields    map[string]interface{} `json:"customFields"`    // For template variables
-	ResponseLogging bool                   `json:"responseLogging"` // Log response for debugging
+	ResponseLogging bool                   `json:"responseLogging"` // Log structured response metadata, never provider text
 }
 
 // WebhookFilterRules defines filtering for this webhook
@@ -39,15 +40,19 @@ type WebhookFilterRules struct {
 // WebhookPayloadData contains all data available for templates
 type WebhookPayloadData struct {
 	// Alert fields
-	ID                 string
-	MessageKey         string
-	Level              string
-	Type               string
-	ResourceName       string
-	ResourceID         string
-	Node               string
-	NodeDisplayName    string
-	Instance           string
+	ID              string
+	MessageKey      string
+	Level           string
+	Type            string
+	ResourceName    string
+	ResourceID      string
+	Node            string
+	NodeDisplayName string
+	Instance        string
+	// AlertURL opens this alert in Pulse's Alert History, or the Alerts page
+	// for a grouped notification; it falls back to Instance when no public
+	// URL is configured.
+	AlertURL           string
 	Message            string
 	Value              float64
 	Threshold          float64
@@ -65,6 +70,10 @@ type WebhookPayloadData struct {
 	Event         string // "alert" or "resolved"
 	ResolvedAt    string // RFC3339 timestamp when alert was resolved
 	ResolvedAtISO string // Same as ResolvedAt (alias for template consistency)
+	// NotRecovered marks a resolved notification in which at least one close
+	// was not a recovery (an alert that moved to a linked Pulse agent), so
+	// templates can drop recovery colours and check marks.
+	NotRecovered bool
 
 	// Tenant identity (multi-tenant orgs and MSP client runtimes).
 	// Empty on plain single-tenant installs.
@@ -124,14 +133,7 @@ func BuildEnhancedWebhookTestConfig(basicWebhook WebhookConfig, requestedService
 				continue
 			}
 			webhook.PayloadTemplate = tmpl.PayloadTemplate
-			if webhook.Headers == nil {
-				webhook.Headers = make(map[string]string)
-			}
-			for k, v := range tmpl.Headers {
-				if !strings.Contains(v, "{{") {
-					webhook.Headers[k] = v
-				}
-			}
+			webhook.WebhookConfig = withWebhookTemplateHeaders(webhook.WebhookConfig, tmpl.Headers)
 			break
 		}
 	}
@@ -339,7 +341,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					} else {
 						log.Debug().
 							Str("webhook", webhook.Name).
-							Str("retryAfter", retryAfter).
 							Msg("invalid Retry-After header; falling back to exponential backoff")
 					}
 				}
@@ -507,6 +508,12 @@ func parseRetryAfterBackoff(retryAfter string, now time.Time) (time.Duration, bo
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry
 func isRetryableWebhookError(err error) bool {
+	// A local security/configuration refusal is authoritative too. In
+	// particular, retrying an origin-changing redirect cannot make it safe.
+	var declared *NotificationFailureError
+	if errors.As(err, &declared) && declared.Class != "" {
+		return declared.Class.Retryable()
+	}
 	// An explicit HTTP rejection takes precedence over diagnostic body text:
 	// a 403 mentioning "timeout" is not a transport timeout. Errors without
 	// a recognised status (including network failures) remain retryable below.
@@ -580,10 +587,10 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)", webhookEventID(testAlert.ID, "alert"))
 	if err != nil {
 		if result != nil {
-			return result.statusCode, result.body, err
+			return result.statusCode, result.responseSummary(), err
 		}
 		return 0, "", err
 	}
 
-	return result.statusCode, result.body, nil
+	return result.statusCode, result.responseSummary(), nil
 }

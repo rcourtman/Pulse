@@ -29,7 +29,7 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	resultMessages []Message,
 	providerMessages []providers.Message,
 	callback StreamCallback,
-) []Message {
+) ([]Message, error) {
 	return a.ensureFinalTextResponseWithSystemPrompt(ctx, sessionID, resultMessages, providerMessages, callback, "")
 }
 
@@ -43,9 +43,9 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	providerMessages []providers.Message,
 	callback StreamCallback,
 	systemPromptOverride string,
-) []Message {
+) ([]Message, error) {
 	if hasFinalAssistantText(resultMessages) {
-		return resultMessages
+		return resultMessages, nil
 	}
 
 	// No text content from the model. Make a final text-only call.
@@ -136,20 +136,30 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 		}
 	}
 
-	if summaryErr == nil && summaryBuilder.Len() > 0 {
+	summaryText := cleanToolCallArtifacts(summaryBuilder.String())
+	// A textual tool call in this tool-free turn means the model was still
+	// investigating rather than concluding. Interactive chat keeps the clean
+	// prefix it has already streamed, so the persisted message matches what
+	// the user saw. A Patrol investigation must not: the orchestrator reads
+	// unmarked prose as NEEDS_ATTENTION, a terminal conclusion, so it takes
+	// the failure receipt and error below and stays eligible for follow-up.
+	rejectLeakedSummary := suppressLeakedToolContent && isPatrolInvestigationExecution(a.currentExecutionProfile())
+	if summaryErr == nil && !rejectLeakedSummary && strings.TrimSpace(summaryText) != "" {
 		summaryMsg := Message{
 			ID:        uuid.New().String(),
 			Role:      "assistant",
-			Content:   cleanToolCallArtifacts(summaryBuilder.String()),
+			Content:   summaryText,
 			Timestamp: time.Now(),
 		}
 		resultMessages = append(resultMessages, summaryMsg)
 		log.Info().Str("session_id", sessionID).Int("summary_len", summaryBuilder.Len()).Msg("[AgenticLoop] Final summary produced")
-		return resultMessages
+		return resultMessages, nil
 	}
 
 	if summaryErr != nil {
 		log.Error().Err(summaryErr).Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call failed")
+	} else if rejectLeakedSummary {
+		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final investigation summary leaked a tool call instead of concluding")
 	} else {
 		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call returned empty content")
 	}
@@ -157,6 +167,9 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	// Deterministic fallback so the user always gets a usable response even if
 	// the model fails to emit final text.
 	fallback := buildAutomaticFallbackSummary(resultMessages)
+	if isPatrolInvestigationExecution(a.currentExecutionProfile()) {
+		fallback = "The model did not return a final narrative for this investigation. Evidence remains in the investigation history. Patrol can reassess this finding on a later scheduled check within the current policy and attempt limit."
+	}
 	fallbackMsg := Message{
 		ID:        uuid.New().String(),
 		Role:      "assistant",
@@ -168,7 +181,18 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	callback(StreamEvent{Type: "content", Data: jsonData})
 	log.Warn().Str("session_id", sessionID).Int("summary_len", len(fallback)).Msg("[AgenticLoop] Emitted deterministic fallback summary")
 
-	return resultMessages
+	// A readable receipt is not a completed model investigation. Preserve it
+	// for the operator, but keep failure on the error channel so the caller
+	// cannot classify fallback prose as a request for human intervention or
+	// advance a captured action proposal. Interactive chat keeps its existing
+	// best-effort narrative behaviour.
+	if isPatrolInvestigationExecution(a.currentExecutionProfile()) {
+		if summaryErr != nil {
+			return resultMessages, fmt.Errorf("investigation final response failed: %w", summaryErr)
+		}
+		return resultMessages, fmt.Errorf("investigation final response was empty or unusable")
+	}
+	return resultMessages, nil
 }
 
 func hasFinalAssistantText(resultMessages []Message) bool {

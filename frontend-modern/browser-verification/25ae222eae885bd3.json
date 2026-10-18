@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "27051deb279b8dc42a82922f14ebdddc7e8fbfcc",
+  "verified_at": "2026-10-06T14:58:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts",
+    "frontend-modern/src/utils/resourceIdentity.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts": "902911e665585a831c072675c85609bc1e6015e71db0deb79877767d9b454892",
+    "frontend-modern/src/utils/resourceIdentity.ts": "c76d4279e7caca8b96b1a52e4c166f791264217730d631f47b8de3cedf411c32"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/vmware/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1300
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack on main c4db7a3fba plus this change (rebased onto 27051deb27, whose node-alert dedup touches no file here); opened a Machines agent drawer (Apollo-114) and a vSphere datastore drawer (archive-tier)",
+    "Before (same stack with this change stashed): Machines Identity read Hostname apollo-114 | Primary ID agent:host-linux-1 | Discovery agent:host-linux-1 | Metrics Target agent:host-linux-1 | Platform ID host-linux-1 | IP Addresses | Aliases agent:host-linux-1, host-linux-1, apollo-114, agent-acdfdee2953587fb; vSphere repeated the Primary ID as Metrics Target and in Aliases, plus the hostname and Platform ID",
+    "After: Machines reads Hostname apollo-114 | Primary ID agent:host-linux-1 | Platform ID host-linux-1 | IP Addresses | Aliases agent-acdfdee2953587fb; vSphere reads Hostname | Primary ID | Platform ID | Tags | Aliases vc-mock-1:datastore:datastore-202, datastore-202. Every identifier appears once",
+    "Phone (390): both drawers' Identity cards read the same single values, stacked label/value rows, nothing clipped"
+  ],
+  "interactions": [
+    "Opened each drawer and read its Identity card, before and after"
+  ]
+}

@@ -96,8 +96,8 @@ export function getSelectionCardTitleClass(
     return 'text-sm font-semibold text-base-content';
   }
   return tone === 'success'
-    ? 'text-sm font-semibold text-green-900/25 dark:text-green-100'
-    : 'text-sm font-semibold text-blue-900/25 dark:text-blue-100';
+    ? 'text-sm font-semibold text-green-900 dark:text-green-100'
+    : 'text-sm font-semibold text-blue-900 dark:text-blue-100';
 }
 
 export function getSelectionCardDescriptionClass(variant: SelectionCardGroupVariant): string {

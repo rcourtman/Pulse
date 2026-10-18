@@ -37,6 +37,7 @@ import {
   unsuppressPatrolAttention,
 } from '@/api/patrolAttention';
 import { createSuppressionRuleFromFinding } from '@/api/patrol';
+import { PATROL_SUPPRESSION_RULES_PATH } from './PatrolSuppressionRules';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -56,18 +57,24 @@ import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
   ALERT_THRESHOLDS_PATH,
   buildPatrolAttentionPath,
-  buildStandalonePath,
-  buildWorkloadsRouteSearch,
   parsePatrolAttentionItemId,
 } from '@/routing/resourceLinks';
+import {
+  buildResourcePagePath,
+  buildResourceThresholdsPath,
+  type ResourcePageSubject,
+} from '@/features/platformNavigation/resourcePagePath';
+import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
-import { formatRelativeTime } from '@/utils/format';
+import { formatAbsoluteTime, formatRelativeTime, formatTimeUntil } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   getAttentionFlappingPresentation,
+  getAttentionHandoverClose,
   getLinkedPatrolFindings,
   getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
@@ -139,6 +146,40 @@ export function sortPatrolAttentionDecisions(
 
     return left.item.id.localeCompare(right.item.id);
   });
+}
+
+// Ending a suppression, early or at its expiry, puts the alert in
+// Acknowledged when it is acknowledged, which is not active attention, and
+// otherwise in Open, back in the decision inbox.
+function getAttentionSuppressionEndPresentation(reviewed: boolean) {
+  return reviewed
+    ? {
+        durationLabel: 'End suppression after',
+        actionLabel: 'End suppression',
+        successLabel: 'Suppression ended. It stays reviewed',
+        countdownLabel: (remaining: string) => `Suppression ends ${remaining}. It stays reviewed.`,
+      }
+    : {
+        durationLabel: 'Return it to active attention after',
+        actionLabel: 'Return to active attention',
+        successLabel: 'Returned to decision inbox',
+        countdownLabel: (remaining: string) => `Returns to active attention ${remaining}.`,
+      };
+}
+
+// The suppression line counts down to the expiry in the same words as the
+// early-end button, and says so once the expiry has passed.
+export function getAttentionSuppressionExpiryLabel(
+  expiresAt: string,
+  reviewed: boolean,
+  now: number,
+): string {
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return '';
+  if (expiry <= now) return 'Suppression has ended.';
+  return getAttentionSuppressionEndPresentation(reviewed).countdownLabel(
+    formatTimeUntil(expiry, { compact: true, now }),
+  );
 }
 
 export function PatrolAttentionWorkbench(
@@ -310,7 +351,7 @@ export function PatrolAttentionWorkbench(
   };
   const changeLifecycle = async (
     operation: () => Promise<unknown>,
-    options: { advanceAfter?: boolean; successLabel?: string } = {},
+    options: { advanceAfter?: boolean; successLabel?: string | (() => string) } = {},
   ) => {
     if (lifecycleBusy()) return;
     const selected = selectedItemId();
@@ -327,7 +368,10 @@ export function PatrolAttentionWorkbench(
         const remaining = orderedDecisions();
         const next =
           remaining.find((decision) => decision.item.id === nextCandidateId) ?? remaining[0];
-        const successLabel = options.successLabel ?? 'Decision updated';
+        const successLabel =
+          (typeof options.successLabel === 'function'
+            ? options.successLabel()
+            : options.successLabel) ?? 'Decision updated';
         setReviewNotice(
           attentionView() === 'handled'
             ? remaining.length > 0
@@ -564,10 +608,17 @@ export function PatrolAttentionWorkbench(
                   successLabel: 'Suppressed temporarily',
                 })
               }
-              onUnsuppress={(itemId) =>
+              onUnsuppress={(itemId, reviewed) =>
                 changeLifecycle(() => unsuppressPatrolAttention(itemId), {
                   advanceAfter: attentionView() === 'handled',
-                  successLabel: 'Returned to decision inbox',
+                  // Announce the state the reload reports, so a detail read
+                  // before the review changed elsewhere cannot misstate it.
+                  successLabel: () => {
+                    const after = patrolAttentionStore.items().find((entry) => entry.id === itemId);
+                    return getAttentionSuppressionEndPresentation(
+                      after ? after.state === 'acknowledged' : reviewed,
+                    ).successLabel;
+                  },
                 })
               }
               onOpenFindings={props.onOpenFindings}
@@ -599,6 +650,7 @@ function AttentionList(props: {
   onSelect: (itemId: string) => void;
   view: PatrolAttentionView;
 }) {
+  const now = useRelativeTimeNow();
   const hasQuietWork = () => {
     const items = patrolAttentionStore.items();
     return Array.isArray(items) && items.length > 0;
@@ -732,7 +784,11 @@ function AttentionList(props: {
                               </span>
                             </Show>
                             <span>
-                              Last seen {formatRelativeTime(item.lastObservedAt, { compact: true })}
+                              Last seen{' '}
+                              {formatRelativeTime(item.lastObservedAt, {
+                                compact: true,
+                                now: now(),
+                              })}
                             </span>
                           </div>
                         </div>
@@ -754,6 +810,7 @@ function AttentionList(props: {
 }
 
 function AttentionEmptyState(props: { hasQuietWork: boolean; view: PatrolAttentionView }) {
+  const now = useRelativeTimeNow();
   const summary = () => patrolAttentionStore.summary();
   const activeFilter = () => patrolAttentionStore.filter() === 'active';
   const trustworthyCalm = () =>
@@ -802,7 +859,7 @@ function AttentionEmptyState(props: { hasQuietWork: boolean; view: PatrolAttenti
               : 'The current operational evaluation has no active items.'}
             <Show when={summary()?.evaluatedAt}>
               {' Checked '}
-              {formatRelativeTime(summary()!.evaluatedAt, { compact: true })}.
+              {formatRelativeTime(summary()!.evaluatedAt, { compact: true, now: now() })}.
             </Show>
           </p>
         </Show>
@@ -834,11 +891,12 @@ function AttentionDetail(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
   onOpenFindings?: (item: AttentionItem) => void;
   findings?: () => UnifiedFinding[];
 }) {
   const [copiedResourceId, setCopiedResourceId] = createSignal('');
+  const now = useRelativeTimeNow();
   const detail = () => props.detail;
   const item = () => detail()?.item;
   const linkedFindings = createMemo(() => {
@@ -854,12 +912,28 @@ function AttentionDetail(props: {
   );
   const primaryEvidence = createMemo(() => orderedEvidence().slice(0, PRIMARY_EVIDENCE_LIMIT));
   const olderEvidence = createMemo(() => orderedEvidence().slice(PRIMARY_EVIDENCE_LIMIT));
-  const resourceHref = () => {
+  // The registry knows which platform shows the subject; until it answers,
+  // or when it cannot resolve the record's id, the item's own type decides.
+  const resolvedSubject = useResolvedResource(() => item()?.subjectResourceId);
+  const pageSubject = (): ResourcePageSubject | null => {
     const value = item();
-    if (!value) return buildStandalonePath('machines');
-    return `${buildStandalonePath('machines')}${buildWorkloadsRouteSearch({
-      resource: value.subjectResourceId,
-    })}`;
+    if (!value) return null;
+    return {
+      id: value.subjectResourceId,
+      name: value.subjectResourceName,
+      type: value.subjectResourceType,
+      resource: resolvedSubject(),
+    };
+  };
+  const resourceHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourcePagePath(subject) : null;
+  };
+  // A bare alert's lasting control is its thresholds: open the subject's
+  // platform tab already searched to it, not the top of every threshold.
+  const thresholdsHref = () => {
+    const subject = pageSubject();
+    return subject ? buildResourceThresholdsPath(subject) : ALERT_THRESHOLDS_PATH;
   };
   const openAssistant = () => {
     const value = detail();
@@ -971,22 +1045,29 @@ function AttentionDetail(props: {
           <div class="space-y-5 px-4 py-4 sm:px-5">
             <section>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                <StateBadge item={loaded().item} />
+                <StateBadge
+                  item={loaded().item}
+                  movedClose={Boolean(getAttentionHandoverClose(loaded()))}
+                />
                 <span aria-hidden="true">·</span>
                 <EvidenceLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
                 <ProtectionLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
                 <span>
-                  Last seen {formatRelativeTime(loaded().item.lastObservedAt, { compact: true })}
+                  Last seen{' '}
+                  {formatRelativeTime(loaded().item.lastObservedAt, { compact: true, now: now() })}
                 </span>
               </div>
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
               </p>
+              <Show when={getAttentionHandoverClose(loaded())}>
+                {(handover) => <p class="mt-1 text-xs leading-5 text-muted">{handover()}</p>}
+              </Show>
               <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
                 {(flapping) => (
-                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
                     <RepeatIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{flapping().detail}</span>
                   </p>
@@ -1021,15 +1102,19 @@ function AttentionDetail(props: {
                 >
                   <span class="text-xs">Copy ID</span>
                 </CopyValueButton>
-                <ButtonLink
-                  href={resourceHref()}
-                  variant="ghost"
-                  size="xs"
-                  class="min-h-11 gap-1.5 sm:min-h-0"
-                >
-                  <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
-                  Open resource
-                </ButtonLink>
+                <Show when={resourceHref()}>
+                  {(href) => (
+                    <ButtonLink
+                      href={href()}
+                      variant="ghost"
+                      size="xs"
+                      class="min-h-11 gap-1.5 sm:min-h-0"
+                    >
+                      <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
+                      Open resource
+                    </ButtonLink>
+                  )}
+                </Show>
               </div>
               <Show when={loaded().item.relatedResources.length > 0}>
                 <p class="mt-2 text-xs text-muted">
@@ -1113,6 +1198,7 @@ function AttentionDetail(props: {
               item={loaded().item}
               linkedFindings={linkedFindings()}
               onOpenFindings={props.onOpenFindings}
+              thresholdsHref={thresholdsHref()}
             />
 
             <details class="rounded-lg border border-border-subtle">
@@ -1206,10 +1292,16 @@ function AttentionDetail(props: {
                             <span class="font-semibold">Flapping.</span>{' '}
                             {flapping().transitionCount} open/resolved changes in the last{' '}
                             {flapping().windowHours} hours, first{' '}
-                            {formatRelativeTime(flapping().firstTransitionAt, { compact: true })}{' '}
+                            {formatRelativeTime(flapping().firstTransitionAt, {
+                              compact: true,
+                              now: now(),
+                            })}{' '}
                             and latest{' '}
-                            {formatRelativeTime(flapping().lastTransitionAt, { compact: true })}.
-                            The transitions are collapsed here so one noisy issue reads as one
+                            {formatRelativeTime(flapping().lastTransitionAt, {
+                              compact: true,
+                              now: now(),
+                            })}
+                            . The transitions are collapsed here so one noisy issue reads as one
                             issue.
                           </p>
                           <details class="mt-2 rounded-md border border-border-subtle">
@@ -1247,12 +1339,18 @@ function AttentionLifecycleControls(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
 }) {
+  // The acknowledgement and suppression expiry times never change while the
+  // detail stays open, so the acknowledgement age and the countdown to the
+  // expiry read the shared clock.
+  const now = useRelativeTimeNow();
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
   const [durationMs, setDurationMs] = createSignal<number>(SUPPRESSION_DURATIONS[1].value);
   const state = () => props.detail.item.state;
+  const reviewed = () => Boolean(props.detail.operationalRecord.acknowledgement);
+  const suppressionEnd = () => getAttentionSuppressionEndPresentation(reviewed());
   const canAcknowledge = () => ['open', 'stale', 'unknown', 'resolving'].includes(state());
   const canSuppress = () =>
     ['open', 'acknowledged', 'stale', 'unknown', 'resolving'].includes(state());
@@ -1276,7 +1374,7 @@ function AttentionLifecycleControls(props: {
           {(acknowledgement) => (
             <p class="mb-2 text-xs leading-5 text-muted">
               {getAlertResourceIncidentAcknowledgedByLabel(acknowledgement().by)}{' '}
-              {formatRelativeTime(acknowledgement().at, { compact: true })}.
+              {formatRelativeTime(acknowledgement().at, { compact: true, now: now() })}.
             </p>
           )}
         </Show>
@@ -1288,10 +1386,13 @@ function AttentionLifecycleControls(props: {
               </p>
               <Show when={suppression().expiresAt}>
                 {(expiresAt) => (
-                  <p>
-                    Returns to active attention {formatRelativeTime(expiresAt(), { compact: true })}
-                    .
-                  </p>
+                  <Show when={getAttentionSuppressionExpiryLabel(expiresAt(), reviewed(), now())}>
+                    {(label) => (
+                      <p title={`Suppressed until ${formatAbsoluteTime(Date.parse(expiresAt()))}`}>
+                        {label()}
+                      </p>
+                    )}
+                  </Show>
                 )}
               </Show>
             </div>
@@ -1326,9 +1427,9 @@ function AttentionLifecycleControls(props: {
               size="sm"
               class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
-              onClick={() => void props.onUnsuppress(props.detail.item.id)}
+              onClick={() => void props.onUnsuppress(props.detail.item.id, reviewed())}
             >
-              Return to active attention
+              {suppressionEnd().actionLabel}
             </Button>
           </Show>
           <Show when={canSuppress() && !showSuppression()}>
@@ -1369,7 +1470,7 @@ function AttentionLifecycleControls(props: {
             />
             <FormSelect
               id={`attention-suppression-duration-${props.detail.item.id}`}
-              label="Return it to active attention after"
+              label={suppressionEnd().durationLabel}
               fieldBaseClass="block"
               labelClass="text-xs"
               selectClass="mt-1 w-auto"
@@ -1415,6 +1516,9 @@ function AttentionLifecycleControls(props: {
 }
 
 function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'] }) {
+  // The open detail is read once per selection and its transitions never
+  // change, so their ages read the shared clock.
+  const now = useRelativeTimeNow();
   return (
     <ol class="space-y-3">
       <For each={props.timeline}>
@@ -1424,7 +1528,7 @@ function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'
               {formatLabel(transition.from)} to {formatLabel(transition.to)}
             </p>
             <p class="mt-0.5 text-[11px] text-muted">
-              {formatRelativeTime(transition.at, { compact: true })} ·{' '}
+              {formatRelativeTime(transition.at, { compact: true, now: now() })} ·{' '}
               {formatLabel(transition.cause)}
             </p>
             <Show when={transition.reason}>
@@ -1449,6 +1553,7 @@ function AttentionLastingDecisions(props: {
   item: AttentionItem;
   linkedFindings: UnifiedFinding[];
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   const [pending, setPending] = createSignal<PatrolLastingDecision | null>(null);
   const [note, setNote] = createSignal('');
@@ -1547,6 +1652,7 @@ function AttentionLastingDecisions(props: {
                 <AttentionAlertOnlyGuidance
                   item={props.item}
                   onOpenFindings={props.onOpenFindings}
+                  thresholdsHref={props.thresholdsHref}
                 />
               }
             >
@@ -1660,6 +1766,14 @@ function AttentionLastingDecisions(props: {
             {error()}
           </p>
         </Show>
+        <ButtonLink
+          href={PATROL_SUPPRESSION_RULES_PATH}
+          variant="ghost"
+          size="sm"
+          class="mt-3 min-h-11"
+        >
+          Manage suppression rules
+        </ButtonLink>
       </div>
     </DetailSection>
   );
@@ -1668,6 +1782,7 @@ function AttentionLastingDecisions(props: {
 function AttentionAlertOnlyGuidance(props: {
   item: AttentionItem;
   onOpenFindings?: (item: AttentionItem) => void;
+  thresholdsHref: string;
 }) {
   return (
     <div>
@@ -1678,7 +1793,7 @@ function AttentionAlertOnlyGuidance(props: {
       </p>
       <div class="mt-2 flex flex-wrap gap-2">
         <ButtonLink
-          href={ALERT_THRESHOLDS_PATH}
+          href={props.thresholdsHref}
           variant="secondary"
           size="sm"
           class="min-h-11 sm:min-h-0"
@@ -1748,6 +1863,9 @@ function DetailSection(props: { title: string; children: import('solid-js').JSX.
 }
 
 function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
+  // An evidence record's observation time is fixed, so its age reads the
+  // shared clock while the detail stays open.
+  const now = useRelativeTimeNow();
   return (
     <li class="rounded-md border border-border-subtle p-3">
       <div class="flex flex-wrap items-center gap-2">
@@ -1771,7 +1889,7 @@ function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
       </div>
       <p class="mt-1 text-xs text-muted">
         {props.evidence.source.collector} · observed{' '}
-        {formatRelativeTime(props.evidence.observedAt, { compact: true })}
+        {formatRelativeTime(props.evidence.observedAt, { compact: true, now: now() })}
       </p>
       <Show when={props.evidence.reason?.message}>
         {(reason) => <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>}
@@ -1793,10 +1911,17 @@ function severityTone(item: AttentionItem): MetadataBadgeTone {
   }
 }
 
-function StateBadge(props: { item: AttentionItem }) {
+// movedClose marks a resolved item whose condition moved to another owner: it
+// did not recover, so it must not wear the green "Resolved" badge.
+function StateBadge(props: { item: AttentionItem; movedClose?: boolean }) {
   return (
-    <MetadataBadge tone={stateTone(props.item)} size="xs" shape="rounded" appearance="outline">
-      {formatLabel(props.item.state)}
+    <MetadataBadge
+      tone={props.movedClose ? 'info' : stateTone(props.item)}
+      size="xs"
+      shape="rounded"
+      appearance="outline"
+    >
+      {props.movedClose ? 'Moved' : formatLabel(props.item.state)}
     </MetadataBadge>
   );
 }

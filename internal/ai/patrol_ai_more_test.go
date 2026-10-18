@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 type noExecutorChatService struct{}
@@ -795,7 +796,7 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		},
 		Metrics: &unifiedresources.ResourceMetrics{
 			CPU:    &unifiedresources.MetricValue{Percent: 10},
-			Memory: &unifiedresources.MetricValue{Percent: 30},
+			Memory: &unifiedresources.MetricValue{Percent: 30, Observation: models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: now}},
 			Disk:   &unifiedresources.MetricValue{Percent: 20},
 		},
 	})
@@ -866,7 +867,7 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		"# Node Metrics",
 		"| node-1 | online | 55% | 65% | 40%",
 		"# Guest Metrics",
-		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+		fmt.Sprintf("| vm-1 | VM | node-1 | 10%% | 30%% (current; source available-field; observed %s; cache-aware guest usage) | 20%% | running | - | 2h ago |", now.UTC().Format(time.RFC3339)),
 		"# Docker",
 		"| docker-1 | 2 | 1 | 1 |",
 		"docker-1/web: health=unhealthy",
@@ -919,6 +920,42 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	}
 	if !strings.Contains(out, "All 2 instances connected") {
 		t.Fatalf("expected all connections summary, got: %s", out)
+	}
+}
+
+// Patrol's seed must not tell the model a node recovered when its alert only
+// moved to the node's Pulse agent.
+func TestSeedHealthAndAlerts_HandoverIsNotARecovery(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	state := models.StateSnapshot{
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert: models.Alert{
+					ResourceName: "pve1",
+					Message:      "Memory usage at 95%",
+					Resolution:   &models.AlertResolution{Reason: "moved_to_agent", Summary: summary},
+				},
+				ResolvedTime: now.Add(-3 * time.Minute),
+			},
+			{
+				Alert:        models.Alert{ResourceName: "pve2", Message: "CPU usage at 90%"},
+				ResolvedTime: now.Add(-5 * time.Minute),
+			},
+		},
+	}
+
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, state), nil, cfg, now)
+	if !strings.Contains(out, "- pve1: Memory usage at 95% — closed 3m ago. "+summary+"\n") {
+		t.Fatalf("expected the handover line, got: %s", out)
+	}
+	if strings.Contains(out, "pve1: Memory usage at 95% — resolved") {
+		t.Fatalf("handover reported as a recovery: %s", out)
+	}
+	if !strings.Contains(out, "- pve2: CPU usage at 90% — resolved 5m ago\n") {
+		t.Fatalf("expected the ordinary recovery line, got: %s", out)
 	}
 }
 
@@ -1015,6 +1052,71 @@ func TestPatrolPhysicalDiskHealthIssueDistinguishesKnownZeroWearout(t *testing.T
 		wearout:  0,
 	}) {
 		t.Fatal("unreported SATA wearout should remain neutral")
+	}
+}
+
+// A retained last-known temperature (a disk in standby, a host agent past its
+// reporting lease) is context, not heat. Patrol's disk issue gate, triage flags
+// and finding verification judge only a collected reading, and both seed
+// tables label the retained value as last known.
+func TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature(t *testing.T) {
+	standby := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
+	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+	unified := newPatrolRuntimeState(models.StateSnapshot{})
+	unified.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{ID: "disk-standby", Name: "standby", Type: unifiedresources.ResourceTypePhysicalDisk, Status: unifiedresources.StatusOnline, ParentName: "tower",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sda", Model: "WDC WD80EFAX", DiskType: "sata", Health: "PASSED", Wearout: -1, Temperature: 61, Collection: standby}},
+				{ID: "disk-hot", Name: "hot", Type: unifiedresources.ResourceTypePhysicalDisk, Status: unifiedresources.StatusOnline, ParentName: "tower",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sdb", Model: "WDC WD80EFAX", DiskType: "sata", Health: "PASSED", Wearout: -1, Temperature: 58, Collection: collected}},
+			}
+		},
+	}
+	legacy := newPatrolRuntimeState(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{
+		{ID: "disk-standby", Node: "tower", DevPath: "/dev/sda", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 61, Collection: standby},
+		{ID: "disk-hot", Node: "tower", DevPath: "/dev/sdb", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 58, Collection: collected},
+	}})
+
+	for name, snap := range map[string]patrolRuntimeState{"unified": unified, "state": legacy} {
+		t.Run(name, func(t *testing.T) {
+			byID := map[string]patrolPhysicalDiskRow{}
+			for _, row := range patrolPhysicalDiskRows(snap, nil) {
+				byID[row.id] = row
+			}
+			if patrolPhysicalDiskHealthIssue(byID["disk-standby"]) {
+				t.Fatalf("a standby disk's retained 61C is not a health issue: %+v", byID["disk-standby"])
+			}
+			if !patrolPhysicalDiskHealthIssue(byID["disk-hot"]) {
+				t.Fatalf("a collected 58C is a health issue: %+v", byID["disk-hot"])
+			}
+			flags := triageDiskHealthChecksState(snap, nil)
+			if len(flags) != 1 || !strings.Contains(flags[0].Reason, "Disk temperature 58") {
+				t.Fatalf("triage flags = %+v, want only the collected 58C disk", flags)
+			}
+			if verification, ok := patrolLookupPhysicalDiskVerificationState(snap, "disk-standby"); !ok || verification.temperature != 0 {
+				t.Fatalf("standby disk verification = %+v (found %v), want no temperature", verification, ok)
+			}
+		})
+	}
+
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+	health := ps.seedHealthAndAlertsState(unified, nil, cfg, now)
+	for _, part := range []string{"| last known 61°C (disk is in standby) |", "| 58°C |"} {
+		if !strings.Contains(health, part) {
+			t.Fatalf("disk health table missing %q:\n%s", part, health)
+		}
+	}
+	inventory := ps.seedResourceInventoryState(unified, nil, cfg, now, false, nil)
+	for _, part := range []string{"| last known 61C (disk is in standby) |", "| 58C |"} {
+		if !strings.Contains(inventory, part) {
+			t.Fatalf("physical disk inventory missing %q:\n%s", part, inventory)
+		}
 	}
 }
 
@@ -1209,6 +1311,28 @@ func TestSeedIntelligenceContext_WithData(t *testing.T) {
 	} {
 		if !strings.Contains(out, part) {
 			t.Fatalf("expected output to contain %q, got: %s", part, out)
+		}
+	}
+}
+
+func TestSeedAlertSubjectNamesTheResourceOnce(t *testing.T) {
+	tests := []struct {
+		alert models.Alert
+		want  string
+	}{
+		{
+			alert: models.Alert{ResourceName: "Edge Stateful", Message: "Network packet loss above threshold"},
+			want:  "Edge Stateful: Network packet loss above threshold",
+		},
+		{
+			alert: models.Alert{ResourceName: "Field Office Edge 01", Message: "Docker host 'Field Office Edge 01' is offline"},
+			want:  "Docker host 'Field Office Edge 01' is offline",
+		},
+		{alert: models.Alert{Message: "CPU high"}, want: "CPU high"},
+	}
+	for _, test := range tests {
+		if got := seedAlertSubject(test.alert); got != test.want {
+			t.Fatalf("seedAlertSubject(%+v) = %q, want %q", test.alert, got, test.want)
 		}
 	}
 }

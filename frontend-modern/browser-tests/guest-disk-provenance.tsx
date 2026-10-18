@@ -13,13 +13,10 @@ import {
   getWorkloadVisibleColumnsForLayout,
 } from '../src/components/Workloads/guestRowModel';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { WorkloadGuest } from '../src/types/workloads';
 import type { WorkloadMetricHistoryReader } from '../src/components/Workloads/workloadMetricHistoryModel';
 import { guestDiskDeferrals } from '../src/components/Workloads/__fixtures__/guestDiskDeferrals';
 import '../src/index.css';
-
-syncAIRuntimeSettings({ discovery_enabled: false });
 
 function Fixture() {
   const [observation, setObservation] = createSignal({
@@ -28,6 +25,9 @@ function Fixture() {
     usage: 50,
     lock: 'backup',
     kind: 'qemu',
+    status: 'running',
+    disksFromAgent: false,
+    agentStale: false,
   });
   const [mode, setMode] = createSignal<'bars' | 'sparklines'>('bars');
   const [expanded, setExpanded] = createSignal(false);
@@ -57,7 +57,7 @@ function Fixture() {
     name: 'backup-guest',
     node: 'pve-a',
     instance: 'fixture-pve',
-    status: 'running',
+    status: observation().status,
     type: observation().kind,
     cpu: 0.1,
     cpus: 2,
@@ -65,6 +65,8 @@ function Fixture() {
     disk: disk(),
     disks: observation().data ? [{ ...disk(), mountpoint: '/data', type: 'ext4' }] : [],
     diskStatusReason: observation().reason,
+    disksFromAgent: observation().disksFromAgent || undefined,
+    agentStale: observation().agentStale || undefined,
     lock: observation().lock,
     networkIn: 0,
     networkOut: 0,
@@ -85,6 +87,9 @@ function Fixture() {
     diskStatusReason: '',
     lock: '',
     backupInProgress: false,
+    status: 'running',
+    disksFromAgent: undefined,
+    agentStale: undefined,
   });
   const history: WorkloadMetricHistoryReader = {
     getGuestMetricSeries: (_guest, metric) => [

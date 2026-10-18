@@ -987,6 +987,118 @@ func TestJSONRPCFetchSnapshotUsesPublishedTrueNAS26MethodsWithoutREST(t *testing
 	}
 }
 
+func TestJSONRPCAppStatsNumbersReuseSession(t *testing.T) {
+	for _, cpu := range []string{"0.0286", "0.0", "17"} {
+		t.Run(cpu, func(t *testing.T) {
+			var logins, subscribes, unsubscribes atomic.Int32
+			fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+				switch request.Method {
+				case "auth.login_ex":
+					logins.Add(1)
+					return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+				case "app.query":
+					return protocolFixtureReply{result: []any{map[string]any{"id": "fixture-app", "name": "Fixture app", "state": "RUNNING"}}}
+				case "core.subscribe":
+					subscribes.Add(1)
+					collection := request.Params.([]any)[0].(string)
+					return protocolFixtureReply{result: "stats-sub", notifications: []protocolFixtureNotification{{
+						method: "collection_update", params: map[string]any{
+							"collection": collection, "fields": []any{map[string]any{
+								"app_name": "fixture-app", "cpu_usage": json.Number(cpu), "memory": 1072459776,
+								"networks": []any{map[string]any{"interface_name": "eth0", "rx_bytes": 3671, "tx_bytes": 284}},
+								"blkio":    map[string]any{"read": 29720576, "write": 0},
+							}},
+						},
+					}}}
+				case "core.unsubscribe":
+					unsubscribes.Add(1)
+					return protocolFixtureReply{result: nil}
+				case "pool.query":
+					return protocolFixtureReply{result: []any{}}
+				default:
+					t.Errorf("unexpected method %s", request.Method)
+					return protocolFixtureReply{close: true}
+				}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+			wantCPU, _ := strconv.ParseFloat(cpu, 64)
+			var lastStats time.Time
+			for poll := 0; poll < 3; poll++ {
+				apps, err := client.GetApps(context.Background())
+				if err != nil || len(apps) != 1 || apps[0].ID != "fixture-app" {
+					t.Fatalf("poll %d lost app inventory: %+v, %v", poll, apps, err)
+				}
+				if stats := apps[0].Stats; stats == nil {
+					t.Errorf("poll %d lost app.stats for JSON CPU number %s", poll, cpu)
+				} else {
+					if stats.CPUPercent != wantCPU || stats.MemoryBytes != 1072459776 || stats.NetInRate != 3671 || stats.NetOutRate != 284 ||
+						stats.BlockReadBytes != 29720576 || stats.BlockWriteBytes != 0 || stats.IntervalSeconds != 2 || !stats.CollectedAt.After(lastStats) {
+						t.Errorf("poll %d lost precise CPU/sibling fields/freshness: %+v", poll, stats)
+					}
+					lastStats = stats.CollectedAt
+				}
+			}
+			if _, err := client.GetPools(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if fixture.sessions.Load() != 1 || logins.Load() != 1 || subscribes.Load() != 3 || unsubscribes.Load() != 3 ||
+				fixture.restRequests.Load() != 0 || !client.TransportStatus().Connected {
+				t.Errorf("JSON CPU number caused session churn: sessions=%d logins=%d subscribe=%d unsubscribe=%d", fixture.sessions.Load(), logins.Load(), subscribes.Load(), unsubscribes.Load())
+			}
+		})
+	}
+}
+
+// Invalid CPU data must still fail the complete event, not fabricate an idle
+// sample or retry a non-transport decode failure after accepting JSON numbers.
+func TestJSONRPCAppStatsRejectsMalformedCPUNumbers(t *testing.T) {
+	for _, cpu := range []string{`"0.0286"`, `true`, `{}`, `[]`, `1e309`} {
+		t.Run(cpu, func(t *testing.T) {
+			var subscribes, unsubscribes, logins atomic.Int32
+			fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+				switch request.Method {
+				case "auth.login_ex":
+					logins.Add(1)
+					return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+				case "core.subscribe":
+					subscribes.Add(1)
+					collection := request.Params.([]any)[0].(string)
+					return protocolFixtureReply{result: "stats-sub", notifications: []protocolFixtureNotification{{
+						method: "collection_update", params: map[string]any{
+							"collection": collection,
+							"fields": []any{
+								map[string]any{"app_name": "valid-app", "cpu_usage": json.Number("0.0286")},
+								map[string]any{"app_name": "invalid-app", "cpu_usage": json.RawMessage(cpu)},
+							},
+						},
+					}}}
+				case "core.unsubscribe":
+					unsubscribes.Add(1)
+					return protocolFixtureReply{result: nil}
+				case "pool.query":
+					return protocolFixtureReply{result: []any{}}
+				default:
+					t.Errorf("unexpected method %s", request.Method)
+					return protocolFixtureReply{close: true}
+				}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+			stats, err := client.GetAppStats(context.Background())
+			if err == nil || !strings.Contains(err.Error(), "decode truenas app.stats notification") || stats != nil {
+				t.Fatalf("malformed CPU produced partial/successful stats: %+v, %v", stats, err)
+			}
+			if client.rpc != nil || client.TransportStatus().Connected || fixture.sessions.Load() != 1 ||
+				logins.Load() != 1 || subscribes.Load() != 1 || unsubscribes.Load() != 0 {
+				t.Fatal("malformed stats were retried, retained the failed session or attempted unsubscribe")
+			}
+			if _, err := client.GetPools(context.Background()); err != nil || fixture.sessions.Load() != 2 ||
+				logins.Load() != 2 || fixture.restRequests.Load() != 0 {
+				t.Fatalf("next independent read did not recover over authenticated JSON-RPC: %v", err)
+			}
+		})
+	}
+}
+
 func TestJSONRPCMalformedSubscriptionEventDiscardsSession(t *testing.T) {
 	fixture := newProtocolFixture(t, func(session int, request trueNASRPCRequest) protocolFixtureReply {
 		switch request.Method {

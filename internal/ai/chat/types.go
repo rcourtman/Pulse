@@ -475,7 +475,7 @@ const (
 )
 
 // ResolvedResource represents a resource that has been authoritatively resolved
-// through pulse_query or pulse_discovery. This is the source of truth that
+// through pulse_query. This is the source of truth that
 // the model cannot override - action tools must reference these IDs.
 //
 // This type implements tools.ResolvedResourceInfo interface.
@@ -641,11 +641,11 @@ type ResolvedContext struct {
 
 	SessionID string `json:"session_id"`
 
-	// Resources maps resource names to their resolved information
-	// Multiple names can point to the same resource (aliases)
+	// Resources stores each resolved resource once, keyed by registry identity.
+	// Legacy name-keyed JSON is normalized when the derived indexes are rebuilt.
 	Resources map[string]*ResolvedResource `json:"resources"`
 
-	// ResourcesByID provides lookup by canonical ResourceID (kind:provider_uid)
+	// ResourcesByID provides lookup by canonical ResourceID
 	ResourcesByID map[string]*ResolvedResource `json:"-"` // Not persisted, rebuilt on load
 
 	// ResourcesByAlias provides lookup by any alias (case-insensitive)
@@ -711,6 +711,7 @@ func (rc *ResolvedContext) touch(resourceID string) {
 
 // evictExpired removes resources that haven't been accessed within the TTL
 func (rc *ResolvedContext) evictExpired() {
+	rc.ensureResourceIndexes()
 	if rc.ttl == 0 {
 		return
 	}
@@ -791,21 +792,60 @@ func (rc *ResolvedContext) evictOverflow() {
 
 // removeByID removes a resource and all its aliases from the context
 func (rc *ResolvedContext) removeByID(resourceID string) {
-	res, ok := rc.ResourcesByID[resourceID]
-	if !ok {
+	delete(rc.ResourcesByID, resourceID)
+	delete(rc.Resources, resourceID)
+	delete(rc.lastAccessed, resourceID)
+	delete(rc.explicitlyAccessed, resourceID)
+	delete(rc.pinned, resourceID)
+	rc.rebuildAliasIndex()
+}
+
+// rebuildAliasIndex keeps only unambiguous aliases. A nil entry reserves a
+// duplicated label until one of its distinct owners leaves the context.
+func (rc *ResolvedContext) rebuildAliasIndex() {
+	rc.ResourcesByAlias = make(map[string]*ResolvedResource)
+	for _, res := range rc.ResourcesByID {
+		if res == nil {
+			continue
+		}
+		for _, alias := range append(append([]string(nil), res.Aliases...), res.Name) {
+			key := strings.ToLower(strings.TrimSpace(alias))
+			if key == "" {
+				continue
+			}
+			previous, exists := rc.ResourcesByAlias[key]
+			if exists && (previous == nil || previous.ResourceID != res.ResourceID) {
+				rc.ResourcesByAlias[key] = nil
+			} else {
+				rc.ResourcesByAlias[key] = res
+			}
+		}
+	}
+}
+
+// ensureResourceIndexes restores derived indexes from old and current JSON.
+func (rc *ResolvedContext) ensureResourceIndexes() {
+	if rc.ResourcesByID != nil {
 		return
 	}
-
-	// Remove from primary maps
-	delete(rc.ResourcesByID, resourceID)
-	delete(rc.Resources, res.Name)
-	delete(rc.lastAccessed, resourceID)
-
-	// Remove all aliases
-	for _, alias := range res.Aliases {
-		delete(rc.ResourcesByAlias, strings.ToLower(alias))
+	old := rc.Resources
+	rc.Resources = make(map[string]*ResolvedResource)
+	rc.ResourcesByID = make(map[string]*ResolvedResource)
+	for key, res := range old {
+		if res == nil {
+			continue
+		}
+		if res.ResourceID == "" {
+			res.ResourceID = key
+		}
+		if res.Name == "" {
+			res.Name = key
+		}
+		rc.Resources[res.ResourceID] = res
+		rc.ResourcesByID[res.ResourceID] = res
+		rc.touch(res.ResourceID)
 	}
-	delete(rc.ResourcesByAlias, strings.ToLower(res.Name))
+	rc.rebuildAliasIndex()
 }
 
 // PinResource marks a resource as pinned (won't be evicted)
@@ -836,6 +876,7 @@ func (rc *ResolvedContext) IsPinned(resourceID string) bool {
 func (rc *ResolvedContext) Clear(keepPinned bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
+	rc.ensureResourceIndexes()
 	if !keepPinned {
 		rc.Resources = make(map[string]*ResolvedResource)
 		rc.ResourcesByID = make(map[string]*ResolvedResource)
@@ -862,18 +903,16 @@ func (rc *ResolvedContext) Clear(keepPinned bool) {
 
 	for _, resourceID := range toKeep {
 		if res, ok := oldByID[resourceID]; ok {
-			rc.Resources[res.Name] = res
+			rc.Resources[resourceID] = res
 			rc.ResourcesByID[resourceID] = res
-			for _, alias := range res.Aliases {
-				rc.ResourcesByAlias[strings.ToLower(alias)] = res
-			}
-			rc.ResourcesByAlias[strings.ToLower(res.Name)] = res
+
 			if lastAccess, ok := rc.lastAccessed[resourceID]; ok {
 				newLastAccessed[resourceID] = lastAccess
 			}
 		}
 	}
 	rc.lastAccessed = newLastAccessed
+	rc.rebuildAliasIndex()
 }
 
 // Stats returns statistics about the context
@@ -1017,7 +1056,7 @@ func (rc *ResolvedContext) addResourceInternal(name string, res *ResolvedResourc
 		rc.Resources = make(map[string]*ResolvedResource)
 	}
 	if rc.ResourcesByID == nil {
-		rc.ResourcesByID = make(map[string]*ResolvedResource)
+		rc.ensureResourceIndexes()
 	}
 	if rc.ResourcesByAlias == nil {
 		rc.ResourcesByAlias = make(map[string]*ResolvedResource)
@@ -1041,14 +1080,18 @@ func (rc *ResolvedContext) addResourceInternal(name string, res *ResolvedResourc
 	// Evict expired and overflow before adding
 	rc.evictExpired()
 
-	rc.Resources[name] = res
-	rc.ResourcesByID[res.ResourceID] = res
-	// Index all aliases
-	for _, alias := range res.Aliases {
-		rc.ResourcesByAlias[strings.ToLower(alias)] = res
+	if res == nil {
+		return
 	}
-	// Also index the primary name
-	rc.ResourcesByAlias[strings.ToLower(res.Name)] = res
+	if res.ResourceID == "" {
+		res.ResourceID = name
+	}
+	if name != "" && name != res.Name {
+		res.Aliases = append(res.Aliases, name)
+	}
+	rc.Resources[res.ResourceID] = res
+	rc.ResourcesByID[res.ResourceID] = res
+	rc.rebuildAliasIndex()
 
 	// Always update lastAccessed for LRU/TTL tracking
 	rc.touch(res.ResourceID)
@@ -1099,40 +1142,7 @@ func (rc *ResolvedContext) MarkExplicitAccess(resourceID string) {
 func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	// Build the canonical resource ID with scope for global uniqueness.
-	// Format: {kind}:{host}:{provider_uid} for scoped resources
-	//         {kind}:{provider_uid} for global resources (nodes, clusters)
-	//
-	// Examples:
-	//   lxc:pve-node:141      (LXC container 141 on node pve-node)
-	//   vm:minipc:203         (VM 203 on node minipc)
-	//   app-container:media-server:abc123  (Docker container on host media-server)
-	//   node:pve-node         (Proxmox node - no parent scope)
-	var resourceID string
-	if reg.ProviderUID != "" {
-		// Include host scope for resources that have a parent host
-		if reg.HostUID != "" || reg.HostName != "" {
-			hostScope := reg.HostUID
-			if hostScope == "" {
-				hostScope = reg.HostName
-			}
-			resourceID = reg.Kind + ":" + hostScope + ":" + reg.ProviderUID
-		} else {
-			// Global resources (nodes, clusters) don't need host scope
-			resourceID = reg.Kind + ":" + reg.ProviderUID
-		}
-	} else {
-		// Fallback to name-based ID for backwards compatibility
-		if reg.HostUID != "" || reg.HostName != "" {
-			hostScope := reg.HostUID
-			if hostScope == "" {
-				hostScope = reg.HostName
-			}
-			resourceID = reg.Kind + ":" + hostScope + ":" + reg.Name
-		} else {
-			resourceID = reg.Kind + ":" + reg.Name
-		}
-	}
+	resourceID := reg.ResolvedID()
 
 	// Build display path from location chain
 	var displayPath string
@@ -1252,7 +1262,7 @@ func (rc *ResolvedContext) getResourceInternal(name string) (*ResolvedResource, 
 		return res, true
 	}
 	// Try alias index
-	if res, ok := rc.ResourcesByAlias[strings.ToLower(name)]; ok {
+	if res, ok := rc.ResourcesByAlias[strings.ToLower(strings.TrimSpace(name))]; ok && res != nil {
 		rc.touch(res.ResourceID)
 		return res, true
 	}
@@ -1306,8 +1316,8 @@ func (rc *ResolvedContext) GetResolvedResourceByAlias(alias string) (tools.Resol
 	// Evict expired on access
 	rc.evictExpired()
 
-	res, ok := rc.ResourcesByAlias[strings.ToLower(alias)]
-	if !ok {
+	res, ok := rc.ResourcesByAlias[strings.ToLower(strings.TrimSpace(alias))]
+	if !ok || res == nil {
 		return nil, false
 	}
 	rc.touch(res.ResourceID)

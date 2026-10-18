@@ -18,6 +18,21 @@ interface SecurityStepProps {
 const GENERATED_PASSWORD_LENGTH = 20;
 const GENERATED_PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
 
+// What the server keeps after an opt-out it refused: already off, held on by
+// the PULSE_TELEMETRY environment variable, or unknown.
+const readTelemetryOutcome = async (): Promise<'off' | 'lockedOn' | 'unknown'> => {
+  try {
+    const settings = await SettingsAPI.getSystemSettings();
+    if (settings.telemetryEnabled === false) return 'off';
+    const locked = Boolean(
+      settings.envOverrides?.telemetryEnabled || settings.envOverrides?.PULSE_TELEMETRY,
+    );
+    return locked && settings.telemetryEnabled === true ? 'lockedOn' : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+};
+
 export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [username, setUsername] = createSignal(props.state.username || 'admin');
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
@@ -124,7 +139,15 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         try {
           await SettingsAPI.updateSystemSettings({ telemetryEnabled: false });
         } catch {
-          showError(t('setup.security.error.telemetryDisableFailed'));
+          // A server started with PULSE_TELEMETRY owns this choice and refuses
+          // the write. Read what it chose rather than report a failure: when
+          // it already keeps statistics off there is nothing to tell.
+          const outcome = await readTelemetryOutcome();
+          if (outcome === 'lockedOn') {
+            showError(t('setup.security.error.telemetryLockedOn'));
+          } else if (outcome !== 'off') {
+            showError(t('setup.security.error.telemetryDisableFailed'));
+          }
         }
       }
 
@@ -229,7 +252,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           </Show>
         </div>
 
-        <div class="bg-base rounded-md p-4 border border-border text-left">
+        <div class="bg-page rounded-md p-4 border border-border text-left">
           <Toggle
             checked={shareUsageStatistics()}
             onChange={() => setShareUsageStatistics(!shareUsageStatistics())}
@@ -238,7 +261,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           />
         </div>
 
-        <div class="bg-base rounded-md p-4 border border-border text-left">
+        <div class="bg-page rounded-md p-4 border border-border text-left">
           <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">
             {t('setup.security.nextScreen.title')}
           </div>
@@ -250,7 +273,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         </div>
       </div>
       {/* Actions */}
-      <div class="p-8 bg-base flex gap-4 border-t border-border relative z-10">
+      <div class="p-8 bg-page flex gap-4 border-t border-border relative z-10">
         <button
           onClick={props.onBack}
           class="px-6 py-3.5 bg-surface border border-border hover:bg-surface-hover text-base-content font-medium rounded-md transition-colors"

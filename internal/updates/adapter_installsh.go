@@ -98,14 +98,27 @@ func (u *DockerUpdater) PrepareUpdate(ctx context.Context, request UpdateRequest
 	return &UpdatePlan{
 		CanAutoUpdate: false,
 		Instructions: []string{
-			fmt.Sprintf("docker pull %s", imageRef),
-			"docker stop pulse",
-			fmt.Sprintf("docker run -d --name pulse %s", imageRef),
+			"docker pull " + quoteShellArgument(imageRef),
+			"Before recreating Pulse, record the current image and take a consistent private backup of its mounted data. Keep the previous image and backup; do not delete volumes.",
+			"Set the image above in the original Compose file, saved docker run command or container manager. Recreate only Pulse with the same data mounts, ports, environment and restart policy, using your actual service or container name.",
+			"If the image pull failed, leave the running container unchanged. Do not start a second Pulse against the same data.",
+			"Check the running image, Pulse version and health after recreation. Rolling back an image alone does not undo data migrations.",
+		},
+		Prerequisites: []string{
+			"Access to the original saved deployment and the Docker daemon",
+			"A consistent private backup of the mounted Pulse data and the previous image reference",
 		},
 		RequiresRoot:    false,
 		RollbackSupport: true,
 		EstimatedTime:   "1-2 minutes",
 	}, nil
+}
+
+// The plan is copyable in the update banner. Keep even a caller-supplied version
+// or configured repository as one literal argument, never shell syntax. The
+// server cannot infer a safe replacement command from its own container.
+func quoteShellArgument(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 // AURUpdater provides instructions for Arch Linux AUR deployments

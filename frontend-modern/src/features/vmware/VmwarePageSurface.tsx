@@ -53,10 +53,12 @@ import type { Resource } from '@/types/resource';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
+  buildVmwareIncidentRows,
   buildVmwarePageModel,
   getVmwarePageTabSpecs,
   type VmwarePageModel,
   type VmwarePageTabId,
+  isSingleVmwareVcenter,
 } from './vmwarePageModel';
 import { VsphereAlertsTable } from './VsphereAlertsTable';
 import { VsphereActivityTable } from './VsphereActivityTable';
@@ -120,7 +122,7 @@ function VmwareInventoryCompletenessNotice(props: {
   return (
     <Show when={props.error || degradedSources().length > 0}>
       <div
-        class="rounded-xs border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950/25 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100"
+        class="rounded-xs border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100"
         data-testid="vmware-inventory-completeness-notice"
       >
         <div class="flex items-start gap-2">
@@ -207,7 +209,10 @@ export function VmwarePageSurface() {
   const activeTab = createMemo<VmwarePageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
-  const shouldHydrateTab = (tab: VmwarePageTabId) => activeTab() === tab;
+  // The overview leads with vCenter's own health signals, so it reads the
+  // Health tab's resource set as well as its own hosts and VMs.
+  const shouldHydrateTab = (tab: VmwarePageTabId) =>
+    activeTab() === tab || (tab === 'health' && activeTab() === 'overview');
   const createTabResources = (tab: VmwarePageTabId) =>
     useUnifiedResources({
       query: VMWARE_RESOURCE_QUERY_BY_TAB[tab],
@@ -258,6 +263,19 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
+  // Decided from the whole vSphere inventory so a filtered table keeps the
+  // column when more than one vCenter is connected.
+  // The Overview's own resources are hosts and VMs, but its signals also cover
+  // datastores and networks, so it counts their connections too.
+  const singleVcenter = createMemo(() =>
+    isSingleVmwareVcenter([
+      ...model().resources,
+      ...(activeTab() === 'overview' ? healthResources.resources() : []),
+    ]),
+  );
+  const overviewIncidents = createMemo(() =>
+    activeTab() === 'overview' ? buildVmwareIncidentRows(healthResources.resources()) : [],
+  );
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -334,7 +352,7 @@ export function VmwarePageSurface() {
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentVMs()}
               targetVersion={serverVersionDisplay()}
-              missingLabel="in-guest telemetry and command support"
+              missingLabel="fixes and VM details"
               copyVariant="latest-detail"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
@@ -343,6 +361,16 @@ export function VmwarePageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
+                <Show when={overviewIncidents().length > 0}>
+                  <VsphereAlertsTable
+                    singleVcenter={singleVcenter()}
+                    incidents={overviewIncidents()}
+                    emptyIcon={vmwareIcon()}
+                    emptyTitle="No active vSphere health signals"
+                    emptyDescription="vSphere triggered alarms and overall health signals appear here when vCenter reports them."
+                    showToolbar={false}
+                  />
+                </Show>
                 <VmwareOverview
                   model={model}
                   metricDisplayMode={metricDisplayMode}
@@ -377,6 +405,7 @@ export function VmwarePageSurface() {
             </Show>
             <Show when={activeTab() === 'health'}>
               <VsphereAlertsTable
+                singleVcenter={singleVcenter()}
                 incidents={model().incidents}
                 emptyIcon={vmwareIcon()}
                 emptyTitle="No active vSphere health signals"
@@ -404,6 +433,7 @@ export function VmwarePageSurface() {
                   }
                 >
                   <VsphereActivityTable
+                    singleVcenter={singleVcenter()}
                     activity={model().activity}
                     emptyIcon={vmwareIcon()}
                     emptyTitle="No vSphere activity"
@@ -432,10 +462,6 @@ interface VmwareOverviewProps {
 
 function VmwareOverview(props: VmwareOverviewProps) {
   const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
-    useWorkloads: true,
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotRefetch: props.resourceSnapshotRefetch,
     forcedPlatform: VMWARE_PLATFORM_FILTER,
@@ -444,9 +470,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
     statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
     additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
-    compactGroupHeaders: true,
     inventorySourcesQuery: props.inventorySourcesQuery,
-    groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,
     metricHistoryRange: props.metricHistoryRange,
@@ -498,26 +522,25 @@ function VmwareOverview(props: VmwareOverviewProps) {
             platformFilter={undefined}
             {...getWorkloadsMetricFilterProps(workloadsState)}
             forcedPlatform={VMWARE_PLATFORM_FILTER}
-            pinnedSelectionActive={() =>
-              Boolean(
-                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
-              )
-            }
+            pinnedSelectionActive={() => Boolean(workloadsState.selectedGuestId())}
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
           />
         </div>
       </Show>
       <WorkloadsSurface
         state={workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
-        compactGroupHeaders
-        groupNodeDrawerMode="disabled"
-        suppressFilterToolbar
+        tableTitle={
+          <h2 class="text-[11px] font-semibold text-muted sm:text-xs">
+            VMs
+            <Show when={showSharedFilterToolbar()}>
+              <span class="ml-1.5 font-normal tabular-nums">
+                {workloadsState.filteredGuests().length}
+              </span>
+            </Show>
+          </h2>
+        }
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
       />

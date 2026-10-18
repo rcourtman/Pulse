@@ -7,6 +7,7 @@ export type ExternalTextLinkVariant =
   | 'compact'
   | 'compactAction'
   | 'compactInherit'
+  | 'inlineInherit'
   | 'inlineAction';
 
 interface ExternalTextLinkProps extends Omit<
@@ -33,6 +34,8 @@ export const EXTERNAL_TEXT_LINK_VARIANT_CLASSES: Record<ExternalTextLinkVariant,
   compactAction:
     'inline-flex min-h-10 items-center rounded-sm px-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300 sm:min-h-9',
   compactInherit: 'inline-flex min-h-10 items-center rounded-sm px-1 underline sm:min-h-9',
+  // A link inside a tinted callout sentence keeps the callout's text colour.
+  inlineInherit: 'underline',
   inlineAction:
     'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-blue-600 hover:underline dark:text-blue-300',
 };

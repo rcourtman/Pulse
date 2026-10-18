@@ -78,16 +78,17 @@ func TestDockerServiceAlertScopeAliasesWithoutServices(t *testing.T) {
 }
 
 // TestDockerServiceAlertScopeAliasesDeriveIDFromName covers services that carry
-// no ID, where the canonical builder derives one from the service name. The
-// alias has to follow that derivation rather than formatting its own string.
+// no ID, where the canonical builder references the marked service name. The
+// alias has to follow that derivation rather than formatting its own string,
+// and a service with neither an ID nor a name raises no alert, so no alias.
 func TestDockerServiceAlertScopeAliasesDeriveIDFromName(t *testing.T) {
-	got := dockerServiceAlertScopeAliases("host-1", []models.DockerService{{Name: "Web API"}})
+	got := dockerServiceAlertScopeAliases("host-1", []models.DockerService{{Name: "Web API"}, {Name: "  "}})
 
 	want := alerts.DockerServiceResourceID("host-1", "", "Web API")
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("aliases = %v, want [%q]", got, want)
 	}
-	if got[0] != "docker:host-1/service/web-api" {
-		t.Errorf("alias = %q, want %q", got[0], "docker:host-1/service/web-api")
+	if got[0] != "docker:host-1/service/name:web-api" {
+		t.Errorf("alias = %q, want %q", got[0], "docker:host-1/service/name:web-api")
 	}
 }

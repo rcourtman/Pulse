@@ -17,6 +17,11 @@ import { DockerSwarmNodesTable } from '../DockerSwarmNodesTable';
 import { DockerTasksTable } from '../DockerTasksTable';
 import { DockerVolumesTable } from '../DockerVolumesTable';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/api/resourceActions', () => ({
   ResourceActionsAPI: {
     planAction: vi.fn().mockResolvedValue({
@@ -182,6 +187,48 @@ afterEach(() => {
 });
 
 describe('Docker native tables', () => {
+  it('offers bulk web-link editing keyed by the container drawer identity', async () => {
+    // The trigger and panel are lazy-loaded; transform them up front so they resolve promptly.
+    await import('@/components/Workloads/WorkloadWebLinksAction');
+    await import('@/components/Workloads/WorkloadWebLinksDialog');
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            customUrl: 'https://edge-web.example',
+            docker: {
+              hostSourceId: 'docker-host-edge',
+              containerId: 'native-container-1',
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit links' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Web links' }));
+    const input = dialog.getByLabelText(/edge-web/);
+
+    expect(dialog.getByText(/for each container/)).toBeInTheDocument();
+    expect(input).toHaveValue('https://edge-web.example');
+    expect(input).toHaveAttribute(
+      'data-metadata-id',
+      'app-container:docker-host-edge:name:edge-web',
+    );
+    expect(dialog.getByText('edge-01 · nginx:latest')).toBeInTheDocument();
+  }, 30_000);
+
   it('renders Docker container API fields', () => {
     setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 
@@ -248,7 +295,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Container')).toBeInTheDocument();
-    expect(screen.getByText('Engine')).toBeInTheDocument();
+    // Grouped by host, the engine and host move to the group header.
+    expect(screen.queryByText('Engine')).not.toBeInTheDocument();
     expect(screen.getByText('CPU')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
@@ -258,23 +306,32 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('State')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     // Multi-host fleets group by host by default, so the host name renders
-    // twice: once in the group header row and once in the host column.
-    expect(screen.getAllByText('edge-01')).toHaveLength(2);
+    // once, in the group header row, instead of again on every container.
+    expect(screen.getAllByText('edge-01')).toHaveLength(1);
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
     expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
+    // The cell drops the all-interfaces address; the title keeps the full form.
+    expect(screen.getByText('8080->80/tcp')).toHaveAttribute('title', '0.0.0.0:8080->80/tcp');
     expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
     expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
 
-    // A crash-looper (restarts above the v5 attention threshold) is flagged.
-    expect(screen.getByText('7')).toHaveClass('text-red-600');
-    expect(screen.getByText('2')).not.toHaveClass('text-red-600');
+    // A crash-looper (restarts above the v5 attention threshold) is flagged in
+    // amber, the colour its row dot shows: running, but worth a look.
+    expect(screen.getByText('7')).toHaveClass('text-amber-700');
+    expect(screen.getByText('2')).not.toHaveClass('text-amber-700');
+    expect(screen.getByTitle('7 restarts')).toBeInTheDocument();
 
     // Both rows get a CPU cell; only the row with memory data gets a bar.
     expect(screen.getAllByTestId('responsive-cpu-metric').length).toBe(2);
+    expect(screen.getByTestId('container-table-cpu-scale')).toHaveTextContent(
+      'CPU is a percentage of total host capacity: 100% means all host CPUs.',
+    );
+    expect(screen.getByTestId('container-table-cpu-scale')).toHaveTextContent(
+      'Docker and Podman stats may use a per-core scale.',
+    );
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute(
       'data-used',
       String(512 * 1024 * 1024),
@@ -320,7 +377,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.queryByText('Engine')).not.toBeInTheDocument();
-    expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
+    // Each host group header still names its engine once.
+    expect(screen.getAllByText('docker 27.5.1')).toHaveLength(2);
   });
 
   it('applies the URL host scope to container rows', () => {
@@ -362,8 +420,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('edge-cache')).toBeInTheDocument();
-    // Scoped to edge-02: group header + host column both show the host name.
-    expect(screen.getAllByText('edge-02')).toHaveLength(2);
+    // Scoped to edge-02: the group header names the host once.
+    expect(screen.getAllByText('edge-02')).toHaveLength(1);
     expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
     expect(screen.queryByText('edge-01')).not.toBeInTheDocument();
   });
@@ -652,18 +710,19 @@ describe('Docker native tables', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand details for nginx' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    const historyRange = screen.getByRole('combobox', { name: 'History range' });
+    const historyRange = await screen.findByRole('combobox', { name: 'History range' });
     fireEvent.change(historyRange, { target: { value: '1h' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
 
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('aria-selected', 'true');
     expect(historyRange).toHaveValue('1h');
 
     setResources(makeContainers(1));
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true'),
+      expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('aria-selected', 'true'),
     );
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByRole('combobox', { name: 'History range' })).toHaveValue('1h');
     expect(screen.getByRole('button', { name: 'Collapse details for nginx' })).toBeInTheDocument();
   });
@@ -835,7 +894,263 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('State')).toBeInTheDocument();
-    expect(screen.getByText('exited')).toBeInTheDocument();
+    expect(screen.getByText('Exited')).toBeInTheDocument();
+  });
+
+  it('shows the State column for a running container whose health check fails', () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'healthy' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-api',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('State')).toBeInTheDocument();
+    const unhealthy = screen.getByText('Unhealthy');
+    expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
+    expect(unhealthy).toHaveAttribute('title', 'Running, but its health check is failing');
+    expect(screen.getByText('Healthy')).toHaveAttribute('data-docker-container-state', 'ok');
+  });
+
+  it('puts the state words under the name where a phone row has no State column', () => {
+    // A narrow table cannot give "Unhealthy" its own column beside the 40%
+    // name, both metric pills and the Update control without cutting it.
+    setViewportWidth(320);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-api',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByRole('columnheader', { name: /State/ })).not.toBeInTheDocument();
+    const unhealthy = screen.getByText('Unhealthy');
+    expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
+    expect(unhealthy.closest('td')).toBe(screen.getByText('edge-api').closest('td'));
+    // Every row carries the line, so the rows keep one height.
+    expect(screen.getByText('Running').closest('td')).toBe(
+      screen.getByText('edge-web').closest('td'),
+    );
+  });
+
+  it('keeps a saved State sort only where the State column shows', () => {
+    window.localStorage.setItem('dockerContainersSortKey', 'state');
+    window.localStorage.setItem('dockerContainersSortDirection', 'asc');
+    const resources = [
+      makeResource({
+        id: 'container-1',
+        type: 'app-container',
+        name: 'edge-web',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running' },
+      }),
+      makeResource({
+        id: 'container-2',
+        type: 'app-container',
+        name: 'edge-api',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+      }),
+    ];
+    const rowOrder = () =>
+      [...document.querySelectorAll('[data-docker-container-row]')].map((row) =>
+        row.getAttribute('data-docker-container-row'),
+      );
+    const renderTable = () =>
+      renderInRouter(() => (
+        <DockerContainersTable
+          resources={resources}
+          emptyIcon={<span />}
+          emptyTitle="No containers"
+          emptyDescription="No containers"
+          showToolbar={false}
+        />
+      ));
+
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+    renderTable();
+    // "Running" sorts before "Unhealthy" while the header shows the sort.
+    expect(rowOrder()).toEqual(['container-1', 'container-2']);
+    cleanup();
+
+    // A phone row has no State header to show the sort, so the rows keep the
+    // attention-first order and the failing container leads.
+    setViewportWidth(320);
+    renderTable();
+    expect(rowOrder()).toEqual(['container-2', 'container-1']);
+    expect(window.localStorage.getItem('dockerContainersSortKey')).toBe('state');
+  });
+
+  it("shows each running container's uptime and none for a stopped one", () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', uptimeSeconds: 90_000 },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'offline',
+            docker: {
+              hostname: 'edge-01',
+              containerState: 'exited',
+              exitCode: 1,
+              uptimeSeconds: 184_082,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Uptime')).toBeInTheDocument();
+    const runningRow = document.querySelector('[data-docker-container-row="container-1"]');
+    const stoppedRow = document.querySelector('[data-docker-container-row="container-2"]');
+    expect(runningRow?.textContent).toContain('1d');
+    expect(stoppedRow?.textContent).not.toContain('2d');
+    expect(screen.getByText('Exited (1)')).toHaveAttribute('data-docker-container-state', 'danger');
+  });
+
+  it('flags a crash-looping container in State where the Restarts column is hidden', () => {
+    const rows = [
+      makeResource({
+        id: 'container-1',
+        type: 'app-container',
+        name: 'edge-web',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', restartCount: 7 },
+      }),
+      makeResource({
+        id: 'container-2',
+        type: 'app-container',
+        name: 'edge-api',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', restartCount: 1 },
+      }),
+    ];
+    // 600px is the mobile layout, which has no Restarts column.
+    setViewportWidth(600);
+    const { unmount } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={rows}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.queryByText('Restarts')).not.toBeInTheDocument();
+    expect(screen.getByText('7 restarts')).toHaveAttribute(
+      'data-docker-container-state',
+      'warning',
+    );
+    // State sorts by the words the row shows: "7 restarts" ranks apart from
+    // "Running" both ways (with equal labels both orders would be the same).
+    const rowOrder = () =>
+      [...document.querySelectorAll('[data-docker-container-row]')].map((row) =>
+        row.getAttribute('data-docker-container-row'),
+      );
+    const clickState = () => {
+      const header = screen
+        .getAllByRole('columnheader')
+        .find((th) => th.textContent?.trim().startsWith('State'));
+      fireEvent.click(header!.querySelector('button') ?? header!);
+    };
+    clickState();
+    expect(rowOrder()).toEqual(['container-1', 'container-2']);
+    clickState();
+    expect(rowOrder()).toEqual(['container-2', 'container-1']);
+    unmount();
+
+    // A wide table shows the count in its own column instead.
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={rows}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.getByText('Restarts')).toBeInTheDocument();
+    expect(screen.queryByText('7 restarts')).not.toBeInTheDocument();
+    // The row dot carries the same verdict at every width.
+    expect(screen.getByTitle('7 restarts')).toBeInTheDocument();
+  });
+
+  it('leaves out the Uptime column when no container reports one', () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
   });
 
   it('renders actionable Docker container updates with native agent and container IDs', async () => {
@@ -875,6 +1190,8 @@ describe('Docker native tables', () => {
     // The phone reflow boundary must include the governed action, not just read-only badges.
     expect(updateButton.closest('td')).toHaveClass('docker-container-update-cell');
     expect(updateButton).toHaveTextContent('Update');
+    // The table keeps the compact pill; only the drawer asks for a phone target.
+    expect(updateButton).not.toHaveClass('max-sm:min-h-11');
     fireEvent.click(updateButton);
 
     await waitFor(() =>
@@ -1062,6 +1379,64 @@ describe('Docker native tables', () => {
     expect(screen.getByTitle('Exited (137)')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('Restarting')).toHaveClass('bg-amber-500');
     expect(screen.getByTitle('Healthy')).toHaveClass('bg-emerald-500');
+  });
+
+  it('keeps the repository and tag of a registry-prefixed image name visible', () => {
+    const { container } = render(() => (
+      <DockerImagesTable
+        resources={[
+          makeResource({
+            id: 'image-ghcr',
+            type: 'docker-image',
+            name: 'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+          }),
+          makeResource({ id: 'image-hub', type: 'docker-image', name: 'postgres:16.4' }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No images"
+        emptyDescription="No images"
+        showToolbar={false}
+      />
+    ));
+
+    // Images that share a registry and namespace differ only at the end, so a
+    // narrow name cell truncates the shared head and keeps the tail visible.
+    const references = [
+      ...container.querySelectorAll<HTMLElement>('[data-docker-image-reference]'),
+    ];
+    const prefixed = references.find(
+      (element) => element.title === 'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+    );
+    expect(prefixed).toHaveTextContent('ghcr.io/pulse-demo/backup-coordinator:2026.04');
+    expect(prefixed?.querySelector('[data-docker-image-reference-tail]')).toHaveTextContent(
+      'backup-coordinator:2026.04',
+    );
+    const bare = references.find((element) => element.title === 'postgres:16.4');
+    expect(bare).toHaveTextContent('postgres:16.4');
+    expect(bare?.querySelector('[data-docker-image-reference-tail]')?.textContent).toBe('');
+
+    // Head and tail are flex items, so a browser copy would put a line break
+    // between them; a selection inside one reference copies as the reference.
+    const copy = (selected: Node) => {
+      const range = document.createRange();
+      range.selectNodeContents(selected);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      const setData = vi.fn();
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData } });
+      prefixed!.dispatchEvent(event);
+      return { setData, prevented: event.defaultPrevented };
+    };
+    const inside = copy(prefixed!);
+    expect(inside.setData).toHaveBeenCalledWith(
+      'text/plain',
+      'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+    );
+    expect(inside.prevented).toBe(true);
+    const wider = copy(container);
+    expect(wider.setData).not.toHaveBeenCalled();
+    expect(wider.prevented).toBe(false);
   });
 
   it('renders Docker image API fields', () => {
@@ -1401,6 +1776,22 @@ describe('Docker native tables', () => {
       ),
     ).toBeInTheDocument();
 
+    // The network's state counts every container the Attention filter holds,
+    // the restarting warning as well as the unhealthy one.
+    expect(screen.getAllByText('2 need attention').length).toBeGreaterThan(0);
+    // One dot per row: the name's dot carries that verdict, not the network's
+    // always-online status, and the State words have no second dot.
+    const networkCells = document
+      .querySelector('[data-docker-network-row="network-dense"]')!
+      .querySelectorAll('td');
+    expect(networkCells[0].querySelector('[title="2 need attention"]')).not.toBeNull();
+    expect(networkCells[0].querySelector('[title="Online"]')).toBeNull();
+    expect(networkCells[2].querySelectorAll('[title]')).toHaveLength(1);
+    // The health filter reads the same verdict: degraded, not healthy, and not
+    // offline, since the network itself is up.
+    expect(screen.getByRole('button', { name: /^Degraded, 1$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Healthy, 1$/ })).toBeNull();
+
     fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
 
     const detail = within(
@@ -1417,17 +1808,36 @@ describe('Docker native tables', () => {
     expect(detail.getByText('Show first 24')).toBeInTheDocument();
 
     fireEvent.click(detail.getByRole('button', { name: /^Attention, \d+$/ }));
-    expect(detail.getByText('2 containers of 30 containers')).toBeInTheDocument();
+    expect(detail.getAllByText('2 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('api-restarting')).toBeInTheDocument();
     expect(detail.queryByText('worker-29')).toBeNull();
+
+    // Running is Docker's run state: the unhealthy container still runs, so it
+    // matches Running too, listed under its Attention section.
+    fireEvent.click(detail.getByRole('button', { name: /^Running, 28$/ }));
+    expect(detail.getAllByText('28 of 30 containers').length).toBeGreaterThan(0);
+    expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
+    expect(detail.getByText('Needs operator review')).toBeInTheDocument();
+    // A card's state words read in its dot's colour; a plain running one does not.
+    expect(detail.getByText('Unhealthy')).toHaveClass('text-red-600');
+    expect(document.querySelector('[data-docker-attachment-state="success"]')).toHaveClass(
+      'text-base-content',
+    );
+    expect(detail.queryByText('api-restarting')).toBeNull();
+    expect(detail.queryByText('worker-stopped')).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: /^Other, 2$/ }));
+    expect(detail.getByText('api-restarting')).toBeInTheDocument();
+    expect(detail.getByText('worker-stopped')).toBeInTheDocument();
+    expect(detail.queryByText('api-unhealthy')).toBeNull();
 
     fireEvent.click(detail.getByRole('button', { name: /^All, \d+$/ }));
     fireEvent.input(detail.getByPlaceholderText('Search attached containers'), {
       target: { value: 'worker-29' },
     });
 
-    expect(detail.getByText('1 container of 30 containers')).toBeInTheDocument();
+    expect(detail.getAllByText('1 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('worker-29')).toBeInTheDocument();
     expect(detail.getByText('0.0.0.0:8029->80/tcp')).toBeInTheDocument();
   });
@@ -1472,6 +1882,41 @@ describe('Docker native tables', () => {
     expect(screen.getByText('10.0.0.11')).toBeInTheDocument();
   });
 
+  it("reads an unreachable manager's Reachability in its dot's colour", () => {
+    render(() => (
+      <DockerSwarmNodesTable
+        resources={[
+          makeResource({
+            id: 'node-2',
+            type: 'docker-swarm-node',
+            name: 'manager-2',
+            docker: {
+              nodeRole: 'manager',
+              availability: 'active',
+              managerReachability: 'unreachable',
+            },
+          }),
+          makeResource({
+            id: 'node-3',
+            type: 'docker-swarm-node',
+            name: 'worker-3',
+            docker: { nodeRole: 'worker', availability: 'drain' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByTitle('Manager unreachable')).toBeInTheDocument();
+    expect(screen.getByText('unreachable')).toHaveClass('text-red-600');
+    expect(screen.getByTitle('Drained')).toBeInTheDocument();
+    expect(screen.getByText('drain')).toHaveClass('text-amber-700');
+    expect(screen.getByText('active')).toHaveClass('text-base-content');
+  });
+
   it('renders Docker Swarm service API fields including update status', () => {
     render(() => (
       <DockerServicesTable
@@ -1510,10 +1955,18 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Stack')).toBeInTheDocument();
     expect(screen.getByText('shop')).toBeInTheDocument();
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
-    expect(screen.getByText('registry.example.com/checkout-api:2026.05')).toBeInTheDocument();
+    // The image keeps its repository and tag visible when the cell truncates;
+    // the full reference stays on the title.
+    const serviceImage = screen.getByTitle('registry.example.com/checkout-api:2026.05');
+    expect(serviceImage).toHaveTextContent('registry.example.com/checkout-api:2026.05');
+    expect(serviceImage.querySelector('[data-docker-image-reference-tail]')).toHaveTextContent(
+      'checkout-api:2026.05',
+    );
     expect(screen.getByText('replicated')).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getAllByText('4').length).toBeGreaterThan(0);
     expect(screen.getByText('2')).toBeInTheDocument();
+    // A phone hides Desired, so its Running count reads out of what.
+    expect(screen.getByText('/4')).toHaveClass('platform-table-phone-only-inline');
     // The snake_case rollout token reads as words; the raw token stays in the title.
     expect(screen.getByText('Rollback started')).toBeInTheDocument();
     expect(screen.getByText('Rollback started')).toHaveClass(
@@ -1523,6 +1976,13 @@ describe('Docker native tables', () => {
     expect(
       screen.getByText('Rollback started').closest('[title]')?.getAttribute('title'),
     ).toContain('rollback_started');
+    // The dot names the rollout for what it is, and the cells behind its
+    // verdict read amber: the Update words and the short Running count.
+    expect(screen.getByTitle('Rolling back')).toBeInTheDocument();
+    expect(screen.getByText('Rollback started')).toHaveClass('text-amber-700');
+    expect(document.querySelector('[data-docker-service-running="warning"]')).toHaveClass(
+      'text-amber-700',
+    );
     expect(screen.getByText('18080:8080/tcp')).toBeInTheDocument();
     expect(screen.getByText('manager-1')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-service-row="service-1"]')).not.toBeNull();
@@ -1642,7 +2102,7 @@ describe('Docker native tables', () => {
               serviceName: 'web',
               slot: 2,
               desiredState: 'running',
-              currentState: 'running 2 minutes',
+              currentState: 'running',
               nodeName: 'worker-1',
               startedAt: '2026-05-24T13:05:00Z',
             },
@@ -1660,11 +2120,50 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('web.2')).toBeInTheDocument();
     expect(screen.getByText('web')).toBeInTheDocument();
-    expect(screen.getByText('running 2 minutes')).toBeInTheDocument();
+    // Current reads the row dot's words, and Desired reads as words beside it;
+    // Docker's own token stays on hover.
+    expect(document.querySelector('[data-docker-task-state="success"]')).toHaveTextContent(
+      'Running',
+    );
+    expect(screen.getAllByText('Running')).toHaveLength(2);
+    expect(screen.getAllByTitle('running')).toHaveLength(2);
     // The raw RFC3339 stamp moves to the title; the cell shows an age.
     const started = screen.getByTitle('2026-05-24T13:05:00Z');
     expect(started).toBeInTheDocument();
     expect(started.textContent).toMatch(/ago$/);
+  });
+
+  it("reads a failed Swarm task's state in its dot's colour, error on hover", () => {
+    render(() => (
+      <DockerTasksTable
+        resources={[
+          makeResource({
+            id: 'task-2',
+            type: 'docker-task',
+            name: 'web.3',
+            docker: {
+              serviceName: 'web',
+              desiredState: 'shutdown',
+              currentState: 'failed',
+              error: 'task: non-zero exit (1)',
+              nodeName: 'worker-1',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No tasks"
+        emptyDescription="No tasks"
+        showToolbar={false}
+      />
+    ));
+
+    const state = screen.getByText('Failed');
+    expect(state).toHaveClass('text-red-600');
+    expect(state).toHaveAttribute('title', 'task: non-zero exit (1)');
+    // A phone cannot hover: the expansion says why it failed.
+    fireEvent.click(document.querySelector('[data-docker-task-row="task-2"]')!);
+    expect(screen.getByText('Error')).toBeInTheDocument();
+    expect(screen.getByText('task: non-zero exit (1)')).toBeInTheDocument();
   });
 
   it('renders Docker Swarm secret API metadata without secret data', () => {

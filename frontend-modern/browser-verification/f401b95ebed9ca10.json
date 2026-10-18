@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "170f726c9330684c6240203071e106dad63ce1e7",
+  "verified_at": "2026-10-13T22:28:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "a9f6116d18eeb473aa86dd91c4b24b98fb1a2e59dda35347718bfb5dbb770f2b",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "8df81a27afadf825285b5142c3e4ef7a48a7379b43a6bae1ee46c83b0e921984",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "864681ed7644f33777d40b0019b405d28c1a0e023f3eb7b8c64a66d984a4f610",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "ddb5c9e4506ca9cd81034a6759edd2bcf1869f3b4997646e9d4ba15e92ef2e64",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "770745fc8b6346218b294957525d35adece0a7076b4c5ea3d90574ed15a1a252",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "6d7137c5c6c4fbb868a1d6b87aaa6c79ebce298540df9b8d6d957f9fdc22c989"
+  },
+  "routes": [
+    "/docker/overview",
+    "/docker/containers",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (origin/main 170f726c93 plus this change) embedded in a darwin binary, mock mode with 7 days of seeded metrics, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye",
+    "Docker host drawer (App Platform 01, /docker/overview): tabs read Overview, Manage; Needs attention with 4 active alerts, then the range picker and Refresh history, then Utilization, Network I/O, Disk I/O and Thermals charts at 24 hours, then the operator context, runtime, memory, storage and telemetry cards",
+    "container drawer (loki, /docker/containers, the shared resource-detail drawer): tabs read Overview, Manage; the CPU-scale note, then three charts (Utilization, Network I/O, Disk I/O) at 24 hours, then runtime, container and identity cards and the relationship map",
+    "agent machine drawer (Apollo-114, /standalone/machines, the shared resource-detail drawer): tabs read Overview, Manage; four charts including Thermals at 24 hours above the operator, runtime and identity cards and the closed Platform details",
+    "390px phone: each drawer stacks its charts in one column under the toolbar with no horizontal overflow; 1440px: charts in a row of three or four"
+  ],
+  "interactions": [
+    "expanded the first Docker host row, the first container row and the first agent machine row by their expand buttons at 1440 and 390px",
+    "read each drawer tab list (Overview, Manage) and counted the chart panels (4, 3 and 4)"
+  ]
+}

@@ -20,15 +20,6 @@ func TestPersistGuestIdentity_Concurrent(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// metadataFile := filepath.Join(tmpDir, "guest_metadata.json") // Actually NewGuestMetadataStore takes directory not file usually? No, it takes root dir?
-	// Let's verify standard usage. "store := NewGuestMetadataStore(tmpDir, nil)"
-	// Implementation: func NewGuestMetadataStore(dataPath string, fs FileSystem)
-	// Inside it does filepath.Join(dataPath, "guest_metadata.json") ?
-	// Let's re-read NewGuestMetadataStore in internal/config/guest_metadata.go via grep or similar if needed.
-	// But based on "config.NewGuestMetadataStore(metadataFile)" from my previous code failing, and grep showing "dataPath", it likely takes a Dir or File path.
-	// grep output: guestMetadataStore := NewGuestMetadataStore(dataPath, c.fs)
-	// Most likely directory.
-
 	store := config.NewGuestMetadataStore(tmpDir, nil)
 
 	guestKey := "pve1:node1:100"
@@ -36,8 +27,9 @@ func TestPersistGuestIdentity_Concurrent(t *testing.T) {
 	// Test basic persistence
 	persistGuestIdentity(store, guestKey, "VM 100", "qemu")
 
-	// Wait a bit since persistGuestIdentity is async
-	time.Sleep(50 * time.Millisecond)
+	if !store.WaitForPendingWrites(time.Second) {
+		t.Fatal("identity writer did not drain")
+	}
 
 	meta := store.Get(guestKey)
 	if meta == nil || meta.LastKnownName != "VM 100" || meta.LastKnownType != "qemu" {
@@ -55,7 +47,9 @@ func TestPersistGuestIdentity_Concurrent(t *testing.T) {
 
 	// Try to update to "lxc"
 	persistGuestIdentity(store, guestKey, "VM 100", "lxc")
-	time.Sleep(50 * time.Millisecond)
+	if !store.WaitForPendingWrites(time.Second) {
+		t.Fatal("identity writer did not drain")
+	}
 
 	meta = store.Get(guestKey)
 	if meta.LastKnownType != "oci" {
@@ -65,6 +59,9 @@ func TestPersistGuestIdentity_Concurrent(t *testing.T) {
 	// Test persistence that shouldn't happen (no change) -> coverage of the if check
 	// Should not trigger Set()
 	persistGuestIdentity(store, guestKey, "VM 100", "oci")
+	if err := store.Close(time.Second); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEnrichWithPersistedMetadata_Detail(t *testing.T) {

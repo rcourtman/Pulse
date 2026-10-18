@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "3b290640a51ef0f488f9cd06b4aa644adbdcc6b3",
+  "verified_at": "2026-10-06T15:43:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "8861f6f170dd9ebab4eebe949e3a311af46916aa10d8d2d2768a33e3d64b2d1a",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "9a2096f3ff967cec93024466d15c1b5117f08d89985c1955965d336a38d03bc0",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "0c2f0be19aa05f8e07f1167273b26b17b0643c73855df8246fcf5f591d3ae5b8"
+  },
+  "routes": [
+    "/kubernetes/overview",
+    "/kubernetes/nodes"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend built from base 3b290640a5 on its own port, Vite serving this tree); mock mode skips CheckHost, so the private binary added that call through a go build overlay of internal/monitoring/monitor_alerts.go that is not part of this commit",
+    "Kubernetes nodes: Prod Euw1 K8s 02 (agent row agent-c8db98b4db98ed5c) has a backend-raised critical alert keyed agent:host-k8s-k8s-production-1-k8s-production-1-node-2-955a86fe (node prod-euw1-k8s-02, Agent memory at 100.0%); before the change its row was untinted while its drawer listed the alert, now the row is red-50 and its drawer lists the same alert",
+    "Kubernetes nodes default order: K8s 02 (Ready, critical alert) first, then K8s 03 (Degraded), then K8s 01 (Ready); K8s 01 and K8s 03 untinted with no drawer alerts",
+    "Kubernetes overview: Nodes needing attention lists K8s 02 (red) then K8s 03 (Degraded); before the change it listed only K8s 03",
+    "After acknowledging the K8s 02 alert through the private stack API: its row is untinted, it drops out of Nodes needing attention, the nodes table falls back to K8s 03, K8s 01, K8s 02, and its drawer still lists the alert as Acknowledged; unacknowledged again afterwards",
+    "Expanded K8s 02 row drops the tint (surface hover background) while its drawer shows the alert",
+    "Light theme at 1440px and 390px and dark theme at 1280px: red-50 / red-950/25 on K8s 02 only, no horizontal overflow at 390px",
+    "TrueNAS and vSphere tables unchanged: truenas-main stays amber for its pool alerts (node truenas-main) and its drawer lists the pool problems; esxi-07 amber for its own alert",
+    "No page errors or console errors"
+  ],
+  "interactions": [
+    "Open Kubernetes overview and Nodes, read each node row's tint and order",
+    "Expand and collapse the K8s 02 row drawer and read its Needs attention list",
+    "Acknowledge then unacknowledge the K8s 02 memory alert and re-read the overview list, row tint, order and drawer",
+    "Repeat the overview and nodes checks at the 390px phone viewport (row tap to expand) and in dark mode"
+  ]
+}

@@ -1,21 +1,19 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
-import { useResourceDetailDrawerDerivedState } from '../useResourceDetailDrawerDerivedState';
 
 const requests = vi.hoisted(() => ({
   facets: vi.fn(),
   intelligence: vi.fn(),
   audits: vi.fn(),
-  discovery: vi.fn(),
 }));
 
 vi.mock('@/contexts/appRuntime', () => ({
-  useWebSocket: () => ({ state: { pmg: [] }, connected: () => true }),
+  useWebSocket: () => ({ state: { pmg: [] }, activeAlerts: {}, connected: () => true }),
   useDarkMode: () => () => false,
 }));
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
@@ -23,13 +21,23 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     target: { resourceType: string; resourceId: string };
     currentMetrics?: Record<string, number | undefined>;
     range: string;
+    onRangeChange?: (range: string) => void;
   }) => (
     <div
       data-testid="snapshot-history"
       data-target={props.target.resourceId}
       data-cpu={props.currentMetrics?.cpu}
       data-range={props.range}
-    />
+    >
+      <select
+        aria-label="History range"
+        value={props.range}
+        onChange={(event) => props.onRangeChange?.(event.currentTarget.value)}
+      >
+        <option value="24h">24 hours</option>
+        <option value="7d">7 days</option>
+      </select>
+    </div>
   ),
   GuestDrawerHistoryRangeSelect: (props: {
     range: string;
@@ -45,8 +53,6 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     </select>
   ),
 }));
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({ DiscoveryTab: () => null }));
-vi.mock('@/api/discovery', () => ({ getDiscovery: requests.discovery }));
 vi.mock('@/api/resources', () => ({ ResourceAPI: { getFacetBundle: requests.facets } }));
 vi.mock('@/api/ai', () => ({ AIAPI: { getResourceIntelligence: requests.intelligence } }));
 vi.mock('@/api/actionAudit', () => ({ ActionAuditAPI: { listActionAudits: requests.audits } }));
@@ -70,69 +76,66 @@ const snapshot = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 beforeEach(() => {
-  syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-    typeof syncAIRuntimeSettings
-  >[0]);
   requests.facets.mockResolvedValue({ capabilities: [], relationships: [], recentChanges: [] });
   requests.intelligence.mockResolvedValue(null);
   requests.audits.mockResolvedValue({ audits: [], count: 0, available: false });
-  requests.discovery.mockResolvedValue(null);
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   resetAIRuntimeState();
   vi.clearAllMocks();
 });
 
 describe('ResourceDetailDrawer snapshot ownership', () => {
-  it('withdraws former Discovery identification while a replacement source key is pending', async () => {
-    let finish!: (value: unknown) => void;
-    requests.discovery
-      .mockResolvedValueOnce({ service_name: 'Old service', confidence: 0.9 })
-      .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
-    const initial = snapshot({
-      discoveryTarget: {
-        resourceType: 'agent',
-        agentId: 'agent-a',
-        resourceId: 'agent-a',
-        hostname: 'pbs-a',
-      },
-    });
-    const [resource, setResource] = createSignal(initial);
-    const Probe = () => {
-      const state = useResourceDetailDrawerDerivedState({
-        get resource() {
-          return resource();
-        },
-        debugEnabled: () => false,
-        discoveryFeatureEnabled: () => true,
-        resourceIntelligence: () => null,
-      });
-      return (
-        <span data-testid="identified-service">
-          {state.discoveryIdentifiedSummary()?.serviceName}
-        </span>
-      );
+  it('ages unchanged observed and occurred times in the mounted change history', async () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const change = {
+      id: 'held-change',
+      resourceId: 'held-resource',
+      kind: 'config_update' as const,
+      observedAt: new Date(start - 60_000).toISOString(),
+      occurredAt: new Date(start - 120_000).toISOString(),
+      reason: 'Retained config observation',
+      sourceType: 'platform_event' as const,
+      confidence: 'high' as const,
     };
-    render(() => <Probe />);
-    await screen.findByText('Old service');
+    const initial = snapshot({ id: 'held-resource', recentChanges: [change] });
+    const [resource, setResource] = createSignal(initial);
+    render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
+    await vi.advanceTimersByTimeAsync(0);
+    const section = screen.getByTestId('resource-change-history-section');
+    expect(section).toHaveTextContent('1 min ago');
+    expect(section).toHaveTextContent('Occurred 2 mins ago');
+    fireEvent.click(within(section).getByRole('button', { name: /Filter/ }));
+    const filter = within(section).getByRole('combobox', { name: 'Change kind' });
+    filter.focus();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(section).toHaveTextContent('2 hours ago');
+    expect(section).toHaveTextContent('Occurred 2 hours ago');
+    expect(filter).toHaveFocus();
+    expect(screen.getByTestId('resource-change-history-section')).toBe(section);
+    expect(resource().recentChanges).toEqual([change]);
+    expect(requests.facets).not.toHaveBeenCalled();
     setResource({
       ...initial,
-      discoveryTarget: { ...initial.discoveryTarget!, agentId: 'agent-b', resourceId: 'agent-b' },
+      recentChanges: [
+        { ...change, observedAt: new Date(Date.now()).toISOString(), occurredAt: undefined },
+      ],
     });
-    expect(screen.getByTestId('identified-service')).toBeEmptyDOMElement();
-    await waitFor(() =>
-      expect(requests.discovery).toHaveBeenLastCalledWith('agent', 'agent-b', 'agent-b'),
-    );
-    finish({ service_name: 'Current service', confidence: 0.9 });
-    await screen.findByText('Current service');
-    expect(screen.queryByText('Old service')).not.toBeInTheDocument();
+    expect(section).toHaveTextContent('0s ago');
+    expect(section).not.toHaveTextContent('Occurred');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(section).toHaveTextContent('1 min ago');
+    setResource({ ...initial, recentChanges: [] });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(screen.queryByText('Retained config observation')).not.toBeInTheDocument();
   });
 
   it('updates derived identity, current metrics and the History target without remounting a same-ID drawer', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'History range' }), {
       target: { value: '7d' },
     });
@@ -151,16 +154,16 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     expect(history).toHaveAttribute('data-range', '7d');
   });
 
-  it('withdraws a lost metrics target on an immutable snapshot and recovers the selected tab when it returns', () => {
+  it('withdraws Overview charts for a lost metrics target on an immutable snapshot and restores them when it returns', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-a');
     setResource(snapshot({ metricsTarget: undefined }));
     expect(screen.queryByTestId('snapshot-history')).not.toBeInTheDocument();
-    expect(screen.getByText('Metrics history is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
     setResource(snapshot());
     expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-a');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('updates availability evidence in Overview instead of retaining the initial snapshot', () => {
@@ -194,7 +197,7 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     requests.facets.mockReturnValueOnce(new Promise((resolve) => (completeOld = resolve)));
     const [resource, setResource] = createSignal(snapshot());
     const { container } = render(() => <ResourceDetailDrawer resource={resource()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
     setResource(
       snapshot({
         id: 'pbs-b',
@@ -205,7 +208,7 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     );
     expect(screen.getByRole('heading', { name: 'PBS B' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByTestId('snapshot-history')).not.toBeInTheDocument();
+    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-b');
     await waitFor(() => expect(requests.facets).toHaveBeenCalledWith('pbs-b', { limit: 25 }));
     completeOld({
       capabilities: [],
@@ -217,14 +220,11 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     await Promise.resolve();
     expect(container).not.toHaveTextContent('Former resource change');
     expect(container).not.toHaveTextContent('PBS A');
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-    expect(screen.getByTestId('snapshot-history')).toHaveAttribute('data-target', 'history-b');
   });
 
   it('keeps the reconciled-store client and same-ID tab continuity working', () => {
     const [resource, setResource] = createStore(snapshot());
     render(() => <ResourceDetailDrawer resource={resource} presentation="table-row" />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     const history = screen.getByTestId('snapshot-history');
     setResource(reconcile(snapshot({ cpu: { current: 35 } })));
     expect(screen.getByTestId('snapshot-history')).toBe(history);

@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"crypto/sha256"
+	"encoding"
 	"encoding/hex"
 	"encoding/json"
 	stderrors "errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -66,9 +68,9 @@ func keepRealPollingInMockMode() bool {
 // process that boots with mock mode already enabled never runs that path, so
 // alerts raised against real infrastructure are restored from disk and served
 // beside fixture data until something clears them.
-func alertManagerRestoreOptions() []alerts.ManagerOption {
+func alertManagerRestoreOptions(mockEnabled bool) []alerts.ManagerOption {
 	options := []alerts.ManagerOption{alerts.WithDurableAlertStore()}
-	if mock.IsMockEnabled() {
+	if mockEnabled {
 		options = append(options, alerts.WithoutPersistedAlertRestore())
 	}
 	return options
@@ -388,7 +390,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
 					strings.EqualFold(candidate.WWN, updated[i].WWN)
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Str("wwn", updated[i].WWN).
@@ -403,7 +405,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				return diskinventory.IsUsableHardwareID(candidate.Serial) &&
 					strings.EqualFold(candidate.Serial, updated[i].Serial)
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Str("serial", updated[i].Serial).
@@ -419,7 +421,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				normalizedTempDev := normalizeSMARTDeviceIdentifier(candidate.Device)
 				return normalizedTempDev != "" && normalizedTempDev == normalizedDevPath
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Int("temp", temp.Temperature).
@@ -456,7 +458,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				continue
 			}
 
-			setPhysicalDiskTemperature(&updated[diskIdx], int(math.Round(tempVal)), "proxmox_node_nvme")
+			setPhysicalDiskTemperature(&updated[diskIdx], int(math.Round(tempVal)), proxmoxNodeNVMeTemperatureSource)
 			log.Debug().
 				Str("disk", updated[diskIdx].DevPath).
 				Int("temp", updated[diskIdx].Temperature).
@@ -484,6 +486,55 @@ func uniqueDiskTemperatureMatch(temperatures []models.DiskTemp, predicate func(m
 	return &temperatures[matchIndex]
 }
 
+// Collection sources of a disk temperature mergeNVMeTempsIntoDisks took from
+// the node's sensor lists.
+const (
+	proxmoxNodeSMARTTemperatureSource = "proxmox_node_smart"
+	proxmoxNodeNVMeTemperatureSource  = "proxmox_node_nvme"
+)
+
+// hostSuppliesNodeSMARTTemperatures reports whether the node's SMART sensor
+// list is this host's report: the node poll takes the linked agent's list when
+// it carries a usable temperature and the SSH collector's otherwise
+// (mergeTemperatureData in host_agent_temps.go). An agent whose lease lapsed
+// supplies nothing, so callers also require it to be reporting.
+func hostSuppliesNodeSMARTTemperatures(host models.Host) bool {
+	for _, row := range host.Sensors.SMART {
+		if row.Temperature > 0 && !row.Standby {
+			return true
+		}
+	}
+	return false
+}
+
+// dropNodeSensorTemperature removes a reading mergeNVMeTempsIntoDisks took
+// from the node's sensor lists, for a disk the operator split from the
+// linked agent's. The SMART list carries rows of the agent's disks when the
+// agent supplies it (smartFromAgent), so a reading from it is the agent's row
+// of the disk this one was split from; an SSH-supplied list is the node's own
+// and stays. The legacy NVMe list names no disk, only an order, so its guess
+// is dropped either way. A reading from another source, which Proxmox itself
+// never supplies, is not touched.
+func dropNodeSensorTemperature(disk *models.PhysicalDisk, smartFromAgent bool) {
+	if disk.Collection == nil {
+		return
+	}
+	switch disk.Collection.Temperature.Source {
+	case proxmoxNodeSMARTTemperatureSource:
+		if !smartFromAgent {
+			return
+		}
+	case proxmoxNodeNVMeTemperatureSource:
+	default:
+		return
+	}
+	disk.Temperature = 0
+	// The copy shares its collection with the caller's slice.
+	collection := diskinventory.CloneStatus(disk.Collection)
+	collection.Temperature = diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")
+	disk.Collection = collection
+}
+
 func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, source string) {
 	if disk == nil || temperature <= 0 {
 		return
@@ -495,10 +546,34 @@ func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, sour
 	disk.Collection.Temperature = diskinventory.Available(source)
 }
 
+// diskAgentSplitStore is implemented by resource stores that hold the
+// operator's merge exclusions (unifiedresources.MonitorAdapter). It reports
+// whether the operator split a Proxmox disk from the disk a linked host
+// agent reports in one SMART row.
+type diskAgentSplitStore interface {
+	ProxmoxDiskAgentSMARTSplit(disk models.PhysicalDisk, host models.Host, smart models.HostDiskSMART) bool
+}
+
+// proxmoxDiskAgentSplits returns the resource store's split decisions, or nil
+// when the store holds none.
+func (m *Monitor) proxmoxDiskAgentSplits() diskAgentSplitStore {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	splits, _ := store.(diskAgentSplitStore)
+	return splits
+}
+
 // mergeHostAgentSMARTIntoDisks merges SMART temperature data from linked host agents
 // into physical disks for Proxmox nodes. This allows disk temps collected by the
-// pulse-agent running on a PVE node to populate the Physical Disks view.
-func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {
+// pulse-agent running on a PVE node to populate the Physical Disks view. A disk
+// the operator split from the agent's disk its matching row describes (splits)
+// takes nothing from that row, nor the node-sensor reading that stands in for
+// it, and is marked AgentSMARTSplit instead.
+func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host, splits diskAgentSplitStore) []models.PhysicalDisk {
 	if len(disks) == 0 || len(nodes) == 0 || len(hosts) == 0 {
 		return disks
 	}
@@ -511,6 +586,8 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
+	hostByNodeName := make(map[string]*models.Host)
+	reportingNodeNames := make(map[string]bool)
 	for _, node := range nodes {
 		if node.LinkedAgentID == "" {
 			continue
@@ -520,6 +597,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
+		hostByNodeName[node.Name] = host
+		// Only an agent still reporting owns its disks' temperature alerts;
+		// a silent one's retained rows still enrich the disk.
+		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			reportingNodeNames[node.Name] = true
+		}
 		log.Debug().
 			Str("nodeName", node.Name).
 			Str("hostAgentID", node.LinkedAgentID).
@@ -559,11 +642,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			return &smartData[matchIndex]
 		}
 
-		// Try to match by WWN (most reliable)
+		// Try to match by WWN (most reliable). PVE and the agent spell one WWN
+		// differently (0x5000c500a1b2c3d4 against smartctl's 5-c50-a1b2c3d4),
+		// so compare the normalized identity, not the reported string.
 		if diskinventory.IsUsableHardwareID(updated[i].WWN) {
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
-				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
-					strings.EqualFold(candidate.WWN, updated[i].WWN) &&
+				return diskinventory.HardwareIdentityMatch("", updated[i].WWN, "", candidate.WWN) &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
 		}
@@ -577,7 +661,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			})
 		}
 
-		// Last resort: match by device path
+		// Last resort: match by device path. A path names a slot, not a disk,
+		// so the row there may describe the slot's previous occupant: the agent
+		// has not reported since the swap, or it went silent and its last rows
+		// are retained. A row whose identity contradicts the disk's is refused,
+		// or it would fill or promote the old serial onto the replacement,
+		// which would then take the old disk's canonical resource and history.
 		if matched == nil {
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
@@ -586,11 +675,35 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 					normalizedDiskDev == normalizedDevPath &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
+			if matched != nil && hostAgentSMARTIdentityConflicts(updated[i], *matched) {
+				log.Debug().
+					Str("node", updated[i].Node).
+					Str("device", updated[i].DevPath).
+					Str("serial", updated[i].Serial).
+					Str("smartSerial", matched.Serial).
+					Msg("Skipping host agent SMART row whose disk identity contradicts the Proxmox disk at the same path")
+				matched = nil
+			}
 		}
 
 		if matched == nil {
 			continue
 		}
+		// The operator split this disk from the agent's (report-merge on the
+		// merged disk), so the row describes another disk: its readings,
+		// identity and temperature alert stay the agent's, and the PVE disk
+		// check judges what Proxmox reported. The refusal never pairs another
+		// row, as in the registry's linked disk join.
+		if host := hostByNodeName[updated[i].Node]; splits != nil && splits.ProxmoxDiskAgentSMARTSplit(updated[i], *host, *matched) {
+			updated[i].AgentSMARTSplit = true
+			dropNodeSensorTemperature(&updated[i], reportingNodeNames[updated[i].Node] && hostSuppliesNodeSMARTTemperatures(*host))
+			continue
+		}
+		// The linked agent reports this disk, so while it keeps reporting its
+		// CheckHost owns the disk's temperature alert and the PVE disk check
+		// stands aside. Once its lease lapses, CheckHost no longer alerts on
+		// the disk and the PVE check judges the node's own readings again.
+		updated[i].AgentSMARTReported = reportingNodeNames[updated[i].Node]
 
 		if strings.TrimSpace(updated[i].Model) == "" && strings.TrimSpace(matched.Model) != "" {
 			updated[i].Model = strings.TrimSpace(matched.Model)
@@ -647,7 +760,10 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			ioCopy := *matched.IO
 			updated[i].IO = &ioCopy
 		}
-		updated[i].Collection = diskinventory.MergeStatus(updated[i].Collection, matched.Collection)
+		// The agent's later word on a field it supplied (its lease expired, or
+		// the disk went into standby) must win over the copy a skipped disk
+		// poll carries forward from the previous merge.
+		updated[i].Collection = diskinventory.MergeReportedStatus(updated[i].Collection, hostAgentSMARTCollection(*matched))
 
 		if shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health) {
 			updated[i].Health = matched.Health
@@ -655,6 +771,22 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	}
 
 	return updated
+}
+
+// hostAgentSMARTCollection returns the agent's collection state for one SMART
+// row, giving a provenance-less temperature the legacy agent source
+// (diskinventory.LegacyHostAgentStatus) so that history and later lease expiry
+// treat it like any other agent reading.
+func hostAgentSMARTCollection(smart models.HostDiskSMART) *diskinventory.CollectionStatus {
+	collection := diskinventory.CloneStatus(smart.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	collection.Temperature = diskinventory.LegacyHostAgentStatus(
+		collection.Temperature,
+		smart.Temperature > 0 && !smart.Standby,
+	)
+	return collection
 }
 
 func shouldUseHostAgentPhysicalDiskHealth(existing, incoming string) bool {
@@ -681,6 +813,40 @@ func diskTopologyCompatible(leftController, leftTarget, rightController, rightTa
 		return false
 	}
 	return true
+}
+
+// hostAgentSMARTIdentityConflicts reports whether a SMART row found only by
+// device path names a different disk than the Proxmox disk at that path.
+// WWNs are compared for every disk; serials only where both producers read
+// the drive's own serial (hostAgentSMARTSerialComparable). Any other Proxmox
+// serial still counts toward agreement.
+func hostAgentSMARTIdentityConflicts(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	if diskinventory.HardwareIdentityMatch(disk.Serial, disk.WWN, smart.Serial, smart.WWN) {
+		return false
+	}
+	serial := ""
+	if hostAgentSMARTSerialComparable(disk, smart) {
+		serial = disk.Serial
+	}
+	return diskinventory.HardwareIdentityConflict(serial, disk.WWN, smart.Serial, smart.WWN)
+}
+
+// hostAgentSMARTSerialComparable reports whether the Proxmox serial was read
+// from the drive itself, as smartctl's is. Proxmox takes the serial from udev:
+// for an NVMe namespace that is the controller's serial, and for a disk
+// presented with SCSI vendor "ATA" (libata, or a SAS HBA's SCSI-ATA
+// translation) udev's ata_id reads it from IDENTIFY. Any other disk's Proxmox
+// serial may be a SAS address or SCSI designator from VPD page 0x83 (#1595),
+// or a USB bridge's own serial.
+func hostAgentSMARTSerialComparable(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	agentType := strings.ToLower(strings.TrimSpace(smart.Type))
+	switch strings.ToLower(strings.TrimSpace(disk.Type)) {
+	case "nvme":
+		return agentType == "nvme"
+	case "usb", "sas":
+		return false
+	}
+	return agentType == "sata" && strings.EqualFold(strings.TrimSpace(disk.Vendor), "ATA")
 }
 
 func shouldPromoteHostAgentSerial(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
@@ -913,8 +1079,7 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 		return
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 && m.metricsHistory != nil {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) && m.metricsHistory != nil {
 		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
@@ -948,8 +1113,7 @@ func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID st
 		})
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
 		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 
@@ -1137,8 +1301,13 @@ type Monitor struct {
 	mockUnifiedViewMu          sync.Mutex
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
+	mockUnifiedViewStructure   uint64 // fixture structure revision the published view was built at
+	mockUnifiedViewLinks       []unifiedresources.ResourceLink
+	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
+	pveGuestPublicationMu      sync.RWMutex             // Orders guest publication with connection/runtime replacement and retirement.
+	pveGuestPolls              map[string]*pveGuestPoll // Guarded by m.mu; canceled cycles retain ownership until completion unless the binding ends.
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
 	availabilityStatuses       map[string]AvailabilityProbeStatus
@@ -1155,6 +1324,7 @@ type Monitor struct {
 	failureCounts              map[string]int
 	lastOutcome                map[string]taskOutcome
 	backoffCfg                 backoffConfig
+	rngMu                      sync.Mutex // Shared by poll backoff and concurrent guest metadata jitter.
 	rng                        *rand.Rand
 	maxRetryAttempts           int
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
@@ -1170,12 +1340,17 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
+	operatorIntentIdentity     atomic.Pointer[operatorIntentIdentity] // read state alert intent resolves through (monitor_alert_intent.go)
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
 	alertPushCallback          func(*alerts.Alert)
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
-	alertProjectionReplayMu    sync.Mutex     // serializes lifecycle projection replay passes
+	alertProjectionReplayMu    sync.Mutex // serializes lifecycle projection replay passes
+	alertProjectionMu          sync.Mutex // closes admission before joining background replay
+	alertProjectionCtx         context.Context
+	alertProjectionCancel      context.CancelFunc
+	alertProjectionStopped     bool
 	alertProjectionWG          sync.WaitGroup // tracks scheduled background catch-up runs
 	notificationMgr            *notifications.NotificationManager
 	deadMan                    *deadManRuntime
@@ -1193,6 +1368,7 @@ type Monitor struct {
 	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
+	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
@@ -1213,6 +1389,7 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
+	vmAgentMemInFlight         map[string]*guestMemoryFetch    // Guarded by rrdCacheMu; retained until the read returns, even after invalidation.
 	removedDockerHosts         map[string]time.Time            // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string               // Track token ID -> Docker host identity bindings to enforce uniqueness
 	dockerIdentityFlaps        map[string]*identityFlapTracker // Track per-host identity flapping (cloned VMs sharing machine-id)
@@ -1231,6 +1408,8 @@ type Monitor struct {
 	guestMetadataCache         map[string]guestMetadataCacheEntry
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
+	guestMetadataInFlight      map[string]*guestMetadataFetch // Guarded by guestMetadataLimiterMu; retained until fetch completion, even after invalidation.
+	guestMetadataLastAccess    map[string]time.Time           // Guarded by guestMetadataLimiterMu; cache activity, never guest evidence.
 	guestMetadataSlots         chan struct{}
 	guestMetadataMinRefresh    time.Duration
 	guestMetadataRefreshJitter time.Duration
@@ -1255,6 +1434,9 @@ type Monitor struct {
 	nodePendingUpdatesCache   map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
 	pveMembershipMisses       map[string]int                 // Consecutive authoritative membership absences by instance/node
 	resourceStore             ResourceStoreInterface         // Optional unified resource store for polling optimization
+	resourceWiringMu          sync.Mutex                     // Serializes dependency changes and their attachment effects, not provider/alert callbacks
+	resourceWiringGeneration  atomic.Uint64                  // Store/provider binding captured by a refresh
+	resourcePublishMu         sync.Mutex                     // Serializes full publications after provider collection
 	supplementalProviders     map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
 	recoveryManager           *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	recoveryIngestMu          sync.Mutex
@@ -1262,6 +1444,13 @@ type Monitor struct {
 	recoveryIngestPending     []recoveryIngestBatch
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
+	mockHostAgentsMu          sync.Mutex
+	mockDockerHosts           map[string]models.DockerHost
+	mockFixtureRevision       uint64
+	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
+	mockModeFence             mockModeFence            // Keeps mode-dependent alert evaluations inside the epoch they read in
+	mockModeAligned           bool                     // Mock mode the alerts and state belong to; guarded by mockModeSwitchMu
+	mockModeSwitchesSeen      uint64                   // mockModeSwitchCount when they were last aligned; guarded by mockModeSwitchMu
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
 	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
@@ -1317,8 +1506,19 @@ type Monitor struct {
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
+	m.pveGuestPublicationMu.Lock()
+	defer m.pveGuestPublicationMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for name := range m.pveGuestPolls {
+		m.cancelPVEGuestPollLocked(name)
+	}
+	// A new runtime invalidates detached replication reads even when the old
+	// caller has not yet canceled its parent context.
+	for name, poll := range m.pveReplicationPolls {
+		poll.cancel()
+		delete(m.pveReplicationPolls, name)
+	}
 	m.runtimeCtx = ctx
 	m.wsHub = hub
 }
@@ -1331,8 +1531,10 @@ func (m *Monitor) getRuntimeContext() context.Context {
 
 // clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
 type clusterSensorsCacheEntry struct {
-	sensors   models.HostSensorSummary
-	updatedAt time.Time
+	reporterID string // host agent that collected the reading over SSH
+	nodeName   string // lowercase Proxmox node name the reading describes
+	sensors    models.HostSensorSummary
+	updatedAt  time.Time
 }
 
 type rrdMemCacheEntry struct {
@@ -1748,6 +1950,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		DataDir: cfg.DataPath,
 	})
 
+	// One read decides the alert restore and records the mode it belongs to,
+	// so Start can tell whether a mock-mode switch landed in between. The
+	// count is read first: a switch flips the flag before it counts, so one
+	// that overlaps these reads leaves a stale count, never a stale mode.
+	switchesSeen := mockModeSwitchCount.Load()
+	builtInMockMode := mock.IsMockEnabled()
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
@@ -1781,7 +1989,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
-		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions()...),
+		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions(builtInMockMode)...),
+		mockModeAligned:            builtInMockMode,
+		mockModeSwitchesSeen:       switchesSeen,
 		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManagerWithDeferredQueue(cfg.PublicURL, cfg.DataPath),
 		deadMan:                    newDeadManRuntime(config.ResolveRuntimeDataDir(cfg.DataPath)),
@@ -1820,6 +2030,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
 		guestMetadataLimiter:       make(map[string]time.Time),
+		guestMetadataLastAccess:    make(map[string]time.Time),
 		guestMetadataMinRefresh:    minRefresh,
 		guestMetadataRefreshJitter: jitter,
 		guestMetadataRetryBackoff:  retryBackoff,
@@ -2057,38 +2268,39 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Msg("Starting monitoring loop")
 
 	m.setRuntimeContext(ctx, wsHub)
+	// Router attachment can start history replay before Start. Tenant teardown
+	// must not observe this runtime as finished while that writer still owns
+	// the canonical history or its durable replay watermark.
+	defer m.stopAlertProjectionCatchUp()
 	defer m.stopMockMetricsSampler()
 
 	// Best-effort startup cleanup: when direct PBS is configured, remove legacy
 	// PVE-proxied PBS backup points to prevent duplicate recovery entries.
 	m.purgeStalePVEPBSBackupsBestEffort(ctx)
 
-	if mock.IsMockEnabled() {
-		m.startMockMetricsSampler(ctx)
-	}
+	// From here every mock-mode switch reaches this monitor. The sampler or
+	// discovery is chosen while no switch can run, so a switch cannot land
+	// between reading the mode and starting the runtime for it.
+	leaveMockModeSwitches := m.joinMockModeSwitches(func(mockEnabled bool) {
+		m.startModeRuntime(ctx, wsHub, mockEnabled)
+	})
+	defer leaveMockModeSwitches()
 
-	// Initialize and start discovery service if enabled
-	if mock.IsMockEnabled() {
-		log.Info().Msg("mock mode enabled - skipping discovery service")
-		m.discoveryService = nil
-	} else if m.config.DiscoveryEnabled {
-		discoverySubnet := m.config.DiscoverySubnet
-		if discoverySubnet == "" {
-			discoverySubnet = "auto"
+	// Tenant deletion waits for Start to return before closing stores and
+	// removing the data directory. Alert passes must belong to that same
+	// lifetime: detached mock checks can otherwise keep writing alert files
+	// after the monitoring loop has reported completion.
+	var alertChecks sync.WaitGroup
+	defer alertChecks.Wait()
+	startAlertCheck := func(check func()) {
+		if ctx.Err() != nil {
+			return
 		}
-		cfgProvider := func() config.DiscoveryConfig {
-			return m.discoveryConfigSnapshot()
-		}
-		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
-		if m.discoveryService != nil {
-			m.discoveryService.Start(ctx)
-			log.Info().Msg("discovery service initialized and started")
-		} else {
-			log.Error().Msg("failed to initialize discovery service")
-		}
-	} else {
-		log.Info().Msg("discovery service disabled by configuration")
-		m.discoveryService = nil
+		alertChecks.Go(func() {
+			if ctx.Err() == nil {
+				check()
+			}
+		})
 	}
 
 	// Set up alert callbacks. Projection replay is deliberately absent here:
@@ -2146,11 +2358,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	if mock.IsMockEnabled() {
 		if keepRealPolling {
 			log.Info().Msg("mock mode enabled - running mock alerts and real metric polling")
-			go m.checkMockAlerts()
+			startAlertCheck(m.checkMockAlerts)
 			go m.poll(ctx, wsHub)
 		} else {
 			log.Info().Msg("mock mode enabled - skipping real node polling")
-			go m.checkMockAlerts()
+			startAlertCheck(m.checkMockAlerts)
 		}
 	} else {
 		go m.poll(ctx, wsHub)
@@ -2180,7 +2392,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.evaluateNotificationDelivery(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
-				go m.checkMockAlerts()
+				startAlertCheck(m.checkMockAlerts)
 				if keepRealPolling {
 					// Keep real metrics flowing while mock UI mode is active.
 					go m.poll(ctx, wsHub)
@@ -2193,7 +2405,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			// ledger, which lives behind the api layer. We invoke the
 			// registered lister here so a wedged PVE/PBS/PMG/VMware/TrueNAS
 			// connection escalates into the top-nav alert stream.
-			go m.checkConnectionAlerts()
+			startAlertCheck(m.checkConnectionAlerts)
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
@@ -2225,6 +2437,38 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			log.Info().Msg("monitoring loop stopped")
 			return
 		}
+	}
+}
+
+// startModeRuntime starts the mock metrics sampler in mock mode, or the
+// discovery service in live mode when it is enabled.
+func (m *Monitor) startModeRuntime(ctx context.Context, wsHub *websocket.Hub, mockEnabled bool) {
+	if mockEnabled {
+		m.startMockMetricsSampler(ctx)
+	}
+
+	// Initialize and start discovery service if enabled
+	if mockEnabled {
+		log.Info().Msg("mock mode enabled - skipping discovery service")
+		m.discoveryService = nil
+	} else if m.config.DiscoveryEnabled {
+		discoverySubnet := m.config.DiscoverySubnet
+		if discoverySubnet == "" {
+			discoverySubnet = "auto"
+		}
+		cfgProvider := func() config.DiscoveryConfig {
+			return m.discoveryConfigSnapshot()
+		}
+		m.discoveryService = discovery.NewService(wsHub, m.GetOrgID(), 5*time.Minute, discoverySubnet, cfgProvider)
+		if m.discoveryService != nil {
+			m.discoveryService.Start(ctx)
+			log.Info().Msg("discovery service initialized and started")
+		} else {
+			log.Error().Msg("failed to initialize discovery service")
+		}
+	} else {
+		log.Info().Msg("discovery service disabled by configuration")
+		m.discoveryService = nil
 	}
 }
 
@@ -2742,6 +2986,8 @@ func (m *Monitor) updateBreakerMetric(instanceType InstanceType, instance string
 }
 
 func (m *Monitor) randomFloat() float64 {
+	m.rngMu.Lock()
+	defer m.rngMu.Unlock()
 	if m.rng == nil {
 		m.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
@@ -3402,7 +3648,10 @@ func (m *Monitor) NodesSnapshot() []models.Node {
 	if m == nil {
 		return nil
 	}
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	return nodesSnapshotFromReadState(m.GetUnifiedReadStateOrSnapshot())
+}
+
+func nodesSnapshotFromReadState(readState unifiedresources.ReadState) []models.Node {
 	if readState == nil {
 		return nil
 	}
@@ -3574,6 +3823,7 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != view.Hostname() {
 		displayName = trimmed
 	}
+	status, lastSeen := hostAgentLivenessFromReadStateView(view, time.Now())
 
 	return models.Host{
 		ID:                firstNonEmptyString(view.AgentID(), view.ID()),
@@ -3595,10 +3845,10 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		RAID:              hostRAIDFromReadStateView(view.RAID()),
 		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
 		Ceph:              hostCephFromReadStateView(view.Ceph()),
-		Status:            string(view.Status()),
+		Status:            status,
 		UptimeSeconds:     view.UptimeSeconds(),
 		IntervalSeconds:   view.IntervalSeconds(),
-		LastSeen:          view.LastSeen(),
+		LastSeen:          lastSeen,
 		AgentVersion:      view.AgentVersion(),
 		IntegrationSource: view.IntegrationSource(),
 		MachineID:         view.MachineID(),
@@ -3619,6 +3869,25 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		LinkedVMID:        view.LinkedVMID(),
 		LinkedContainerID: view.LinkedContainerID(),
 	}
+}
+
+// hostAgentLivenessFromReadStateView returns the status and last report of the
+// agent behind a read-state host row. A row merged with a Proxmox node takes
+// LastSeen from its freshest source and stays online while PVE polling
+// continues, so a silent agent would look current: its retained disk summary
+// and datasets kept feeding the node, and its connection read as active. A
+// models.Host describes the agent, so read the agent source's own sighting
+// and lease, as evaluateHostAgents does for the host in state.
+func hostAgentLivenessFromReadStateView(view *unifiedresources.HostView, now time.Time) (string, time.Time) {
+	status, lastSeen := string(view.Status()), view.LastSeen()
+	agentSighting, ok := view.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || agentSighting.LastSeen.IsZero() {
+		return status, lastSeen
+	}
+	if !hostAgentReportCurrent(agentSighting.LastSeen, view.IntervalSeconds(), now) {
+		status = "offline"
+	}
+	return status, agentSighting.LastSeen
 }
 
 func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
@@ -3753,6 +4022,7 @@ func pbsInstanceFromReadStateView(view *unifiedresources.PBSInstanceView) models
 		ID:               firstNonEmptyString(view.InstanceID(), view.ID()),
 		Name:             view.Name(),
 		Host:             view.HostURL(),
+		NodeName:         view.NodeName(),
 		GuestURL:         view.GuestURL(),
 		Status:           string(view.Status()),
 		Version:          view.Version(),
@@ -4318,43 +4588,54 @@ func (m *Monitor) PBSBackupsSnapshot() []models.PBSBackup {
 // BuildFrontendState returns the current state converted to frontend format.
 // This replaces the GetState().ToFrontend() pattern in consumer code.
 func (m *Monitor) BuildFrontendState() models.StateFrontend {
-	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+	return m.buildBroadcastFrontendStateFromSnapshot(m.currentStateWithScope())
 }
 
 // BuildBroadcastFrontendState returns frontend state ready for websocket
 // broadcasts, including the unified resource payload when a resource store is
 // configured.
 func (m *Monitor) BuildBroadcastFrontendState() models.StateFrontend {
-	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+	return m.buildBroadcastFrontendStateFromSnapshot(m.currentStateWithScope())
 }
 
 func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	return snapshot.ToFrontend()
 }
 
-func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot, scope mockModeScope) models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, scope, time.Now)
+}
+
+// The clock is sampled at the same post-read health-evaluation boundary as
+// ordinary broadcasts. Tests can compare complete projections at one instant
+// without mistaking a naturally advancing health-age label for lost content.
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot models.StateSnapshot, scope mockModeScope, healthClock func() time.Time) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
-	m.updateResourceStoreForRead(snapshot)
+	m.updateResourceStoreForRead(snapshot, scope)
 	if m != nil && m.alertManager != nil {
 		if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
 			frontendState.ActiveAlerts = liveAlerts
 		}
 	}
 	unifiedView := m.currentUnifiedStateView()
-	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
-	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
+	metricsTargetResolver := unifiedView.metricsTargets
+	if metricsTargetResolver == nil {
+		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
+	}
+	// Coalescing picks each merged metric's source by freshness, judged by
+	// the thresholds the view's own registry judged its sightings by.
+	broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources, unifiedView.staleThresholds)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
-	now := time.Now().UTC()
+	now := healthClock().UTC()
 	for i := range broadcastResources {
 		m.applyPersistedMetadataToUnifiedResource(&broadcastResources[i])
 		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)
 		broadcastResources[i].Health = &health
 	}
-	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(
-		attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver),
-	)
+	attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)
+	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
@@ -4364,6 +4645,45 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}
 	return frontendState
+}
+
+// presentationCoalescingResourceStore is implemented by resource stores whose
+// registry can hold the operator's merge exclusions (MonitorAdapter).
+type presentationCoalescingResourceStore interface {
+	CoalesceForPresentation(resources []unifiedresources.Resource, thresholds map[unifiedresources.DataSource]time.Duration) ([]unifiedresources.Resource, bool)
+}
+
+// coalesceResourcesForPresentation applies the presentation host coalesce with
+// the operator's merge exclusions, which the resources API's
+// ListForPresentation honours too: a host pair the operator split must not
+// show as one broadcast row while REST lists two. The read state that listed
+// the rows supplies them when its registry is store-backed, as the resource
+// store's adapter and a host-continuity overlay are; the mock view and other
+// views built from an unified list carry none, so the resource store's
+// adapter supplies them instead. staleThresholds are those the listing's
+// registry generation judged its sightings by; the coalesce judges each
+// merged metric's freshness by them.
+func (m *Monitor) coalesceResourcesForPresentation(
+	readState unifiedresources.ReadState,
+	resources []unifiedresources.Resource,
+	staleThresholds map[unifiedresources.DataSource]time.Duration,
+) []unifiedresources.Resource {
+	if coalescer, ok := readState.(presentationCoalescingResourceStore); ok {
+		if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {
+			return coalesced
+		}
+	}
+	if m != nil {
+		m.mu.RLock()
+		store := m.resourceStore
+		m.mu.RUnlock()
+		if coalescer, ok := store.(presentationCoalescingResourceStore); ok {
+			if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {
+				return coalesced
+			}
+		}
+	}
+	return unifiedresources.CoalescePresentationHostResourcesWithStaleThresholds(resources, staleThresholds)
 }
 
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without
@@ -4525,49 +4845,93 @@ func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Aler
 	hub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 }
 
-// SetMockMode switches between mock data and real infrastructure data at runtime.
+// SetMockMode switches between mock data and real infrastructure data at
+// runtime. The mode is process-wide, so the switch reaches m and every running
+// monitor (see mockModeSwitchMu), whichever tenant's monitor it was made
+// through. It must not be called from inside an alert evaluation of any of
+// them, whose completion it may wait for.
 func (m *Monitor) SetMockMode(enable bool) error {
-	current := mock.IsMockEnabled()
-	if current == enable {
-		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
-		return nil
+	mockModeSwitchMu.Lock()
+	defer mockModeSwitchMu.Unlock()
+
+	monitors := mockModeSwitchTargetsLocked(m)
+	flip := mock.IsMockEnabled() != enable
+	if !flip {
+		// The flag already holds the mode, but a monitor that was not running
+		// during an earlier switch can still hold the other mode's alerts
+		// and state; only those leave it.
+		monitors = slices.DeleteFunc(monitors, func(monitor *Monitor) bool {
+			return monitor.mockModeAligned == enable
+		})
+		if len(monitors) == 0 {
+			log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
+			return nil
+		}
 	}
 
+	for _, monitor := range monitors {
+		monitor.stopMockMetricsSampler()
+	}
+	if flip {
+		if err := mock.SetEnabled(enable); err != nil {
+			return err
+		}
+		mockModeSwitchCount.Add(1)
+	}
+	for _, monitor := range monitors {
+		monitor.endMockModeEpoch(enable)
+	}
+	for _, monitor := range monitors {
+		_, running := mockModeRunningMonitors[monitor]
+		monitor.resumeAfterMockModeSwitch(enable, running)
+	}
 	if enable {
-		m.stopMockMetricsSampler()
-		if err := mock.SetEnabled(true); err != nil {
-			return err
-		}
-		m.alertManager.ClearActiveAlerts()
-		m.mu.Lock()
-		m.resetStateLocked()
-		m.metricsHistory.Reset()
-		m.mu.Unlock()
-		m.StopDiscoveryService()
-		m.mu.RLock()
-		ctx := m.runtimeCtx
-		m.mu.RUnlock()
-		if ctx != nil {
-			m.startMockMetricsSampler(ctx)
-		}
-		log.Info().Msg("switched monitor to mock mode")
+		log.Info().Int("monitors", len(monitors)).Msg("switched monitors to mock mode")
 	} else {
-		m.stopMockMetricsSampler()
-		if err := mock.SetEnabled(false); err != nil {
-			return err
-		}
-		m.alertManager.ClearActiveAlerts()
-		m.mu.Lock()
-		m.resetStateLocked()
-		m.metricsHistory.Reset()
-		m.mu.Unlock()
-		log.Info().Msg("switched monitor to real data mode")
+		log.Info().Int("monitors", len(monitors)).Msg("switched monitors to real data mode")
 	}
+	return nil
+}
 
+// endMockModeEpoch leaves the mode the monitor's alerts and state belong to
+// once the process flag already holds the new one. Every evaluation of
+// mode-dependent data that started before the flip must finish or be refused
+// before the clear, or it reopens alerts for the side the monitor just left
+// (see mockModeFence). The caller holds mockModeSwitchMu.
+func (m *Monitor) endMockModeEpoch(enable bool) {
+	m.mockModeFence.advance()
+	m.alertManager.ClearActiveAlerts()
+	if !enable {
+		m.forgetMockFixtureHosts()
+	}
+	m.mu.Lock()
+	m.resetStateLocked()
+	m.metricsHistory.Reset()
+	m.mu.Unlock()
+	if enable {
+		m.StopDiscoveryService()
+	}
+	m.mockModeAligned = enable
+	m.mockModeSwitchesSeen = mockModeSwitchCount.Load()
+}
+
+// resumeAfterMockModeSwitch restarts the mode-dependent runtime of a monitor
+// whose Start loop has joined the switches, once every monitor has ended its
+// epoch. A monitor that has not joined yet starts that runtime itself when it
+// does (Start sets its runtime context first), and one whose loop has stopped
+// only broadcasts.
+func (m *Monitor) resumeAfterMockModeSwitch(enable, running bool) {
 	m.mu.RLock()
 	ctx := m.runtimeCtx
 	hub := m.wsHub
 	m.mu.RUnlock()
+	if !running || (ctx != nil && ctx.Err() != nil) {
+		ctx = nil
+	}
+
+	if enable && ctx != nil {
+		m.startMockMetricsSampler(ctx)
+	}
 
 	if hub != nil {
 		m.broadcastCurrentState(hub)
@@ -4585,8 +4949,6 @@ func (m *Monitor) SetMockMode(enable bool) error {
 			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
 		}
 	}
-
-	return nil
 }
 
 func (m *Monitor) resetStateLocked() {
@@ -4594,6 +4956,33 @@ func (m *Monitor) resetStateLocked() {
 	m.state.Stats = models.Stats{
 		StartTime: m.startTime,
 		Version:   "2.0.0-go",
+	}
+	m.installNodeAgentSplitDeciderLocked()
+}
+
+// installNodeAgentSplitDeciderLocked makes the state hold back node<->agent
+// links the operator split in the resource store, so the monitor's own link
+// agrees with the registry's rows. Callers hold m.mu.
+func (m *Monitor) installNodeAgentSplitDeciderLocked() {
+	if m.state == nil {
+		return
+	}
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.state.SetNodeAgentSplitDecider(decider)
+}
+
+// nodeAgentSplitFilter reports, for a polled node, whether a read-state host
+// is an agent the operator split from it. Nil when no resource store holds
+// operator decisions.
+func (m *Monitor) nodeAgentSplitFilter(node models.Node) func(*unifiedresources.HostView) bool {
+	m.mu.RLock()
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.mu.RUnlock()
+	if decider == nil {
+		return nil
+	}
+	return func(host *unifiedresources.HostView) bool {
+		return decider.ProxmoxNodeAgentSplit(node, hostFromReadStateView(host))
 	}
 }
 
@@ -4625,7 +5014,7 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 		return m.discoveryConfigSnapshot()
 	}
 
-	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)
+	m.discoveryService = discovery.NewService(wsHub, m.orgID, 5*time.Minute, subnet, cfgProvider)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
 		log.Info().Str("subnet", subnet).Msg("discovery service started")
@@ -4660,72 +5049,147 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 	log.Info().Msg("temperature monitoring disabled")
 }
 
-// SetResourceStore sets the resource store for polling optimization.
-// When set, the monitor will check if it should reduce polling frequency
-// for nodes that have host agents providing data.
+// SetResourceStore sets the resource store and immediately backfills it, even
+// when the same store is supplied again. Use SetResourceStoreAndProviders for
+// repeatable router/tenant initialization without redundant full refreshes.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
+	m.wireResourceStoreAndProviders(store, nil, true)
+}
+
+// SetResourceStoreAndProviders attaches the store and a batch of provider
+// updates in one critical section, then publishes once if anything changed.
+// Omitted sources are unchanged; an explicit nil withdraws a source. Like a
+// mock-mode switch, changing dependencies must not run inside an admitted
+// alert callback: it joins old alert calls before the new binding can publish.
+func (m *Monitor) SetResourceStoreAndProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
+	m.wireResourceStoreAndProviders(store, providers, false)
+}
+
+// sameWiredValue treats uncomparable dependency values as changed, never as a
+// reason to panic or silently skip a refresh.
+func sameWiredValue(a, b any) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+	return a == b
+}
+
+func (m *Monitor) wireResourceStoreAndProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider, force bool) {
+	if m == nil {
+		return
+	}
+	m.resourceWiringMu.Lock()
 	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
 		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
 
 	m.mu.Lock()
+	_, providersChanged := m.registerSupplementalProvidersLocked(providers)
+	storeChanged := !sameWiredValue(m.resourceStore, store)
 	m.resourceStore = store
 	incidentStore := m.incidentStore
+	m.installNodeAgentSplitDeciderLocked()
+	changed := storeChanged || providersChanged
+	if changed {
+		m.resourceWiringGeneration.Add(1)
+	}
 	m.mu.Unlock()
-	m.installOperatorIntentResolver(store)
-	log.Info().Msg("resource store set for polling optimization")
 
-	timelineAttached := false
-	if incidentStore != nil {
-		if timelineStore, ok := store.(memory.IncidentTimelineStore); ok {
+	if storeChanged || force {
+		m.installOperatorIntentResolver(store)
+		if incidentStore != nil {
+			timelineStore, _ := store.(memory.IncidentTimelineStore)
 			incidentStore.SetResourceTimelineStore(timelineStore)
-			timelineAttached = true
-		} else {
-			incidentStore.SetResourceTimelineStore(nil)
+			if timelineStore != nil {
+				// Router/health serving must not wait for backlog projection.
+				m.scheduleAlertProjectionCatchUp()
+			}
 		}
 	}
-	if timelineAttached {
-		// The canonical boundary: with the durable resource store attached,
-		// restart repair can reach resource history as well as the incident
-		// fallback cache, and the replay watermark may advance. Run it in the
-		// background — router construction and health serving must not wait
-		// behind an un-projected backlog.
-		m.scheduleAlertProjectionCatchUp()
+	m.resourceWiringMu.Unlock()
+
+	if changed {
+		// The epoch guards dependency-derived alerts as well as mode-derived
+		// ones. No active alert is cleared here; the new inventory evaluates
+		// them normally. No monitor/state lock is held while joining old calls.
+		m.mockModeFence.advance()
 	}
 
-	// Immediately backfill the store from current state so ReadState
-	// consumers have data as soon as the store is wired.
-	// Guard against minimally initialized monitors (e.g., test fixtures
-	// with bare &Monitor{}) where m.state may be nil.
-	if store != nil && m.state != nil {
-		m.updateResourceStore(m.GetState())
+	if changed || force {
+		m.backfillResourceStore(false)
 	}
 }
 
-// SetSupplementalRecordsProvider configures source-native resource providers
-// that ingest alongside the legacy state snapshot path.
+func (m *Monitor) backfillResourceStore(allowEmptyState bool) {
+	// Bare monitor fixtures have no state. Read the pointer under the same
+	// lock used by a mock switch replacing it.
+	m.mu.RLock()
+	ready := m.resourceStore != nil && (m.state != nil || allowEmptyState)
+	m.mu.RUnlock()
+	if ready {
+		m.updateResourceStore(m.currentStateWithScope())
+	}
+}
+
+// SetSupplementalRecordsProvider preserves the single-source explicit-refresh
+// behavior, including when the supplied provider is unchanged.
 func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSource, provider MonitorSupplementalRecordsProvider) {
+	m.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{source: provider})
+}
+
+// SetSupplementalRecordsProviders applies a batch of source updates and
+// refreshes once. Empty source names are ignored; nil withdraws a provider.
+// Changed bindings have the same alert-callback restriction as the combined setter.
+func (m *Monitor) SetSupplementalRecordsProviders(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
 	if m == nil {
 		return
 	}
-
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
-		return
-	}
-
+	m.resourceWiringMu.Lock()
 	m.mu.Lock()
-	if m.supplementalProviders == nil {
-		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
-	}
-	if provider == nil {
-		delete(m.supplementalProviders, normalized)
-	} else {
-		m.supplementalProviders[normalized] = provider
+	usable, changed := m.registerSupplementalProvidersLocked(providers)
+	if changed {
+		m.resourceWiringGeneration.Add(1)
 	}
 	m.mu.Unlock()
+	m.resourceWiringMu.Unlock()
+	if changed {
+		m.mockModeFence.advance()
+	}
+	if usable {
+		// Source-native providers can publish into a store even before a
+		// legacy state exists (including minimally initialized monitors).
+		m.backfillResourceStore(true)
+	}
+}
 
-	m.updateResourceStore(m.GetState())
+// The caller holds m.mu. Compare and update every source in the same section
+// as the store binding, so a refresh can never capture half a wiring batch.
+func (m *Monitor) registerSupplementalProvidersLocked(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) (usable, changed bool) {
+	for source, provider := range providers {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if normalized == "" {
+			continue
+		}
+		usable = true
+		previous, registered := m.supplementalProviders[normalized]
+		if provider == nil {
+			if registered {
+				delete(m.supplementalProviders, normalized)
+				changed = true
+			}
+			continue
+		}
+		if !registered || !sameWiredValue(previous, provider) {
+			changed = true
+		}
+		if m.supplementalProviders == nil {
+			m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+		}
+		m.supplementalProviders[normalized] = provider
+	}
+	return usable, changed
 }
 
 // SetLicenseChecker wires the commercial feature gate used by monitoring-owned
@@ -4815,10 +5279,20 @@ func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.
 		return nil
 	}
 
-	if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
-		if resolver, ok := view.(MetricsTargetResourceStore); ok {
-			if target := resolver.MetricsTargetForResource(resourceID); target != nil {
-				return target
+	// Mock mode resolves from the cached view's captured targets and never
+	// asks the view again: this runs once per resource and windowed metric in
+	// every alert pass, and the fixture's data version moves on every tick
+	// (see mockMetricsTarget).
+	target, fromMockView := m.mockMetricsTarget(resourceID)
+	if target != nil {
+		return target
+	}
+	if !fromMockView {
+		if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
+			if resolver, ok := view.(MetricsTargetResourceStore); ok {
+				if target := resolver.MetricsTargetForResource(resourceID); target != nil {
+					return target
+				}
 			}
 		}
 	}
@@ -4871,23 +5345,53 @@ func (m *Monitor) RecentResourceChanges(resourceID string, since time.Time, limi
 }
 
 type monitorUnifiedStateView struct {
-	resources []unifiedresources.Resource
-	readState unifiedresources.ReadState
-	freshness time.Time
+	resources      []unifiedresources.Resource
+	readState      unifiedresources.ReadState
+	freshness      time.Time
+	metricsTargets MetricsTargetResourceStore
+	// staleThresholds are those the listed resources' registry generation
+	// was judged by; nil means the registry defaults.
+	staleThresholds map[unifiedresources.DataSource]time.Duration
 }
 
 type unifiedResourceReadStateLister interface {
 	GetAll() []unifiedresources.Resource
 }
 
+type unifiedResourceProjectionLister interface {
+	GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget)
+}
+
+// This resolver never falls through to the live store, including for an
+// unknown ID. A missing target belongs to this captured generation too.
+type projectionMetricsTargets map[string]unifiedresources.MetricsTarget
+
+func (targets projectionMetricsTargets) MetricsTargetForResource(id string) *unifiedresources.MetricsTarget {
+	target, ok := targets[unifiedresources.CanonicalResourceID(id)]
+	if !ok {
+		return nil
+	}
+	return &target
+}
+
+func unifiedProjectionResources(lister unifiedResourceReadStateLister) ([]unifiedresources.Resource, MetricsTargetResourceStore) {
+	if projection, ok := lister.(unifiedResourceProjectionLister); ok {
+		resources, targets := projection.GetAllWithMetricsTargets()
+		return resources, projectionMetricsTargets(targets)
+	}
+	return lister.GetAll(), nil
+}
+
 func monitorUnifiedStateViewFromSnapshot(snapshot models.StateSnapshot) monitorUnifiedStateView {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
 	adapter := unifiedresources.NewMonitorAdapter(registry)
+	resources, targets := unifiedProjectionResources(adapter)
 	return monitorUnifiedStateView{
-		resources: registry.List(),
-		readState: adapter,
-		freshness: snapshot.LastUpdate,
+		resources:      resources,
+		readState:      adapter,
+		freshness:      snapshot.LastUpdate,
+		metricsTargets: targets,
 	}
 }
 
@@ -4895,10 +5399,12 @@ func monitorUnifiedStateViewFromResources(resources []unifiedresources.Resource,
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestResources(resources)
 	adapter := unifiedresources.NewMonitorAdapter(registry)
+	resources, targets := unifiedProjectionResources(adapter)
 	return monitorUnifiedStateView{
-		resources: registry.List(),
-		readState: adapter,
-		freshness: freshness,
+		resources:      resources,
+		readState:      adapter,
+		freshness:      freshness,
+		metricsTargets: targets,
 	}
 }
 
@@ -4915,8 +5421,10 @@ func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifi
 		return view
 	}
 
-	resources := lister.GetAll()
+	resources, targets, thresholds := unifiedProjectionResourcesWithStaleThresholds(lister)
 	view.resources = resources
+	view.metricsTargets = targets
+	view.staleThresholds = thresholds
 	if view.freshness.IsZero() {
 		view.freshness = latestUnifiedResourceLastSeen(resources)
 	}
@@ -4939,27 +5447,61 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	if mock.IsMockEnabled() {
-		// Read the version before the snapshot so a tick landing in between
-		// caches newer data under an older token (harmless rebuild next
-		// call) rather than ever serving stale data under a newer one.
+		// Read the version and links before the snapshot so a tick or
+		// rebuild landing in between caches newer data under an older
+		// token (harmless rebuild next call) rather than ever serving stale
+		// data under a newer one. The structure revision goes first: the
+		// fixture advances its data version before its revision, so a
+		// reader that sees a new revision also reads the new version and
+		// never memoizes the previous estate under it
+		// (mock.FixtureStructureRevision).
+		structure := mock.FixtureStructureRevision()
 		version := mock.FixtureDataVersion()
+		links := m.resourceStoreManualLinks()
 		m.mockUnifiedViewMu.Lock()
-		if m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version {
+		if m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version && sameManualLinks(m.mockUnifiedViewLinks, links) {
 			view := m.mockUnifiedView
 			m.mockUnifiedViewMu.Unlock()
 			return view
 		}
 		m.mockUnifiedViewMu.Unlock()
 
-		resources, freshness := mock.UnifiedResourceSnapshot()
+		// The fixture graph knows no link store, so the operator's links,
+		// as the resource store's current generation applied them, are
+		// applied while it is built, at each ingest stage like the live
+		// rebuild. Its registry has no store: fixture data never reaches
+		// durable state through it.
+		resources, freshness := mock.UnifiedResourceSnapshotWithLinks(links)
 		if len(resources) > 0 || !freshness.IsZero() {
 			// Consumers share this view between ticks, mirroring the
 			// sharing semantics the persistent-store ReadState path has
 			// always had in real mode: views are read-only.
 			view := monitorUnifiedStateViewFromResources(resources, freshness)
 			m.mockUnifiedViewMu.Lock()
+			// Readers key caches on freshness: the resources API reuses
+			// its registry, seeded from this list, while freshness is
+			// equal. A link change alters the view without moving any
+			// fixture timestamp, and a slow build can publish after a
+			// newer one, so freshness is assigned here, in publication
+			// order: a view built from the fixture freshness and links of
+			// the one it replaces keeps its freshness, and any other view
+			// gets one later than every view published before it. Fixture
+			// freshness stands in for the fixture data here, as it already
+			// does for that cache.
+			fixtureFreshness := view.freshness
+			if m.mockUnifiedViewValid {
+				previous := m.mockUnifiedView.freshness
+				if fixtureFreshness.Equal(m.mockUnifiedViewFixtureAt) && sameManualLinks(m.mockUnifiedViewLinks, links) {
+					view.freshness = previous
+				} else if !view.freshness.After(previous) {
+					view.freshness = previous.Add(time.Nanosecond)
+				}
+			}
 			m.mockUnifiedView = view
+			m.mockUnifiedViewFixtureAt = fixtureFreshness
 			m.mockUnifiedViewVersion = version
+			m.mockUnifiedViewStructure = structure
+			m.mockUnifiedViewLinks = links
 			m.mockUnifiedViewValid = true
 			m.mockUnifiedViewMu.Unlock()
 			return view
@@ -4995,6 +5537,38 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
 }
 
+// manualLinkResourceStore is implemented by resource stores that apply the
+// operator's manual links (MonitorAdapter).
+type manualLinkResourceStore interface {
+	ManualLinks() []unifiedresources.ResourceLink
+}
+
+// resourceStoreManualLinks returns the operator links the resource store's
+// current generation applied, or nil when the store applies none.
+func (m *Monitor) resourceStoreManualLinks() []unifiedresources.ResourceLink {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	linkStore, ok := store.(manualLinkResourceStore)
+	if !ok {
+		return nil
+	}
+	return linkStore.ManualLinks()
+}
+
+// sameManualLinks reports whether two link lists fold the same resources in
+// the same order. The reason and author do not change a fold, but the creation
+// time can: among otherwise equal candidates a chain of links folds into the
+// primary of its earliest-created link (unifiedresources linkChainRootLocked),
+// so lists that differ only in a creation time can leave a different row
+// standing.
+func sameManualLinks(a, b []unifiedresources.ResourceLink) bool {
+	return slices.EqualFunc(a, b, func(x, y unifiedresources.ResourceLink) bool {
+		return x.ResourceA == y.ResourceA && x.ResourceB == y.ResourceB && x.PrimaryID == y.PrimaryID &&
+			x.CreatedAt.Equal(y.CreatedAt)
+	})
+}
+
 func (m *Monitor) currentUnifiedResourceFreshness() time.Time {
 	if m == nil {
 		return time.Time{}
@@ -5022,11 +5596,11 @@ func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State)
 // associated freshness marker. In mock mode it returns the shared mock
 // unified-resource fixture graph rather than the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	view := m.currentUnifiedStateView()
 	// REST /api/resources seeds its registry from this snapshot. Apply the
 	// same user-metadata hydration (container customUrl) as the websocket
 	// broadcast path, so the two payload shapes cannot drift.
-	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness
+	resources, freshness, _ := m.UnifiedResourceSnapshotWithStaleThresholds()
+	return resources, freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the
@@ -5071,6 +5645,29 @@ func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
 	return m.currentUnifiedStateView().readState
 }
 
+// currentModeReadState is GetUnifiedReadStateOrSnapshot for callers that act
+// on the inventory it lists: those that open or remove alerts from it (Docker
+// pruning, backup and snapshot guest lookups) and the pollers' previous-state
+// carry, which writes it back into live state. After leaving mock mode the
+// registry may still hold the fixture estate until an undisturbed rebuild in
+// the new epoch replaces it, so they get a view of current state meanwhile.
+// The view lists the state snapshot without provider-owned supplemental
+// resources or persisted manual links and copies the whole estate, so it is
+// only for callers outside per-resource loops. The links stay out because the
+// view is a plain projection of current state for a short window: the links
+// still apply in the registry once a rebuild in the new epoch lands. Meanwhile
+// typed lookups see linked resources unmerged; the previous-state carry, for
+// one, loses a manually linked agent's memory.
+func (m *Monitor) currentModeReadState() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	if !mock.IsMockEnabled() && m.GetUnifiedReadState() != nil && !m.mockModeFence.registryCurrent() {
+		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState())).readState
+	}
+	return m.GetUnifiedReadStateOrSnapshot()
+}
+
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
 // for the given node because a host agent is providing richer data.
 // This helps reduce API load when agents are active.
@@ -5112,44 +5709,96 @@ type readRefreshResourceStore interface {
 // above all must not queue behind an in-flight rebuild whose change-record
 // and identity-pin persistence can take seconds per transaction on slow
 // volumes (#1665: /api/state stuck for minutes with SQLite on NFS).
-func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
-	m.mu.RLock()
-	store := m.resourceStore
-	m.mu.RUnlock()
-
+func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope mockModeScope) {
+	if !scope.current() {
+		return
+	}
+	binding := m.captureResourceStoreBinding()
+	store := binding.store
 	if store == nil {
 		return
 	}
 	readStore, ok := store.(readRefreshResourceStore)
 	if !ok {
-		m.updateResourceStore(state)
+		m.updateResourceStore(state, scope)
 		return
 	}
 
+	// Preserve the cheap fresh-read path and the cold-start build guarantee.
+	// A warm read never waits behind an ingest publication. Records themselves
+	// are repeatable; collect them outside both publication and adapter locks.
+	cold := false
+	if timed, ok := store.(interface{ LastRebuiltAt() time.Time }); ok {
+		last := timed.LastRebuiltAt()
+		cold = last.IsZero()
+		if !cold && time.Since(last) < readPathRegistryFreshness {
+			return
+		}
+	}
 	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
 		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
-	snapshotForStore := state
-	if ownedSources := m.providerOwnedSnapshotSources(); len(ownedSources) > 0 {
-		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
-	}
-	rebuilt := readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, m.collectSupplementalRecordsBySource)
-	if !rebuilt {
+	snapshotForStore := unifiedresources.SnapshotWithoutSources(state, binding.providers.ownedSnapshotSources(m))
+	recordsBySource := binding.providers.recordsBySource(m)
+	if cold {
+		m.resourcePublishMu.Lock()
+	} else if !m.resourcePublishMu.TryLock() {
 		return
 	}
-	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	if m.resourceWiringGeneration.Load() != binding.generation {
+		m.resourcePublishMu.Unlock()
+		return
+	}
+	rebuilt := false
+	mark, published := scope.publish(func() bool {
+		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
+			return recordsBySource
+		})
+		return rebuilt
+	})
+	m.resourcePublishMu.Unlock()
+	if !published || !rebuilt {
+		return
+	}
+	// Once admitted, this pass drains only its captured providers into its
+	// captured store, even if a replacement is now wiring or publishing.
+	recordSupplementalResourceChanges(store, binding.providers.changes(m))
+	if m.resourceWiringGeneration.Load() == binding.generation {
+		m.syncPublishedResourceStore(store, scope, mark)
+	}
+}
+
+// syncPublishedResourceStore runs the metric and alert syncs over the registry
+// a refresh just published under scope. A rebuild from an ended mock-mode
+// epoch that overlapped the refresh may have replaced that registry with the
+// mode the monitor left, so the alert sync runs only if none did.
+func (m *Monitor) syncPublishedResourceStore(store ResourceStoreInterface, scope mockModeScope, mark uint64) {
 	store = newResourceSnapshotStore(store)
+	resources := store.GetAll()
 	m.syncAllUnifiedMetrics(store)
-	m.syncUnifiedResourceAlertsToState(store.GetAll())
+	if scope.undisturbedSince(mark) {
+		m.syncUnifiedResourceAlertsToState(resources, scope)
+	}
+}
+
+// currentStateWithScope reads the monitor state together with the mock-mode
+// scope it was read in. GetState serves the fixture graph in mock mode, so a
+// refresh that evaluates alerts from it must take the scope first.
+func (m *Monitor) currentStateWithScope() (models.StateSnapshot, mockModeScope) {
+	scope := m.mockModeFence.begin()
+	return m.GetState(), scope
 }
 
 // updateResourceStore populates the canonical resource store from current
 // monitoring state. Callers use it at accepted-ingest boundaries and before
 // broadcast hydration so every ReadState consumer observes the same snapshot.
-func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
-	m.mu.RLock()
-	store := m.resourceStore
-	m.mu.RUnlock()
+// The scope must predate the read of state (see currentStateWithScope).
+func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockModeScope) {
+	if !scope.current() {
+		return
+	}
+	binding := m.captureResourceStoreBinding()
+	store, generation := binding.store, binding.generation
 
 	if store == nil {
 		log.Debug().Msg("[Resources] No resource store configured, skipping population")
@@ -5169,7 +5818,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		Msg("[Resources] Populating resource store from state snapshot")
 
 	snapshotForStore := state
-	ownedSources := m.providerOwnedSnapshotSources()
+	ownedSources := binding.providers.ownedSnapshotSources(m)
 	if len(ownedSources) > 0 {
 		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
 		sourceNames := make([]string, 0, len(ownedSources))
@@ -5181,46 +5830,62 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
 	}
 
-	recordsBySource := m.collectSupplementalRecordsBySource()
-	supplementalChanges := m.collectSupplementalChanges()
-	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
-		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
-		recordSupplementalResourceChanges(store, supplementalChanges)
-		store = newResourceSnapshotStore(store)
-		m.syncAllUnifiedMetrics(store)
-		for source, records := range recordsBySource {
-			if len(records) == 0 {
-				continue
-			}
-			log.Debug().
-				Str("source", string(source)).
-				Int("records", len(records)).
-				Msg("[Resources] Atomically ingested supplemental records")
-		}
-		m.syncUnifiedResourceAlertsToState(store.GetAll())
+	// Provider callbacks can read or re-enter the monitor. Collect without any
+	// publication/wiring lock, then refuse a binding that changed meanwhile.
+	if !scope.current() {
 		return
 	}
-
-	store.PopulateFromSnapshot(snapshotForStore)
-
-	supplementalStore, ok := store.(SupplementalRecordStore)
-	if ok {
-		for source, records := range recordsBySource {
-			if len(records) == 0 {
-				continue
-			}
-			supplementalStore.PopulateSupplementalRecords(source, records)
-			log.Debug().
-				Str("source", string(source)).
-				Int("records", len(records)).
-				Msg("[Resources] Ingested supplemental records")
-		}
+	recordsBySource := binding.providers.recordsBySource(m)
+	m.resourcePublishMu.Lock()
+	if m.resourceWiringGeneration.Load() != generation {
+		m.resourcePublishMu.Unlock()
+		return
 	}
+	mark, published := scope.publish(func() bool {
+		if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
+			atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+			for source, records := range recordsBySource {
+				if len(records) == 0 {
+					continue
+				}
+				log.Debug().
+					Str("source", string(source)).
+					Int("records", len(records)).
+					Msg("[Resources] Atomically ingested supplemental records")
+			}
+			return true
+		}
 
-	recordSupplementalResourceChanges(store, supplementalChanges)
-	store = newResourceSnapshotStore(store)
-	m.syncAllUnifiedMetrics(store)
-	m.syncUnifiedResourceAlertsToState(store.GetAll())
+		store.PopulateFromSnapshot(snapshotForStore)
+
+		supplementalStore, ok := store.(SupplementalRecordStore)
+		if ok {
+			for source, records := range recordsBySource {
+				if len(records) == 0 {
+					continue
+				}
+				supplementalStore.PopulateSupplementalRecords(source, records)
+				log.Debug().
+					Str("source", string(source)).
+					Int("records", len(records)).
+					Msg("[Resources] Ingested supplemental records")
+			}
+		}
+
+		return true
+	})
+	m.resourcePublishMu.Unlock()
+	if !published {
+		// The snapshot belongs to the mode the monitor just left.
+		return
+	}
+	// Drain consume-once changes only for a pass that actually published. No
+	// provider callback runs under resourcePublishMu, and changes already
+	// drained remain history even if a subsequent rewire replaces the binding.
+	recordSupplementalResourceChanges(store, binding.providers.changes(m))
+	if m.resourceWiringGeneration.Load() == generation {
+		m.syncPublishedResourceStore(store, scope, mark)
+	}
 }
 
 // resourceSnapshotStore serves one GetAll clone to every consumer of a single
@@ -5274,7 +5939,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentStateChange() {
 	if m == nil || m.state == nil {
 		return
 	}
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 // agentReportRefreshInterval bounds how often accepted agent reports refresh
@@ -5307,7 +5972,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
 	}
 	window := m.agentReportRefreshWindow
 	if window <= 0 {
-		m.updateResourceStore(m.GetState())
+		m.updateResourceStore(m.currentStateWithScope())
 		return
 	}
 
@@ -5323,7 +5988,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
 		r.running = true
 		r.lastRun = now
 		r.mu.Unlock()
-		m.updateResourceStore(m.GetState())
+		m.updateResourceStore(m.currentStateWithScope())
 		r.mu.Lock()
 		r.running = false
 		r.mu.Unlock()
@@ -5347,7 +6012,7 @@ func (m *Monitor) runTrailingAgentReportRefresh() {
 	r.lastRun = time.Now()
 	r.mu.Unlock()
 
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 
 	r.mu.Lock()
 	r.running = false
@@ -5944,11 +6609,14 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 			RPM:             resource.PhysicalDisk.RPM,
 			Used:            resource.PhysicalDisk.Used,
 			SmartAttributes: smartAttributesFromUnifiedMeta(resource.PhysicalDisk.SMART),
+			Collection:      diskinventory.CloneStatus(resource.PhysicalDisk.Collection),
 			LastChecked:     resource.LastSeen,
 		}
-		if disk.Serial == "" {
-			disk.ID = targetID
-		}
+		// Write under the key readers resolve. PhysicalDiskMetricID keys on a
+		// usable serial or WWN, which the target already equals, and
+		// otherwise on disk.ID, so a placeholder serial must not leave the
+		// canonical resource ID there.
+		disk.ID = targetID
 		// Anchor to the source observation time so a read-side registry rebuild
 		// re-issuing the same snapshot maps to one sample instead of a fresh
 		// wall-clock row (#1966).
@@ -6479,15 +7147,22 @@ func attachBroadcastMetricsTargets(
 	}
 
 	out := make([]unifiedresources.Resource, len(resources))
-	for i, resource := range resources {
-		if resource.MetricsTarget == nil {
-			resource.MetricsTarget = validBroadcastMetricsTarget(
-				resolver.MetricsTargetForResource(resource.ID),
-			)
-		}
-		out[i] = resource
-	}
+	copy(out, resources)
+	attachBroadcastMetricsTargetsInPlace(out, resolver)
 	return out
+}
+
+// Only call with the owned outer slice of a coalesced broadcast projection.
+// Nested resource data stays read-only, and the resolver returns owned targets.
+func attachBroadcastMetricsTargetsInPlace(resources []unifiedresources.Resource, resolver MetricsTargetResourceStore) {
+	if resolver == nil {
+		return
+	}
+	for i := range resources {
+		if resources[i].MetricsTarget == nil {
+			resources[i].MetricsTarget = validBroadcastMetricsTarget(resolver.MetricsTargetForResource(resources[i].ID))
+		}
+	}
 }
 
 func validBroadcastMetricsTarget(
@@ -6508,17 +7183,17 @@ func validBroadcastMetricsTarget(
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
-	resourceType := monitorFrontendResourceType(resource)
+	resourceType := monitorFrontendResourceType(&resource)
 	if resource.DiscoveryTarget == nil {
-		resource.DiscoveryTarget = monitorDiscoveryTarget(resource, resourceType)
+		resource.DiscoveryTarget = monitorDiscoveryTarget(&resource, resourceType)
 	}
 	if resource.MetricsTarget == nil {
-		resource.MetricsTarget = monitorMetricsTarget(resource, resourceType)
+		resource.MetricsTarget = monitorMetricsTarget(&resource, resourceType)
 	}
 	unifiedresources.RefreshCanonicalMetadata(&resource)
 	slimResourceForBroadcast(&resource)
-	name, displayName := monitorFrontendNames(resource, resourceType)
-	platformID := monitorPlatformID(resource, resourceType)
+	name, displayName := monitorFrontendNames(&resource, resourceType)
+	platformID := monitorPlatformID(&resource, resourceType)
 
 	input := models.ResourceConvertInput{
 		ID:                    resource.ID,
@@ -6527,21 +7202,21 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		Name:                  name,
 		DisplayName:           displayName,
 		PlatformID:            platformID,
-		PlatformType:          monitorPlatformType(resource, resourceType),
+		PlatformType:          monitorPlatformType(&resource, resourceType),
 		SourceType:            monitorSourceType(resource.Sources),
 		Sources:               monitorSourceKeys(resource.Sources),
 		ParentID:              monitorStringValue(resource.ParentID),
 		ParentName:            resource.ParentName,
 		ChildCount:            resource.ChildCount,
-		ClusterID:             monitorClusterID(resource),
-		Status:                monitorFrontendStatus(resource, resourceType),
+		ClusterID:             monitorClusterID(&resource),
+		Status:                monitorFrontendStatus(&resource, resourceType),
 		CPU:                   monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
 		Memory:                monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
 		Disk:                  monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
-		Temperature:           monitorTemperature(resource),
-		Uptime:                monitorUptime(resource),
+		Temperature:           monitorTemperature(&resource),
+		Uptime:                monitorUptime(&resource),
 		Tags:                  append([]string(nil), resource.Tags...),
-		Labels:                monitorLabels(resource),
+		Labels:                monitorLabels(&resource),
 		CustomURL:             strings.TrimSpace(resource.CustomURL),
 		LastSeenUnix:          monitorLastSeenUnix(resource.LastSeen),
 		Health:                monitorRawJSON(resource.Health),
@@ -6555,7 +7230,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		IncidentImpactSummary: resource.IncidentImpactSummary,
 		IncidentUrgency:       resource.IncidentUrgency,
 		IncidentAction:        resource.IncidentAction,
-		Identity:              monitorIdentity(resource, name),
+		Identity:              monitorIdentity(&resource, name),
 		DiscoveryTarget:       monitorRawJSON(resource.DiscoveryTarget),
 		MetricsTarget:         monitorRawJSON(resource.MetricsTarget),
 		Canonical:             monitorRawJSON(resource.Canonical),
@@ -6579,7 +7254,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		VMware:                monitorRawJSON(resource.VMware),
 		Availability:          monitorRawJSON(resource.Availability),
 		AvailabilityChecks:    monitorRawJSON(resource.AvailabilityChecks),
-		PlatformData:          monitorPlatformData(resource, resourceType, platformID),
+		PlatformData:          monitorPlatformData(&resource, resourceType, platformID),
 	}
 
 	hasNetwork, rx, tx := monitorNetworkMetricInput(resource.Metrics)
@@ -6594,6 +7269,25 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 func monitorRawJSON(value interface{}) json.RawMessage {
 	if value == nil {
 		return nil
+	}
+	// Optional facets arrive as typed nil pointers/slices in an interface.
+	// Marshaling "null" only to discard it costs one encode and allocation
+	// per absent facet, on every row and frame. Named slice/map marshalers
+	// still get their normal chance to emit a non-null representation.
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			return nil
+		}
+	case reflect.Slice, reflect.Map:
+		if v.IsNil() {
+			if _, custom := value.(json.Marshaler); !custom {
+				if _, customText := value.(encoding.TextMarshaler); !customText {
+					return nil
+				}
+			}
+		}
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil || string(encoded) == "null" {
@@ -6662,7 +7356,7 @@ func capabilityCatalogID(encoded json.RawMessage) string {
 	return hex.EncodeToString(digest[:6])
 }
 
-func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {
+func monitorDiscoveryTarget(resource *unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {
 	switch resourceType {
 	case "agent", "docker-host":
 		agentID := monitorAgentTargetID(resource)
@@ -6680,7 +7374,7 @@ func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType str
 	}
 }
 
-func monitorMetricsTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.MetricsTarget {
+func monitorMetricsTarget(resource *unifiedresources.Resource, resourceType string) *unifiedresources.MetricsTarget {
 	switch resourceType {
 	case "agent", "docker-host":
 		agentID := monitorAgentTargetID(resource)
@@ -6696,7 +7390,7 @@ func monitorMetricsTarget(resource unifiedresources.Resource, resourceType strin
 	}
 }
 
-func monitorAgentTargetID(resource unifiedresources.Resource) string {
+func monitorAgentTargetID(resource *unifiedresources.Resource) string {
 	if resource.Agent != nil {
 		if id := strings.TrimSpace(resource.Agent.AgentID); id != "" {
 			return id
@@ -6718,7 +7412,7 @@ func monitorAgentTargetID(resource unifiedresources.Resource) string {
 	return ""
 }
 
-func monitorTargetHostname(resource unifiedresources.Resource) string {
+func monitorTargetHostname(resource *unifiedresources.Resource) string {
 	if resource.Agent != nil {
 		if hostname := strings.TrimSpace(resource.Agent.Hostname); hostname != "" {
 			return hostname
@@ -6742,19 +7436,19 @@ func monitorTargetHostname(resource unifiedresources.Resource) string {
 	return strings.TrimSpace(resource.Name)
 }
 
-func monitorFrontendResourceType(resource unifiedresources.Resource) string {
-	return string(unifiedresources.ContractResourceType(resource))
+func monitorFrontendResourceType(resource *unifiedresources.Resource) string {
+	return string(unifiedresources.ContractResourceType(*resource))
 }
 
-func monitorFrontendNames(resource unifiedresources.Resource, resourceType string) (string, string) {
-	name := strings.TrimSpace(unifiedresources.ResourceDisplayName(resource))
+func monitorFrontendNames(resource *unifiedresources.Resource, resourceType string) (string, string) {
+	name := strings.TrimSpace(unifiedresources.ResourceDisplayName(*resource))
 	if name == "" {
 		name = resource.ID
 	}
 	return name, name
 }
 
-func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
+func monitorPlatformType(resource *unifiedresources.Resource, resourceType string) string {
 	if resource.Proxmox != nil {
 		return "proxmox-pve"
 	}
@@ -6855,7 +7549,7 @@ func monitorStoragePlatformType(storage *unifiedresources.StorageMeta, sources [
 	}
 }
 
-func monitorPlatformID(resource unifiedresources.Resource, resourceType string) string {
+func monitorPlatformID(resource *unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
 	case "node", "vm", "system-container":
 		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
@@ -6901,7 +7595,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 	return resource.ID
 }
 
-func monitorFrontendStatus(resource unifiedresources.Resource, resourceType string) string {
+func monitorFrontendStatus(resource *unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
 	case "app-container":
 		switch resource.Status {
@@ -6955,8 +7649,8 @@ func monitorIsWorkloadType(resourceType string) bool {
 	}
 }
 
-func monitorClusterID(resource unifiedresources.Resource) string {
-	if clusterID := strings.TrimSpace(unifiedresources.ResourceClusterName(resource)); clusterID != "" {
+func monitorClusterID(resource *unifiedresources.Resource) string {
+	if clusterID := strings.TrimSpace(unifiedresources.ResourceClusterName(*resource)); clusterID != "" {
 		return clusterID
 	}
 
@@ -7033,7 +7727,7 @@ func monitorDiskIOMetricInput(metrics *unifiedresources.ResourceMetrics) (*int64
 	return read, write
 }
 
-func monitorTemperature(resource unifiedresources.Resource) *float64 {
+func monitorTemperature(resource *unifiedresources.Resource) *float64 {
 	if resource.Agent != nil && resource.Agent.Temperature != nil {
 		value := *resource.Agent.Temperature
 		return &value
@@ -7053,7 +7747,7 @@ func monitorTemperature(resource unifiedresources.Resource) *float64 {
 	return nil
 }
 
-func monitorUptime(resource unifiedresources.Resource) *int64 {
+func monitorUptime(resource *unifiedresources.Resource) *int64 {
 	if resource.Agent != nil && resource.Agent.UptimeSeconds > 0 {
 		value := resource.Agent.UptimeSeconds
 		return &value
@@ -7095,7 +7789,7 @@ func monitorUptime(resource unifiedresources.Resource) *int64 {
 	return nil
 }
 
-func monitorLabels(resource unifiedresources.Resource) map[string]string {
+func monitorLabels(resource *unifiedresources.Resource) map[string]string {
 	if resource.Kubernetes == nil || len(resource.Kubernetes.Labels) == 0 {
 		return nil
 	}
@@ -7106,7 +7800,7 @@ func monitorLabels(resource unifiedresources.Resource) map[string]string {
 	return labels
 }
 
-func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
+func monitorIdentity(resource *unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
 	hostname := ""
 	if resource.Agent != nil {
 		hostname = strings.TrimSpace(resource.Agent.Hostname)
@@ -7153,7 +7847,7 @@ func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *m
 	}
 }
 
-func monitorPlatformData(resource unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
+func monitorPlatformData(resource *unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
 	var payload interface{}
 
 	switch resourceType {
@@ -7370,7 +8064,7 @@ func monitorAttachSourceKeys(payload interface{}, sources []unifiedresources.Dat
 	return payload
 }
 
-func monitorStoragePlatformData(resource unifiedresources.Resource, platformID string) map[string]interface{} {
+func monitorStoragePlatformData(resource *unifiedresources.Resource, platformID string) map[string]interface{} {
 	nodeLabel := resource.ParentName
 	if nodeLabel == "" {
 		nodeLabel = monitorStringValue(resource.ParentID)
@@ -7461,7 +8155,7 @@ func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interfa
 	return out
 }
 
-func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interface{} {
+func buildProxmoxVMPayload(resource *unifiedresources.Resource) map[string]interface{} {
 	if resource.Proxmox == nil {
 		return nil
 	}
@@ -7598,7 +8292,17 @@ func monitorLastSeenUnix(value time.Time) int64 {
 const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
+	if err := m.stop(); err != nil {
+		log.Error().Err(err).Msg("monitor stopped with incomplete guest metadata persistence; data directory must be retained")
+	}
+}
+
+func (m *Monitor) stop() error {
 	log.Info().Msg("stopping monitor")
+
+	// Also cover monitors stopped before Start. Refuse new replay admissions,
+	// finish the current occurrence, and checkpoint before closing any stores.
+	m.stopAlertProjectionCatchUp()
 
 	// A trailing agent-report refresh must not run against stores closed below.
 	m.stopAgentReportRefresh()
@@ -7620,9 +8324,7 @@ func (m *Monitor) Stop() {
 	// Drain background guest-metadata writes before the data directory can be
 	// torn down. Without this a queued write lands after shutdown and leaves a
 	// stray guest_metadata.json.tmp behind.
-	if m.guestMetadataStore != nil {
-		m.guestMetadataStore.WaitForPendingWrites(guestMetadataDrainTimeout)
-	}
+	drainErr := m.guestMetadataStore.Close(guestMetadataDrainTimeout)
 
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
@@ -7633,7 +8335,11 @@ func (m *Monitor) Stop() {
 		}
 	}
 
+	if drainErr != nil {
+		return drainErr
+	}
 	log.Info().Msg("monitor stopped")
+	return nil
 }
 
 // recordAuthFailure records an authentication failure for a node

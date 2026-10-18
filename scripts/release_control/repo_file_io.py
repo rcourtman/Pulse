@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import subprocess
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -234,8 +234,31 @@ def repo_relative_path(path: str | Path) -> str:
     return candidate.as_posix()
 
 
-def read_repo_text(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> str:
+def read_repo_text(
+    path: str | Path,
+    *,
+    staged: bool = False,
+    strict_staged: bool = False,
+    revision: str | None = None,
+) -> str:
+    """Read a repo file from the working tree, the index, or a commit.
+
+    `revision` wins over `staged` and never falls back to the working tree:
+    a caller judging a specific commit must not silently read another tree.
+    """
     rel = repo_relative_path(path)
+    if revision is not None:
+        result = subprocess.run(
+            ["git", "show", f"{revision}:{rel}"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=git_env(),
+        )
+        if result.returncode != 0:
+            raise FileNotFoundError(f"missing {rel} at revision {revision}")
+        return result.stdout
     if staged:
         try:
             result = subprocess.run(
@@ -275,5 +298,88 @@ def missing_staged_repo_paths(paths: Iterable[str | Path]) -> list[str]:
     return missing
 
 
-def load_repo_json(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> dict[str, Any]:
-    return json.loads(read_repo_text(path, staged=staged, strict_staged=strict_staged))
+def load_repo_json(
+    path: str | Path,
+    *,
+    staged: bool = False,
+    strict_staged: bool = False,
+    revision: str | None = None,
+) -> dict[str, Any]:
+    return json.loads(
+        read_repo_text(path, staged=staged, strict_staged=strict_staged, revision=revision)
+    )
+
+
+def run_git(args: Sequence[str], *, repo_root: Path = REPO_ROOT) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=repo_root, check=True, capture_output=True,
+        text=True, env=git_env(repo_root),
+    )
+    return result.stdout.strip()
+
+
+def _git_tree_entries(
+    revision: str | None,
+    paths: Sequence[str],
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, tuple[str, str]]:
+    """Mode and object ID for each committed or indexed path.
+
+    A path that does not exist there is simply absent from the result.
+    """
+    ids: dict[str, tuple[str, str]] = {}
+    for start in range(0, len(paths), 200):
+        chunk = list(paths[start : start + 200])
+        if revision is None:
+            command = ["ls-files", "--stage", "-z", "--", *chunk]
+        else:
+            command = ["ls-tree", "-r", "-z", revision, "--", *chunk]
+        output = run_git(["--literal-pathspecs", *command], repo_root=repo_root)
+        for entry in output.split("\0"):
+            meta, separator, path = entry.partition("\t")
+            if not separator:
+                continue
+            fields = meta.split()
+            ids[path] = (fields[0], fields[1] if revision is None else fields[2])
+    return ids
+
+
+def blob_ids(revision: str | None, paths: Sequence[str], *, repo_root: Path = REPO_ROOT) -> dict[str, str]:
+    return {path: entry[1] for path, entry in _git_tree_entries(revision, paths, repo_root=repo_root).items()}
+
+
+def merge_parents(*, commit: str | None, repo_root: Path = REPO_ROOT) -> list[str]:
+    """Parents beyond the first: the merge being concluded, or a merge commit's own."""
+    if commit:
+        return run_git(
+            ["rev-list", "--parents", "-n", "1", commit], repo_root=repo_root
+        ).split()[2:]
+    merge_head = Path(run_git(["rev-parse", "--git-path", "MERGE_HEAD"], repo_root=repo_root))
+    if not merge_head.is_absolute():
+        merge_head = repo_root / merge_head
+    if not merge_head.exists():
+        return []
+    return merge_head.read_text(encoding="utf-8").split()
+
+
+def merged_in_paths(
+    paths: Sequence[str],
+    *,
+    commit: str | None,
+    repo_root: Path = REPO_ROOT,
+) -> set[str]:
+    """Paths with exactly the same indexed or committed state as a merged parent.
+
+    Both object ID and mode must match. New resolutions, edits and mode changes
+    remain changes of the current commit. Inherited deletions also match.
+    """
+    parents = merge_parents(commit=commit, repo_root=repo_root)
+    if not parents or not paths:
+        return set()
+    new = _git_tree_entries(commit, paths, repo_root=repo_root)
+    inherited: set[str] = set()
+    for parent in parents:
+        theirs = _git_tree_entries(parent, paths, repo_root=repo_root)
+        inherited.update(path for path in paths if new.get(path) == theirs.get(path))
+    return inherited

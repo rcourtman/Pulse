@@ -108,20 +108,43 @@ func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceNa
 	m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplates)
 }
 
-func quotePVEACLTokenID(tokenID string) string {
-	return "'" + strings.ReplaceAll(tokenID, "'", `'"'"'`) + "'"
+func pveBackupPermissionWarning(instanceCfg *config.PVEInstance) string {
+	identity := "the configured user and API token in the saved PVE connection"
+	if instanceCfg != nil && strings.TrimSpace(instanceCfg.TokenName) == "" {
+		identity = "the configured login credentials or manually supplied API token in the saved PVE connection"
+	}
+	return "Check " + identity + ". For a privilege-separated token, check both user and token scopes without disabling privilege separation. Verify the permissions required by the rejected endpoint on your installed PVE version; a failed read alone does not identify a missing role. Do not delete nodes, remove registration state or rotate credentials to diagnose an empty backup table."
 }
 
-func pveBackupPermissionWarning(instanceCfg *config.PVEInstance) string {
-	warning := "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
-	if instanceCfg == nil {
-		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+func pveBackupAccessWarning(instanceCfg *config.PVEInstance, endpoint string, err error) string {
+	status, known := proxmox.APIErrorStatus(err)
+	cause := "PVE backup inventory access failed; authentication or permission cause is unconfirmed."
+	if known && status == 401 {
+		cause = "PVE rejected backup inventory authentication (HTTP 401); this is not evidence of a missing role."
+	} else if known && status == 403 {
+		cause = "PVE denied backup inventory access (HTTP 403); the required permission and scope need verification."
 	}
-	tokenID := strings.TrimSpace(instanceCfg.TokenName)
-	if tokenID == "" || !strings.Contains(tokenID, "!") {
-		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+	// Endpoint comes from the actual attempted node/storage operation, never
+	// from provider error text. Bound and quote it to keep controls out of logs
+	// and warnings. No credential, token ID or provider body is reproduced.
+	endpointRunes := []rune(strings.ToValidUTF8(endpoint, "?"))
+	if len(endpointRunes) > 256 {
+		endpoint = string(endpointRunes[:256]) + "…"
+	} else {
+		endpoint = string(endpointRunes)
 	}
-	return warning + " && pveum aclmod /storage -token " + quotePVEACLTokenID(tokenID) + " -role PVEDatastoreAdmin"
+	return cause + " Rejected endpoint: " + strconv.Quote(endpoint) + ". " + pveBackupPermissionWarning(instanceCfg)
+}
+
+func (m *Monitor) recordPVEBackupAccessWarning(instanceName, endpoint string, err error) {
+	warning := pveBackupAccessWarning(m.getInstanceConfig(instanceName), endpoint, err)
+	m.mu.Lock()
+	if m.backupPermissionWarnings == nil {
+		m.backupPermissionWarnings = make(map[string]string)
+	}
+	m.backupPermissionWarnings[instanceName] = warning
+	m.mu.Unlock()
+	log.Warn().Str("instance", instanceName).Str("guidance", warning).Msg("PVE backup inventory access failed")
 }
 
 func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
@@ -234,6 +257,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if isPVEBackupPermissionError(err) {
 				hadPermissionError = true
 				permissionFailureCount++
+				m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
@@ -267,15 +291,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
 					permissionFailureCount++
-					warning := pveBackupPermissionWarning(m.getInstanceConfig(instanceName))
-					m.mu.Lock()
-					m.backupPermissionWarnings[instanceName] = warning
-					m.mu.Unlock()
-					log.Warn().
-						Str("instance", instanceName).
-						Str("node", node.Node).
-						Str("storage", storage.Storage).
-						Msg("Backup permission denied - PVEDatastoreAdmin role may be missing on /storage")
+					m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
 				} else {
 					log.Debug().Err(monErr).
 						Str("node", node.Node).
@@ -568,25 +584,27 @@ func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
 	}
 
 	m.state.SyncGuestBackupTimes()
-	m.updateResourceStore(m.state.GetSnapshot())
+	scope := m.mockModeFence.begin()
+	m.updateResourceStore(m.state.GetSnapshot(), scope)
 }
 
 func (m *Monitor) backupReadStateForInstance(instanceName string) unifiedresources.ReadState {
 	if m == nil {
 		return nil
 	}
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if backupReadStateHasGuestForInstance(readState, instanceName) || m.state == nil {
 		return readState
 	}
 
+	scope := m.mockModeFence.begin()
 	snapshot := m.state.GetSnapshot()
 	if !backupSnapshotHasGuestForInstance(snapshot, instanceName) {
 		return readState
 	}
 
-	m.updateResourceStore(snapshot)
-	readState = m.GetUnifiedReadStateOrSnapshot()
+	m.updateResourceStore(snapshot, scope)
+	readState = m.currentModeReadState()
 	if backupReadStateHasGuestForInstance(readState, instanceName) {
 		return readState
 	}
@@ -872,33 +890,8 @@ func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMI
 
 // persistGuestIdentity updates the metadata store with the last-known name and type for a guest
 func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, name, guestType string) {
-	existing := metadataStore.Get(guestKey)
-	if existing == nil {
-		existing = &config.GuestMetadata{
-			ID:   guestKey,
-			Tags: []string{},
-		}
-	}
-
-	guestType = strings.TrimSpace(guestType)
-	if guestType == "" {
-		return
-	}
-
-	// Never "downgrade" OCI containers back to LXC. OCI classification can be transiently
-	// unavailable if Proxmox config reads fail due to permissions or transient API errors.
-	if existing.LastKnownType == "oci" && guestType != "oci" {
-		guestType = existing.LastKnownType
-	}
-
-	// Only update if the name or type has changed
-	if existing.LastKnownName != name || existing.LastKnownType != guestType {
-		existing.LastKnownName = name
-		existing.LastKnownType = guestType
-		// Save without blocking the monitor. The store owns the goroutine so
-		// Monitor.Stop can drain it; a detached goroutine here could write
-		// after shutdown, into a data directory that was already being removed.
-		metadataStore.SetAsync(guestKey, existing)
+	if err := metadataStore.RememberIdentity(guestKey, name, guestType); err != nil {
+		log.Error().Err(err).Str("guestKey", guestKey).Msg("failed to admit guest identity update")
 	}
 }
 
@@ -975,6 +968,8 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
+	// The guest inventory comes from the fixture read view in mock mode.
+	scope := m.mockModeFence.begin()
 	readState := m.backupReadStateForInstance(instanceName)
 	var vms []models.VM
 	for _, vm := range readState.VMs() {
@@ -1295,7 +1290,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	if m.alertManager != nil {
-		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups)
+		scope.run(func() { m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups) })
 	}
 
 	log.Debug().
@@ -1581,10 +1576,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	var allBackups []models.PBSBackup
 	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
+	refreshedGroups := make(map[pbsBackupGroupKey]time.Time)
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
-	datastoreErrors := 0              // Number of failed datastore fetches
+	datastoreErrors := 0              // Datastores with incomplete history
 	datastoreTerminalFailures := 0    // Number of datastores that failed only with terminal errors
+	collectionTerminalFailures := 0   // Datastores with any rejected namespace or snapshot request
 
 	// Process each datastore
 	for _, ds := range datastores {
@@ -1646,6 +1643,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 						Str("namespace", namespace).
 						Int("limit", pbsBackupLiveStateLimit).
 						Msg("PBS backup live-state limit reached; skipping remaining groups")
+					// Skipped groups are not a complete inventory, even when
+					// every request we did make succeeded.
+					datastoreNamespaceErrors++
 					break
 				}
 
@@ -1713,26 +1713,27 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 			groupsRequested += len(requests)
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
-			if len(fetched) > 0 {
-				allBackups = appendPBSBackupsWithinLimit(allBackups, fetched)
-			}
+			allBackups = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
+			datastoreNamespaceErrors += fetched.errors
+			datastoreTerminalNamespaceErrors += fetched.terminalErrors
 
-			// Record fetch time for each requested group so the TTL tracks freshness.
-			// We record for all requested groups — on fetch failure, fetchPBSBackupSnapshots
-			// falls back to cached data, so the timestamp prevents hammering a failing
-			// endpoint. The TTL ensures we retry within a bounded window.
+			// Stage successful read times until their matching rows are published.
+			// A later cancellation must not freshen the previously published rows
+			// when this poll's refreshed payload never reaches state.
 			fetchedAt := time.Now()
-			for _, req := range requests {
-				reqKey := pbsBackupGroupKey{
-					datastore:  req.datastore,
-					namespace:  req.namespace,
-					backupType: req.group.BackupType,
-					backupID:   req.group.BackupID,
-				}
-				m.setPBSBackupCacheTime(instanceName, reqKey, fetchedAt)
+			for _, key := range fetched.refreshed {
+				refreshedGroups[key] = fetchedAt
 			}
 		}
 
+		// Listing groups is not proof that their snapshots or every namespace
+		// were readable. Carry those losses into provider-wide evidence.
+		if datastoreNamespaceErrors > 0 {
+			datastoreErrors++
+		}
+		if datastoreTerminalNamespaceErrors > 0 {
+			collectionTerminalFailures++
+		}
 		if datastoreHadSuccess {
 			datastoreFetches++
 			log.Info().
@@ -1766,8 +1767,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					retainedGroups[key] = struct{}{}
 				}
 			}
-			datastoreErrors++
 		}
+	}
+
+	if ctx.Err() != nil {
+		// An interrupted enumeration cannot authoritatively replace history.
+		return
 	}
 
 	log.Info().
@@ -1782,7 +1787,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			datastoreCount,
 			datastoreFetches,
 			datastoreErrors,
-			datastoreTerminalFailures,
+			collectionTerminalFailures,
 			protectionObservedAt,
 		)
 	if protectionObservationErr != nil {
@@ -1832,10 +1837,20 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 	}
 
-	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+	if ctx.Err() != nil {
+		// Running-task correlation is the last HTTP read and can also be
+		// interrupted. Do not publish its incomplete payload or renew cache.
+		return
+	}
 
-	// Update state
+	// Publication is the commit boundary: no cancellation return may split a
+	// successful read time from its matching payload. Per-instance poller
+	// admission serializes this publication with the next ordinary poll.
 	m.state.UpdatePBSBackups(instanceName, allBackups)
+	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+	for key, fetchedAt := range refreshedGroups {
+		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
+	}
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
@@ -1860,15 +1875,20 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	if protectionObservationErr == nil {
 		observations = append(observations, protectionObservation)
 	}
-	m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
-		points,
-		observations,
-		recoveryReconcileScope{
+	batch := recoveryIngestBatch{points: points, observations: observations}
+	// Only an authoritative complete enumeration can delete absent points.
+	// Unreadable history remains historical evidence, qualified by this poll's
+	// partial/unavailable provider observation, until an ordinary complete poll
+	// recovers or confirms deletion. Never infer absence from a failed request.
+	if protectionObservationErr == nil &&
+		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
+		batch.reconcile = &recoveryReconcileScope{
 			provider: string(recovery.ProviderProxmoxPBS),
 			idPrefix: "pbs-backup:",
 			instance: instanceName,
-		},
-	)
+		}
+	}
+	m.enqueueRecoveryIngest(batch)
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
@@ -2037,9 +2057,18 @@ func namespacePathsForDatastore(ds models.PBSDatastore) []string {
 	return paths
 }
 
-func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) []models.PBSBackup {
+// pbsBackupSnapshotFetchResult retains request quality alongside the artifacts.
+// A cached row is not evidence that its snapshot request succeeded this poll.
+type pbsBackupSnapshotFetchResult struct {
+	backups        []models.PBSBackup
+	errors         int
+	terminalErrors int
+	refreshed      []pbsBackupGroupKey
+}
+
+func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
 	if len(requests) == 0 {
-		return nil
+		return pbsBackupSnapshotFetchResult{}
 	}
 
 	workerCount := pbsBackupSnapshotFetchWorkers
@@ -2048,7 +2077,7 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	}
 
 	jobs := make(chan pbsBackupFetchRequest)
-	results := make(chan []models.PBSBackup, workerCount)
+	results := make(chan pbsBackupSnapshotFetchResult, workerCount)
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {
@@ -2076,18 +2105,26 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 						Str("id", req.group.BackupID).
 						Msg("Failed to list PBS backup snapshots")
 
-					if len(req.cached.snapshots) > 0 {
-						select {
-						case results <- req.cached.snapshots:
-						case <-ctx.Done():
-						}
+					result := pbsBackupSnapshotFetchResult{errors: 1}
+					if shouldReuseCachedPBSBackups(err) {
+						result.backups = req.cached.snapshots
+					} else {
+						// Access rejection cannot renew a cached raw row.
+						result.terminalErrors = 1
 					}
+					results <- result
 					continue
 				}
 
 				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
 				select {
-				case results <- backups:
+				case results <- pbsBackupSnapshotFetchResult{
+					backups: backups,
+					refreshed: []pbsBackupGroupKey{{
+						datastore: req.datastore, namespace: req.namespace,
+						backupType: req.group.BackupType, backupID: req.group.BackupID,
+					}},
+				}:
 				case <-ctx.Done():
 					return
 				}
@@ -2111,12 +2148,12 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		close(results)
 	}()
 
-	var combined []models.PBSBackup
-	for backups := range results {
-		if len(backups) == 0 {
-			continue
-		}
-		combined = appendPBSBackupsWithinLimit(combined, backups)
+	var combined pbsBackupSnapshotFetchResult
+	for result := range results {
+		combined.backups = appendPBSBackupsWithinLimit(combined.backups, result.backups)
+		combined.errors += result.errors
+		combined.terminalErrors += result.terminalErrors
+		combined.refreshed = append(combined.refreshed, result.refreshed...)
 	}
 
 	return combined
@@ -2254,14 +2291,18 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	tasks, err := client.GetBackupTasks(ctx)
+	tasks, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
 	if err != nil {
+		m.persistBackupTaskHistory(ctx, nil, collection)
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 		return
 	}
 
 	var backupTasks []models.BackupTask
+	var liveTasks []models.BackupTask
+	liveByNode := make(map[string]int)
+	liveJobIDs := make(map[string]bool)
 	var jobTasks []models.BackupTask
 	jobUPIDs := make(map[string]string)
 	for _, task := range tasks {
@@ -2291,6 +2332,14 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 
 		backupTasks = append(backupTasks, backupTask)
+		// Durable reports backfill more history than the live API historically
+		// exposed. Preserve its 200 provider tasks per node rather than inflating
+		// every state/WebSocket payload with the entire retained task history.
+		if liveByNode[task.Node] < 200 {
+			liveTasks = append(liveTasks, backupTask)
+			liveByNode[task.Node]++
+			liveJobIDs[taskID] = true
+		}
 
 		// Scheduled multi-guest backup jobs run under a single UPID with an
 		// empty VMID slot, so the task alone says nothing about which guests
@@ -2301,12 +2350,20 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	backupTasks = append(backupTasks, m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)...)
+	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)
+	backupTasks = append(backupTasks, guestTasks...)
+	for _, guest := range guestTasks {
+		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
+		if liveJobIDs[parentID] {
+			liveTasks = append(liveTasks, guest)
+		}
+	}
 
 	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
+	m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	// Retain execution history before qualifying collection coverage. Task rows
+	// are not reconciled against the provider's shrinking inventory window.
 	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
 	points, evidenceErr := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence(
 		backupTasks,
@@ -2320,14 +2377,16 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 			Msg("Failed to attach PVE backup-task recovery evidence; preserving existing points")
 		return
 	}
-	m.ingestRecoveryPointsAsync(points)
+	m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
+	m.persistBackupTaskHistory(ctx, points, collection)
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
 // vzdump job run's log so finished jobs are fetched at most once.
 type vzdumpJobTaskCacheEntry struct {
-	tasks []models.BackupTask
-	final bool
+	tasks           []models.BackupTask
+	final           bool
+	historyComplete bool
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
@@ -2388,13 +2447,15 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		}
 
 		guestTasks := parseVzdumpJobLog(jobTask, upid, logLines)
+		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
 		}
 		m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
-			tasks: guestTasks,
-			final: !jobTask.EndTime.IsZero(),
+			tasks:           guestTasks,
+			final:           historyComplete,
+			historyComplete: historyComplete,
 		}
 		m.mu.Unlock()
 		synthesized = append(synthesized, refreshObservedAt(guestTasks, now)...)

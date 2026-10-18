@@ -22,6 +22,8 @@ import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewP
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
+import { renderDocMarkdown } from '@/features/docs/docMarkdown';
+import { settingsDocumentationLinkViolations } from '@/components/shared/__tests__/settingsDocumentationLinkContract';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +64,49 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  const memoryFAQ = () => {
+    const faq = readFileSync(path.join(repoRoot, 'docs', 'FAQ.md'), 'utf8');
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(
+      faq.split('### High memory usage?')[1].split('\n### ')[0],
+      'FAQ',
+    );
+    return article;
+  };
+
+  it('makes the resident-memory FAQ lead to the shipped passive recipe', () => {
+    const link = memoryFAQ().querySelector(
+      'a[href="/docs/TROUBLESHOOTING#memory-use-keeps-growing"]',
+    );
+    expect(link?.textContent).toBe('read-only memory checks');
+    const source = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/TROUBLESHOOTING.md'), 'utf8')).toBe(
+      source,
+    );
+    const guide = document.createElement('article');
+    guide.innerHTML = renderDocMarkdown(source, 'TROUBLESHOOTING');
+    expect(guide.querySelector('#memory-use-keeps-growing')?.textContent).toBe(
+      'Memory use keeps growing',
+    );
+    expect(guide.textContent).toContain('Pulse resident-memory sample');
+  });
+
+  it('keeps the resident-memory FAQ from sacrificing history or claiming a leak', () => {
+    const article = memoryFAQ();
+    const text = article.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain("container usage from Pulse's resident memory (RSS)");
+    expect(text).toContain('a high LXC or Docker chart alone does not establish a leak');
+    expect(text).toContain('Do not shorten retention, slow polling, restart Pulse or drop caches');
+    expect(text).toContain('Shorter retention removes history');
+    expect(text).toContain('slower polling can delay monitoring');
+    expect(text).toContain('neither establishes the cause');
+    expect(text).toContain('stop sampling and prioritise safe recovery');
+    expect(article.querySelector('pre')).toBeNull();
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/FAQ.md'), 'utf8')).toBe(
+      readFileSync(path.join(repoRoot, 'docs/FAQ.md'), 'utf8'),
+    );
+  });
+
   it('keeps report collection precautions usable without unpublished documentation links', () => {
     for (const form of ['bug_report.yml', 'v6_rc_feedback.yml']) {
       const source = readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', form), 'utf8');
@@ -173,6 +218,53 @@ describe('docsLinks', () => {
       'compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil',
     );
     expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
+  });
+
+  it('documents alert configuration saves as replacing only the keys they send', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`PUT /api/alerts/config` — replaces only the top-level keys the body');
+    expect(api).toContain('a key left out keeps its stored value');
+    const handler = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'alerting', 'alerts.go'),
+      'utf8',
+    );
+    expect(handler).toContain('GetAlertManager().ApplyConfigUpdate(body)');
+  });
+
+  it('documents the Pulse Pro runtime switch routes and their scopes', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`GET /api/updates/pro-runtime` (`settings:read`)');
+    expect(api).toContain('`POST /api/updates/pro-runtime/apply` (`settings:write`)');
+    const routes = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'router_routes_registration.go'),
+      'utf8',
+    );
+    expect(routes).toContain(
+      '"/api/updates/pro-runtime", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead,',
+    );
+    expect(routes).toContain(
+      '"/api/updates/pro-runtime/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,',
+    );
+  });
+
+  it('documents instance administration refusing organization-bound tokens', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('tenant organization gets `403` whatever its scopes');
+    expect(api).toContain('Token management is instance administration');
+    const guard = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'security_setup_fix.go'),
+      'utf8',
+    );
+    expect(guard).toContain(
+      'ensureTokenSettingsScope(w, req, record, scope) && refuseOrgBoundToken(w, req, record)',
+    );
+  });
+
+  it('documents network discovery without the removed AI Discovery routes', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
+    expect(api).not.toContain('/api/discovery');
+    expect(api).not.toContain('### AI Discovery');
   });
 
   it('separates server removal from persistent-data erasure', () => {
@@ -480,6 +572,40 @@ describe('docsLinks', () => {
     );
   });
 
+  it('explains container CPU scales without inventing a zero or forcing an alert', () => {
+    const docker = readFileSync(path.join(repoRoot, 'docs', 'DOCKER.md'), 'utf8');
+    const cpu = docker
+      .split('## Container CPU readings\n')[1]
+      .split('\n---')[0]
+      .replace(/\s+/g, ' ');
+    expect(cpu).toContain("Docker/Podman host's total CPU capacity");
+    expect(cpu).toContain('100% for one logical CPU');
+    expect(cpu).toContain('CPU count reported for the runtime host');
+    expect(cpu).toContain("not the physical Proxmox host's CPUs");
+    expect(cpu).toContain("not utilisation of the container's own CPU quota or cpuset");
+    expect(cpu).toContain('not an assumption about your host');
+    expect(cpu).toContain('v6.5.0-rc.1');
+    expect(cpu).toContain('not change stored readings or the values used by CPU alert evaluation');
+    expect(cpu).toContain('unavailable data, not a measured zero');
+    expect(cpu).toContain('Do not divide Pulse History again');
+    expect(cpu).toContain('separate sampling intervals can legitimately differ');
+    expect(cpu).toContain('Active does not prove fresh CPU samples');
+    expect(cpu).toContain('not that an alert should fire or that its notification was delivered');
+    expect(cpu).toContain('Do not restart workloads, create CPU load, lower alert thresholds');
+    expect(cpu).toContain('no forced alert test is needed');
+
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    const entry = troubleshooting
+      .split('#### Container CPU differs from Docker or Podman stats\n')[1]
+      .split('\n#### ')[0]
+      .replace(/\s+/g, ' ');
+    expect(entry).toContain('DOCKER.md#container-cpu-readings');
+    expect(entry).toContain('reported runtime host CPU count');
+    expect(entry).toContain('same container and time interval');
+    expect(entry).toContain('unavailable, not zero');
+    expect(entry).toContain('Do not restart workloads, create CPU load or lower alert thresholds');
+  });
+
   it('keeps clone identity recovery separate from destructive OS or credential resets', () => {
     const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const agentGuide = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');
@@ -532,6 +658,88 @@ describe('docsLinks', () => {
     expect(apiReference).not.toContain('Mobile Remote Access');
   });
 
+  it('keeps report narration behind both POST and the token spending scope', () => {
+    const handler = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'metrics_reporting_handlers.go'),
+      'utf8',
+    );
+    const single = handler
+      .split('func (h *ReportingHandlers) HandleGenerateReport(')[1]
+      .split('\nfunc ')[0];
+    const fleet = handler
+      .split('func (h *ReportingHandlers) generateMultiReportFromBody(')[1]
+      .split('\nfunc ')[0];
+    const caller = handler.split('func reportCallerMayUseAI(')[1].split('\nfunc ')[0];
+    const resolver = handler
+      .split('func (h *ReportingHandlers) resolveNarrator(')[1]
+      .split('\nfunc ')[0];
+
+    // The shared resolver owns spending permission; the handler still owns
+    // GET's deterministic path. Behavioural Go tests exercise every caller.
+    expect(single).toMatch(
+      /if r\.Method == http\.MethodPost \{\s*narrator, _, findings = h\.resolveNarrator\(r\.Context\(\)\)/,
+    );
+    expect(single.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
+    expect(single).toMatch(
+      /if !reportCallerMayUseAI\(r\.Context\(\)\) \{\s*(?:\/\/[^\n]*\n\s*)*req\.Narrator = scopeLimitedReportNarrator\{\}/,
+    );
+    expect(single).toMatch(
+      /\} else \{\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = getReportNarrator\{\}/,
+    );
+    expect(caller).toContain('internalauth.GetAPIToken(ctx).(*config.APITokenRecord)');
+    expect(caller).toMatch(/if !ok \|\| record == nil \{\s*return true/);
+    expect(caller).toContain('return record.HasScope(config.ScopeAIExecute)');
+    expect(resolver).toMatch(
+      /if !reportCallerMayUseAI\(ctx\) \{\s*return nil, nil, h\.resolveExistingFindings\(ctx\)\s*\}\s*return h\.narratorResolver\(ctx\)/,
+    );
+    expect(resolver.match(/h\.narratorResolver\(/g)).toHaveLength(1);
+    expect(fleet).toMatch(/_, fleetNarrator, findings := h\.resolveNarrator\(ctx\)/);
+    expect(fleet.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
+  });
+
+  it('ships report help that separates read permission from AI spending', () => {
+    for (const guide of ['API.md', 'MSP.md']) {
+      const rootDoc = readFileSync(path.join(repoRoot, 'docs', guide), 'utf8');
+      expect(readFileSync(path.join(frontendRoot, 'public', 'docs', guide), 'utf8')).toBe(rootDoc);
+      expect(rootDoc).toContain('`POST /api/admin/reports/generate` (');
+      // Parse the actual report section, not both entire reference guides:
+      // unrelated installation/API tables are not this narration contract.
+      const reportSection =
+        guide === 'API.md'
+          ? rootDoc
+              .split('### Advanced Reporting (Pro)')[1]
+              .split('### Queue and Dead-Letter Tools')[0]
+          : rootDoc.split('## Per-client reports')[1].split('## Licensing')[0];
+      const rendered = document.createElement('div');
+      rendered.innerHTML = renderDocMarkdown(reportSection, guide.replace('.md', ''));
+      const text = rendered.textContent?.replace(/\s+/g, ' ');
+      expect(text).toContain('Report generation uses settings:read.');
+      expect(text).toContain(
+        'For single-resource and fleet PDF narration, an API token also needs ai:execute (or full access).',
+      );
+      expect(text).toContain(
+        'Without it, the report still succeeds with a deterministic summary and no AI provider call',
+      );
+      expect(text).toContain('a single-resource PDF also explains the missing scope.');
+      expect(text).toContain(
+        'Browser sessions and server-run schedules keep their existing narration behaviour.',
+      );
+      expect(text).toContain('AI budgets still apply. GET and CSV never use AI narration');
+    }
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    // Keep both upstream route descriptions beside the shared spending guard.
+    expect(apiReference).toContain(
+      'API-token callers also need the `ai:execute` scope for AI narration.',
+    );
+    expect(apiReference).toContain(
+      'AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used. CSV output is never narrated.',
+    );
+    expect(apiReference).toContain('it never calls an AI provider');
+    expect(apiReference).toContain('`405` with `Allow: GET, POST`');
+    const msp = readFileSync(path.join(repoRoot, 'docs', 'MSP.md'), 'utf8');
+    expect(msp).not.toContain('`GET /api/admin/reports/generate` (single resource)');
+  });
+
   it('ships credential-free Proxmox setup instructions and a separate token prompt', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
@@ -541,6 +749,23 @@ describe('docsLinks', () => {
     expect(setup).toContain('`downloadURL` equals the tokenless `url`');
     expect(setup).toContain('paste the token only at its prompt');
     expect(setup).not.toContain('token-bearing `commandWithEnv`');
+  });
+
+  it('ships the saved-credential probe TLS override contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
+    const probe = apiReference
+      .split('### Test Node (Legacy)')[1]
+      .split('### Refresh Cluster Nodes')[0];
+
+    expect(shipped).toBe(apiReference);
+    expect(probe).toContain('`POST /api/config/nodes/{id}/test` (admin, `settings:write`)');
+    expect(probe).toContain('optional JSON body can override `verifySSL` and `fingerprint`');
+    expect(probe).toContain('without changing the saved connection or credentials');
+    expect(probe).toMatch(/Omitted fields keep their\s+saved values/);
+    expect(probe).toContain('`false` to disable CA verification or `""` to clear the saved');
+    expect(probe).toMatch(/nonempty fingerprint remains enforced regardless of\s+`verifySSL`/);
+    expect(probe).toContain('Empty-body requests keep the saved TLS settings');
   });
 
   it('ships the per-alert snooze and resume API contract', () => {
@@ -734,7 +959,9 @@ describe('docsLinks', () => {
     expect(securityWarningSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/docs/',
     );
-    expect(aiRuntimeControlsSectionSource).toContain('TERMS_DOC_URL');
+    // This section may remove its only Terms link with the control it explains.
+    // Any surviving link must still use the shared primitive and shipped route.
+    expect(settingsDocumentationLinkViolations(aiRuntimeControlsSectionSource)).toEqual([]);
     expect(aiRuntimeControlsSectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );

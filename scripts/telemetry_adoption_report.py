@@ -1059,6 +1059,33 @@ ALERT_QUALITY_COUNT_FIELDS = (
     ("alert_active_state_authoritative_tenants", "Authoritative active-state tenants"),
     ("alert_active_state_persistence_degraded_tenants", "Degraded active-state tenants"),
 )
+REPORTING_USAGE_COUNT_FIELDS = (
+    "reporting_generated_resources_30d",
+    "reporting_generated_vm_inventory_30d",
+    "reporting_generated_backup_health_30d",
+    "reporting_generated_patrol_digest_30d",
+    "reporting_successful_resources_periods_30d",
+    "reporting_successful_vm_inventory_periods_30d",
+    "reporting_successful_backup_health_periods_30d",
+    "reporting_successful_patrol_digest_periods_30d",
+    "reporting_repeat_resources_periods_30d",
+    "reporting_repeat_vm_inventory_periods_30d",
+    "reporting_repeat_backup_health_periods_30d",
+    "reporting_repeat_patrol_digest_periods_30d",
+    "reporting_saved_30d",
+    "reporting_email_accepted_30d",
+    "reporting_delivery_failed_30d",
+    "reporting_delivery_unconfirmed_30d",
+    "reporting_data_complete_30d",
+    "reporting_data_incomplete_30d",
+    "reporting_data_unavailable_30d",
+    "reporting_resources_active_days_30d",
+    "reporting_vm_inventory_active_days_30d",
+    "reporting_backup_health_active_days_30d",
+    "reporting_patrol_digest_active_days_30d",
+)
+REPORTING_USAGE_FIELDS = (*REPORTING_USAGE_COUNT_FIELDS, "reporting_telemetry_available", "reporting_observation_days")
+
 REPORT_ROW_COLUMNS = tuple(
     dict.fromkeys(
         (
@@ -1073,6 +1100,8 @@ REPORT_ROW_COLUMNS = tuple(
             "version_is_published_release",
             "platform",
             "notification_failures_7d",
+            "successful_history_reads_over_7d_30d",
+            *REPORTING_USAGE_FIELDS,
             *(key for key, _ in ALERT_QUALITY_COUNT_FIELDS),
             *(key for key, _ in ADOPTION_COUNT_FIELDS),
             *(key for key, _ in FEATURE_BOOL_FIELDS),
@@ -1686,8 +1715,14 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 """
             ).fetchone()
         )
+        available_columns = {row[1] for row in conn.execute("PRAGMA table_info(telemetry_pings)")}
+        missing_columns = sorted(set(REPORT_ROW_COLUMNS) - available_columns)
+        projection = ", ".join(
+            name if name in available_columns else "0 AS " + name
+            for name in REPORT_ROW_COLUMNS
+        )
         rows_sql = (
-            f"SELECT {REPORT_ROW_PROJECTION} "
+            f"SELECT {projection} "
             "FROM telemetry_pings "
             "WHERE received_at >= datetime('now', ?) "
             "ORDER BY received_at DESC"
@@ -1699,7 +1734,7 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 (f"-{since_days} days",),
             ).fetchall()
         ]
-        return {"db_stats": db_stats, "rows": rows}
+        return {"db_stats": db_stats, "rows": rows, "unavailable_columns": missing_columns}
     finally:
         conn.close()
 
@@ -2279,13 +2314,18 @@ def pulse_intelligence_row_analysis_keys(
 ) -> tuple[set[str], set[str]]:
     cohort_keys: set[str] = set()
     signal_groups: set[str] = set()
-    for field in PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS:
-        if not parse_optional_bool(row.get(field)):
+    # Older schemas and sparse exports omit most signals. Intersect in C rather
+    # than parsing every absent field for every heartbeat; explicit nulls have
+    # the same no-signal meaning. Keep the existing parsers for supplied values.
+    for field in row.keys() & PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD.keys():
+        value = row[field]
+        if value is None or not parse_optional_bool(value):
             continue
         cohort_keys.update(PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD[field])
         signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_BOOL_KEYS_BY_FIELD[field])
-    for field in PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS:
-        if parse_optional_nonnegative_int(row.get(field)) <= 0:
+    for field in row.keys() & PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD.keys():
+        value = row[field]
+        if value is None or parse_optional_nonnegative_int(value) <= 0:
             continue
         cohort_keys.update(PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD[field])
         signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_COUNT_KEYS_BY_FIELD[field])
@@ -2786,6 +2826,107 @@ def summarize_user_base_signals(
         "boolean_signals": list(boolean_signals.values()),
         "count_signals": list(count_signals.values()),
     }
+
+
+def summarize_extended_history_usage(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    *,
+    now: datetime,
+    unavailable_columns: Iterable[str] = (),
+) -> dict[str, Any]:
+    """One latest rolling count per reporting ID, with explicit coverage.
+
+    No heartbeat summing or account joins. The license flag is coarse, and
+    rotating IDs do not identify people or subscriptions.
+    """
+    field = "successful_history_reads_over_7d_30d"
+    source_available = field not in unavailable_columns
+    cohorts = {
+        posture: {"reporting_ids": 0, "covered_ids": 0, "unmeasured_ids": 0,
+                  "ids_with_reads": 0, "successful_reads_30d": 0}
+        for posture in ("nonfree", "free", "unknown")
+    }
+    excluded = 0
+    for row in latest_by_install.values():
+        age = now - parse_received_at(str(row["received_at"]))
+        if age < timedelta(0) or age > timedelta(days=7):
+            continue
+        identity = classify_row_version(row, published_versions)
+        if (is_mock_fleet_row(row) or identity.is_development
+                or not identity.is_published_release
+                or not parse_optional_bool(row.get("monitoring_active"))):
+            excluded += 1
+            continue
+        paid = parse_optional_bool(row.get("paid_license"))
+        cohort = cohorts["nonfree" if paid is True else "free" if paid is False else "unknown"]
+        cohort["reporting_ids"] += 1
+        if (not source_available or field not in row
+                or parse_optional_nonnegative_int(row.get("schema_version")) < 19):
+            cohort["unmeasured_ids"] += 1
+            continue
+        cohort["covered_ids"] += 1
+        reads = parse_optional_nonnegative_int(row.get(field))
+        if reads > 0:
+            cohort["ids_with_reads"] += 1
+            cohort["successful_reads_30d"] += reads
+    return {"window": "7d", "minimum_schema_version": 19,
+            "source_available": source_available, "excluded_ids": excluded,
+            "cohorts": cohorts}
+
+
+def summarize_reporting_usage(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str], *, now: datetime,
+    unavailable_columns: Iterable[str] = (),
+) -> dict[str, Any]:
+    """Latest rolling counters per rotating ID, never a customer census."""
+    source_available = not set(REPORTING_USAGE_FIELDS).intersection(unavailable_columns)
+    cohorts = {
+        posture: {"reporting_ids": 0, "covered_ids": 0, "unmeasured_ids": 0,
+                  "partial_observation_ids": 0, "full_30d_observation_ids": 0,
+                  "ids_with_generated_reports": 0, "ids_with_repeat_periods": 0, "ids_with_multiple_generation_days": 0,
+                  "counts": dict.fromkeys(REPORTING_USAGE_COUNT_FIELDS, 0)}
+        for posture in ("nonfree", "free", "unknown")
+    }
+    excluded = 0
+    for row in latest_by_install.values():
+        age = now - parse_received_at(str(row["received_at"]))
+        if age < timedelta(0) or age > timedelta(days=7):
+            continue
+        identity = classify_row_version(row, published_versions)
+        if (is_mock_fleet_row(row) or identity.is_development
+                or not identity.is_published_release
+                or not parse_optional_bool(row.get("monitoring_active"))):
+            excluded += 1
+            continue
+        paid = parse_optional_bool(row.get("paid_license"))
+        cohort = cohorts["nonfree" if paid is True else "free" if paid is False else "unknown"]
+        cohort["reporting_ids"] += 1
+        days = parse_optional_nonnegative_int(row.get("reporting_observation_days"))
+        if (not source_available or any(field not in row for field in REPORTING_USAGE_FIELDS)
+                or parse_optional_nonnegative_int(row.get("schema_version")) < 20
+                or parse_optional_bool(row.get("reporting_telemetry_available")) is not True
+                or not 1 <= days <= 30):
+            cohort["unmeasured_ids"] += 1
+            continue
+        cohort["covered_ids"] += 1
+        cohort["full_30d_observation_ids" if days == 30 else "partial_observation_ids"] += 1
+        counts = {field: min(100000, parse_optional_nonnegative_int(row.get(field)))
+                  for field in REPORTING_USAGE_COUNT_FIELDS}
+        for field, count in counts.items():
+            cohort["counts"][field] += count
+        if any(count for field, count in counts.items() if field.startswith("reporting_generated_")):
+            cohort["ids_with_generated_reports"] += 1
+        if any(count for field, count in counts.items() if field.startswith("reporting_repeat_")):
+            cohort["ids_with_repeat_periods"] += 1
+        # Cross-day retries can generate again without another successful
+        # reporting period. Keep generation-day activity separate from reuse.
+        if any(count > 1 for field, count in counts.items() if "_active_days_" in field):
+            cohort["ids_with_multiple_generation_days"] += 1
+    return {"window": "7d", "minimum_schema_version": 20,
+            "counter_window_utc_days": 30, "repeat_marker_retention_days": 90,
+            "source_available": source_available, "excluded_ids": excluded, "cohorts": cohorts}
 
 
 def analyze_target_release_rows(
@@ -3316,6 +3457,7 @@ def summarize_rows(
     source_window_days: int | None = None,
     pulse_intelligence_analysis_facts: Iterable[dict[str, Any]] | None = None,
     target_release_analysis_facts: Iterable[dict[str, Any]] | None = None,
+    unavailable_columns: Iterable[str] = (),
 ) -> dict[str, Any]:
     row_list: list[dict[str, Any]] = []
     mock_fleet_rows = 0
@@ -3398,6 +3540,14 @@ def summarize_rows(
             "installs": len(mock_fleet_installs),
         },
         "latest_install_windows": latest_install_windows,
+        "reporting_usage_7d": summarize_reporting_usage(
+            latest_by_install, published_versions, now=current_time,
+            unavailable_columns=unavailable_columns,
+        ),
+        "extended_history_usage_7d": summarize_extended_history_usage(
+            latest_by_install, published_versions, now=current_time,
+            unavailable_columns=unavailable_columns,
+        ),
         "user_base_signals_7d": summarize_user_base_signals(
             latest_by_install,
             now=current_time,
@@ -3613,6 +3763,51 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         lines.append(
             "- notification failure semantics: schema v2 counted unsuccessful retry attempts; "
             "schema v3+ counts only terminal failed or dead-letter outcomes"
+        )
+
+    extended_history = summary.get("extended_history_usage_7d")
+    if extended_history:
+        lines.extend(["", "Successful history reads beyond seven days (active production reporting IDs, 7d):"])
+        for posture, cohort in extended_history["cohorts"].items():
+            lines.append(
+                f"- {posture}: {cohort['covered_ids']} measured, "
+                f"{cohort['unmeasured_ids']} unmeasured, {cohort['ids_with_reads']} with reads, "
+                f"{cohort['successful_reads_30d']} successful reads (rolling 30d)"
+            )
+        lines.append(
+            "- interpretation: schema v19+ only. Older or unavailable measurements are unknown, "
+            "not zero use. Each reporting ID contributes only its latest rolling count. "
+            "Automatic refreshes count as reads. Rotating IDs are not people or subscriptions. "
+            "The nonfree flag does not verify paying customers or willingness to pay. "
+            "An upgrade starts measurement, so a zero is not a full 30-day observation."
+        )
+
+    reporting = summary.get("reporting_usage_7d")
+    if reporting:
+        lines.extend(["", "Reporting outcomes (active production reporting IDs, 7d):"])
+        for posture, cohort in reporting["cohorts"].items():
+            lines.append(
+                f"- {posture}: {cohort['covered_ids']} measured, "
+                f"{cohort['unmeasured_ids']} unmeasured, "
+                f"{cohort['full_30d_observation_ids']} with 30 elapsed observation days, "
+                f"{cohort['ids_with_generated_reports']} generating reports, "
+                f"{cohort['ids_with_repeat_periods']} with repeat successful reporting periods, "
+                f"{cohort['ids_with_multiple_generation_days']} generating on multiple days"
+            )
+            for field, count in cohort["counts"].items():
+                lines.append(f"  - {field}: {count}")
+        lines.append(
+            "- interpretation: schema v20+ and available tally only. Missing measurements are unknown, "
+            "not zero use. Latest rolling 30 UTC-day totals only, never summed heartbeats. "
+            "Active-day counts show distinct UTC days with successful generation, including manual downloads. "
+            "Multiple attempts in one day count as one active day. Cross-day generation may include "
+            "retries, so multiple active days alone do not establish a fresh successful period or returning manual use. "
+            "Generation and delivery counts include separate attempts. Successful periods require a persisted "
+            "successful saved-schedule run. Repeat periods require another distinct window on the same schedule "
+            "within 90 days, so retries and same-period reruns do not qualify. "
+            "SMTP acceptance does not establish inbox receipt. Observation days are elapsed days since tally "
+            "initialization, not proof of continuous uptime. Rotating IDs are not people or subscriptions. "
+            "The nonfree flag does not verify paying customers or willingness to pay."
         )
 
     pulse_loop = summary.get("pulse_intelligence_value_loop_7d")
@@ -3996,6 +4191,7 @@ def main(argv: list[str] | None = None) -> int:
         baseline_version=args.baseline_version,
         include_mock_fleet=args.include_mock_fleet,
         source_window_days=args.since_days,
+        unavailable_columns=source.get("unavailable_columns", []),
         pulse_intelligence_analysis_facts=source.get(
             "pulse_intelligence_analysis_facts"
         ),

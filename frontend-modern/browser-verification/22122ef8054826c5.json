@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "e90b10f9f2a8b75249eb78327d302ae27c39b528",
+  "verified_at": "2026-10-05T18:27:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "5c58ef600ede08b04ccb8acd70d14d70ade52cb048f25e1075df328fe2e8324f",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "ae16913c0761aee84ec808a4be9d2782576e7afea78f64ea0b134d5d9e43f375",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "fa21aa6871c0930e23531bfa27614644871a73a353fd1971aebca1f4dcd1bc0e",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "f011f93aa9950cf10ce93317f5baf9e25161b39b03ec1a124da6fdbfc20cc249",
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx": "6efd4b42234cdc432507786bb3c014262dbc02be400b9029f9af1e5bac871f35",
+    "frontend-modern/src/utils/apiClient.ts": "56dc80b15c0e7854ee16ece8b902c9de519e54f6110d55dc2c7e735d72214295"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity#patrol-suppression-rules"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production Patrol surface, clients and Router mounted with real CSS in the offline browser fixture; API responses and tenant/session inputs are synthetic. No installed or reporter deletion is claimed.",
+    "Assigned parent 53ec5fae creates a permanent narrow rule but has no manual-rule reversal surface. Existing Inbox and Finding options creator links lead to Activity in the repaired source.",
+    "Final-content WebKit 320: manual list, scoped confirmation, cancel, exact-ID removal/readback, preserved unrelated/finding-backed decisions, wildcard confirmation, uncertain response, explicit reload, revoked access and organisation invalidation.",
+    "Final-content Chromium 1365 viewport: exact manual identity and all-resource/all-category confirmation are visible with initial Cancel focus. Desktop deletion and strict transport checks were completed before the scroll-only markup repair; their client/handler content is unchanged.",
+    "Long multiline reason at 320 dark WebKit and 1365 light Chromium: heading and action footer stay visible, initial resource/category/rule ID remain in view, reason scrolls independently. WebKit native keyboard PageDown and Home; Chromium pointer wheel and keyboard Home.",
+    "Full-page screenshots omitted fixed confirmation panels. Separately inspected viewport captures and bounding boxes establish visual readability. No horizontal overflow, page errors or off-origin calls; browser/server closed in all cases."
+  ],
+  "interactions": [
+    "Written reason required by the real Inbox Create rule form; narrow POST with synthetic CSRF and exact tenant, then link opens the collection even if Router state precedes pushState.",
+    "Escape/Cancel performs no DELETE and returns focus. Confirm verifies the same manual row with a fresh GET, sends one exact-ID DELETE and requires readback absence; unrelated rules and historic dismissals remain.",
+    "Finding options Create rule from this has a labelled reason field, Reopen distinction and the same Activity link without creating a second rule.",
+    "Lost DELETE response never retries or reports success; explicit reload reconciles. 403 fresh read stops before DELETE; org switch invalidates confirmation and old list with no cross-tenant action.",
+    "Measured final confirmation boxes within desktop and narrow viewports; finished finite entrance animations for viewport inspection. Long-reason scroll leaves the footer fixed, and keyboard Home restores the initial scope.",
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 and WebKit 26.0. Mobile WebKit wheel is unsupported; its failed aggregate remains evidence, with completed cases retained and the outstanding scroll check completed using supported keyboard input, without replaying their mutations."
+  ]
+}

@@ -969,3 +969,93 @@ func TestAlertCharacterizationResolvedCallbackUsesCanonicalIDForCanonicalAliasCl
 		t.Fatalf("expected resolved callback for %q", alertID)
 	}
 }
+
+// A held threshold alert keeps the value and message of its last breach, but
+// what the alert is about can be newer than the alert: one restored from a
+// checkpoint written before its producer named a child type or stamped
+// platformType would otherwise keep linking to the wrong page and naming the
+// wrong policy owner until it re-fires or clears.
+func TestAlertCharacterizationHeldMetricAlertRefreshesItsClassification(t *testing.T) {
+	type staleAlert struct {
+		resourceType string
+		platformType string
+	}
+	tests := []struct {
+		name             string
+		alertID          string
+		fire             func(*Manager)
+		hold             func(*Manager)
+		stale            staleAlert
+		wantResourceType string
+		wantPlatform     string
+		wantValue        float64
+	}{
+		{
+			name:    "agent filesystem",
+			alertID: canonicalMetricStateID("agent:held-host/disk:srv", "disk"),
+			fire: func(m *Manager) {
+				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Usage: 92}}})
+			},
+			hold: func(m *Manager) {
+				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Usage: 75}}})
+			},
+			stale:            staleAlert{resourceType: "agent"},
+			wantResourceType: "agent-disk",
+			wantPlatform:     "agent",
+			wantValue:        92,
+		},
+		{
+			name:    "vSphere VM",
+			alertID: canonicalMetricStateID("vmware:vc-1:vm:vm-201", "disk"),
+			fire: func(m *Manager) {
+				m.CheckUnifiedResource(&UnifiedResourceInput{ID: "vmware:vc-1:vm:vm-201", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "Lab vCenter", Disk: &UnifiedResourceMetric{Percent: 94}})
+			},
+			hold: func(m *Manager) {
+				m.CheckUnifiedResource(&UnifiedResourceInput{ID: "vmware:vc-1:vm:vm-201", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "Lab vCenter", Disk: &UnifiedResourceMetric{Percent: 87}})
+			},
+			stale:            staleAlert{resourceType: "vSphere VM"},
+			wantResourceType: "vSphere VM",
+			wantPlatform:     "vmware-vsphere",
+			wantValue:        94,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestManager(t)
+			configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+			m.mu.Lock()
+			m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
+			m.mu.Unlock()
+
+			tt.fire(m)
+			m.mu.Lock()
+			alert, ok := m.getActiveAlertNoLock(tt.alertID)
+			if !ok {
+				m.mu.Unlock()
+				t.Fatalf("expected active alert %q", tt.alertID)
+			}
+			alert.Metadata["resourceType"] = tt.stale.resourceType
+			delete(alert.Metadata, alertPlatformTypeKey)
+			m.mu.Unlock()
+
+			tt.hold(m)
+
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			held, ok := m.getActiveAlertNoLock(tt.alertID)
+			if !ok {
+				t.Fatal("held alert resolved; the reading should sit between clear and trigger")
+			}
+			if held.Value != tt.wantValue {
+				t.Fatalf("held alert value = %v, want the last breach %v", held.Value, tt.wantValue)
+			}
+			if got := held.Metadata["resourceType"]; got != tt.wantResourceType {
+				t.Fatalf("resourceType = %v, want %s", got, tt.wantResourceType)
+			}
+			if got := held.Metadata[alertPlatformTypeKey]; got != tt.wantPlatform {
+				t.Fatalf("platformType = %v, want %s", got, tt.wantPlatform)
+			}
+		})
+	}
+}

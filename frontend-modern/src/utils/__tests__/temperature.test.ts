@@ -3,7 +3,6 @@ import {
   celsiusToFahrenheit,
   formatTemperature,
   getTemperatureSymbol,
-  getCpuTemperature,
   getTemperatureTextClass,
   temperatureStore,
 } from '../temperature';
@@ -58,59 +57,6 @@ describe('temperature', () => {
     });
   });
 
-  describe('getCpuTemperature', () => {
-    it('returns null if not available', () => {
-      expect(getCpuTemperature(null)).toBeNull();
-      expect(getCpuTemperature({ available: false, lastUpdate: '' } as any)).toBeNull();
-    });
-
-    it('picks the maximum value from various sources', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: 50,
-        cpuMax: 55,
-        cores: [
-          { name: 'Core 0', temp: 52 },
-          { name: 'Core 1', temp: 58 },
-        ],
-      };
-      // Should pick 58
-      expect(getCpuTemperature(temp as any)).toBe(58);
-    });
-
-    it('handles missing fields gracefully', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: 60,
-        // others missing
-      };
-      expect(getCpuTemperature(temp as any)).toBe(60);
-    });
-
-    it('filters invalid temperatures', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: NaN,
-        cpuMax: Infinity,
-        cores: [{ name: 'C1', temp: 45 }],
-      };
-      expect(getCpuTemperature(temp as any)).toBe(45);
-    });
-
-    it('returns null if no valid temperatures found', () => {
-      const temp = {
-        available: true,
-        lastUpdate: '',
-        cpuPackage: NaN,
-        cores: [],
-      };
-      expect(getCpuTemperature(temp as any)).toBeNull();
-    });
-  });
-
   describe('getTemperatureTextClass', () => {
     it('returns muted tone for nullish or invalid values', () => {
       expect(getTemperatureTextClass(null)).toBe('text-muted');
@@ -130,12 +76,34 @@ describe('temperature', () => {
       expect(getTemperatureTextClass(80)).toContain('text-red-600');
     });
 
+    it('colours no disk reading whose disk temperature alerting is off', () => {
+      expect(getTemperatureTextClass(80, null, 'diskTemperature')).toBe('text-base-content');
+      // Node temperatures keep the factory colours without configured thresholds.
+      expect(getTemperatureTextClass(80, null, 'temperature')).toContain('text-red-600');
+    });
+
     it('honors configured warning and critical thresholds', () => {
       const thresholds = { warning: 80, critical: 85 };
 
       expect(getTemperatureTextClass(76, thresholds)).toContain('text-green-600');
       expect(getTemperatureTextClass(80, thresholds)).toContain('text-amber-600');
       expect(getTemperatureTextClass(85, thresholds)).toContain('text-red-600');
+    });
+
+    it("keeps an open alert's tone while the reading holds under its trigger", () => {
+      const thresholds = { warning: 75, critical: 80 };
+      // minipc: alert open at 80°C, now reading 72°C on its way down.
+      expect(getTemperatureTextClass(72, thresholds)).toContain('text-green-600');
+      expect(getTemperatureTextClass(72, thresholds, 'temperature', 'warning')).toContain(
+        'text-amber-600',
+      );
+      expect(getTemperatureTextClass(72, thresholds, 'temperature', 'critical')).toContain(
+        'text-red-600',
+      );
+      // The reading still wins when it is worse than the alert.
+      expect(getTemperatureTextClass(86, thresholds, 'temperature', 'warning')).toContain(
+        'text-red-600',
+      );
     });
 
     it('uses disk temperature defaults for disk temperature displays', () => {

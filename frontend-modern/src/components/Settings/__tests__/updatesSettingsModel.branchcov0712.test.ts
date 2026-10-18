@@ -54,9 +54,9 @@ const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): Docker
 });
 
 const PRO_STEP_CODE_CLASS =
-  'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400 whitespace-pre-wrap break-all';
+  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
 const SYSTEMD_DOWNLOAD_CODE_CLASS =
-  'block rounded-md border border-border bg-base p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all';
+  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all';
 
 // ---- buildIdleDockerComposeCommand -----------------------------------------
 // Single return path; assert the exact constant.

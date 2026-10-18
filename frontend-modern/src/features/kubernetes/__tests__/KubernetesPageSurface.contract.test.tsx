@@ -1,12 +1,15 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
+const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, Alert> }));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -38,6 +41,14 @@ const renderSurface = () =>
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
+}));
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: activeAlertsRef.current }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
 vi.mock('@/stores/updates', () => ({
@@ -121,8 +132,18 @@ vi.mock('../KubernetesNetworkingTable', () => ({
 }));
 
 vi.mock('../KubernetesNodesTable', () => ({
-  KubernetesNodesTable: (props: { resources: Resource[] }) => (
-    <div data-testid="nodes-table" data-rows={props.resources.length} />
+  KubernetesNodesTable: (props: {
+    resources: Resource[];
+    title?: string;
+    sortStorageKey?: string;
+  }) => (
+    <div
+      data-testid="nodes-table"
+      data-rows={props.resources.length}
+      data-ids={props.resources.map((resource) => resource.id).join(',')}
+      data-title={props.title}
+      data-sort-key={props.sortStorageKey}
+    />
   ),
 }));
 
@@ -150,6 +171,9 @@ vi.mock('../KubernetesStorageTable', () => ({
   ),
 }));
 
+const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+activeAlertsRef.current = activeAlerts;
+
 describe('KubernetesPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/');
@@ -158,7 +182,113 @@ describe('KubernetesPageSurface contract', () => {
 
   afterEach(() => {
     cleanup();
+    setActiveAlerts(reconcile({}));
     vi.clearAllMocks();
+  });
+
+  it('leads the overview with health signals and not-ready nodes before inventory', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-down',
+        type: 'k8s-node',
+        kubernetes: { ready: false } as Resource['kubernetes'],
+      }),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+      makeResource({
+        id: 'pod-1',
+        type: 'pod',
+        incidents: [{ code: 'pod_crashloop', severity: 'warning', summary: 'CrashLoopBackOff' }],
+      }),
+    ]);
+
+    renderSurface();
+
+    const signals = screen.getByTestId('alerts-table');
+    const attention = screen.getByTestId('nodes-table');
+    const clusters = screen.getByTestId('clusters-table');
+    expect(attention).toHaveAttribute('data-title', 'Nodes needing attention');
+    expect(attention).toHaveAttribute('data-rows', '1');
+    // Its own persisted sort, so sorting the Nodes tab cannot reorder this list.
+    expect(attention).toHaveAttribute('data-sort-key', 'kubernetesNodesNeedingAttention');
+    expect(
+      signals.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      attention.compareDocumentPosition(clusters) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('names a Ready node with an open alert among the nodes needing attention', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-memory',
+        type: 'agent',
+        sources: ['agent', 'kubernetes'],
+        agent: { agentId: 'host-k8s-02' },
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      } as Partial<Resource> & Pick<Resource, 'id' | 'type'>),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+    ]);
+    renderSurface();
+    // Every node is Ready, so nothing needs attention until an alert opens.
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+
+    // The node's agent raises it: keyed on the agent, labelled with the hostname.
+    setActiveAlerts({
+      memory: {
+        id: 'memory',
+        type: 'memory',
+        level: 'critical',
+        resourceId: 'agent:host-k8s-02',
+        resourceName: 'Prod Euw1 K8s 02',
+        node: 'prod-euw1-k8s-02',
+        instance: '',
+        message: 'Agent memory at 100.0%',
+        value: 100,
+        threshold: 90,
+        startTime: '2026-10-06T10:00:00Z',
+        acknowledged: false,
+      },
+    });
+
+    const attention = screen.getByTestId('nodes-table');
+    expect(attention).toHaveAttribute('data-title', 'Nodes needing attention');
+    expect(attention).toHaveAttribute('data-ids', 'node-memory');
+
+    // Acknowledged: someone owns it, and the row is no longer tinted either.
+    setActiveAlerts('memory', 'acknowledged', true);
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+    setActiveAlerts('memory', 'acknowledged', false);
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-ids', 'node-memory');
+    // Resolved: the alert leaves the store and the node leaves the list.
+    setActiveAlerts(reconcile({}));
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+  });
+
+  it('shows no attention table when every node is Ready', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+    expect(screen.queryByTestId('alerts-table')).toBeNull();
   });
 
   it('declares inventory-backed workflow tabs while querying API-native Kubernetes resources', () => {
@@ -257,7 +387,7 @@ describe('KubernetesPageSurface contract', () => {
     renderSurface();
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('k8s-node-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('k8s-node-1 runs an older Pulse agent (v5.1.34), so');
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
@@ -300,7 +430,7 @@ describe('KubernetesPageSurface contract', () => {
     renderSurface();
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('worker-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('worker-1 runs an older Pulse agent (v5.1.34), so');
     expect(notice).toHaveTextContent('for this node');
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(

@@ -14,7 +14,7 @@ import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
-  PlatformTableDateTimeValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -26,6 +26,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -145,6 +146,20 @@ const activityTone = (bucket: VmwareActivityStateBucket): ActivityDetailTone => 
   return 'muted';
 };
 
+// An event's title is vCenter's own message when it sent one, so the message
+// and description rows would only repeat it.
+const distinctFromTitle = (activity: VmwareActivityRow, value: string): string =>
+  value.trim() && value.trim() !== activity.title.trim() ? value : '';
+
+// Recent activity reads as an age ("3h ago"); the exact time is on hover and
+// in the drawer. vCenter reports unset times as dates before 2000.
+const activityTimestamp = (activity: VmwareActivityRow): string | undefined => {
+  const value = activity.occurredAt || activity.observedAt;
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() < 2000 ? undefined : value;
+};
+
 const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetailSection[] => {
   const meta = activity.resource.vmware;
   return compactDetailSections([
@@ -156,8 +171,9 @@ const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetai
           tone: activityTone(activity.stateBucket),
         }),
         detailRow('Activity', activity.title),
-        detailRow('Message', activity.message),
-        detailRow('Description', activity.description),
+        detailRow('Event type', activity.eventType),
+        detailRow('Message', distinctFromTitle(activity, activity.message)),
+        detailRow('Description', distinctFromTitle(activity, activity.description)),
       ]),
     },
     {
@@ -247,6 +263,9 @@ export const VsphereActivityTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  // One vCenter connection: its name would repeat on every row, so the
+  // column hides (the row drawer still names it).
+  singleVcenter?: boolean;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.activity,
@@ -348,14 +367,16 @@ export const VsphereActivityTable: Component<{
                 >
                   Actor
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="vcenter"
-                  class="hidden lg:table-cell md:w-[10%]"
-                >
-                  vCenter
-                </PlatformSortableTableHead>
+                <Show when={!props.singleVcenter}>
+                  <PlatformSortableTableHead
+                    kind="text"
+                    sort={sort}
+                    sortKey="vcenter"
+                    class="hidden lg:table-cell md:w-[10%]"
+                  >
+                    vCenter
+                  </PlatformSortableTableHead>
+                </Show>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
@@ -408,6 +429,17 @@ export const VsphereActivityTable: Component<{
                                 >
                                   {activity.resourceName}
                                 </div>
+                                {/* A phone hides State; the same words read under the name. */}
+                                <span
+                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket))}`}
+                                  data-vsphere-activity-state-phone={activityStateVariant(
+                                    activity.stateBucket,
+                                  )}
+                                >
+                                  <span class="min-w-0 truncate">
+                                    {formatActivityState(activity)}
+                                  </span>
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -421,7 +453,9 @@ export const VsphereActivityTable: Component<{
                               class="block truncate text-base-content"
                               title={[
                                 activity.title,
-                                activity.message || activity.description || activity.nativeId,
+                                distinctFromTitle(activity, activity.message) ||
+                                  distinctFromTitle(activity, activity.description) ||
+                                  activity.nativeId,
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
@@ -432,7 +466,12 @@ export const VsphereActivityTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
-                            <span class="text-[11px] font-semibold text-base-content">
+                            <span
+                              class={`text-[11px] font-semibold ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket)) || 'text-base-content'}`}
+                              data-vsphere-activity-state={activityStateVariant(
+                                activity.stateBucket,
+                              )}
+                            >
                               {formatActivityState(activity)}
                             </span>
                           </TableCell>
@@ -443,35 +482,38 @@ export const VsphereActivityTable: Component<{
                               {activity.actor || '-'}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
-                          >
-                            <span
-                              class="block truncate text-base-content"
-                              title={[
-                                meta()?.connectionName || meta()?.vcenterHost,
-                                meta()?.datacenterName || meta()?.clusterName,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
+                          <Show when={!props.singleVcenter}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
                             >
-                              {meta()?.connectionName || meta()?.vcenterHost || '-'}
-                            </span>
-                          </TableCell>
+                              <span
+                                class="block truncate text-base-content"
+                                title={[
+                                  meta()?.connectionName || meta()?.vcenterHost,
+                                  meta()?.datacenterName || meta()?.clusterName,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
+                                {meta()?.connectionName || meta()?.vcenterHost || '-'}
+                              </span>
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <PlatformTableDateTimeValue
-                              value={activity.occurredAt || activity.observedAt}
-                              emptyText="-"
-                              minYear={2000}
-                            />
+                            <span title={detailDateTime(activityTimestamp(activity))}>
+                              <PlatformTableRelativeTimeValue
+                                value={activityTimestamp(activity)}
+                                emptyText="-"
+                              />
+                            </span>
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={7}
+                            colspan={props.singleVcenter ? 6 : 7}
                             data-inline-detail-for={activity.id}
                             data-vsphere-activity-detail-row={activity.id}
                           >

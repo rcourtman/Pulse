@@ -4,7 +4,9 @@ import type {
   ResourceKubernetesPodContainerStatus,
   ResourceType,
 } from '@/types/resource';
+import type { Alert } from '@/types/api';
 import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -99,6 +101,20 @@ const displayName = (resource: Resource): string =>
 // is only a fallback for rows whose adapter carries no name. Every Kubernetes
 // page table shares this so the same cluster never reads as "Production EU"
 // in one column and "k8s-production-1" in another.
+// Pod names end in the generated segment that tells replicas apart
+// (checkout-api-6d8f9c7b5-x7k2p, web-0), which is exactly what end truncation
+// cuts off in a narrow column. Splitting it out lets the table truncate the
+// head and keep the tail, so a long name reads checkout-api-6d…-x7k2p.
+const KUBERNETES_NAME_TAIL_MAX = 10;
+
+export function splitKubernetesNameTail(name: string): { head: string; tail: string } {
+  const cut = name.lastIndexOf('-');
+  if (cut <= 0 || name.length - cut - 1 > KUBERNETES_NAME_TAIL_MAX || cut === name.length - 1) {
+    return { head: name, tail: '' };
+  }
+  return { head: name.slice(0, cut), tail: name.slice(cut) };
+}
+
 export const kubernetesClusterLabel = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.clusterName) ||
   asTrimmedString(resource.kubernetes?.clusterId);
@@ -122,6 +138,25 @@ const podHasFatalContainer = (containers: ResourceKubernetesPodContainerStatus[]
 
 const podAllContainersReady = (containers: ResourceKubernetesPodContainerStatus[]): boolean =>
   containers.length > 0 && containers.every((container) => container.ready === true);
+
+// With one cluster in view, every row's scope repeats the cluster name and
+// crowds out the namespace, the part that differs between rows. Tables then
+// show the namespace alone (Cluster-wide for cluster-scoped objects) and keep
+// the full cluster/namespace scope on hover. Several clusters keep both.
+// Clusters are told apart by ID (two can share a display name), and a row with
+// no cluster at all counts as its own, so a mix keeps the full scope.
+const kubernetesClusterKey = (resource: Resource): string =>
+  asTrimmedString(resource.kubernetes?.clusterId) ||
+  asTrimmedString(resource.kubernetes?.clusterName) ||
+  '';
+
+export const isSingleKubernetesCluster = (resources: readonly Resource[]): boolean =>
+  new Set(resources.map(kubernetesClusterKey)).size <= 1;
+
+export const kubernetesScopeDisplayLabel = (resource: Resource, singleCluster: boolean): string =>
+  singleCluster
+    ? asTrimmedString(resource.kubernetes?.namespace) || 'Cluster'
+    : kubernetesScopeLabel(resource);
 
 export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   const phase = normalizeKubernetesToken(
@@ -767,6 +802,46 @@ const countKubernetesDanger = (
   resources: readonly Resource[],
   mapper: (resource: Resource) => StatusIndicator,
 ): number => resources.filter((resource) => mapper(resource).variant === 'danger').length;
+
+// Attention order shared by the overview's "Nodes needing attention" list and
+// the nodes table's default sort: 0 for a NotReady node or one with an
+// unacknowledged critical alert, 1 for a cordoned or degraded node or one with
+// another unacknowledged alert, 2 otherwise. The alerts are the ones the
+// node's row tint and drawer use, so a Ready node at 100% memory ranks with
+// the NotReady ones instead of below every degraded node.
+export function getKubernetesNodeAttentionRank(
+  node: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean,
+): 0 | 1 | 2 {
+  const variant = mapKubernetesNodeStatus(node).variant;
+  const statusRank = variant === 'danger' ? 0 : variant === 'warning' ? 1 : 2;
+  const alertStyles = getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled);
+  const alertRank = !alertStyles.hasUnacknowledgedAlert
+    ? 2
+    : alertStyles.severity === 'critical'
+      ? 0
+      : 1;
+  return Math.min(statusRank, alertRank) as 0 | 1 | 2;
+}
+
+// Nodes the overview should name before any inventory, in attention order.
+// "2/3 nodes" on the cluster row says something is wrong but not which node;
+// this list answers that.
+export function getKubernetesNodesNeedingAttention(
+  model: KubernetesPageModel,
+  activeAlerts: Record<string, Alert> = {},
+  alertsEnabled = false,
+): Resource[] {
+  return model.nodes
+    .map((node) => ({
+      node,
+      rank: getKubernetesNodeAttentionRank(node, activeAlerts, alertsEnabled),
+    }))
+    .filter((entry) => entry.rank < 2)
+    .sort((a, b) => a.rank - b.rank || compareKubernetesNodes(a.node, b.node))
+    .map((entry) => entry.node);
+}
 
 export function buildKubernetesOverviewPosture(
   model: KubernetesPageModel,

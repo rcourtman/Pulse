@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "723f3165a1292268634b6054ab93d3015805d990",
+  "verified_at": "2026-10-06T23:14:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "f141220216a968f5953b7646035108f015a9f7de3c5ae5a9e3251ec6e7046fa5",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "07b26eafecbd1ec93fb1dd90d4af6629778cef59a2d9e7450426cb88c90bdfdb",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "70955e370c5b2611557a5de8ba4df44b8f6dce47c1b08c611a154d232c786501",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "450cce7a4723ce7fe7b01ffe9d10c7d6439c34a1a6dda4fc0af6689ceb4741b5",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "8d63a04f6a475f39de90cb9813b8bd4315525bf63318cfaf958ac195ae07950f"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Two private mock stacks (8-node estate) built from this tree: one with this commit's registry.go/types.go, one with origin/main's, both with a local-only go build -overlay of internal/mock/generator.go that holds standalone Linux agent host-linux-1 (Apollo-114) and Docker host edge-proxy-01 past their reporting leases the way evaluateHostAgents/evaluateDockerAgents leave them: status offline, LastSeen frozen 14m/9m before the first tick, last readings kept. Mock mode skips the host health sweep, hence the overlay.",
+    "Before (origin/main backend and frontend): /api/resources served Apollo-114 as status warning with agent.stale true and edge-proxy-01 as warning with health stale. The Machines row showed an amber dot, CPU 32%, Memory 74%, Disk 80%, Net and Disk I/O rates, Up 29d and Temp 45\u00b0C in threshold green beside 'Seen 14m ago', while the drawer led with the critical 'Host Apollo-114 is offline' alert and read 'Observed state Degraded, Uptime 29d 12h'.",
+    "After (this commit): both resources serve status offline, the agent/docker sightings still read stale, and health reads critical with reasons offline then telemetry_stale. The Apollo-114 row shows a red dot and '\u2014' in CPU, Memory, Disk, Net I/O, Disk I/O, Up and Temp at 1440 and 390; the status filter counts it under Offline. Spectrum-709 (reporting) keeps every value, Temp 47\u00b0C included.",
+    "Machine drawer at 1440 and 390: Runtime context reads 'Observed state Offline' and 'Last seen N mins ago' with no Uptime row; Platform details > Machine 'Show details' drops the System card's Uptime and the Thermals card reads 'Cpu.package 45\u00b0C (last known)' with title 'Last known reading, not current: host agent stopped reporting'.",
+    "Docker page at 1440 and 390: edge-proxy-01 shows a red dot, '\u2014' for CPU, Memory, Disk and Temp (the hold seeds a retained 51\u00b0C), and the existing 'No report for 16m' marker in Uptime; Edge Apps 01 keeps its values, Temp 38.5\u00b0C included.",
+    "Bundle check: WorkloadsSurface unchanged (70.20 kB), Standalone +0.04 kB, Docker +0.01 kB, InfrastructureWorkspace flat versus this tree without the frontend diff; all chunks within budget.",
+    "Not covered: a real agent going silent on hardware, light/dark differences (no new colour classes), and the drawer Disks card, which still threshold-colours a silent agent's retained filesystem usage (left for a follow-up)."
+  ],
+  "interactions": [
+    "Enabled the Network, Disk I/O, Uptime and Temp columns through the Machines column preferences (localStorage init) and read every cell of the offline and reporting rows plus the status dot class at 1440 and 390.",
+    "Opened the Apollo-114 drawer by row click at both widths, read the Runtime context rows, expanded Platform details and the Machine 'Show details', and read the System and Thermals cards with their value titles.",
+    "Opened /docker at both widths and read every cell of edge-proxy-01 and Edge Apps 01.",
+    "Queried /api/resources on both stacks for status, per-source sighting status and health reasons of the held agent and Docker host."
+  ]
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -349,11 +350,10 @@ func (r *RemediationLog) loadFromDisk() error {
 
 // Helper functions
 
-var recordCounter int64
+var recordCounter atomic.Int64
 
 func generateRecordID() string {
-	recordCounter++
-	return "rem-" + time.Now().Format("20060102150405") + "-" + intToString(int(recordCounter%1000))
+	return nextSequencedID("rem-", &recordCounter)
 }
 
 func truncateOutput(output string, maxLen int) string {

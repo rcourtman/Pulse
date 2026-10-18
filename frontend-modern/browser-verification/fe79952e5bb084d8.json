@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "1a094646d7f21217eda051af6ba0252e208f283e",
+  "verified_at": "2026-10-07T22:32:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/utils/recoveryItemTypePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/routing/resourceLinks.ts": "420b501bf1d305bc4287ef50655764cbff4c19db4823e8258e34ca9097edaec4",
+    "frontend-modern/src/utils/recoveryItemTypePresentation.ts": "deleted"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage",
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private Vite dev server from this change's tree (verified on origin/main 15322e1573 plus the change, then rebased onto 1a094646d7, whose intervening frontend changes touch summary focus, Patrol and workload guest presentation, not the Proxmox Backups or TrueNAS Protection code) against two backends: the shared non-mock :7655 backend with real PBS/PVE backup history and no TrueNAS system, and a peer's mock-mode backend on :7891 with TrueNAS replication and snapshot recovery points",
+    "The change only deletes exports no production module reads (RECOVERY_QUERY_PARAMS, parseRecoveryLinkSearch, buildRecoveryRouteSearch, normalizeQueryBooleanFlag) and the unreachable recoveryItemTypePresentation.ts; no rendered component imports any of them",
+    "/proxmox/backups/date: backup servers table, backup health posture strip, Backups per day chart and the date feed render; By date / Coverage tabs sit above the filter bar at both widths",
+    "/proxmox/backups/date?day=2026-09-19 (real data): feed narrowed in place to one 7-backup day group; after reload the day is kept and the range control is back on 30d",
+    "1y range: 364+ day columns, chart scrolls inside its card, document scrollWidth equals clientWidth (no page overflow); URL unchanged by range changes",
+    "/proxmox/backups/coverage: coverage table with posture filter and Node / Backup location / Type filters; the date-only day facet is cleared on the switch",
+    "/truenas/protection on the non-mock backend: 'No TrueNAS systems' empty state",
+    "/truenas/protection on the mock backend: 10 snapshot and replication events with canonical dataset labels (display.itemLabel); Failed status filter leaves one row with the URL unchanged; expanded detail leads with Kind, Outcome, Dataset, Host, then replication and target sections, no raw JSON",
+    "390x844: /proxmox/backups/date and /truenas/protection have no horizontal page overflow",
+    "Console: only WebSocket proxy failures to the peer mock backend's /ws (its origin check, REST data unaffected); no other errors"
+  ],
+  "interactions": [
+    "Clicked an activity day column (Sat 19 Sept on real data, Wed 7 Oct on mock) and read the URL and day group headers",
+    "Clicked the 1y range button and measured page overflow, then reloaded the day URL",
+    "Clicked the Coverage tab",
+    "Clicked the Failed status filter on the TrueNAS Protection table",
+    "Expanded the details row for archive/backups",
+    "Resized to 390x844 and 1280x800 and re-measured overflow and tab/filter order"
+  ]
+}

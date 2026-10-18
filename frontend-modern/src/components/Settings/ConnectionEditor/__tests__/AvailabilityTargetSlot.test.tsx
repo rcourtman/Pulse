@@ -338,6 +338,10 @@ describe('AvailabilityTargetSlot', () => {
       'placeholder',
       'Stored securely — leave blank to keep it',
     );
+    // The request body composes FormTextarea, which links its size note.
+    expect(screen.getByLabelText(/^Request body \(optional\)/)).toHaveAccessibleDescription(
+      'Up to 8 KiB. Kept out of history and test output.',
+    );
     expect(screen.getByLabelText('Header value')).toHaveAttribute(
       'placeholder',
       'Stored securely — leave blank to keep it',

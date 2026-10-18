@@ -781,11 +781,31 @@ describe('formatAlertAxisTickLabel', () => {
       locale: 'en-US',
     });
     expect(label).toContain('Mar 22');
-    // The mid-range branch sets only `hour` (no `minute`), so the time-of-day
-    // token is a bare hour like "09 AM" with no colon.
-    expect(label).toMatch(/09/);
     expect(label).toMatch(/AM|PM/);
-    expect(label).not.toMatch(/\d{1,2}:\d{2}/);
+    expect(label).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  // The default 7-day chart labels its axis by hour. With only the hour, a
+  // 24-hour locale printed "8 Oct, 11", a date followed by a bare number.
+  it('writes the hour as a time in 24-hour locales', () => {
+    const ts = new Date(2026, 9, 8, 11, 0, 0).getTime();
+    for (const locale of ['en-GB', 'fr-FR', 'en-US']) {
+      const label = formatAlertAxisTickLabel({
+        timestamp: ts,
+        bucketHours: 6,
+        totalHours: 7 * 24,
+        locale,
+      });
+      expect(label).toMatch(/11:00/);
+    }
+    expect(
+      formatAlertAxisTickLabel({
+        timestamp: ts,
+        bucketHours: 6,
+        totalHours: 7 * 24,
+        locale: 'en-GB',
+      }),
+    ).toBe('8 Oct, 11:00');
   });
 
   it('omits the hour for a mid-range total with a large bucket and long span', () => {

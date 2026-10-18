@@ -34,7 +34,7 @@ export function EmptyState(props: EmptyStateProps) {
   const containerClass = [
     'flex w-full animate-fade-in flex-col',
     variant === 'framed'
-      ? 'rounded-md border border-dashed border-border bg-base px-6 py-10 sm:px-8 sm:py-16'
+      ? 'rounded-md border border-dashed border-border px-6 py-10 sm:px-8 sm:py-16'
       : 'px-4 py-8',
     alignment === 'center' ? 'items-center text-center' : 'items-start text-left',
     local.class ?? '',

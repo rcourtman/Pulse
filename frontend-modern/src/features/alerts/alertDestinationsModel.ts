@@ -42,6 +42,7 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
     to: config.to.map((entry) => entry.trim()).filter((entry) => entry.length > 0),
     tls: config.tls,
     startTLS: config.startTLS,
+    rateLimit: config.rateLimit,
   };
   if (config.tagFilter !== undefined) {
     payload.tagFilter = config.tagFilter;

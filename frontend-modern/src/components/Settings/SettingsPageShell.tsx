@@ -64,7 +64,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 />
               </svg>
               <div>
-                <p class="font-semibold text-amber-900/25 dark:text-amber-100">
+                <p class="font-semibold text-amber-900 dark:text-amber-100">
                   {unsavedChangesBanner().title}
                 </p>
                 <p class="text-sm text-amber-700 dark:text-amber-200 mt-0.5">

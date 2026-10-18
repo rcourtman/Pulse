@@ -51,6 +51,16 @@ export function getAuditWebhookFeatureGateCopy(
   };
 }
 
+// People looking for alert delivery land here first because it is the only
+// webhook page in Settings (issue #1344 tried to add a Discord webhook from
+// it). The panel says what it is for and where alert notifications live.
+export function getAuditWebhookNotificationsSignpost() {
+  return {
+    text: 'These carry security events only. To send alerts to Discord, Slack, ntfy or email, set up',
+    linkLabel: 'alert notifications',
+  } as const;
+}
+
 export function getAuditWebhookEmptyStateCopy(): AuditWebhookEmptyStateCopy {
   return {
     title: 'No audit webhooks configured yet.',

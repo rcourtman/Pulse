@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "8424fd65057af75e1ea3c1fc9fe29528d7c0d68e",
+  "verified_at": "2026-10-06T21:24:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/stores/websocket.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/stores/websocket.ts": "1be5c0f23d3dbaf85a32f7b8b3906c2cb25b20bb02412c31c200ffbad9c6c2d5"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (backend + Vite from this tree) with a local-only overlay pinning node standalone2's evaluated CPU temperature and letting mock mode restore persisted alerts across restarts",
+    "standalone2 temperature alert latched below trigger (breach 95, live 78): node drawer Needs attention reads 'Temperature 78\u00b0C now, back under the 80\u00b0C alert level' and the node table temperature cell title carries the same summary",
+    "Backend restarted with the reading missing: /api/alerts/active returns the restored alert without metricStatus; the open tab reconnects and the drawer and cell title fall back to 'Node temperature at 95.0\u00b0C' within seconds",
+    "Reading returns: the next keyed delta adds metricStatus and the drawer reads '78\u00b0C now' again",
+    "Control on the unchanged store, same run: after the restart the open tab kept 'Temperature 78\u00b0C now' in the drawer and cell title for the full two-minute window",
+    "Alerts overview card snoozed ('Snoozed until ...', Resume shown), resumed, and acknowledged from the UI with no page errors"
+  ],
+  "interactions": [
+    "Expanded the standalone2 row details in the Proxmox nodes table (desktop) and after Show all nodes (narrow)",
+    "Restarted the private backend while the tab stayed open, then changed the pinned reading back to 78",
+    "Clicked Snooze and the first preset, then Resume, then Acknowledge on the alert card",
+    "Acknowledged and unacknowledged through the API from another session with the tab open (card left and returned within 2s)"
+  ]
+}

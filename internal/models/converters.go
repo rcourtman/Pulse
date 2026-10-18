@@ -1174,7 +1174,6 @@ type ResourceConvertInput struct {
 	CustomURL             string
 	LastSeenUnix          int64
 	Health                json.RawMessage
-	Alerts                []ResourceAlertInput
 	IncidentCount         int
 	IncidentCode          string
 	IncidentSeverity      string
@@ -1222,16 +1221,6 @@ type ResourceMetricInput struct {
 	Used        *int64
 	Free        *int64
 	Observation MemoryObservation
-}
-
-type ResourceAlertInput struct {
-	ID            string
-	Type          string
-	Level         string
-	Message       string
-	Value         float64
-	Threshold     float64
-	StartTimeUnix int64
 }
 
 type ResourceIdentityInput struct {
@@ -1350,22 +1339,6 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		rf.DiskIO = &ResourceDiskIOFrontend{
 			ReadRate:  input.DiskReadRate,
 			WriteRate: input.DiskWriteRate,
-		}
-	}
-
-	// Convert alerts
-	if len(input.Alerts) > 0 {
-		rf.Alerts = make([]ResourceAlertFrontend, len(input.Alerts))
-		for i, a := range input.Alerts {
-			rf.Alerts[i] = ResourceAlertFrontend{
-				ID:        a.ID,
-				Type:      a.Type,
-				Level:     a.Level,
-				Message:   a.Message,
-				Value:     a.Value,
-				Threshold: a.Threshold,
-				StartTime: a.StartTimeUnix,
-			}
 		}
 	}
 

@@ -7,6 +7,50 @@ import (
 	"time"
 )
 
+func TestGuestDiskObservationIsInternalSnapshotEvidence(t *testing.T) {
+	origin := GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	vm := VM{ID: "pve:node:105", VMID: 105, Type: "qemu", DiskObservation: origin,
+		Disk: Disk{Total: 1000, Used: 400, Free: 600, Usage: 40}, Disks: []Disk{{Total: 1000, Used: 400, Usage: 40}}}
+	copy := cloneVMs([]VM{vm})[0]
+	if copy.DiskObservation != origin {
+		t.Fatal("snapshot cloning lost the filesystem's original source time")
+	}
+	copy.DiskObservation.ObservedAt = time.Now()
+	copy.Disks[0].Used = 999
+	if vm.DiskObservation != origin || vm.Disks[0].Used != 400 {
+		t.Fatal("snapshot mutation changed source-owned evidence")
+	}
+	for name, value := range map[string]any{"model": vm, "frontend": vm.ToFrontend()} {
+		t.Run(name, func(t *testing.T) {
+			wire, err := json.Marshal(value)
+			if err != nil || strings.Contains(string(wire), "DiskObservation") || strings.Contains(string(wire), "diskObservation") || strings.Contains(string(wire), "ObservedAt") {
+				t.Fatalf("internal QGA evidence changed the public model/agent contract: %s / %v", wire, err)
+			}
+		})
+	}
+}
+
+func TestGuestAgentEvidenceIsInternalSnapshotEvidence(t *testing.T) {
+	origin := GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	vm := VM{ID: "pve:node:105", VMID: 105, Type: "qemu", GuestAgentEvidence: origin}
+	copy := cloneVMs([]VM{vm})[0]
+	if copy.GuestAgentEvidence != origin {
+		t.Fatal("snapshot cloning lost original eligibility evidence")
+	}
+	copy.GuestAgentEvidence.ObservedAt = time.Now()
+	if vm.GuestAgentEvidence != origin {
+		t.Fatal("snapshot mutation changed source-owned evidence")
+	}
+	for name, value := range map[string]any{"model": vm, "frontend": vm.ToFrontend()} {
+		t.Run(name, func(t *testing.T) {
+			wire, err := json.Marshal(value)
+			if err != nil || strings.Contains(string(wire), "Evidence") || strings.Contains(string(wire), "ObservedAt") {
+				t.Fatalf("internal evidence leaked into the public/agent contract: %s / %v", wire, err)
+			}
+		})
+	}
+}
+
 func TestGuestMemoryObservationWireContract(t *testing.T) {
 	legacy := Memory{Total: 100, Used: 25, Free: 75, Usage: 25}
 	payload, err := json.Marshal(legacy)
@@ -93,6 +137,43 @@ func TestAlertLastSeenWireContract(t *testing.T) {
 	}
 	if !strings.Contains(string(withLastSeen), `"lastSeen":"2026-08-27T12:15:00Z"`) {
 		t.Fatalf("payload = %s, want canonical RFC3339 lastSeen", withLastSeen)
+	}
+}
+
+// A resolved alert that closed without recovering says so on the state and
+// websocket payloads; an ordinary recovery carries no resolution at all.
+func TestAlertResolutionWireContract(t *testing.T) {
+	recovered, err := json.Marshal(ResolvedAlert{Alert: Alert{ID: "alert-1"}})
+	if err != nil {
+		t.Fatalf("marshal recovered alert: %v", err)
+	}
+	if strings.Contains(string(recovered), "resolution") {
+		t.Fatalf("payload = %s, a recovery must not carry a resolution", recovered)
+	}
+
+	moved := ResolvedAlert{Alert: Alert{ID: "alert-1", Resolution: &AlertResolution{
+		Reason:              "moved_to_agent",
+		SuccessorResourceID: "agent-pve-1",
+		SuccessorName:       "pve-1 (Host Agent)",
+		Summary:             "Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading.",
+	}}}
+	payload, err := json.Marshal(moved)
+	if err != nil {
+		t.Fatalf("marshal moved alert: %v", err)
+	}
+	want := `"resolution":{"reason":"moved_to_agent","successorResourceId":"agent-pve-1","successorName":"pve-1 (Host Agent)","summary":"Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading."}`
+	if !strings.Contains(string(payload), want) {
+		t.Fatalf("payload = %s, want %s", payload, want)
+	}
+
+	// The state store keeps its own copy of each resolution.
+	state := NewState()
+	state.UpdateRecentlyResolved([]ResolvedAlert{moved})
+	moved.Resolution.SuccessorName = "changed"
+	snapshot := state.GetSnapshot().RecentlyResolved
+	if len(snapshot) != 1 || snapshot[0].Resolution == nil ||
+		snapshot[0].Resolution.SuccessorName != "pve-1 (Host Agent)" {
+		t.Fatalf("snapshot = %+v, want the resolution as it was recorded", snapshot)
 	}
 }
 
@@ -449,5 +530,67 @@ func TestPhysicalDiskSnapshotPreservesIndependentPollingCadence(t *testing.T) {
 	snapshot.PhysicalDisks[0].ExpectedUpdateInterval = time.Minute
 	if state.GetSnapshot().PhysicalDisks[0].ExpectedUpdateInterval != 15*time.Minute {
 		t.Fatal("snapshot mutation changed collector state")
+	}
+}
+
+func TestMetricAlertStatusCloneIsDeep(t *testing.T) {
+	raw := 91.0
+	startedAt := time.Date(2026, 10, 6, 10, 49, 0, 0, time.UTC)
+	status := &MetricAlertStatus{
+		Phase: MetricAlertPhaseRecovering, Value: 74, RawValue: &raw,
+		RecoveryStartedAt: &startedAt, RecoveryElapsedSeconds: 90,
+	}
+	clone := status.Clone()
+	*clone.RawValue = 10
+	*clone.RecoveryStartedAt = startedAt.Add(time.Hour)
+	if *status.RawValue != 91 || !status.RecoveryStartedAt.Equal(startedAt) {
+		t.Fatalf("clone shares pointers with the original: %+v", status)
+	}
+	if (*MetricAlertStatus)(nil).Clone() != nil {
+		t.Fatal("nil status must clone to nil")
+	}
+}
+
+// Check the encoded additive contract as an older client would see it; missing
+// dates stay missing, including Go's zero time, without changing other fields.
+func TestMetricAlertStatusBreachTimeWireAndClone(t *testing.T) {
+	for _, tc := range []struct{ name, date string }{
+		{"known", "2026-10-09T19:25:16.123456789Z"},
+		{"offset", "2026-10-09T20:25:16+01:00"},
+		{"unknown", ""},
+		{"zero", "0001-01-01T00:00:00Z"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := map[string]any{"phase": "latched", "value": 78, "trigger": 80, "recovery": 75}
+			if tc.date != "" {
+				input["lastBreachAt"] = tc.date
+			}
+			data, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var status MetricAlertStatus
+			if err := json.Unmarshal(data, &status); err != nil {
+				t.Fatal(err)
+			}
+			for _, copy := range []*MetricAlertStatus{&status, status.Clone()} {
+				data, err = json.Marshal(copy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var wire map[string]any
+				if err := json.Unmarshal(data, &wire); err != nil {
+					t.Fatal(err)
+				}
+				got, present := wire["lastBreachAt"]
+				wantDate := tc.date != "" && tc.date != "0001-01-01T00:00:00Z"
+				if present != wantDate || wantDate && got != tc.date {
+					t.Errorf("lastBreachAt = %v, present %v; want %q present %v", got, present, tc.date, wantDate)
+				}
+				if wire["value"] != float64(78) || wire["phase"] != "latched" {
+					t.Fatalf("new date changed legacy reading: %s", data)
+				}
+			}
+		})
 	}
 }

@@ -105,37 +105,6 @@ func (p ownedSupplementalProvider) SnapshotOwnedSources() []unified.DataSource {
 	return []unified.DataSource{p.source}
 }
 
-type staticResourceDiscoveryReadinessProvider struct {
-	byResource map[string]unified.ResourceDiscoveryReadiness
-}
-
-func (p staticResourceDiscoveryReadinessProvider) DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness {
-	if readiness, ok := p.byResource[unified.CanonicalResourceID(resource.ID)]; ok {
-		if readiness.GeneratedAt.IsZero() {
-			readiness.GeneratedAt = now
-		}
-		if resource.DiscoveryTarget != nil {
-			if readiness.ResourceType == "" {
-				readiness.ResourceType = resource.DiscoveryTarget.ResourceType
-			}
-			if readiness.TargetID == "" {
-				readiness.TargetID = resource.DiscoveryTarget.AgentID
-			}
-			if readiness.ResourceID == "" {
-				readiness.ResourceID = resource.DiscoveryTarget.ResourceID
-			}
-		}
-		return readiness
-	}
-	readiness := unified.ResourceDiscoveryReadiness{State: unified.ResourceDiscoveryReadinessMissing, Source: "service-discovery", GeneratedAt: now}
-	if resource.DiscoveryTarget != nil {
-		readiness.ResourceType = resource.DiscoveryTarget.ResourceType
-		readiness.TargetID = resource.DiscoveryTarget.AgentID
-		readiness.ResourceID = resource.DiscoveryTarget.ResourceID
-	}
-	return readiness
-}
-
 func TestResourceListRepairsPreFixAvailabilitySnapshotFromConfiguredTargets(t *testing.T) {
 	now := time.Date(2026, 7, 23, 22, 0, 0, 0, time.UTC)
 	hostID := "agent-core2026"
@@ -518,67 +487,6 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 }
 
-func TestResourceListAttachesDiscoveryReadiness(t *testing.T) {
-	now := time.Date(2026, 6, 4, 11, 0, 0, 0, time.UTC)
-	observedAt := now.Add(-5 * time.Minute)
-	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewQueryService(cfg)
-	h.SetStateProvider(resourceUnifiedSeedProvider{
-		snapshot: models.StateSnapshot{LastUpdate: now},
-		resources: []unified.Resource{
-			{
-				ID:        "agent:node-a",
-				Type:      unified.ResourceTypeAgent,
-				Name:      "node-a",
-				Status:    unified.StatusOnline,
-				LastSeen:  now,
-				UpdatedAt: now,
-				Sources:   []unified.DataSource{unified.SourceAgent},
-				Agent: &unified.AgentData{
-					AgentID:  "node-a",
-					Hostname: "node-a",
-				},
-			},
-		},
-	})
-	h.SetDiscoveryReadinessProvider(staticResourceDiscoveryReadinessProvider{
-		byResource: map[string]unified.ResourceDiscoveryReadiness{
-			"agent:node-a": {
-				State:       unified.ResourceDiscoveryReadinessStale,
-				Source:      "service-discovery",
-				ObservedAt:  &observedAt,
-				AgeSeconds:  int64((31 * 24 * time.Hour).Seconds()),
-				ServiceName: "Node services",
-				FactCount:   3,
-			},
-		},
-	})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
-	h.HandleListResources(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-	var resp ResourcesResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 resource, got %d", len(resp.Data))
-	}
-	readiness := resp.Data[0].DiscoveryReadiness
-	if readiness == nil {
-		t.Fatal("expected discoveryReadiness in resource payload")
-	}
-	if readiness.State != unified.ResourceDiscoveryReadinessStale {
-		t.Fatalf("readiness state = %q, want stale", readiness.State)
-	}
-	if readiness.ResourceType != "agent" || readiness.TargetID != "node-a" || readiness.ResourceID != "node-a" {
-		t.Fatalf("readiness target = %+v, want agent/node-a/node-a", readiness)
-	}
-}
-
 func TestResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
 	cfg := &config.Config{DataPath: t.TempDir()}
@@ -691,6 +599,72 @@ func TestResourceListInvalidatesUnifiedSeedCacheOnFreshnessChange(t *testing.T) 
 	}
 	if len(secondResp.Data) != 1 || secondResp.Data[0].Name != "seeded-agent-new" {
 		t.Fatalf("expected cache invalidation after freshness change, got %#v", secondResp.Data)
+	}
+}
+
+type staleThresholdSeedProvider struct {
+	resources  []unified.Resource
+	freshness  time.Time
+	thresholds map[unified.DataSource]time.Duration
+}
+
+func (p *staleThresholdSeedProvider) ReadSnapshot() models.StateSnapshot {
+	return models.StateSnapshot{}
+}
+
+func (p *staleThresholdSeedProvider) UnifiedResourceSnapshotWithStaleThresholds() ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration) {
+	out := make([]unified.Resource, len(p.resources))
+	copy(out, p.resources)
+	return out, p.freshness, p.thresholds
+}
+
+// A cached registry was built with one seed's stale thresholds; a seed judged
+// by others needs a rebuild even when its freshness marker is unchanged. The
+// provider changes its threshold map in place, so the cache must keep its own
+// copy to notice.
+func TestResourceListRebuildsWhenSeedStaleThresholdsChange(t *testing.T) {
+	now := time.Now().UTC()
+	polled := now.Add(-90 * time.Second)
+	provider := &staleThresholdSeedProvider{
+		resources: []unified.Resource{{
+			ID: "agent-pve2", Type: unified.ResourceTypeAgent, Name: "pve2", Status: unified.StatusOnline,
+			LastSeen: polled, UpdatedAt: polled,
+			Sources:      []unified.DataSource{unified.SourceProxmox},
+			SourceStatus: map[unified.DataSource]unified.SourceStatus{unified.SourceProxmox: {Status: "online", LastSeen: polled}},
+			Proxmox:      &unified.ProxmoxData{NodeName: "pve2", Instance: "homelab"},
+			Identity:     unified.ResourceIdentity{Hostnames: []string{"pve2"}},
+		}},
+		freshness:  now,
+		thresholds: map[unified.DataSource]time.Duration{unified.SourceProxmox: 4 * time.Minute},
+	}
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(provider)
+
+	list := func(t *testing.T) unified.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var response ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(response.Data) != 1 {
+			t.Fatalf("resources = %#v, want the one node", response.Data)
+		}
+		return response.Data[0]
+	}
+
+	if got := list(t); got.Status != unified.StatusOnline || got.SourceStatus[unified.SourceProxmox].Status != "online" {
+		t.Fatalf("under a four-minute threshold: status %q, Proxmox sighting %q; want online for both",
+			got.Status, got.SourceStatus[unified.SourceProxmox].Status)
+	}
+	provider.thresholds[unified.SourceProxmox] = 60 * time.Second
+	if got := list(t); got.SourceStatus[unified.SourceProxmox].Status != "stale" {
+		t.Fatalf("under sixty seconds at the same freshness: Proxmox sighting %q, want stale; the cached registry was reused",
+			got.SourceStatus[unified.SourceProxmox].Status)
 	}
 }
 

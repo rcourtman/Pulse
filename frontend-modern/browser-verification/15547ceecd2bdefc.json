@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "5b7a9df8acda2b897ae593fd2f728d70bade5f84",
+  "verified_at": "2026-10-05T02:46:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/actionRouting.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/patrolWorkspaceRouting.ts",
+    "frontend-modern/src/pages/Actions.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/actionRouting.ts": "03e843f15212f590eda7660fced7964c15a95fb0365e322b559d4ed025a4ebcc",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "117baebb4a64ea1c38a74bfc9295f69ba5d5b70c1f3d66aba90cb089edabbfb1",
+    "frontend-modern/src/features/patrol/patrolWorkspaceRouting.ts": "74a545cf0db482bf4ca55b0d1ff338c1305e8b7646e216b329a6b45688783620",
+    "frontend-modern/src/pages/Actions.tsx": "1c2da103bf18c622e6e9478ba0c0b14a61597213eb3e308cee1463de53ae8a04"
+  },
+  "routes": [
+    "/actions",
+    "/actions/history",
+    "/patrol",
+    "/patrol/protection",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Deep link /actions/history selects History and lists recorded outcomes",
+    "Deep link /patrol/activity selects Activity; /patrol selects Inbox",
+    "Inbox selection keeps ?attention= on the Inbox address",
+    "No console errors"
+  ],
+  "interactions": [
+    "Actions: History deep link, click Open (path /actions), browser back returns to /actions/history with History selected",
+    "Patrol: Activity deep link, click Protection (path /patrol/protection), browser back returns to /patrol/activity",
+    "Patrol: select an inbox item, click Activity then Inbox: the ?attention selection and its Browse findings control return",
+    "Patrol: Browse Patrol findings for this resource lands on /patrol/activity scrolled to the findings with focus on the findings panel"
+  ]
+}

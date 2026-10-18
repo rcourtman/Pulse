@@ -31,6 +31,9 @@ type ResolvedAlertInfo struct {
 	AlertInfo
 	ResolvedTime time.Time `json:"resolved_time"`
 	Duration     string    `json:"total_duration"` // How long the alert lasted
+	// Resolution is set only when the alert closed without recovering, such
+	// as a node metric handed to its Pulse agent.
+	Resolution string `json:"resolution,omitempty"`
 }
 
 // AlertProvider provides access to the current alert state
@@ -131,6 +134,12 @@ func (s *Service) buildAlertContext() string {
 		}
 		for i := 0; i < limit; i++ {
 			a := recentlyResolved[i]
+			if resolution := strings.TrimSpace(a.Resolution); resolution != "" {
+				sections = append(sections, fmt.Sprintf("- **%s** on %s: %s (lasted %s, closed %s ago) %s",
+					a.Type, a.ResourceName, a.Message, a.Duration,
+					formatTimeAgo(a.ResolvedTime), resolution))
+				continue
+			}
 			sections = append(sections, fmt.Sprintf("- **%s** on %s: %s (lasted %s, resolved %s ago)",
 				a.Type, a.ResourceName, a.Message, a.Duration,
 				formatTimeAgo(a.ResolvedTime)))

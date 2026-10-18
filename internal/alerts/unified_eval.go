@@ -6,6 +6,7 @@ import (
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rs/zerolog/log"
 )
 
@@ -57,6 +58,9 @@ type UnifiedResourceInput struct {
 	Temperature *UnifiedResourceMetric
 
 	StorageAliases []string // Durable policy lookup identities for storage alerts.
+	// DiskType is a physical disk's type ("nvme", "sas", "sata"). It picks
+	// the disk temperature threshold of a TrueNAS disk.
+	DiskType string
 }
 
 type unifiedMetricCandidate struct {
@@ -153,6 +157,26 @@ func isUnifiedVMwareAlertType(typeKey string) bool {
 
 func isUnifiedModernPlatformAlertType(typeKey string) bool {
 	return isUnifiedKubernetesAlertType(typeKey) || isUnifiedTrueNASAlertType(typeKey) || isUnifiedVMwareAlertType(typeKey)
+}
+
+// alertPlatformTypeKey carries the canonical platform id of the resource an
+// alert is about. Metric alerts put a display label such as "vSphere VM" in
+// resourceType, so consumers that link or name the owning platform read this.
+const alertPlatformTypeKey = "platformType"
+
+// unifiedAlertPlatformType returns the canonical platform id for a unified
+// alert type key, or "" when the key does not name one.
+func unifiedAlertPlatformType(typeKey string) string {
+	switch {
+	case isUnifiedKubernetesAlertType(typeKey):
+		return "kubernetes"
+	case strings.HasPrefix(typeKey, "truenas-"):
+		return "truenas"
+	case strings.HasPrefix(typeKey, "vmware-"):
+		return "vmware-vsphere"
+	default:
+		return ""
+	}
 }
 
 func (m *Manager) unifiedPlatformAlertsDisabledNoLock(typeKey string) bool {
@@ -255,38 +279,105 @@ func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) Threshol
 }
 
 // evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.
-func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions) {
+func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions, separatelyEvaluated ...string) {
 	if input == nil {
 		return
 	}
 
 	opts = metricOptionsWithTags(opts, input.Tags)
-	if len(input.StorageAliases) > 0 {
+	platformType := unifiedAlertPlatformType(input.Type)
+	if len(input.StorageAliases) > 0 || platformType != "" {
 		merged := metricOptions{}
 		if opts != nil {
 			merged = *opts
 		}
-		metadata := make(map[string]interface{}, len(merged.Metadata)+1)
+		metadata := make(map[string]interface{}, len(merged.Metadata)+2)
 		for k, v := range merged.Metadata {
 			metadata[k] = v
 		}
-		metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
+		if len(input.StorageAliases) > 0 {
+			metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
+		}
+		if platformType != "" {
+			metadata[alertPlatformTypeKey] = platformType
+		}
+		if input.Type == "truenas-disk" {
+			// A config save re-judges the open temperature alert against
+			// the threshold for this disk type.
+			metadata["diskType"] = input.DiskType
+		}
 		merged.Metadata = metadata
 		opts = &merged
 	}
-	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
+	candidates := buildUnifiedMetricCandidates(input, thresholds)
+	m.interruptUnobservedUnifiedMetrics(input, candidates, separatelyEvaluated)
+	for _, candidate := range candidates {
 		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
 	}
 }
 
-func metricOptionsWithTags(opts *metricOptions, tags []string) *metricOptions {
-	if len(tags) == 0 {
-		return opts
+// An omitted/rejected metric is unknown, not a pause in its sustained-for
+// clock. Build candidates stays pure; dispatch owns interruption for metrics
+// this resource supports but cannot currently observe.
+func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput, candidates []unifiedMetricCandidate, separatelyEvaluated []string) {
+	if _, ok := unifiedMetricResourceType(input.Type); !ok {
+		return
 	}
+	metrics := [...]string{"cpu", "memory", "disk", "temperature", "diskRead", "diskWrite", "networkIn", "networkOut", "usage"}
+	m.mu.Lock()
+	intentChanged := false
+	for _, metric := range metrics {
+		separateOwner := false
+		for _, separateMetric := range separatelyEvaluated {
+			if metric == separateMetric {
+				separateOwner = true
+				break
+			}
+		}
+		if separateOwner {
+			continue
+		}
+		switch metric {
+		case "diskRead", "diskWrite", "networkIn", "networkOut":
+			if !supportsUnifiedIOMetrics(input.Type) {
+				continue
+			}
+		case "usage":
+			if !unifiedStorageUsageResourceType(input.Type) {
+				continue
+			}
+		}
+		observed := false
+		for _, candidate := range candidates {
+			if candidate.Spec.MetricThreshold.Metric == metric {
+				observed = true
+				break
+			}
+		}
+		if !observed {
+			if m.interruptMetricRunNoLock(input.ID, canonicalMetricSpecID(input.ID, metric), canonicalMetricStateID(input.ID, metric)) {
+				intentChanged = true
+			}
+		}
+	}
+	m.mu.Unlock()
+	if intentChanged {
+		m.saveActiveAlertsAsync("unified metric observation gap")
+	}
+}
 
+// metricOptionsWithTags records a resource's tags on its metric alerts. With
+// no tags it drops any an open alert still carries: config-save reevaluation
+// reads pulse-relaxed back from them, and a removed tag left behind judged
+// the alert by thresholds the evaluator no longer applies.
+func metricOptionsWithTags(opts *metricOptions, tags []string) *metricOptions {
 	merged := metricOptions{}
 	if opts != nil {
 		merged = *opts
+	}
+	if len(tags) == 0 {
+		merged.RemoveMetadata = append(append([]string(nil), merged.RemoveMetadata...), "tags")
+		return &merged
 	}
 	metadata := make(map[string]interface{}, len(merged.Metadata)+1)
 	for key, value := range merged.Metadata {
@@ -422,11 +513,11 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 	return spec, spec.Validate()
 }
 
-func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) bool {
 	if spec.MetricThreshold == nil {
-		return
+		return false
 	}
-	m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
+	return m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
 }
 
 func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {
@@ -525,9 +616,14 @@ func UnifiedResourceInputFromResource(resource unifiedresources.Resource) (*Unif
 	}
 	if resource.Temperature != nil {
 		input.Temperature = &UnifiedResourceMetric{Value: *resource.Temperature, Percent: *resource.Temperature}
-	} else if resource.PhysicalDisk != nil && resource.PhysicalDisk.Temperature > 0 {
+	} else if resource.PhysicalDisk != nil &&
+		diskinventory.TemperatureCollected(resource.PhysicalDisk.Temperature, resource.PhysicalDisk.Collection) {
+		// A retained last-known reading is not current evidence of heat.
 		value := float64(resource.PhysicalDisk.Temperature)
 		input.Temperature = &UnifiedResourceMetric{Value: value, Percent: value}
+	}
+	if resource.PhysicalDisk != nil {
+		input.DiskType = strings.ToLower(strings.TrimSpace(resource.PhysicalDisk.DiskType))
 	}
 
 	return input, true
@@ -772,7 +868,7 @@ func (m *Manager) CheckUnifiedResourceWithCapacityTrend(input *UnifiedResourceIn
 		return
 	}
 
-	thresholds := m.resolveResourceThresholds(input.Type, input.ID)
+	thresholds := m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: input.Type, ResourceID: input.ID, DiskType: input.DiskType}).Thresholds
 	m.mu.RUnlock()
 
 	if thresholds.Disabled {

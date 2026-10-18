@@ -374,7 +374,7 @@ describe('mapDockerSwarmNodeStatus — down, degraded, ready, and unknown branch
 // ---------------------------------------------------------------------------
 
 describe('mapDockerServiceStatus — rollback started branch', () => {
-  it('flags rollbackstarted as warning Rollback paused', () => {
+  it('flags rollbackstarted as warning Rolling back', () => {
     expect(
       mapDockerServiceStatus(
         makeResource({
@@ -387,7 +387,7 @@ describe('mapDockerServiceStatus — rollback started branch', () => {
           },
         }),
       ),
-    ).toEqual({ variant: 'warning', label: 'Rollback paused' });
+    ).toEqual({ variant: 'warning', label: 'Rolling back' });
   });
 });
 

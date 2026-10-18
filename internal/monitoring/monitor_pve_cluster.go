@@ -431,11 +431,13 @@ func (m *Monitor) reconcilePVENodeInventory(
 			node.ConnectionHealth = "error"
 			node.CPU = 0
 			node.Uptime = 0
+			node.Temperature = nil
 		} else if _, observed := currentByName[key]; !observed {
 			node.Status = "unknown"
 			node.ConnectionHealth = "degraded"
 			node.CPU = 0
 			node.Uptime = 0
+			m.boundCarriedNodeTemperature(&node, time.Now())
 		}
 		reconciled[key] = node
 	}
@@ -680,7 +682,8 @@ func clusterEndpointIdentityChanged(existing, refreshed []config.ClusterEndpoint
 
 // rebuildPVEClusterClient swaps the failover client for a cluster instance so
 // it picks up the refreshed endpoint list. The in-flight poll keeps using the
-// old client; the next poll cycle gets the new one.
+// old client for node work; obsolete guest collections cannot publish. The
+// next poll cycle uses the refreshed transport for guest collection too.
 func (m *Monitor) rebuildPVEClusterClient(instanceName string) {
 	if m.config == nil || m.pveClients == nil {
 		return
@@ -702,9 +705,7 @@ func (m *Monitor) rebuildPVEClusterClient(instanceName string) {
 	clientConfig.Timeout = m.config.ConnectionTimeout
 	clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
 
-	m.mu.Lock()
-	m.pveClients[instanceName] = clusterClient
-	m.mu.Unlock()
+	m.replacePVEClient(instanceName, clusterClient)
 
 	log.Info().
 		Str("instance", instanceName).

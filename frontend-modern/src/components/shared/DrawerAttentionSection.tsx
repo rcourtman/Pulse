@@ -10,6 +10,10 @@ import { Button } from './Button';
 export interface DrawerAttentionItem {
   id: string;
   message: string;
+  /** Secondary line, e.g. what clears an alert whose reading has dropped. */
+  detail?: string;
+  /** Hover text when it should say more than the message. */
+  title?: string;
   subject?: string;
   metric?: string;
   severity?: string;
@@ -73,10 +77,13 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
                   </Show>
                   <p
                     class="wrap-break-word text-xs leading-5 text-base-content"
-                    title={item.message}
+                    title={item.title ?? item.message}
                   >
                     {item.message}
                   </p>
+                  <Show when={item.detail}>
+                    <p class="wrap-break-word text-xs leading-5 text-muted">{item.detail}</p>
+                  </Show>
                 </div>
                 <span
                   class={

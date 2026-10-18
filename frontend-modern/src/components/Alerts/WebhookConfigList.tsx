@@ -17,6 +17,7 @@ interface WebhookConfigListProps {
   webhooks: Webhook[];
   templates: Accessor<WebhookTemplate[]>;
   testing?: string | null;
+  saving: boolean;
   allEnabled: Accessor<boolean>;
   someEnabled: Accessor<boolean>;
   toggleAllWebhooks: (enabled: boolean) => void;
@@ -39,14 +40,14 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
         <div class="flex flex-wrap gap-2 sm:flex-nowrap">
           <button
             onClick={() => props.toggleAllWebhooks(false)}
-            disabled={!props.someEnabled()}
+            disabled={props.saving || !props.someEnabled()}
             class="min-h-11 w-full rounded-sm border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:min-h-0 sm:w-auto"
           >
             {getAlertWebhookToggleAllLabel(false)}
           </button>
           <button
             onClick={() => props.toggleAllWebhooks(true)}
-            disabled={props.allEnabled()}
+            disabled={props.saving || props.allEnabled()}
             class="min-h-11 w-full rounded-sm border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 sm:min-h-0 sm:w-auto dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/25"
           >
             {getAlertWebhookToggleAllLabel(true)}
@@ -61,6 +62,7 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <span class="font-medium text-base-content">{webhook.name}</span>
               <button
                 onClick={() => props.onToggleWebhook(webhook)}
+                disabled={props.saving}
                 class={`min-h-11 rounded-sm border px-3 py-1 text-xs font-medium transition-colors sm:min-h-0 ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/25' : 'border-border text-muted hover:bg-surface-hover'}`}
               >
                 {getAlertWebhookToggleLabel(webhook.enabled)}
@@ -100,19 +102,21 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
             <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">
               <button
                 onClick={() => props.onTestWebhook(webhook)}
-                disabled={props.testing === webhook.id || !webhook.enabled}
+                disabled={props.saving || props.testing === webhook.id || !webhook.enabled}
                 class="min-h-11 rounded-sm border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 {getAlertWebhookTestLabel(props.testing === webhook.id)}
               </button>
               <button
                 onClick={() => props.onEditWebhook(webhook)}
+                disabled={props.saving}
                 class="min-h-11 rounded-sm border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 sm:min-h-0 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900/25"
               >
                 {ALERT_WEBHOOK_EDIT_LABEL}
               </button>
               <button
                 onClick={() => props.onDeleteWebhook(webhook)}
+                disabled={props.saving}
                 class="min-h-11 rounded-sm border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900/25"
               >
                 {ALERT_WEBHOOK_DELETE_LABEL}

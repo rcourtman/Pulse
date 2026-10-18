@@ -1,5 +1,4 @@
 import { Component, For, JSX, Show, splitProps } from 'solid-js';
-import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { FormSelect } from './FormSelect';
@@ -406,33 +405,6 @@ export const FilterPopoverTrigger: Component<FilterPopoverTriggerProps> = (props
         class={`h-3.5 w-3.5 transition-transform ${local.open ? 'rotate-180' : ''}`}
         aria-hidden="true"
       />
-    </FilterActionButton>
-  );
-};
-
-interface ChartVisibilityToggleButtonProps extends Omit<
-  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
-  'aria-label' | 'aria-pressed' | 'children' | 'onClick' | 'title'
-> {
-  collapsed: boolean;
-  onToggle: () => void;
-}
-
-export const ChartVisibilityToggleButton: Component<ChartVisibilityToggleButtonProps> = (props) => {
-  const [local, buttonProps] = splitProps(props, ['collapsed', 'onToggle', 'class']);
-  const label = () => (local.collapsed ? 'Show charts' : 'Hide charts');
-  return (
-    <FilterActionButton
-      {...buttonProps}
-      class={`hidden lg:inline-flex ${local.class ?? ''}`.trim()}
-      active={!local.collapsed}
-      aria-label={label()}
-      aria-pressed={!local.collapsed}
-      title={label()}
-      onClick={() => local.onToggle()}
-    >
-      <BarChartIcon class="h-3 w-3" />
-      Charts
     </FilterActionButton>
   );
 };

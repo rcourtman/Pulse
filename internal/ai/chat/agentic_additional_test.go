@@ -1378,13 +1378,16 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "prompt"}
 
-	result := loop.ensureFinalTextResponse(
+	result, summaryErr := loop.ensureFinalTextResponse(
 		context.Background(),
 		"session-1",
 		[]Message{{Role: "assistant", Content: ""}},
 		[]providers.Message{{Role: "assistant", Content: ""}},
 		func(event StreamEvent) {},
 	)
+	if summaryErr != nil {
+		t.Fatal(summaryErr)
+	}
 	if len(result) != 2 {
 		t.Fatalf("expected summary message to be appended")
 	}
@@ -1398,7 +1401,7 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 		return errors.New("boom")
 	}
-	result2 := loop.ensureFinalTextResponse(
+	result2, summaryErr2 := loop.ensureFinalTextResponse(
 		context.Background(),
 		"session-2",
 		[]Message{
@@ -1408,6 +1411,9 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 		[]providers.Message{{Role: "assistant", Content: ""}},
 		func(event StreamEvent) {},
 	)
+	if summaryErr2 != nil {
+		t.Fatal(summaryErr2)
+	}
 	if len(result2) != 3 {
 		t.Fatalf("expected fallback summary message when provider errors")
 	}
@@ -1422,7 +1428,7 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
 		return nil
 	}
-	result3 := loop.ensureFinalTextResponse(
+	result3, summaryErr3 := loop.ensureFinalTextResponse(
 		context.Background(),
 		"session-3",
 		[]Message{
@@ -1432,6 +1438,9 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 		[]providers.Message{{Role: "assistant", Content: ""}},
 		func(event StreamEvent) {},
 	)
+	if summaryErr3 != nil {
+		t.Fatal(summaryErr3)
+	}
 	if len(result3) != 3 {
 		t.Fatalf("expected fallback summary when provider returns empty content")
 	}
@@ -1453,7 +1462,7 @@ func TestEnsureFinalTextResponseRequiresAssistantTextAfterLatestToolResult(t *te
 	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "prompt"}
 
 	var emitted strings.Builder
-	result := loop.ensureFinalTextResponse(
+	result, summaryErr := loop.ensureFinalTextResponse(
 		context.Background(),
 		"session-pre-tool-preamble",
 		[]Message{
@@ -1494,6 +1503,9 @@ func TestEnsureFinalTextResponseRequiresAssistantTextAfterLatestToolResult(t *te
 		},
 	)
 
+	if summaryErr != nil {
+		t.Fatal(summaryErr)
+	}
 	if len(result) != 5 {
 		t.Fatalf("expected final summary to be appended after tool result, got %d messages", len(result))
 	}

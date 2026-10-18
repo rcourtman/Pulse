@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -44,6 +45,10 @@ type UnifiedAgentHandlers struct {
 	// check. Empty (the default) omits it from acks.
 	serverVersion string
 
+	// recordReportedIdentity records a report's server-resolved identity on
+	// its hostname-bound token. Nil (the default) records nothing.
+	recordReportedIdentity func(organizationID, tokenID, presentedID, hostID, hostname string)
+
 	configFetchAudits *agentConfigFetchAuditTracker
 }
 
@@ -52,6 +57,12 @@ type UnifiedAgentHandlers struct {
 // version-free.
 func (h *UnifiedAgentHandlers) SetServerVersion(version string) {
 	h.serverVersion = strings.TrimSpace(version)
+}
+
+// SetReportedIdentityRecorder supplies the canonical token-store binding that
+// records the agent identity a report resolves to. Call once at wiring time.
+func (h *UnifiedAgentHandlers) SetReportedIdentityRecorder(record func(organizationID, tokenID, presentedID, hostID, hostname string)) {
+	h.recordReportedIdentity = record
 }
 
 func trimUnifiedAgentRoutePath(path string) string {
@@ -89,11 +100,32 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 		report.Timestamp = time.Now().UTC()
 	}
 
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	host, err := h.getMonitor(r.Context()).ApplyHostReport(report, tokenRecord)
+	host, err := monitor.ApplyHostReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
+	}
+
+	// Name the agent on a token bound only to its hostname, so the token
+	// carries an identity even if this agent never registers a command channel.
+	// Only a host the monitor resolved and holds under this token carries its
+	// token ID; mock mode's discard acknowledgement echoes the presented ID
+	// unresolved and carries none, whenever mock mode flips. The hostname is
+	// the report's own, which is what the agent's command registration
+	// presents: a report the ordering watermark rejects returns the stored
+	// host, whose hostname may come from a different report. The request's
+	// token snapshot screens out tokens that are already bound or do not
+	// qualify without taking the exclusive token lock on every report; the
+	// recorder decides again on the live record.
+	reportedHostname := strings.TrimSpace(report.Host.Hostname)
+	if h.recordReportedIdentity != nil && tokenRecord != nil && host.TokenID == tokenRecord.ID &&
+		agentbinding.EvaluateReportedIdentity(tokenRecord, report.Agent.ID, host.ID, reportedHostname) {
+		h.recordReportedIdentity(GetOrgID(r.Context()), tokenRecord.ID, report.Agent.ID, host.ID, reportedHostname)
 	}
 
 	// A freshly generated install token is the server's durable record of the
@@ -101,7 +133,7 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	// identity before returning remote config, otherwise an old false override
 	// survives remove/reinstall and immediately shuts down an agent launched
 	// with --enable-commands (#1728).
-	if err := reconcileInstallTokenCommandPolicy(h.getMonitor(r.Context()), tokenRecord, host); err != nil {
+	if err := reconcileInstallTokenCommandPolicy(monitor, tokenRecord, host); err != nil {
 		log.Error().Err(err).
 			Str("agent_id", host.ID).
 			Str("token_id", tokenID(tokenRecord)).
@@ -117,7 +149,7 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	h.broadcastState(r.Context())
 
 	// Include any server-side config overrides in the response
-	serverConfig := h.getMonitor(r.Context()).GetHostAgentConfig(host.ID)
+	serverConfig := monitor.GetHostAgentConfig(host.ID)
 	serverConfig = sanitizeHostAgentConfigForToken(serverConfig, tokenRecord, host)
 
 	resp := map[string]any{
@@ -130,6 +162,17 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	}
 	if h.serverVersion != "" {
 		resp["serverVersion"] = h.serverVersion
+	}
+	// Name the identity this agent's command channel must register under, for
+	// a host the monitor resolved and holds under this token, judged for the
+	// hostname this report presents, as its registration will. Mock mode's
+	// discard acknowledgement carries no token ID, so it names nothing.
+	if tokenRecord != nil && host.TokenID == tokenRecord.ID {
+		commandHost := host
+		commandHost.Hostname = reportedHostname
+		if commandAgentID := commandIdentityForToken(tokenRecord, commandHost); commandAgentID != "" {
+			resp["commandAgentId"] = commandAgentID
+		}
 	}
 
 	// Only include config if there are actual overrides
@@ -241,7 +284,11 @@ func (h *UnifiedAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Reque
 
 	// Use the live host snapshot (not the global mock snapshot) so agent
 	// registrations can still be validated while Pulse is in mock/demo mode.
-	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	hosts := monitor.GetLiveHostsSnapshot()
 
 	var (
 		host  models.Host
@@ -376,7 +423,11 @@ func (h *UnifiedAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.R
 	}
 
 	// Remove the agent from state.
-	host, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	host, err := monitor.RemoveHostAgent(agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "agent_removal_failed", err.Error(), nil)
 		return
@@ -408,7 +459,11 @@ func (h *UnifiedAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).AllowHostAgentReenroll(agentID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.AllowHostAgentReenroll(agentID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "agent_reenroll_failed", err.Error(), nil)
 		return
 	}
@@ -466,6 +521,9 @@ func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID s
 	// Use the live host snapshot so agents can still fetch config while
 	// Pulse is running in mock/demo mode.
 	monitor := h.getMonitor(ctx)
+	if monitor == nil {
+		return models.Host{}, false
+	}
 	hosts := monitor.GetLiveHostsSnapshot()
 
 	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
@@ -578,6 +636,11 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+
 	host, ok := h.resolveConfigAgent(r.Context(), agentID, record)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
@@ -588,7 +651,7 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 
 	agentID = host.ID
 
-	config := h.getMonitor(r.Context()).GetHostAgentConfig(agentID)
+	config := monitor.GetHostAgentConfig(agentID)
 	config = sanitizeHostAgentConfigForToken(config, record, host)
 	signedConfig, err := h.signAgentConfig(agentID, config)
 	if err != nil {
@@ -660,7 +723,7 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 	// commands are enabled when its channel registration would be rejected
 	// strands the host on "Remote control blocked" (the agent reports
 	// CommandsEnabled=true forever while no channel can be admitted).
-	if !evaluateAgentExecBinding(record, host.ID, host.Hostname).admit {
+	if commandIdentityForToken(record, host) == "" {
 		// This gate runs before the agent ever attempts command-channel
 		// registration, so without a log here a refused binding leaves no
 		// trace anywhere: the agent never learns commands were requested and
@@ -679,6 +742,42 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 	return true
 }
 
+// commandIdentityForToken names the identity a host agent's command channel
+// must register under for its token to admit it: the host ID Pulse resolved
+// for the agent's report, which the ack returns as agentId and the agent
+// persists and presents after a restart. A token binds the first ID its
+// channel presents, so an agent that registered a configured --agent-id, or
+// an ID Pulse forked or kept from an earlier enrollment, was refused on every
+// restart while the config gate judged the resolved ID.
+//
+// The ID is named only for a credential that command admission would take on
+// its legacy path (agent:exec, at most one organization, no runner,
+// collector, or unsupported runtime role), and only when the shared binding
+// decision admits it: the token already holds it, or a registration
+// presenting it would take the first bind, backfill, legacy migration,
+// hostname rebind, or one-time deploy repair it would get anyway. Naming it
+// grants nothing beyond that registration. An established binding to any
+// other ID is never moved by report contents, which can be steered onto
+// another host's continuity record; the result is empty and the agent keeps
+// registering under the ID it presents. The config gate consumes the same
+// decision, so commands are never reported enabled for an identity the
+// channel would refuse.
+func commandIdentityForToken(record *config.APITokenRecord, host models.Host) string {
+	hostID := strings.TrimSpace(host.ID)
+	if record == nil || hostID == "" || !record.HasScope(config.ScopeAgentExec) || len(record.GetBoundOrgs()) > 1 {
+		return ""
+	}
+	switch strings.TrimSpace(record.Metadata[agenttokens.RuntimeRoleMetadataKey]) {
+	case "", agenttokens.CredentialKindLegacyFullTrust:
+	default:
+		return ""
+	}
+	if !evaluateAgentExecBinding(record, hostID, host.Hostname).admit {
+		return ""
+	}
+	return hostID
+}
+
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {
 	record := getAPITokenRecordFromRequest(r)
 	if record == nil {
@@ -690,7 +789,11 @@ func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *h
 	}
 
 	// Use the live host snapshot so mock/demo mode doesn't block agent auth checks.
-	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return false
+	}
+	hosts := monitor.GetLiveHostsSnapshot()
 	for _, host := range hosts {
 		if host.ID != agentID {
 			continue
@@ -722,7 +825,11 @@ func (h *UnifiedAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UpdateHostAgentConfig(agentID, req.CommandsEnabled); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.UpdateHostAgentConfig(agentID, req.CommandsEnabled); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
 		return
 	}
@@ -774,7 +881,10 @@ func (h *UnifiedAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Re
 
 	log.Info().Str("agentId", agentID).Msg("Received unregistration request from agent uninstaller")
 
-	monitor := h.getMonitor(r.Context())
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
 	record := getAPITokenRecordFromRequest(r)
 	var err error
 	if record != nil {
@@ -840,7 +950,11 @@ func (h *UnifiedAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).LinkHostAgent(agentID, nodeID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.LinkHostAgent(agentID, nodeID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "link_failed", err.Error(), nil)
 		return
 	}
@@ -882,7 +996,11 @@ func (h *UnifiedAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UnlinkHostAgent(agentID); err != nil {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	if err := monitor.UnlinkHostAgent(agentID); err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "unlink_failed", err.Error(), nil)
 		return
 	}

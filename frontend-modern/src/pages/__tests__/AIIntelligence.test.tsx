@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { Suspense, createSignal, type JSX } from 'solid-js';
+import { Suspense, type JSX } from 'solid-js';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import {
   PATROL_CONTROL_ANCHOR,
@@ -17,6 +17,7 @@ import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligence
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import { AGENT_PATROL_CONTROL_STATUS_PATH } from '@/api/agentCapabilities';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 
 import { AIIntelligence } from '../AIIntelligence';
 
@@ -40,7 +41,6 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
   },
   intelligenceState: {
     findings: [] as Array<Record<string, unknown>>,
-    circuitBreakerStatus: null as { state: string; consecutive_failures: number } | null,
     summary: null as {
       timestamp: string;
       overall_health: {
@@ -85,29 +85,9 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
         incidents_tracked: number;
       };
     } | null,
-    correlations: null as {
-      correlations: Array<{
-        source_id: string;
-        source_name: string;
-        source_type: string;
-        target_id: string;
-        target_name: string;
-        target_type: string;
-        event_pattern: string;
-        occurrences: number;
-        avg_delay: number | string;
-        confidence: number;
-        last_seen: string;
-        description?: string;
-      }>;
-      count: number;
-    } | null,
   },
 }));
 
-const getCorrelationsMock = vi.fn();
-const [correlationsState, setCorrelationsState] =
-  createSignal<(typeof intelligenceState)['correlations']>(null);
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
@@ -126,20 +106,34 @@ const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
 
-vi.mock('@solidjs/router', () => ({
-  A: (props: {
-    href: string;
-    class?: string;
-    children?: JSX.Element;
-    'aria-label'?: string;
-    title?: string;
-  }) => (
-    <a href={props.href} class={props.class} aria-label={props['aria-label']} title={props.title}>
-      {props.children}
-    </a>
-  ),
-  useLocation: () => ({ hash: '', pathname: '/patrol', search: '' }),
-}));
+// Workspace views are routes, so the mocked location follows navigate().
+const routerLocation = vi.hoisted(() => ({ setPath: (_path: string) => {} }));
+vi.mock('@solidjs/router', async () => {
+  const { createSignal } = await import('solid-js');
+  const [pathname, setPathname] = createSignal('/patrol');
+  routerLocation.setPath = setPathname;
+  return {
+    A: (props: {
+      href: string;
+      class?: string;
+      children?: JSX.Element;
+      'aria-label'?: string;
+      title?: string;
+    }) => (
+      <a href={props.href} class={props.class} aria-label={props['aria-label']} title={props.title}>
+        {props.children}
+      </a>
+    ),
+    useLocation: () => ({
+      hash: '',
+      get pathname() {
+        return pathname();
+      },
+      search: '',
+    }),
+    useNavigate: () => (to: string) => setPathname(to.split('?')[0]),
+  };
+});
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const recordWorkflowPromptActivityMock = vi.fn();
@@ -201,7 +195,6 @@ vi.mock('@/api/patrol', () => ({
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
-    getCorrelations: (...args: unknown[]) => getCorrelationsMock(...args),
     getModels: (...args: unknown[]) => apiFetchJSONMock('/api/ai/models', ...args),
     getSettings: (...args: unknown[]) => apiFetchJSONMock('/api/settings/ai', ...args),
     updateSettings: (...args: unknown[]) => apiFetchJSONMock('/api/settings/ai/update', ...args),
@@ -260,21 +253,12 @@ vi.mock('@/stores/aiIntelligence', () => {
     loadFindings: vi.fn().mockResolvedValue(undefined),
     loadPatrolFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
-    loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
-    loadCorrelations: vi.fn().mockImplementation(async () => {
-      const response = await getCorrelationsMock();
-      intelligenceState.correlations = response;
-      setCorrelationsState(response);
-      return response;
-    }),
     loadDashboardData: vi.fn().mockImplementation(async () => {
       await Promise.all([
         store.loadFindings(),
         store.loadIntelligenceSummary(),
-        store.loadCircuitBreakerStatus(),
         store.loadPendingApprovals(),
-        store.loadCorrelations(),
       ]);
     }),
     get findings() {
@@ -286,14 +270,8 @@ vi.mock('@/stores/aiIntelligence', () => {
     get intelligenceSummary() {
       return intelligenceState.summary;
     },
-    get circuitBreakerStatus() {
-      return intelligenceState.circuitBreakerStatus;
-    },
     get patrolPendingApprovals() {
       return [];
-    },
-    get correlations() {
-      return correlationsState();
     },
   };
 
@@ -584,8 +562,8 @@ async function openPatrolActivityMode() {
 
 describe('AIIntelligence entitlement gating', () => {
   it('keeps Patrol page data sync bounded without making it a primary action', () => {
-    expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
-    expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
+    expect(patrolIntelligenceStateSource).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
+    expect(patrolIntelligenceStateSource).toContain('requestId === manualRefreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('isManualRefreshRunning');
     expect(patrolIntelligenceStateSource).toContain('handleRefreshPatrol');
@@ -621,6 +599,7 @@ describe('AIIntelligence entitlement gating', () => {
   });
 
   beforeEach(() => {
+    routerLocation.setPath('/patrol');
     resetCreateNonSuspendingQueryCacheForTest();
     resetAIRuntimeState();
     getPatrolStatusMock.mockReset();
@@ -646,11 +625,7 @@ describe('AIIntelligence entitlement gating', () => {
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.findings = [];
-    intelligenceState.circuitBreakerStatus = null;
     intelligenceState.summary = null;
-    intelligenceState.correlations = null;
-    setCorrelationsState(null);
-    getCorrelationsMock.mockReset();
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
     getPatrolAutonomySettingsMock.mockResolvedValue(defaultPatrolAutonomySettings());
@@ -713,10 +688,6 @@ describe('AIIntelligence entitlement gating', () => {
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
     recordWorkflowPromptActivityMock.mockResolvedValue(undefined);
     window.history.replaceState({}, '', '/patrol');
-    getCorrelationsMock.mockResolvedValue({
-      correlations: [],
-      count: 0,
-    });
   });
 
   it('keeps the Patrol page heading accessible name singular when the logo is present', async () => {
@@ -942,15 +913,23 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getAllByRole('button', { name: /Check now/i }).length).toBeGreaterThan(0);
     });
 
-    getCorrelationsMock.mockImplementation(() => new Promise(() => {}));
+    // Stall the Patrol refresh that follows an accepted start: the run button
+    // must leave Starting without waiting on it.
+    const loadIntelligenceSummary = vi.mocked(aiIntelligenceStore.loadIntelligenceSummary);
+    loadIntelligenceSummary.mockClear();
+    loadIntelligenceSummary.mockImplementation(() => new Promise(() => {}));
+    try {
+      fireEvent.click(screen.getAllByRole('button', { name: /Check now/i })[0]);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Check now/i })[0]);
-
-    await waitFor(() => {
-      expect(triggerPatrolRunMock).toHaveBeenCalled();
-      expect(screen.getAllByRole('button', { name: /Running/i }).length).toBeGreaterThan(0);
-    });
-    expect(screen.queryByRole('button', { name: /Starting/i })).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(triggerPatrolRunMock).toHaveBeenCalled();
+        expect(screen.getAllByRole('button', { name: /Running/i }).length).toBeGreaterThan(0);
+        expect(loadIntelligenceSummary).toHaveBeenCalled();
+      });
+      expect(screen.queryByRole('button', { name: /Starting/i })).not.toBeInTheDocument();
+    } finally {
+      loadIntelligenceSummary.mockResolvedValue(null);
+    }
   });
 
   it('surfaces backend readiness rejection when a stale manual run request reaches the server', async () => {
@@ -1051,40 +1030,6 @@ describe('AIIntelligence entitlement gating', () => {
         incidents_tracked: 0,
       },
     };
-    getCorrelationsMock.mockResolvedValue({
-      correlations: [
-        {
-          source_id: 'storage-2',
-          source_name: 'Storage 2',
-          source_type: 'storage',
-          target_id: 'vm-200',
-          target_name: 'VM 200',
-          target_type: 'vm',
-          event_pattern: 'disk_full -> restart',
-          occurrences: 2,
-          avg_delay: '1m30s',
-          confidence: 0.95,
-          last_seen: '2026-03-01T00:05:00Z',
-          description: 'Disk pressure often precedes restarts',
-        },
-        {
-          source_id: 'storage-1',
-          source_name: 'Storage 1',
-          source_type: 'storage',
-          target_id: 'vm-100',
-          target_name: 'VM 100',
-          target_type: 'vm',
-          event_pattern: 'cpu_high -> restart',
-          occurrences: 1,
-          avg_delay: '3m',
-          confidence: 0.5,
-          last_seen: '2026-03-01T00:03:00Z',
-          description: 'Lower-confidence backup pattern',
-        },
-      ],
-      count: 2,
-    });
-
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
@@ -1111,9 +1056,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(
       screen.queryByText('What Patrol was allowed to inspect or act on.'),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('Storage 2')).not.toBeInTheDocument();
-    expect(screen.queryByText('VM 200')).not.toBeInTheDocument();
-    expect(screen.queryByText('Disk Full → Restart')).not.toBeInTheDocument();
 
     await openPatrolActivityMode();
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
@@ -1242,6 +1184,107 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
+  });
+
+  describe('Patrol mode runtime lock', () => {
+    const useLicensedCommunityRuntime = () => {
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_autofix'
+          ? {
+              key: 'ai_autofix',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      runtimeCapabilitiesMock.mockReturnValue({
+        runtime: { build: 'community', label: 'Pulse Community runtime' },
+        capabilities: ['ai_intelligence'],
+        blocked_capabilities: [
+          { key: 'ai_autofix', reason: 'paid_runtime_required' },
+          { key: 'ai_alerts', reason: 'paid_runtime_required' },
+        ],
+      });
+      getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: true }));
+    };
+
+    it('points a licensed community runtime at the Pro runtime download', async () => {
+      useLicensedCommunityRuntime();
+
+      render(() => <AIIntelligence />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Pulse Pro runtime required/).length).toBeGreaterThan(0);
+      });
+      const downloads = screen.getAllByRole('link', { name: 'Open Pro downloads' });
+      expect(downloads.length).toBeGreaterThan(0);
+      for (const link of downloads) {
+        expect(link).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+      }
+    });
+
+    it('keeps Pro runtime wording off the page when commercial surfaces are hidden', async () => {
+      useLicensedCommunityRuntime();
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+      render(() => <AIIntelligence />);
+
+      await waitFor(() => {
+        expect(getPatrolStatusMock).toHaveBeenCalled();
+      });
+      const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+      expect(patrolControlAnchor).not.toBeNull();
+      const patrolControl = within(patrolControlAnchor!);
+      expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+      expect(patrolControl.queryByRole('group', { name: 'Patrol mode' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pulse Pro runtime/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Install the Pulse Pro runtime/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Open Pro downloads' })).not.toBeInTheDocument();
+    });
+
+    it('saves only Watch only, without an unlock field, while governed fixes are locked', async () => {
+      useLicensedCommunityRuntime();
+      // A previous entitlement left a paid mode and the compatibility unlock in memory.
+      getPatrolAutonomySettingsMock.mockResolvedValue(
+        defaultPatrolAutonomySettings({
+          autonomy_level: 'assisted',
+          requested_autonomy_level: 'assisted',
+          effective_autonomy_level: 'assisted',
+          full_mode_unlocked: true,
+        }),
+      );
+
+      render(() => <AIIntelligence />);
+
+      const modes = within(await screen.findByRole('group', { name: 'Patrol mode' }));
+      await waitFor(() => expect(getPatrolAutonomySettingsMock).toHaveBeenCalled());
+      await getPatrolAutonomySettingsMock.mock.results[0]?.value;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(modes.getByRole('button', { name: 'Watch only' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      for (const paidMode of ['Ask first', 'Safe auto-fix', 'Autopilot']) {
+        expect(modes.getByRole('button', { name: paidMode })).toBeDisabled();
+        fireEvent.click(modes.getByRole('button', { name: paidMode }));
+      }
+      expect(screen.queryByRole('dialog', { name: 'Activate Autopilot' })).toBeNull();
+      expect(updatePatrolAutonomySettingsMock).not.toHaveBeenCalled();
+
+      fireEvent.click(modes.getByRole('button', { name: 'Watch only' }));
+
+      // The browser sends no full_mode_unlocked field; the API clears stale
+      // unlock and Autopilot activation state on every non-Autopilot save.
+      await waitFor(() => {
+        expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledTimes(1);
+      });
+      expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith({
+        autonomy_level: 'monitor',
+        investigation_budget: 15,
+        investigation_timeout_sec: 300,
+      });
+    });
   });
 
   it('keeps the Patrol model catalog out of the operator page', async () => {

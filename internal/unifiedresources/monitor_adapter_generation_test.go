@@ -113,3 +113,35 @@ func TestMonitorAdapterSerializesSupplementalMutationAfterSnapshotPublication(t 
 		t.Fatalf("final generation lost a writer: %+v", resources)
 	}
 }
+
+func TestMonitorAdapterKeepsInMemoryManualLinksAcrossGenerations(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "host-app", Hostname: "app-guest", MachineID: "machine-app", Status: "online", LastSeen: now},
+			{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas", Status: "online", LastSeen: now},
+		},
+		LastUpdate: now,
+	}
+	baseline := NewRegistry(nil)
+	baseline.IngestSnapshot(snapshot)
+	listed := baseline.List()
+	if len(listed) != 2 {
+		t.Fatalf("fixture hosts did not stay separate: %+v", listed)
+	}
+	link := ResourceLink{ResourceA: listed[0].ID, ResourceB: listed[1].ID, PrimaryID: listed[0].ID}
+	adapter := NewMonitorAdapter(NewRegistryWithManualLinks([]ResourceLink{link}))
+	for generation := 0; generation < 3; generation++ {
+		adapter.PopulateFromSnapshot(snapshot)
+		got := adapter.GetAll()
+		if len(got) != 1 || got[0].ID != link.PrimaryID {
+			t.Fatalf("generation %d lost the in-memory operator link: %+v", generation, got)
+		}
+		if links := adapter.ManualLinks(); len(links) != 1 || links[0] != link {
+			t.Fatalf("generation %d changed the operator's link: %+v", generation, links)
+		}
+		if adapter.currentRegistry().store != nil {
+			t.Fatal("a storeless generation acquired persistence")
+		}
+	}
+}

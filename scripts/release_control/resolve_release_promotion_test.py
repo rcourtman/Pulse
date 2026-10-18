@@ -830,7 +830,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
 
 class ReleaseTrainPromotionTest(unittest.TestCase):
-    """The release train: a stable ships its soaked candidate, and minors soak a week."""
+    """The release train: a stable ships its exact candidate after a 24-hour soak."""
 
     def promote(self, version: str, **overrides):
         promoted = f"{version}-rc.1"

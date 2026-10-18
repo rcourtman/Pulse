@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,12 @@ const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
+const mockWorkloadsSurfaceProps = vi.hoisted(() => vi.fn());
+const mockWorkloadsStateRef = vi.hoisted(() => ({ current: undefined as unknown }));
+const mockWorkloadsReady = vi.hoisted(() => vi.fn(() => false));
+const mockFetchReplicationJobs = vi.hoisted(() =>
+  vi.fn((_signal?: AbortSignal) => Promise.resolve([] as unknown[])),
+);
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -87,16 +93,19 @@ vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: () => <div data-testid="workloads-surface" />,
+  WorkloadsSurface: (props: Record<string, unknown>) => {
+    mockWorkloadsSurfaceProps(props);
+    return <div data-testid="workloads-surface" />;
+  },
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: (options: unknown) => {
     mockWorkloadsOptions(options);
-    return {
-      surfaceConnected: () => false,
-      surfaceInitialDataReceived: () => false,
-      allGuests: () => [],
+    const state = {
+      surfaceConnected: mockWorkloadsReady,
+      surfaceInitialDataReceived: mockWorkloadsReady,
+      allGuests: () => (mockWorkloadsReady() ? [{ id: 'vm-1' }] : []),
       selectedNode: mockSelectedNode,
       handleNodeSelect: mockHandleNodeSelect,
       selectedHostHint: () => null,
@@ -104,6 +113,8 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
       search: mockWorkloadSearch,
       setSearch: vi.fn(),
     };
+    mockWorkloadsStateRef.current = state;
+    return state;
   },
 }));
 
@@ -152,8 +163,18 @@ vi.mock('../ProxmoxNodesTable', () => ({
 }));
 
 vi.mock('../ProxmoxReplicationTable', () => ({
-  ProxmoxReplicationTable: () => <div data-testid="replication-table" />,
-  fetchReplicationJobs: () => Promise.resolve([]),
+  ProxmoxReplicationTable: (props: { jobs?: unknown[]; error?: unknown; onRetry: () => void }) => (
+    <div
+      data-testid="replication-table"
+      data-jobs={props.jobs === undefined ? 'loading' : props.jobs.length}
+      data-error={props.error ? 'yes' : 'no'}
+    >
+      <button type="button" onClick={() => props.onRetry()}>
+        Retry replication
+      </button>
+    </div>
+  ),
+  fetchReplicationJobs: (signal?: AbortSignal) => mockFetchReplicationJobs(signal),
 }));
 
 const renderSurface = () =>
@@ -166,6 +187,7 @@ const renderSurface = () =>
 describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockWorkloadsOptions.mockClear();
+    mockWorkloadsReady.mockReturnValue(false);
     mockSelectedNode.mockReturnValue(null);
     mockHandleNodeSelect.mockClear();
     mockPathname.mockReturnValue('/proxmox/overview');
@@ -199,6 +221,11 @@ describe('ProxmoxPageSurface contract', () => {
     expect(mockWorkloadsOptions).toHaveBeenCalledWith(
       expect.objectContaining({ resourceSnapshotChange }),
     );
+    // Guests and nodes reach the state only through that snapshot.
+    const options = mockWorkloadsOptions.mock.lastCall?.[0] as Record<string, unknown>;
+    for (const option of ['vms', 'containers', 'nodes', 'useWorkloads']) {
+      expect(options, option).not.toHaveProperty(option);
+    }
   });
 
   afterEach(() => {
@@ -225,6 +252,27 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('tells the Storage surface whether its tab is the one showing', () => {
+    // Storage stays mounted behind the other tabs; their ?resource= links
+    // must not open a pool.
+    mockPathname.mockReturnValue('/proxmox/storage');
+    setResources([
+      makeResource({
+        id: 'pbs-datastore-1',
+        type: 'storage',
+        platformType: 'proxmox-pbs',
+        sources: ['pbs'],
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('storage-surface')).toBeInTheDocument();
+    const props = mockStorageProps.mock.lastCall?.[0] as { routeActive?: boolean };
+    expect(props.routeActive).toBe(true);
+    expect(proxmoxPageSurfaceSource).toContain("routeActive={activeTab() === 'storage'}");
+  });
+
   it('surfaces stale agent-backed Proxmox nodes', () => {
     mockVersionInfo.mockReturnValue({
       version: 'v6.0.0-rc.6',
@@ -246,10 +294,8 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('delly is running an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent(
-      'latest agent-contributed Proxmox node detail and command support',
-    );
+    expect(notice).toHaveTextContent('delly runs an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('latest fixes and node details');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',
@@ -269,16 +315,16 @@ describe('ProxmoxPageSurface contract', () => {
     const revealFrame = vi.spyOn(window, 'requestAnimationFrame');
 
     onShowGuests(node);
-    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('node|lab|pve1', 'pve');
     expect(revealFrame).toHaveBeenCalledTimes(1);
     revealFrame.mockClear();
-    mockSelectedNode.mockReturnValue('lab-pve1');
+    mockSelectedNode.mockReturnValue('node|lab|pve1');
     onShowGuests(node);
     expect(mockHandleNodeSelect).toHaveBeenLastCalledWith(null, null);
     expect(revealFrame).not.toHaveBeenCalled();
-    mockSelectedNode.mockReturnValue('lab-other');
+    mockSelectedNode.mockReturnValue('node|lab|other');
     onShowGuests(node);
-    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('node|lab|pve1', 'pve');
     expect(revealFrame).toHaveBeenCalledTimes(1);
     revealFrame.mockRestore();
   });
@@ -352,6 +398,44 @@ describe('ProxmoxPageSurface contract', () => {
 
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
+  });
+
+  it('shows the outdated sensor setup notice on Overview without hydrating disks', () => {
+    const node = makeResource({
+      id: 'agent:pve3',
+      name: 'pve3',
+      displayName: 'pve3',
+      type: 'agent',
+      proxmox: {
+        nodeName: 'pve3',
+        temperatureDetails: { available: true, legacySensorsFormat: true },
+        sensorSetupOutdated: true,
+      },
+    });
+    // Like production, the Overview query returns nodes and guests only: the
+    // verdict has to arrive on the node, because no physical_disk rows do.
+    mockUseUnifiedResources.mockImplementation((options: { cacheKey?: string }) => ({
+      resources: () => (options.cacheKey === 'proxmox-overview' ? [node] : []),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    }));
+
+    renderSurface();
+
+    const overviewOptions = mockUseUnifiedResources.mock.calls
+      .map(([options]) => options as { cacheKey?: string; query?: string })
+      .find((options) => options.cacheKey === 'proxmox-overview');
+    expect(overviewOptions?.query).toBeDefined();
+    expect(overviewOptions?.query).not.toContain('physical_disk');
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('platform-outdated-sensor-setup-notice')).toHaveTextContent(
+      'pve3 is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures.',
+    );
+    expect(screen.getByRole('link', { name: 'Open Infrastructure settings' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
   });
 
   it('folds estate topology into the existing nodes table header contract', () => {
@@ -544,6 +628,47 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('renders the one workload toolbar above the guests table once workload state is ready', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+
+    renderSurface();
+    expect(screen.queryByTestId('workloads-filter')).not.toBeInTheDocument();
+    cleanup();
+
+    mockWorkloadsReady.mockReturnValue(true);
+    renderSurface();
+    expect(screen.getAllByTestId('workloads-filter')).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId('workloads-filter')
+        .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('hands the guests table only its page-owned state and presentation props', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+    renderSurface();
+
+    const props = mockWorkloadsSurfaceProps.mock.lastCall?.[0] as Record<string, unknown>;
+    expect(Object.keys(props).sort()).toEqual([
+      'emptyStateDescription',
+      'emptyStateTitle',
+      'forcedPlatform',
+      'state',
+      'tableTitle',
+    ]);
+    expect(props.state).toBe(mockWorkloadsStateRef.current);
+    const options = mockWorkloadsOptions.mock.lastCall?.[0] as { forcedPlatform?: string };
+    expect(props.forcedPlatform).toBe(options.forcedPlatform);
+    expect(options).toEqual(
+      expect.objectContaining({
+        excludedWorkloadTypes: ['app-container'],
+        showNestedExcludedWorkloads: true,
+      }),
+    );
+  });
+
   it('keeps the bounded node preview before guests at every viewport', () => {
     expect(proxmoxPageSurfaceSource).toContain('<section>\n        <ProxmoxNodesTable');
     expect(proxmoxPageSurfaceSource).toContain('class="space-y-3 scroll-mt-4"');
@@ -628,6 +753,204 @@ describe('ProxmoxPageSurface contract', () => {
       expect(tabs).toHaveAttribute('data-tabs', 'overview,backups');
       expect(tabs).toHaveAttribute('data-active', 'overview');
     });
+  });
+
+  it('re-reads replication jobs in the background and keeps the tab through a failed read', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    let resolveFirstRead: (jobs: unknown[]) => void = () => undefined;
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockReturnValueOnce(
+      new Promise<unknown[]>((resolve) => {
+        resolveFirstRead = resolve;
+      }),
+    );
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // Counts are known but the first read is pending: a direct link stays put.
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', 'loading');
+
+      resolveFirstRead([{ id: 'job-1' }]);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+
+      // The table's ages move on the shared clock, so its jobs are re-read in
+      // the background rather than aging a snapshot taken at mount.
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }, { id: 'job-2' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '2'),
+      );
+
+      // A failed read reports the error but keeps the tab and the user on it.
+      mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'no'),
+      );
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1');
+      expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('holds a direct replication link on a failed first read and recovers on retry', async () => {
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+    mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // A failed read says nothing about whether replication exists, so the
+      // link keeps its error and Retry instead of falling back to Overview.
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+      expect(tabs).toHaveAttribute('data-tabs', 'overview');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry replication' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'no');
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+    } finally {
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('keeps an empty replication answer through a failed poll instead of reopening the route', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockResolvedValueOnce([]);
+    mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+    mockFetchReplicationJobs.mockResolvedValueOnce([]);
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // An empty answer means no replication: the link falls back to Overview.
+      await waitFor(() => expect(tabs).toHaveAttribute('data-active', 'overview'));
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() => expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(2));
+      await Promise.resolve();
+      expect(tabs).toHaveAttribute('data-active', 'overview');
+      expect(screen.queryByTestId('replication-table')).not.toBeInTheDocument();
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() => expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(3));
+      expect(tabs).toHaveAttribute('data-active', 'overview');
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('holds a direct replication link on an access denial that withdraws loaded jobs', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+    mockFetchReplicationJobs.mockRejectedValueOnce(
+      Object.assign(new Error('Insufficient permissions'), { status: 403 }),
+    );
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      // The denied jobs are withdrawn, so the tab goes; the link shows why.
+      expect(tabs).toHaveAttribute('data-tabs', 'overview');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('cancels an in-flight replication read when the page unmounts', async () => {
+    mockPathname.mockReturnValue('/proxmox/replication');
+    setResources([makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' })]);
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockReturnValueOnce(new Promise<unknown[]>(() => undefined));
+
+    try {
+      const view = renderSurface();
+      expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(1);
+      const signal = mockFetchReplicationJobs.mock.calls[0][0];
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal?.aborted).toBe(false);
+
+      view.unmount();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
   });
 
   it('does not surface stale-agent notices for development builds without an agent target', () => {

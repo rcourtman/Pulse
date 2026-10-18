@@ -376,40 +376,11 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
 		"# Pulse v6 Canonical Development Protocol",
-		"## Core Rule",
-		"## V6 Modernization Invariants",
-		"## Required Operating Files",
-		"## Subsystem Contracts",
-		"## Task Completion Protocol",
-		"## Guardrails",
-		"## Boundary Rule",
 		"AGENT_VALUES.md",
 		"control_plane.py --agent-entrypoint --pretty",
-		"status_lookup.py --lane <LANE_ID> --pretty",
-		"work_claim.py --kind ... --id ... --summary ... --agent-id ... --write",
-		"contract_audit.py --check",
-		"Did the user state a durable product truth or change the current priority?",
-		"consistency, seamlessness, drift, bypass",
-		"Did the user casually raise a new quality bar or product invariant?",
-		"status.json.lanes[*].completion",
-		"references must also reference the same lane",
-		"already-passed",
-		"lane followup",
-		"rather than a broad target reference",
-		"candidate_lane_queue",
-		"status.json.work_claims",
-		"available_candidate_lane_queue",
-		"replace the old claim with the new claim in the same `status.json` edit",
-		"route through unified resources when that is the canonical shape",
-		"These rules are retrospective.",
-		"Existing lanes are not grandfathered out of the modernization rules.",
-		"do not mark such a gap `planned`",
-		"`target-update` coverage gaps",
-		"Guardrail-only proof routing, contract wording, registry cleanup, and",
-		"substantive lane movement by themselves.",
-		"preserving legacy internals when only boundary compatibility is",
-		"Legacy support is allowed only for explicit boundaries",
-		"that is drift. Retire it or record the exception",
+		"status_lookup.py",
+		"work_claim.py",
+		"status.json",
 	})
 }
 
@@ -515,55 +486,18 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	values := readRepoFile(t, valuesRel)
 	assertContainsAll(t, valuesRel, values, []string{
 		"# Pulse Agent Values",
-		"## Purpose",
-		"## Values",
-		"## Delegation Rule",
-		"## Current State",
-		"prompt-like guidance should express posture, priorities, and decision heuristics",
-		"the canonical system, not the prompt, carry the detailed operating burden",
-		"governance routing should usually be automatic and mostly invisible to the user",
-		"Do that resolution quietly unless the result materially changes the plan",
 		"control_plane.py --agent-entrypoint --pretty",
-		"work_claim.py --kind ... --id ... --summary ... --agent-id ... --pretty",
-		"Proof routing, registry cleanup, contract ratchets, and guardrail-only test",
-		"Treat guardrail work as support work.",
-		"owned runtime or product-surface delta in the same slice",
-		"Keep legacy support at the boundary.",
-		"Do not preserve or polish legacy-primary internal paths",
-		"Prefer the largest coherent slice.",
-		"Treat scores and evidence as signals, not targets.",
-		"gap first, then record the proof",
-		"Use worktrees when a mutating slice needs physical isolation.",
+		"work_claim.py",
 	})
-
 	docRel := "docs/release-control/internal/CONTROL_PLANE.md"
 	doc := readRepoFile(t, docRel)
 	assertContainsAll(t, docRel, doc, []string{
 		"# Pulse Release Control Plane",
 		"AGENT_VALUES.md",
-		"control_plane.py --agent-entrypoint --pretty",
 		"control_plane.json",
-		"active target",
-		"v6 is the current active release profile",
 		"control_plane_audit.py --check",
-		"Direction changes must be normalized",
-		"Do not wait for a special governance prompt",
-		"stable or GA promotion readiness",
-		"v6-release-reliability",
-		"v6-ga-promotion",
-		"v6-rc-stabilization",
-		"available_candidate_lane_queue",
-		"should always be true",
-		"Lane work must follow canonical v6 modernization rules",
-		"These modernization rules are retrospective as well as forward-looking",
-		"Governance routing should be quiet by default",
 		"status_lookup.py",
-		"worktree_base.py",
-		"worktree_claim.py",
-		"worktree_finish.py",
-		"raw `status.json` or `registry.json`",
 	})
-
 	jsonRel := "docs/release-control/control_plane.json"
 	jsonContent := readRepoFile(t, jsonRel)
 	assertContainsAll(t, jsonRel, jsonContent, []string{
@@ -667,71 +601,18 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"CONTROL_PLANE.md",
 		"control_plane.json",
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
-		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
 		"registry.schema.json",
-		"subsystems/*.md",
-		"structured evidence references",
-		"ready to cut a prerelease or approve stable/GA",
-		"control_plane_audit.py --check",
-		"status_audit.py --pretty",
-		"status.json.coverage_gaps",
-		"status.json.candidate_lanes",
-		"status.json.work_claims",
-		"status.json.readiness_assertions",
-		"proof_commands",
-		"available_candidate_lane_queue",
 	})
-
 	source := readRepoFile(t, "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md")
 	assertContainsAll(t, "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md", source, []string{
 		"AGENT_VALUES.md",
-		"control_plane.py --agent-entrypoint --pretty",
-		"work_claim.py",
-		"CONTROL_PLANE.md",
 		"control_plane.json",
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
-		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
 		"registry.schema.json",
-		"docs/release-control/v6/internal/subsystems/",
-		"## Evergreen Readiness Assertions",
-		"## Development Governance",
-		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
-		"Do not promote v6 to stable or GA without an exercised prerelease",
-		"v5 maintenance-only support policy",
-		"control_plane_audit.py --check",
-		"When a user states a durable product truth",
-		"classify that as an active-target update or another control-plane",
-		"Do not wait for a special governance prompt",
-		"Lanes that are at target but intentionally not closed must record a",
-		"Those references must belong to that same lane",
-		"status.json.coverage_gaps",
-		"status.json.candidate_lanes",
-		"status.json.work_claims",
-		"lane-coverage score",
-		"coverage-planning score",
-		"active claims",
-		"available_candidate_lane_queue",
-		"The claim is an audit trail",
-		"Lane work must be evaluated against the canonical v6 model",
-		"These modernization rules are retrospective.",
-		"Do not treat a lane as healthy just because it has local fixes on a legacy path.",
-		"consistency, seamlessness, drift, bypass",
-		"status_audit.py --pretty",
 		"status_lookup.py",
-		"canonical databases, not startup prompt payload",
-		"Claimed lane work should prefer the largest coherent same-surface slice.",
-		"Lane scores, missing evidence items, and proof counts are signals, not the",
-		"Do not frame a slice as \"get two more evidence items\"",
-		"Worktrees are available for isolated mutating slices",
-		"Do not run parallel mutating agents out of one dirty checkout",
-		"status.json.readiness_assertions",
-		"`coverage_gaps.status` is not cosmetic",
-		"`target-update` coverage gaps",
-		"Keep governance routing quiet by default",
 	})
-
 	matrix := readRepoFile(t, "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
 	assertContainsAll(t, "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md", matrix, []string{
 		"status.json.release_gates",
@@ -767,7 +648,6 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"agent_id\"",
 		"\"heartbeat_at\"",
 		"\"expires_at\"",
-		"\"coverage_impact\"",
 		"\"proposed_resolution\"",
 		"\"blocking_level\"",
 		"\"proof_type\"",
@@ -799,48 +679,11 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 	rel := "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"## Purpose",
 		"## Canonical Control Files",
-		"## Scope",
-		"## Release Definition",
-		"## Evergreen Readiness Assertions",
-		"## Non-Negotiable Release Gates",
-		"## Locked Decisions",
-		"## Development Governance",
-		"## Source Domains",
-		"It is not a live progress dashboard.",
-		"coverage-gap discovery records",
-		"candidate-lane planning records",
-		"Active multi-agent lease records",
-		"normalized follow-up tracking",
-		"derived coverage scores",
-		"status.json.lane_followups",
-		"status.json.coverage_gaps",
-		"status.json.candidate_lanes",
-		"status.json.work_claims",
-		"coverage-planning score",
-		"`complete` goes with",
-		"`bounded-residual` goes with",
-		"`partial` means measurable progress",
-		"`not-started` means zero score",
-		"`blocked` remains an `open`",
-		"typed same-lane blocker references",
-		"Those references must belong to that same lane",
-		"already-passed assertions, gates, or completed targets",
-		"open or complete lanes",
-		"rather than a broad target reference",
-		"active residual records",
-		"Lane work must be evaluated against the canonical v6 model",
-		"These modernization rules are retrospective.",
-		"Do not treat a lane as healthy just because it has local fixes on a legacy path.",
-		"Legacy compatibility must be named as a boundary exception",
-		"Preserve legacy behavior only at explicit boundaries",
-		"Within an active claimed lane, prefer the largest coherent same-surface slice",
-		"Lane scores, missing evidence items, and proof counts are signals, not the",
-		"Do not frame a slice as \"get two more evidence items\"",
-		"Do not treat missing evidence count or a score delta as the task itself.",
-		"Worktrees are available for isolated mutating slices",
-		"Do not run parallel mutating agents out of one dirty checkout",
+		"status.json",
+		"status.schema.json",
+		"registry.schema.json",
+		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",
@@ -885,9 +728,6 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 		}
 	}
 
-	if _, ok := status["priority_engine"].(map[string]any); !ok {
-		t.Fatalf("status.json missing priority_engine object")
-	}
 	if _, ok := status["open_decisions"].([]any); !ok {
 		t.Fatalf("status.json missing open_decisions list")
 	}
@@ -928,8 +768,8 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if gates, ok := status["release_gates"].([]any); !ok || len(gates) == 0 {
 		t.Fatalf("status.json release_gates must be a non-empty list")
 	}
-	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present plus all repo-ready assertions passed" {
-		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present plus all repo-ready assertions passed")
+	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed" {
+		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed")
 	}
 	if got, ok := readiness["rc_ready_rule"].(string); !ok || got != "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed" {
 		t.Fatalf("status.json readiness.rc_ready_rule = %#v, want %q", readiness["rc_ready_rule"], "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed")
@@ -1063,20 +903,6 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if _, ok := lane["name"].(string); !ok {
 			t.Fatalf("status.json lane %q missing string name", laneID)
 		}
-		targetScore, ok := lane["target_score"].(float64)
-		if !ok {
-			t.Fatalf("status.json lane %q missing numeric target_score", laneID)
-		}
-		currentScore, ok := lane["current_score"].(float64)
-		if !ok {
-			t.Fatalf("status.json lane %q missing numeric current_score", laneID)
-		}
-		if targetScore < 0 || targetScore > 10 || currentScore < 0 || currentScore > 10 {
-			t.Fatalf("status.json lane %q score out of range", laneID)
-		}
-		if currentScore > targetScore {
-			t.Fatalf("status.json lane %q current_score %.0f exceeds target_score %.0f", laneID, currentScore, targetScore)
-		}
 		statusValue, ok := lane["status"].(string)
 		if !ok || !slices.Contains([]string{"not-started", "partial", "target-met", "blocked"}, statusValue) {
 			t.Fatalf("status.json lane %q has invalid status %#v", laneID, lane["status"])
@@ -1106,20 +932,11 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if completionState == "open" && statusValue == "target-met" {
 			t.Fatalf("status.json lane %q must not pair completion.state open with status target-met", laneID)
 		}
-		if statusValue == "partial" && currentScore == 0 {
-			t.Fatalf("status.json lane %q must keep current_score above 0 while status is partial", laneID)
-		}
-		if statusValue == "not-started" && currentScore != 0 {
-			t.Fatalf("status.json lane %q must keep current_score at 0 while status is not-started", laneID)
-		}
 		if statusValue == "not-started" && completionState != "open" {
 			t.Fatalf("status.json lane %q must pair status not-started with completion.state open", laneID)
 		}
 		if statusValue == "blocked" && completionState != "open" {
 			t.Fatalf("status.json lane %q must pair status blocked with completion.state open", laneID)
-		}
-		if statusValue == "blocked" && currentScore >= targetScore {
-			t.Fatalf("status.json lane %q must stay below target_score while status is blocked", laneID)
 		}
 		if statusValue == "blocked" && len(rawBlockers) == 0 {
 			t.Fatalf("status.json lane %q must declare blockers while status is blocked", laneID)

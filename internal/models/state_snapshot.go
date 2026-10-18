@@ -205,8 +205,12 @@ func (s StateSnapshot) Clone() StateSnapshot {
 	return snapshot
 }
 
-// GetSnapshot returns a snapshot of the current state without mutex
+// GetSnapshot returns a detached snapshot of the complete current state.
 func (s *State) GetSnapshot() StateSnapshot {
+	return s.getSnapshot(cloneKubernetesClusters)
+}
+
+func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster) StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -221,7 +225,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		Containers:                cloneContainers(s.Containers),
 		DockerHosts:               cloneDockerHosts(s.DockerHosts),
 		RemovedDockerHosts:        append([]RemovedDockerHost(nil), s.RemovedDockerHosts...),
-		KubernetesClusters:        cloneKubernetesClusters(s.KubernetesClusters),
+		KubernetesClusters:        cloneClusters(s.KubernetesClusters),
 		RemovedKubernetesClusters: append([]RemovedKubernetesCluster(nil), s.RemovedKubernetesClusters...),
 		Hosts:                     cloneHosts(s.Hosts),
 		RemovedHostAgents:         append([]RemovedHostAgent(nil), s.RemovedHostAgents...),
@@ -369,6 +373,10 @@ func (s *State) GetLastUpdate() time.Time {
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.
 // This is the authoritative source of truth for routing commands to resources.
 type ResourceLocation struct {
+	// Ambiguous refuses a known label shared by different resource identities.
+	Ambiguous bool
+	// NodeResourceID keeps command routing scoped to the owned parent node.
+	NodeResourceID string
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name

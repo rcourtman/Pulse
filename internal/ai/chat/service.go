@@ -63,7 +63,6 @@ type (
 	IncidentArchiveProvider             = tools.IncidentArchiveProvider
 	EventCorrelatorProvider             = tools.EventCorrelatorProvider
 	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
-	AssistantDiscoveryProvider          = tools.DiscoveryProvider
 	AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider
 	AssistantTypedActionPlanner         = tools.TypedActionPlanner
 )
@@ -96,8 +95,8 @@ type Config struct {
 
 	// Optional cost store. When set, ExecuteStream records a
 	// cost.UsageEvent after each chat turn so user-chat token usage
-	// appears in the operator dashboard alongside patrol, discovery,
-	// and report-narrative spend. Absent value means "don't record"
+	// appears in the operator dashboard alongside patrol and
+	// report-narrative spend. Absent value means "don't record"
 	// — useful for tests and for callers that bring their own ledger.
 	// ExecutePatrolStream intentionally does NOT record here; its
 	// caller (patrol_ai.go) records via its own helper so cost is
@@ -125,7 +124,6 @@ type Service struct {
 	started                 bool
 	autonomousMode          bool
 	contextPrefetcher       *ContextPrefetcher
-	discoveryProvider       tools.DiscoveryProvider
 	budgetChecker           func() error // Optional mid-run budget enforcement
 	orgID                   string
 	controlLevelResolver    func(*config.AIConfig) string
@@ -176,7 +174,6 @@ func NewService(cfg Config) *Service {
 
 	if cfg.AIConfig != nil {
 		execCfg.ControlLevel = resolveEffectiveControlLevel(cfg.ControlLevelResolver, cfg.AIConfig)
-		execCfg.ProtectedGuests = cfg.AIConfig.GetProtectedGuests()
 	}
 
 	executor := tools.NewPulseToolExecutor(execCfg)
@@ -205,13 +202,13 @@ func resolveEffectiveControlLevel(
 ) tools.ControlLevel {
 	if resolver != nil {
 		if resolved := strings.TrimSpace(resolver(cfg)); config.IsValidControlLevel(resolved) {
-			return tools.ControlLevel(resolved)
+			return tools.ControlLevel(config.AssistantControlLevel(resolved))
 		}
 	}
 	if cfg == nil {
 		return tools.ControlLevelReadOnly
 	}
-	return tools.ControlLevel(cfg.GetControlLevel())
+	return tools.ControlLevel(config.AssistantControlLevel(cfg.GetControlLevel()))
 }
 
 func controlLevelForRequestAutonomousMode(level tools.ControlLevel, requested *bool) tools.ControlLevel {
@@ -562,7 +559,6 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	// Update executor settings
 	if s.executor != nil && s.cfg != nil {
 		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
-		s.executor.SetProtectedGuests(s.cfg.GetProtectedGuests())
 	}
 
 	// Recreate provider with new settings
@@ -771,25 +767,19 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Msg("[ChatService] Checking prefetcher")
 
 	mentionsFound := false
-	var modelBoundaryAllowedCloudContext []string
 	if prefetcher != nil {
-		cloudContextPolicy := CloudContextPolicy{
-			CloudRouting: modelboundary.ModelUsesExternalProvider(selectedModel),
-		}
 		// Route product-originated handoff resources through the same prefetch path
 		// as explicit @-mentions so a drawer "Ask Assistant" handoff delivers the
-		// resource's cloud-safe operational context to the model, not just the
-		// structural handoff context pack.
+		// resource's routing context to the model, not just the structural
+		// handoff context pack.
 		prefetchMentions := mentionsIncludingHandoff(req.Mentions, handoffResources)
-		prefetchCtx := prefetcher.PrefetchWithCloudPolicy(ctx, req.Prompt, prefetchMentions, cloudContextPolicy)
+		prefetchCtx := prefetcher.Prefetch(ctx, req.Prompt, prefetchMentions)
 		if prefetchCtx != nil {
 			mentionsFound = len(prefetchCtx.Mentions) > 0
-			modelBoundaryAllowedCloudContext = prefetchCtx.CloudSafeContextSpans
 		}
 		if prefetchCtx != nil && prefetchCtx.Summary != "" {
 			log.Info().
 				Int("mentions", len(prefetchCtx.Mentions)).
-				Int("discoveries", len(prefetchCtx.Discoveries)).
 				Msg("[ChatService] Injecting prefetched context")
 
 			// Mark mentioned resources as explicitly accessed for routing validation
@@ -890,7 +880,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if baseExecutor != nil {
 		effectiveExecutor = baseExecutor.Clone()
 		effectiveExecutor.SetControlLevel(effectiveControlLevel)
-		effectiveExecutor.SetAutonomousMode(autonomousMode)
 		effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 		effectiveExecutor.SetExecuteAuthority(req.HasExecuteAuthority)
 		effectiveExecutor.SetResolvedContext(resolvedCtx)
@@ -955,14 +944,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
-		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
-		// Preserve the PII-free operational context injected for opted-in cloud
-		// turns so the resource-policy sanitizer does not re-strip it as if it
-		// were a raw identifier. FormatCloudSafeContext already excludes PII.
-		if len(modelBoundaryAllowedCloudContext) > 0 {
-			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedCloudContext...))
-		}
-		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider, sanitizerOptions...))
+		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider))
 		loop.SetSuppressProviderErrorEvents(true)
 
 		loop.SetKnowledgeAccumulator(ka)
@@ -1416,22 +1398,24 @@ func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (
 		}
 		for _, vm := range node.VMs {
 			nodeContext.VMs = append(nodeContext.VMs, assistantInventoryWorkload{
-				AnswerLabel:   assistantInventoryGuestAnswerLabel("VM", vm.VMID, vm.Name),
-				VMID:          vm.VMID,
-				Name:          vm.Name,
-				Status:        vm.Status,
-				CPUPercent:    vm.CPU,
-				MemoryPercent: vm.Memory,
+				AnswerLabel:    assistantInventoryGuestAnswerLabel("VM", vm.VMID, vm.Name),
+				VMID:           vm.VMID,
+				Name:           vm.Name,
+				Status:         vm.Status,
+				CPUPercent:     vm.CPU,
+				MemoryPercent:  vm.Memory,
+				MemoryEvidence: vm.MemoryEvidence,
 			})
 		}
 		for _, container := range node.Containers {
 			nodeContext.Containers = append(nodeContext.Containers, assistantInventoryWorkload{
-				AnswerLabel:   assistantInventoryGuestAnswerLabel("CT", container.VMID, container.Name),
-				VMID:          container.VMID,
-				Name:          container.Name,
-				Status:        container.Status,
-				CPUPercent:    container.CPU,
-				MemoryPercent: container.Memory,
+				AnswerLabel:    assistantInventoryGuestAnswerLabel("CT", container.VMID, container.Name),
+				VMID:           container.VMID,
+				Name:           container.Name,
+				Status:         container.Status,
+				CPUPercent:     container.CPU,
+				MemoryPercent:  container.Memory,
+				MemoryEvidence: container.MemoryEvidence,
 			})
 		}
 		context.Proxmox.Nodes = append(context.Proxmox.Nodes, nodeContext)
@@ -1545,12 +1529,13 @@ type assistantInventoryProxmoxNode struct {
 }
 
 type assistantInventoryWorkload struct {
-	AnswerLabel   string  `json:"answer_label"`
-	VMID          int     `json:"vmid"`
-	Name          string  `json:"name"`
-	Status        string  `json:"status"`
-	CPUPercent    float64 `json:"cpu_percent,omitempty"`
-	MemoryPercent float64 `json:"memory_percent,omitempty"`
+	AnswerLabel    string                                `json:"answer_label"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPUPercent     float64                               `json:"cpu_percent,omitempty"`
+	MemoryPercent  *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 type assistantInventoryDockerHost struct {
@@ -1866,11 +1851,10 @@ func buildResourceContextHandoffDirective(handoffResources []HandoffResource, me
 		"Source: Pulse resource drawer handoff",
 		"Selected Resource: The attached handoff resource is the user's current selected resource. Do not ask which server, service, container, VM, or resource the user means.",
 		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy a withheld or placeholder label into any tool argument.",
-		"Context-First Answering: When the user asks what Pulse already knows, asks for discovery readiness, or asks a question that should be answerable from discovered/service context, answer from the attached context without tools. If the attached context lacks the fact, say that Pulse does not currently have that discovery/context fact instead of filling the gap with tools.",
-		"Discovery Boundary: Do not call discovery tools only to identify this resource or fill in missing context. Use attached discovery readiness first; call discovery only when the user explicitly asks you to run discovery.",
+		"Context-First Answering: When the user asks what Pulse already knows about this resource, answer from the attached context without tools. If the attached context lacks the fact, say that Pulse does not currently have it instead of filling the gap with tools.",
 		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt. Do not use read or mixed tools just to improve a context summary.",
-		"Data Boundary: You may use the attached operational context — the service's access pattern, config/data/log paths, and ports — to answer and guide the user. Do not reveal, reconstruct, or guess raw hostnames, IP addresses, aliases, environment variables, credentials, secret-bearing metadata, or any value the attached context marks as withheld or redacted.",
-		"Withheld Details: If asked to print, expand, or reveal a value the attached context withholds or redacts (a hostname, IP address, credential, or secret), start with exactly this boundary: \"That detail is withheld by policy.\" Then give a safe summary. This boundary does not apply to the operational paths, ports, and access pattern already provided — use those freely to help.",
+		"Data Boundary: You may use the attached context to answer and guide the user. Do not reveal, reconstruct, or guess raw hostnames, IP addresses, aliases, environment variables, credentials, secret-bearing metadata, or any value the attached context marks as withheld or redacted.",
+		"Withheld Details: If asked to print, expand, or reveal a value the attached context withholds or redacts (a hostname, IP address, credential, or secret), start with exactly this boundary: \"That detail is withheld by policy.\" Then give a safe summary.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority. Any action requires the governed approval/action flow.",
 	}, "\n")
 }
@@ -1930,10 +1914,6 @@ func resourceContextPromptExplicitlyRequestsTools(text string) bool {
 		"read logs",
 		"tail logs",
 		"inspect live",
-		"run discovery",
-		"call discovery",
-		"use discovery",
-		"start discovery",
 		"scan this resource",
 	} {
 		if strings.Contains(text, phrase) {
@@ -2756,7 +2736,7 @@ func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []H
 			continue
 		}
 		resolvedCtx.AddResolvedResource(reg)
-		if resolved, ok := resolvedCtx.GetResolvedResourceByAlias(reg.Name); ok {
+		if resolved, ok := resolvedCtx.GetResolvedResourceByID(reg.ResolvedID()); ok {
 			resolvedCtx.MarkExplicitAccess(resolved.GetResourceID())
 			log.Debug().
 				Str("session_id", sessionID).
@@ -3105,7 +3085,6 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	autonomousMode := s.isAutonomousModeEnabled()
 	effectiveExecutor := executor.Clone()
 	effectiveExecutor.SetControlLevel(effectiveControlLevel)
-	effectiveExecutor.SetAutonomousMode(autonomousMode)
 	effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 	effectiveExecutor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
 	availableTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
@@ -3633,8 +3612,8 @@ func (s *Service) SetReadState(readState unifiedresources.ReadState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.readState = readState
-	if readState != nil && s.discoveryProvider != nil {
-		s.contextPrefetcher = NewContextPrefetcher(readState, s.discoveryProvider)
+	if readState != nil {
+		s.contextPrefetcher = NewContextPrefetcher(readState)
 	} else {
 		s.contextPrefetcher = nil
 	}
@@ -3656,25 +3635,6 @@ func (s *Service) SetAppContainerReadProvider(provider AssistantAppContainerRead
 	}
 }
 
-func (s *Service) SetDiscoveryProvider(provider AssistantDiscoveryProvider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.discoveryProvider = provider
-	if s.executor != nil {
-		s.executor.SetDiscoveryProvider(provider)
-	}
-	// Create/update context prefetcher with the discovery provider
-	if s.readState != nil && provider != nil {
-		s.contextPrefetcher = NewContextPrefetcher(s.readState, provider)
-		log.Info().Msg("[ChatService] Context prefetcher created with discovery provider")
-	} else {
-		log.Warn().
-			Bool("hasReadState", s.readState != nil).
-			Bool("hasDiscoveryProvider", provider != nil).
-			Msg("[ChatService] Cannot create context prefetcher - missing provider")
-	}
-}
-
 func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 	if cfg == nil {
 		return
@@ -3684,7 +3644,6 @@ func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 	s.cfg = cfg
 	if s.executor != nil {
 		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
-		s.executor.SetProtectedGuests(cfg.GetProtectedGuests())
 	}
 }
 
@@ -3702,9 +3661,6 @@ func (s *Service) SetAutonomousMode(enabled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.autonomousMode = enabled
-	if s.executor != nil {
-		s.executor.SetContext("", "", enabled)
-	}
 	if s.agenticLoop != nil {
 		s.agenticLoop.SetAutonomousMode(enabled)
 	}
@@ -3835,7 +3791,7 @@ func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) str
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts
 - To edit a container's config, find the bind mount and edit the host path
-- Bind mount mappings may be available in Pulse discovery context or tools when needed
+- Bind mount mappings may be available in Pulse resource context or tools when needed
 
 ## TOOL SELECTION
 - Tool action modes and approval policies are generated from Pulse's tool registry. Treat the available-tool manifest for this turn as the source of truth for which tools exist and whether each tool is read-only, mixed, or write-capable.
@@ -3950,7 +3906,10 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 		if !ok || res == nil {
 			continue
 		}
-		policy, aiSafeSummary := recentSessionResourceGovernance(resourceProvider, resourceID, res)
+		policy, aiSafeSummary, owned := recentSessionResourceGovernance(resourceProvider, resourceID, res)
+		if !owned {
+			continue
+		}
 		label := res.Name
 		if label == "" {
 			label = resourceID
@@ -4036,29 +3995,19 @@ func (s *Service) injectRecentSessionContext(sessionID string, messages []Messag
 	messages[lastIdx].Content = context + "\n\n---\nUser message:\n" + messages[lastIdx].Content
 }
 
-func recentSessionResourceGovernance(provider tools.UnifiedResourceProvider, resourceID string, res *ResolvedResource) (*unifiedresources.ResourcePolicy, string) {
-	if provider == nil || res == nil {
-		return nil, ""
+func recentSessionResourceGovernance(provider tools.UnifiedResourceProvider, resourceID string, res *ResolvedResource) (*unifiedresources.ResourcePolicy, string, bool) {
+	if res == nil {
+		return nil, "", false
 	}
-	resourceType := res.Kind
-	if resourceType == "" {
-		resourceType = res.ResourceType
+	if provider == nil {
+		return nil, "", true
 	}
-	node := res.Node
-	if node == "" {
-		node = res.Scope.HostName
-	}
-	resource, ok := tools.CanonicalHandoffUnifiedResource(provider, firstNonEmptyRecentString(resourceID, res.ResourceID, res.ProviderUID), res.Name, resourceType, node)
-	if !ok && res.ResourceID != "" && res.ResourceID != resourceID {
-		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ResourceID, res.Name, resourceType, node)
-	}
-	if !ok && res.ProviderUID != "" {
-		resource, ok = tools.CanonicalHandoffUnifiedResource(provider, res.ProviderUID, res.Name, resourceType, node)
-	}
+	resource, ok := tools.CanonicalHandoffUnifiedResource(provider, firstNonEmptyRecentString(resourceID, res.ResourceID), "", "", "")
 	if !ok {
-		return nil, ""
+		return nil, "", false
 	}
-	return unifiedresources.CanonicalGovernanceMetadata(&resource)
+	policy, summary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+	return policy, summary, true
 }
 
 func firstNonEmptyRecentString(values ...string) string {
@@ -4440,10 +4389,9 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 func (s *Service) isAutonomousModeEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.autonomousMode {
-		return true
-	}
-	return s.cfg != nil && s.cfg.IsAutonomous()
+	// Non-interactive investigation mode is core-owned, not inherited from a
+	// legacy saved Assistant preference. Match the public chat turn posture.
+	return s.autonomousMode
 }
 
 // ExecuteAssistantTool executes a native Assistant registry tool directly by

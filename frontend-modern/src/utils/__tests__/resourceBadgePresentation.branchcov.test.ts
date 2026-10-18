@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   getInfrastructureSystemIdentityBadges,
-  getInfrastructureSystemIdentitySortLabel,
   getSourceBadge,
   getTypeBadge,
   getUnifiedSourceBadges,
 } from '@/utils/resourceBadgePresentation';
-import type { PlatformType, Resource, ResourceType, SourceType } from '@/types/resource';
+import type { Resource, ResourceType, SourceType } from '@/types/resource';
 
 const makeResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
@@ -483,40 +482,5 @@ describe('getDockerHostOsIdentityBadge (via getInfrastructureSystemIdentityBadge
     expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
       'Docker / Podman',
     ]);
-  });
-});
-
-describe('getInfrastructureSystemIdentitySortLabel — branch coverage', () => {
-  it('returns the first badge label when identity badges exist', () => {
-    const resource = makeResource({
-      type: 'k8s-node',
-      platformType: 'kubernetes',
-      sourceType: 'api',
-      sources: ['kubernetes'],
-      platformData: {
-        sources: ['kubernetes'],
-        kubernetes: { version: '1.28.4' },
-      },
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('K8s 1.28.4');
-  });
-
-  it('returns empty string when no badges and platformType is falsy', () => {
-    const resource = makeResource({
-      type: 'storage',
-      platformType: '' as unknown as PlatformType,
-      sourceType: 'agent',
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('');
-  });
-
-  it('returns the platform badge label when no system identity is found', () => {
-    const resource = makeResource({
-      type: 'agent',
-      platformType: 'truenas',
-      sourceType: 'agent',
-      platformData: { sources: ['agent'] },
-    });
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('TrueNAS');
   });
 });

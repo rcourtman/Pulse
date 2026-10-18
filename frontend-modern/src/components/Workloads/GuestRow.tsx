@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show, splitProps } from 'solid-js';
+import { createMemo, createSignal, Show, splitProps, type JSX } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -22,6 +22,7 @@ import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import {
   MetricMiniSparkline,
+  MetricMiniSparklineRatePair,
   type MetricMiniSparklineValueLabelContext,
 } from '@/components/Workloads/MetricMiniSparkline';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
@@ -30,14 +31,19 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
-import { nativeRowClickTarget } from '@/components/shared/Table';
-import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
+import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
+import { getMetricSeverity } from '@/utils/metricThresholds';
+import {
+  getWorkloadMemoryGuestKind,
+  getWorkloadMemoryObservationPresentation,
+} from '@/utils/memoryObservation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
 import type {
   WorkloadMetricHistoryReader,
+  WorkloadRateMetric,
   WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 
@@ -54,6 +60,15 @@ import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
+  const selectionGuard = createRowTextSelectionGuard();
+  const runRowAction = (event: MouseEvent) => {
+    if (!selectionGuard.isSelectionClick(event)) rowActionProps.onClick?.();
+  };
+  const rowAction = {
+    get onClick() {
+      return rowActionProps.onClick ? runRowAction : undefined;
+    },
+  };
   const {
     agentVersion,
     appContainerRuntimeBadge,
@@ -64,9 +79,9 @@ export function GuestRow(props: GuestRowProps) {
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
-    discoveryReadinessPresentation,
     diskRead,
     diskThresholds,
+    diskUsageRead,
     diskWrite,
     displayId,
     dockerHostId,
@@ -158,12 +173,84 @@ export function GuestRow(props: GuestRowProps) {
   const memoryDisplayTotal = createMemo(() =>
     isHostMemoryBasis() ? hostMemoryTotal() : (props.guest.memory?.total ?? 0),
   );
+  const memoryReading = createMemo(() =>
+    getWorkloadMemoryObservationPresentation(props.guest, { includeCurrent: false }),
+  );
   const memoryDisplayUnavailable = createMemo(
     () =>
       !telemetryAvailable('memory') ||
       props.guest.memory?.usageUnavailable === true ||
+      memoryReading()?.state === 'unavailable' ||
       (isHostMemoryBasis() && hostMemoryTotal() <= 0),
   );
+  // The guest's own memory severity, even when the bar shows its host share:
+  // the bar is coloured by the same figure.
+  const guestMemoryAtWarning = createMemo(() => {
+    const memory = props.guest.memory;
+    const percent =
+      typeof memory?.used === 'number' && typeof memory.total === 'number' && memory.total > 0
+        ? (memory.used / memory.total) * 100
+        : memory?.usage;
+    if (typeof percent !== 'number' || !Number.isFinite(percent)) return false;
+    return getMetricSeverity(percent, 'memory', memoryThresholds()) !== 'normal';
+  });
+  const memoryReadStatus = createMemo(() => {
+    const reading = memoryReading();
+    if (!reading) return undefined;
+    // With no number shown for another reason (memory telemetry off, no host
+    // total for a host share), there is no reading to qualify.
+    if (memoryDisplayUnavailable() && reading.state !== 'unavailable') return undefined;
+    // A current reading needs no qualification, except a VM's cache-inclusive
+    // one: the guest agent can supply the VM's own figure. Containers have no
+    // such step, so their caveat stays in the tooltip and drawer.
+    const cacheReading =
+      reading.state === 'current' &&
+      reading.mayIncludeCache &&
+      getWorkloadMemoryGuestKind(props.guest) === 'vm';
+    if (reading.state === 'current' && !cacheReading) return undefined;
+    return {
+      message: reading.message,
+      // Visible only where it changes what the user concludes: a cache
+      // reading that looks like memory pressure, or a number that is not
+      // current. An unavailable reading already shows no number, so a label
+      // would only repeat it. Every reason stays in the title, assistive text
+      // and drawer.
+      label: cacheReading
+        ? guestMemoryAtWarning()
+          ? usesCompactTableLayout()
+            ? 'Cache?'
+            : 'May include cache'
+          : null
+        : reading.state === 'last-known'
+          ? usesCompactTableLayout()
+            ? 'Prior'
+            : 'Last known'
+          : reading.state === 'unavailable'
+            ? null
+            : usesCompactTableLayout()
+              ? 'Unknown'
+              : 'Freshness unknown',
+      valueLabelContext: cacheReading
+        ? ('current' as const)
+        : reading.state === 'last-known'
+          ? ('last known' as const)
+          : reading.state === 'unavailable'
+            ? ('unavailable' as const)
+            : ('freshness unknown' as const),
+    };
+  });
+  // The cell title carries a reading's reason; the dash explains only what
+  // the cell does not.
+  const memoryUnavailableTooltip = () =>
+    memoryReadStatus()
+      ? undefined
+      : isHostMemoryBasis() && hostMemoryTotal() <= 0
+        ? 'Host memory total unavailable'
+        : 'Memory usage unavailable';
+  const memoryValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
+    memoryDisplayUnavailable()
+      ? 'unavailable'
+      : (memoryReadStatus()?.valueLabelContext ?? 'current');
   const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));
   const nestedWorkloadCueLabel = createMemo(() => {
     const context = props.nestedWorkloadContext;
@@ -187,53 +274,136 @@ export function GuestRow(props: GuestRowProps) {
     }
     return clampMetricPercent(fallbackUsage);
   };
+  // Every input is an accessor so a live snapshot updates the mounted chart in
+  // place. Reading signals while building the chart would remount it on each
+  // update and drop an open scrub tooltip.
   const renderMetricSparkline = (
     metric: WorkloadTableMetric,
-    valueLabel: string,
-    title: string,
-    unit = '%',
-    valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
-    formatValue?: (value: number) => string,
-    seriesOptions?: Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2],
-    valueLabelContext?: MetricMiniSparklineValueLabelContext,
+    options: {
+      valueLabel: () => string;
+      title: () => string;
+      tooltip?: () => string | undefined;
+      unit?: string;
+      formatValue: (value: number) => string;
+      seriesOptions?: () => Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2];
+      valueLabelContext?: () => MetricMiniSparklineValueLabelContext;
+      valueContent?: () => JSX.Element;
+    },
   ) => (
     <MetricMiniSparkline
-      series={props.metricHistory?.getGuestMetricSeries(props.guest, metric, seriesOptions) ?? []}
-      valueLabel={valueLabel}
-      valueLabelContext={valueLabelContext}
-      valueLabelMode={valueLabelMode}
-      title={title}
-      unit={unit}
-      formatValue={formatValue}
+      series={
+        props.metricHistory?.getGuestMetricSeries(props.guest, metric, options.seriesOptions?.()) ??
+        []
+      }
+      valueLabel={options.valueLabel()}
+      valueContent={options.valueContent?.()}
+      valueLabelContext={options.valueLabelContext?.()}
+      valueLabelMode="inline"
+      title={options.title()}
+      tooltip={options.tooltip?.()}
+      unit={options.unit ?? '%'}
+      formatValue={options.formatValue}
       cursorRatio={historyCursorRatio()}
       onCursorRatioChange={setTrackedHistoryCursorRatio}
       showTooltip={true}
     />
   );
+  const renderCpuSparkline = () =>
+    renderMetricSparkline('cpu', {
+      valueLabel: () => formatMetricPercent(cpuPercent()),
+      title: () => `${props.guest.name} CPU history`,
+      formatValue: formatMetricPercent,
+    });
+  const renderMemorySparkline = () =>
+    renderMetricSparkline('memory', {
+      valueLabel: () =>
+        memoryDisplayUnavailable()
+          ? 'N/A'
+          : formatMetricPercent(
+              usagePercent(
+                props.guest.memory?.used,
+                memoryDisplayTotal(),
+                isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
+              ),
+            ),
+      title: () =>
+        isHostMemoryBasis()
+          ? `${props.guest.name} host memory share history`
+          : `${props.guest.name} memory history`,
+      // The chart covers the cell, so it carries the reading's reason on hover.
+      tooltip: () =>
+        memoryReadStatus()?.message ??
+        (memoryDisplayUnavailable() ? memoryUnavailableTooltip() : undefined),
+      formatValue: formatMetricPercent,
+      seriesOptions: () => ({
+        memoryDisplayBasis: props.memoryDisplayBasis,
+        parentMemoryTotal: props.parentMemoryTotal,
+      }),
+      valueLabelContext: () => memoryValueLabelContext(),
+    });
+  const renderDiskSparkline = () =>
+    renderMetricSparkline('disk', {
+      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—'),
+      title: () => `${props.guest.name} disk usage history`,
+      tooltip: () => diskReadStatus()?.message,
+      formatValue: formatMetricPercent,
+      valueLabelContext: () => diskValueLabelContext(),
+    });
+  const renderRateSparkline = (metric: WorkloadRateMetric) => {
+    const isNetwork = metric === 'netIo';
+    const live = () => isRunning() && telemetryAvailable(isNetwork ? 'networkIO' : 'diskIO');
+    const values = (): [number, number] =>
+      isNetwork ? [networkIn(), networkOut()] : [diskRead(), diskWrite()];
+    return renderMetricSparkline(metric, {
+      valueLabel: () =>
+        live() ? `${formatSpeed(values()[0])} / ${formatSpeed(values()[1])}` : '—',
+      title: () => `${props.guest.name} ${isNetwork ? 'network' : 'disk'} I/O history`,
+      unit: 'B/s',
+      formatValue: formatSpeed,
+      valueContent: () =>
+        live() ? <MetricMiniSparklineRatePair metric={metric} values={values()} /> : undefined,
+    });
+  };
 
   const getDiskStatusTooltip = () => {
-    if (!isVM(props.guest)) return 'Disk stats unavailable';
+    const message = diskUsageRead().message;
+    if (message) return message;
+    if (!isVM(props.guest) || props.guest.disksFromAgent) return 'Disk stats unavailable';
 
     const vm = props.guest as VM;
     return getWorkloadGuestDiskStatusMessage(vm.diskStatusReason);
   };
   // A native title or bar tooltip is not a visible freshness cue on touch,
   // and disappears from the chart's accessible value when the history lens opens.
+  // A retained number and a broken read the user can fix get a visible label.
+  // Other unavailable reads (VM stopped, no guest agent) already show a dash,
+  // so their reason stays in the title, assistive text and drawer.
   const diskReadStatus = createMemo(() => {
-    const guest = props.guest;
-    if (!isVM(guest) || !guest.diskStatusReason) return undefined;
-    const reason = guest.diskStatusReason;
-    const retained = reason.startsWith('prev-');
+    const read = diskUsageRead();
+    if (read.state === 'current') return undefined;
+    const retained = read.state === 'last-known';
+    const reason = isVM(props.guest)
+      ? (props.guest.diskStatusReason ?? '').replace(/^prev-/, '')
+      : '';
     return {
       label: retained
         ? usesCompactTableLayout()
           ? 'Prior'
           : 'Last known'
-        : usesCompactTableLayout()
-          ? 'N/A'
-          : 'Unavailable',
-      message: getDiskStatusTooltip(),
+        : !read.needsAction
+          ? null
+          : reason === 'permission-denied'
+            ? usesCompactTableLayout()
+              ? 'Denied'
+              : 'No permission'
+            : usesCompactTableLayout()
+              ? 'Error'
+              : 'Agent error',
+      message: read.message,
       valueLabelContext: retained ? ('last known' as const) : ('current' as const),
+      // Most reasons are a setup gap (no guest agent, VM stopped) rather than a
+      // fault, so they stay muted; only a broken read the user can fix is amber.
+      needsAction: read.needsAction,
     };
   });
   const diskValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
@@ -263,14 +433,10 @@ export function GuestRow(props: GuestRowProps) {
         }
         data-workload-alert-accent={alertAccentTone()}
         data-summary-series-id={guestId()}
-        data-summary-group-member-active={
-          props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
-            ? props.summaryGroupMemberState
-            : undefined
-        }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
         on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
-        {...rowActionProps}
+        on:mousedown={rowActionProps.onClick ? selectionGuard.onMouseDown : undefined}
+        {...rowAction}
         {...interactiveRowHandlers}
       >
         {/* Name - always visible */}
@@ -299,50 +465,60 @@ export function GuestRow(props: GuestRowProps) {
                 onPreviewClear={() => props.onHoverChange?.(null)}
               />
             </Show>
-            <div class="flex items-center gap-1.5 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <ResourceNameWithWebInterfaceLink
-                  name={props.guest.name}
-                  url={customUrl()}
-                  class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
-                  nameClass="truncate text-[11px] font-medium text-base-content select-none"
-                />
-                {/* Show backup indicator in name cell only if backup column is hidden */}
-                <Show when={!isColVisible('backup') && supportsBackup()}>
-                  <BackupIndicator
-                    lastBackup={props.guest.lastBackup}
-                    isTemplate={props.guest.template}
-                    backupRunning={props.guest.backupInProgress}
-                  />
-                </Show>
-                <Show when={nestedWorkloadCueLabel()}>
-                  <span
-                    class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
-                    data-testid="nested-workload-cue"
-                    title={nestedWorkloadCueLabel()}
-                    aria-label={nestedWorkloadCueLabel()}
-                  >
-                    <BoxIcon class="h-3 w-3" aria-hidden="true" />
-                    <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
-                  </span>
-                </Show>
-              </div>
-            </div>
-
-            <Show when={lockLabel()}>
-              <span
-                class="text-[10px] font-medium text-muted uppercase tracking-wide whitespace-nowrap"
-                title={`Guest is locked (${lockLabel()})`}
+            <div
+              class={`min-w-0 ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-2'}`}
+            >
+              <div
+                class={`flex items-center gap-1.5 min-w-0 ${usesCondensedIdentity() ? 'w-full' : ''}`}
               >
-                Lock: {lockLabel()}
-              </span>
-            </Show>
+                <StatusDot
+                  variant={guestStatus().variant}
+                  title={guestStatus().label}
+                  ariaLabel={guestStatus().label}
+                  size="xs"
+                  class={usesCondensedIdentity() ? 'self-start mt-1.5' : undefined}
+                />
+                <div
+                  class={`min-w-0 group/name ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-1.5'}`}
+                >
+                  <ResourceNameWithWebInterfaceLink
+                    name={props.guest.name}
+                    url={customUrl()}
+                    class={`min-w-0 ${usesCondensedIdentity() ? 'w-full [&>a]:hidden' : ''}`}
+                    nameClass="truncate text-[11px] font-medium text-base-content select-none"
+                  />
+                  {/* Show backup indicator in name cell only if backup column is hidden */}
+                  <Show when={!isColVisible('backup') && supportsBackup()}>
+                    <BackupIndicator
+                      guestName={props.guest.name}
+                      lastBackup={props.guest.lastBackup}
+                      isTemplate={props.guest.template}
+                      backupRunning={props.guest.backupInProgress}
+                    />
+                  </Show>
+                  <Show when={nestedWorkloadCueLabel()}>
+                    <span
+                      class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
+                      data-testid="nested-workload-cue"
+                      title={nestedWorkloadCueLabel()}
+                      aria-label={nestedWorkloadCueLabel()}
+                    >
+                      <BoxIcon class="h-3 w-3" aria-hidden="true" />
+                      <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
+                    </span>
+                  </Show>
+                </div>
+              </div>
+
+              <Show when={lockLabel()}>
+                <span
+                  class={`max-w-full text-[10px] font-medium text-muted uppercase tracking-wide ${usesCondensedIdentity() ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}
+                  title={`Guest is locked (${lockLabel()})`}
+                >
+                  Lock: {lockLabel()}
+                </span>
+              </Show>
+            </div>
           </div>
         </td>
 
@@ -457,27 +633,13 @@ export function GuestRow(props: GuestRowProps) {
                       }
                     >
                       <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                        {renderMetricSparkline(
-                          'cpu',
-                          formatMetricPercent(cpuPercent()),
-                          `${props.guest.name} CPU history`,
-                          '%',
-                          'inline',
-                          formatMetricPercent,
-                        )}
+                        {renderCpuSparkline()}
                       </div>
                     </Show>
                   </div>
                 }
               >
-                {renderMetricSparkline(
-                  'cpu',
-                  formatMetricPercent(cpuPercent()),
-                  `${props.guest.name} CPU history`,
-                  '%',
-                  'inline',
-                  formatMetricPercent,
-                )}
+                {renderCpuSparkline()}
               </Show>
             </Show>
           </td>
@@ -485,7 +647,11 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="memory">
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            data-workload-col="memory"
+            title={memoryReadStatus()?.message}
+          >
             <Show
               when={isSparklineMode()}
               fallback={
@@ -493,88 +659,87 @@ export function GuestRow(props: GuestRowProps) {
                   <Show
                     when={historyLensVisible()}
                     fallback={
-                      <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
-                        <StackedMemoryBar
-                          used={props.guest.memory?.used || 0}
-                          total={memoryDisplayTotal()}
-                          unavailable={memoryDisplayUnavailable()}
-                          percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
-                          cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
-                          cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
-                          balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
-                          swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
-                          swapTotal={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)}
-                          resourceId={metricsKey()}
-                          anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
-                          thresholds={memoryThresholds()}
-                          severityPercent={
-                            isHostMemoryBasis()
-                              ? usagePercent(
-                                  props.guest.memory?.used,
-                                  props.guest.memory?.total,
-                                  props.guest.memory?.usage,
-                                )
-                              : undefined
-                          }
-                          comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
-                          tooltipTitle={
-                            isHostMemoryBasis()
-                              ? `${props.parentNodeName?.trim() || 'Host'} memory share`
-                              : undefined
-                          }
-                        />
-                      </div>
+                      <Show
+                        when={!memoryDisplayUnavailable()}
+                        fallback={
+                          <div class="flex justify-center">
+                            <span class="text-xs text-slate-400" title={memoryUnavailableTooltip()}>
+                              -
+                            </span>
+                          </div>
+                        }
+                      >
+                        <div
+                          title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}
+                        >
+                          <StackedMemoryBar
+                            used={props.guest.memory?.used || 0}
+                            total={memoryDisplayTotal()}
+                            unavailable={memoryDisplayUnavailable()}
+                            reading={memoryReading()}
+                            percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
+                            cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
+                            cacheInclusiveLabel={
+                              isHostMemoryBasis() ? undefined : 'Shown in Proxmox'
+                            }
+                            balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
+                            swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
+                            swapTotal={
+                              isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)
+                            }
+                            resourceId={metricsKey()}
+                            anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
+                            thresholds={memoryThresholds()}
+                            severityPercent={
+                              isHostMemoryBasis()
+                                ? usagePercent(
+                                    props.guest.memory?.used,
+                                    props.guest.memory?.total,
+                                    props.guest.memory?.usage,
+                                  )
+                                : undefined
+                            }
+                            comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
+                            tooltipTitle={
+                              isHostMemoryBasis()
+                                ? `${props.parentNodeName?.trim() || 'Host'} memory share`
+                                : undefined
+                            }
+                          />
+                        </div>
+                      </Show>
                     }
                   >
                     <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderMetricSparkline(
-                        'memory',
-                        memoryDisplayUnavailable()
-                          ? 'N/A'
-                          : formatMetricPercent(
-                              usagePercent(
-                                props.guest.memory?.used,
-                                memoryDisplayTotal(),
-                                isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
-                              ),
-                            ),
-                        isHostMemoryBasis()
-                          ? `${props.guest.name} host memory share history`
-                          : `${props.guest.name} memory history`,
-                        '%',
-                        'inline',
-                        formatMetricPercent,
-                        {
-                          memoryDisplayBasis: props.memoryDisplayBasis,
-                          parentMemoryTotal: props.parentMemoryTotal,
-                        },
-                      )}
+                      {renderMemorySparkline()}
                     </div>
                   </Show>
                 </div>
               }
             >
-              {renderMetricSparkline(
-                'memory',
-                memoryDisplayUnavailable()
-                  ? 'N/A'
-                  : formatMetricPercent(
-                      usagePercent(
-                        props.guest.memory?.used,
-                        memoryDisplayTotal(),
-                        isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
-                      ),
-                    ),
-                isHostMemoryBasis()
-                  ? `${props.guest.name} host memory share history`
-                  : `${props.guest.name} memory history`,
-                '%',
-                'inline',
-                formatMetricPercent,
-                {
-                  memoryDisplayBasis: props.memoryDisplayBasis,
-                  parentMemoryTotal: props.parentMemoryTotal,
-                },
+              {renderMemorySparkline()}
+            </Show>
+            <Show when={memoryReadStatus()}>
+              {(status) => (
+                <Show
+                  when={status().label}
+                  fallback={
+                    <span data-workload-memory-read-status class="sr-only">
+                      {status().message}
+                    </span>
+                  }
+                >
+                  {(label) => (
+                    <p
+                      data-workload-memory-read-status
+                      class="mt-0.5 text-center text-[10px] leading-none text-muted"
+                      title={status().message}
+                    >
+                      <span aria-hidden="true">{label()}</span>
+                      <span class="sr-only">{status().message}</span>
+                    </p>
+                  )}
+                </Show>
               )}
             </Show>
           </td>
@@ -587,18 +752,7 @@ export function GuestRow(props: GuestRowProps) {
             data-workload-col="disk"
             title={diskReadStatus()?.message}
           >
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'disk',
-                hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—',
-                `${props.guest.name} disk usage history`,
-                '%',
-                'inline',
-                formatMetricPercent,
-                undefined,
-                diskValueLabelContext(),
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderDiskSparkline()}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={hasDiskUsage()}
@@ -620,25 +774,12 @@ export function GuestRow(props: GuestRowProps) {
                         aggregateDisk={props.guest.disk}
                         anomaly={diskAnomaly()}
                         thresholds={diskThresholds()}
-                        statusMessage={
-                          isVM(props.guest) && props.guest.diskStatusReason
-                            ? getDiskStatusTooltip()
-                            : undefined
-                        }
+                        reading={diskUsageRead()}
                       />
                     }
                   >
                     <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderMetricSparkline(
-                        'disk',
-                        formatMetricPercent(props.guest.disk?.usage),
-                        `${props.guest.name} disk usage history`,
-                        '%',
-                        'inline',
-                        formatMetricPercent,
-                        undefined,
-                        diskValueLabelContext(),
-                      )}
+                      {renderDiskSparkline()}
                     </div>
                   </Show>
                 </div>
@@ -646,13 +787,27 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={diskReadStatus()}>
               {(status) => (
-                <p
-                  data-workload-disk-read-status
-                  class="mt-0.5 text-center text-[10px] leading-none text-amber-700 dark:text-amber-300"
+                <Show
+                  when={status().label}
+                  fallback={
+                    <span data-workload-disk-read-status class="sr-only">
+                      {status().message}
+                    </span>
+                  }
                 >
-                  <span aria-hidden="true">{status().label}</span>
-                  <span class="sr-only">{status().message}</span>
-                </p>
+                  {(label) => (
+                    <p
+                      data-workload-disk-read-status
+                      class={`mt-0.5 text-center text-[10px] leading-none ${
+                        status().needsAction ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
+                      }`}
+                      title={status().message}
+                    >
+                      <span aria-hidden="true">{label()}</span>
+                      <span class="sr-only">{status().message}</span>
+                    </p>
+                  )}
+                </Show>
               )}
             </Show>
           </td>
@@ -801,26 +956,6 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* AI context readiness */}
-        <Show when={isColVisible('aiContext')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
-              <Show
-                when={discoveryReadinessPresentation()}
-                fallback={
-                  <span class="text-xs text-slate-400" aria-hidden="true">
-                    —
-                  </span>
-                }
-              >
-                {(presentation) => (
-                  <DiscoveryReadinessBadge presentation={presentation()} compact />
-                )}
-              </Show>
-            </div>
-          </td>
-        </Show>
-
         {/* Backup Status */}
         <Show when={isColVisible('backup')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
@@ -835,6 +970,7 @@ export function GuestRow(props: GuestRowProps) {
               >
                 <Show when={!props.guest.template}>
                   <BackupStatusCell
+                    guestName={props.guest.name}
                     lastBackup={props.guest.lastBackup}
                     backupRunning={props.guest.backupInProgress}
                   />
@@ -894,18 +1030,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Net I/O */}
         <Show when={isColVisible('netIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'netIo',
-                isRunning() && telemetryAvailable('networkIO')
-                  ? `${formatSpeed(networkIn())} / ${formatSpeed(networkOut())}`
-                  : '—',
-                `${props.guest.name} network I/O history`,
-                'B/s',
-                'tooltip',
-                formatSpeed,
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderRateSparkline('netIo')}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={isRunning() && telemetryAvailable('networkIO')}
@@ -917,30 +1042,39 @@ export function GuestRow(props: GuestRowProps) {
                   </div>
                 }
               >
-                <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-                  <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                    title={
-                      networkEmphasis().showOutlierHint
-                        ? `${formatSpeed(networkIn())} (Top outlier)`
-                        : formatSpeed(networkIn())
-                    }
-                  >
-                    {formatSpeed(networkIn())}
-                  </span>
-                  <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                    title={
-                      networkEmphasis().showOutlierHint
-                        ? `${formatSpeed(networkOut())} (Top outlier)`
-                        : formatSpeed(networkOut())
-                    }
-                  >
-                    {formatSpeed(networkOut())}
-                  </span>
-                </div>
+                <Show
+                  when={historyLensVisible()}
+                  fallback={
+                    <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                      <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                        title={
+                          networkEmphasis().showOutlierHint
+                            ? `${formatSpeed(networkIn())} (Top outlier)`
+                            : formatSpeed(networkIn())
+                        }
+                      >
+                        {formatSpeed(networkIn())}
+                      </span>
+                      <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                        title={
+                          networkEmphasis().showOutlierHint
+                            ? `${formatSpeed(networkOut())} (Top outlier)`
+                            : formatSpeed(networkOut())
+                        }
+                      >
+                        {formatSpeed(networkOut())}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                    {renderRateSparkline('netIo')}
+                  </div>
+                </Show>
               </Show>
             </Show>
           </td>
@@ -949,18 +1083,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Disk I/O */}
         <Show when={isColVisible('diskIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'diskIo',
-                isRunning() && telemetryAvailable('diskIO')
-                  ? `${formatSpeed(diskRead())} / ${formatSpeed(diskWrite())}`
-                  : '—',
-                `${props.guest.name} disk I/O history`,
-                'B/s',
-                'tooltip',
-                formatSpeed,
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderRateSparkline('diskIo')}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={isRunning() && telemetryAvailable('diskIO')}
@@ -972,30 +1095,39 @@ export function GuestRow(props: GuestRowProps) {
                   </div>
                 }
               >
-                <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-                  <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                    title={
-                      diskIOEmphasis().showOutlierHint
-                        ? `${formatSpeed(diskRead())} (Top outlier)`
-                        : formatSpeed(diskRead())
-                    }
-                  >
-                    {formatSpeed(diskRead())}
-                  </span>
-                  <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                    title={
-                      diskIOEmphasis().showOutlierHint
-                        ? `${formatSpeed(diskWrite())} (Top outlier)`
-                        : formatSpeed(diskWrite())
-                    }
-                  >
-                    {formatSpeed(diskWrite())}
-                  </span>
-                </div>
+                <Show
+                  when={historyLensVisible()}
+                  fallback={
+                    <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                      <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                        title={
+                          diskIOEmphasis().showOutlierHint
+                            ? `${formatSpeed(diskRead())} (Top outlier)`
+                            : formatSpeed(diskRead())
+                        }
+                      >
+                        {formatSpeed(diskRead())}
+                      </span>
+                      <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                        title={
+                          diskIOEmphasis().showOutlierHint
+                            ? `${formatSpeed(diskWrite())} (Top outlier)`
+                            : formatSpeed(diskWrite())
+                        }
+                      >
+                        {formatSpeed(diskWrite())}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                    {renderRateSparkline('diskIo')}
+                  </div>
+                </Show>
               </Show>
             </Show>
           </td>

@@ -26,7 +26,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 # Build stage for Go backend
 # Force amd64 platform - Go cross-compiles for all targets anyway,
 # and this avoids slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:51a7c389a5ddaf82f527191a1e9bff9928655130a44e4975dd1d7e0acf59f1ae AS backend-builder
+FROM --platform=linux/amd64 golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS backend-builder
 
 ARG BUILD_AGENT
 ARG VERSION
@@ -44,9 +44,10 @@ RUN apk add --no-cache git openssh-client
 
 # Copy go mod files for better layer caching
 COPY go.mod go.sum ./
+COPY scripts/go-mod-download.sh /usr/local/bin/pulse-go-mod-download
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    go mod download
+    sh /usr/local/bin/pulse-go-mod-download
 
 # Copy only necessary source code
 COPY cmd/ ./cmd/

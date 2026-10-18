@@ -7,6 +7,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/stretchr/testify/require"
 )
 
 func strPointer(v string) *string {
@@ -116,6 +118,73 @@ func TestMonitorSourceType(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Only the operator's decisions are carried. A rebuild that cannot read the
+// store still publishes the snapshot it was given, so resource data is never
+// held back to protect the decisions.
+func TestRebuildThatCannotReadDecisionsStillPublishesFreshResources(t *testing.T) {
+	f, flaky, apart, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	f.state.UpsertHost(models.Host{
+		ID: "host-late", Hostname: "late-arrival", MachineID: "machine-late", Status: "online", LastSeen: time.Now().UTC(),
+	})
+	// The first rebuild after the outage starts leaves the rows apart whether
+	// or not the decisions are carried, since the state still holds the link
+	// back; it is the decider's answer, and so the next report, that differs.
+	for cycle := 1; cycle <= 2; cycle++ {
+		f.cycle()
+		listed := f.adapter.GetAll()
+		late := false
+		for _, resource := range listed {
+			late = late || resource.Name == "late-arrival"
+		}
+		require.True(t, late, "cycle %d: a host reported during the outage was not published", cycle)
+		requirePairApart(t, listed, apart)
+		require.True(t, f.splitReadByDecider(), "cycle %d: the decider lost the split", cycle)
+	}
+}
+
+// requirePairApart checks, by ID, that the node and the agent are still two
+// rows in a listing that may hold other agents.
+func requirePairApart(t *testing.T, listed []Resource, apart nodeAgentRows) {
+	t.Helper()
+	byID := map[string]Resource{}
+	for _, resource := range listed {
+		byID[resource.ID] = resource
+	}
+	node, agent := byID[apart.node], byID[apart.agent]
+	require.NotNil(t, node.Proxmox, "the node row %s is gone", apart.node)
+	require.Nil(t, node.Agent, "the node row took the agent in")
+	require.NotNil(t, agent.Agent, "the agent row %s is gone", apart.agent)
+	require.Nil(t, agent.Proxmox, "the agent row took the node in")
+}
+
+// The overlay a read builds for saved-host continuity is a registry of its
+// own on the same store, so it carries the decisions of the generation it
+// overlays when the store cannot be read. The rows it copies from that
+// generation are already split, so the overlay's own decisions are what is
+// checked: its split decider and the presentation listing it coalesces.
+func TestHostContinuityOverlayKeepsDecisionsItsStoreCannotRead(t *testing.T) {
+	f, flaky, apart, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	saved := models.Host{ID: "host-saved", Hostname: "saved-away", MachineID: "machine-saved", Status: "offline", LastSeen: time.Now().UTC().Add(-time.Hour)}
+	view := ReadStateWithHostContinuity(f.adapter, []IngestRecord{HostIngestRecord(saved)})
+	overlay, ok := view.(*MonitorAdapter)
+	require.True(t, ok)
+	require.NotSame(t, f.adapter, overlay, "the saved host did not build an overlay")
+	require.True(t, overlay.currentRegistry().overridesUnreadable, "the overlay read the store")
+
+	saw := false
+	for _, resource := range overlay.GetAll() {
+		saw = saw || resource.Name == "saved-away"
+	}
+	require.True(t, saw, "the overlay lost the saved host")
+	snapshot := f.state.GetSnapshot()
+	require.True(t, overlay.ProxmoxNodeAgentSplit(snapshot.Nodes[0], snapshot.Hosts[0]), "the overlay's decider lost the split")
+	requirePairApart(t, overlay.currentRegistry().ListForPresentation(), apart)
 }
 
 func TestResourceFromVMProjectsExpectedGuestAgentOutageIncident(t *testing.T) {
@@ -1043,5 +1112,119 @@ func TestMetricPercent(t *testing.T) {
 				t.Fatalf("metricPercent(%#v) = %v, want %v", tt.metric, got, tt.want)
 			}
 		})
+	}
+}
+
+// Unraid inventory temperatures have no agent provenance, so the adapter
+// derives their state from the host's reporting lease and the disk's spin
+// state. The native row and a SMART row that borrows the inventory reading
+// both carry it, and a SMART row with its own reading keeps the agent's state.
+// Disk risk never judges heat in any state: the alert disk temperature policy
+// owns that.
+func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
+	smartWithout := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Collection: &diskinventory.CollectionStatus{
+		Serial:      diskinventory.Available("smartctl"),
+		Temperature: diskinventory.Unsupported("smartctl", "no temperature attribute"),
+	}}
+	smartWith := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Temperature: 40, Collection: &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason),
+	}}
+	stopped := diskinventory.Unavailable("unraid", models.HostAgentStoppedReportingReason)
+	spunDown := diskinventory.Unavailable("unraid", "disk is reported spun down")
+	hotRisk := func(risk *PhysicalDiskRisk) bool {
+		if risk == nil {
+			return false
+		}
+		for _, reason := range risk.Reasons {
+			if reason.Code == "temperature_high" {
+				return true
+			}
+		}
+		return false
+	}
+	for _, tc := range []struct {
+		name     string
+		status   string
+		spunDown bool
+		native   diskinventory.FieldStatus
+		borrowed diskinventory.FieldStatus
+	}{
+		{"reporting", "online", false, diskinventory.Available("unraid"), diskinventory.Available("unraid")},
+		{"silent agent", "offline", false, stopped, stopped},
+		{"spun down", "online", true, spunDown, spunDown},
+	} {
+		inventory := models.HostUnraidDisk{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-1",
+			Temperature: 72, SpunDown: tc.spunDown}
+		host := models.Host{ID: "agent-tower", Hostname: "tower", Status: tc.status,
+			Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{inventory}}}
+
+		native, _ := resourceFromHostUnraidPhysicalDisk(host, inventory)
+		got := native.PhysicalDisk
+		var nativeStatus diskinventory.FieldStatus
+		if got.Collection != nil {
+			nativeStatus = got.Collection.Temperature
+		}
+		if got.Temperature != 72 || nativeStatus != tc.native {
+			t.Fatalf("%s: Unraid row temperature=%d state=%+v, want 72 with %+v", tc.name, got.Temperature, nativeStatus, tc.native)
+		}
+		if hotRisk(got.Risk) {
+			t.Fatalf("%s: Unraid row risk judged its 72C temperature: %+v", tc.name, got.Risk)
+		}
+
+		borrowed, _ := resourceFromHostSMARTDisk(host, smartWithout)
+		got = borrowed.PhysicalDisk
+		if got.Temperature != 72 || got.Collection.Temperature != tc.borrowed ||
+			got.Collection.Serial != diskinventory.Available("smartctl") {
+			t.Fatalf("%s: SMART row borrowing the inventory reading: temperature=%d collection=%+v", tc.name, got.Temperature, got.Collection)
+		}
+		if hotRisk(got.Risk) {
+			t.Fatalf("%s: SMART row risk judged the borrowed 72C temperature: %+v", tc.name, got.Risk)
+		}
+		if smartWithout.Collection.Temperature.State != diskinventory.FieldUnsupported {
+			t.Fatal("the adapter mutated the SMART row's own collection state")
+		}
+
+		own, _ := resourceFromHostSMARTDisk(host, smartWith)
+		if got := own.PhysicalDisk; got.Temperature != 40 || got.Collection.Temperature != smartWith.Collection.Temperature {
+			t.Fatalf("%s: SMART row with its own reading lost the agent's state: temperature=%d collection=%+v", tc.name, got.Temperature, got.Collection)
+		}
+	}
+
+	cold := models.HostUnraidDisk{Name: "disk2", Device: "sdd", Serial: "UNRAID-2", SpunDown: true}
+	native, _ := resourceFromHostUnraidPhysicalDisk(models.Host{ID: "agent-tower", Status: "online"}, cold)
+	if native.PhysicalDisk.Collection != nil {
+		t.Fatalf("an Unraid row without a temperature claimed temperature state: %+v", native.PhysicalDisk.Collection)
+	}
+}
+
+// The registry merges an Unraid inventory row and the agent's SMART row for the
+// same disk. When they disagree, the inventory's "available" never lends
+// itself to the SMART row's uncollected reading.
+func TestUnraidInventoryRowDoesNotMaskTheSMARTRowState(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{
+		ID: "agent-tower", Hostname: "tower", Status: "online",
+		Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+			{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-MERGE1", Temperature: 37},
+		}},
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdc", Serial: "UNRAID-MERGE1", Temperature: 40,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")},
+		}}},
+	})
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	var disks []*PhysicalDiskMeta
+	for _, resource := range registry.List() {
+		if resource.Type == ResourceTypePhysicalDisk {
+			disks = append(disks, resource.PhysicalDisk)
+		}
+	}
+	if len(disks) != 1 {
+		t.Fatalf("physical disks = %d, want the inventory and SMART rows merged into one", len(disks))
+	}
+	if got := disks[0]; got.Temperature != 40 || got.Collection == nil ||
+		got.Collection.Temperature != diskinventory.Unavailable("smartctl", "disk is in standby") {
+		t.Fatalf("merged disk presents the SMART row's uncollected reading under another state: temperature=%d collection=%+v", got.Temperature, got.Collection)
 	}
 }

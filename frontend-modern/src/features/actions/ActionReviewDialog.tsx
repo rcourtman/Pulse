@@ -10,6 +10,8 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
+import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
+import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
 import {
   formatActionName,
@@ -40,6 +42,13 @@ export const ActionReviewDialog: Component<{
   detail: ActionDetailResponse | null;
   onClose: () => void;
   onChanged?: (detail: ActionDetailResponse) => void | Promise<void>;
+  /**
+   * Link the resource the action acts on. Only a host that keeps the review
+   * in the address (the Actions page's `?action=`) should ask: leaving for
+   * the resource and pressing Back must return to the same review, and a
+   * review opened from the resource itself has nowhere new to go.
+   */
+  showResourceLink?: boolean;
 }> = (props) => {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -58,6 +67,21 @@ export const ActionReviewDialog: Component<{
     return record
       ? getActionResourcePresentation(record.request.resourceId, record.resource)
       : { label: '', detail: '' };
+  });
+  // The review asks the operator to check the resource before approving or
+  // retrying, so it links to the page that shows it.
+  const registryResource = useResolvedResource(() =>
+    props.showResourceLink ? audit()?.request.resourceId : undefined,
+  );
+  const resourceHref = createMemo(() => {
+    const record = audit();
+    if (!record || !props.showResourceLink) return null;
+    return buildResourcePagePath({
+      id: record.request.resourceId,
+      name: record.resource?.name,
+      type: record.resource?.type,
+      resource: registryResource(),
+    });
   });
   const readOnly = createMemo(
     () => props.detail?.readOnly === true || presentationPolicyIsReadOnly(),
@@ -402,18 +426,35 @@ export const ActionReviewDialog: Component<{
                   {resource().label}
                   <Show when={resource().detail}> · {resource().detail}</Show>
                 </p>
-                <Show when={originDestination()}>
-                  {(destination) => (
-                    <ButtonLink
-                      href={destination().href}
-                      variant="ghost"
-                      size="xs"
-                      class="mt-2 -ml-2.5 gap-1.5"
-                    >
-                      {destination().exact ? 'Open Patrol record' : 'Open Patrol'}
-                      <ArrowUpRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </ButtonLink>
-                  )}
+                <Show when={resourceHref() || originDestination()}>
+                  <div class="mt-2 -ml-2.5 flex flex-wrap items-center gap-1">
+                    <Show when={resourceHref()}>
+                      {(href) => (
+                        <ButtonLink
+                          href={href()}
+                          variant="ghost"
+                          size="xs"
+                          class="min-h-11 gap-1.5 sm:min-h-0"
+                        >
+                          Open resource
+                          <ArrowUpRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                        </ButtonLink>
+                      )}
+                    </Show>
+                    <Show when={originDestination()}>
+                      {(destination) => (
+                        <ButtonLink
+                          href={destination().href}
+                          variant="ghost"
+                          size="xs"
+                          class="min-h-11 gap-1.5 sm:min-h-0"
+                        >
+                          {destination().exact ? 'Open Patrol record' : 'Open Patrol'}
+                          <ArrowUpRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                        </ButtonLink>
+                      )}
+                    </Show>
+                  </div>
                 </Show>
               </div>
               <Button
@@ -533,7 +574,7 @@ export const ActionReviewDialog: Component<{
                 <div
                   role="alert"
                   data-testid="action-review-invalid"
-                  class="mt-4 rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900/25 dark:bg-amber-950/40 dark:text-amber-200"
+                  class="mt-4 rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
                 >
                   {invalidActionMessage()}
                 </div>

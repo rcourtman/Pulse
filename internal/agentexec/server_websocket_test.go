@@ -2169,7 +2169,10 @@ func TestTypedOperation_SocketDropAfterSendUnblocksDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { _, err := s.ExecuteProxmoxGuestLifecycle(context.Background(), "typed-a1", request); done <- err }()
+	go func() {
+		_, err := s.ExecuteProxmoxGuestLifecycle(context.Background(), "typed-a1", request)
+		done <- err
+	}()
 	if sent, ok := agent.nextMessage(3 * time.Second); !ok || sent.Type != MsgTypeProxmoxGuestLifecycle {
 		t.Fatalf("dispatched request = %+v", sent)
 	}
@@ -2246,4 +2249,8 @@ func TestRegistrationReservesFirstFrameBeforePublishingSession(t *testing.T) {
 	if !<-checked {
 		t.Fatal("published session permits command writes before registration acknowledgement")
 	}
+}
+
+func TestVMGuestExecCapabilityBoundToRegisteredSession(t *testing.T) {
+	testVMGuestExecCapabilityGate(t)
 }

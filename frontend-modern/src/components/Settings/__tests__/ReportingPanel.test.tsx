@@ -19,6 +19,7 @@ vi.mock('../ResourcePicker', () => ({
 }));
 
 const baseCatalog = {
+  backupHealthAvailable: true,
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
@@ -35,6 +36,7 @@ const baseCatalog = {
     title: 'Performance Reports',
     description: 'Historical performance reporting',
     singleResourceEndpoint: '/api/admin/reports/generate',
+    singleResourceMethod: 'POST',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     singleFilenameSubject: 'resource_id',
@@ -140,6 +142,32 @@ function buildState(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ReportingPanel', () => {
+  it('keeps incomplete backup evidence visible beside a successfully delivered report', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedules: () => [
+          {
+            id: 'backup',
+            name: 'Client backups',
+            kind: 'backup_health',
+            enabled: true,
+            cadence: { type: 'weekly', weekday: 'monday', time: '09:00', timezone: 'UTC' },
+            scope: { resources: [], tags: [] },
+            format: 'pdf',
+            delivery: { method: 'email', to: [], attach: true, save_to_disk: true },
+            last_run_status: 'ok',
+            last_delivery_status: 'sent_with_attachment',
+            last_report_data_state: 'partial',
+            last_report_data_message:
+              'Backup data is incomplete. The report identifies missing evidence.',
+          },
+        ],
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.getByText('Email accepted')).toBeInTheDocument();
+    expect(screen.getByText(/Last report data: Backup data is incomplete/)).toBeInTheDocument();
+  });
   beforeEach(() => {
     useReportingPanelStateMock.mockReset();
   });
@@ -157,7 +185,7 @@ describe('ReportingPanel', () => {
     expect(screen.getByText('Report Title')).toBeInTheDocument();
   });
 
-  it('shows the scheduled reports table surface with an empty state', () => {
+  it('shows the scheduled reports surface with a confirmed empty state', () => {
     useReportingPanelStateMock.mockReturnValue(buildState());
 
     render(() => <ReportingPanel />);
@@ -166,21 +194,44 @@ describe('ReportingPanel', () => {
     expect(screen.getByText('No scheduled reports are configured yet.')).toBeInTheDocument();
   });
 
-  it('keeps the schedule form free of the report type choice while Patrol cannot run', () => {
+  it.each(['loading', 'error'])('does not claim an empty schedule list during %s', (state) => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedulesLoading: () => state === 'loading',
+        reportSchedulesError: () => (state === 'error' ? 'Report schedules are unavailable' : ''),
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.queryByText('No scheduled reports are configured yet.')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        state === 'loading' ? 'Loading report schedules...' : 'Report schedules are unavailable',
+      ),
+    ).toBeVisible();
+  });
+
+  it('offers performance and inventory schedules while Patrol cannot run', async () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({ scheduleFormOpen: () => true, patrolDigestAvailable: () => false }),
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
-    expect(screen.queryByLabelText('Report type')).not.toBeInTheDocument();
+    const select = screen.getByLabelText('Report type') as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
+      'Performance report',
+      'Client backup health',
+      'VM inventory CSV',
+    ]);
+    expect(screen.getByLabelText('Schedule name', { selector: 'input' })).toHaveFocus();
     expect(screen.queryByText(/Patrol weekly summary can also be emailed/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Cadence')).toBeInTheDocument();
     // One picker for on-demand reports, one in the schedule form.
     expect(screen.getAllByText('Mock Resource Picker')).toHaveLength(2);
   });
 
-  it('offers the Patrol weekly summary as a report type when Patrol can run', () => {
+  it('offers the Patrol weekly summary as a report type when Patrol can run', async () => {
     const setScheduleKind = vi.fn();
     useReportingPanelStateMock.mockReturnValue(
       buildState({
@@ -191,12 +242,15 @@ describe('ReportingPanel', () => {
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
     expect(screen.getByText(/Patrol weekly summary can also be emailed/)).toBeInTheDocument();
     const select = screen.getByLabelText('Report type') as HTMLSelectElement;
     expect(select.value).toBe('resources');
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
       'Performance report',
+      'Client backup health',
+      'VM inventory CSV',
       'Patrol weekly summary',
     ]);
     expect(
@@ -208,7 +262,27 @@ describe('ReportingPanel', () => {
     expect(setScheduleKind).toHaveBeenCalledWith('patrol_digest');
   });
 
-  it('reduces the form to weekday, time and recipients for a Patrol weekly summary', () => {
+  it('keeps inventory CSV scope clear and both cadences available without performance controls', async () => {
+    const state = buildState();
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        scheduleFormOpen: () => true,
+        scheduleForm: () => ({ ...state.scheduleForm(), kind: 'vm_inventory', format: 'csv' }),
+      }),
+    );
+    render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
+    expect(screen.getByLabelText('Report type')).toHaveValue('vm_inventory');
+    expect(screen.getByLabelText('Cadence')).toHaveValue('monthly');
+    expect(screen.getByText(/including newly discovered VMs/)).toBeVisible();
+    expect(screen.queryByLabelText('Format')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tag filter')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Mock Resource Picker')).toHaveLength(1);
+    expect(screen.getByLabelText('Delivery')).toBeVisible();
+    expect(screen.getByRole('spinbutton', { name: 'Retention' })).toBeVisible();
+  });
+
+  it('reduces the form to weekday, time and recipients for a Patrol weekly summary', async () => {
     const base = buildState();
     useReportingPanelStateMock.mockReturnValue(
       buildState({
@@ -227,6 +301,7 @@ describe('ReportingPanel', () => {
     );
 
     render(() => <ReportingPanel />);
+    await screen.findByLabelText('Schedule name', { selector: 'input' });
 
     // An existing digest schedule stays editable even when Patrol is off now.
     const select = screen.getByLabelText('Report type') as HTMLSelectElement;
@@ -255,7 +330,7 @@ describe('ReportingPanel', () => {
     expect(screen.queryByText('Save copy')).not.toBeInTheDocument();
   });
 
-  it('describes a digest schedule by its Patrol window in the schedules table', () => {
+  it('describes a digest schedule by its Patrol window in the schedules list', () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({
         reportSchedules: () => [
@@ -441,5 +516,38 @@ describe('ReportingPanel', () => {
     expect(exportButton).toHaveClass('px-6');
     exportButton.click();
     expect(handleExportVMInventory).toHaveBeenCalledOnce();
+  });
+  it('keeps delivery failures and the remedy visible with an explicit retry action', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportSchedules: () => [
+          {
+            id: 'weekly',
+            name: 'Client report',
+            enabled: true,
+            cadence: { type: 'weekly', weekday: 'monday', time: '09:00', timezone: 'UTC' },
+            scope: { resources: [], tags: [] },
+            format: 'csv',
+            delivery: { method: 'email', to: [], attach: true, save_to_disk: true },
+            last_run_status: 'failed',
+            run_window_end: '2026-10-17T09:00:00Z',
+            last_error: 'The email sender needs fixing.',
+            delivery_check: { ready: false, message: 'Email is disabled.' },
+            last_report_path: '/reports/generated/client.csv',
+          },
+        ],
+      }),
+    );
+    render(() => <ReportingPanel />);
+    expect(screen.getByText('The email sender needs fixing.')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Email settings' })).toHaveAttribute(
+      'href',
+      '/alerts/notifications',
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Retry Client report now', hidden: true }),
+    ).toHaveLength(1);
+    expect(screen.getByText('Report details')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable Client report' })).toBeChecked();
   });
 });

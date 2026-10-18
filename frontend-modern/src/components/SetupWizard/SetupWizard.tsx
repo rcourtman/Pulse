@@ -67,11 +67,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
   ]);
 
   return (
-    <div
-      class="min-h-screen bg-base flex flex-col"
-      role="main"
-      aria-label={t('setup.wizard.ariaLabel')}
-    >
+    <div class="min-h-screen flex flex-col" role="main" aria-label={t('setup.wizard.ariaLabel')}>
       {/* Background decoration */}
       <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true"></div>
 

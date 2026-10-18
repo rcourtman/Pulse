@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "76b6f7ea974d4c40f039093182ae63fc2ca074c5",
+  "verified_at": "2026-10-05T14:30:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/agentDeploy.ts",
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/agentDeploy.ts": "ffd3f69a1cec222b64e055f99dedac99a6560f0e8fc14a51074bca4d052ee365",
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx": "a5eabaacff3c5912f9c23ee1b9e33507f474c4e6681ea98d1956650ee98c156f",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "9f0379ddd85e53a60f222cb1d23f2570569583cad930846faf3dfb179477fd24",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "a74685970f9d094f9dd2ebc87ac94a1228e885a1c99c6775a355b22af1e66aac",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "cae45614e0793e974de6f13ed681be3fcbeb06416d464cde5b3b5a5a24562225"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=linux-host"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack from this tree (backend :7711 in mock mode, Vite :5231), driven by headless Chromium through Playwright. Mock mode has no PVE cluster connection and no connected source agent, so Playwright routes injected one cluster (homelab: delly with a connected agent, delly2 and pi without) into the real /api/connections response and answered /api/clusters/homelab/agent-deploy/* and /api/agent-deploy/* with recorded payload shapes. The dialog, ledger and routing code under test ran unmodified.",
+    "Ledger: the homelab cluster row expanded to three members; delly showed its agent, delly2 and pi offered Install agent, and the cluster summary offered installing node agents on 2 uncovered nodes.",
+    "Select: Install Pulse Agent on homelab opened from delly2's row with delly2 (192.168.0.111) checked and Not installed, pi disabled with 'Pulse has no IP address for this node. Set its connection address under Manage.', and the footer read Use the installer instead, Cancel, Install on 1 node.",
+    "Running and Reporting: the check and install phases advanced delly2 through Checking and Installing to Reporting; the checkbox locked during the run and the footer collapsed to Close.",
+    "Failure: a preflight refusal showed delly2 as Failed with 'SSH to 192.168.0.111 was refused' in red and offered Use the installer instead beside Close.",
+    "No source: with no connected agent in the cluster the dialog explained that the installer must add the first one, with focus on Close.",
+    "Phone 375x812: the dialog fits the viewport with no horizontal overflow; footer buttons wrap so Install on 1 node takes its own row. The only console errors were WebSocket 403s on /ws from the mock stack's auth, unrelated to this change. This is not a real-cluster or release acceptance: the same deploy endpoints installed an agent on a real Proxmox cluster member, but on the released backend, not this tree."
+  ],
+  "interactions": [
+    "Clicked delly2's Install agent at 1280 and 375 widths; pressed Escape and the dialog closed.",
+    "Clicked the cluster summary install action; only delly2 was preselected because pi has no address.",
+    "Clicked Install on 1 node and waited for Reporting; clicked Close.",
+    "Re-ran the install with a refused preflight; read the per-node error; pressed Escape.",
+    "Opened the dialog with no connected source agent and clicked Use the installer instead; the URL became /settings/infrastructure?add=linux-host."
+  ]
+}

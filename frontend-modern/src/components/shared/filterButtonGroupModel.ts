@@ -39,7 +39,7 @@ const groupClassByVariant: Record<FilterButtonGroupVariant, string> = {
     'inline-flex items-center gap-1 bg-surface-hover rounded-md p-0.5 ring-1 ring-border-subtle overflow-x-auto scrollbar-hide',
   prominent: 'grid grid-cols-1 gap-2',
   segmented:
-    'flex items-center gap-1 rounded-md border border-border bg-base p-1 shadow-inner overflow-x-auto scrollbar-hide',
+    'flex items-center gap-1 rounded-md border border-border bg-page p-1 shadow-inner overflow-x-auto scrollbar-hide',
 };
 
 const labelClassByVariant: Partial<Record<FilterButtonGroupVariant, string>> = {

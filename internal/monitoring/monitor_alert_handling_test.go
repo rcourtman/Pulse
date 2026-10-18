@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,10 +14,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/require"
 )
 
@@ -87,6 +90,147 @@ func TestDockerAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
 	encoded, err := json.Marshal(afterRestart)
 	require.NoError(t, err)
 	t.Logf("DOCKER_HISTORY_LIFECYCLE %s", encoded)
+}
+
+// Proxmox node and guest alerts carry source-native IDs. Their lifecycle must
+// reach the canonical resource history that facets, the drawer and the
+// assistant read, including events emitted after the resource left inventory.
+func TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{"node": 0, "guest": 0}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://pve1.lab:8006", Status: "online", CPU: 0.99, LastSeen: now}
+	vm := models.VM{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "stopped", Type: "qemu", LastSeen: now}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{node}, VMs: []models.VM{vm}})
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	manager.CheckNode(node)
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+
+	canonical := map[string]string{}
+	for _, resource := range registry.List() {
+		canonical[resource.Name] = resource.ID
+	}
+	require.NotEqual(t, node.ID, canonical["pve1"])
+	require.NotEqual(t, vm.ID, canonical["web"])
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved}}
+	for name, sourceID := range map[string]string{"pve1": node.ID, "web": vm.ID} {
+		changes, err := store.GetRecentChangesFiltered(canonical[name], time.Time{}, 10, filters)
+		require.NoError(t, err)
+		require.Len(t, changes, 1, name)
+		require.Equal(t, unifiedresources.ChangeAlertFired, changes[0].Kind)
+		require.Equal(t, canonical[name], changes[0].ResourceID)
+		kinds, err := store.CountRecentChangesByKind(canonical[name], time.Time{})
+		require.NoError(t, err)
+		require.Equal(t, 1, kinds[unifiedresources.ChangeAlertFired], name)
+		legacy, err := store.GetRecentChangesFiltered(sourceID, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		require.Equal(t, changes, legacy, "the source reference reads the same history")
+	}
+
+	// The node recovers after it left inventory; its retained binding holds.
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	node.CPU = 0.05
+	manager.CheckNode(node)
+	changes, err := store.GetRecentChangesFiltered(canonical["pve1"], time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, changes[0].Kind)
+	require.Equal(t, canonical["pve1"], changes[0].ResourceID)
+}
+
+// Docker host, Swarm service and sub-resource alerts (a ZFS pool and device,
+// a host filesystem) carry references the registry has no resource for. Their
+// lifecycle must reach the owner's canonical history, so the producers' ref
+// shapes are pinned here against the real alert manager. A container or
+// service reported without an ID alerts under its own name reference, so it
+// joins neither its host's history nor that of the service whose ID it is
+// named like.
+func TestOwnerAlertTimelinesUseCanonicalHistoryIdentity(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 0}}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	dockerHost := models.DockerHost{ID: "dh-7f3a", Hostname: "tower", DisplayName: "tower", Status: "online", LastSeen: now,
+		Swarm:      &models.DockerSwarmInfo{NodeID: "node-a", NodeRole: "manager", LocalState: "active", ControlAvailable: true, ClusterID: "swarm-1"},
+		Containers: []models.DockerContainer{{Name: "sidecar", State: "running", Health: "unhealthy"}},
+		Services: []models.DockerService{{ID: "x7k2m9q4w1e8r5t3y6u0i2o4p", Name: "web", DesiredTasks: 2, RunningTasks: 0},
+			{Name: "X7K2M9Q4W1E8R5T3Y6U0I2O4P", DesiredTasks: 2, RunningTasks: 0}}}
+	storage := models.Storage{ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available", Total: 100, Used: 10, Usage: 10, Enabled: true, Active: true, LastSeen: now,
+		ZFSPool: &models.ZFSPool{Name: "rpool", State: "DEGRADED", Status: "Degraded", Devices: []models.ZFSDevice{{Name: "sda2", Type: "disk", State: "FAULTED"}}}}
+	agentHost := models.Host{ID: "host-nas", Hostname: "nas", DisplayName: "nas", MachineID: "fedcba9876543210", Status: "online", LastSeen: now,
+		Disks: []models.Disk{{Mountpoint: "/var", Device: "/dev/sdb1", Type: "ext4", Total: 100, Used: 99, Free: 1, Usage: 99}}}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{dockerHost}, Storage: []models.Storage{storage}, Hosts: []models.Host{agentHost}})
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	manager.CheckDockerHost(dockerHost)
+	manager.CheckStorage(storage)
+	manager.CheckHost(agentHost)
+	for range 3 {
+		manager.HandleDockerHostOffline(dockerHost)
+	}
+
+	owner := map[string]string{}
+	for _, resource := range registry.List() {
+		owner[string(resource.Type)+"/"+resource.Name] = resource.ID
+	}
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired}}
+	want := map[string]string{
+		"docker-host-offline":   owner["agent/tower"],
+		"docker-service-health": owner["docker-service/web"],
+		"zfs-pool-state":        owner["storage/local-zfs"],
+		"zfs-device":            owner["storage/local-zfs"],
+		"disk":                  owner["agent/nas"],
+	}
+	for alertType, canonicalID := range want {
+		require.NotEmpty(t, canonicalID, alertType)
+		changes, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		found := false
+		for _, change := range changes {
+			require.Equal(t, canonicalID, change.ResourceID)
+			found = found || change.Metadata["alert_type"] == alertType
+		}
+		require.True(t, found, "%s alert missing from %s history: %+v", alertType, canonicalID, changes)
+	}
+	alertTypes := func(ref string) []any {
+		changes, err := store.GetRecentChangesFiltered(ref, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		types := make([]any, 0, len(changes))
+		for _, change := range changes {
+			types = append(types, change.Metadata["alert_type"])
+		}
+		return types
+	}
+	require.ElementsMatch(t, []any{"docker-host-offline"}, alertTypes(owner["agent/tower"]))
+	require.ElementsMatch(t, []any{"docker-service-health"}, alertTypes(owner["docker-service/web"]))
+	require.ElementsMatch(t, []any{"docker-container-health"}, alertTypes("docker:dh-7f3a/name:sidecar"))
+	require.ElementsMatch(t, []any{"docker-service-health"}, alertTypes("docker:dh-7f3a/service/name:x7k2m9q4w1e8r5t3y6u0i2o4p"))
+	for _, name := range []string{"app-container/sidecar", "docker-service/X7K2M9Q4W1E8R5T3Y6U0I2O4P"} {
+		require.NotEmpty(t, owner[name], name)
+		require.Empty(t, alertTypes(owner[name]), "a name binds nothing: %s", name)
+	}
 }
 
 func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
@@ -238,6 +382,68 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	}
 }
 
+// A node alert handed to its Pulse agent closes without recovering. The
+// resource history and the alert's incident timeline (the Alerts history row
+// expansion) must say where it went, not "Alert resolved: Memory usage at 95%".
+func TestMonitor_HandleAlertLifecycle_HandoverCloseIsNotARecovery(t *testing.T) {
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	m := &Monitor{
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+
+	startedAt := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	movedAt := startedAt.Add(2 * time.Hour)
+	alert := &alerts.Alert{
+		ID:         "pve1-memory",
+		Type:       "memory",
+		Level:      alerts.AlertLevelWarning,
+		ResourceID: "pve1",
+		Message:    "Memory usage at 95%",
+		Value:      95,
+		Threshold:  85,
+		StartTime:  startedAt,
+	}
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: startedAt, Alert: alert})
+	closed := alert.Clone()
+	closed.Resolution = &alerts.AlertResolution{
+		Reason:              alerts.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-pve1",
+		SuccessorName:       "pve1 (Host Agent)",
+	}
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: movedAt, Alert: closed})
+
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	changes, err := resourceStore.GetRecentChanges("pve1", time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, changes[0].Kind)
+	require.Equal(t, summary, changes[0].Reason)
+	require.Equal(t, "moved_to_agent", changes[0].Metadata[unifiedresources.MetadataAlertResolution])
+	require.Equal(t, unifiedresources.ChangeAlertFired, changes[1].Kind)
+	require.NotContains(t, changes[1].Metadata, unifiedresources.MetadataAlertResolution)
+
+	timeline := incidentStore.GetTimelineByAlertAt(alert.ID, startedAt)
+	require.NotNil(t, timeline)
+	require.Len(t, timeline.Events, 2)
+	require.Equal(t, memory.IncidentEventAlertResolved, timeline.Events[1].Type)
+	require.Equal(t, summary, timeline.Events[1].Summary)
+
+	// An ordinary recovery keeps its existing wording.
+	recovered := alert.Clone()
+	recovered.ID = "pve1-cpu"
+	recovered.Type = "cpu"
+	recovered.Message = "CPU usage at 90%"
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: startedAt, Alert: recovered})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: movedAt.Add(time.Minute), Alert: recovered})
+	recoveredTimeline := incidentStore.GetTimelineByAlertAt(recovered.ID, startedAt)
+	require.NotNil(t, recoveredTimeline)
+	require.Len(t, recoveredTimeline.Events, 2)
+	require.Equal(t, "Alert resolved", recoveredTimeline.Events[1].Summary)
+}
+
 func TestPausedDeliveryStillBuildsTimelineThroughRealAlertLifecycle(t *testing.T) {
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(manager.Stop)
@@ -300,8 +506,8 @@ func TestActiveTimelineReconciliationIsIdempotent(t *testing.T) {
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
 	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
-	monitor.reconcileActiveAlertTimelines()
-	monitor.reconcileActiveAlertTimelines()
+	monitor.reconcileActiveAlertTimelines(context.Background())
+	monitor.reconcileActiveAlertTimelines(context.Background())
 
 	active := manager.GetActiveAlerts()
 	if len(active) != 1 {
@@ -354,8 +560,8 @@ func TestLifecycleReplayRepairsResolvedIncidentTimeline(t *testing.T) {
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
 	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
-	monitor.replayAlertLifecycleProjections()
-	monitor.replayAlertLifecycleProjections()
+	monitor.replayAlertLifecycleProjections(context.Background())
+	monitor.replayAlertLifecycleProjections(context.Background())
 
 	timeline := incidentStore.GetTimelineByAlertAt(alertID, startedAt)
 	if timeline == nil || len(timeline.Events) != 2 {
@@ -476,7 +682,7 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 	// not advance the durable watermark, or resource-timeline projections for
 	// those events would never materialize.
 	partial := &Monitor{alertManager: manager, incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{})}
-	partial.replayAlertLifecycleProjections()
+	partial.replayAlertLifecycleProjections(context.Background())
 	if got := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer); got != 0 {
 		t.Fatalf("watermark after partial-surface replay = %d, want 0", got)
 	}
@@ -487,7 +693,7 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
-	monitor.replayAlertLifecycleProjections()
+	monitor.replayAlertLifecycleProjections(context.Background())
 	watermark := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer)
 	if watermark == 0 {
 		t.Fatal("watermark did not advance after full-surface replay")
@@ -501,14 +707,14 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(freshResources)),
 	}
-	rerun.replayAlertLifecycleProjections()
+	rerun.replayAlertLifecycleProjections(context.Background())
 	if changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10); err != nil || len(changes) != 0 {
 		t.Fatalf("bounded pass wrote %d changes (err %v), want none", len(changes), err)
 	}
 
 	// Resetting the watermark forces a full repair replay for rebuilt stores.
 	manager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, 0)
-	rerun.replayAlertLifecycleProjections()
+	rerun.replayAlertLifecycleProjections(context.Background())
 	changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetRecentChanges after watermark reset: %v", err)
@@ -865,6 +1071,7 @@ func TestMonitor_HandleAlertResolved_SuppressesRecoveryWhenFiringNeverDelivered(
 	notifMgr.SetGroupingWindow(120)
 
 	alertMgr := alerts.NewManager()
+	t.Cleanup(alertMgr.Stop)
 	cfg := alertMgr.GetConfig()
 	cfg.Enabled = true
 	cfg.ActivationState = alerts.ActivationActive
@@ -1465,4 +1672,253 @@ func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
 	if unwantedRecoveries.Load() != 0 {
 		t.Fatal("unannounced destination received a recovery")
 	}
+}
+
+// A host agent linked to a Proxmox node merges into one read-state row that
+// every PVE poll keeps fresh. When the agent stops reporting, its retained
+// sensors must stop feeding the node's temperature: otherwise the frozen
+// reading is re-observed every poll, an open temperature alert's LastSeen keeps
+// moving, and stale-alert cleanup never reaches it.
+func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	alertConfig := manager.GetConfig()
+	alertConfig.Enabled = true
+	alertConfig.TimeThresholds = map[string]int{}
+	alertConfig.SuppressionWindow = 0
+	alertConfig.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	manager.UpdateConfig(alertConfig)
+
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor := &Monitor{
+		config:        &config.Config{TemperatureMonitoringEnabled: true},
+		state:         models.NewState(),
+		resourceStore: adapter,
+	}
+	node := models.Node{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		ConnectionHealth: "healthy", LinkedAgentID: "agent-1",
+	}
+	// ingest rebuilds the store, as each monitor refresh does, from the last PVE
+	// poll's node (with the temperature it published, which the next poll reads
+	// back as its previous node) plus the agent as of its last report.
+	lastPolled := node
+	ingest := func(agentLastReport time.Time, agentStatus string) {
+		polledNode := lastPolled
+		polledNode.LastSeen = time.Now()
+		adapter.PopulateFromSnapshot(models.StateSnapshot{
+			Nodes: []models.Node{polledNode},
+			Hosts: []models.Host{{
+				ID: "agent-1", Hostname: "node1", Status: agentStatus, LinkedNodeID: node.ID,
+				IntervalSeconds: 30, LastSeen: agentLastReport,
+				Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 92}},
+			}},
+		})
+	}
+	// poll runs the node temperature step of a PVE poll (no SSH collector) and
+	// evaluates the node's alerts with the result.
+	poll := func() *models.Temperature {
+		prevNodes := monitor.snapshotPrevNodes("pve1")
+		polled := node
+		monitor.collectNodeTemperatureData(
+			context.Background(), "pve1", &config.PVEInstance{Name: "pve1"}, proxmox.Node{Node: node.Name},
+			&polled, prevNodes, "online",
+		)
+		manager.CheckNode(polled)
+		lastPolled = polled
+		return polled.Temperature
+	}
+	temperatureAlert := func() alerts.Alert {
+		t.Helper()
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.Type == "temperature" && alert.ResourceID == node.ID {
+				return alert
+			}
+		}
+		t.Fatalf("expected an open temperature alert for %s", node.ID)
+		return alerts.Alert{}
+	}
+
+	// While the agent reports, its hot reading feeds the node, stamped with the
+	// agent's report time, and opens the alert.
+	agentReport := time.Now().Add(-10 * time.Second)
+	ingest(agentReport, "online")
+	reading := poll()
+	require.NotNil(t, reading)
+	require.Equal(t, 92.0, reading.CPUPackage)
+	require.True(t, reading.LastUpdate.Equal(agentReport), "the reading carries the agent's own report time")
+	opened := temperatureAlert()
+
+	// The agent goes silent while PVE polling continues: the merged row stays
+	// fresh, but the agent's retained sensors no longer count as a reading, and
+	// the poller does not carry the agent's last reading past its lease. With no
+	// clock to advance, age the agent's last report and the reading it produced
+	// by the same amount.
+	silence := hostAgentHealthWindow(30) + time.Minute
+	agedReading := *lastPolled.Temperature
+	agedReading.LastUpdate = agedReading.LastUpdate.Add(-silence)
+	lastPolled.Temperature = &agedReading
+	ingest(agentReport.Add(-silence), "offline")
+	time.Sleep(5 * time.Millisecond)
+	require.Nil(t, poll(), "a silent agent's retained sensors must not be presented as a current reading")
+	held := temperatureAlert()
+	require.True(t, held.LastSeen.Equal(opened.LastSeen), "a frozen agent reading must not keep the alert fresh")
+	require.Nil(t, poll())
+	require.True(t, temperatureAlert().LastSeen.Equal(opened.LastSeen))
+
+	// The agent reports again and its reading is evaluated.
+	ingest(time.Now(), "online")
+	time.Sleep(5 * time.Millisecond)
+	require.NotNil(t, poll())
+	require.True(t, temperatureAlert().LastSeen.After(held.LastSeen), "a fresh agent reading is evaluated")
+}
+
+// Drive the actual node/agent evaluators into the monitor's lifecycle handler,
+// rather than fabricating a pre-stamped handover event.
+func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	// Match the monitoring bootstrap: ephemeral managers otherwise have no
+	// durable event log, so AlertEvents cannot prove the served History route.
+	manager.EnableEventLog()
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = alerts.ActivationPending
+	cfg.TimeThresholds = map[string]int{}
+	// Pin zero delay deliberately; config normalization restores factory type
+	// delays, and CPU (unlike critical memory) does not bypass that delay.
+	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 0, "memory": 0}}
+	cfg.SuppressionWindow = 0
+	cfg.NodeDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	cfg.AgentDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	cfg.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent-a": {Memory: &alerts.HysteresisThreshold{Trigger: 0}},
+		"agent-b": {CPU: &alerts.HysteresisThreshold{Trigger: 0}},
+	}
+	manager.UpdateConfig(cfg)
+	store := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	m := &Monitor{alertManager: manager, incidentStore: incidentStore, resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))}
+	incidentStore.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+	manager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
+	node := models.Node{ID: "instance/node", Name: "node", Instance: "instance", Status: "online", ConnectionHealth: "healthy", CPU: 0.99, Memory: models.Memory{Total: 100, Used: 99, Free: 1, Usage: 99}}
+	manager.CheckNode(node)
+	opened := manager.GetActiveAlerts()
+	require.Len(t, opened, 2)
+	fired, err := manager.AlertEvents(eventlog.Filter{Types: []string{eventlog.TypeFired}})
+	require.NoError(t, err)
+	require.Len(t, fired, 2, "control must record both original node occurrences")
+	cpuAgent := models.Host{ID: "agent-a", Hostname: "node", DisplayName: "CPU reader", Status: "online", LinkedNodeID: node.ID, CPUUsage: 50}
+	memoryAgent := models.Host{ID: "agent-b", Hostname: "node", DisplayName: "Memory reader", Status: "online", LinkedNodeID: node.ID, Memory: node.Memory}
+	manager.CheckHost(cpuAgent)
+	manager.CheckHost(memoryAgent)
+	manager.CheckNode(node)
+	for _, a := range opened {
+		timeline := incidentStore.GetTimelineByAlertAt(a.ID, a.StartTime)
+		require.NotNil(t, timeline)
+		require.Len(t, timeline.Events, 2)
+		wantName := "CPU reader (Host Agent)"
+		wantID := "agent:agent-a"
+		if a.Type == "memory" {
+			wantName = "Memory reader (Host Agent)"
+			wantID = "agent:agent-b"
+		}
+		summary := "Alert moved to " + wantName + ". This is not a recovery: check the agent for the current reading."
+		require.Equal(t, summary, timeline.Events[1].Summary)
+		events, err := manager.AlertEvents(eventlog.Filter{AlertID: a.ID, Types: []string{eventlog.TypeResolved}})
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		require.Equal(t, "moved_to_agent", events[0].Reason)
+		require.Equal(t, summary, events[0].Message)
+		found := false
+		for _, row := range manager.GetAlertHistory(10) {
+			if row.ID == a.ID && row.Resolution != nil {
+				found = true
+				require.NotNil(t, row.Resolution)
+				require.Equal(t, wantID, row.Resolution.SuccessorResourceID)
+			}
+		}
+		require.True(t, found, "no resolved History row for %s", a.ID)
+	}
+	changes, err := store.GetRecentChanges(node.ID, time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, changes, 4)
+	for _, c := range changes {
+		if c.Kind == unifiedresources.ChangeAlertResolved {
+			require.Equal(t, "moved_to_agent", c.Metadata[unifiedresources.MetadataAlertResolution])
+			require.Contains(t, c.Reason, "This is not a recovery")
+		}
+	}
+}
+
+// PVE disk alerts reference the disk by device path and record the evaluated
+// disk's serial and WWN. Through the real alert manager, each lifecycle row
+// joins the disk that identity names, even when a reboot has reordered the
+// devices and the registry still places the other disk at the path. The
+// Alerts history Resource action, which reads incidents by the alert's own
+// reference, still lists that reference's occurrences.
+func TestProxmoxDiskAlertTimelineFollowsRecordedHardware(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	disk := func(device, serial, health string) models.PhysicalDisk {
+		return models.PhysicalDisk{ID: unifiedresources.ProxmoxPhysicalDiskSourceID("lab", "pve1", device, "", ""), Node: "pve1", Instance: "lab",
+			DevPath: device, Model: "Disk " + serial, Serial: serial, WWN: "0x5000c500" + serial, Type: "sata", Health: health, Wearout: -1, LastChecked: now}
+	}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{disk("/dev/sda", "ZA1A2B3C", "FAILED"), disk("/dev/sdb", "ZA4D5E6F", "PASSED")}})
+	incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	incidents.SetResourceTimelineStore(store)
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry), incidentStore: incidents}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sda", "ZA1A2B3C", "FAILED")))
+	// A reboot swaps the devices before the registry catches up: the failing
+	// disk now raises its alert at /dev/sdb, and the healthy one at /dev/sda
+	// resolves the alert the failing disk raised there.
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sdb", "ZA1A2B3C", "FAILED")))
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sda", "ZA4D5E6F", "PASSED")))
+
+	diskIDs := map[string]string{}
+	for _, resource := range registry.List() {
+		diskIDs[resource.Name] = resource.ID
+	}
+	failing, healthy := diskIDs["Disk ZA1A2B3C"], diskIDs["Disk ZA4D5E6F"]
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved}}
+	changes, err := store.GetRecentChangesFiltered(failing, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 3)
+	sda := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	sdb := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sdb")
+	refs := map[string]int{}
+	for _, change := range changes {
+		require.Equal(t, failing, change.ResourceID)
+		refs[string(change.Kind)+" "+unifiedresources.OwnedAlertReference(change)]++
+	}
+	require.Equal(t, map[string]int{"alert_fired " + sda: 1, "alert_resolved " + sda: 1, "alert_fired " + sdb: 1}, refs)
+	changes, err = store.GetRecentChangesFiltered(healthy, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Empty(t, changes)
+
+	page, err := incidents.QueryIncidents(memory.IncidentQuery{ResourceID: sda, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Incidents, 1)
+	require.Equal(t, memory.IncidentStatusResolved, page.Incidents[0].Status)
+	require.Equal(t, sda, page.Incidents[0].ResourceID)
+	page, err = incidents.QueryIncidents(memory.IncidentQuery{ResourceID: failing, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Incidents, 2)
+	page, err = incidents.QueryIncidents(memory.IncidentQuery{ResourceID: healthy, Limit: 10})
+	require.NoError(t, err)
+	require.Empty(t, page.Incidents)
 }

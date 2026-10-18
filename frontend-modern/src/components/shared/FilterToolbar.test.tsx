@@ -2,7 +2,6 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ChartVisibilityToggleButton,
   FilterHeader,
   FilterPopoverTrigger,
   FilterToolbarPanel,
@@ -66,6 +65,50 @@ describe('FilterHeader', () => {
     expect(onChange).toHaveBeenCalledWith('warnings');
   });
 
+  it('preserves segmented-control focus and selection across live label projections', () => {
+    const [healthyCount, setHealthyCount] = createSignal(1);
+    const [selected, setSelected] = createSignal('online');
+    const onChange = vi.fn();
+    render(() => (
+      <FilterSegmentedControl
+        value={selected()}
+        onChange={(next) => {
+          setSelected(next);
+          onChange(next);
+        }}
+        options={[
+          {
+            value: 'online',
+            label: <span>Healthy {healthyCount()}</span>,
+            ariaLabel: `Healthy, ${healthyCount()}`,
+          },
+          {
+            value: 'degraded',
+            label: <span>Degraded {1 - healthyCount()}</span>,
+            ariaLabel: `Degraded, ${1 - healthyCount()}`,
+          },
+        ]}
+      />
+    ));
+    const healthy = screen.getByRole('button', { name: 'Healthy, 1' });
+    const degraded = screen.getByRole('button', { name: 'Degraded, 0' });
+    healthy.focus();
+    setHealthyCount(0);
+    expect(screen.getByRole('button', { name: 'Healthy, 0' })).toBe(healthy);
+    expect(healthy).toHaveTextContent('Healthy 0');
+    expect(document.activeElement).toBe(healthy);
+    expect(healthy).toHaveAttribute('aria-pressed', 'true');
+    degraded.click();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('degraded');
+    expect(healthy).toHaveAttribute('aria-pressed', 'false');
+    expect(degraded).toHaveAttribute('aria-pressed', 'true');
+    degraded.focus();
+    setHealthyCount(1);
+    expect(screen.getByRole('button', { name: 'Degraded, 0' })).toBe(degraded);
+    expect(document.activeElement).toBe(degraded);
+    expect(degraded).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('uses labeled toggle groups for compact stable filter choices', () => {
     const onChange = vi.fn();
     render(() => (
@@ -122,34 +165,6 @@ describe('FilterHeader', () => {
         { value: 'five', label: 'Five' },
       ]),
     ).toBe(false);
-  });
-
-  it('keeps chart visibility as an explicit display toggle action', () => {
-    const [collapsed, setCollapsed] = createSignal(false);
-    const onToggle = vi.fn(() => setCollapsed((current) => !current));
-
-    render(() => (
-      <ChartVisibilityToggleButton
-        collapsed={collapsed()}
-        onToggle={onToggle}
-        data-testid="charts-toggle"
-      />
-    ));
-
-    const hideButton = screen.getByRole('button', { name: 'Hide charts' });
-    expect(hideButton).toHaveTextContent('Charts');
-    expect(hideButton).toHaveAttribute('aria-pressed', 'true');
-    expect(hideButton).toHaveAttribute('title', 'Hide charts');
-    expect(hideButton).toHaveClass('hidden');
-    expect(hideButton).toHaveClass('lg:inline-flex');
-
-    hideButton.click();
-
-    const showButton = screen.getByRole('button', { name: 'Show charts' });
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(showButton).toHaveTextContent('Charts');
-    expect(showButton).toHaveAttribute('aria-pressed', 'false');
-    expect(showButton).toHaveAttribute('title', 'Show charts');
   });
 
   it('keeps shared toggle behavior on shell, runtime, and model owners', () => {

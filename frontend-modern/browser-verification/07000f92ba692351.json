@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "c5416b6800add376e674ab64292df3e4d8e88f7f",
+  "verified_at": "2026-10-07T22:31:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
+    "frontend-modern/src/features/platformPage/sensorSetup.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx": "404d9a23881683e94ec74400120a33c432ffa4b8f24238be3d127a6a7e243abc",
+    "frontend-modern/src/features/platformPage/sensorSetup.ts": "153a28a603520156129738bd09d3d5dedab03ab8f5de2075edeb57b777aed778"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 414,
+      "height": 896
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (8-node estate; every node carries an operator-style display name such as West Production C for pve3) with a local-only generator overlay: pve1, pve3 and standalone2 report the legacy sensors -j payload with a SATA disk lacking a current temperature, so the registry sets sensorSetupOutdated on those three nodes. Frontend served by Vite from this tree; backend binary built from dace9295c6 with the overlay (main's later commits do not touch this data path).",
+    "Three affected nodes: 'Affected: Automation Lab Standalone (standalone2), West Production A (pve1), West Production C (pve3).', sorted by table label, on Overview and Storage at all four viewports, with no notice or page overflow and no console errors; the action link targets /settings/infrastructure.",
+    "The nodes table container measures 1320, 695 and 385px at 1440, 768 and 414 wide and shows display names; at 375 wide it measures 346px (its narrow layout) and labels rows standalone2, standalone1, pve1. The notice carries both names, so each layout can match it to a row.",
+    "Single affected node (pve3 only, earlier revision of this change with the same label output): 'West Production C (pve3) is using an older temperature monitoring setup ...'.",
+    "Before control on the same stack with origin/main's sensorSetup.ts and PlatformOutdatedSensorSetupNotice.tsx swapped in: 'Affected: pve1, pve3, standalone2.' above rows labelled Automation Lab Standalone, West Production A and West Production C.",
+    "Labels that already contain the node name (pve2.lan, 'Rack 4 (pve3)', quoted, case-only) and labels that only resemble it (PVE3 for pve-3, pve5-backup, pve10 for pve1, a Kelvin-sign lookalike) are covered by sensorSetup.test.ts only; every mock node carries a distinct display name. The last edit after the pass was a code comment.",
+    "Mock data only; not a real pre-rc.6 SSH node or a real operator-renamed cluster."
+  ],
+  "interactions": [
+    "Loaded /proxmox and /proxmox/storage by URL in headless Chromium at each viewport and read the notice text, node row labels, table container width and overflow from the DOM; screenshots kept locally.",
+    "Restarted the backend with two more legacy nodes to move from the single-node sentence to the multi-node list.",
+    "Swapped origin/main's two source files in and out through Vite HMR for the before control, then restored this change byte-for-byte and re-read the notice."
+  ]
+}

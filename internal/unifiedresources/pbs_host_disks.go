@@ -88,7 +88,7 @@ func (rr *ResourceRegistry) associatePBSHostAgentResources(
 			pbsParentID,
 		)
 	}
-	rr.viewsDirty = true
+	rr.invalidateViewsLocked()
 }
 
 func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []models.VM) *models.Host {

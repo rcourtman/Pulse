@@ -3,11 +3,12 @@ package chat
 import (
 	"context"
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 )

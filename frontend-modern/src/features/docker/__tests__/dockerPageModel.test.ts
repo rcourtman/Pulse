@@ -10,6 +10,7 @@ import {
   compareDockerServices,
   compareDockerSwarmNodes,
   compareDockerTasks,
+  dockerContainerPortsCompactSummary,
   dockerServiceStack,
   filterDockerIncidents,
   filterDockerResources,
@@ -431,6 +432,54 @@ describe('dockerPageModel', () => {
       ).toEqual({ variant: 'danger', label: 'Unhealthy' });
     });
 
+    it('reads an online container without a reported Docker state as running', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-online-unhealthy',
+            type: 'app-container',
+            status: 'online',
+            docker: { health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Unhealthy' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({ id: 'c-online', type: 'app-container', status: 'online', docker: {} }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Running' });
+    });
+
+    it('ignores the health status Docker leaves on a stopped container', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exited-stale',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 0, health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Exited' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exited-crash',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 1, health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Exited (1)' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-paused-stale',
+            type: 'app-container',
+            docker: { containerState: 'paused', health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Paused' });
+    });
+
     it('flags exited containers with non-zero exit codes as danger', () => {
       expect(
         mapDockerContainerStatus(
@@ -548,7 +597,25 @@ describe('dockerPageModel', () => {
             },
           }),
         ),
-      ).toEqual({ variant: 'warning', label: 'Rollback paused' });
+      ).toEqual({ variant: 'warning', label: 'Update paused' });
+    });
+
+    it("names each of Docker's mid-change update states as itself", () => {
+      const service = (state: string, runningTasks = 3) =>
+        mapDockerServiceStatus(
+          makeResource({
+            id: `svc-${state}`,
+            type: 'docker-service',
+            docker: { desiredTasks: 3, runningTasks, serviceUpdate: { state } },
+          }),
+        );
+      // Docker reports rollback_started and rollback_paused as snake_case.
+      expect(service('rollback_started')).toEqual({ variant: 'warning', label: 'Rolling back' });
+      expect(service('rollback_paused')).toEqual({ variant: 'warning', label: 'Rollback paused' });
+      expect(service('updating')).toEqual({ variant: 'success', label: 'Healthy' });
+      expect(service('rollback_completed')).toEqual({ variant: 'success', label: 'Healthy' });
+      // No replicas running is down, whatever the rollout says.
+      expect(service('rollback_started', 0)).toEqual({ variant: 'danger', label: '0 / 3 running' });
     });
   });
 
@@ -658,6 +725,25 @@ describe('dockerPageModel', () => {
       expect(
         [healthy, restarting, dead, stopped].sort(compareDockerContainers).map((r) => r.id),
       ).toEqual(['dead', 'restarting', 'stopped', 'happy']);
+    });
+
+    it('ranks a running container past the restart threshold with the warnings', () => {
+      const container = (id: string, docker: Resource['docker']) =>
+        makeResource({ id, type: 'app-container', docker });
+      const rows = [
+        container('happy', { containerState: 'running', restartCount: 2 }),
+        container('at-threshold', { containerState: 'running', restartCount: 5 }),
+        container('looping', { containerState: 'running', restartCount: 6 }),
+        container('unhealthy', { containerState: 'running', health: 'unhealthy', restartCount: 9 }),
+        container('stopped', { containerState: 'exited', exitCode: 0, restartCount: 9 }),
+      ];
+      expect(rows.sort(compareDockerContainers).map((r) => r.id)).toEqual([
+        'unhealthy',
+        'looping',
+        'stopped',
+        'at-threshold',
+        'happy',
+      ]);
     });
 
     it('orders Swarm services by replica health', () => {
@@ -1059,5 +1145,54 @@ describe('dockerPageModel', () => {
       ).toEqual(['host-edge']);
       expect(filterDockerIncidents(incidents, 'edge-01', 'all').length).toBe(2);
     });
+  });
+});
+
+describe('dockerContainerPortsCompactSummary', () => {
+  it('drops the all-interfaces address and folds the IPv4 and IPv6 pair', () => {
+    const resource = makeResource({
+      id: 'c-ports',
+      type: 'app-container',
+      docker: {
+        ports: [
+          { ip: '0.0.0.0', publicPort: 23210, privatePort: 8080, protocol: 'tcp' },
+          { ip: '::', publicPort: 23210, privatePort: 8080, protocol: 'tcp' },
+          { ip: '127.0.0.1', publicPort: 5432, privatePort: 5432, protocol: 'tcp' },
+          { privatePort: 9000, protocol: 'udp' },
+        ],
+      },
+    });
+    expect(dockerContainerPortsCompactSummary(resource)).toBe(
+      '23210->8080/tcp, 127.0.0.1:5432->5432/tcp, 9000/udp',
+    );
+  });
+
+  it('reads a dash when nothing is published or exposed', () => {
+    expect(
+      dockerContainerPortsCompactSummary(
+        makeResource({ id: 'c-none', type: 'app-container', docker: {} }),
+      ),
+    ).toBe('—');
+  });
+});
+
+describe('container status without a reported container state', () => {
+  // The row dot, the State words and the drawer header all read this verdict,
+  // so a degraded or lost container must not fall back to a neutral grey.
+  it('reads the unified status as other resources do', () => {
+    const container = (status: string, containerState?: string) =>
+      mapDockerContainerStatus(
+        makeResource({
+          id: `c-${status}-${containerState ?? 'none'}`,
+          type: 'app-container',
+          status: status as Resource['status'],
+          docker: containerState === undefined ? {} : { containerState },
+        }),
+      );
+    expect(container('degraded')).toEqual({ variant: 'warning', label: 'Degraded' });
+    expect(container('offline')).toEqual({ variant: 'danger', label: 'Offline' });
+    expect(container('unknown')).toEqual({ variant: 'muted', label: 'Unknown' });
+    // A reported state still wins, so a cleanly exited container on a lost host stays muted.
+    expect(container('offline', 'exited')).toEqual({ variant: 'muted', label: 'Exited' });
   });
 });

@@ -130,6 +130,41 @@ para visibilidad de Docker/Podman dentro de invitados, datos SMART/temperatura
 del host, detalle local de ZFS/Ceph/mdadm u otra telemetría que requiera acceso
 local al host.
 
+### Proxmox: seguridad durante las copias de seguridad
+
+**API-only no significa sin agente de invitado.** Las consultas de sistemas de
+archivos y memoria de las VMs mediante QEMU Guest Agent pueden compartir el
+canal de las copias de seguridad con congelación de sistemas de archivos. Los
+permisos de solo lectura no demuestran que la copia sea segura. Durante una
+copia, congelación/descongelación o un incidente con un invitado que no responde,
+no añadas permisos, instales o reinicies agentes ni envíes consultas manuales al
+agente de invitado.
+
+Para instalaciones afectadas, sigue la
+[precaución de seguridad para copias](../../VM_DISK_MONITORING.md#backup-safety)
+en inglés **antes de una copia programada con congelación**. Tiene en cuenta
+el servidor Pulse y los actualizadores automáticos, no solo el agente de invitado.
+No es un procedimiento de recuperación de un incidente en curso. Detener Pulse
+no cancela las consultas ya enviadas al agente de invitado. **Mientras Pulse
+está detenido, no hay monitoreo ni alertas de Pulse**; dispón de monitoreo
+independiente.
+
+Un resultado **OK** de la copia no demuestra que el invitado se haya
+descongelado. Mantén Pulse en pausa hasta que termine la copia y comprobaciones
+independientes **posteriores a su finalización**, sin Pulse ni QEMU Guest Agent,
+confirmen los tres puntos:
+
+1. Los sistemas de archivos se han descongelado.
+2. Escrituras recientes y correctas de las cargas de trabajo en **cada sistema de archivos incluido en la copia**.
+3. Las cargas de trabajo funcionan.
+
+Si falta una comprobación o falla, mantén la pausa y usa el procedimiento de
+recuperación de la plataforma. Una conexión a la consola o una lectura correcta
+no basta. Solo después de todas las comprobaciones, restaura únicamente los
+servicios y temporizadores que **estaban activos antes de la pausa**; un estado
+anterior desconocido no autoriza su inicio. No borres bloqueos de copias ni
+desactives la congelación para probar un problema de monitoreo.
+
 ## Siguientes pasos
 
 - [Installation Guide](../../INSTALL.md) para rutas completas de instalación.

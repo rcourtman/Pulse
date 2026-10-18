@@ -2,7 +2,7 @@
 
 This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kubernetes clusters, including immutable distributions like Talos Linux.
 
-> **Navigation note (v6):** Kubernetes cluster and node resources appear on the **Infrastructure** page, while pods appear on the **Workloads** page. The legacy `/kubernetes` URL redirects to `/workloads?type=k8s`.
+> **Navigation note (v6):** Kubernetes has its own page at `/kubernetes`, with tabs for nodes, workloads (pods), services, storage, configuration, and events. Pods appear on the **Workloads** tab (`/kubernetes/workloads`).
 
 ## Prerequisites
 
@@ -70,30 +70,75 @@ the legacy `API_TOKENS` server environment variable.
 
 On your kubectl workstation, save only the token in a private, regular file
 outside your GitOps repository. Do not paste it into a shell assignment, a
-`--from-literal` argument, a Helm value or the DaemonSet YAML:
+`--from-literal` argument, a Helm value or the DaemonSet YAML. Run these Bash
+steps as the credential's owner, not with `sudo`. Stop if preparation or the
+editor fails; do not continue to Secret creation. Existing token contents are
+preserved until you deliberately edit them. Symlinked paths and non-regular
+token files are refused before opening the editor:
 
 ```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-chmod 700 "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/kubernetes-agent-token"
-chmod 600 "$HOME/.config/pulse/kubernetes-agent-token"
-vi "$HOME/.config/pulse/kubernetes-agent-token"
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  token_file="$config_dir/kubernetes-agent-token"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$token_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$config_dir"; do
+    if [ -e "$directory" ] && { [ ! -d "$directory" ] || [ ! -O "$directory" ]; }; then
+      printf 'Credential directories must belong to the current user.\n' >&2
+      exit 1
+    fi
+  done
+  if [ -e "$token_file" ] && { [ ! -f "$token_file" ] || [ ! -O "$token_file" ]; }; then
+    printf 'Token file must be a regular file owned by the current user.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$config_dir"
+  chmod 700 "$config_dir"
+  touch "$token_file"
+  chmod 600 "$token_file"
+  vi "$token_file"
+)
 ```
 
 After saving the token in the editor, create the Secret in the same namespace
-as the agent. The generated Secret goes directly to kubectl, not to your
-terminal or a checked-in manifest. The subshell stops on either pipeline's
+as the agent. This is a provisioning operation that can change cluster state,
+not a diagnostic for a missing reading. Check your current kubectl context and
+intended namespace privately before proceeding. The generated Secret goes
+directly to kubectl, not to your terminal or a checked-in manifest. Recheck the
+credential path before either pipeline; an empty, unreadable or unsafe file
+stops before contacting the cluster. The subshell stops on either pipeline's
 failure; do not continue to the agent deployment if it fails:
 
 ```bash
 (
   set -euo pipefail
-  test -s "$HOME/.config/pulse/kubernetes-agent-token"
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  token_file="$config_dir/kubernetes-agent-token"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$token_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$config_dir"; do
+    if [ ! -d "$directory" ] || [ ! -O "$directory" ]; then
+      printf 'Credential directories must belong to the current user.\n' >&2
+      exit 1
+    fi
+  done
+  if [ ! -f "$token_file" ] || [ ! -O "$token_file" ] || [ ! -r "$token_file" ] || [ ! -s "$token_file" ]; then
+    printf 'Token file must be owned, readable, regular and non-empty.\n' >&2
+    exit 1
+  fi
+  chmod 700 "$config_dir"
+  chmod 600 "$token_file"
   kubectl create namespace pulse --dry-run=client -o yaml | \
     kubectl apply --server-side --field-manager=pulse-agent-setup -f -
   kubectl -n pulse create secret generic pulse-agent-env \
-    --from-file=PULSE_TOKEN="$HOME/.config/pulse/kubernetes-agent-token" \
+    --from-file=PULSE_TOKEN="$token_file" \
     --dry-run=client -o yaml | \
     kubectl apply --server-side --field-manager=pulse-agent-setup -f -
 )
@@ -205,7 +250,7 @@ spec:
             - --enable-kubernetes
           env:
             - name: PULSE_URL
-              value: "http://pulse-server.pulse.svc.cluster.local:7655"
+              value: "http://pulse.pulse.svc.cluster.local:7655"
             - name: PULSE_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -378,6 +423,27 @@ Talos Linux is immutable, so you cannot install the agent via the shell script. 
 
 ## 4. Troubleshooting
 
-- **Agent not showing in UI**: Check logs for the DaemonSet pods, for example: `kubectl logs -l app=pulse-agent -n pulse`.
-- **"Permission Denied" on metrics**: Ensure `securityContext.privileged: true` is set or proper capabilities are added.
-- **Connection Refused**: Ensure `PULSE_URL` is correct and reachable from the agent pods.
+Start with the affected pod's existing status and a bounded, locally reviewed
+log excerpt around the original failure. Missing usage, missing inventory and
+a rejected Pulse report are different failures:
+
+| Observation | What to check without widening access |
+| --- | --- |
+| Pulse rejects reporting with HTTP 401/403 | Compare the intended Pulse server, token scopes and cluster identity with the existing configuration. `kubernetes:report` authorises Kubernetes reporting; host reporting also needs `agent:report`. Use the [agent authentication checks](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403), not an administrator token or a new installation. |
+| Kubernetes API reports Forbidden | Check the pod's service account and the exact denied API resource against its Role/ClusterRole. Running a pod as root or privileged does not grant Kubernetes API permissions. Do not add `cluster-admin`, Secret reads or `nodes/proxy` merely to diagnose a missing reading. |
+| Inventory appears but CPU/memory usage is absent | Check whether the cluster's `metrics.k8s.io` service and its intended read permissions are available. Pulse can continue with inventory-only reporting when usage collection fails; missing usage is not zero. Host mounts and privileged mode are a separate, deliberate node-telemetry choice, not a repair for API metrics access. |
+| Connection refused or TLS validation fails | Check the existing `PULSE_URL` and network path from the agent pod, not just your browser. A refusal is not an authentication error; retain certificate verification and do not replace a token or expose Pulse to bypass it. |
+
+An applied Secret or running pod is not proof that Pulse accepted a fresh report
+or collected every resource. Keep expected inventory and usage separate when
+checking the ordinary view. Do not reapply the Secret, restart pods, enable
+Debug, change cluster permissions or rerun provisioning just to complete a
+report. A deliberate token rotation is separate maintenance and needs the
+restart described above.
+
+Keep tokens, Secret YAML, kubeconfigs, Helm values, pod environments and full
+logs private. Use the original time, status, API resource and a manually
+redacted error if help is needed; use consistent aliases for cluster, namespace
+and pod names. Do not publish `kubectl get secret -o yaml`, full pod descriptions
+or a broad label-selected log dump. Existing observations or unknowns are
+valid evidence; see [safe evidence collection](TROUBLESHOOTING.md#collect-diagnostics-safely).

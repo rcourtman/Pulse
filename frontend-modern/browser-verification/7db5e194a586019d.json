@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "base_sha": "8e68bab55a68d80c7fa234a89216daa5e3af8f29",
+  "verified_at": "2026-10-05T13:41:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "a4b95eaae2c0b67cc8195b3b5f5812cee3499bd583da195f809bf8ff1c4e81f0"
+  },
+  "routes": [
+    "/docker/images"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 480,
+      "height": 900
+    },
+    {
+      "width": 540,
+      "height": 900
+    },
+    {
+      "width": 573,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 900
+    },
+    {
+      "width": 640,
+      "height": 900
+    },
+    {
+      "width": 700,
+      "height": 900
+    },
+    {
+      "width": 740,
+      "height": 900
+    },
+    {
+      "width": 767,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, random metrics off) serving this tree on main 8e68bab55a, which already carries the Used by block-truncate span from #2514; before = main, after = main plus this change",
+    "Clip sweep (scrollWidth over clientWidth + 1 on every td and its overflow-hidden or ellipsis descendants, .sr-only excluded) at 15 widths from 390 to 1440: the Update check badge clipped at 600, 640, 700 and 768 on main and nowhere patched; total clipped elements 65 on main, 61 patched; Image, Host, Used by and Size clip counts identical at every width (Used by 1/2/2/1 at 600/640/700/740 both ways, 0 from 768)",
+    "Label probe: each of the six update labels (Update available 97.9px, Managed by Pulse 105.8px, Check failed, Not checked, Current, Pinned) cloned into the narrowest Update check cell: on main Update available and Managed by Pulse overflow at 600, 640, 700 and 768, and Managed by Pulse alone at 740 and 800; patched every label fits at every width (Update check content box 113px at the 573px band edge, 116px at 768, 108px at 390)",
+    "Column widths patched: band at 600 Image 171 / Host 100 / Used by 100 / Size 69 / Update check 131 (Host and Used by unchanged from main); md at 768 Image 209 / Host 118 / Used by 160 / Size 76 / Update check 132 (main 209 / 125 / 167 / 83 / 111)",
+    "Size probe: the widest byte strings (1023 MB, 9.99 GB, 99.9 MB, 1023 KB) fit the narrower Size cell at 573, 640, 767, 768, 800 and 900 (worst 49.6px in a 53 to 74px content box)",
+    "The UPDATE CHECK header clipped at 600 on main, including with a sort indicator; patched no header clips at any width, sorted or not",
+    "Before and after element screenshots of the table at 600, 700, 768 and 1440 show the postgres:16.4 Update available badge cut at the cell edge with a stray ellipsis dot on main and whole patched; the phone projection at 390 keeps Image, Size and Update check unchanged"
+  ],
+  "interactions": [
+    "Loaded /docker/images fresh, waited for the row count to settle, then resized through every viewport before measuring",
+    "Sorted by Size and by Update check at the 573px band edge and re-measured header clipping",
+    "Expanded and collapsed the Update available row's detail at 390, 600, 768 and 1440 (aria-expanded true then false, detail row visible); no console errors"
+  ]
+}

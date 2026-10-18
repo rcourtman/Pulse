@@ -47,8 +47,8 @@ func RefreshPlatformScopes(resource *Resource) {
 		add(platformScopeForSource(source))
 	}
 
-	addPlatformScopesForFacets(add, *resource)
-	if shouldAddDockerPlatformScope(*resource) {
+	addPlatformScopesForFacets(add, resource)
+	if shouldAddDockerPlatformScope(resource) {
 		add("docker")
 	}
 
@@ -88,7 +88,9 @@ func platformScopeForSource(source DataSource) string {
 	}
 }
 
-func addPlatformScopesForFacets(add func(string), resource Resource) {
+// Facet readers borrow the caller-owned resource without retaining or mutating
+// it; only RefreshPlatformScopes replaces its derived membership slice.
+func addPlatformScopesForFacets(add func(string), resource *Resource) {
 	if resource.Agent != nil {
 		add("agent")
 	}
@@ -110,12 +112,12 @@ func addPlatformScopesForFacets(add func(string), resource Resource) {
 	if resource.VMware != nil {
 		add("vmware-vsphere")
 	}
-	if len(AvailabilityChecksForResource(resource)) > 0 || CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
+	if len(AvailabilityChecksForResource(*resource)) > 0 || CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
 		add("availability")
 	}
 }
 
-func shouldAddDockerPlatformScope(resource Resource) bool {
+func shouldAddDockerPlatformScope(resource *Resource) bool {
 	if resource.Docker == nil {
 		return false
 	}

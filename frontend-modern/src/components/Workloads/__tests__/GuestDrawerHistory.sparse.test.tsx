@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from '@/api/charts';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -12,11 +13,23 @@ vi.mock('@/stores/license', () => ({
   isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+});
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
   vi.restoreAllMocks();
 });
+
+// The charts have no manual refresh while reads succeed; tests drive the
+// 30-second poll on a fake interval clock (timeouts stay real for waitFor).
+const settledHistory = () =>
+  waitFor(() => {
+    expect(ChartsAPI.getMetricsHistory).toHaveBeenCalled();
+    expect(screen.queryByText('Loading history')).not.toBeInTheDocument();
+  });
 
 const start = Date.UTC(2026, 9, 1, 11);
 const time = start + 30 * 60_000;
@@ -49,6 +62,60 @@ const group = (id = 'utilization') =>
 const dots = () => document.querySelectorAll('[data-history-observation]');
 
 describe('GuestDrawerHistory sparse observations and current provenance', () => {
+  it('reads again only for changed coordinates, not a fresh same-target snapshot object', async () => {
+    const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [source, setSource] = createSignal(target);
+    const [usage, setUsage] = createSignal(25);
+    render(() => (
+      <GuestDrawerHistory target={source()} range="1h" currentMetrics={{ memory: usage() }} />
+    ));
+    await settledHistory();
+    const chart = group();
+    setSource({ ...target });
+    setUsage(35);
+    await waitFor(() =>
+      expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+        '35.0%current',
+      ),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(group()).toBe(chart);
+    setSource({ ...target, resourceId: 'peer-host' });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch.mock.calls[1][0]).toMatchObject({ resourceId: 'peer-host' });
+  });
+
+  it('keeps unknown freshness distinct from current, last-known and stored readings', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="1h"
+        currentMetrics={{ memory: 99 }}
+        deferredMetrics={{
+          memory: {
+            lastKnownValue: 25,
+            valueLabel: 'freshness unknown',
+            message: 'Observation time unknown. Not a current measurement.',
+          },
+        }}
+      />
+    ));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    expect(group().querySelector('[data-history-unknown="memory"]')).toHaveTextContent(
+      'Memory25.0%freshness unknown',
+    );
+    expect(group().querySelector('[data-history-unknown="memory"]')).toHaveAccessibleDescription(
+      'Memory reading: Observation time unknown. Not a current measurement.',
+    );
+    expect(group().querySelector('[data-history-current]')).toBeNull();
+    expect(group().querySelector('[data-history-last-known]')).toBeNull();
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
+    expect(dots()).toHaveLength(0);
+  });
+
   it('gives explicit deferred evidence precedence over a numeric current fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
     render(() => (
@@ -67,9 +134,9 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       'Disk50.0%last known',
     );
     expect(group().querySelector('[data-history-last-known="disk"]')).toHaveAccessibleDescription(
-      'Disk live reading: Guest reads paused.',
+      'Disk reading: Guest reads paused.',
     );
-    expect(group().querySelector('path')).toBeNull();
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
     expect(dots()).toHaveLength(0);
   });
 
@@ -87,9 +154,15 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       await waitFor(() => expect(dots()).toHaveLength(1));
       const chart = group(id);
       const dot = chart.querySelector(`[data-history-observation="${metric}"]`)!;
-      expect(Number(dot.getAttribute('cx'))).toBeCloseTo(193);
-      expect(Number(dot.getAttribute('cy'))).toBeCloseTo(74);
-      expect(chart.querySelector('path')).toBeNull();
+      expect(Number(dot.getAttribute('data-x'))).toBeCloseTo(193);
+      expect(Number(dot.getAttribute('data-y'))).toBeCloseTo(74);
+      // The plot stretches non-uniformly; a <circle> there renders as an oval.
+      // Dots are round-capped, non-scaling strokes drawn in screen pixels.
+      expect(chart.querySelector('[data-testid="guest-history-plot"] circle')).toBeNull();
+      expect(
+        dot.querySelectorAll('path[stroke-linecap="round"][vector-effect="non-scaling-stroke"]'),
+      ).toHaveLength(2);
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
       expect(chart.querySelector('[data-history-current]')).toBeNull();
       expect(chart).not.toHaveTextContent('No stored history in this range');
       expect(chart).toHaveTextContent('Single observation. No trend yet.');
@@ -106,7 +179,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     },
   );
 
-  it('draws a lone series alongside a trend and labels only the live fallback', async () => {
+  it('preserves interleaved lone observations without mixing in a live fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
       response({
         cpu: [point(start, 10), point(end, 20)],
@@ -114,25 +187,22 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       }),
     );
     mount({ cpu: 99, memory: 98, disk: 88 });
-    await waitFor(() => expect(dots()).toHaveLength(1));
-    expect(group().querySelectorAll('path')).toHaveLength(1);
-    expect(group().querySelector('[data-history-observation]')).toHaveAttribute(
-      'data-history-observation',
-      'memory',
-    );
-    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(1);
-    expect(group().querySelector('[data-history-current="disk"]')).toHaveTextContent(
-      'Disk88.0%current',
-    );
+    await waitFor(() => expect(dots()).toHaveLength(3));
+    expect(group().querySelectorAll('path[data-history-series]')).toHaveLength(0);
+    expect(group().querySelectorAll('[data-history-observation="memory"]')).toHaveLength(1);
+    expect(group().querySelectorAll('[data-history-observation="cpu"]')).toHaveLength(2);
+    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(0);
+    expect(group()).toHaveTextContent('Memoryno reading');
+    expect(group()).toHaveTextContent('Diskno reading');
     expect(group()).not.toHaveTextContent('Single observation. No trend yet.');
     const slider = within(group()).getByRole('slider');
     slider.focus();
     fireEvent.input(slider, { target: { value: '1' } });
-    expect(group()).toHaveTextContent('CPU-');
+    expect(group()).toHaveTextContent('CPUno reading');
     expect(group()).toHaveTextContent('Memory0.0%');
-    expect(group()).toHaveTextContent('Disk-');
+    expect(group()).toHaveTextContent('Diskno reading');
     expect(group().querySelector('[data-history-current]')).toBeNull();
-    expect(dots()).toHaveLength(1);
+    expect(dots()).toHaveLength(3);
   });
 
   it('does not connect single observations from different series or borrow their times', async () => {
@@ -144,10 +214,13 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     );
     mount();
     await waitFor(() => expect(dots()).toHaveLength(2));
-    expect(group().querySelector('path')).toBeNull();
-    expect(group().querySelector('[data-history-observation="cpu"]')).toHaveAttribute('cx', '34');
+    expect(group().querySelector('path[data-history-series]')).toBeNull();
+    expect(group().querySelector('[data-history-observation="cpu"]')).toHaveAttribute(
+      'data-x',
+      '34',
+    );
     expect(group().querySelector('[data-history-observation="memory"]')).toHaveAttribute(
-      'cx',
+      'data-x',
       '352',
     );
     const slider = within(group()).getByRole('slider');
@@ -181,7 +254,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       );
       expect(document.querySelectorAll('[data-history-current]')).toHaveLength(1);
       expect(dots()).toHaveLength(0);
-      expect(document.querySelectorAll('path')).toHaveLength(0);
+      expect(document.querySelectorAll('path[data-history-series]')).toHaveLength(0);
       expect(screen.queryByRole('slider')).not.toBeInTheDocument();
       expect(screen.queryByText('Single observation. No trend yet.')).not.toBeInTheDocument();
     },
@@ -195,14 +268,14 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       .mockResolvedValueOnce(response({ cpu: [point(time, 0), point(end, 5)] }));
     mount();
     await waitFor(() => expect(dots()).toHaveLength(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await screen.findByText('History refresh failed. Showing previously loaded history.');
     expect(dots()).toHaveLength(1);
     expect(group()).toHaveTextContent('Single observation. No trend yet.');
     expect(document.body).not.toHaveTextContent('private diagnostic');
     fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
     await screen.findByRole('slider');
-    expect(group().querySelectorAll('path')).toHaveLength(1);
+    expect(group().querySelectorAll('path[data-history-series]')).toHaveLength(1);
     expect(dots()).toHaveLength(0);
     expect(group()).not.toHaveTextContent('Single observation. No trend yet.');
     expect(fetch).toHaveBeenCalledTimes(3);

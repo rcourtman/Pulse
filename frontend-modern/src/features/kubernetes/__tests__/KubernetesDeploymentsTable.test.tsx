@@ -123,5 +123,46 @@ describe('KubernetesDeploymentsTable', () => {
     expect(screen.getByTitle('0 / 3 ready')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('1 / 3 ready')).toHaveClass('bg-amber-500');
     expect(screen.getByTitle('Ready')).toHaveClass('bg-emerald-500');
+    // The Ready count behind each verdict reads in its dot's colour.
+    const readyCell = (variant: string) =>
+      document.querySelector(`[data-kubernetes-deployment-ready="${variant}"]`);
+    expect(readyCell('danger')).toHaveClass('text-red-600');
+    expect(readyCell('warning')).toHaveClass('text-amber-700');
+    expect(readyCell('success')).toHaveClass('text-base-content');
+  });
+
+  it('sizes the tablet band for a long name and keeps Desired for wide tables', () => {
+    const { container } = render(() => (
+      <KubernetesDeploymentsTable
+        resources={[
+          makeResource({
+            id: 'ingress-nginx-controller',
+            kubernetes: {
+              namespace: 'ingress-nginx',
+              resourceKind: 'Deployment',
+              desiredReplicas: 2,
+              readyReplicas: 2,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No deployments"
+        emptyDescription="No deployments"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('thead th')];
+    const byLabel = (label: string) =>
+      headers.find((th) => th.textContent?.includes(label)) as HTMLElement | undefined;
+    // The band gives the name about a third of the row and the counts little.
+    expect(byLabel('Deployment')?.style.getPropertyValue('--platform-table-band-width')).toBe(
+      '36%',
+    );
+    expect(byLabel('Ready')?.style.getPropertyValue('--platform-table-band-width')).toBe('9.5%');
+    // Ready already shows the desired count as its denominator (2/2).
+    const desired = byLabel('Desired');
+    expect(desired).toHaveClass('hidden', 'md:table-cell');
+    expect(desired?.style.getPropertyValue('--platform-table-band-width')).toBe('');
   });
 });

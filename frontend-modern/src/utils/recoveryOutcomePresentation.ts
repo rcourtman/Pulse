@@ -1,13 +1,5 @@
 import type { RecoveryOutcome } from '@/types/recovery';
 
-export const RECOVERY_OUTCOMES: RecoveryOutcome[] = [
-  'success',
-  'warning',
-  'failed',
-  'running',
-  'unknown',
-];
-
 export function normalizeRecoveryOutcome(value: string | null | undefined): RecoveryOutcome {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'success' || normalized === 'ok') return 'success';
@@ -50,35 +42,5 @@ export function getRecoveryOutcomeBadgeClass(outcome: RecoveryOutcome): string {
       return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300`;
     default:
       return `${base} bg-surface-alt text-muted`;
-  }
-}
-
-export function getRecoveryOutcomeBarClass(outcome: RecoveryOutcome): string {
-  switch (outcome) {
-    case 'success':
-      return 'bg-emerald-500';
-    case 'warning':
-      return 'bg-amber-400';
-    case 'failed':
-      return 'bg-red-500';
-    case 'running':
-      return 'bg-blue-500';
-    default:
-      return 'bg-gray-400';
-  }
-}
-
-export function getRecoveryOutcomeTextClass(outcome: RecoveryOutcome): string {
-  switch (outcome) {
-    case 'success':
-      return 'text-emerald-600 dark:text-emerald-400';
-    case 'warning':
-      return 'text-amber-600 dark:text-amber-400';
-    case 'failed':
-      return 'text-red-600 dark:text-red-400';
-    case 'running':
-      return 'text-blue-600 dark:text-blue-400';
-    default:
-      return 'text-muted';
   }
 }

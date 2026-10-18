@@ -116,6 +116,30 @@ describe('hasCustomAlertResourceGlobalDefaults', () => {
     ).toBe(true);
   });
 
+  it('reads an Off default saved as 0 as the factory Off of -1', () => {
+    expect(
+      hasCustomAlertResourceGlobalDefaults(
+        { cpu: 80, diskRead: 0, networkIn: 0 },
+        { cpu: 80, diskRead: -1, networkIn: -1 },
+      ),
+    ).toBe(false);
+    expect(hasCustomAlertResourceGlobalDefaults({ diskRead: 100 }, { diskRead: -1 })).toBe(true);
+  });
+
+  it('keeps an Off default custom against an unset factory value', () => {
+    // An unset factory value follows another setting (TrueNAS disks follow Disk
+    // temperature by type), so Off is a choice that needs its reset control.
+    expect(
+      hasCustomAlertResourceGlobalDefaults({ temperature: 0 }, { temperature: undefined }),
+    ).toBe(true);
+    expect(
+      hasCustomAlertResourceGlobalDefaults({ temperature: -1 }, { temperature: undefined }),
+    ).toBe(true);
+    expect(
+      hasCustomAlertResourceGlobalDefaults({ temperature: undefined }, { temperature: undefined }),
+    ).toBe(false);
+  });
+
   it('returns false when a factory key is absent from globalDefaults (current is undefined)', () => {
     expect(hasCustomAlertResourceGlobalDefaults({ memory: 90 }, { cpu: 80, memory: 90 })).toBe(
       false,
@@ -557,14 +581,12 @@ describe('alertResourceSupportsMetric', () => {
     });
   });
 
-  describe('dockerContainer — restart + memory-warn set', () => {
-    it('supports restart and memory-warn metrics', () => {
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartWindow')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryCriticalPct')).toBe(true);
+  describe('dockerContainer — cpu and memory only', () => {
+    it('supports cpu and memory but not the Docker-default-only rules', () => {
       expect(alertResourceSupportsMetric('dockerContainer', 'cpu')).toBe(true);
       expect(alertResourceSupportsMetric('dockerContainer', 'memory')).toBe(true);
+      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(false);
+      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(false);
     });
 
     it('rejects temperature and disk', () => {

@@ -36,8 +36,9 @@ import {
   normalizeStorageView,
   readStorageRouteValue,
   storageResourceMatchesSourceFilter,
-  syncExpandedStorageGroups,
-  toggleExpandedStorageGroup,
+  haveSameStorageGroups,
+  resolveExpandedStorageGroups,
+  toggleCollapsedStorageGroup,
   toStorageHealthFilterValue,
   writeStorageRouteValue,
 } from '@/components/Storage/storagePageState';
@@ -207,10 +208,14 @@ describe('storagePageState', () => {
   });
 
   it('keeps expanded storage groups canonical across data refreshes', () => {
-    expect(syncExpandedStorageGroups(new Set(), ['A', 'B'])).toEqual(new Set(['A', 'B']));
-    expect(syncExpandedStorageGroups(new Set(['A']), ['A', 'B'])).toEqual(new Set(['A', 'B']));
-    expect(toggleExpandedStorageGroup(new Set(['A']), 'A')).toEqual(new Set());
-    expect(toggleExpandedStorageGroup(new Set(['A']), 'B')).toEqual(new Set(['A', 'B']));
+    expect(resolveExpandedStorageGroups(['A', 'B'], new Set())).toEqual(new Set(['A', 'B']));
+    expect(resolveExpandedStorageGroups(['A', 'B'], new Set(['B']))).toEqual(new Set(['A']));
+    expect(resolveExpandedStorageGroups(['A', 'B'], new Set(['A', 'B']))).toEqual(new Set());
+    expect(toggleCollapsedStorageGroup(new Set(['A']), 'A')).toEqual(new Set());
+    expect(toggleCollapsedStorageGroup(new Set(['A']), 'B')).toEqual(new Set(['A', 'B']));
+    expect(haveSameStorageGroups(new Set(['A', 'B']), new Set(['B', 'A']))).toBe(true);
+    expect(haveSameStorageGroups(new Set(['A']), new Set(['B']))).toBe(false);
+    expect(haveSameStorageGroups(new Set(['A']), new Set(['A', 'B']))).toBe(false);
   });
 
   it('derives active storage filters canonically', () => {

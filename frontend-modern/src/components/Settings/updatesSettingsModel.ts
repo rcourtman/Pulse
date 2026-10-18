@@ -70,14 +70,14 @@ function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateIn
       title: 'Pull the new Pulse Pro image (pinned to this release’s digest)',
       command: dockerUpdate.composePullCommand,
       commandCodeClass:
-        'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400 whitespace-pre-wrap break-all',
+        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
     },
     {
       id: 'docker-pro-up',
       title: 'Recreate the container on the new image',
       command: dockerUpdate.composeUpCommand,
       commandCodeClass:
-        'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400 whitespace-pre-wrap break-all',
+        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
     },
   ];
   if (dockerUpdate.loginCommand) {
@@ -192,7 +192,7 @@ export function buildUpdateInstallGuide(
           title: 'Download and extract the new version',
           command: systemdDownloadCommand,
           commandCodeClass:
-            'block rounded-md border border-border bg-base p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all',
+            'block rounded-md border border-border bg-page p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all',
         },
         { id: 'systemd-start', title: 'Start the service', command: 'sudo systemctl start pulse' },
       ],

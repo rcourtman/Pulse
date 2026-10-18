@@ -137,7 +137,32 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument();
   });
 
-  it('disables the button with the refusal reason when the server refuses the update capability', () => {
+  it('grows to a 44px phone target only where the caller asks for it', () => {
+    const status = {
+      updateAvailable: true,
+      currentDigest: 'sha256:current',
+      latestDigest: 'sha256:latest',
+      lastChecked: 0,
+    };
+    const table = render(() => (
+      <UpdateButton agentId="agent-1" containerId="c-1" containerName="web" updateStatus={status} />
+    ));
+    expect(screen.getByRole('button', { name: /update/i })).not.toHaveClass('max-sm:min-h-11');
+    table.unmount();
+
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="c-2"
+        containerName="web"
+        updateStatus={status}
+        touchTarget
+      />
+    ));
+    expect(screen.getByRole('button', { name: /update/i })).toHaveClass('max-sm:min-h-11');
+  });
+
+  it('shows update availability and host guidance without an action when the server refuses updates', () => {
     render(() => (
       <UpdateButton
         agentId="agent-1"
@@ -161,11 +186,15 @@ describe('ContainerUpdateBadge', () => {
       />
     ));
 
-    const button = screen.getByRole('button', { name: /update unavailable/i });
-    expect(button).toBeDisabled();
-    expect(button.getAttribute('aria-label')).toContain(
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('Update available')).toBeInTheDocument();
+    const status = screen.getByLabelText(/Pulse cannot apply it/);
+    expect(status.getAttribute('aria-label')).toContain(
       'The Pulse agent on this host is still on an older version.',
     );
+    expect(status.getAttribute('aria-label')).toContain('container manager on the host');
+    fireEvent.click(status);
+    expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
   });
 
   it('keeps the button enabled when the update readiness entry is available', () => {

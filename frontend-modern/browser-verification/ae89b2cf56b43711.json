@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "d196f1cb518e81b771668dd7327808867c235511",
+  "verified_at": "2026-10-10T09:08:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useRecoveryPoints.ts",
+    "frontend-modern/src/types/recovery.ts",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useRecoveryPoints.ts": "63904218b7726faa7e7b883f06054fcc307decb3971470d813837115ad620c07",
+    "frontend-modern/src/types/recovery.ts": "bdafd86ef62522cb1d23dc55c66cce848a33f4b8b76c94d8f826e42eafc734cc",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts": "3512b2210726228d7b2fb9f24a60a3dc96046da3cbe114991b0ed1a78e6c18b0"
+  },
+  "routes": [
+    "/truenas/overview",
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Before/after pair on pulse-dev: production vite builds of the parent tree (the PR 2773 head 4511a3ded0) and of the same tree with this change, each served with vite preview proxied to the 50-node mock rig on :7699 (which includes the TrueNAS recovery fixtures), driven by the same headless Chromium script at 1440x900 and 390x844. Two probe runs per build. Main has moved since (to d196f1cb51); none of its commits touches a file this change touches, and the files that mention the points types or endpoint are the same set as in the verified tree.",
+    "Off the Protection tab: /truenas/overview makes no /api/recovery/points request in any run of either build, so the hook still sees a null query there. Opening Protection requests /api/recovery/points?page=1&limit=200&platform=truenas twice (the open-time duplicate that both builds show), the 33 s window on the tab adds one poll request, and leaving to Overview adds none.",
+    "TrueNAS Protection: 10 rows in every run of both builds at both widths, named by dataset (archive/backups, tank/apps, vault/compliance, tank/photos, tank/media, fast/vm-images), status filter All 10, Attention 1, Healthy 8, Warning 0, Failed 1, Running 1, Unknown 0 (the filter is hidden at phone width in both builds); searching \"backups\" narrows to the same three rows; the first row opens the identical Protection detail panel (Kind Replication, Outcome Failed, Dataset archive/backups, Host truenas-main, Replication and Target sections) apart from the mock clock minute. Every deterministic measurement (row count, labels, status filter, search token and result, detail text with the clock masked, open-time requests, the off-tab request list) has exactly one distinct value across the four runs at each width.",
+    "The backend response is unchanged and the page ignores it: every /api/recovery/points response body in both builds has the top-level keys data and meta, and meta carries limit, page, total and totalPages, with 10 rows.",
+    "Timing-dependent counts differ within a build as much as between builds: the duplicate requests on returning to the tab are 3 and 1 on desktop in the before build and 1 and 1 in the after build (phone 1 in both), and one before-build phone run saw no poll inside the 33 s window. Each build also has one run where a section-tab click timed out at 30 s under pulse-dev load of 45 to 60 (before: the Overview tab link never resolved at phone width; after: the Protection tab link click at desktop width); the other run of each build completed every step at both widths. No failing responses and no console errors in any run.",
+    "Dist proof: 189 files each side; 94 byte-identical (the CSS included), 94 differ only in chunk-hash names and SRI strings, and 1 differs in code. After normalising hashes and short identifiers, TrueNAS-*.js (68278 to 67891 bytes) loses only the removed statements: the meta normalizer, the meta field of the decode and the meta member of the hook initial value; the two statements that replace them are the data-only decode and the data-only initial value.",
+    "check-bundle-size.mjs passes on both builds with no chunk renamed and .bundlesize.json unchanged: TrueNAS 16.57 to 16.49 kB gzip, total JS 1372.50 to 1372.47 kB, total CSS 32.11 kB in both.",
+    "Coverage preserved: vitest v8 coverage of the hook and the decode over the recovery suites, matched by normalised source text, loses nothing (LOST_TOTAL 0); the decode goes from 74 to 52 covered statements and branch arms with none uncovered either side, and the hook stays at 57 covered and 9 uncovered. 253 tests before, 252 after."
+  ],
+  "interactions": [
+    "Sign in with the rig login, load /truenas/overview and wait, click the Protection section tab, read the row labels, status filter options and row count, type \"backups\" into \"Search snapshots or replication\", read the narrowed rows, clear it, expand the first row and read the Protection detail panel; repeat at 390x844.",
+    "Stay on Protection for 33 s and count /api/recovery/points requests, click the Overview section tab and wait 33 s, click Protection again and count requests and rows; repeat at 390x844. Record the top-level and meta keys of every /api/recovery/points response body.",
+    "Run the same script twice against each of the before and after builds and compare the JSON results; screenshots of both viewports inspected."
+  ]
+}

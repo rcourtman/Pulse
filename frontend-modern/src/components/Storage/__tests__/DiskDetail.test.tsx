@@ -13,8 +13,9 @@ vi.mock('@/components/shared/HistoryChart', () => ({
     resourceId: string;
     metric: string;
     range?: string;
+    enabled?: boolean;
   }) => (
-    <div data-testid="history-chart">
+    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
       {props.resourceType}:{props.resourceId}:{props.metric}:{props.range}
     </div>
   ),
@@ -50,14 +51,92 @@ const buildDisk = (): Resource =>
     },
   }) as unknown as Resource;
 
+const atPhoneWidth = (run: () => void) => {
+  const width = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: width,
+    });
+  }
+};
+// metric -> [reads, folded on a phone]
+const chartStates = (): Record<string, [string | undefined, string]> =>
+  Object.fromEntries(
+    screen
+      .getAllByTestId('history-chart')
+      .map((chart) => [
+        chart.textContent!.split(':').at(-2),
+        [
+          chart.dataset.enabled,
+          chart.closest('[data-phone-collapsed="true"]') ? 'folded' : 'shown',
+        ],
+      ]),
+  );
+
 describe('DiskDetail', () => {
+  it('shows the first chart on a phone and folds the rest behind one button that stops their reads', () => {
+    atPhoneWidth(() => {
+      render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
+      expect(chartStates()).toEqual({
+        smart_temp: ['true', 'shown'],
+        smart_reallocated_sectors: ['false', 'folded'],
+        diskread: ['false', 'folded'],
+        diskwrite: ['false', 'folded'],
+        disk: ['false', 'folded'],
+      });
+      const toggle = screen.getByTestId('disk-detail-phone-toggle');
+      expect(toggle).toHaveTextContent('Show Reallocated Sectors, Read, Write, Busy');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(document.getElementById(toggle.getAttribute('aria-controls')!)).not.toBeNull();
+      fireEvent.click(toggle);
+      expect(new Set(Object.values(chartStates()).map(([reads]) => reads))).toEqual(
+        new Set(['true']),
+      );
+      expect(document.querySelectorAll('[data-phone-collapsed="true"]')).toHaveLength(0);
+      expect(toggle).toHaveTextContent('Show fewer charts');
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  it('keeps a chart whose SMART card is out of bounds on a phone', () => {
+    const disk = buildDisk();
+    (disk.physicalDisk as { smart: { reallocatedSectors: number } }).smart.reallocatedSectors = 8;
+    atPhoneWidth(() => {
+      render(() => <DiskDetail disk={disk} nodes={[]} />);
+      expect(chartStates().smart_reallocated_sectors).toEqual(['true', 'shown']);
+      expect(screen.getByTestId('disk-detail-phone-toggle')).toHaveTextContent(
+        'Show Read, Write, Busy',
+      );
+    });
+  });
+
+  it('reads every chart on a wider screen, where the fold does not apply', () => {
+    render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
+    expect(new Set(Object.values(chartStates()).map(([reads]) => reads))).toEqual(
+      new Set(['true']),
+    );
+  });
+
+  it('pauses every disk chart when its holder is hidden', () => {
+    const [shown, setShown] = createSignal(true);
+    render(() => <DiskDetail disk={buildDisk()} nodes={[]} historyEnabled={shown()} />);
+    const states = () => screen.getAllByTestId('history-chart').map((c) => c.dataset.enabled);
+    expect(states().length).toBeGreaterThan(0);
+    expect(new Set(states())).toEqual(new Set(['true']));
+    setShown(false);
+    expect(new Set(states())).toEqual(new Set(['false']));
+  });
+
   it('keeps disk detail range choices inside the current history entitlement', () => {
     render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);
 
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('combobox', { name: 'Disk history range' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    // One view: no tab strip, the range picker sits beside the history charts.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
 
     const rangeSelector = screen.getByRole('combobox', {
       name: 'Disk history range',
@@ -70,9 +149,16 @@ describe('DiskDetail', () => {
       '24h',
       '7d',
     ]);
+    // The same option names as every other history range picker.
+    expect(Array.from(rangeSelector.options).map((option) => option.textContent)).toEqual([
+      '1 hour',
+      '6 hours',
+      '12 hours',
+      '24 hours',
+      '7 days',
+    ]);
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
-    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByTestId('history-chart-hover-group')).toHaveLength(2);
   });
 
@@ -99,6 +185,10 @@ describe('DiskDetail', () => {
     expect(
       screen.getByText('Temperature is temporarily unavailable: collection deadline exceeded'),
     ).toBeInTheDocument();
+    // The retained value sits under its own label with no health tone.
+    expect(screen.queryByText('Temperature')).not.toBeInTheDocument();
+    expect(screen.getByText('Last known temperature')).toBeInTheDocument();
+    expect(screen.getByText('42°C')).toHaveClass('text-muted');
     expect(
       screen.getByText('Disk I/O is unsupported: per-member counters unavailable'),
     ).toBeInTheDocument();
@@ -180,7 +270,6 @@ describe('DiskDetail', () => {
     delete disk.physicalDisk!.smart;
     disk.physicalDisk!.collection = { io: { state: 'unsupported' } };
     render(() => <DiskDetail disk={disk} nodes={[]} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     expect(screen.getAllByTestId('history-chart').map((chart) => chart.textContent)).toEqual([
       'disk:agent-tower:sda:smart_temp:24h',
       'disk:agent-tower:sda:smart_reallocated_sectors:24h',

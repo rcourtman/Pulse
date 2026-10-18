@@ -5,7 +5,7 @@
  * Used to organize resource groups in the thresholds page.
  */
 
-import { Component, Show, createSignal, createEffect, JSX } from 'solid-js';
+import { Component, For, Show, createSignal, createEffect, JSX } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -34,6 +34,12 @@ export interface CollapsibleSectionProps {
   icon?: JSX.Element;
   /** Subtitle or description */
   subtitle?: string;
+  /**
+   * What the group alerts on by default, shown under the title so the page
+   * answers "what will alert me" before the group is opened. Hidden while the
+   * group is disabled, where it would promise alerts that cannot fire.
+   */
+  defaultsSummary?: string;
   /** Message to show when section is empty */
   emptyMessage?: string;
   /** Whether to show a visual indicator for global disable state */
@@ -132,6 +138,23 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
               </span>
               <Show when={props.subtitle}>
                 <span class="block truncate text-sm font-normal text-muted">{props.subtitle}</span>
+              </Show>
+              <Show when={!props.isGloballyDisabled && props.defaultsSummary}>
+                <span
+                  class="block text-xs font-normal tabular-nums text-muted sm:truncate sm:text-sm"
+                  title={props.defaultsSummary}
+                  data-thresholds-defaults-summary
+                >
+                  {/* Break between items only, never inside "Disk 90%". */}
+                  <For each={props.defaultsSummary?.split(' · ') ?? []}>
+                    {(item, index) => (
+                      <>
+                        {index() > 0 ? ' · ' : ''}
+                        <span class="whitespace-nowrap">{item}</span>
+                      </>
+                    )}
+                  </For>
+                </span>
               </Show>
             </span>
           </button>

@@ -7,8 +7,10 @@ vi.mock('@solidjs/router', () => ({
   A: (props: Record<string, unknown>) => props.children,
 }));
 
+const getConfigMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/api/alerts', () => ({
-  AlertsAPI: {},
+  AlertsAPI: { getConfig: getConfigMock },
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -24,6 +26,7 @@ vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
 }));
 
 import { OverviewTab } from '../OverviewTab';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 function defaultProps(overrides: Record<string, unknown> = {}) {
   return {
@@ -88,5 +91,29 @@ describe('OverviewTab empty state', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Alerting is paused')).not.toBeInTheDocument();
+  });
+});
+
+// Runs last: it loads the shared activation store, which the empty-state tests
+// above rely on staying unloaded.
+describe('OverviewTab delivery paused banner', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each([
+    ['a fresh install', { enabled: true, activationState: 'pending_review' }],
+    [
+      'an install whose delivery was switched off',
+      { enabled: true, activationState: 'pending_review', activationTime: '2026-10-01T09:00:00Z' },
+    ],
+  ])('says only that delivery is off for %s', async (_case, config) => {
+    getConfigMock.mockResolvedValue(config);
+    await useAlertsActivation().refreshConfig();
+
+    render(() => <OverviewTab {...defaultProps()} />);
+
+    expect(screen.getByText(/Notification delivery is turned off\./)).toBeInTheDocument();
+    expect(screen.queryByText(/for this install yet/)).not.toBeInTheDocument();
   });
 });

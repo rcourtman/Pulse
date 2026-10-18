@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   getPatrolAutopilotExpiry,
-  getPatrolConfigurationFailureInlineDetails,
 } from '../PatrolIntelligenceHeader';
 import {
+  getPatrolAlertAnalysisAvailabilityPresentation,
   getPatrolAutonomyAvailabilityPresentation,
   PATROL_AUTONOMY_RUNTIME_REQUIRED_REASON,
 } from '../patrolAutonomyAvailability';
@@ -35,38 +35,6 @@ describe('PatrolIntelligenceHeader', () => {
     );
   });
 
-  it('keeps Patrol mode readiness context visible inline', () => {
-    expect(
-      getPatrolConfigurationFailureInlineDetails({
-        message: 'Patrol mode could not be saved.',
-        code: 'patrol_readiness_not_ready',
-        readiness: {
-          status: 'not_ready',
-          cause: 'model_unsupported_tools',
-          summary:
-            'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
-          provider: 'openrouter',
-          model: 'openrouter:deepseek/deepseek-r1',
-        },
-      }),
-    ).toEqual([
-      'patrol_readiness_not_ready · model_unsupported_tools',
-      'Setup: The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
-      'Provider: openrouter',
-      'Model: openrouter:deepseek/deepseek-r1',
-    ]);
-  });
-
-  it('falls back to the blocked cause when readiness cause is absent', () => {
-    expect(
-      getPatrolConfigurationFailureInlineDetails({
-        message: 'Patrol mode could not be saved.',
-        code: 'patrol_autonomy_pro_required',
-        blockedCause: 'license_required',
-      }),
-    ).toEqual(['patrol_autonomy_pro_required · license_required']);
-  });
-
   it('keeps trigger runtime status in the header chrome after setup', () => {
     expect(headerSource).toContain('getPatrolTriggerStatusSummary');
     expect(headerSource).toContain('state.patrolStatus()?.trigger_status');
@@ -88,6 +56,15 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain("settingsTabPath('system-ai-patrol')");
     expect(headerSource).not.toContain('Patrol schedule and model settings');
     expect(headerSource).toContain('Check now');
+  });
+
+  it('opens the collapsed Patrol mode disclosure only for its route anchors', () => {
+    // Rendered behaviour lives in PatrolIntelligenceHeader.render.test.tsx.
+    expect(headerSource).toContain('`#${PATROL_CONTROL_ANCHOR}`');
+    expect(headerSource).toContain('`#${PATROL_OPERATIONS_LOOP_ANCHOR}`');
+    expect(headerSource).toContain('<details ref={setModeDisclosure}');
+    expect(headerSource).toContain('PATROL_MODE_ANCHOR_HASHES.has(location.hash)');
+    expect(headerSource).not.toMatch(/<details[^>]*\sopen[\s=>]/);
   });
 
   it('turns provider-blocked manual run controls into setup actions', () => {
@@ -250,7 +227,10 @@ describe('PatrolIntelligenceHeader', () => {
         external: false,
       },
     });
-    expect(headerSource).toContain('commercialSurfacesHidden: true');
+    expect(headerSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(headerSource).not.toContain('commercialSurfacesHidden: true');
     expect(headerSource).not.toContain('showAutonomyPlanBillingAction');
     expect(headerSource).not.toContain('CreditCardIcon');
     expect(headerSource).not.toContain('Plans & Billing');
@@ -309,6 +289,43 @@ describe('PatrolIntelligenceHeader', () => {
       title: 'Pulse Pro runtime required',
       actionLabel: 'Open Pro downloads',
       destination: { href: 'https://pulserelay.pro/download.html', external: true },
+    });
+  });
+
+  it('explains the container update risk lock through the same presentation policy', () => {
+    const planUpgradeDestination = {
+      href: '/settings/pulse-intelligence/billing/plan',
+      external: false,
+    };
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        planUpgradeDestination,
+      }),
+    ).toMatchObject({
+      kind: 'plan_locked',
+      title: 'Higher license plan required',
+      actionLabel: 'Plans & Billing',
+      destination: planUpgradeDestination,
+    });
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        upgradePromptsHidden: true,
+        planUpgradeDestination,
+      }),
+    ).not.toHaveProperty('actionLabel');
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        commercialSurfacesHidden: true,
+        planUpgradeDestination,
+      }),
+    ).toEqual({
+      kind: 'plan_locked',
+      locked: true,
+      title: 'Not available',
+      body: 'This install does not include container update risk.',
     });
   });
 

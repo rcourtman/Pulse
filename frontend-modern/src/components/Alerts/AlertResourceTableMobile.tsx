@@ -10,39 +10,36 @@ import { Card } from '@/components/shared/Card';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { AlertResourceMetricEditor } from './AlertResourceMetricEditor';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditNotePlaceholder,
   getAlertResourceTableEmptyState,
-  getAlertResourceTableMetricOffToggleProps,
-  getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
 import {
-  ALERT_RESOURCE_METRIC_OFF_VALUE,
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
-  getAlertResourceEnabledDefault,
   getAlertResourceLabel,
-  getAlertResourceMetricBounds,
+  getAlertResourceInitialEditMetric,
   getAlertResourceMetricDisplayValue,
-  getAlertResourceMetricStep,
-  isAlertResourceMetricOff,
+  getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
-  resolveAlertResourceMetricEnableValue,
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
 import type { OfflineState, ResourceTableProps } from './ResourceTable';
 
 interface AlertResourceTableMobileProps {
   table: ResourceTableProps;
   hasRows: () => boolean;
   hasCustomGlobalDefaults: () => boolean;
+  activeMetricInput: () => { resourceId: string; metric: string } | null;
   setActiveMetricInput: (value: { resourceId: string; metric: string } | null) => void;
 }
 
@@ -88,8 +85,10 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     if (resource.editable === false) {
       return;
     }
-    if (metric) {
-      props.setActiveMetricInput({ resourceId: resource.id, metric });
+    const initialMetric =
+      metric ?? getAlertResourceInitialEditMetric(props.table.columns, resource.type);
+    if (initialMetric) {
+      props.setActiveMetricInput({ resourceId: resource.id, metric: initialMetric });
     }
     const payload = buildAlertResourceEditPayload(resource);
     props.table.onEdit(resource.id, payload.thresholds, payload.defaults, payload.note);
@@ -115,6 +114,8 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     state: OfflineState,
     disabled: boolean,
     onToggle: () => void,
+    // What the button sets; its visible state word ends the accessible name.
+    name: string,
   ) => {
     const config = getAlertResourceTableOfflineStatePresentation(state);
 
@@ -128,11 +129,17 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           onToggle();
         }}
         title={config.title}
+        aria-label={`${name}: ${config.label}`}
       >
         {config.label}
       </button>
     );
   };
+
+  // The value a metric cell shows, which its accessible name repeats so a
+  // screen reader hears the current threshold and voice control can say it.
+  const metricValueText = (metric: string, value: number) =>
+    value <= 0 ? 'Off' : props.table.formatMetricValue(metric, value);
 
   const MetricValueWithHeat = (metricProps: {
     resourceId: string;
@@ -141,9 +148,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     isOverridden: boolean;
   }) => {
     const isDisabledMetric = metricProps.value <= 0;
-    const displayText = isDisabledMetric
-      ? 'Off'
-      : props.table.formatMetricValue(metricProps.metric, metricProps.value);
+    const displayText = metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
@@ -198,6 +203,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   props.table.onToggleGlobalDisable?.();
                   props.table.setHasUnsavedChanges?.(true);
                 }}
+                ariaLabel="Global alerts toggle"
               />
             </Show>
           </div>
@@ -211,74 +217,21 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
             >
               {(column) => {
                 const metric = normalizeAlertResourceMetricKey(column);
-                const bounds = getAlertResourceMetricBounds(metric);
-                const value = () => props.table.globalDefaults?.[metric] ?? 0;
-                // An unset default and a stored 0 are both disabled to the alert
-                // engine, so neither may render as On.
-                const isOff = () => isAlertResourceMetricOff(value());
-
                 return (
                   <div class="p-2 bg-surface rounded-sm border border-border-subtle flex flex-col gap-1">
                     <span class="text-[10px] uppercase text-slate-500 font-medium">{column}</span>
-                    <div class="flex items-center gap-1.5">
-                      <div class="relative flex-1">
-                        <input
-                          type="number"
-                          min={bounds.min}
-                          max={bounds.max}
-                          step={getAlertResourceMetricStep(metric)}
-                          value={isOff() ? '' : value()}
-                          placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
-                          disabled={isOff()}
-                          class={`min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0 ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
-                          onInput={(e) => {
-                            const nextValue = parseFloat(e.currentTarget.value);
-                            // An empty box is mid-edit, not a disable request:
-                            // coercing it to 0 used to disable the metric in the
-                            // engine while the card still claimed On. Use the Off
-                            // toggle to disable.
-                            if (Number.isNaN(nextValue)) {
-                              return;
-                            }
-                            if (nextValue < bounds.min || nextValue > bounds.max) {
-                              return;
-                            }
-                            props.table.setGlobalDefaults?.((prev) => ({
-                              ...prev,
-                              [metric]: nextValue,
-                            }));
-                            props.table.setHasUnsavedChanges?.(true);
-                          }}
-                        />
-                        <Show when={isOff()}>
-                          <button
-                            type="button"
-                            class="absolute inset-0 w-full"
-                            onClick={() => {
-                              props.table.setGlobalDefaults?.((prev) => ({
-                                ...prev,
-                                [metric]: getAlertResourceEnabledDefault(metric),
-                              }));
-                              props.table.setHasUnsavedChanges?.(true);
-                            }}
-                            aria-label={`Enable ${column} default`}
-                          />
-                        </Show>
-                      </div>
-                      <StatusBadge
-                        isEnabled={!isOff()}
-                        onToggle={() => {
-                          props.table.setGlobalDefaults?.((prev) => ({
-                            ...prev,
-                            [metric]: isOff()
-                              ? getAlertResourceEnabledDefault(metric)
-                              : ALERT_RESOURCE_METRIC_OFF_VALUE,
-                          }));
-                          props.table.setHasUnsavedChanges?.(true);
-                        }}
-                        {...getAlertResourceTableMetricOffToggleProps()}
-                      />
-                    </div>
+                    <AlertResourceMetricEditor
+                      metric={metric}
+                      column={column}
+                      scope="default"
+                      layout="card"
+                      value={props.table.globalDefaults?.[metric]}
+                      fallback={props.table.globalDefaultFallbacks?.[metric]}
+                      onChange={(value) => {
+                        props.table.setGlobalDefaults?.((prev) => ({ ...prev, [metric]: value }));
+                        props.table.setHasUnsavedChanges?.(true);
+                      }}
+                    />
                   </div>
                 );
               }}
@@ -308,6 +261,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           labelDisabled="Off"
                           titleEnabled="Offline alerts currently enabled by default. Click to disable."
                           titleDisabled="Offline alerts currently disabled by default. Click to enable."
+                          ariaLabel="Offline alerts default"
                         />
                       </Show>
                     }
@@ -322,10 +276,15 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           ? 'critical'
                           : 'warning';
 
-                      return renderOfflineStateButton(state, disabledGlobally, () => {
-                        if (disabledGlobally) return;
-                        props.table.onSetGlobalOfflineState?.(nextOfflineState(state));
-                      });
+                      return renderOfflineStateButton(
+                        state,
+                        disabledGlobally,
+                        () => {
+                          if (disabledGlobally) return;
+                          props.table.onSetGlobalOfflineState?.(nextOfflineState(state));
+                        },
+                        'Offline alerts default',
+                      );
                     })()}
                   </Show>
                 </div>
@@ -359,6 +318,14 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           const displayValue = (metric: string) => getDisplayValue(resource, metric, isEditing());
           const isOverridden = (metric: string) =>
             isAlertResourceMetricOverridden(resource, metric);
+          const relaxedTriggerSummary = () =>
+            props.table.globalDisableFlag?.()
+              ? null
+              : getAlertResourceRelaxedTriggerSummary(
+                  resource,
+                  props.table.editingThresholds(),
+                  isEditing(),
+                );
 
           return (
             <Card
@@ -379,6 +346,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           !(props.table.globalDisableFlag?.() ?? false) &&
                           props.table.onToggleDisabled?.(resource.id)
                         }
+                        ariaLabel={`Alerts for ${getAlertResourceLabel(resource)}`}
                       />
                     </div>
                   </Show>
@@ -387,8 +355,21 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     <div class="font-medium text-sm truncate">
                       {getAlertResourceLabel(resource)}
                     </div>
+                    <Show when={resource.type === 'agent' && resource.clusterName}>
+                      <span class="block text-xs text-muted whitespace-normal break-words">
+                        {resource.clusterName}
+                      </span>
+                    </Show>
                     <Show when={resource.subtitle}>
-                      <div class="text-xs text-slate-500 truncate">{resource.subtitle}</div>
+                      <div
+                        class="text-xs text-muted"
+                        classList={{
+                          truncate: !resource.readingMessage,
+                          'whitespace-normal break-words': Boolean(resource.readingMessage),
+                        }}
+                      >
+                        {resource.subtitle}
+                      </div>
                     </Show>
                   </div>
                 </div>
@@ -467,6 +448,17 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   </Show>
                 </div>
               </div>
+              <Show when={resource.readingMessage}>
+                <p class="text-xs text-muted whitespace-normal break-words">
+                  {resource.readingMessage}
+                </p>
+              </Show>
+
+              <Show when={relaxedTriggerSummary()}>
+                {(summary) => (
+                  <AlertResourceRelaxedTriggers summary={summary()} class="text-xs text-muted" />
+                )}
+              </Show>
 
               <Show when={isEditing()}>
                 <FormTextarea
@@ -514,14 +506,11 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             onToggle={() => onToggle(resource.id)}
                             titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                             titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
+                            ariaLabel={`${titlePrefix} alerts for ${getAlertResourceLabel(resource)}`}
                           />
                         </div>
                       );
                     }
-
-                    const isDisabled = () => isAlertResourceMetricOff(thresholds()?.[metric]);
-                    const inheritedDefault = () => resource.defaults?.[metric];
-                    const bounds = getAlertResourceMetricBounds(metric);
 
                     return (
                       <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded-sm">
@@ -536,7 +525,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               type="button"
                               onClick={(e) => startEditing(resource, metric, e)}
                               class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded-sm px-1 -mx-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
-                              aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
+                              aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}: ${metricValueText(metric, displayValue(metric))}`}
                             >
                               <MetricValueWithHeat
                                 resourceId={resource.id}
@@ -547,44 +536,29 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             </button>
                           }
                         >
-                          <div class="flex items-center gap-1.5 [&_button]:min-h-11">
-                            <input
-                              type="number"
-                              min={bounds.min}
-                              max={bounds.max}
-                              value={isDisabled() ? '' : (thresholds()?.[metric] ?? '')}
-                              placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
-                              class="min-h-11 w-16 text-right text-xs p-1 rounded-sm border border-border bg-surface"
-                              onInput={(e) => {
-                                const nextValue = parseFloat(e.currentTarget.value);
-                                if (
-                                  !Number.isNaN(nextValue) &&
-                                  (nextValue < bounds.min || nextValue > bounds.max)
-                                ) {
-                                  return;
-                                }
-                                props.table.setEditingThresholds({
-                                  ...props.table.editingThresholds(),
-                                  [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
-                                });
-                              }}
-                            />
-                            <StatusBadge
-                              isEnabled={!isDisabled()}
-                              onToggle={() =>
-                                props.table.setEditingThresholds({
-                                  ...props.table.editingThresholds(),
-                                  [metric]: isDisabled()
-                                    ? resolveAlertResourceMetricEnableValue(
-                                        inheritedDefault(),
-                                        metric,
-                                      )
-                                    : ALERT_RESOURCE_METRIC_OFF_VALUE,
-                                })
-                              }
-                              {...getAlertResourceTableMetricOffToggleProps()}
-                            />
-                          </div>
+                          <AlertResourceMetricEditor
+                            metric={metric}
+                            column={column}
+                            scope="override"
+                            layout="card"
+                            value={thresholds()?.[metric]}
+                            inheritedDefault={resource.defaults?.[metric]}
+                            resourceName={getAlertResourceLabel(resource)}
+                            onFocus={() =>
+                              props.setActiveMetricInput({ resourceId: resource.id, metric })
+                            }
+                            autoFocus={
+                              isEditing() &&
+                              props.activeMetricInput()?.resourceId === resource.id &&
+                              props.activeMetricInput()?.metric === metric
+                            }
+                            onChange={(value) =>
+                              props.table.setEditingThresholds({
+                                ...props.table.editingThresholds(),
+                                [metric]: value,
+                              })
+                            }
+                          />
                         </Show>
                       </div>
                     );
@@ -619,6 +593,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               titleEnabled="Offline alerts enabled. Click to disable for this resource."
                               titleDisabled="Offline alerts disabled. Click to enable for this resource."
                               titleWhenDisabled="Offline alerts controlled globally"
+                              ariaLabel={`Offline alerts for ${getAlertResourceLabel(resource)}`}
                             />
                           }
                         >
@@ -638,10 +613,18 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               state = defaultSeverity === 'critical' ? 'critical' : 'warning';
                             }
 
-                            return renderOfflineStateButton(state, disabledGlobally(), () => {
-                              if (disabledGlobally()) return;
-                              props.table.onSetOfflineState?.(resource.id, nextOfflineState(state));
-                            });
+                            return renderOfflineStateButton(
+                              state,
+                              disabledGlobally(),
+                              () => {
+                                if (disabledGlobally()) return;
+                                props.table.onSetOfflineState?.(
+                                  resource.id,
+                                  nextOfflineState(state),
+                                );
+                              },
+                              `Offline alerts for ${getAlertResourceLabel(resource)}`,
+                            );
                           })()}
                         </Show>
                       </div>

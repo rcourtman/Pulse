@@ -58,6 +58,8 @@ type MetricsHistory struct {
 	capacityForecastCache map[string]storageCapacityForecastCacheEntry
 	metricWindowMu        sync.Mutex
 	metricWindowCache     map[string]metricWindowCacheEntry
+	metricWindowBytes     int
+	metricWindowSweepAt   time.Time
 }
 
 // NewMetricsHistory creates a new metrics history tracker
@@ -145,6 +147,8 @@ func (mh *MetricsHistory) Reset() {
 
 	mh.metricWindowMu.Lock()
 	mh.metricWindowCache = nil
+	mh.metricWindowBytes = 0
+	mh.metricWindowSweepAt = time.Time{}
 	mh.metricWindowMu.Unlock()
 }
 

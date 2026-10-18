@@ -416,24 +416,17 @@ export const buildStorageNodeOnlineByLabel = (nodes: Resource[]): Map<string, bo
   return map;
 };
 
-export const syncExpandedStorageGroups = (
-  previous: Set<string>,
-  allKeys: string[],
-): Set<string> => {
-  if (previous.size === 0) return new Set(allKeys);
+// Groups open by default and only the groups the operator collapsed are stored,
+// so a live update that rebuilds the group list never reopens a collapsed one.
+export const resolveExpandedStorageGroups = (
+  allKeys: readonly string[],
+  collapsed: ReadonlySet<string>,
+): Set<string> => new Set(allKeys.filter((key) => !collapsed.has(key)));
 
-  const next = new Set(previous);
-  let changed = false;
-  for (const key of allKeys) {
-    if (!next.has(key)) {
-      next.add(key);
-      changed = true;
-    }
-  }
-  return changed ? next : previous;
-};
+export const haveSameStorageGroups = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean =>
+  a.size === b.size && [...a].every((key) => b.has(key));
 
-export const toggleExpandedStorageGroup = (previous: Set<string>, key: string): Set<string> => {
+export const toggleCollapsedStorageGroup = (previous: Set<string>, key: string): Set<string> => {
   const next = new Set(previous);
   if (next.has(key)) next.delete(key);
   else next.add(key);

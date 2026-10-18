@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -16,6 +17,72 @@ func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
 	vmSnapshot := guestSnapshotFromVM(models.VM{})
 	if got := vmSnapshot.resourceType(); got != "vm" {
 		t.Fatalf("expected VM resourceType to be vm, got %q", got)
+	}
+}
+
+func TestGuestSnapshotObservationAvailability(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		memory     models.Memory
+		disk       models.Disk
+		reason     string
+		wantMemory bool
+		wantDisk   bool
+	}{
+		{name: "legacy measured zero", memory: models.Memory{}, disk: models.Disk{}},
+		{name: "current independent read", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "current", Source: "agent"}}, disk: models.Disk{Usage: 98}},
+		{name: "retained memory only", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "last-known"}}, disk: models.Disk{Usage: 98}, wantMemory: true},
+		{name: "unavailable numeric placeholder", memory: models.Memory{Usage: 0, Observation: models.MemoryObservation{State: "unavailable"}}, wantMemory: true},
+		{name: "unknown observation version", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "future-version"}}, wantMemory: true},
+		{name: "explicit unavailable overrides current", memory: models.Memory{Usage: 96, UsageUnavailable: true, Observation: models.MemoryObservation{State: "current"}}, wantMemory: true},
+		{name: "retained filesystem only", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: 98}, reason: "prev-vm-locked", wantDisk: true},
+		{name: "failed empty filesystem inventory", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: -1}, reason: "agent-error", wantDisk: true},
+		{name: "legacy unavailable aggregate", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: -1}, wantDisk: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// A deferred QGA session does not by itself make independent
+			// selected memory or Pulse-agent filesystems unavailable.
+			vm := models.VM{Memory: test.memory, Disk: test.disk, DiskStatusReason: test.reason, GuestAgentStatus: "deferred"}
+			for _, guest := range []any{vm, &vm} {
+				snapshot, ok := extractGuestSnapshot(guest)
+				if !ok || snapshot.MemoryUnavailable != test.wantMemory || snapshot.DiskUnavailable != test.wantDisk {
+					t.Fatalf("observation flags lost: %+v", snapshot)
+				}
+				metrics := snapshot.metrics()
+				if metrics.MemoryUnavailable != test.wantMemory || metrics.DiskUnavailable != test.wantDisk || metrics.MemUsage != test.memory.Usage || metrics.DiskUsage != test.disk.Usage {
+					t.Fatal("filter projection lost availability or rewrote retained values")
+				}
+			}
+			ct := models.Container{Memory: test.memory, Disk: test.disk}
+			for _, guest := range []any{ct, &ct} {
+				snapshot, _ := extractGuestSnapshot(guest)
+				if snapshot.MemoryUnavailable != test.wantMemory || snapshot.DiskUnavailable != (test.disk.Usage < 0) {
+					t.Fatal("LXC observation availability changed with an unrelated VM disk failure")
+				}
+			}
+		})
+	}
+}
+
+func TestGuestAlertRetainedDiskStillHonoursExplicitOverride(t *testing.T) {
+	for _, override := range []ThresholdConfig{{Disabled: true}, {Disk: &HysteresisThreshold{Trigger: -1}}} {
+		m := guestObservationManager(t)
+		vm := guestObservationVM()
+		vm.Memory.Usage = 10
+		m.CheckGuest(vm, "site")
+		if len(m.GetActiveAlerts()) != 2 {
+			t.Fatal("expected two current filesystem incidents")
+		}
+		_, keySource, key := guestDiskIdentity(vm.Disks[0], 0)
+		cfg := m.GetConfig()
+		cfg.Overrides[guestDiskOverrideKey(vm, vm.ID, keySource)] = override
+		m.UpdateConfig(cfg)
+		vm.DiskStatusReason = "prev-vm-locked"
+		m.CheckGuest(vm, "site")
+		active := m.GetActiveAlerts()
+		if len(active) != 1 || active[0].ResourceID == vm.ID+"-disk-"+key {
+			t.Fatalf("explicit filesystem disablement was lost or crossed disk identity: %+v", active)
+		}
 	}
 }
 
@@ -116,5 +183,40 @@ func TestGuestIORateMetricsDistinguishValidZeroFromUnknown(t *testing.T) {
 	diskRead, diskWrite, networkIn, networkOut = guestIORateMetrics(unknown)
 	if diskRead != nil || diskWrite != nil || networkIn != nil || networkOut != nil {
 		t.Fatalf("unknown rates became alert candidates: %+v %+v %+v %+v", diskRead, diskWrite, networkIn, networkOut)
+	}
+}
+
+// A filesystem alert's resource ID ("<guest>-disk-<key>") names nothing the
+// resource registry can open, so it carries the guest it belongs to under
+// guestResourceId: the ID the guest's own alerts are raised under. Both the
+// canonical-spec path (VMs, containers) and the legacy checkMetric path (a
+// guest of unknown kind) stamp it.
+func TestGuestFilesystemAlertsNameOwningGuest(t *testing.T) {
+	vm := guestObservationVM()
+	legacy := guestSnapshotFromVM(vm)
+	legacy.Kind = guestKindUnknown
+	for name, guest := range map[string]any{"canonical": vm, "legacy": legacy} {
+		t.Run(name, func(t *testing.T) {
+			// Only the canonical guest raises a guest-level (memory) alert
+			// beside its filesystems; it ties the stamp to that alert's ID.
+			wantGuestLevel := name == "canonical"
+			m := guestObservationManager(t)
+			m.CheckGuest(guest, "site")
+			var filesystems int
+			var guestLevel bool
+			for _, alert := range m.GetActiveAlerts() {
+				if !strings.HasPrefix(alert.ResourceID, vm.ID+"-disk-") {
+					guestLevel = guestLevel || alert.ResourceID == vm.ID
+					continue
+				}
+				filesystems++
+				if got := alert.Metadata["guestResourceId"]; got != vm.ID {
+					t.Fatalf("filesystem alert %s guestResourceId = %v, want %q", alert.ResourceID, got, vm.ID)
+				}
+			}
+			if filesystems != 2 || guestLevel != wantGuestLevel {
+				t.Fatalf("expected two filesystem alerts (guest-level alert under %q: %v): %+v", vm.ID, wantGuestLevel, m.GetActiveAlerts())
+			}
+		})
 	}
 }

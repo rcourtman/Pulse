@@ -261,8 +261,8 @@ func TestClientVMFSInfoSkipsMalformedEntries(t *testing.T) {
 
 	ctx := context.Background()
 	filesystems, err := client.GetVMFSInfo(ctx, "node1", 100)
-	if err != nil {
-		t.Fatalf("GetVMFSInfo error: %v", err)
+	if err == nil {
+		t.Fatal("malformed peer must prevent a complete filesystem inventory")
 	}
 	if len(filesystems) != 1 {
 		t.Fatalf("expected malformed entry to be skipped, got %+v", filesystems)

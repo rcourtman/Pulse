@@ -1,10 +1,13 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -150,6 +153,67 @@ func TestInstallOperatorIntentResolverInheritsScopedMaintenanceFromParent(t *tes
 	}
 }
 
+// A recurring parent window carries no one-shot dates. Scoped to descendants,
+// its active occurrence silences the child's alerts until the occurrence ends,
+// resolved by the coverage rule Patrol's projection shares.
+func TestInstallOperatorIntentResolverInheritsRecurringScopedMaintenance(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	parentID := "node:pve-a"
+	registry.IngestResources([]unifiedresources.Resource{
+		{ID: parentID, Type: unifiedresources.ResourceTypeAgent, Name: "pve-a"},
+		{ID: "vm:101", Type: unifiedresources.ResourceTypeVM, Name: "database", ParentID: &parentID},
+	})
+	// A two-hour occurrence every day, centred on the current minute.
+	now := time.Now().UTC().Truncate(time.Minute)
+	minute := now.Hour()*60 + now.Minute()
+	recurrence := &unifiedresources.RecurringMaintenanceWindow{
+		Timezone:    "UTC",
+		Weekdays:    []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartMinute: (minute + 1440 - 60) % 1440,
+		EndMinute:   (minute + 60) % 1440,
+	}
+	setParent := func(scope unifiedresources.MaintenanceScope) {
+		t.Helper()
+		if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+			CanonicalID:           parentID,
+			MaintenanceRecurrence: recurrence,
+			MaintenanceScope:      scope,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setParent(unifiedresources.MaintenanceScopeResourceAndDescendants)
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	preview := func() alerts.AlertIntentPolicyPreview {
+		t.Helper()
+		got, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+			ResourceID: "vm:101", ResourceType: "vm", Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	got := preview()
+	if got.Reason != "operator_maintenance" || got.Status != "expected_transient" {
+		t.Fatalf("inherited recurring maintenance preview = %+v", got)
+	}
+	if wantEnd := now.Add(time.Hour); got.EligibleAt == nil || !got.EligibleAt.Equal(wantEnd) {
+		t.Fatalf("eligibleAt = %v, want the occurrence end %v", got.EligibleAt, wantEnd)
+	}
+
+	// Control: the same recurrence scoped to the parent alone leaves the child.
+	setParent(unifiedresources.MaintenanceScopeResource)
+	if got := preview(); got.Status != "would_activate" {
+		t.Fatalf("resource-only recurring parent window leaked to child: %+v", got)
+	}
+}
+
 func TestPlatformMonitorResourceIdentityConstructors(t *testing.T) {
 	if got := PBSMonitorResourceID("backup-main"); got != "pbs-backup-main" {
 		t.Fatalf("PBS monitor resource ID = %q", got)
@@ -256,5 +320,243 @@ func TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask(t *testing.T) 
 
 	if got, ok := monitor.resolveBackupIntentContext("", "pve-a", "node-a", 101, now); ok {
 		t.Fatalf("guest whose job section already finished should not carry intent: %+v", got)
+	}
+}
+
+func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
+	}
+	defer m.alertManager.Stop()
+
+	cfg := m.alertManager.GetConfig()
+	cfg.TimeThresholds = map[string]int{"node": 0}
+	cfg.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.alertManager.UpdateConfig(cfg)
+
+	node := models.Node{
+		ID: "homelab-minipc", Name: "minipc", Instance: "homelab", Status: "online",
+		Temperature: &models.Temperature{Available: true, CPUPackage: 85},
+	}
+	m.alertManager.CheckNode(node)
+	var breachedAt time.Time
+	for _, alert := range m.alertManager.GetActiveAlerts() {
+		if alert.Type == "temperature" {
+			breachedAt = alert.LastSeen
+		}
+	}
+	if breachedAt.IsZero() {
+		t.Fatal("breaching temperature did not open the alert")
+	}
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 78}
+	m.alertManager.CheckNode(node)
+
+	m.syncAlertsToState()
+
+	var held *models.Alert
+	snapshot := m.state.GetSnapshot()
+	for i := range snapshot.ActiveAlerts {
+		if snapshot.ActiveAlerts[i].Type == "temperature" {
+			held = &snapshot.ActiveAlerts[i]
+		}
+	}
+	if held == nil {
+		t.Fatal("expected the temperature alert to stay open at 78°C")
+	}
+	if held.Value != 85 {
+		t.Fatalf("legacy value = %v, want the last breach 85", held.Value)
+	}
+	status := held.MetricStatus
+	if status == nil {
+		t.Fatal("websocket state must carry the live reading")
+	}
+	if status.Phase != models.MetricAlertPhaseLatched || status.Value != 78 || status.Recovery != 75 {
+		t.Fatalf("live status = %+v, want latched at 78 clearing at 75", status)
+	}
+	// The concrete /api/state and websocket projection has no LastSeen. The
+	// live status must date the held breach without advancing it to this poll.
+	data, err := json.Marshal(m.state.ToFrontend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		ActiveAlerts []struct {
+			Type         string     `json:"type"`
+			LastSeen     *time.Time `json:"lastSeen"`
+			MetricStatus *struct {
+				LastBreachAt time.Time `json:"lastBreachAt"`
+				ObservedAt   time.Time `json:"observedAt"`
+			} `json:"metricStatus"`
+		} `json:"activeAlerts"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, alert := range wire.ActiveAlerts {
+		if alert.Type != "temperature" {
+			continue
+		}
+		found = true
+		if alert.LastSeen != nil {
+			t.Fatal("projection added poll-varying legacy LastSeen")
+		}
+		if alert.MetricStatus == nil || !alert.MetricStatus.LastBreachAt.Equal(breachedAt) {
+			t.Fatalf("projected breach time = %+v, want %v", alert.MetricStatus, breachedAt)
+		}
+		if !alert.MetricStatus.ObservedAt.After(breachedAt) {
+			t.Fatal("hold did not carry a newer independent observation")
+		}
+	}
+	if !found {
+		t.Fatal("frontend projection lost the held temperature alert")
+	}
+}
+
+// After a restart, a host that has not reported again exists only through
+// saved-host continuity, and the host-offline alert continuity raises names it
+// as agent:<host ID>. Intent the operator set on the saved host's row must
+// reach that alert, as it does for Patrol findings and resources API reads,
+// although the published registry alone does not know the host.
+func TestOperatorIntentReachesSavedHostAlertsAfterRestart(t *testing.T) {
+	now := time.Now().UTC()
+	saved := config.HostContinuityEntry{
+		HostID: "host-retired", MachineID: "machine-retired", Hostname: "retired",
+		Platform: "linux", LastSeen: now.Add(-10 * time.Minute),
+	}
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(saved); err != nil {
+		t.Fatal(err)
+	}
+	store := unifiedresources.NewMemoryStore()
+	savedID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, saved.MachineID)
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID: savedID, IntentionallyOffline: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now})
+	if _, ok := adapter.ResolveCanonicalResourceID("agent:" + saved.HostID); ok {
+		t.Fatal("published registry already knows the saved host; the case needs it absent")
+	}
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	m := &Monitor{state: models.NewState(), alertManager: manager, hostContinuityStore: continuity}
+	m.SetResourceStore(adapter)
+
+	preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "agent:" + saved.HostID, ResourceType: "agent",
+		Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_expected_offline" {
+		t.Fatalf("saved host offline alert intent = %+v, want the intentionally-offline state set on %s", preview, savedID)
+	}
+
+	// The saved host reports again: the published registry knows it, and its
+	// alerts keep reading the same row.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID: saved.HostID, MachineID: saved.MachineID, Hostname: saved.Hostname,
+			Platform: "linux", Status: "online", LastSeen: now, IntervalSeconds: 30,
+		}},
+		LastUpdate: now.Add(time.Second),
+	})
+	m.state.Hosts = []models.Host{{ID: saved.HostID, MachineID: saved.MachineID, Hostname: saved.Hostname, Status: "online", LastSeen: now}}
+	preview, err = manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "agent:" + saved.HostID, ResourceType: "agent",
+		Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_expected_offline" {
+		t.Fatalf("reporting host offline alert intent = %+v, want the same intentionally-offline state", preview)
+	}
+}
+
+// Alert intent keeps one saved-host overlay per published generation, so
+// lookups made under the alert manager's lock reuse what publication built.
+// A new publication replaces it even when it shares the last one's timestamp
+// or is stamped earlier, and mock mode answers from the published registry
+// and drops the real-mode overlay.
+func TestOperatorIntentIdentityKeepsOneOverlayPerGeneration(t *testing.T) {
+	now := time.Now().UTC()
+	saved := config.HostContinuityEntry{
+		HostID: "host-retired", MachineID: "machine-retired", Hostname: "retired",
+		Platform: "linux", LastSeen: now.Add(-10 * time.Minute),
+	}
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(saved); err != nil {
+		t.Fatal(err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore()))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now.Add(time.Hour)})
+	m := &Monitor{state: models.NewState(), hostContinuityStore: continuity}
+	identity := m.newOperatorIntentIdentity(adapter)
+	if identity == nil {
+		t.Fatal("monitor adapter offers no operator intent identity")
+	}
+	resolvesSavedHost := func(readState any) bool {
+		_, ok := readState.(resourceIntentIdentityReader).ResolveCanonicalResourceID("agent:" + saved.HostID)
+		return ok
+	}
+
+	identity.refresh()
+	first := identity.current()
+	if first == any(adapter) || !resolvesSavedHost(first) {
+		t.Fatal("refresh did not build the saved-host overlay")
+	}
+	if again := identity.current(); again != first {
+		t.Fatal("lookup rebuilt the overlay within one generation")
+	}
+
+	// A rebuild of a snapshot stamped in the future keeps its time, so two
+	// publications can share a timestamp.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now.Add(time.Hour)})
+	identity.refresh()
+	sameStamp := identity.current()
+	if sameStamp == first || !resolvesSavedHost(sameStamp) {
+		t.Fatal("a publication sharing the last one's timestamp kept its overlay")
+	}
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now})
+	identity.refresh()
+	second := identity.current()
+	if second == sameStamp || !resolvesSavedHost(second) {
+		t.Fatal("an earlier-stamped generation kept the previous overlay")
+	}
+	if again := identity.current(); again != second {
+		t.Fatal("lookups rebuild the overlay after an earlier-stamped generation")
+	}
+
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+	if got := identity.current(); got != any(adapter) {
+		t.Fatal("mock mode resolved through the real-mode saved-host overlay")
+	}
+	identity.refresh()
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	// Alert evaluation resolves from inside an admitted mock-mode fence call,
+	// so the rebuild's own fenced store nests in it.
+	var third any
+	if !m.mockModeFence.begin().run(func() { third = identity.current() }) {
+		t.Fatal("fence refused the lookup")
+	}
+	if third == any(adapter) || !resolvesSavedHost(third) {
+		t.Fatal("leaving mock mode kept answering from the published registry alone")
+	}
+	if again := identity.current(); again != third {
+		t.Fatal("the rebuild made inside a fenced call was not kept")
 	}
 }

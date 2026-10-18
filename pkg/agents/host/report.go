@@ -120,6 +120,10 @@ type XCPNGVM struct {
 type ProxmoxLXCInventory struct {
 	Containers  []ProxmoxLXCContainer `json:"containers"`
 	CollectedAt time.Time             `json:"collectedAt"`
+	// Empty status is the legacy complete-only helper response. Version 2
+	// makes completeness explicit; omitted VMIDs never carry fresh readings.
+	Status       string `json:"status,omitempty"`
+	OmittedVMIDs []int  `json:"omittedVmids,omitempty"`
 }
 
 // ProxmoxLXCContainer contains direct pct df readings for one local running

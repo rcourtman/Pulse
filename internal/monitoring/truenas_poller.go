@@ -993,6 +993,11 @@ func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 
 // SupplementalRecords adapts TrueNAS records to the monitor supplemental
 // provider contract.
+// SupplementalRecordsMockMode binds native records to real infrastructure.
+// Mock-mode publications must not read this cached inventory before the
+// router's post-switch hook replaces the platform provider pair.
+func (*TrueNASPoller) SupplementalRecordsMockMode() bool { return false }
+
 func (p *TrueNASPoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
 	return p.GetCurrentRecordsForOrg(orgID)
 }
@@ -1018,6 +1023,8 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 	defer cancel()
 
 	history := make(map[string][]MetricPoint)
+	owners := make(map[string]trueNASPollerProviderEntry)
+	ambiguous := make(map[string]bool)
 	for _, entry := range entries {
 		nativeHistory, err := entry.provider.PhysicalDiskTemperatureHistory(ctx, duration)
 		if err != nil {
@@ -1028,10 +1035,15 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 				Str("connection_id", strings.TrimSpace(entry.connectionID)).
 				Err(err).
 				Msg("TrueNAS poller failed to read native disk temperature history")
-			continue
 		}
 		for resourceID, points := range nativeHistory {
-			if strings.TrimSpace(resourceID) == "" || len(points) == 0 {
+			if strings.TrimSpace(resourceID) == "" || len(points) == 0 || ambiguous[resourceID] {
+				continue
+			}
+			if owner, exists := owners[resourceID]; exists && owner.connectionID != entry.connectionID {
+				delete(history, resourceID)
+				delete(owners, resourceID)
+				ambiguous[resourceID] = true
 				continue
 			}
 			converted := make([]MetricPoint, len(points))
@@ -1042,8 +1054,18 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 				}
 			}
 			history[resourceID] = converted
+			owners[resourceID] = entry
 		}
 	}
+	// Do not serve a provider that was removed or replaced while any of the
+	// native reads were in flight. No poller lock is held during network I/O.
+	p.mu.Lock()
+	for resourceID, owner := range owners {
+		if !truenas.IsFeatureEnabled() || p.providersByOrg[orgID][owner.connectionID] != owner.provider {
+			delete(history, resourceID)
+		}
+	}
+	p.mu.Unlock()
 	if len(history) == 0 {
 		return nil
 	}

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "a21e0ef8f819c404338661f76b82b5bea09aedfd",
+  "verified_at": "2026-10-07T10:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/utils/resourcePolicyPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx": "fd9ae0f141eadb0058cbf99bae19adf3d36e31008a2a35bb81e2bd02ff20d8df",
+    "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts": "deleted",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "3ad9d22fc2e416c1224fc4db64d1dd3d99bac19b1d8d82fa947877af7a56afd7",
+    "frontend-modern/src/utils/resourcePolicyPresentation.ts": "e9402807382b076d0cab3e84d4f03ef3fab8f81e508a83f8304471788f001992"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree (rebased on a21e0ef8f8) served by a private DEMO_MODE mock backend (50 Proxmox nodes, 929 guests, Docker estate); the same checks also ran on an embedded build of unmodified origin/main for comparison",
+    "Proxmox overview workloads table at 1920: 161 guest rows, 512 Net I/O and Disk I/O values, 14 flagged as top outliers (4 semibold, 10 medium) and the rest muted, so the moved IO distribution still drives outlier emphasis",
+    "Proxmox overview workloads table at 390: 45 guest rows render; Net I/O and Disk I/O stay hidden at that width as before",
+    "Docker containers table, inline resource drawer for branch-portal-3 with its real change history plus facet counts widened to nine badges (REST list response and websocket frames edited in Playwright, since mock list rows carry recentChanges 0)",
+    "Drawer Change history facet summary renders all nine badges (Timeline, State transition, Restart, Config update, Anomaly, Platform event, Pulse diff, Docker adapter, Proxmox adapter) with no +N overflow chip; one line at 1440, four wrapped lines at 390, no clipped badge, right edge inside the viewport; the origin/main build renders the same nine badges and line counts",
+    "Console shows only the 401 and inline-style CSP messages that the origin/main build also logs on the same routes"
+  ],
+  "interactions": [
+    "Demo auto sign-in, then direct navigation to /proxmox/overview and /docker",
+    "Typed branch-portal-3 into Search containers and clicked its row to open the inline resource drawer, then scrolled the Change history facet summary into view",
+    "Compared drawer badge count, wrap lines and overflow chip against the origin/main build on a second private backend"
+  ]
+}

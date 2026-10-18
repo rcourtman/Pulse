@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 
 import {
   buildDrawerDiskListItems,
@@ -6,9 +6,12 @@ import {
 } from '@/components/Workloads/DrawerDiskListCard';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
-import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
+import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
+import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
+  DetailSectionTable,
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
@@ -16,10 +19,14 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
+import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import {
   formatBytes,
   formatRelativeTime,
@@ -28,9 +35,30 @@ import {
   normalizeDiskArray,
 } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import type { HistoryTimeRange } from '@/api/charts';
+import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
+import {
+  getAlertStatedRowLabels,
+  getDrawerChartAlerts,
+  isDrawerAvailabilityHealthy,
+  partitionDrawerExceptionRows,
+} from '@/components/Workloads/drawerOverviewModel';
+import type {
+  GuestDrawerHistoryGroupConfig,
+  GuestDrawerHistoryTarget,
+} from '@/components/Workloads/guestDrawerModel';
 
 interface DockerHostDrawerOverviewProps {
   host: Resource;
+  historyTarget?: GuestDrawerHistoryTarget | null;
+  historyRange?: HistoryTimeRange;
+  onHistoryRangeChange?: (range: HistoryTimeRange) => void;
+  historyGroups?: GuestDrawerHistoryGroupConfig[];
+  /** Live readings the charts show before any history is stored. */
+  currentMetrics?: Record<string, number | undefined>;
+  /** True while Overview is the visible tab; hidden charts do not poll. */
+  historyEnabled?: boolean;
 }
 
 interface DockerOverviewRow {
@@ -77,6 +105,7 @@ const toDetailRows = (rows: DockerOverviewRow[]): DetailRow[] =>
   );
 
 export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
   const docker = () => props.host.docker;
   const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
   const summaryOnly = createMemo(
@@ -111,7 +140,10 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
           <InfoCardKeyValueRow label="Available" value={updatesAvailable()} />
           <Show when={checkedAtMillis()} keyed>
             {(timestamp) => (
-              <InfoCardKeyValueRow label="Last checked" value={formatRelativeTime(timestamp)} />
+              <InfoCardKeyValueRow
+                label="Last checked"
+                value={formatRelativeTime(timestamp, { now: now() })}
+              />
             )}
           </Show>
           <Show when={hostCommand()?.type || hostCommand()?.status}>
@@ -169,11 +201,22 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
 }
 
 export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const docker = () => props.host.docker;
   const agent = () => props.host.agent;
   const linkedAgentId = () => cleanText(agent()?.agentId);
   const summaryOnly = () => cleanText(docker()?.collectionMode) === 'typed-helper-summary';
+  const hostAlerts = () =>
+    getAlertsForUnifiedResource(props.host, activeAlerts, alertsActivation.detectionEnabled());
+  // Needs attention lists the host's containers and services too; the charts
+  // describe the host itself, so only its own alerts draw a trigger.
+  const chartAlerts = () =>
+    getDrawerChartAlerts(
+      getOwnAlertsForUnifiedResource(props.host, activeAlerts, alertsActivation.detectionEnabled()),
+      (props.historyGroups ?? []).flatMap((group) => group.series.map((series) => series.metric)),
+    );
   const temperatureThresholds = createMemo(() =>
     alertsActivation.getMetricThresholds(
       'node',
@@ -330,6 +373,16 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
       {
         label: 'Operator context',
         rows: compactDetailRows([
+          // A host that is not reporting says so in front of the charts.
+          props.host.status === 'offline'
+            ? makeDetailRow(
+                'Observed state',
+                props.host.lastSeen
+                  ? `Offline · last seen ${formatRelativeTime(props.host.lastSeen, { now: now() })}`
+                  : 'Offline',
+                { tone: 'danger' },
+              )
+            : null,
           makeDetailRow('Runtime', runtimeLabel()),
           makeDetailRow('System', osLabel()),
           makeDetailRow(
@@ -348,29 +401,111 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     ]);
   };
 
+  // Inventory follows the Proxmox drawers: anything wrong is lifted in front,
+  // one facts line adds what the row does not say, and the rest waits under a
+  // closed Details section rather than as five equal-weight cards.
+  const inventorySections = () => [...overviewSections(), ...technicalSections()];
+  const inventory = () =>
+    partitionDrawerExceptionRows(
+      inventorySections(),
+      getAlertStatedRowLabels(
+        getOwnAlertsForUnifiedResource(
+          props.host,
+          activeAlerts,
+          alertsActivation.detectionEnabled(),
+        ),
+      ),
+    );
+  const exceptionRows = () => inventory().lifted;
+  const detailSections = () => inventory().details;
+  const sizeFact = (
+    source: { total?: number; used?: number; free?: number } | undefined,
+    label: string,
+  ): string => {
+    const total = source?.total ?? 0;
+    if (!(total > 0)) return '';
+    if (source && 'usageUnavailable' in source && source.usageUnavailable === true) {
+      return `${formatBytes(total)} ${label}`;
+    }
+    const used =
+      typeof source?.used === 'number'
+        ? source.used
+        : typeof source?.free === 'number'
+          ? total - source.free
+          : undefined;
+    const observation = (source as { observation?: { state?: string } } | undefined)?.observation;
+    const current = !observation || observation.state === 'current';
+    const reporting = props.host.status === 'online' || props.host.status === 'running';
+    return reporting && current && typeof used === 'number' && used >= 0
+      ? `${formatBytes(used)} of ${formatBytes(total)} ${label}`
+      : `${formatBytes(total)} ${label}`;
+  };
+  const facts = () => {
+    const system = osLabel();
+    // The row already states the engine version; the facts add what it lacks.
+    return [
+      // A bare "linux" from the engine adds nothing; a named OS does.
+      system && system.toLowerCase() !== 'linux' ? system : '',
+      sizeFact(memorySource(), 'RAM'),
+      sizeFact(diskSource(), 'disk'),
+    ].filter(Boolean);
+  };
+  const availabilityChecks = () => [
+    ...(props.host.availability ? [props.host.availability] : []),
+    ...(props.host.availabilityChecks ?? []),
+  ];
+  const availabilityHealthy = () =>
+    availabilityChecks().length > 0 &&
+    availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
+  const attentionItems = () => [
+    ...(summaryOnly()
+      ? [
+          {
+            id: `${props.host.id}:typed-helper-summary`,
+            subject: 'Reduced container coverage',
+            message:
+              'The typed helper reports container summaries only. Stats, secondary inventory, update checks, and lifecycle actions are unavailable.',
+            severity: 'warning' as const,
+          },
+        ]
+      : []),
+    ...hostAlerts().map((alert) => ({
+      id: alert.id,
+      ...getAlertAttentionCopy(alert, now),
+      subject: cleanText(alert.resourceName) || props.host.displayName || props.host.name,
+      metric: alertTypeDisplayLabel(alert.type),
+      severity: alert.level,
+      acknowledged: alert.acknowledged,
+    })),
+  ];
+
   return (
     <div class="space-y-3">
-      <DrawerAttentionSection
-        items={[
-          ...(summaryOnly()
-            ? [
-                {
-                  id: `${props.host.id}:typed-helper-summary`,
-                  subject: 'Reduced container coverage',
-                  message:
-                    'The typed helper reports container summaries only. Stats, secondary inventory, update checks, and lifecycle actions are unavailable.',
-                  severity: 'warning',
-                },
-              ]
-            : []),
-          ...(props.host.alerts ?? []).map((alert) => ({
-            id: alert.id,
-            message: alert.message,
-            severity: alert.level,
-          })),
-        ]}
-      />
-      <Show when={props.host.availability || props.host.availabilityChecks?.length}>
+      <DrawerAttentionSection items={attentionItems()} />
+      <Show when={attentionItems().length === 0}>
+        <p data-testid="drawer-no-attention" class="text-xs text-muted">
+          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
+          <Show when={availabilityHealthy()}>
+            <span> · availability checks passing</span>
+          </Show>
+        </p>
+      </Show>
+      <DrawerExceptionList testId="docker-host-drawer-exceptions" rows={exceptionRows()} />
+      <Show when={props.historyTarget}>
+        {(target) => (
+          <GuestDrawerHistory
+            target={target()}
+            range={props.historyRange ?? '24h'}
+            onRangeChange={props.onHistoryRangeChange}
+            enabled={props.historyEnabled ?? true}
+            groups={props.historyGroups}
+            currentMetrics={props.currentMetrics}
+            alerts={chartAlerts()}
+          />
+        )}
+      </Show>
+      {/* A failing check stays in front, after the charts as in every drawer. */}
+      <Show when={availabilityChecks().length > 0 && !availabilityHealthy()}>
         <div class="max-w-sm">
           <AvailabilityProbeStatusCards
             availability={props.host.availability}
@@ -378,10 +513,42 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           />
         </div>
       </Show>
-      <TechnicalDetailsSection
-        dataTestId="docker-host-technical-details"
-        sections={[...overviewSections(), ...technicalSections()]}
-      />
+      <Show when={facts().length > 0}>
+        <div
+          data-testid="docker-host-drawer-facts"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+        >
+          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+        </div>
+      </Show>
+      <Show when={detailSections().length > 0 || availabilityHealthy()}>
+        <TechnicalDetailsDisclosure
+          dataTestId="docker-host-technical-details"
+          title="Details"
+          keepMounted
+          subtitle={[
+            ...detailSections().map((section) => section.label.toLowerCase()),
+            availabilityHealthy() ? 'availability checks' : '',
+          ]
+            .filter(Boolean)
+            .join(', ')}
+          class="border-t border-border pt-2"
+          contentClass="mt-2 space-y-3"
+        >
+          <DetailSectionTable
+            sections={detailSections()}
+            dataTestId="docker-host-technical-sections"
+          />
+          <Show when={availabilityHealthy()}>
+            <div class="max-w-sm">
+              <AvailabilityProbeStatusCards
+                availability={props.host.availability}
+                checks={props.host.availabilityChecks}
+              />
+            </div>
+          </Show>
+        </TechnicalDetailsDisclosure>
+      </Show>
     </div>
   );
 }

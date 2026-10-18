@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { Card } from '@/components/shared/Card';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import Activity from 'lucide-solid/icons/activity';
@@ -72,6 +73,7 @@ interface DiagnosticsResultsPanelProps {
 }
 
 export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = (props) => {
+  const now = useRelativeTimeNow();
   return (
     <Show
       when={props.diagnosticsData}
@@ -252,6 +254,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               value={formatRelativeTime(props.diagnosticsData?.discovery?.lastScanStartedAt, {
                 compact: true,
                 emptyText: 'Never',
+                now: now(),
               })}
             />
             <MetricRow
@@ -555,9 +558,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           >
             <div class="mb-3 flex items-center gap-3">
               <XCircle class="h-5 w-5 text-red-600 dark:text-red-400" />
-              <h4 class="text-sm font-semibold text-red-900/25 dark:text-red-100">
-                Errors Detected
-              </h4>
+              <h4 class="text-sm font-semibold text-red-900 dark:text-red-100">Errors Detected</h4>
             </div>
             <ul class="space-y-2 text-xs text-red-700 dark:text-red-300">
               <For each={props.diagnosticsData?.errors || []}>

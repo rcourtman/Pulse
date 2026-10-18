@@ -88,6 +88,28 @@
   padding-bottom: max(3.5rem, env(safe-area-inset-bottom, 3.5rem));
 }
 
+/* The shared select classes drop the native arrow (appearance-none) so the
+   control matches the text inputs, which left every FormSelect looking like
+   a text field. Draw a small caret in the reserved right padding instead, in
+   the muted text colour so it follows the theme. */
+@utility form-select-arrow {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) calc(50% + 1px),
+    calc(100% - 10px) calc(50% + 1px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+
+  /* Forced-colors mode drops background images, so hand the arrow back to
+     the browser there. */
+  @media (forced-colors: active) {
+    appearance: auto !important;
+    background-image: none;
+  }
+}
+
 @utility scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -95,6 +117,15 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* The page backdrop as a background, for wells inside a surface card (code
+   blocks, previews, segmented-control tracks) that should read as the page
+   behind the card. It is a utility rather than a theme colour on purpose: a
+   colour named `base` also gave `text-base` a colour and painted text in the
+   page colour, and without that colour the old class rendered nothing. */
+@utility bg-page {
+  background-color: var(--color-bg-base);
 }
 
 @utility animate-slideDown {
@@ -250,11 +281,6 @@
     --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
     --color-summary-row-border: rgba(14, 165, 233, 0.16);
     --color-summary-row-accent: rgba(14, 165, 233, 0.42);
-    --color-summary-group-member-preview-bg: rgba(14, 165, 233, 0.025);
-    --color-summary-group-member-preview-bg-hover: rgba(14, 165, 233, 0.04);
-    --color-summary-group-member-pinned-bg: rgba(14, 165, 233, 0.04);
-    --color-summary-group-member-pinned-bg-hover: rgba(14, 165, 233, 0.055);
-    --color-summary-group-member-pinned-accent: rgba(14, 165, 233, 0.22);
     /* Shared product-table subgroup band. It should read as body segmentation, not table chrome. */
     --color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);
     --color-grouped-table-row-bg-hover: rgba(203, 213, 225, 0.82);
@@ -278,11 +304,6 @@
     --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
     --color-summary-row-border: rgba(56, 189, 248, 0.18);
     --color-summary-row-accent: rgba(56, 189, 248, 0.5);
-    --color-summary-group-member-preview-bg: rgba(56, 189, 248, 0.045);
-    --color-summary-group-member-preview-bg-hover: rgba(56, 189, 248, 0.065);
-    --color-summary-group-member-pinned-bg: rgba(56, 189, 248, 0.07);
-    --color-summary-group-member-pinned-bg-hover: rgba(56, 189, 248, 0.09);
-    --color-summary-group-member-pinned-accent: rgba(56, 189, 248, 0.28);
     --color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);
     --color-grouped-table-row-bg-hover: rgba(51, 65, 85, 0.82);
     --color-grouped-table-row-border: rgba(71, 85, 105, 0.85);
@@ -465,9 +486,37 @@
     can be much narrower than the viewport. Exact time stays with the six core
     fields whenever the desktop table is active. Duration is secondary context
     at 800px, while type and node remain reserved for a 1024px table shell.
-    Fixed-layout tables calculate all nine tracks before collapsed columns are
-    removed, so the table width compensates at each density to let the six,
-    seven, or nine visible tracks fill the card without creating a scrollbar.
+    Hidden tracks are collapsed and also given zero width, so the table is
+    always 100% of the card. Chromium removes collapsed columns, but WebKit
+    (Safari) keeps their width in a fixed-layout table: the earlier approach of
+    widening the table by the hidden tracks' share made the History table
+    scroll sideways in Safari from an 800px to a 1024px card. `display: none`
+    on a column is no better: Chromium then lays it out as an auto column that
+    shares the free width with message.
+    The base density (an unmeasured card under 800px) sizes every visible
+    track as a percentage summing to 100%. From an 800px card the columns
+    whose content has a fixed size take exactly the pixels it needs: time
+    ("08:27 AM" in a 14px monospace), severity, duration, status
+    ("acknowledged" needs 119px with its cell padding), the type label (from
+    1024px; "Container Health" needs 119px, and from 1280px it takes 128px for
+    wider Linux fonts) and the three actions on one line
+    (177px). Resource and node hold names that truncate, so they keep a plain
+    share of the card, at least their header at the narrowest card (a max()
+    of a length and a percentage would be laid out as an auto column).
+    Message, the column that says what happened, has no width so it takes all
+    the rest. Percentages for every track gave the fixed columns most of each
+    extra pixel: at a 982px card message held 182px while status and actions
+    held 364px for a badge and three buttons.
+    App.architecture.test.ts holds those minimums and message's 18% floor at
+    the narrowest card of each density. Below 800px the three
+    actions stack, which makes those rows taller than the rest.
+    Below an 80rem card, resource and message wrap inside their cells
+    instead of ending in an ellipsis after one line. Message then occupies two
+    lines (`min-h-[2lh]`) so its length never changes a row's height, which
+    the single estimated row height of the shared windowing hook
+    (`usePlatformWindowedItems`) needs once a history passes 140 rows; a
+    message past two lines ends in an ellipsis and keeps its full text on the
+    title. From an 80rem card both cells return to a one-line clamp.
   */
   .table-scroll-shell col.alert-history-context-track,
   .table-scroll-shell col.alert-history-full-detail-track {
@@ -479,14 +528,53 @@
     visibility: collapse;
   }
 
-  .table-scroll-shell col.alert-history-core-track,
-  .table-scroll-shell col.alert-history-context-track,
-  .table-scroll-shell col.alert-history-full-detail-track {
-    width: 16.6667%;
+  .table-scroll-shell table.alert-history-responsive-table {
+    --alert-history-timestamp-width: 14%;
+    --alert-history-resource-width: 15.6%;
+    --alert-history-type-width: 0%;
+    --alert-history-severity-width: 14.4%;
+    --alert-history-message-width: 22.7%;
+    --alert-history-duration-width: 0%;
+    --alert-history-status-width: 19.9%;
+    --alert-history-node-width: 0%;
+    --alert-history-actions-width: 13.4%;
+    width: 100%;
   }
 
-  .table-scroll-shell table.alert-history-responsive-table {
-    width: 150%;
+  .table-scroll-shell col.alert-history-timestamp-track {
+    width: var(--alert-history-timestamp-width);
+  }
+
+  .table-scroll-shell col.alert-history-resource-track {
+    width: var(--alert-history-resource-width);
+  }
+
+  .table-scroll-shell col.alert-history-type-track {
+    width: var(--alert-history-type-width);
+  }
+
+  .table-scroll-shell col.alert-history-severity-track {
+    width: var(--alert-history-severity-width);
+  }
+
+  .table-scroll-shell col.alert-history-message-track {
+    width: var(--alert-history-message-width);
+  }
+
+  .table-scroll-shell col.alert-history-duration-track {
+    width: var(--alert-history-duration-width);
+  }
+
+  .table-scroll-shell col.alert-history-status-track {
+    width: var(--alert-history-status-width);
+  }
+
+  .table-scroll-shell col.alert-history-node-track {
+    width: var(--alert-history-node-width);
+  }
+
+  .table-scroll-shell col.alert-history-actions-track {
+    width: var(--alert-history-actions-width);
   }
 
   /*
@@ -529,6 +617,15 @@
     display: inline;
   }
 
+  /* The Deployments Desired column returns with the 72rem tier (hidden
+     md:table-cell), so Ready drops its own /desired total there and never
+     before: one of the two always carries the desired count. */
+  @container (min-width: 72rem) {
+    .k8s-deployment-ready-total {
+      display: none;
+    }
+  }
+
   @container (min-width: 50rem) {
     .table-scroll-shell col.alert-history-context-track {
       visibility: visible;
@@ -538,14 +635,17 @@
       visibility: visible;
     }
 
-    .table-scroll-shell col.alert-history-core-track,
-    .table-scroll-shell col.alert-history-context-track,
-    .table-scroll-shell col.alert-history-full-detail-track {
-      width: 14.2857%;
-    }
-
     .table-scroll-shell table.alert-history-responsive-table {
-      width: 128.5714%;
+      --alert-history-timestamp-width: 84px;
+      --alert-history-resource-width: 11.7%;
+      --alert-history-type-width: 0px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
+      --alert-history-node-width: 0px;
+      --alert-history-actions-width: 177px;
+      width: 100%;
     }
 
     .table-scroll-shell :is(th, td).agent-doctor-target-column {
@@ -568,10 +668,6 @@
     .table-scroll-shell :is(th, td).storage-dataset-referenced-column {
       display: table-cell;
     }
-
-    .k8s-deployment-ready-total {
-      display: none;
-    }
   }
 
   @container (min-width: 64rem) {
@@ -583,18 +679,34 @@
       visibility: visible;
     }
 
-    .table-scroll-shell col.alert-history-core-track,
-    .table-scroll-shell col.alert-history-context-track,
-    .table-scroll-shell col.alert-history-full-detail-track {
-      width: 11.1111%;
-    }
-
     .table-scroll-shell table.alert-history-responsive-table {
+      --alert-history-timestamp-width: 84px;
+      --alert-history-resource-width: 9.1%;
+      --alert-history-type-width: 120px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
+      --alert-history-node-width: 6.7%;
+      --alert-history-actions-width: 177px;
       width: 100%;
     }
   }
 
   @container (min-width: 80rem) {
+    .table-scroll-shell table.alert-history-responsive-table {
+      --alert-history-timestamp-width: 84px;
+      --alert-history-resource-width: 12%;
+      --alert-history-type-width: 128px;
+      --alert-history-severity-width: 86px;
+      --alert-history-message-width: auto;
+      --alert-history-duration-width: 91px;
+      --alert-history-status-width: 119px;
+      --alert-history-node-width: 8.5%;
+      --alert-history-actions-width: 177px;
+      width: 100%;
+    }
+
     .table-scroll-shell :is(th, td).hidden.xl\:table-cell.agent-machine-address-column {
       display: table-cell;
     }
@@ -816,31 +928,6 @@
   tr.grouped-table-row:hover > td,
   tr.grouped-table-row:hover > th {
     background-color: var(--color-grouped-table-row-bg-hover);
-  }
-
-  tr[data-summary-group-member-active='preview'] > td,
-  tr[data-summary-group-member-active='preview'] > th {
-    background-color: var(--color-summary-group-member-preview-bg);
-  }
-
-  tr[data-summary-group-member-active='preview']:hover > td,
-  tr[data-summary-group-member-active='preview']:hover > th {
-    background-color: var(--color-summary-group-member-preview-bg-hover);
-  }
-
-  tr[data-summary-group-member-active='pinned'] > td,
-  tr[data-summary-group-member-active='pinned'] > th {
-    background-color: var(--color-summary-group-member-pinned-bg);
-  }
-
-  tr[data-summary-group-member-active='pinned']:hover > td,
-  tr[data-summary-group-member-active='pinned']:hover > th {
-    background-color: var(--color-summary-group-member-pinned-bg-hover);
-  }
-
-  tr[data-summary-group-member-active='pinned'] > td:first-child,
-  tr[data-summary-group-member-active='pinned'] > th:first-child {
-    box-shadow: inset 1px 0 0 var(--color-summary-group-member-pinned-accent);
   }
 
   tr[data-summary-row-active='true'] > td,
@@ -1431,6 +1518,38 @@
 
     .platform-table-phone-only-inline {
       display: inline-flex;
+    }
+  }
+
+  /* Between the phone projection and the md viewport breakpoint, tables that
+     size their columns with md:w-[...] classes have no widths at all, while the
+     phone-hidden columns are already back. Every visible column then took an
+     equal share, so a seven-column Kubernetes table left its name column 83px
+     with the chevron and status dot inside it. Keep the phone identity anchor
+     until the md widths apply. Tables sized by a weighted colgroup keep their
+     own widths, because column widths win over header widths. */
+  @media (width < 768px) {
+    @container (min-width: 34rem) {
+      .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
+        width: 30%;
+      }
+
+      /* A table whose columns need unequal room in this band (short counts
+         beside a long name) declares each width through the header's
+         bandWidth, which the shell applies only here. */
+      .table-scroll-shell > .table-fixed.platform-table th[style*='--platform-table-band-width'] {
+        width: var(--platform-table-band-width);
+      }
+
+      /* A header whose full label is longer than its band column keeps the
+         compact label it already shows on phones (compactInBand). */
+      .platform-table-label-compact.platform-table-label-band-compact {
+        display: inline;
+      }
+
+      .platform-table-label-full.platform-table-label-band-compact {
+        display: none;
+      }
     }
   }
 

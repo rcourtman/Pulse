@@ -1,7 +1,35 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ensureAuthenticated, primaryNavigationLink } from "./helpers";
+import {
+  ensureAuthenticated,
+  getMockMode,
+  primaryNavigationLink,
+} from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+
+const truthy = (value: string | undefined) =>
+  ["1", "true", "yes", "on"].includes(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
+
+// The guards read the mock-mode estate: PBS servers and a populated backup
+// calendar. The Core E2E harness runs mock mode, but `npm run dev:verify`
+// attaches to the managed hot-dev runtime in whatever mode it was left in.
+// There a real-mode runtime skips the guards instead of switching modes in
+// place, because Monitor.SetMockMode clears the runtime's active alerts and
+// in-memory history on every switch.
+async function skipUnlessManagedRuntimeIsMock(page: Page) {
+  if (!truthy(process.env.PULSE_E2E_USE_HOT_DEV)) {
+    return;
+  }
+  const { enabled } = await getMockMode(page);
+  test.skip(
+    !enabled,
+    "Needs the mock-mode dataset; run `npm run mock:on` before `npm run dev:verify`",
+  );
+}
 
 async function openProxmoxBackups(page: Page) {
   const proxmoxTab = primaryNavigationLink(page, "Proxmox");
@@ -41,6 +69,7 @@ test.describe("Proxmox backups layout guards", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
+    await skipUnlessManagedRuntimeIsMock(page);
     await openProxmoxBackups(page);
 
     // The Backups section now opens the date view directly.
@@ -69,6 +98,7 @@ test.describe("Proxmox backups layout guards", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
+    await skipUnlessManagedRuntimeIsMock(page);
     await openProxmoxBackups(page);
 
     await page

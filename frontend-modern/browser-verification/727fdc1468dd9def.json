@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "6eafe916da44c4a4f232870d2924a78d417a4f0b",
+  "verified_at": "2026-10-16T18:03:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/settings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/settings.ts": "77f8775e16371b52f0e55cb5107d3e68732b6616ce2dcdd2fb12f5b587a9f973"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/docs/PRIVACY"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private task-owned current embedded build on pulse-dev port17857 with mock fixtures and outbound telemetry disabled. Preview closed then open, schema19 exact field present at zero. Mock data does not create qualifying history reads.",
+    "Desktop and narrow Preview pixels inspected with successful_history_reads_over_7d_30d visible. JSON remains horizontally scrollable and document has no horizontal overflow at390px.",
+    "Shipped privacy document opens separately and discloses the field, successful-point criterion, excluded responses, daily aggregation, coverage limits and unchanged privacy controls."
+  ],
+  "interactions": [
+    "Focused Preview payload and activated it by keyboard. Refreshed real local Preview and verified count remains zero.",
+    "Opened Full details in a new tab, scrolled to schema19 explanation, inspected pixels and closed the tab.",
+    "Resized to390x844, accepted Reset ID confirmation, verified rotating identity changes while count remains zero, scrolled actual preview container to the new field and inspected pixels.",
+    "Both Playwright disclosure tests passed after the final test helper change. Managed backend was stopped by the runner."
+  ]
+}

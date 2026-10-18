@@ -17,6 +17,7 @@ export type DockerContainerTableColumnId =
   | 'cpu'
   | 'memory'
   | 'restarts'
+  | 'uptime'
   | 'ports'
   | 'networks'
   | 'mounts'
@@ -41,6 +42,7 @@ export const DOCKER_CONTAINER_SORTABLE_COLUMN_IDS = [
   'cpu',
   'memory',
   'restarts',
+  'uptime',
   'updates',
 ] as const satisfies readonly DockerContainerTableColumnId[];
 
@@ -67,12 +69,21 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   WorkloadTableLayoutMode
 > = {
   container: 'narrow',
-  state: 'narrow',
+  // A narrow table (most phones) cannot give State's words their own column
+  // beside the 40% name, both metric pills and the Update control without
+  // cutting "Unhealthy" to "Unhe…"; the name cell shows them on a second line
+  // there instead (isDockerContainerStateUnderName).
+  state: 'phone',
   cpu: 'narrow',
   memory: 'narrow',
-  // A phone row cannot fit the Restarts header beside the Update control;
-  // the count stays in the row expansion there and returns at mobile width.
-  restarts: 'mobile',
+  // Below a 720px table the Restarts header cannot fit beside State, the
+  // metric bars and the Update control without clipping one of them; the
+  // count stays in the row expansion there and returns at tablet width.
+  restarts: 'tablet',
+  // Uptime is the current run, so a short one shows a container that just
+  // restarted. Its header needs about 57px, which a tablet row cannot spare
+  // beside State, Restarts and the Update control; the drawer keeps it there.
+  uptime: 'compact',
   updates: 'narrow',
   actions: 'mobile',
   host: 'tablet',
@@ -92,6 +103,7 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
   { id: 'memory', label: 'Memory', kind: 'metric-bar' },
   { id: 'restarts', label: 'Restarts', kind: 'numeric-value' },
+  { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
   { id: 'ports', label: 'Ports', kind: 'text' },
   { id: 'networks', label: 'Networks', kind: 'text' },
   { id: 'mounts', label: 'Mounts', kind: 'text' },
@@ -99,57 +111,72 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'actions', label: 'Actions', kind: 'badge' },
 ];
 
+// The Updates column holds the update control or its status badge, which
+// must not clip: Update and Current are about 74px, and Check failed,
+// Updating... and Completed up to 100px. Every layout gives the column room
+// for the 74px states at its narrowest table width, whichever optional
+// columns are showing. The 100px states fit in most layouts too, but can
+// still clip at a layout's narrow end when several optional columns show.
+// The room comes only from
+// the CPU bar, which never shows a sublabel, and from the collapsed actions
+// menu, so every other column keeps its width. Below the 34rem phone
+// container the badge wraps instead (index.css). Wide rows expand the
+// lifecycle controls to about 92px, so actions gains a little there.
+// State names a problem in words ("Exited (139)", "Restarting", "Unhealthy"),
+// about 77px on a phone and 86px on desktop with padding; it takes that room
+// from the CPU and memory bars, ports and networks, which truncate anyway.
 const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, number> = {
   container: 16,
   host: 8,
   runtime: 7,
   image: 16,
-  state: 6,
-  cpu: 9,
-  memory: 10,
+  state: 7.5,
+  cpu: 6,
+  memory: 7,
   restarts: 6,
+  uptime: 5,
   ports: 10,
   networks: 8,
-  mounts: 9,
-  updates: 7,
-  actions: 8,
+  mounts: 5.5,
+  updates: 9,
+  actions: 9,
 };
 
 const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
+  // With State under the name, the metric pills ("100%" is about 53px) and
+  // the Update control (about 46px) share what the 40% name leaves.
   narrow: {
     container: 40,
-    state: 15,
-    cpu: 15,
-    memory: 17,
-    updates: 13,
+    cpu: 20,
+    memory: 20,
+    updates: 20,
   },
   phone: {
     container: 32,
-    state: 14,
-    cpu: 14,
-    memory: 14,
+    state: 18,
+    cpu: 13,
+    memory: 13,
     updates: 16,
   },
   mobile: {
     container: 30,
-    state: 12,
-    cpu: 14,
-    memory: 16,
-    restarts: 8,
-    updates: 10,
-    actions: 10,
+    state: 14.5,
+    cpu: 10,
+    memory: 13.5,
+    updates: 16.25,
+    actions: 7.75,
   },
   tablet: {
     container: 27,
     host: 15,
-    state: 10,
-    cpu: 15,
-    memory: 19,
-    restarts: 9,
-    updates: 9,
+    state: 14,
+    cpu: 9.5,
+    memory: 12,
+    restarts: 10,
+    updates: 14.5,
     actions: 6,
   },
   // Compact is what a 1280-1536px laptop window gets. Host, Engine and the
@@ -160,30 +187,51 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     host: 12,
     runtime: 9.5,
     image: 16.5,
-    state: 7,
-    cpu: 9.5,
-    memory: 10,
+    state: 10,
+    cpu: 6.5,
+    memory: 8,
     restarts: 8.5,
-    ports: 12,
-    updates: 10,
-    actions: 8,
+    uptime: 7,
+    ports: 8,
+    updates: 12.5,
+    actions: 6,
   },
 };
+
+// Whether a layout has room for a column at all (before row-set gates such
+// as "only when some container restarted").
+export const isDockerContainerColumnInLayout = (
+  columnId: DockerContainerTableColumnId,
+  layoutMode: WorkloadTableLayoutMode,
+): boolean =>
+  DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[columnId]] <=
+  DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
+
+// Where the layout has no State column, the name cell carries the state words
+// on its own second line, for every row, so the rows keep one height.
+export const isDockerContainerStateUnderName = (layoutMode: WorkloadTableLayoutMode): boolean =>
+  !isDockerContainerColumnInLayout('state', layoutMode);
 
 export const getDockerContainerVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,
   includeRuntime: boolean,
   includeRestarts: boolean,
   includeState: boolean,
+  options: { groupedByHost?: boolean; singleHost?: boolean; includeUptime?: boolean } = {},
 ): DockerContainerTableColumn[] => {
   const layoutRank = DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
+    // Grouped by host, every row in a group shares its host and engine; the
+    // group header carries both instead of repeating them on each row.
+    if (options.groupedByHost && (column.id === 'host' || column.id === 'runtime')) return false;
+    // With one host in view the Host column would repeat its name on every row.
+    if (options.singleHost && column.id === 'host') return false;
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
-    // Ultra-narrow rows still need five stable scan fields. Keep the explicit
-    // state label there even when every current row is running; wider layouts
-    // may continue to remove the otherwise repetitive column.
-    if (column.id === 'state' && !includeState && layoutMode !== 'narrow') return false;
+    if (column.id === 'uptime' && options.includeUptime === false) return false;
+    // Wider layouts remove the otherwise repetitive column while every
+    // current row is running.
+    if (column.id === 'state' && !includeState) return false;
     return (
       DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[column.id]] <=
       layoutRank

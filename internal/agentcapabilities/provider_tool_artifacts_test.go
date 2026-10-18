@@ -8,7 +8,7 @@ import (
 func TestProviderToolCallArtifactIndexDetectsSharedProviderLeakShapes(t *testing.T) {
 	catalog := NewProviderToolNameCatalog([]string{
 		"pulse_query",
-		"pulse_discovery",
+		"pulse_metrics",
 		"pulse_read",
 		PulseQuestionToolName,
 	})
@@ -50,8 +50,8 @@ func TestProviderToolCallArtifactIndexDetectsSharedProviderLeakShapes(t *testing
 		},
 		{
 			name:      "code fenced JSON tool call leak",
-			input:     "Here's the call:\n```json\n{\"name\":\"pulse_discovery\",\"parameters\":{}}",
-			wantIndex: strings.Index("Here's the call:\n```json\n{\"name\":\"pulse_discovery\",\"parameters\":{}}", "\n"),
+			input:     "Here's the call:\n```json\n{\"name\":\"pulse_metrics\",\"parameters\":{}}",
+			wantIndex: strings.Index("Here's the call:\n```json\n{\"name\":\"pulse_metrics\",\"parameters\":{}}", "\n"),
 		},
 		{
 			name:      "function-style tool call leak",

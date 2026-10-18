@@ -35,7 +35,7 @@ Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 
 Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 
-- **Assembles evidence** from metrics, storage, backups, discovery, alerts, and resource timelines
+- **Assembles evidence** from metrics, storage, backups, alerts, and resource timelines
 - **Provides statistical context** such as baselines, trend summaries, capacity estimates, and event relationships
 - **Lets the configured LLM reason** over that evidence and decide whether to call tools or report findings
 - **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
@@ -75,7 +75,7 @@ Patrol is a scheduled model workflow that builds a rich, system-wide snapshot an
 Scheduled/Event Trigger
         │
         ▼
-buildSeedContext()  ── infrastructure evidence and policy context
+buildTriageSeedSectionsState()  ── infrastructure evidence and policy context
         │
         ▼
 LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
@@ -118,7 +118,7 @@ can handle the steady-state signal.
 
 ### The Patrol attention queue
 
-The first thing Patrol shows is **Needs attention**, a single operator queue
+The first thing Patrol shows is the **Inbox** tab, a decision inbox headed "N decisions need you" (or "No decisions are waiting"), a single operator queue
 projected from Pulse's canonical alert lifecycle. It combines current
 operational state with evidence quality and protection context; it does not
 create a second finding lifecycle.
@@ -168,7 +168,7 @@ Every patrol run passes the LLM comprehensive context about your environment:
 
 Beyond raw metrics, Patrol prepares structured evidence for the model:
 
-- **Trend summaries** — 24h and 7d samples showing `growing`, `stable`, `declining`, or `volatile` behavior
+- **Trend summaries** — 24h and 7d samples showing `growing`, `stable`, or `declining` behavior
 - **Baseline evidence** — Z-score anomaly evidence from historical metrics
 - **Capacity estimates** — "Storage pool reaches 95% in about 12 days at current growth rate"
 - **Infrastructure changes** — Detected config changes, VM migrations, new deployments
@@ -228,11 +228,120 @@ Note: `info` and `watch` level findings are filtered out to reduce noise.
 
 Findings can be managed via the UI or API:
 
-- **Get help**: Chat with AI to troubleshoot the issue
+- **Open in Assistant**: Open Pulse Assistant with the finding attached to troubleshoot the issue (on Patrol findings it appears under **Resolve or dismiss**)
 - **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
-- **Dismiss**: Mark as expected behavior (creates suppression rule)
+- **Dismiss**: Record feedback about this finding; use **Reopen** to undo its dismissal
+- **Create rule**: Permanently auto-dismiss future findings for the selected resource and category
 
 Dismissed and resolved findings persist across Pulse restarts.
+
+#### Remove a rule created by mistake
+
+**Reopen** undoes an individual finding's dismissal, not a separately created
+rule. Removing a created rule allows future matching findings to appear again; it
+does not resolve a problem or automatically reopen previously dismissed
+findings. It leaves the other rules and finding history intact.
+
+##### Use the rule controls when available
+
+1. Sign in as an authorised administrator and select the correct organisation.
+   Open **Patrol → Activity** and expand **Suppression rules**, or follow
+   **Manage suppression rules** from the finding's rule-creation control.
+2. Match the resource, category, reason and **Rule ID** before choosing
+   **Remove rule**. **All resources** or **All categories** means a broad rule,
+   not just the finding you were looking at.
+3. Review the exact scope in the confirmation and choose **Remove this rule**.
+   **Cancel** leaves the rules unchanged.
+4. Check that the selected row disappears and Pulse reports **Rule removed**.
+   If removal cannot be confirmed, choose **Reload rules** and check that exact
+   ID before trying again: a lost response does not prove deletion failed.
+
+After an organisation or access change, reload the rules in the intended
+organisation before making another change. If you cannot load or verify them,
+stop; do not bypass the failure with the console workaround. Other rules may
+still cover the same scope, so removal does not guarantee a new finding.
+To undo an individual dismissal, use **Reopen finding** in **Finding options
+and history** instead.
+
+##### Older builds without rule controls
+
+In v6.4.5, **Create rule** has no corresponding rule-list or delete control in
+the UI. If your build has no **Suppression rules** control, the existing API
+workaround below can remove one manual rule without an upgrade or restart.
+It is not a way around denied access or a failed removal in the UI.
+
+For a rule made with **Create rule**, sign in normally to Pulse in an
+authorised administrator's browser session, select the correct organisation,
+and open that Pulse tab's developer console. Review the following snippet
+before running it. It lists only manually created rules, asks for one exact
+ID, and confirms its resource, category and reason before deleting it. Cancel
+either prompt to leave the rules unchanged. Keep the list private: resource
+names and reasons can describe your infrastructure.
+
+No password, API token or session cookie needs to be copied or pasted. The
+browser supplies its existing session; the snippet reads only the normal
+CSRF and organisation cookies locally. Do not switch organisation while it
+runs, use it on another website, disable authentication/CSRF protection, or
+edit Pulse's data files. A token-only login or an expired session may not
+support this workaround: stop on an authentication or missing-CSRF error
+instead of inserting credentials into the snippet.
+
+```javascript
+(async () => {
+  const cookie = (name) => {
+    const row = document.cookie.split(';').find((part) => part.trim().startsWith(`${name}=`));
+    return row ? decodeURIComponent(row.trim().slice(name.length + 1)) : '';
+  };
+  const org = cookie('pulse_org_id') || 'default';
+  const headers = {
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-Pulse-Org-ID': org,
+  };
+  const readRules = async () => {
+    if ((cookie('pulse_org_id') || 'default') !== org) throw new Error('Organisation changed; stop.');
+    const response = await fetch('/api/ai/patrol/suppressions', {
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers,
+    });
+    if (!response.ok) throw new Error(`Rule list failed (HTTP ${response.status}); stop.`);
+    const rules = await response.json();
+    if (!Array.isArray(rules)) throw new Error('Unexpected rule list; stop.');
+    return rules.filter((rule) => rule && rule.created_from === 'manual');
+  };
+  const rules = await readRules();
+  console.table(rules.map((rule) => ({
+    id: rule.id, resource: rule.resource_name || rule.resource_id || 'Any resource',
+    category: rule.category || 'Any category', reason: rule.description,
+  })));
+  const id = prompt('Enter one exact rule ID from this list, or Cancel to keep all rules.');
+  if (id === null || !id.trim()) return;
+  const matches = rules.filter((rule) => typeof rule.id === 'string' && rule.id === id.trim());
+  if (matches.length !== 1) throw new Error('ID must match exactly one listed manual rule; stop.');
+  const rule = matches[0];
+  if (!confirm(`Delete only ${rule.id}?\nResource: ${rule.resource_name || rule.resource_id || 'Any resource'}\nCategory: ${rule.category || 'Any category'}\nReason: ${rule.description}\nFuture matching findings may appear again.`)) return;
+  if ((cookie('pulse_org_id') || 'default') !== org) throw new Error('Organisation changed; stop.');
+  const csrf = cookie('pulse_csrf');
+  if (!csrf) throw new Error('No browser CSRF token; stop and sign in normally, without pasting tokens.');
+  const response = await fetch(`/api/ai/patrol/suppressions/${encodeURIComponent(rule.id)}`, {
+    method: 'DELETE', credentials: 'same-origin', redirect: 'error',
+    headers: { ...headers, 'X-CSRF-Token': csrf },
+  });
+  if (!response.ok) throw new Error(`Deletion not confirmed (HTTP ${response.status}); stop.`);
+  if ((await readRules()).some((remaining) => remaining.id === rule.id)) {
+    throw new Error('Rule is still listed; removal was not verified.');
+  }
+  console.info('Selected rule is no longer listed. Other rules were not deleted.');
+})().catch((error) => console.error(error.message));
+```
+
+A failed or lost response is not confirmation of removal. Do not blindly run
+the deletion again: refresh the rule list first (open
+`/api/ai/patrol/suppressions` in the same signed-in Pulse browser) and check the
+selected ID. If the rule is absent, it was already removed. If you cannot
+verify the result, stop and report only the HTTP status or error, not cookies,
+tokens or the full rule list. Entries whose `created_from` is `finding` or
+`dismissed` are individual finding decisions and are deliberately excluded
+from this snippet.
 
 Every active finding shown or returned to a Patrol run must receive an
 explicit `present`, `resolved`, or `uncertain` assessment. Silence is not an
@@ -259,9 +368,9 @@ Patrol supports four modes that decide how far Pulse can go after it finds an is
 | Mode | Behavior | Plan |
 |-------|----------|------|
 | **Watch only** | Detect issues only. No investigation or fixes. | Community (BYOK) |
-| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
-| **Auto-fix safe issues** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
-| **Policy autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
+| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Safe auto-fix** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+| **Autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
 
 Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit.
 
@@ -300,8 +409,8 @@ MaybeInvestigateFinding()
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MaxEvidenceCalls` | 15 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
-| `MaxTurns` | 17 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
+| `MaxEvidenceCalls` | 10 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
+| `MaxTurns` | 12 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
 | `Timeout` | 10 min | Maximum duration per investigation |
 | `MaxConcurrent` | 3 | Maximum concurrent investigations |
 | `MaxAttemptsPerFinding` | 3 | Maximum investigation attempts per finding |
@@ -331,7 +440,7 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 
 ### The Model's Workflow (Discover → Investigate → Act)
 
-1. **Discover**: Uses `pulse_query` or `pulse_discovery` to find real resources and IDs
+1. **Discover**: Uses `pulse_query` to find real resources and IDs
 2. **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs
 3. **Act** (optional): Uses `pulse_control` for changes, then verifies with a read
 
@@ -358,7 +467,7 @@ fleet triage, resource investigation, and Patrol finding review workflows.
 
 The assistant enforces multiple safety gates:
 
-1. **Discovery Before Action** — Action tools cannot operate on resources that weren't first discovered
+1. **Resolve Before Action** — Action tools cannot operate on resources that weren't first resolved by a read tool
 2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
 3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
 4. **Grounded Execution Guardrails** — Visible tool traces and read-after-write checks prevent unsupported execution claims from being treated as facts
@@ -367,23 +476,150 @@ The assistant enforces multiple safety gates:
 
 ### Control Levels
 
-| Level | Behavior | Plan |
-|-------|----------|---------|
-| **Read-only** | AI can observe and query data only | Community |
-| **Controlled** | AI asks for approval before executing commands | Community |
-| **Autonomous** | AI executes actions without prompting | Pro / hosted Cloud |
+| Mode | Behaviour | Availability |
+|------|-----------|--------------|
+| **Read-only** | Assistant queries and explains; no infrastructure action planning | Community |
+| **Ask first** (`controlled`) | Assistant saves infrastructure action plans to **Actions** for your review | Community |
 
-### Using Approvals (Controlled Mode)
+Assistant chat does not execute these plans. Patrol's own mode and Autopilot
+policy are separate; changing Chat action mode grants no Patrol authority.
+Older saved `autonomous` preferences display as **Ask first**, not as permission
+to execute without approval. The stored preference and its existing entitlement
+checks are preserved for older clients.
 
-When control level is **Controlled**, write actions pause for approval:
+To keep Assistant away from a specific guest, lock it: open the guest, choose
+**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
+Pulse then refuses typed actions that target that resource, including
+approved ones. Older versions also showed a **Protected guests** list here. It
+never excluded a guest from action plans, so it has been removed.
 
-1. Tool returns `APPROVAL_REQUIRED: { approval_id, command, ... }`
-2. Agentic loop emits `approval_needed` SSE event
-3. UI shows approval card with the proposed command
-4. **Approve** to execute and verify, or **Deny** to cancel
-5. Only users with admin privileges can approve/deny
+### Reviewing an Assistant action plan
+
+1. Assistant submits a typed action for a resource advertising that capability.
+2. Pulse records the plan in **Actions**; planning is not execution.
+3. Open **Actions** to check the target, proposed operation, approval policy and expiry.
+4. An authorised operator reviews, approves where required, and runs the plan
+   through the existing action controls. Chat mode cannot bypass these checks.
+5. Read the recorded execution and independent verification result. A saved plan
+   or successful command alone does not establish recovery.
 
 ---
+
+## Weekly summary and email
+
+Pulse's **This week** summary adds up retained Patrol activity over the last
+seven days. Open **Patrol → Activity** to read it; use **Settings → Data & Reports**
+to schedule the same summary by email. The card, weekly email and **Report type**
+selector are included in **v6.5.0**. An older build can lack these controls.
+
+This is a summary of recorded activity, not a complete audit or proof that every
+resource is healthy. Use individual findings, run history and **Actions** for
+the result of a particular investigation or fix.
+
+### Read the summary
+
+The card normally says **Last 7 days**: a rolling window, not a calendar week.
+If it says **Since … (older runs are no longer kept)**, its run history covers
+only part of that window. Refreshing the card reads existing records; it does
+not run Patrol or recover missing history.
+
+| Line | What it means and what to check |
+| --- | --- |
+| **Patrol runs** | Retained runs, checks and failures in the window. The resource count is the largest number checked in one run, not a count of distinct resources across the week. Read run history for failed or missing checks. |
+| **New issues** | New-finding totals recorded by those runs. The open severity counts concern findings detected within the window; older open findings are not included. Check the full findings list before concluding that nothing needs attention. |
+| **Issues resolved** | Recorded automatic resolutions plus manual resolutions still retained. Dismissed and muted findings are described separately. A cleared finding does not establish that an action ran or was independently verified. |
+| **Investigated** | Recorded investigation outcomes on retained findings. “Fix run, result unknown” is not a verified fix; open the finding for its result and remaining work. |
+| **Fixes run** | Actions recorded as successfully executed. “Verified afterwards” is a separate count; review failed actions and waiting approvals in **Actions**. Do not run an action again merely to increase the count. |
+| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](AI.md#cost-tracking). |
+
+The displayed mode is Patrol's **current** mode, not a history of mode changes.
+Watch-only mode can explain why investigations or fixes were not performed,
+but changing mode is not a repair for an empty summary.
+
+### Schedule the weekly email
+
+Scheduling requires the **advanced reporting** entitlement and an account
+allowed to manage report schedules. Reading the Patrol card does not itself
+grant scheduling access. See [Plans and entitlements](PULSE_PRO.md).
+
+1. Check that email notifications are **enabled and configured** under
+   **Alerts → Notifications**. Listing recipients on a schedule does not
+   configure a mail provider or enable email.
+2. Open **Settings → Data & Reports**, choose **Create schedule**, then set
+   **Report type** to **Patrol weekly summary**.
+3. Enter a schedule name, weekday, time and an IANA **Timezone**, such as
+   `Europe/London`. The summary is weekly, covers the last seven days, and is
+   sent as HTML and plain text email. It is not a PDF/CSV attachment, a
+   resource/tag-filtered report, or a saved disk copy.
+4. Set **Email recipients** deliberately. Blank uses the existing email
+   notification recipients; if none are configured, delivery can fall back
+   to the sender address. Use explicit authorised recipients to avoid that
+   ambiguity. The email can contain resource names, findings and costs.
+5. Save with **Enabled** selected for automatic runs. **Run now** sends a real
+   email; it is not a preview or a test of future scheduled delivery. Use it
+   only when those recipients should receive the summary.
+
+The Report type choice appears when the session reports AI as enabled. An
+existing summary keeps its type when edited after AI is switched off. If the
+choice is missing, check the installed version, current workspace, AI settings
+and reporting access; do not change Patrol's autonomy mode, re-enrol agents or
+create an API token just to reveal it.
+
+### Check a missing email or empty summary
+
+- **No recorded runs:** check Patrol's enabled state, configured provider,
+  ordinary run history and errors. “Patrol has not run” can also reflect an
+  unavailable Patrol service, not proof that the environment had no problems.
+  Do not force a run, restart Pulse or change retention just to fill the card.
+- **Failed schedule:** read **Last run** and the saved error in Reporting. On
+  a narrow screen, use the same signed-in page at a wider viewport to see
+  that column. A missing Patrol service and missing email configuration are
+  different failures. Preserve the original error; do not repeatedly use
+  Run now or send synthetic alerts to diagnose them.
+- **Run marked OK but no email received:** that status means Pulse's sender
+  returned success, not that the message reached the recipient's inbox.
+  Check the selected recipients and the mail provider's delivery or rejection
+  record, then the mailbox's filtering. A successful alert Test does not prove
+  that this schedule ran or used the intended recipients.
+- **Email links missing:** links depend on the configured Pulse public URL.
+  Open Patrol in your existing authenticated browser; do not make Pulse
+  publicly accessible or disable TLS to make an email link work.
+
+Keep full mail errors, recipient addresses, credentials and exports private.
+Share only a locally reviewed, redacted error and the relevant schedule time
+and outcome; see [Getting Help](TROUBLESHOOTING.md#-getting-help).
+
+### Honest limits of the data
+
+- Run history retains at most **100 runs**. Event-triggered activity can
+  exhaust it before seven days. The partial-window notice concerns run
+  retention only; its absence does not certify all other lines as complete.
+- Resolved findings can be purged after **24 hours**, and dismissed findings
+  after **30 days**. Manual resolutions, dismissals and investigation outcomes
+  on purged findings can disappear from these totals. Automatic resolution
+  totals come from retained runs, so the lines need not reconcile exactly.
+- Actions have their own retained audit records, but the digest reads a bounded
+  set and can show an empty action line when that source is unavailable.
+  Check **Actions** itself; zero in this summary is not proof that no action
+  took place. Pending approvals can include actions created before the window.
+- Model spend depends on recorded usage and known prices. This summary cannot
+  establish that caching, a budget limit or a provider's bill is correct.
+
+### API
+
+For an existing authenticated integration, `GET /api/ai/patrol/digest` requires
+`ai:execute` scope. Optional `days` is an integer from **1 to 30**, default
+**7**; invalid values return 400. Scheduled email always uses seven days.
+The response groups `window`, `mode`, `runs`, `findings`, `investigations`,
+`actions`, `alerts` and `spend`. `window.history_complete` and
+`window.history_since` describe the run-retention limitation above, not a
+whole-report completeness guarantee.
+
+A zero response can be returned when the Patrol service is unavailable.
+Authentication, scope or transport errors are not a zero result. Prefer the
+signed-in card for a one-off check; never extract a session cookie or put an
+API token in a command, URL or public report. See [API authentication](API.md#-authentication)
+for the private header-file approach when an integration needs it.
 
 ## Configuration
 
@@ -605,7 +841,7 @@ Patrol runs on a configurable schedule:
 | 10 min – 7 days | Configurable interval (default: 6 hours) |
 
 Patrol can also be triggered by:
-- **Manual run**: Click "Run Patrol" in the UI
+- **Manual run**: Click "Check now" in the Patrol header (the button shows "Starting…" or "Running…" while a run is starting or in progress)
 - **Alert-triggered analysis (Pro and above)**: Runs when an alert fires
 - **API call**: `POST /api/ai/patrol/run`
 
@@ -626,11 +862,12 @@ Pulse includes a model-context layer that aggregates evidence from AI runtime su
 | **Knowledge Store** | Persists user annotations and model-safe context |
 | **Forecast Service** | Estimates capacity trajectories from historical samples |
 
-### Health Scoring
+### Check History
 
-Historical Patrol checks and the legacy operational score remain available in
-the collapsed supporting-context section. They are not the primary daily
-monitoring answer and do not replace the canonical attention queue.
+Historical Patrol checks remain available from **Activity > Finding options and
+history**, under **History**. Patrol no longer shows the legacy operational
+score. Check history is not the primary daily monitoring answer and does not
+replace the canonical attention queue.
 
 ---
 

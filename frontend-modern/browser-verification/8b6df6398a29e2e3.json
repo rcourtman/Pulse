@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "982a6f6148cf9d39883e4443191b4d40b59cfd7c",
+  "verified_at": "2026-10-06T15:03:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/operationalTrust.ts",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "94bb73163dd86c1f045a0b5559b42486198ab824ef2abccfc3c8c1dcc0ff2784",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "aacc7232596a47d64c7e6ec3b29dfaf51be6e1691d9be906b30bfce49f4daf6f",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "30548565d29ca16fe1c1192687c881defc064ba1b267fdcd40fc28922a51fed4",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "b3c87b3ead9bde22a091b2c080b9eaca18face9ba153085bb1a1dbb9b6ae9f54",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "04338cdce5b54bc041267b325a6985a9a8f84ef9e5a8dba8040c7d9fc5ab1811",
+    "frontend-modern/src/types/api.ts": "17a948b6ba78780ef2b95c1f397d2d9a04eebd2726c568a8316e25e7c8f9e6b3",
+    "frontend-modern/src/types/operationalTrust.ts": "9a50a869b1f6ef2885f30a354fb70b36b64fbb1a3f00ba4476d592389f9ba954",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts": "f77c42b48f22bddcccb43a3da43b3771bb03d25c6d23b7efa200a34dae1da0e9"
+  },
+  "routes": [
+    "/alerts/history",
+    "/patrol?attention=pve1::metric-threshold:memory"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private non-mock stack (backend :7691, Vite :5291) on a data dir whose alert history was written by the real alerts manager: a pve1 node memory alert closed through releaseCanonicalMetricAlert with a moved_to_agent resolution (successor pve1 (Host Agent)) and a pve1 CPU alert closed as an ordinary release; the handover record's resolve transition carries cause ownership_transferred",
+    "Alerts history at 1280: the CPU row's status badge reads resolved, the memory row's reads moved to agent in blue, and its title is 'Moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.'",
+    "Memory row Timeline expanded: the incident timeline lists 'Node memory at 95.0%' then 'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.' where it said 'Alert resolved' before; the incident header still says resolved (incident status vocabulary, unchanged)",
+    "Alerts history at 375: the memory card shows the moved to agent badge and the account as a muted line under the breach message; the CPU card is unchanged",
+    "Patrol deep link to the moved record at 1280 and 375: the detail badge reads Moved (info tone) instead of green Resolved, the handover sentence sits directly under 'Node memory at 95.0%', and Evidence and history shows 'Open to Resolved, Ownership transferred' with the same reason; no Recovery evidence label anywhere; no horizontal scroll at 375 and no console errors"
+  ],
+  "interactions": [
+    "Loaded /alerts/history at 1280x900 and read both rows' status badges and titles",
+    "Clicked the memory row's Timeline button and read the expanded incident timeline",
+    "Reloaded /alerts/history at 375x812 and read both history cards",
+    "Opened /patrol?attention=pve1::metric-threshold:memory at 1280x900 and 375x812, opened Evidence and history, and read the badge, summary, handover line and timeline",
+    "Checked document width against the viewport at 375 and read the console for errors"
+  ]
+}

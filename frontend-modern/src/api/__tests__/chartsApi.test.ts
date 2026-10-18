@@ -39,17 +39,6 @@ describe('ChartsAPI', () => {
     });
   });
 
-  it('adds node query for host-scoped workloads summary', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
-
-    await ChartsAPI.getWorkloadsSummaryCharts('1h', undefined, { nodeId: 'cluster-a-node-1' });
-
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/charts/workloads-summary?range=1h&node=cluster-a-node-1',
-      { signal: undefined },
-    );
-  });
-
   it('builds infrastructure summary chart requests with explicit metric filters', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
 

@@ -246,3 +246,10 @@ func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
 		})
 	}
 }
+
+// The same ordinary status decoder also preserves memory availability presence.
+func TestVMStatusMemoryAvailabilityPresence(t *testing.T) {
+	t.Run("round-trip", testVMMemInfoAvailabilityRoundTrip)
+	t.Run("invalid-numbers", testVMMemInfoAvailabilityRejectsInvalidNumbers)
+	t.Run("reused-decode", testVMMemInfoAvailabilityPresenceDoesNotLeakAcrossDecode)
+}

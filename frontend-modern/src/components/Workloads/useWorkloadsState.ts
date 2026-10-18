@@ -5,8 +5,7 @@ import {
   type RuntimeInventorySourcesResponse,
 } from '@/api/runtimeInventorySources';
 import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
-import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
-import type { VM, Container, Node } from '@/types/api';
+import type { Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -16,7 +15,6 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useWorkloads } from '@/hooks/useWorkloads';
-import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   getWorkloadsDisconnectedState,
   getWorkloadsGuestsEmptyState,
@@ -24,11 +22,10 @@ import {
   getWorkloadsLoadingState,
   getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
-  buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   selectVisibleWorkloadInventory,
@@ -39,7 +36,6 @@ import {
   type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
   type WorkloadsMetricHoverMode,
-  type WorkloadsStatusOption,
   type WorkloadsSortKey,
 } from './workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from './workloadMetricHistoryModel';
@@ -69,32 +65,20 @@ const isProxmoxNodeResource = (resource: Resource): boolean =>
     Boolean(resource.proxmox) ||
     Boolean(resource.platformData?.proxmox));
 
-export interface WorkloadsSurfaceProps {
-  vms: VM[];
-  containers: Container[];
-  nodes: Node[];
+export interface WorkloadsStateOptions {
   layoutWidth?: Accessor<number | null | undefined>;
-  useWorkloads?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   excludedWorkloadTypes?: readonly WorkloadType[];
   showNestedExcludedWorkloads?: boolean;
   forcedGroupingMode?: WorkloadsGroupingMode;
-  defaultSortKey?: WorkloadsSortKey;
-  filterAriaLabel?: string;
-  filterSearchPlaceholder?: string;
-  filterSearchEmptyMessage?: string;
-  filterStatusOptions?: readonly WorkloadsStatusOption[];
   // When the surface is mounted inside a platform-first page, the page owns
   // platform scope through `forcedPlatform`. `suppressPlatformFilter`
-  // removes the redundant Platform chip from the filter row since the
-  // platform is already fixed by the owning page.
+  // withholds the Platform filter config from the returned state, so a
+  // platform the owning page already fixed never counts as an operator
+  // filter. The owning page renders the one WorkloadsFilter; the surface
+  // renders none.
   suppressPlatformFilter?: boolean;
-  // When a platform page renders its own shared WorkloadsFilter above the
-  // embedded surface (so one toolbar drives both the page's top table and
-  // this surface), set `suppressFilterToolbar` so the surface skips its
-  // internal filter row and avoids a duplicate.
-  suppressFilterToolbar?: boolean;
   // An owning platform page may provide the canonical unified-resource
   // snapshot it already fetched. This avoids a second workload/infrastructure
   // request and keeps both surfaces on the same refresh generation.
@@ -105,16 +89,6 @@ export interface WorkloadsSurfaceProps {
   }>;
   resourceSnapshotRefetch?: () => Promise<unknown>;
   statusModeStorageScope?: string;
-  // Platform pages that render their own hosts table above the embedded
-  // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
-  // / Disk / Temperature / uptime / version stats. Setting
-  // `compactGroupHeaders` strips those stats from the NodeGroupHeader rows
-  // in grouped mode so the section dividers don't duplicate the info.
-  compactGroupHeaders?: boolean;
-  // Default Workloads behavior owns grouped host row drawers inline. Platform
-  // pages with a dedicated host table can disable that drawer so host details
-  // open from the host-owned table instead of the embedded guest table.
-  groupNodeDrawerMode?: 'inline' | 'disabled';
   // When a platform page owns the metric display mode + sparkline range
   // (so the same toggle drives both the page's hosts table and this
   // embedded workloads surface), pass the accessors + change handlers.
@@ -155,27 +129,31 @@ export interface WorkloadGroupLabelBadge {
   title?: string;
 }
 
-export function useWorkloadsState(props: WorkloadsSurfaceProps) {
+export function useWorkloadsState(props: WorkloadsStateOptions) {
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
 
-  const kioskMode = useKioskMode();
-
-  const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState();
-
-  const workloadsEnabled = createMemo(() => props.useWorkloads === true);
-  const workloads = useWorkloads(workloadsEnabled, {
+  const workloads = useWorkloads(undefined, {
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotChange: props.resourceSnapshotChange,
     refetchSnapshot: props.resourceSnapshotRefetch,
   });
+  const metadataIds = createMemo<ReadonlySet<string>>(
+    () => new Set(workloads.workloads().map(getWorkloadMetadataId)),
+    new Set<string>(),
+    {
+      equals: (previous, next) =>
+        previous.size === next.size && [...next].every((id) => previous.has(id)),
+    },
+  );
+  const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState(metadataIds);
   const infrastructureSources = useUnifiedResources({
     query: WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY,
     cacheKey: 'workloads-infrastructure-sources',
-    enabled: () => workloadsEnabled() && !props.resourceSnapshot,
+    enabled: () => !props.resourceSnapshot,
   });
   const infrastructureResources = createMemo(() =>
     props.resourceSnapshot ? (props.resourceSnapshot() ?? []) : infrastructureSources.resources(),
@@ -186,7 +164,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
       : infrastructureSources.loading(),
   );
   const inventorySourcesResourceKey = createMemo(() =>
-    workloadsEnabled() && !props.inventorySourcesQuery ? 'enabled' : null,
+    props.inventorySourcesQuery ? null : 'enabled',
   );
   const ownedInventorySourcesSnapshot = createNonSuspendingQuery<
     RuntimeInventorySourcesResponse,
@@ -212,19 +190,15 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   };
 
   const excludedWorkloadTypeSet = createMemo(() => new Set(props.excludedWorkloadTypes ?? []));
-  const rawGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsEnabled() ? workloads.workloads() : [],
-  );
+  const rawGuests = createMemo<WorkloadGuest[]>(() => workloads.workloads());
   const allGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsEnabled()
-      ? dedupeGuests(
-          selectVisibleWorkloadInventory({
-            guests: rawGuests(),
-            excludedTypes: excludedWorkloadTypeSet(),
-            platformScope: props.forcedPlatform,
-          }),
-        )
-      : [],
+    dedupeGuests(
+      selectVisibleWorkloadInventory({
+        guests: rawGuests(),
+        excludedTypes: excludedWorkloadTypeSet(),
+        platformScope: props.forcedPlatform,
+      }),
+    ),
   );
   const nestedWorkloadContextByGuestId = createMemo<NestedWorkloadContextByGuestId>(() =>
     props.showNestedExcludedWorkloads
@@ -256,23 +230,16 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     ),
   );
 
-  const infrastructureNodes = createMemo<Node[]>(() => {
-    const merged = new Map<string, Node>();
-    props.nodes.forEach((node) => merged.set(node.id, node));
-
-    if (workloadsEnabled()) {
-      infrastructureResources()
-        .filter(isProxmoxNodeResource)
-        .map(nodeFromResource)
-        .filter((node): node is Node => Boolean(node))
-        .forEach((node) => {
-          const existing = merged.get(node.id);
-          merged.set(node.id, existing ? { ...existing, ...node } : node);
-        });
-    }
-
-    return Array.from(merged.values());
-  });
+  // One node per canonical Proxmox agent resource. Snapshot producers keep
+  // resource IDs unique (the registry lists each ID once and the REST fetch
+  // dedupes by ID), and each node keeps its resource's instance/node tuple, so
+  // two installs whose names join to the same alias stay separate nodes.
+  const infrastructureNodes = createMemo<Node[]>(() =>
+    infrastructureResources()
+      .filter(isProxmoxNodeResource)
+      .map(nodeFromResource)
+      .filter((node): node is Node => Boolean(node)),
+  );
 
   const {
     clusterFilterConfig,
@@ -359,7 +326,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setWorkloadMetricHoverMode,
     setWorkloadMetricHistoryRange,
   } = useWorkloadsControlsState({
-    defaultSortKey: props.defaultSortKey,
     forcedGroupingMode: props.forcedGroupingMode,
     statusModeStorageScope: props.statusModeStorageScope,
     metricDisplayMode: props.metricDisplayMode,
@@ -401,39 +367,29 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     buildWorkloadInventorySourceIssues(inventorySourcesSnapshot.value().sources ?? []),
   );
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
-  const hasInfrastructureSources = createMemo(() =>
-    workloadsEnabled()
-      ? infrastructureNodes().length > 0 || infrastructureResources().length > 0
-      : infrastructureNodes().length > 0,
+  const hasInfrastructureSources = createMemo(
+    () => infrastructureNodes().length > 0 || infrastructureResources().length > 0,
   );
-  const infrastructureSourceStateReady = createMemo(() =>
-    workloadsEnabled() ? hasInfrastructureSources() || !infrastructureLoading() : true,
+  const infrastructureSourceStateReady = createMemo(
+    () => hasInfrastructureSources() || !infrastructureLoading(),
   );
-  const surfaceConnected = createMemo(() =>
-    workloadsEnabled()
-      ? workloads.loading() || hasWorkloadsData() || !workloads.error()
-      : connected(),
+  const surfaceConnected = createMemo(
+    () => workloads.loading() || hasWorkloadsData() || !workloads.error(),
   );
-  const surfaceInitialDataReceived = createMemo(() =>
-    workloadsEnabled()
-      ? hasWorkloadsData() ||
-        ((!workloads.loading() || Boolean(workloads.error())) && infrastructureSourceStateReady())
-      : initialDataReceived(),
+  const surfaceInitialDataReceived = createMemo(
+    () =>
+      hasWorkloadsData() ||
+      ((!workloads.loading() || Boolean(workloads.error())) && infrastructureSourceStateReady()),
   );
 
   const reconnectSurface = () => {
-    if (workloadsEnabled()) {
-      void workloads.refetch();
-      void inventorySourcesSnapshot.refetch({ background: true });
-    }
+    void workloads.refetch();
+    void inventorySourcesSnapshot.refetch({ background: true });
     reconnect();
   };
 
-  const getNodeTemperatureThresholds = (node: Node) =>
-    alertsActivation.getMetricThresholds('node', 'temperature', nodeOverrideIdCandidates(node));
-
   createEffect(() => {
-    if (!workloadsEnabled() || props.inventorySourcesQuery) return;
+    if (props.inventorySourcesQuery) return;
     const handle = window.setInterval(() => {
       void inventorySourcesSnapshot.refetch({ background: true });
     }, WORKLOADS_INVENTORY_SOURCES_POLL_INTERVAL_MS);
@@ -445,7 +401,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   createEffect(() => {
     const isConnected = connected();
     if (isConnected) {
-      if (workloadsEnabled() && !lastConnected && hasSeenConnectedState) {
+      if (!lastConnected && hasSeenConnectedState) {
         void workloads.refetch();
       }
       hasSeenConnectedState = true;
@@ -457,12 +413,18 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     createWorkloadSortComparator(sortKey() || '', sortDirection(), {
       memoryValue: (guest) => {
         if (workloadMemoryDisplayBasis() !== 'host') {
-          return guest.memory?.usage ?? 0;
+          return guest.memory?.usage;
         }
         const hostTotal =
           memoryParentNodeByGuestId()[getCanonicalWorkloadId(guest)]?.memory?.total ?? 0;
-        const used = guest.memory?.used ?? 0;
-        return hostTotal > 0 && Number.isFinite(used) ? (used / hostTotal) * 100 : 0;
+        const used = guest.memory?.used;
+        return Number.isFinite(hostTotal) &&
+          hostTotal > 0 &&
+          typeof used === 'number' &&
+          Number.isFinite(used) &&
+          used >= 0
+          ? (used / hostTotal) * 100
+          : null;
       },
     }),
   );
@@ -486,29 +448,15 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const groupLabelBadges = createMemo<Record<string, WorkloadGroupLabelBadge>>(
     () => props.groupLabelBadges ?? {},
   );
-  const summaryGroupScopes = createMemo(() =>
-    buildWorkloadSummaryGroupScopeMap({
-      guests: filteredGuests(),
-      nodes: infrastructureNodes(),
-      groupingMode: groupingMode(),
-      sortComparator: guestSortComparator(),
-      groupLabelBadges: groupLabelBadges(),
-    }),
-  );
 
   const {
-    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,
-    focusedSummaryWorkloadGroupScope,
-    focusedSummaryWorkloadGroupId,
-    hoveredSummaryWorkloadGroupScope,
     hoveredWorkloadId,
     revealedGuestId,
+    selectedGuestDrawerState,
     selectedGuestId,
     setClearSurfaceRootRef,
-    setFocusedWorkloadGroupScope,
-    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
@@ -521,7 +469,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
       resetWorkloadRouteFilters();
     },
     filteredGuests,
-    summaryGroupScopes,
     routeStateEnabled: props.routeStateEnabled,
   });
 
@@ -581,6 +528,10 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     prefetchGuests: metricHistoryPrefetchGuests,
     range: workloadMetricHistoryRange,
     selectedNode,
+    // Grouped node rows carry no metric cells, so this reader never polls
+    // the infrastructure summary.
+    series: 'guests',
+    nodes: infrastructureNodes,
   });
   const [workloadHistoryHintSeen, setWorkloadHistoryHintSeen] = usePersistentSignal<boolean>(
     STORAGE_KEYS.WORKLOADS_HISTORY_HINT_SEEN,
@@ -609,7 +560,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     allGuests,
     inventoryStats,
     isScrollToTopVisible,
-    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,
     bottomSpacerHeight,
@@ -626,10 +576,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsInfrastructureEmptyState,
     workloadsLoadingState,
     filteredGuests,
-    focusedSummaryWorkloadGroupScope,
-    focusedSummaryWorkloadGroupId,
     getGroupLabel,
-    getNodeTemperatureThresholds,
     groupedGuests,
     groupedWindowing,
     guestMetadata,
@@ -641,14 +588,12 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     handleTagClick,
     hasInfrastructureSources,
     hostFilterConfig,
-    hoveredSummaryWorkloadGroupScope,
     infrastructureSourceStateReady,
     infrastructureNodes,
     initialDataReceived,
     isMobile,
     isSearchLocked,
     isWorkloadsRoute,
-    kioskMode,
     kubernetesContextOptions,
     kubernetesNamespaceOptions,
     navigate,
@@ -662,6 +607,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     search,
     scrollToTop,
     selectedCluster,
+    selectedGuestDrawerState,
     selectedGuestId,
     selectedHostHint,
     selectedPlatform,
@@ -670,9 +616,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     selectedNode,
     setContainerRuntime,
     setClearSurfaceRootRef,
-    setFocusedWorkloadGroupScope,
     setGroupingMode,
-    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSearch,
     setSelectedCluster,
@@ -728,8 +672,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsNoInventoryState,
     ws,
     groupingMode,
-    compactGroupHeaders: () => props.compactGroupHeaders === true,
-    groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
     groupLabelBadges,
   } as const;
 }

@@ -13,6 +13,7 @@ import {
   hasThresholdDiff,
   hostActionId,
   hostOverrideIdCandidates,
+  matchesThresholdResourceSearch,
   platformData,
   readRecord,
   readString,
@@ -81,7 +82,7 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
       } satisfies TableResource;
     });
 
-    return search ? nodes.filter((node) => node.name.toLowerCase().includes(search)) : nodes;
+    return search ? nodes.filter((node) => matchesThresholdResourceSearch(node, search)) : nodes;
   }, []);
 
   const agentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
@@ -155,7 +156,9 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
         } satisfies TableResource);
       });
 
-    return search ? agents.filter((agent) => agent.name.toLowerCase().includes(search)) : agents;
+    return search
+      ? agents.filter((agent) => matchesThresholdResourceSearch(agent, search))
+      : agents;
   }, []);
 
   const agentDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {

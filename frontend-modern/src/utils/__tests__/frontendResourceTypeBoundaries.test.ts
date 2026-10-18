@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 import appSource from '@/App.tsx?raw';
 import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
-import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
@@ -72,7 +72,6 @@ import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
-import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
@@ -120,7 +119,6 @@ import environmentLockPresentationSource from '@/utils/environmentLockPresentati
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
-import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
 import recoveryDatePresentationSource from '@/utils/recoveryDatePresentation.ts?raw';
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
@@ -176,7 +174,6 @@ import guestDrawerStateSource from '@/components/Workloads/useGuestDrawerState.t
 import workloadGuestPresentationSource from '@/utils/workloadGuestPresentation.ts?raw';
 import orgScopeSource from '@/utils/orgScope.ts?raw';
 import workloadsUtilitySource from '@/utils/workloads.ts?raw';
-import infrastructureSummaryCacheSource from '@/utils/infrastructureSummaryCache.ts?raw';
 import workloadEmptyStatePresentationSource from '@/utils/workloadEmptyStatePresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
@@ -261,17 +258,10 @@ import resourceDetailDrawerOperationalModelSource from '@/components/Infrastruct
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
-import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
-import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
-import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
-import unifiedResourceTableStateModelSource from '@/components/Infrastructure/unifiedResourceTableStateModel.ts?raw';
-import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
-import discoveryProvenanceMarkerSource from '@/components/shared/DiscoveryProvenanceMarker.tsx?raw';
-import discoveryPresentationSource from '@/utils/discoveryPresentation.ts?raw';
+import infrastructureSettingsPresentationSource from '@/utils/infrastructureSettingsPresentation.ts?raw';
 import proxmoxSettingsModelSource from '@/components/Settings/proxmoxSettingsModel.ts?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
@@ -390,6 +380,7 @@ import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGro
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
+import alertResourceMetricEditorSource from '@/components/Alerts/AlertResourceMetricEditor.tsx?raw';
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
@@ -484,7 +475,6 @@ import systemLogsPresentationSource from '@/utils/systemLogsPresentation.ts?raw'
 import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
 import approvalRiskPresentationSource from '@/utils/approvalRiskPresentation.ts?raw';
 import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
-import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import modelSelectorSource from '@/components/AI/Chat/ModelSelector.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
@@ -513,6 +503,60 @@ const resourceDetailDrawerSource = [
   resourceDetailDrawerStateSource,
 ].join('\n');
 
+// Assert the shared boundary, not a retired helper spelling. Once the adapter
+// supports close metadata, timeline consumers must use it: kind-only labels can
+// incorrectly describe a moved alert as recovered (PR #2607).
+function usesSharedChangePresentation(consumer: string, adapter: string): boolean {
+  const parse = (source: string) =>
+    ts.createSourceFile('boundary.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const metadataAware = parse(adapter).statements.some(
+    (node) =>
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === 'getResourceChangePresentation' &&
+      node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
+  const required = metadataAware
+    ? 'getResourceChangePresentation'
+    : 'getResourceChangeKindPresentation';
+  const tree = parse(consumer);
+  const bindings = new Set<string>();
+  for (const node of tree.statements) {
+    if (
+      !ts.isImportDeclaration(node) ||
+      !ts.isStringLiteral(node.moduleSpecifier) ||
+      node.moduleSpecifier.text !== '@/utils/resourceChangePresentation' ||
+      node.importClause?.isTypeOnly
+    )
+      continue;
+    const imports = node.importClause?.namedBindings;
+    if (!imports || !ts.isNamedImports(imports)) continue;
+    for (const item of imports.elements) {
+      if (!item.isTypeOnly && (item.propertyName ?? item.name).text === required) {
+        bindings.add(item.name.text);
+      }
+    }
+  }
+  let called = false;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      bindings.has(node.expression.text) &&
+      node.arguments.length > 0 &&
+      // The metadata-aware adapter needs the change, not just its kind.
+      !(
+        metadataAware &&
+        ts.isPropertyAccessExpression(node.arguments[0]) &&
+        node.arguments[0].name.text === 'kind'
+      )
+    )
+      called = true;
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return called;
+}
+
 describe('frontend resource type boundaries', () => {
   it('keeps the shared compatibility adapter narrow and explicit', () => {
     expect(resourceTypeCompatSource).toContain('export const canonicalizeFrontendResourceType');
@@ -524,14 +568,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceTypeCompatSource).not.toContain("case 'qemu'");
     expect(resourceTypeCompatSource).not.toContain("case 'lxc'");
     expect(resourceTypeCompatSource).not.toContain("case 'container'");
-  });
-
-  it('keeps canonical frontend discovery types separate from backend API aliases', () => {
-    expect(discoveryTypesSource).toContain(
-      "export type ResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';",
-    );
-    expect(discoveryTypesSource).toContain('export type APIResourceType =');
-    expect(discoveryTypesSource).toContain("| 'k8s'");
   });
 
   it('keeps compatibility handling centralized in shared adapters and edge translators', () => {
@@ -726,10 +762,8 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsSelectionStateSource).toContain(
       'const [hoveredWorkloadId, setHoveredWorkloadId]',
     );
-    expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
     expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
     expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-    expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
     expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
     expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
     expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
@@ -775,8 +809,6 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
     expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
     expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
-    expect(workloadTopologySource).toContain('export const getDiscoveryHostIdForWorkload');
-    expect(workloadTopologySource).toContain('export const getDiscoveryResourceIdForWorkload');
     expect(workloadTopologySource).toContain('export const buildNodeByInstance');
     expect(workloadTopologySource).toContain('export const buildGuestParentNodeMap');
     expect(thresholdSliderSource).toContain('useThresholdSliderState');
@@ -824,8 +856,6 @@ describe('frontend resource type boundaries', () => {
     expect(enhancedCpuBarStateSource).toContain('useTooltip');
     expect(enhancedCpuBarModelSource).toContain('export function buildEnhancedCPUBarPresentation');
     expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
-    expect(infrastructureSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(infrastructureSummaryCacheSource).not.toContain('const normalizeOrgScope =');
     expect(useWorkloadsSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
@@ -880,7 +910,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceIdentityView');
-    expect(resourceDetailDrawerIdentityModelSource).toContain('buildDiscoveryContextSummary');
     expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceDebugBundle');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
@@ -920,7 +949,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
     expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
     expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
-    expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
+    expect(workloadsWorkloadTableSource).not.toMatch(/from\s+['"]\.\/GuestDrawer['"]/);
     expect(workloadTableHeaderSource).toContain('TableHead');
     expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
@@ -941,9 +970,6 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoveryArtifactModePresentationSource).toContain(
-      'export function getRecoveryArtifactModePresentation',
-    );
     expect(recoveryDatePresentationSource).toContain(
       'export function recoveryDateKeyFromTimestamp',
     );
@@ -952,13 +978,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryFullDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryFilterDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryCompactAxisLabel');
-    expect(recoveryDatePresentationSource).toContain('export function formatRecoveryTimeOnly');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryNiceAxisMax');
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineAxisLabelClass',
-    );
-    expect(recoveryTimelineChartPresentationSource).toContain(
-      'export function getRecoveryTimelineBarMinWidthClass',
     );
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineLabelEvery',
@@ -1303,7 +1325,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).not.toContain("'text-yellow-500'");
     expect(storagePoolDetailSource).not.toContain("'text-yellow-600 dark:text-yellow-400 italic'");
     expect(storagePoolDetailSource).not.toContain("'text-red-600 dark:text-red-400 font-medium'");
-    expect(diskDetailSource).toContain('getDiskAttributeValueTextClass');
+    expect(diskDetailSource).toContain('getDiskAttributeCardValueTextClass');
     expect(diskDetailSource).toContain('attributeCards()');
     expect(diskDetailSource).toContain('historyCharts()');
     expect(diskDetailSource).toContain('getDiskDetailHistoryFallbackMessage');
@@ -1423,7 +1445,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageGroupRowSource).toContain('buildStorageGroupRowPresentation');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupRowSource).not.toContain('cursor-pointer select-none bg-surface-alt');
-    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('getGroupedTableRowClass()');
     expect(storageGroupPresentationSource).toContain(
       'export const getStorageGroupHealthCountPresentation',
     );
@@ -1567,8 +1589,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageResourceHighlightSource).toContain('export const useStorageResourceHighlight');
     expect(storageResourceHighlightSource).toContain('findHighlightedStorageRecord');
     expect(storageExpansionStateSource).toContain('export const useStorageExpansionState');
-    expect(storageExpansionStateSource).toContain('syncExpandedStorageGroups');
-    expect(storageExpansionStateSource).toContain('toggleExpandedStorageGroup');
+    expect(storageExpansionStateSource).toContain('resolveExpandedStorageGroups');
+    expect(storageExpansionStateSource).toContain('toggleCollapsedStorageGroup');
     expect(storagePageSource).not.toContain('const rowClass = createMemo(() => {');
     expect(storagePageSource).not.toContain('const rowStyle = createMemo(() => {');
     expect(storagePageSource).not.toContain('const isWaitingForData = createMemo(');
@@ -1856,8 +1878,8 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageStateSource).toContain('export const buildStorageNodeOptions');
     expect(storagePageStateSource).toContain('export const filterStorageDiskNodeOptions');
     expect(storagePageStateSource).toContain('export const buildStorageNodeOnlineByLabel');
-    expect(storagePageStateSource).toContain('export const syncExpandedStorageGroups');
-    expect(storagePageStateSource).toContain('export const toggleExpandedStorageGroup');
+    expect(storagePageStateSource).toContain('export const resolveExpandedStorageGroups');
+    expect(storagePageStateSource).toContain('export const toggleCollapsedStorageGroup');
     expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SELECTED_NODE_ID');
     expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SORT_OPTIONS');
     expect(storagePageStateSource).toContain('export const STORAGE_STATUS_FILTER_OPTIONS');
@@ -2140,15 +2162,33 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_KIND_ORDER');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_TYPE_ORDER');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER');
-    expect(resourceDetailDrawerSource).toContain('getResourceChangeKindPresentation');
+    expect(
+      usesSharedChangePresentation(
+        resourceDetailDrawerOverviewSource,
+        resourceChangePresentationSource,
+      ),
+    ).toBe(true);
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
-    expect(resourceChangeSummarySource).toContain('getResourceChangeKindPresentation');
+    expect(
+      usesSharedChangePresentation(resourceChangeSummarySource, resourceChangePresentationSource),
+    ).toBe(true);
+    // Per-change rows read getResourceChangePresentation, which wraps the
+    // kind presentation so an alert close that was not a recovery reads as
+    // a move.
+    expect(resourceDetailDrawerSource).toContain('getResourceChangePresentation(change)');
+    expect(resourceChangeSummarySource).toContain('getResourceChangePresentation(change)');
+    expect(resourceChangeSummarySource).not.toContain(
+      'getResourceChangeKindPresentation(change.kind)',
+    );
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceAdapterPresentation');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
     expect(resourceChangePresentationSource).toContain('getResourceChangeKindPresentation');
+    expect(resourceChangePresentationSource).toContain(
+      'export function getResourceChangePresentation',
+    );
     expect(resourceChangePresentationSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangePresentationSource).toContain(
       'getResourceChangeSourceAdapterPresentation',
@@ -2159,7 +2199,6 @@ describe('frontend resource type boundaries', () => {
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
-    expect(resourceDetailDrawerIdentityModelSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPbsVisibleJobBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleQueueBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleMailBreakdown');
@@ -2211,7 +2250,6 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
-    expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
@@ -2499,129 +2537,29 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
-    expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
-    expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
-    expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
-    expect(unifiedResourceTableSource).not.toContain('const split = createMemo(() =>');
-    expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
-    expect(unifiedResourceTableSource).not.toContain(
-      'const resourceColumnStyle = createMemo(() =>',
-    );
-    expect(unifiedResourceTableSource).not.toContain('getServiceHealthSummaryPresentation');
-    expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
-    expect(unifiedResourceTableSource).not.toContain('const summarizeServiceHealthTone =');
-    expect(unifiedResourceTableStateSource).toContain(
-      'export function useUnifiedResourceTableState',
-    );
-    expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
-    expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
-    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
-    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
-    expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
-    expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
-    expect(unifiedResourceTableStateSource).not.toContain(
-      'const resourceColumnStyle = createMemo(() =>',
-    );
-    expect(unifiedResourceTableStateSource).not.toContain(
-      "const showGroupHeaders = props.groupingMode === 'grouped'",
-    );
-    expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
-    expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
-    expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
-    expect(unifiedResourceTableStateModelSource).toContain('export const buildHostTableItems');
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getUnifiedResourceTableColumnPresentations',
-    );
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getUnifiedResourceTableShellClass',
-    );
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getNextUnifiedResourceTableSortState',
-    );
-    expect(unifiedResourceTableModelSource).toContain('getServiceHealthSummaryPresentation');
-    expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
-    expect(unifiedResourceTableViewportSyncSource).toContain('bindWindowedPageScrollEvents');
-    expect(unifiedResourceTableViewportSyncSource).not.toContain('window.addEventListener');
-    expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
-    expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
-    expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
-    expect(discoveryTabSource).toContain('getDiscoverySuggestedURLReason');
-    expect(discoveryTabSource).toContain('getDiscoveryObservedSourceLabel');
-    expect(discoveryTabSource).toContain('getDiscoveryAnalysisProviderBadgeClass');
-    expect(discoveryTabSource).toContain('getDiscoveryCategoryBadgeClass');
-    expect(discoveryTabSource).toContain('getDiscoveryInitialEmptyState');
-    expect(discoveryTabSource).toContain('getDiscoveryLoadingState');
-    expect(discoveryTabSource).toContain('getDiscoverySuggestedURLFallback');
-    expect(discoveryTabSource).toContain('getDiscoveryNotesEmptyState');
     expect(guestDrawerSource).toContain('useGuestDrawerState');
-    expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
     expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
-    expect(guestDrawerStateSource).toContain('getDiscoveryLoadingState');
     expect(guestDrawerSource).not.toContain('const discoveryResourceType = () =>');
     expect(guestDrawerSource).not.toContain('const urlTargetLabel = () =>');
     expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
-    expect(workloadsUtilitySource).toContain('export const getDiscoveryResourceTypeForWorkload');
     expect(workloadsUtilitySource).toContain('export const getWebInterfaceTargetLabelForWorkload');
-    expect(resourceDetailDrawerSource).toContain('DiscoveryLoadingFallback');
-    expect(resourceDetailDrawerOverviewSource).toContain('DiscoveryLoadingFallback');
-    expect(discoveryTabSource).not.toContain('const getURLSuggestionSourceLabel =');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryURLSuggestionSourceLabel',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoverySuggestedURLReason');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryObservedSourceLabel',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryProvenanceTitle');
-    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceTitle');
-    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceBadgeClass');
-    expect(discoveryTabSource).toContain('DiscoveryProvenanceMarker');
-    expect(webInterfaceUrlFieldSource).toContain('DiscoveryProvenanceMarker');
-    expect(guestDrawerOverviewSource).toContain('discovery.sourceLabel');
-    expect(guestDrawerOverviewSource).toContain('formatDiscoveryAge');
-    expect(guestDrawerOverviewSource).not.toContain('DiscoveryProvenanceMarker');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLCardClass',
-    );
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLActionClass',
-    );
-    expect(discoveryTabSource).not.toContain('bg-blue-100 text-blue-700');
-    expect(discoveryTabSource).not.toContain('bg-green-100 text-green-700');
-    expect(discoveryTabSource).not.toContain('No discovery data yet');
-    expect(discoveryTabSource).not.toContain('Loading discovery...');
     expect(guestDrawerSource).not.toContain('Loading discovery...');
     expect(resourceDetailDrawerSource).not.toContain('Loading discovery...');
-    expect(discoveryTabSource).not.toContain('No suggested URL available');
-    expect(discoveryTabSource).not.toContain(
-      'No discovery notes yet. Add notes to capture important context.',
-    );
     expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
     expect(webInterfaceUrlFieldSource).not.toContain('No suggested URL available');
     expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
-    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryAnalysisProviderBadgeClass',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryCategoryBadgeClass');
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryInitialEmptyState');
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryLoadingState');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLFallback',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryNotesEmptyState');
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoveryPriorityNotice',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoverySectionPresentation',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoveryModePresentation',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoverySubnetPresentation',
     );
     expect(discoverySettingsFormSource).toContain('getNetworkDiscoveryPriorityNotice');
@@ -2815,7 +2753,7 @@ describe('frontend resource type boundaries', () => {
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
-    expect(alertOverviewTabSource).toContain('AlertOverviewStatsCards');
+    expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewStatsCards');
     expect(alertOverviewTabSource).toContain('AlertOverviewActiveAlertsSection');
     expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
@@ -3596,7 +3534,10 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceBannersSource).toContain('state.licenseRequired()');
     expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceHeaderSource).toContain('!presentationPolicyHidesUpgradePrompts()');
-    expect(patrolIntelligenceHeaderSource).toContain('commercialSurfacesHidden: true');
+    expect(patrolIntelligenceHeaderSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(patrolIntelligenceHeaderSource).not.toContain('commercialSurfacesHidden: true');
     expect(patrolIntelligenceHeaderSource).not.toContain('Plans & Billing');
     expect(patrolIntelligenceHeaderSource).toContain(
       "from '@/components/shared/FilterButtonGroup'",
@@ -3612,8 +3553,6 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
     );
-    expect(patrolSummaryPresentationSource).toContain('badgeVariant:');
-    expect(patrolSummaryPresentationSource).not.toContain('badgeClass:');
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
     // Work-group badge tones resolve in the patrolControlPresentation adapter
     // (getPatrolWorkspaceWorkGroups), never inline in the workspace component.
@@ -3648,18 +3587,16 @@ describe('frontend resource type boundaries', () => {
     expect(aiIntelligenceSummaryModelSource).toContain(
       'export function normalizeIntelligenceSummary',
     );
-    // Verify the symbol is imported from the model without prescribing a
-    // specific single- vs multi-line import shape; usePatrolIntelligenceState
-    // groups several patrolInvestigationContextModel imports together.
-    expect(patrolIntelligenceStateSource).toContain(
+    // FindingsPanel owns the Patrol finding to Assistant handoff; the page
+    // state hook must not carry a second, unwired copy of it.
+    expect(patrolIntelligenceStateSource).not.toContain(
       'buildPatrolAssistantFindingHandoffFromUnifiedFinding',
     );
-    expect(patrolIntelligenceStateSource).toContain('buildPatrolSettingsReadinessFailure');
-    expect(patrolIntelligenceStateSource).toContain("from './patrolInvestigationContextModel'");
+    expect(patrolIntelligenceStateSource).toContain('getPatrolSavedReadinessWarning');
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
-      'export function buildPatrolInvestigationContextSummary',
+      'export function buildPatrolAssistantFindingHandoffFromUnifiedFinding',
     );
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationRecordPresentation',
@@ -3678,7 +3615,9 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).not.toContain(
       'record.proposed_fix.commands.join',
     );
-    expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
+    // Patrol renders no supporting-context summary, so the model must not
+    // carry its policy-coverage count copy either.
+    expect(patrolInvestigationContextModelSource).not.toContain('policy-covered resource');
     expect(patrolIntelligenceHeaderSource).not.toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceHeaderSource).not.toContain('quickstart_credits');
@@ -3692,18 +3631,6 @@ describe('frontend resource type boundaries', () => {
       'historicalRegressionCount={state.historicalRegressionCount()}',
     );
     expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900/25 border-green-200 dark:border-green-800'",
-    );
-    expect(patrolSummaryPresentationSource).toContain(
-      'export function getPatrolSummaryPresentation',
-    );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950/25 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
     );
@@ -3824,7 +3751,7 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_MENU_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_DRAWER_TITLE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_DISCOVERY_HINT_TITLE');
+    expect(aiChatPresentationSource).not.toContain('AI_CHAT_DISCOVERY_HINT_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_QUESTION_CARD_TITLE');
     expect(aiChatPresentationSource).toContain('export function getAIChatLauncherTitle');
     expect(aiChatPresentationSource).not.toContain('AI_CHAT_SUGGESTIONS_LABEL');
@@ -3961,7 +3888,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewStateSource).not.toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().acknowledged');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().total24h');
-    expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().overrides');
+    // Override count is configuration, not alert status; it left the overview.
+    expect(alertOverviewStatsCardsSource).not.toContain('alertStats().overrides');
     expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewAlertCard');
     expect(alertOverviewActiveAlertsSectionSource).toContain('getAlertListEmptyState');
     expect(alertOverviewAlertCardSource).toContain('IncidentTimelinePanel');
@@ -4211,19 +4139,22 @@ describe('frontend resource type boundaries', () => {
       'getAlertResourceTableResetFactoryDefaultsLabel',
     );
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableAlertDelayLabel');
-    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableDesktopSource).toContain('AlertResourceMetricEditor');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableNoResultsState');
     expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
     expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
     expect(alertResourceTableMobileSource).toContain('buildAlertResourceEditPayload');
     expect(alertResourceTableMobileSource).toContain('getAlertResourceTableCustomBadgeLabel');
-    expect(alertResourceTableMobileSource).toContain('getAlertResourceTableMetricPlaceholder');
+    expect(alertResourceTableMobileSource).toContain('AlertResourceMetricEditor');
     expect(alertResourceTableMobileSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
     expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
     expect(alertResourceTableRowSource).toContain('getAlertResourceTableOverrideNotePlaceholder');
-    expect(alertResourceTableRowSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableRowSource).toContain('AlertResourceMetricEditor');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricPlaceholder');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricOffToggleProps');
     expect(alertResourceTableRowSource).toContain('getAlertResourceTableEditMetricTitle');
     expect(alertResourceTableModelSource).toContain(
       'export function normalizeAlertResourceMetricKey',
@@ -4348,5 +4279,90 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookTestLabel');
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookSubmitLabel');
+  });
+});
+
+describe('shared resource change presentation boundary controls', () => {
+  const kindAdapter = 'export function getResourceChangeKindPresentation(kind) {}';
+  const metadataAdapter = `${kindAdapter}\nexport function getResourceChangePresentation(change) {}`;
+  const consumer = (name: string, argument = 'change') =>
+    `import { ${name} } from '@/utils/resourceChangePresentation'; ${name}(${argument});`;
+
+  it('accepts the kind adapter before the metadata-aware API exists', () => {
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangeKindPresentation', 'change.kind'),
+        kindAdapter,
+      ),
+    ).toBe(true);
+  });
+
+  it('requires the whole-change adapter once available, even if the old helper still exists', () => {
+    expect(
+      usesSharedChangePresentation(consumer('getResourceChangePresentation'), metadataAdapter),
+    ).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangeKindPresentation', 'change.kind'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation', 'change.kind'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+  });
+
+  it('resolves named import aliases without accepting an inline lookalike', () => {
+    expect(
+      usesSharedChangePresentation(
+        "import { getResourceChangePresentation as present } from '@/utils/resourceChangePresentation'; present(change);",
+        metadataAdapter,
+      ),
+    ).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        'function getResourceChangePresentation(change) {} getResourceChangePresentation(change);',
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace(
+          '@/utils/resourceChangePresentation',
+          '@/utils/localCopy',
+        ),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects comment-only, unused and type-only imports', () => {
+    expect(
+      usesSharedChangePresentation(
+        '// ' + consumer('getResourceChangePresentation'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        "import { getResourceChangePresentation } from '@/utils/resourceChangePresentation';",
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace('import {', 'import type {'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace('{ getResource', '{ type getResource'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
   });
 });

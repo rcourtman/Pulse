@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "cc11241a39851c55a5add347e3764839e06826b0",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "9d98d2b00d16bc5c10b090fa009149bc59d66b1dc2a2527fcfd13a7434af24ea",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "6af4daf46d5a6b075e0fb34097d8c2f0077c680a9f64934b0b846e6d09da7879",
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts": "4046daa78e657b9e91153257b450c13b7a6495fd0c5230dd025b306e9aedd859"
+  },
+  "routes": [
+    "/browser-tests/held-breach-time.html",
+    "/browser-tests/held-breach-time.html?case=legacy"
+  ],
+  "states": [
+    "Synthetic production node attention, Alerts overview and active History: latched/recovering, valid status date before newer legacy poll, legacy fallback, Go-zero/unknown undated, stale reading, no live status before evaluation after restart",
+    "Existing compact Assistant attachment preserved; real production handoff carries normalised UTC ISO breach evidence and scoped approval boundary; fixture consumes the explanation intent before Chat mounts, no inference"
+  ],
+  "interactions": [
+    "Production Assistant handoff button to actual aiChatStore, compact Chat attachment render/close; no inferred or executed action",
+    "Reactive recovery, legacy, unknown, stale and pre-evaluation states; reload valid legacy state",
+    "36 assertions across Chromium desktop light/dark and WebKit 390/320px phone light/dark; no horizontal overflow, page errors, external requests or writes"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "verified_at": "2026-10-09T22:38:47.231Z",
+  "fixture": "frontend-modern/browser-tests/held-breach-time.cjs",
+  "captures_inspected": 12
+}

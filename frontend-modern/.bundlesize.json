@@ -7,8 +7,8 @@
     "index": {
       "baselineGzip": 150212
     },
-    "sharedPlatformPage": {
-      "baselineGzip": 120645
+    "MetricBar": {
+      "baselineGzip": 120887
     },
     "Alerts": {
       "baselineGzip": 120045
@@ -26,9 +26,9 @@
       "baselineGzip": 67677
     },
     "AIIntelligence": {
-      "baselineGzip": 63097
+      "baselineGzip": 73662
     },
-    "WorkloadsSurface": {
+    "useWorkloadsState": {
       "baselineGzip": 62538
     },
     "Docker": {
@@ -85,14 +85,11 @@
     "AuditLogPanel": {
       "baselineGzip": 8806
     },
-    "discovery": {
-      "baselineGzip": 8522
-    },
     "useUnifiedResources": {
       "baselineGzip": 7595
     },
     "ActionReviewDialog": {
-      "baselineGzip": 8453
+      "baselineGzip": 10414
     },
     "DrawerDiskListCard": {
       "baselineGzip": 6035

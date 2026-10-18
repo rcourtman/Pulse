@@ -34,6 +34,7 @@ interface WorkloadsWorkloadFilterOptionsOptions {
   containerRuntime: Accessor<string>;
   selectedPlatform: Accessor<string | null>;
   selectedNode: Accessor<string | null>;
+  selectedHostHint?: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
   selectedCluster: Accessor<string | null>;
@@ -116,7 +117,9 @@ export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptions
       viewMode: options.viewMode(),
       selectedKubernetesContext: options.selectedKubernetesContext(),
       kubernetesContextOptions: kubernetesContextOptions(),
-      selectedNode: options.selectedNode(),
+      // An unresolved bookmark is still an active text filter. Keep its
+      // normal removable chip and filtered-empty copy, not an inventory outage.
+      selectedNode: options.selectedNode() ?? options.selectedHostHint?.() ?? null,
       workloadNodeOptions: workloadNodeOptions(),
       onContextChange: (value) => options.setSelectedKubernetesContext(value || null),
       onNodeChange: (value) => options.handleNodeSelect(value || null, value ? 'pve' : null),

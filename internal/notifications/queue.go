@@ -848,11 +848,18 @@ func (nq *NotificationQueue) enqueueLocked(notif *QueuedNotification) error {
 
 // UpdateStatus updates the status of a queued notification without incrementing attempts
 func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueStatus, errorMsg string) error {
+	return nq.updateStatus(id, status, errorMsg, true)
+}
+
+// Delivery workers defer reconciliation until their audit is recorded and
+// their per-alert gates are released. Explicit operator transitions still
+// reconcile immediately after committing the status.
+func (nq *NotificationQueue) updateStatus(id string, status NotificationQueueStatus, errorMsg string, notifyHealth bool) error {
 	nq.mu.Lock()
 	err := nq.updateNotificationStatusNoLock(id, status, errorMsg, time.Now())
 	nq.mu.Unlock()
 
-	if err == nil && notificationStatusChangesDeliveryHealth(status) {
+	if err == nil && notifyHealth && notificationStatusChangesDeliveryHealth(status) {
 		nq.notifyDeliveryHealthChanged()
 	}
 	return err
@@ -1218,6 +1225,10 @@ func (nq *NotificationQueue) scanNotification(rows interface{ Scan(...any) error
 // ScheduleRetry schedules a notification for retry with exponential backoff.
 // Cancelled and delivered rows are final, even for stale operator requests.
 func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
+	return nq.scheduleRetry(id, attempt, true)
+}
+
+func (nq *NotificationQueue) scheduleRetry(id string, attempt int, notifyHealth bool) error {
 	backoff := calculateBackoff(attempt)
 	nextRetry := time.Now().Add(backoff)
 
@@ -1272,7 +1283,9 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		Time("nextRetry", nextRetry).
 		Msg("notification retry scheduled")
 
-	nq.notifyDeliveryHealthChanged()
+	if notifyHealth {
+		nq.notifyDeliveryHealthChanged()
+	}
 	return nil
 }
 
@@ -1881,7 +1894,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		retryable := failureClass.Retryable()
 		if notif.Attempts >= notif.MaxAttempts || !retryable {
 			// Move to DLQ
-			if dlqErr := nq.MoveToDLQ(notif.ID, errorMsg); dlqErr != nil {
+			if dlqErr := nq.updateStatus(notif.ID, QueueStatusDLQ, errorMsg, false); dlqErr != nil {
 				log.Error().
 					Err(dlqErr).
 					Str("component", "notification_queue").
@@ -1892,6 +1905,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					Int("maxAttempts", notif.MaxAttempts).
 					Msg("Failed to move notification to DLQ")
 			} else {
+				healthChanged = true
 				completedAt := time.Now()
 				notif.Status = QueueStatusDLQ
 				notif.CompletedAt = &completedAt
@@ -1918,7 +1932,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			}
 		} else {
 			// Schedule retry
-			if retryErr := nq.ScheduleRetry(notif.ID, notif.Attempts); retryErr != nil {
+			if retryErr := nq.scheduleRetry(notif.ID, notif.Attempts, false); retryErr != nil {
 				log.Error().
 					Err(retryErr).
 					Str("component", "notification_queue").
@@ -1929,6 +1943,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					Int("maxAttempts", notif.MaxAttempts).
 					Msg("Failed to schedule retry")
 			} else {
+				healthChanged = true
 				notif.Status = QueueStatusPending
 				notif.Links = transitionNotificationLinks(
 					notif.Links,

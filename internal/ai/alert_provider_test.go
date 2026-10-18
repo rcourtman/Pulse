@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 type stubAlertProvider struct {
@@ -148,6 +150,61 @@ func TestService_buildAlertContext_NoActiveWithResolved(t *testing.T) {
 	}
 	if !strings.Contains(ctx, "... and 1 more") {
 		t.Fatalf("expected overflow line for resolved alerts, got: %s", ctx)
+	}
+}
+
+// The assistant reads recently resolved alerts through the adapter, so a node
+// alert handed to its Pulse agent must reach the prompt as a handover and not
+// as "resolved", which the model would read as the node being healthy.
+func TestService_buildAlertContext_HandoverIsNotARecovery(t *testing.T) {
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	adapter := NewAlertManagerAdapter(&stubAlertManager{resolved: []models.ResolvedAlert{
+		{
+			Alert: models.Alert{
+				ID:           "pve1-memory",
+				Type:         "memory",
+				Level:        "warning",
+				ResourceID:   "pve1",
+				ResourceName: "pve1",
+				Message:      "Memory usage at 95%",
+				StartTime:    now.Add(-time.Hour),
+				Resolution:   &models.AlertResolution{Reason: "moved_to_agent", Summary: summary},
+			},
+			ResolvedTime: now.Add(-time.Minute),
+		},
+		{
+			Alert: models.Alert{
+				ID:           "pve2-cpu",
+				Type:         "cpu",
+				Level:        "warning",
+				ResourceID:   "pve2",
+				ResourceName: "pve2",
+				Message:      "CPU usage at 90%",
+				StartTime:    now.Add(-time.Hour),
+			},
+			ResolvedTime: now.Add(-time.Minute),
+		},
+	}})
+
+	resolved := adapter.GetRecentlyResolved(30)
+	if len(resolved) != 2 || resolved[0].Resolution != summary || resolved[1].Resolution != "" {
+		t.Fatalf("GetRecentlyResolved = %+v, want only the handover to carry a resolution", resolved)
+	}
+	if history := adapter.GetAlertHistory("pve1", 5); len(history) != 1 || history[0].Resolution != summary {
+		t.Fatalf("GetAlertHistory = %+v, want the handover resolution", history)
+	}
+
+	s := &Service{}
+	s.SetAlertProvider(adapter)
+	ctx := s.buildAlertContext()
+	if !strings.Contains(ctx, "- **memory** on pve1: Memory usage at 95% (lasted ") ||
+		!strings.Contains(ctx, ", closed 1 minute ago) "+summary) {
+		t.Fatalf("expected the handover line, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "- **cpu** on pve2: CPU usage at 90% (lasted ") ||
+		!strings.Contains(ctx, ", resolved 1 minute ago)") {
+		t.Fatalf("expected the ordinary recovery line, got: %s", ctx)
 	}
 }
 

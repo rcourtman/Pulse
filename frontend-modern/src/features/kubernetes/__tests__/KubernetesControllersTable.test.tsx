@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/api/resources', () => ({
   ResourceAPI: {
     getFacetBundle: vi.fn().mockResolvedValue({
@@ -14,6 +19,13 @@ vi.mock('@/api/resources', () => ({
 import { formatPlatformTableDateTimeValue } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { KubernetesControllersTable } from '../KubernetesControllersTable';
+
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
 
 const makeResource = ({
   id,
@@ -137,6 +149,10 @@ describe('KubernetesControllersTable', () => {
     expect(screen.getByText('ReplicaSet')).toBeInTheDocument();
     expect(screen.getByText('4 pods')).toBeInTheDocument();
     expect(screen.getAllByText('1 not ready')).toHaveLength(2);
+    // An exception reads in its row dot's colour.
+    for (const exception of screen.getAllByText('1 not ready')) {
+      expect(exception).toHaveClass('text-amber-700');
+    }
     expect(screen.getByText('Fully labeled: 4')).toBeInTheDocument();
 
     expect(screen.getByText('StatefulSet')).toBeInTheDocument();
@@ -250,7 +266,7 @@ describe('KubernetesControllersTable', () => {
     // Tapping the row opens the expansion; the Detail column is hidden below a
     // large container, so this is where a phone or half-width pane reads the
     // completion time.
-    fireEvent.click(screen.getByText('nightly-import'));
+    fireEvent.click(screen.getByText(kubernetesName('nightly-import')));
     const job = screen.getByTestId('resource-kubernetes-controller-section');
     expect(within(job).getByText('Started')).toBeInTheDocument();
     expect(
@@ -264,9 +280,12 @@ describe('KubernetesControllersTable', () => {
     expect(within(job).getByText('5m')).toBeInTheDocument();
     expect(within(job).getByText('Target')).toBeInTheDocument();
     expect(within(job).getByText('10 completions')).toBeInTheDocument();
-    expect(within(job).getByText('Failed').closest('tr')).toHaveTextContent('2');
+    // Failed pods are worth checking, so the drawer lifts that row in front.
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Failed').closest('tr')).toHaveTextContent('2');
+    expect(within(job).queryByText('Failed')).toBeNull();
 
-    fireEvent.click(screen.getByText('billing-rollup'));
+    fireEvent.click(screen.getByText(kubernetesName('billing-rollup')));
     const cron = screen.getByTestId('resource-kubernetes-controller-section');
     expect(within(cron).getByText('Schedule')).toBeInTheDocument();
     expect(within(cron).getByText('*/5 * * * *')).toBeInTheDocument();

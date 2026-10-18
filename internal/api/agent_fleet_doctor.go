@@ -38,7 +38,7 @@ func (r *Router) handleAgentFleetDiagnostics(w http.ResponseWriter, req *http.Re
 	if r.agentExecServer != nil {
 		connected = r.agentExecServer.GetConnectedAgentsForOrganization(organizationID)
 	}
-	applyAgentFleetActionRunnerState(&diagnostics, actionRunnerCredentialSnapshot(r.config), connected, organizationID, now)
+	applyAgentFleetActionRunnerState(&diagnostics, snapshotAPITokenRecords(r.config), connected, organizationID, now)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(diagnostics); err != nil {
@@ -46,12 +46,12 @@ func (r *Router) handleAgentFleetDiagnostics(w http.ResponseWriter, req *http.Re
 	}
 }
 
-// applyAgentFleetActionRunnerState joins the existing organization-scoped
-// command-session inventory to the existing Agent Doctor response. Admission
-// has already bound an action runner to one canonical host identity; the
-// projection still filters the closed runtime role and capability before
-// reporting it as connected.
-func actionRunnerCredentialSnapshot(cfg *config.Config) []config.APITokenRecord {
+// snapshotAPITokenRecords copies the token inventory under config.Mu. Token
+// writers edit cfg.APITokens in place under the write lock (scope edits,
+// delete-then-append, rotation, LastUsedAt on every token request), so a
+// reader must iterate this copy rather than the live slice. It takes the read
+// lock itself: callers must not already hold config.Mu.
+func snapshotAPITokenRecords(cfg *config.Config) []config.APITokenRecord {
 	if cfg == nil {
 		return nil
 	}
@@ -64,6 +64,11 @@ func actionRunnerCredentialSnapshot(cfg *config.Config) []config.APITokenRecord 
 	return records
 }
 
+// applyAgentFleetActionRunnerState joins the existing organization-scoped
+// command-session inventory to the existing Agent Doctor response. Admission
+// has already bound an action runner to one canonical host identity; the
+// projection still filters the closed runtime role and capability before
+// reporting it as connected.
 func applyAgentFleetActionRunnerState(
 	diagnostics *monitoring.AgentFleetDiagnostics,
 	records []config.APITokenRecord,

@@ -158,6 +158,36 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('localizes the alert overview summary, row disclosure and paused-delivery banner', () => {
+    expect(t('alerts.overview.summary.critical', { count: 2 }, 'en')).toBe('2 critical');
+    expect(t('alerts.overview.summary.warning', { count: 3 }, 'de')).toBe('3 Warnung');
+    expect(t('alerts.overview.action.moreActions', undefined, 'es')).toBe('Más');
+    expect(t('alerts.delivery.paused.title', undefined, 'de')).toBe(
+      'Benachrichtigungen sind pausiert',
+    );
+    const pausedKeys = [
+      'alerts.delivery.paused.title',
+      'alerts.delivery.paused.action',
+      'alerts.delivery.paused.setupLink',
+      'alerts.delivery.paused.reason.detectionOff',
+      'alerts.delivery.paused.reason.snoozed',
+      'alerts.delivery.paused.reason.notActivated',
+      'alerts.delivery.paused.consequence.destinations',
+      'alerts.delivery.paused.consequence.destinationsDetectionOff',
+      'alerts.delivery.paused.consequence.overview',
+      'alerts.delivery.paused.consequence.overviewDetectionOff',
+      'alerts.overview.action.moreActions',
+      'alerts.overview.action.lessActions',
+    ] as const;
+    for (const key of pausedKeys) {
+      const english = t(key, undefined, 'en');
+      for (const locale of SUPPORTED_LOCALES) {
+        expect(t(key, undefined, locale)).toBeTruthy();
+        if (locale !== 'en') expect(t(key, undefined, locale)).not.toBe(english);
+      }
+    }
+  });
+
   it('localizes alert group correlation labels across every supported locale', () => {
     expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'en')).toBe('+1 linked signal');
     expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'de')).toBe(
@@ -421,24 +451,60 @@ describe('i18n foundation', () => {
     }
   });
 
+  // Switching delivery off stores the same pending state as a fresh install,
+  // so the paused banner may say delivery is off but never that it was never on.
+  it('describes pending notification delivery as off, not as never turned on', () => {
+    expect(I18N_MESSAGES.en['alerts.delivery.paused.reason.notActivated']).toBe(
+      'Notification delivery is turned off.',
+    );
+    for (const locale of ['en', 'de', 'es'] as const) {
+      expect(I18N_MESSAGES[locale]['alerts.delivery.paused.reason.notActivated']).not.toMatch(
+        /yet|noch nicht|aún no/i,
+      );
+    }
+  });
+
   it('keeps external notification delivery distinct from alert detection', () => {
-    expect(I18N_MESSAGES.en['alerts.activation.label.enabled']).toBe('Notifications enabled');
-    expect(I18N_MESSAGES.en['alerts.activation.label.disabled']).toBe('Notifications paused');
+    // The delivery switch has one name in every state, so an off switch is
+    // never labelled with a word that reads as its opposite.
+    expect(I18N_MESSAGES.en['alerts.activation.switchLabel']).toBe('Send notifications');
+    for (const locale of ['en', 'de', 'es'] as const) {
+      expect(I18N_MESSAGES[locale]['alerts.activation.switchLabel']).not.toMatch(
+        /paus|enabled|aktiviert|activad/i,
+      );
+    }
     expect(I18N_MESSAGES.en['alerts.activation.toast.deactivated']).toContain(
       'keep detecting and showing active alerts',
     );
 
-    expect(I18N_MESSAGES.de['alerts.activation.label.enabled']).toBe(
-      'Benachrichtigungen aktiviert',
-    );
-    expect(I18N_MESSAGES.de['alerts.activation.label.disabled']).toBe(
-      'Benachrichtigungen pausiert',
-    );
+    expect(I18N_MESSAGES.de['alerts.activation.switchLabel']).toBe('Benachrichtigungen senden');
     expect(I18N_MESSAGES.de['alerts.activation.toast.deactivated']).toContain('weiterhin');
 
-    expect(I18N_MESSAGES.es['alerts.activation.label.enabled']).toBe('Notificaciones activadas');
-    expect(I18N_MESSAGES.es['alerts.activation.label.disabled']).toBe('Notificaciones pausadas');
+    expect(I18N_MESSAGES.es['alerts.activation.switchLabel']).toBe('Enviar notificaciones');
     expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
+  });
+
+  // The Schedule page sets how alerts are delivered; maintenance windows are a
+  // separate per-resource feature, so no locale may title it as maintenance.
+  it('titles the alerts Schedule page for delivery, not maintenance', () => {
+    expect(I18N_MESSAGES.en['alerts.page.schedule.title']).toBe('Delivery Schedule');
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['alerts.page.schedule.title']).not.toMatch(
+        /maintenance|wartung|mantenimiento/i,
+      );
+    }
+  });
+
+  // The setup message names the environment variable an operator must remove;
+  // a translated name would point at a variable that does not exist.
+  it('keeps PULSE_TELEMETRY untranslated in the setup lock message', () => {
+    for (const locale of ['en', ...FIRST_LOCALIZATION_LOCALES] as const) {
+      // Removing the variable restores the default (on), so the copy must
+      // name the value that turns statistics off.
+      expect(I18N_MESSAGES[locale]['setup.security.error.telemetryLockedOn']).toContain(
+        'PULSE_TELEMETRY=false',
+      );
+    }
   });
 
   it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
@@ -450,6 +516,14 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.title']).toContain('Patrol');
       expect(I18N_MESSAGES[locale]['alerts.assistant.explain.menuLabel']).toContain('Assistant');
+      // History rows name each Assistant button after its alert, resource
+      // and start time; every locale must keep all three placeholders.
+      for (const key of ['alerts.assistant.iconLabel', 'alerts.assistant.iconLabelAt'] as const) {
+        expect(I18N_MESSAGES[locale][key]).toContain('Pulse Assistant');
+        expect(I18N_MESSAGES[locale][key]).toContain('{alertType}');
+        expect(I18N_MESSAGES[locale][key]).toContain('{resourceName}');
+      }
+      expect(I18N_MESSAGES[locale]['alerts.assistant.iconLabelAt']).toContain('{startedAt}');
       expect(
         t(
           'alerts.assistant.action.investigate',

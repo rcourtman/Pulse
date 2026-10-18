@@ -33,6 +33,7 @@ import {
   formatPlatformAlertResourceType,
   formatPlatformAlertStartedAt,
 } from '@/utils/alertDetailPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -116,7 +117,11 @@ export const VsphereAlertsTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  // One vCenter connection: its name would repeat on every row, so the
+  // column hides (the row drawer still names it).
+  singleVcenter?: boolean;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.incidents,
     initialStatus: 'all' as VmwareIncidentSeverityFilter,
@@ -189,11 +194,13 @@ export const VsphereAlertsTable: Component<{
                 >
                   Signal
                 </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
-                >
-                  <PlatformResponsiveTableLabel compact="VC" full="vCenter" />
-                </TableHead>
+                <Show when={!props.singleVcenter}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                  >
+                    <PlatformResponsiveTableLabel compact="VC" full="vCenter" />
+                  </TableHead>
+                </Show>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
                 >
@@ -270,19 +277,21 @@ export const VsphereAlertsTable: Component<{
                               {incident.summary}
                             </span>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span
-                              class="block truncate text-base-content"
-                              title={[
-                                meta()?.connectionName || meta()?.vcenterHost,
-                                meta()?.datacenterName || meta()?.clusterName,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            >
-                              {meta()?.connectionName || meta()?.vcenterHost || '-'}
-                            </span>
-                          </TableCell>
+                          <Show when={!props.singleVcenter}>
+                            <TableCell class={getPlatformTableCellClassForKind('text')}>
+                              <span
+                                class="block truncate text-base-content"
+                                title={[
+                                  meta()?.connectionName || meta()?.vcenterHost,
+                                  meta()?.datacenterName || meta()?.clusterName,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
+                                {meta()?.connectionName || meta()?.vcenterHost || '-'}
+                              </span>
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
@@ -301,13 +310,15 @@ export const VsphereAlertsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatPlatformAlertStartedAt(incident.startedAt)}
+                            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
+                              {formatPlatformAlertStartedAt(incident.startedAt, now())}
+                            </span>
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={6}
+                            colspan={props.singleVcenter ? 5 : 6}
                             data-inline-detail-for={incident.id}
                             data-vsphere-alert-detail-row={incident.id}
                           >

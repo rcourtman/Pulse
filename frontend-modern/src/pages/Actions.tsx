@@ -1,5 +1,5 @@
 import { Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
-import { useLocation, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import EyeIcon from 'lucide-solid/icons/eye';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -22,7 +22,12 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
-import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actions/actionRouting';
+import {
+  ACTION_REVIEW_QUERY_PARAM,
+  buildActionsViewPath,
+  parseActionReviewId,
+  parseActionsView,
+} from '@/features/actions/actionRouting';
 import {
   formatActionName,
   getActionOriginLabel,
@@ -47,7 +52,13 @@ const getInboxViewForState = (state: ActionAuditState): ActionInboxView =>
 export function Actions() {
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
-  const [view, setView] = createSignal<ActionInboxView>('pending');
+  const navigate = useNavigate();
+  const view = createMemo<ActionInboxView>(() => parseActionsView(location.pathname));
+  const setView = (next: ActionInboxView, options: { replace?: boolean } = {}) => {
+    if (view() === next) return;
+    // The views switch in place, so navigation must not scroll to the top.
+    navigate(`${buildActionsViewPath(next)}${location.search}`, { ...options, scroll: false });
+  };
   const [selected, setSelected] = createSignal<ActionDetailResponse | null>(null);
   const [detailError, setDetailError] = createSignal('');
   const [actions, setActions] = createSignal<ActionAuditRecord[]>([]);
@@ -127,7 +138,7 @@ export function Actions() {
         return;
       }
       setSelected(detail);
-      setView(getInboxViewForState(detail.audit.state));
+      setView(getInboxViewForState(detail.audit.state), { replace: true });
     } catch (cause) {
       if (
         generation !== detailRequestGeneration ||
@@ -323,13 +334,19 @@ export function Actions() {
                             class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted"
                             title={action.request.resourceId}
                           >
-                            <span class="truncate">{resource().label}</span>
-                            <Show when={resource().detail}>
-                              <span aria-hidden="true">·</span>
-                              <span class="truncate font-mono text-[11px]">
-                                {resource().detail}
-                              </span>
-                            </Show>
+                            {/* The name says what the action touches, so it keeps its
+                                width and only the type, with its separator, gives way. */}
+                            <span class="flex min-w-0 items-center gap-1.5">
+                              <span class="max-w-full shrink-0 truncate">{resource().label}</span>
+                              <Show when={resource().detail}>
+                                <span class="min-w-0 flex-1 truncate">
+                                  <span class="mr-1.5" aria-hidden="true">
+                                    ·
+                                  </span>
+                                  <span class="font-mono text-[11px]">{resource().detail}</span>
+                                </span>
+                              </Show>
+                            </span>
                             <span aria-hidden="true">·</span>
                             <span class="shrink-0">{formatRelativeTime(action.updatedAt)}</span>
                           </div>
@@ -350,6 +367,7 @@ export function Actions() {
       </Show>
       <ActionReviewDialog
         detail={selected()}
+        showResourceLink
         onClose={closeAction}
         onChanged={async (detail) => {
           // A read or mutation started in an earlier review must not replace
@@ -362,7 +380,7 @@ export function Actions() {
           setSelected(detail);
           const nextView = getInboxViewForState(detail.audit.state);
           if (view() === nextView) await loadActions();
-          else setView(nextView); // the view effect loads the new list once
+          else setView(nextView, { replace: true }); // the view effect loads the new list once
         }}
       />
     </div>

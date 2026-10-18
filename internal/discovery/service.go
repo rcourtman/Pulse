@@ -19,7 +19,8 @@ import (
 // Service handles background network discovery
 type Service struct {
 	scanner        discoveryScanner
-	wsHub          *websocket.Hub
+	wsHub          eventBroadcaster
+	orgID          string
 	cache          *DiscoveryCache
 	interval       time.Duration
 	subnet         string
@@ -34,6 +35,10 @@ type Service struct {
 	scannerFactory scannerFactory
 	stopCancel     context.CancelFunc
 	stopOnce       sync.Once
+}
+
+type eventBroadcaster interface {
+	BroadcastToTenant(orgID string, data interface{})
 }
 
 // DiscoveryCache stores the latest discovery results
@@ -208,7 +213,7 @@ func init() {
 }
 
 // NewService creates a new discovery service
-func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfgProvider func() config.DiscoveryConfig) *Service {
+func NewService(wsHub *websocket.Hub, orgID string, interval time.Duration, subnet string, cfgProvider func() config.DiscoveryConfig) *Service {
 	normalizedInterval := normalizeScanInterval(interval)
 	if normalizedInterval != interval {
 		log.Warn().
@@ -230,9 +235,9 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 		cfgProvider = func() config.DiscoveryConfig { return config.DefaultDiscoveryConfig() }
 	}
 
-	return &Service{
+	service := &Service{
 		scanner:      newScannerFn(),
-		wsHub:        wsHub,
+		orgID:        orgID,
 		cache:        &DiscoveryCache{},
 		interval:     normalizedInterval,
 		subnet:       normalizedSubnet,
@@ -244,6 +249,10 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 			return BuildScanner(cfg)
 		},
 	}
+	if wsHub != nil {
+		service.wsHub = wsHub
+	}
+	return service
 }
 
 func normalizeDiscoverySubnet(subnet string) (string, error) {
@@ -488,7 +497,7 @@ func (s *Service) performScan() {
 			if result != nil && result.Environment != nil {
 				payload.Environment = result.Environment
 			}
-			s.wsHub.Broadcast(websocket.Message{
+			s.wsHub.BroadcastToTenant(s.orgID, websocket.Message{
 				Type: "discovery_complete",
 				Data: payload,
 			})
@@ -499,7 +508,7 @@ func (s *Service) performScan() {
 
 	// Send scan started notification
 	if s.wsHub != nil {
-		s.wsHub.Broadcast(websocket.Message{
+		s.wsHub.BroadcastToTenant(s.orgID, websocket.Message{
 			Type: "discovery_started",
 			Data: map[string]interface{}{
 				"scanning":  true,
@@ -558,7 +567,7 @@ func (s *Service) performScan() {
 	serverCallback := func(server pkgdiscovery.DiscoveredServer, phase string) {
 		// Send immediate update for each discovered server
 		if s.wsHub != nil {
-			s.wsHub.Broadcast(websocket.Message{
+			s.wsHub.BroadcastToTenant(s.orgID, websocket.Message{
 				Type: "discovery_server_found",
 				Data: discoveryServerFoundPayload{
 					Server:    server,
@@ -577,7 +586,7 @@ func (s *Service) performScan() {
 	progressCallback := func(progress pkgdiscovery.ScanProgress) {
 		// Send progress update via WebSocket
 		if s.wsHub != nil {
-			s.wsHub.Broadcast(websocket.Message{
+			s.wsHub.BroadcastToTenant(s.orgID, websocket.Message{
 				Type: "discovery_progress",
 				Data: discoveryProgressPayload{
 					Progress:  progress,
@@ -640,7 +649,7 @@ func (s *Service) performScan() {
 				Timestamp:        time.Now().Unix(),
 				Environment:      result.Environment,
 			}
-			s.wsHub.Broadcast(websocket.Message{
+			s.wsHub.BroadcastToTenant(s.orgID, websocket.Message{
 				Type: "discovery_update",
 				Data: payload,
 			})

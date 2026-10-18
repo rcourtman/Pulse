@@ -2,7 +2,6 @@ import type { VM, Container, DockerContainerUpdateStatus, HostRAIDArray } from '
 import type {
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
-  ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
 } from './resource';
@@ -24,12 +23,16 @@ export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Backend identities that may own active alerts for this canonical workload. */
   alertResourceIds?: string[];
-  /** Exact unified-resource ID; a Proxmox row ID can be a different VMID-based display key. */
+  /** Exact unified-resource identity, also used as the canonical workload row ID. */
   canonicalResourceId?: string;
+  /** Exact unified parent identity, independent of provider display labels. */
+  parentResourceId?: string;
   /** Backend-owned coordinates for metrics history; distinct from the stable workload row id. */
   metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
   resourceStatus?: string;
+  /** The unified-resource health names an open warning or critical alert. */
+  hasOpenAlert?: boolean;
   displayId?: string;
   image?: string;
   // Provider/runtime-native identifier for app-container actions such as Docker image updates.
@@ -54,8 +57,20 @@ export type WorkloadGuest = (VM | Container) & {
   containerRuntime?: string;
   /** Identifies the producer of agentVersion instead of inferring it from VM type. */
   agentKind?: 'pulse' | 'qemu-guest';
+  /** ID of the Pulse agent running in this guest, the key of its alert overrides. */
+  agentId?: string;
   /** RAID arrays reported by the linked Pulse agent, not Proxmox virtual disks. */
   agentRaid?: HostRAIDArray[];
+  /**
+   * Set when the linked Pulse agent is past its reporting lease. Its RAID,
+   * network and filesystem readings are then its last report, not current.
+   */
+  agentStale?: boolean;
+  /**
+   * Set when `disks` came from the linked Pulse agent because the platform
+   * reported no guest filesystems, so the rows follow that agent's freshness.
+   */
+  disksFromAgent?: boolean;
   updateStatus?: DockerContainerUpdateStatus;
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason
@@ -71,10 +86,8 @@ export type WorkloadGuest = (VM | Container) & {
   // Stable Kubernetes cluster identity used with namespace, kind, and name
   // for persisted workload metadata. Runtime pod UIDs remain separate.
   kubernetesClusterId?: string;
-  // Canonical discovery ownership. API-backed platforms such as TrueNAS should
-  // only expose Discovery when the unified resource contract supplies a target.
+  // Canonical agent coordinates the unified resource contract supplies.
   discoveryTarget?: ResourceDiscoveryTarget;
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   // vSphere placement context surfaced in the workload drawer's vSphere
   // card. Only populated for resources with platformScopes containing
   // `vmware-vsphere`. Kept narrow on purpose — operational state like

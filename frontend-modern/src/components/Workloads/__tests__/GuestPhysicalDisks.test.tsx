@@ -1,20 +1,48 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AlertsAPI } from '@/api/alerts';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import { GuestPhysicalDisks } from '../GuestPhysicalDisks';
 
 const queryState = vi.hoisted(() => ({
   resources: [] as Resource[],
+  // Set to a signal accessor to drive live resource updates.
+  accessor: undefined as (() => Resource[]) | undefined,
   error: undefined as unknown,
   query: '',
   enabled: false,
+  realtimeEnabled: undefined as (() => boolean) | undefined,
+}));
+
+// The expanded disk detail now shows its history charts in view; the chart
+// measures itself with ResizeObserver, which jsdom lacks. Its rendering is
+// covered by the HistoryChart and DiskDetail suites.
+vi.mock('@/components/shared/HistoryChart', () => ({
+  HistoryChartHoverGroup: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+  HistoryChart: (props: { label: string; enabled?: boolean }) => (
+    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
+      {props.label}
+    </div>
+  ),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
-  useUnifiedResources: (options: { query: string; enabled: () => boolean }) => {
+  useUnifiedResources: (options: {
+    query: string;
+    enabled: () => boolean;
+    realtimeEnabled?: () => boolean;
+  }) => {
     queryState.query = options.query;
     queryState.enabled = options.enabled();
-    return { resources: () => queryState.resources, error: () => queryState.error };
+    queryState.realtimeEnabled = options.realtimeEnabled;
+    return {
+      resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
+      error: () => queryState.error,
+    };
   },
 }));
 
@@ -41,11 +69,19 @@ const disk: Resource = {
 };
 
 describe('GuestPhysicalDisks', () => {
+  // The first expansion lazy-loads the Storage disk detail; a cold transform of
+  // that module can outlast findByText's default wait on a loaded machine.
+  beforeAll(async () => {
+    await import('@/components/Storage/DiskDetail');
+  }, 30_000);
+
   beforeEach(() => {
     queryState.resources = [];
+    queryState.accessor = undefined;
     queryState.error = undefined;
     queryState.query = '';
     queryState.enabled = false;
+    queryState.realtimeEnabled = undefined;
   });
   afterEach(cleanup);
 
@@ -64,10 +100,66 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    expect(await within(card).findByText('Reallocated Sectors')).toBeInTheDocument();
+    // The SMART card and the disk's Reallocated Sectors history chart both
+    // name the attribute once the detail is open.
+    expect((await within(card).findAllByText('Reallocated Sectors')).length).toBeGreaterThan(0);
     expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
     expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);
+  });
+
+  it('pauses an expanded disk and the live list while its Overview is hidden', async () => {
+    queryState.resources = [disk];
+    const [shown, setShown] = createSignal(true);
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" historyEnabled={shown()} />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+    await waitFor(() => expect(screen.getAllByTestId('history-chart').length).toBeGreaterThan(0));
+    const enabledStates = () =>
+      screen.getAllByTestId('history-chart').map((chart) => chart.dataset.enabled);
+    expect(new Set(enabledStates())).toEqual(new Set(['true']));
+    expect(queryState.realtimeEnabled?.()).toBe(true);
+    setShown(false);
+    expect(new Set(enabledStates())).toEqual(new Set(['false']));
+    expect(queryState.realtimeEnabled?.()).toBe(false);
+    // The initial read is not withheld: only background refresh pauses.
+    expect(queryState.enabled).toBe(true);
+    setShown(true);
+    expect(new Set(enabledStates())).toEqual(new Set(['true']));
+    expect(queryState.realtimeEnabled?.()).toBe(true);
+  });
+
+  it("judges the guest's disks by its own agent's Disk Temp override", async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { sata: { trigger: 55, clear: 50 } },
+      overrides: { 'host-guest-101': { diskTemperature: { trigger: 65, clear: 60 } } },
+    } as unknown as AlertConfig);
+    try {
+      queryState.resources = [
+        { ...disk, physicalDisk: { ...disk.physicalDisk!, temperature: 58 } } as Resource,
+      ];
+      await useAlertsActivation().refreshConfig();
+      const guestCard = render(() => (
+        <GuestPhysicalDisks parentId="vm-resource-101" alertResourceIds={['host-guest-101']} />
+      ));
+      // 58C passes the 55C SATA trigger but not the agent's 65C override.
+      await waitFor(() =>
+        expect(within(guestCard.container).getByText('Healthy')).toBeInTheDocument(),
+      );
+      guestCard.unmount();
+
+      const unmatched = render(() => (
+        <GuestPhysicalDisks parentId="vm-resource-101" alertResourceIds={['host-other']} />
+      ));
+      expect(within(unmatched.container).getByText('Running Hot')).toBeInTheDocument();
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
   });
 
   it('does not add an empty storage card to an uninstrumented guest', () => {
@@ -82,6 +174,85 @@ describe('GuestPhysicalDisks', () => {
     render(() => <GuestPhysicalDisks parentId=" " />);
     expect(queryState.enabled).toBe(false);
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+  });
+
+  it('marks a retained disk temperature as last known', () => {
+    queryState.resources = [
+      disk,
+      {
+        ...disk,
+        id: 'disk-101-b',
+        displayName: 'Guest NVMe',
+        physicalDisk: {
+          ...disk.physicalDisk!,
+          devPath: '/dev/nvme0',
+          model: 'Guest NVMe',
+          temperature: 61,
+          collection: {
+            temperature: {
+              state: 'unavailable',
+              source: 'host_agent',
+              reason: 'host agent stopped reporting',
+            },
+          },
+        },
+      },
+    ];
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+
+    const [currentRow, retainedRow] = screen.getAllByTestId('guest-physical-disk');
+    const current = within(currentRow).getByText('45°C');
+    expect(current).toHaveAttribute('data-temperature-reading', 'current');
+    expect(current).not.toHaveAttribute('title');
+
+    const retained = retainedRow.querySelector('[data-temperature-reading="last-known"]');
+    expect(retained).not.toBeNull();
+    expect(retained).toHaveTextContent('61°C, last known');
+    expect(retained).toHaveClass('underline', 'decoration-dotted', 'text-muted');
+    expect(retained).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+  });
+
+  it('follows a disk between current and last known as its collection state changes', () => {
+    const withReading = (
+      temperature: number,
+      collection?: NonNullable<Resource['physicalDisk']>['collection'],
+    ): Resource => ({
+      ...disk,
+      physicalDisk: { ...disk.physicalDisk!, temperature, collection },
+    });
+    const [resources, setResources] = createSignal<Resource[]>([disk]);
+    queryState.accessor = resources;
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const reading = () =>
+      screen.getByTestId('guest-physical-disk').querySelector('[data-temperature-reading]');
+
+    expect(reading()).toHaveAttribute('data-temperature-reading', 'current');
+
+    setResources([
+      withReading(61, {
+        temperature: {
+          state: 'unavailable',
+          source: 'host_agent',
+          reason: 'host agent stopped reporting',
+        },
+      }),
+    ]);
+    expect(reading()).toHaveAttribute('data-temperature-reading', 'last-known');
+    expect(reading()).toHaveTextContent('61°C, last known');
+    expect(reading()).toHaveClass('decoration-dotted');
+
+    setResources([withReading(47, { temperature: { state: 'available', source: 'smartctl' } })]);
+    expect(reading()).toHaveAttribute('data-temperature-reading', 'current');
+    expect(reading()).toHaveTextContent('47°C');
+    expect(reading()).not.toHaveTextContent('last known');
+    expect(reading()).not.toHaveAttribute('title');
+    expect(reading()).not.toHaveClass('decoration-dotted');
+
+    setResources([withReading(0)]);
+    expect(reading()).toBeNull();
   });
 
   it('makes a failed child query visible rather than silently implying no disks', () => {

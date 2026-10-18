@@ -46,7 +46,7 @@
   ],
   "execution_model": "direct-repo-sessions",
   "readiness": {
-    "repo_ready_rule": "all lanes target-met and evidence-present plus all repo-ready assertions passed",
+    "repo_ready_rule": "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed",
     "rc_ready_rule": "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed",
     "release_ready_rule": "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
   },
@@ -93,11 +93,6 @@
         {
           "repo": "pulse",
           "path": "cmd/pulse-agent/service_windows.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
           "kind": "file"
         },
         {
@@ -2453,8 +2448,7 @@
             "src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
             "src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
             "src/components/Settings/__tests__/useConnectionsLedger.test.ts",
-            "src/components/Settings/__tests__/settingsArchitecture.test.ts",
-            "src/utils/__tests__/discoveryPresentation.test.ts"
+            "src/components/Settings/__tests__/settingsArchitecture.test.ts"
           ]
         },
         {
@@ -4052,7 +4046,7 @@
             "./internal/ai/tools",
             "./internal/api",
             "-run",
-            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestService_Execute_RepeatedDeniedToolCallTerminatesBounded|TestServiceToolLoop_|TestPulseToolExecutor_ExecuteRunCommand|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
+            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestService_Execute_RepeatedDeniedToolCallTerminatesBounded|TestServiceToolLoop_|TestRetiredMutationProfileMatrixDeniesBeforeHandlers|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
             "-count=1"
           ]
         },
@@ -4193,11 +4187,6 @@
           "path": "internal/ai/service_tool_loop_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/tools/control_run_command_test.go",
-          "kind": "file"
         },
         {
           "repo": "pulse",
@@ -5106,36 +5095,10 @@
     "absolute_paths_forbidden": true,
     "local_repo": "pulse"
   },
-  "priority_engine": {
-    "formula": "behind_score = (max(0,target-current)*4) + criticality + staleness + dependency + blocker_bonus",
-    "floor_rule": {
-      "release_critical_lanes": [
-        "L1",
-        "L2",
-        "L3",
-        "L7",
-        "L8",
-        "L9",
-        "L10",
-        "L11",
-        "L12"
-      ],
-      "minimum_score": 6
-    },
-    "weights": {
-      "gap_multiplier": 4,
-      "criticality_range": "0-5",
-      "staleness_range": "0-3",
-      "dependency_range": "0-3",
-      "blocker_bonus": 8
-    }
-  },
   "lanes": [
     {
       "id": "L1",
       "name": "Self-hosted release confidence",
-      "target_score": 9,
-      "current_score": 9,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5222,8 +5185,6 @@
     {
       "id": "L2",
       "name": "Conversion/commercial readiness",
-      "target_score": 9,
-      "current_score": 9,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5294,8 +5255,6 @@
     {
       "id": "L3",
       "name": "Cloud paid readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5342,8 +5301,6 @@
     {
       "id": "L4",
       "name": "Hosted MSP readiness",
-      "target_score": 6,
-      "current_score": 6,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5363,8 +5320,6 @@
     {
       "id": "L5",
       "name": "Mobile go-live readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5409,8 +5364,6 @@
     {
       "id": "L6",
       "name": "Architecture coherence",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5501,8 +5454,6 @@
     {
       "id": "L7",
       "name": "Relay infrastructure readiness",
-      "target_score": 9,
-      "current_score": 9,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5544,8 +5495,6 @@
     {
       "id": "L8",
       "name": "First-session & UX polish",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5607,8 +5556,6 @@
     {
       "id": "L9",
       "name": "Documentation readiness",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5648,8 +5595,6 @@
     {
       "id": "L10",
       "name": "Performance & scalability",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5668,22 +5613,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
           "kind": "file"
         },
         {
@@ -5751,8 +5681,6 @@
     {
       "id": "L11",
       "name": "v5-to-v6 migration safety",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5822,8 +5750,6 @@
     {
       "id": "L12",
       "name": "E2E journey coverage",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -5858,8 +5784,6 @@
     {
       "id": "L13",
       "name": "Core monitoring runtime",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -5923,7 +5847,7 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "path": "frontend-modern/src/hooks/useUnifiedResources.ts",
           "kind": "file"
         },
         {
@@ -6002,12 +5926,10 @@
     {
       "id": "L14",
       "name": "Security, identity, and privacy",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Security, identity, and privacy is at the current governed floor: privacy disclosures, telemetry controls, RBAC boundaries, and shared token/auth settings surfaces now route through explicit subsystem ownership with exercised proof across the remaining shared token and auth boundaries.",
+        "summary": "Security, identity, and privacy remains at the governed floor. Schema v19 adds only a content-free successful extended-history HTTP read count with private daily persistence, exact Preview disclosure, compatible receiver intake and explicit report coverage. Source and isolated browser proofs pass. Receiver deployment and client release adoption remain separate operational boundaries.",
         "tracking": []
       },
       "blockers": [],
@@ -6068,6 +5990,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/chartapi/history_activity_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/org_handlers_test.go",
           "kind": "file"
         },
@@ -6093,12 +6020,37 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/telemetry_history_reads_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/history_read_activity_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/telemetry/telemetry.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "scripts/tests/test_telemetry_adoption_report.py",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "SECURITY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/19-telemetry-disclosure.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/telemetry_test.go",
           "kind": "file"
         }
       ]
@@ -6106,8 +6058,6 @@
     {
       "id": "L15",
       "name": "Storage and recovery",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6159,8 +6109,6 @@
     {
       "id": "L16",
       "name": "Agent lifecycle and fleet operations",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -6412,8 +6360,6 @@
     {
       "id": "L17",
       "name": "Customer account portal",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6488,8 +6434,6 @@
     {
       "id": "L18",
       "name": "Policy-aware data governance",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6564,8 +6508,6 @@
     {
       "id": "L19",
       "name": "Resource change intelligence",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -6740,8 +6682,6 @@
     {
       "id": "L20",
       "name": "Action governance and auditability",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7159,8 +7099,6 @@
     {
       "id": "L21",
       "name": "Platform admission execution",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7340,8 +7278,6 @@
     {
       "id": "L22",
       "name": "Fleet governance and rollout control",
-      "target_score": 6,
-      "current_score": 6,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -7491,8 +7427,6 @@
     {
       "id": "L23",
       "name": "Monitor-first Patrol operations",
-      "target_score": 8,
-      "current_score": 8,
       "status": "target-met",
       "completion": {
         "state": "complete",
@@ -7674,8 +7608,6 @@
     {
       "id": "L24",
       "name": "Localized product surfaces",
-      "target_score": 8,
-      "current_score": 8,
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
@@ -9538,7 +9470,7 @@
     },
     {
       "id": "storage-recovery-post-rc-hardening",
-      "summary": "Track broader storage health UX polish and recovery timeline hardening beyond the current RC floor, including additional filter coherence edge cases and storage panel presentation improvements.",
+      "summary": "Track broader storage health UX polish and recovery timeline hardening beyond the current RC floor, including additional filter coherence edge cases and storage panel presentation improvements. Post-reliability recovery priorities are orders 1, 3 and 5 in docs/release-control/v6/internal/RECOVERY_AND_CHANGE_INVESTIGATION_PLAN.md: cross-system backup task outcomes under docs/BACKUP_TASK_TIMELINE_CONTRACT.md, one understandable workload protection assessment, then demand-dependent retained recovery-test evidence. Pick up through planned target v6-product-lane-expansion only when v6-release-reliability explicitly yields priority. Reconcile the existing task-timeline demand entry and stable-delivery prerequisite before activation. Recovery-test execution remains a separate L20 admission decision.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-14",
@@ -9621,7 +9553,7 @@
     },
     {
       "id": "resource-change-intelligence-post-rc-hardening",
-      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline and relationship-map floor, including surfaced cross-resource timeline IA, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into deeper operator workflows.",
+      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline and relationship-map floor, including surfaced cross-resource timeline IA, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into deeper operator workflows. Post-reliability change priorities are orders 2 and 4 in docs/release-control/v6/internal/RECOVERY_AND_CHANGE_INVESTIGATION_PLAN.md: explicit incident-focused access to retained history with preserved resource/time context and continuation, then safe provider configuration diffs on canonical change records. Pick up through planned target v6-product-lane-expansion only when v6-release-reliability explicitly yields priority. The broader infrastructure lifecycle timeline retains its existing demand-ledger threshold.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",
@@ -9760,7 +9692,6 @@
         "agent-lifecycle"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -9775,11 +9706,6 @@
         {
           "repo": "pulse",
           "path": "internal/monitoring/monitor_host_agents_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/servicediscovery/service.go",
           "kind": "file"
         }
       ]
@@ -9801,7 +9727,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 6,
       "evidence": [
         {
           "repo": "pulse",
@@ -9840,7 +9765,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "new-lane",
-      "coverage_impact": 8,
       "evidence": [
         {
           "repo": "pulse",
@@ -9899,7 +9823,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "new-lane",
-      "coverage_impact": 9,
       "evidence": [
         {
           "repo": "pulse",
@@ -9914,11 +9837,6 @@
         {
           "repo": "pulse",
           "path": "internal/monitoring/availability_poller.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/servicediscovery/availability_suggestion.go",
           "kind": "file"
         }
       ]
@@ -9938,7 +9856,6 @@
         "monitoring"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 6,
       "evidence": [
         {
           "repo": "pulse",
@@ -9977,7 +9894,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -9992,38 +9908,6 @@
         {
           "repo": "pulse",
           "path": "pkg/server/telemetry_pulse_intelligence.go",
-          "kind": "file"
-        }
-      ]
-    },
-    {
-      "id": "release-train-exact-candidate-promotion",
-      "summary": "Stable promotions built whatever the dispatch branch was at that second: the resolver checked that HEAD descends from the promoted RC but not that its content matches, so v6.4.0 shipped 64 changed files that v6.4.0-rc.12 never soaked, and every v6 version was mapped to main, which moves every few minutes under the autonomous maintainer. The release train needs a branch per train declared in the control plane, a resolver rule that refuses stable content beyond release metadata without a recorded hotfix reason, and a seven day soak for minor releases. Founder direction on 2026-09-05 replaces the fixed minor calendar with maintainer-owned release judgment informed by the preference for fast progress and willingness to use many betas, while retaining exact-candidate, branch and clean-soak requirements.",
-      "owner": "project-owner",
-      "status": "triaged",
-      "recorded_at": "2026-09-01",
-      "lane_ids": [
-        "L1"
-      ],
-      "subsystem_ids": [
-        "deployment-installability"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 5,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/control_plane.json",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "scripts/release_control/resolve_release_promotion.py",
           "kind": "file"
         }
       ]
@@ -10045,7 +9929,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10089,7 +9972,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10123,7 +10005,6 @@
         "patrol-intelligence"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 4,
       "evidence": [
         {
           "repo": "pulse",
@@ -10149,7 +10030,7 @@
     },
     {
       "id": "notification-delivery-terminal-failure-diagnosis",
-      "summary": "Terminal notification failures are 36% of resolved delivery outcomes fleet-wide (126,337 dead-lettered against 224,692 delivered, week to 2026-09-03, 6,668 clean installs), and the failure breakdown could not explain why. Two causes, one fixed here. First, the delivery failure class was inferred from Go error prose, so any failure whose text carried no recognised token fell to unknown (31,218, the modal bucket) and the destination's own response body could steer the class, letting a 500 whose body says 'rate limit' be recorded as rate_limited; senders now declare the class and SMTP reply codes, DNS, x509 and timeout errors classify structurally. Second, the shape is concentration, not breadth: only 400 of 6,668 installs report any failure, the top 10 carry 73,276 (58%), the median failing install has 13, and 72 installs that delivered nothing at all in seven days account for 62,615 failures (50%). Pulse retries a permanently broken destination three times per notification forever and never tells the operator the destination has never once succeeded, so the worst install burned 20,312 dead letters against 36 deliveries. Still open: back off or disable a destination with no successful delivery, surface that state on the destinations surface, and add server_error guidance to the delivery health card, which currently falls through to the unknown copy for a class the client already emits.",
+      "summary": "The 18 October 2026 production clean weekly cohort has 495 of 8,466 covered rotating IDs reporting terminal notification failures, with rolling totals of 122,341 failures and 245,365 deliveries. Connectivity (37,688) and authentication (30,627) are the largest classified sums, with schema-dependent coverage. These aggregates do not identify a transport/provider or prove a release regression. Typed failure classification, deterministic-failure short circuiting and explicit retained-queue recovery already exist. The preceding source slice repairs SMTP provider-default authentication and concurrent envelope mutation. This connectivity slice independently reproduces and repairs stalled leading approved addresses starving healthy fallback connections in both pinned HTTP clients, plus webhook DNS continuing after dial cancellation. Shared bounded dialing, context-aware DNS and real TCP/resolver controls retain destination policy, one-request delivery and persisted queue verdicts. Remaining work is destination-level repeated-failure handling, evidence of destination recovery, and precise delivery-health guidance. These source fixes do not establish how much fleet failure they explain or that the production fleet has recovered.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-09-03",
@@ -10161,8 +10042,17 @@
         "notifications"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/notification-connectivity-reliability-2026-10-18.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/notification-smtp-delivery-reliability-2026-10-17.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/utils/alertDestinationsPresentation.ts",
@@ -10198,7 +10088,6 @@
         "security-privacy"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
       "evidence": [
         {
           "repo": "pulse",
@@ -10219,7 +10108,7 @@
     },
     {
       "id": "patrol-assistant-customer-outcome-qualification",
-      "summary": "The executable redesign plan, product contract, honest baseline and exact qualification receipts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Model-owned investigation and the named healthy, unhealthy, dependency, missing-access, storage-capacity, approved and rejected local matrix landed through core PR1960 and enterprise PR23. The shared incident-history continuation landed through PR1973 as 783571bb35c42c4813415d4981673f65c069ee0f, preserving canonical provenance, risk, bounded history, operator notes and the linked Assistant journey. Final worker hooks, affected race suites, all eight hosted Playwright shards, frontend, API and remaining CI tests pass. All 28 reported checks pass after one controlled benchmark repeat. Its first failure and loaded-worker comparison remain recorded, as do the earlier API timeouts. Final source-bound local browser proof covers /alerts at 1440, 900, 768, 767 and 390 widths. Five funded history turns cost US$0.36895475 estimated, with three Astra passes and two Gemini failures. The restored local Gemini route remains unqualified for its unsupported action-absence claims. Passing Astra history explanations do not qualify Gemini or transfer the earlier lab matrix between models. Production-wide readiness requires independent volunteered customer environments and known-condition outcome review beyond this maintainer homelab. Adoption and reported resolutions do not establish population useful-diagnosis, false-alarm, missed-problem or latency rates, which remain unknown. Storage-capacity proof does not qualify backup restore, unattended autonomy or every compatibility filter. Preserve the subscription-provider refusal without retry or bypass. Keep this gap and candidate open while these evidence limits remain.",
+      "summary": "The executable redesign plan, product contract, honest baseline and exact qualification receipts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Model-owned investigation and the named healthy, unhealthy, dependency, missing-access, storage-capacity, approved and rejected local matrix landed through core PR1960 and enterprise PR23. The shared incident-history continuation landed through PR1973 as 783571bb35c42c4813415d4981673f65c069ee0f, preserving canonical provenance, risk, bounded history, operator notes and the linked Assistant journey. Final worker hooks, affected race suites, all eight hosted Playwright shards, frontend, API and remaining CI tests pass. All 28 reported checks pass after one controlled benchmark repeat. Its first failure and loaded-worker comparison remain recorded, as do the earlier API timeouts. Final source-bound local browser proof covers /alerts at 1440, 900, 768, 767 and 390 widths. Five funded history turns cost US$0.36895475 estimated, with three Astra passes and two Gemini failures. The restored local Gemini route remains unqualified for its unsupported action-absence claims. Passing Astra history explanations do not qualify Gemini or transfer the earlier lab matrix between models. Production-wide readiness requires independent volunteered customer environments and known-condition outcome review beyond this maintainer homelab. Adoption and reported resolutions do not establish population useful-diagnosis, false-alarm, missed-problem or latency rates, which remain unknown. Storage-capacity proof does not qualify backup restore, unattended autonomy or every compatibility filter. Preserve the subscription-provider refusal without retry or bypass. Keep this gap and candidate open while these evidence limits remain. The earlier 2026-10-16 unattended provider failure is retained as the pre-repair result. Pulse PR2994 and enterprise PR123 repair incomplete investigation outcomes: empty or failed final narratives preserve evidence and return failure, clear stale prior conclusions, and permit the next scheduled assessment within existing admission and attempt limits. Causal before/after tests cover empty output, summary errors and caller deadlines, persisted eligibility, retained evidence and blocked proposal progression. A fresh frozen 36-minute Opus 5.5 trial per arm recovered all three injected target failures in both Pro and free Pulse plus Claude, including after the planned controller restart; both left the healthy control untouched and the persistent dependency unresolved without restart. Observed Pro recovery delays were 672.734, 504.897 and 457.347 seconds; Claude delays were 514.012, 397.035 and 332.276 seconds. Provider-reported list-equivalent usage was US$5.5860168 and US$1.2533858 respectively, with complete receipts; actual subscription cash cost was not measured. The live Pro trial did not naturally reproduce an empty response or summary timeout. This single fixed-order, restart-only, development-licensing trial does not establish repeatability, a general comparative advantage, permanent repair, production licence onboarding or cross-environment readiness. The external setup reused a scoped bridge, timer and journal and does not measure minimum DIY effort; free unified action APIs remain available. Claude also retained an unsupported no-alerts claim despite critical container-health alerts in recorded Pulse state. The broader gap and candidate remain planned.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-09-05",
@@ -10240,7 +10129,6 @@
         "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
-      "coverage_impact": 4,
       "evidence": [
         {
           "repo": "pulse",
@@ -10259,12 +10147,42 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/agentic_final.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/agentic_final_failure_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings_provider_failure_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/qualification",
           "kind": "dir"
         },
         {
           "repo": "pulse",
           "path": "scripts/check-patrol-assistant-journey.mjs",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-enterprise",
+          "path": "internal/investigation/orchestrator.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-enterprise",
+          "path": "internal/investigation/orchestrator_test.go",
           "kind": "file"
         }
       ]
@@ -10389,7 +10307,7 @@
     {
       "id": "patrol-assistant-customer-outcomes",
       "name": "Patrol and Assistant Customer Outcomes",
-      "summary": "Simplify Patrol around capable-model judgment and one issue-to-verified-outcome journey shared with Assistant. Preserve canonical evidence, mechanical authority and independent verification. The executable redesign plan and exact limits are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Local implementation and the named lab matrix landed through core PR1960 and enterprise PR23. PR1973 delivered the shared incident-history continuation with final source-bound browser proof and passing CI. Keep this candidate proposed for unresolved Gemini history reliability and the independent volunteered-environment rollout gate. Local implementation proof does not establish production-wide effectiveness, backup restore or unattended autonomy.",
+      "summary": "Simplify Patrol around capable-model judgment and one issue-to-verified-outcome journey shared with Assistant. Preserve canonical evidence, mechanical authority and independent verification. The executable redesign plan and exact limits are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Local implementation and the named lab matrix landed through core PR1960 and enterprise PR23. PR1973 delivered the shared incident-history continuation with final source-bound browser proof and passing CI. Keep this candidate proposed for unresolved Gemini history reliability and the independent volunteered-environment rollout gate. Local implementation proof does not establish production-wide effectiveness, backup restore or unattended autonomy. The 2026-10-16 comparison also leaves unattended provider-failure recovery unqualified: an empty response and timed-out final summary can complete an unresolved finding as needs_attention and suppress later automatic investigation.",
       "status": "proposed",
       "recorded_at": "2026-09-05",
       "target_id": "v6-product-lane-expansion",
@@ -11416,6 +11334,30 @@
       "summary": "On 2026-08-28 the release owner explicitly directed stable v6.4.0 publication from runtime cutoff 18b22d1ebbfe542484652e419320fc7643a792f0, promoted from published v6.4.0-rc.12, without another public candidate or the remainder of the normal 72-hour soak. The accepted reason is active customer harm from incorrect same-name Proxmox agent links, repeated Docker inspection load, incomplete backup and SMART detail, and unstable rolling metric history. This is a version-bound owner-risk acceptance that includes the bounded post-RC product fixes. It is not soak evidence or a standing exception.",
       "kind": "release-policy",
       "decided_at": "2026-08-28",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
+      "id": "release-train-mechanical-from-main",
+      "summary": "Resolves coverage gap release-train-exact-candidate-promotion. The resolver now refuses stable content beyond release metadata without a recorded hotfix reason, so the exact-candidate rule the gap asked for is enforced. The founder direction of 2026-10-04 replaced the rest: releases are mechanical, with no maintainer judgment; the release train cuts the next minor candidate from the head of main 14 days after the last stable release or on request, soaks it for 24 hours and promotes it unchanged; only an open release-blocker issue stops a promotion; versions are consecutive and patch releases are not scheduled. The branch per train, backports and the seven-day minor soak it called for no longer apply. RELEASE_PROMOTION_POLICY.md, Release Train, is the in-repository statement.",
+      "kind": "release-policy",
+      "decided_at": "2026-10-04",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
+      "id": "daily-beta-release-cadence",
+      "summary": "Founder direction on 2026-10-13: publish almost daily betas. The release train cuts the next minor beta from main every 24 hours when there are new changes, honours already recorded publication and retry deadlines, skips empty cuts and the final day before the release candidate is due, and retains prerelease qualification and at least 24 hours between published betas. Beta failures do not hold the release candidate or stable release. The 14-day candidate cadence, exact-candidate stable promotion and clean 24-hour RC soak remain unchanged. RELEASE_PROMOTION_POLICY.md, Release Train, is the in-repository statement; the infrastructure repository owns the executable schedule.",
+      "kind": "release-policy",
+      "decided_at": "2026-10-13",
       "subsystem_ids": [
         "deployment-installability"
       ],

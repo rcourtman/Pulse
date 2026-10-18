@@ -32,13 +32,24 @@ func canonicalPrimaryID(resource Resource) string {
 	if nodeID := canonicalProxmoxNodePrimaryID(resource); nodeID != "" {
 		return nodeID
 	}
+	if isDockerChildResource(resource) {
+		for _, target := range []interface {
+			GetResourceType() string
+			GetResourceID() string
+		}{resource.MetricsTarget, resource.DiscoveryTarget} {
+			if id := dockerChildTargetID(resource, target); id != "" {
+				return string(CanonicalResourceType(resource.Type)) + ":" + id
+			}
+		}
+		if identity := canonicalDockerSwarmNodePrimaryID(resource); identity != "" {
+			return identity
+		}
+		return strings.TrimSpace(resource.ID)
+	}
 	if identity := formatTargetIdentity(resource.MetricsTarget); identity != "" {
 		return identity
 	}
 	if identity := formatTargetIdentity(resource.DiscoveryTarget); identity != "" {
-		return identity
-	}
-	if identity := canonicalDockerSwarmNodePrimaryID(resource); identity != "" {
 		return identity
 	}
 	if runtimeID := strings.TrimSpace(canonicalDockerRuntimeID(resource)); runtimeID != "" {
@@ -81,6 +92,21 @@ func canonicalProxmoxNodePrimaryID(resource Resource) string {
 
 func canonicalAliases(resource Resource, primaryID, platformID, hostname string) []string {
 	values := append([]string{}, resource.SupersededCanonicalIDs...)
+	if isDockerChildResource(resource) {
+		// Docker placement identifies the command host, not the collected
+		// object. Indexing that host on every child makes the real host's
+		// otherwise unique hostname and agent ID ambiguous.
+		values = append(values, primaryID)
+		if CanonicalResourceType(resource.Type) == ResourceTypeDockerSwarmNode {
+			values = append(values, canonicalDockerNodeID(resource), canonicalDockerNodeName(resource))
+		}
+		values = append(values,
+			dockerChildTargetID(resource, resource.MetricsTarget),
+			dockerChildTargetID(resource, resource.DiscoveryTarget),
+			platformID, hostname, resource.Name, resource.Identity.MachineID, resource.ID,
+		)
+		return uniqueTrimmed(append(values, resource.Identity.Hostnames...)...)
+	}
 	values = append(values,
 		primaryID,
 		targetResourceID(resource.MetricsTarget),
@@ -111,12 +137,18 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		values = append(values, "agent:"+agentID)
 	}
 	if resource.Proxmox != nil {
-		values = append(
-			values,
-			strings.TrimSpace(resource.Proxmox.NodeIdentity),
-			strings.TrimSpace(resource.Proxmox.NodeName),
-		)
-		values = append(values, resource.Proxmox.NodeAliases...)
+		// Only the node owns its node identity. Guests and storage inherit
+		// the parent's NodeIdentity and NodeAliases for presentation and
+		// search, but as aliases they would make every child answer to the
+		// node's alert resource ID, so one node alert painted every guest.
+		if CanonicalResourceType(resource.Type) == ResourceTypeAgent {
+			values = append(
+				values,
+				strings.TrimSpace(resource.Proxmox.NodeIdentity),
+				strings.TrimSpace(resource.Proxmox.NodeName),
+			)
+			values = append(values, resource.Proxmox.NodeAliases...)
+		}
 		// PVE disk alerts predate the unified resource registry and retain a
 		// path-shaped resource reference. Resolve it to this exact physical
 		// disk so a UI mute reaches both new and restored occurrences (#2112).
@@ -133,6 +165,13 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 }
 
 func canonicalPlatformID(resource Resource) string {
+	if isDockerChildResource(resource) {
+		return firstTrimmed(
+			dockerChildTargetID(resource, resource.MetricsTarget),
+			dockerChildTargetID(resource, resource.DiscoveryTarget),
+			resource.Name, resource.ID,
+		)
+	}
 	return firstTrimmed(
 		canonicalProxmoxNodeName(resource),
 		canonicalAgentHostname(resource),
@@ -148,6 +187,9 @@ func canonicalPlatformID(resource Resource) string {
 }
 
 func canonicalHostname(resource Resource) string {
+	if isDockerChildResource(resource) {
+		return firstIdentityHostname(resource.Identity)
+	}
 	return firstTrimmed(
 		firstIdentityHostname(resource.Identity),
 		canonicalAgentHostname(resource),
@@ -157,6 +199,29 @@ func canonicalHostname(resource Resource) string {
 		canonicalTrueNASHostname(resource),
 		canonicalAvailabilityAddress(resource),
 	)
+}
+
+func isDockerChildResource(resource Resource) bool {
+	if resource.Docker == nil {
+		return false
+	}
+	switch CanonicalResourceType(resource.Type) {
+	case ResourceTypeAppContainer, ResourceTypeDockerService, ResourceTypeDockerImage,
+		ResourceTypeDockerVolume, ResourceTypeDockerNetwork, ResourceTypeDockerTask,
+		ResourceTypeDockerSwarmNode, ResourceTypeDockerSecret, ResourceTypeDockerConfig:
+		return true
+	}
+	return false
+}
+
+func dockerChildTargetID(resource Resource, target interface {
+	GetResourceType() string
+	GetResourceID() string
+}) string {
+	if target == nil || CanonicalResourceType(ResourceType(target.GetResourceType())) != CanonicalResourceType(resource.Type) {
+		return ""
+	}
+	return targetResourceID(target)
 }
 
 func canonicalProxmoxNodeName(resource Resource) string {
@@ -387,18 +452,47 @@ func firstTrimmed(values ...string) string {
 }
 
 func uniqueTrimmed(values ...string) []string {
-	seen := make(map[string]struct{}, len(values))
-	aliases := make([]string, 0, len(values))
+	// Canonical aliases usually contain only a handful of non-empty unique
+	// identities among many optional inputs. Do not allocate a map sized for
+	// every placeholder, or retain that capacity in each row's alias slice.
+	// A bounded stack scan handles the common case; larger vocabularies use
+	// the same lowercased-key map semantics without quadratic growth.
+	var smallKeys [8]string
+	var seen map[string]struct{}
+	aliases := make([]string, 0, min(len(values), len(smallKeys)))
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
 			continue
 		}
 		key := strings.ToLower(trimmed)
-		if _, ok := seen[key]; ok {
-			continue
+		if seen != nil {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+		} else {
+			duplicate := false
+			for _, previous := range smallKeys[:len(aliases)] {
+				if previous == key {
+					duplicate = true
+					break
+				}
+			}
+			if duplicate {
+				continue
+			}
+			if len(aliases) < len(smallKeys) {
+				smallKeys[len(aliases)] = key
+			} else {
+				seen = make(map[string]struct{}, min(len(values), 64))
+				for _, previous := range smallKeys {
+					seen[previous] = struct{}{}
+				}
+			}
 		}
-		seen[key] = struct{}{}
+		if seen != nil {
+			seen[key] = struct{}{}
+		}
 		aliases = append(aliases, trimmed)
 	}
 	return aliases

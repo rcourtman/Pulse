@@ -49,6 +49,8 @@ describe('storageAlertState', () => {
           severity: 'warning',
           acknowledgedCount: 1,
           hasAcknowledgedOnlyAlert: true,
+          headline: 'Over 85% usage limit',
+          headlineCompact: 'Over 85%',
         },
         {
           ...EMPTY_STORAGE_ALERT_STATE,
@@ -57,6 +59,8 @@ describe('storageAlertState', () => {
           severity: 'critical',
           hasUnacknowledgedAlert: true,
           unacknowledgedCount: 2,
+          headline: 'Full within a day',
+          headlineCompact: 'Full <1d',
         },
       ),
     ).toEqual({
@@ -67,6 +71,9 @@ describe('storageAlertState', () => {
       unacknowledgedCount: 2,
       acknowledgedCount: 1,
       hasAcknowledgedOnlyAlert: false,
+      // The more severe side explains the row.
+      headline: 'Full within a day',
+      headlineCompact: 'Full <1d',
     });
   });
 

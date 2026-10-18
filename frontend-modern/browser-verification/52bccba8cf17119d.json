@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "7eb32f318100fef045d63414fd63304c62acfdef",
+  "verified_at": "2026-10-07T16:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "e5b27178cb3268132595943058849b3f619da22fcbd7916dfc301d4e852ef244"
+  },
+  "routes": [
+    "/standalone/availability",
+    "/standalone/machines",
+    "/proxmox",
+    "/docker",
+    "/kubernetes"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1000,
+      "height": 800
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Private stacks served by Vite from this tree (Playwright 1.56.1 headless Chromium): a non-mock stack with one HTTP availability check, then a mock estate (3 Proxmox nodes, 2 Docker hosts, 1 Kubernetes cluster, 2 generic hosts).",
+    "Before (origin/main class max-w-[calc(100vw-3.5rem)]): at 390px every opened drawer (availability check, Proxmox node, Proxmox guest, Docker host, Docker container, Kubernetes node, Machines agent) was 334px inside a 361px visible table, leaving a 27px empty strip; at 768px a table forced wider than its shell got a 712px drawer in a 695px visible area.",
+    "After (max-w-[100cqi]): drawer content equals the scroll shell's visible width at 320 (291px), 390 (361px), 768 (695px) and 1000 (916px) with no right gap, including the forced-wider table; 1440px keeps the static lg layout (max-width none, 1320px). The availability drawer's hostname now shows in full instead of truncating.",
+    "Long unwrapped identity chips (e.g. proxmox-lxc-docker:Production West:pve1:107) were already clipped at the content edge before (Kubernetes 20px, Docker 8px and 83px) and are clipped less after (7px, 70px); chip wrapping is a separate follow-up.",
+    "Sticky positioning is inert in both versions because .table-fixed td sets overflow hidden; not changed here. This is not an installed-build, physical-phone or release acceptance."
+  ],
+  "interactions": [
+    "Opened each drawer by its disclosure button (row tap at phone width where the button is hidden), measured the scroll shell, detail cell, content shell and every descendant's right edge, and captured screenshots at 390px before and after.",
+    "Forced a 900px table inside its shell at 390px and 768px and scrolled it 300px sideways to compare drawer width against the visible area for both classes."
+  ]
+}

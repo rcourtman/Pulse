@@ -2,28 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   getRecoveryTimelineAxisLabelClass,
   getRecoveryTimelineAxisTicks,
-  getRecoveryTimelineBarMinWidthClass,
   getRecoveryTimelineChartGapPx,
   getRecoveryTimelineChartMinWidthPx,
   getRecoveryTimelineLabelEvery,
   RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
-  RECOVERY_TIMELINE_RANGE_GROUP_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
 
 describe('recoveryTimelineChartPresentation', () => {
-  it('exposes shared legend and range-group classes', () => {
+  it('exposes the shared legend item class', () => {
     expect(RECOVERY_TIMELINE_LEGEND_ITEM_CLASS).toContain('items-center');
-    expect(RECOVERY_TIMELINE_RANGE_GROUP_CLASS).toContain('border-border');
   });
 
-  it('derives axis label and bar width classes', () => {
+  it('derives axis label classes', () => {
     expect(getRecoveryTimelineAxisLabelClass(true)).toContain('text-blue-700');
     expect(getRecoveryTimelineAxisLabelClass(false)).toBe('text-muted');
-    expect(getRecoveryTimelineBarMinWidthClass(true, 30)).toBe('');
-    expect(getRecoveryTimelineBarMinWidthClass(false, 7)).toBe('min-w-[28px]');
-    expect(getRecoveryTimelineBarMinWidthClass(false, 30)).toBe('min-w-[14px]');
-    expect(getRecoveryTimelineBarMinWidthClass(false, 90)).toBe('min-w-[8px]');
-    expect(getRecoveryTimelineBarMinWidthClass(false, 365)).toBe('');
   });
 
   it('derives label cadence from day count', () => {

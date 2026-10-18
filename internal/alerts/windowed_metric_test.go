@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -371,5 +373,99 @@ func TestNonFiniteMetricDoesNotPreventExplicitDisable(t *testing.T) {
 		if len(m.GetActiveAlerts()) != 0 || len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeFired}})) != 1 || len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeResolved}})) != 1 {
 			t.Fatal("explicit disable must still resolve the active rule independently of telemetry")
 		}
+	}
+}
+
+// A skipped window must not leave grace on disk for a restart to resume.
+func TestUnknownMetricObservationDropsDurableIntentCheckpoint(t *testing.T) {
+	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "guest-filesystem-expired"} {
+		t.Run(route, func(t *testing.T) {
+			m, elapsed := continuityManager(t, true)
+			gap := "missing"
+			if route == "legacy" || route == "canonical" {
+				gap = "history-empty"
+			}
+			_, _, observe := continuityObserver(t, m, route, gap)
+			observe(85, false)
+			elapsed.Store(int64(40 * time.Second))
+			observe(85, false)
+			if err := m.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(m.getAlertsDir(), intentPendingFileName)
+			read := func() []IntentPendingState {
+				data, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var saved []IntentPendingState
+				if err := json.Unmarshal(data, &saved); err != nil {
+					t.Fatal(err)
+				}
+				return saved
+			}
+			if len(read()) != 1 {
+				t.Fatal("control did not retain a real in-progress grace checkpoint")
+			}
+			elapsed.Store(int64(2 * time.Minute))
+			observe(85, true)
+			if err := m.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			if len(read()) != 0 {
+				t.Fatal("unknown observation left grace for a restart to reuse")
+			}
+			dir := filepath.Dir(m.getAlertsDir())
+			m.Stop()
+			restarted := NewManagerWithDataDir(dir)
+			t.Cleanup(restarted.Stop)
+			restarted.mu.RLock()
+			pending := len(restarted.intentPending)
+			restarted.mu.RUnlock()
+			if pending != 0 {
+				t.Fatal("restart restored interrupted grace")
+			}
+		})
+	}
+}
+
+// The evaluator reports whether an observation was usable evidence; host-agent
+// deduplication hands a node metric to an agent only on that evidence (or an
+// incident the agent still holds), never on configuration alone.
+func TestCheckMetricReportsWhetherObservationWasUsable(t *testing.T) {
+	live := &HysteresisThreshold{Trigger: 80, Clear: 75}
+	cases := []struct {
+		name      string
+		threshold *HysteresisThreshold
+		value     float64
+		window    int
+		provider  bool
+		want      bool
+	}{
+		{name: "live threshold, instant evaluation", threshold: live, value: 50, want: true},
+		{name: "disabled threshold", threshold: &HysteresisThreshold{Trigger: 0}, value: 50, want: false},
+		{name: "non-finite value", threshold: live, value: math.NaN(), want: false},
+		{name: "evaluation window without history", threshold: live, value: 50, window: 300, provider: true, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewManagerWithDataDir(t.TempDir(), WithoutPersistedAlertRestore())
+			t.Cleanup(m.Stop)
+			m.mu.Lock()
+			m.config.MetricEvaluationWindows = map[string]map[string]int{"all": {"cpu": tc.window}}
+			m.mu.Unlock()
+			if tc.provider {
+				m.SetMetricWindowProvider(func(MetricWindowRequest) ([]MetricWindowPoint, error) {
+					return nil, nil
+				})
+			}
+			spec, err := buildCanonicalMetricSpec("vm-1", "web-1", unifiedresources.ResourceTypeVM, "cpu", tc.threshold)
+			if err != nil {
+				t.Fatalf("spec: %v", err)
+			}
+			if got := m.checkMetricWithCanonicalSpec(spec, "web-1", "node-1", "pve-1", "vm", tc.value, tc.threshold, nil); got != tc.want {
+				t.Fatalf("usable evidence = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

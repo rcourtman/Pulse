@@ -1,7 +1,9 @@
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import { For, Show, Suspense, createMemo, lazy, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import { getDockerContainerUpdateAction } from './dockerContainerUpdateAction';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import {
   GroupedTableModeSegmentedControl,
@@ -18,6 +20,11 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import type {
+  WorkloadWebLinkRow,
+  WorkloadWebLinksNoun,
+} from '@/components/Workloads/workloadWebLinksModel';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import {
   getWorkloadTableLayoutMode,
   getWorkloadTableLayoutModeForContainer,
@@ -39,6 +46,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
@@ -58,12 +66,16 @@ import {
   dockerHostName,
   dockerJoinValues,
   dockerResourceName,
+  dockerStateTextToneClass,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import {
   compareDockerContainers,
+  dockerContainerPortsCompactSummary,
   dockerContainerPortsSummary,
+  dockerContainerRestartAttentionLabel,
+  dockerContainerRestartCountTitle,
   filterDockerResources,
   mapDockerContainerStatus,
   type DockerResourceStatusFilter,
@@ -74,12 +86,19 @@ import {
   getDockerContainerSortKey,
   getDockerContainerTableMinWidthClass,
   getDockerContainerVisibleColumnsForLayout,
+  isDockerContainerColumnInLayout,
+  isDockerContainerStateUnderName,
   type DockerContainerSortKey,
   type DockerContainerTableColumn,
 } from './dockerContainerTableModel';
-import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
+import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
+import { DockerImageReferenceText } from './DockerImageReferenceText';
+import {
+  getDockerContainerStatePresentation,
+  getDockerContainerUptimeSeconds,
+} from './dockerContainerStatePresentation';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
@@ -135,16 +154,34 @@ const runtimeSummary = (resource: Resource): string => {
   return runtime || version || '—';
 };
 
-const containerState = (resource: Resource): string =>
-  dockerTextValue(resource.docker?.containerState || resource.status);
+// Lazy so the trigger keeps its own chunk instead of joining (and renaming)
+// the chunk the Docker and workloads pages already share.
+const WorkloadWebLinksAction = lazy(() => import('@/components/Workloads/WorkloadWebLinksAction'));
+
+const CONTAINER_WEB_LINKS_NOUN: WorkloadWebLinksNoun = { one: 'container', many: 'containers' };
+
+// Keyed by the identity the container drawer saves its web link under, so the
+// bulk editor and the drawer field read and write the same record.
+const toContainerWebLinkRows = (resource: Resource): WorkloadWebLinkRow[] => {
+  const target = toDiscoveryConfig(resource);
+  if (target?.metadataKind !== 'guest' || !target.metadataId) return [];
+  return [
+    {
+      metadataId: target.metadataId,
+      name: dockerResourceName(resource),
+      detail: [dockerHostName(resource), dockerTextValue(resource.docker?.image)]
+        .filter((part) => part && part !== '—')
+        .join(' · '),
+      status: asTrimmedString(resource.docker?.containerState || resource.status) ?? '',
+      addressHint: '',
+      savedUrl: resource.customUrl ?? '',
+    },
+  ];
+};
 
 const isContainerRunning = (resource: Resource): boolean =>
   (asTrimmedString(resource.docker?.containerState || resource.status) ?? '').toLowerCase() ===
   'running';
-
-// v5 flagged crash-loopers in the restarts column; a container that restarted
-// more than this many times needs an operator's eye even while "running".
-const RESTART_ATTENTION_THRESHOLD = 5;
 
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
@@ -170,55 +207,6 @@ const updateStatusTitle = (resource: Resource): string => {
   );
 };
 
-const updateLastCheckedMillis = (lastChecked: string | undefined): number => {
-  if (!lastChecked) return 0;
-  const parsed = Date.parse(lastChecked);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const containerUpdateStatus = (resource: Resource): DockerContainerUpdateStatus | undefined => {
-  const update = resource.docker?.updateStatus;
-  if (!update) return undefined;
-
-  const error = asTrimmedString(update.error);
-  if (typeof update.updateAvailable !== 'boolean' && !error) return undefined;
-
-  return {
-    updateAvailable: update.updateAvailable === true,
-    currentDigest: asTrimmedString(update.currentDigest) || undefined,
-    latestDigest: asTrimmedString(update.latestDigest) || undefined,
-    lastChecked: updateLastCheckedMillis(update.lastChecked),
-    error: error || undefined,
-  };
-};
-
-const containerUpdateAction = (
-  resource: Resource,
-):
-  | {
-      agentId: string;
-      containerId: string;
-      containerName: string;
-      updateStatus: DockerContainerUpdateStatus;
-    }
-  | undefined => {
-  const updateStatus = containerUpdateStatus(resource);
-  const agentId = asTrimmedString(resource.docker?.hostSourceId);
-  const containerId = asTrimmedString(resource.docker?.containerId);
-  if (!updateStatus || !agentId || !containerId) return undefined;
-
-  return {
-    agentId,
-    containerId,
-    containerName:
-      asTrimmedString(resource.name) ||
-      asTrimmedString(resource.displayName) ||
-      asTrimmedString(resource.docker?.displayName) ||
-      containerId,
-    updateStatus,
-  };
-};
-
 // Scalar per column that user-controlled sorting orders on. '—' style empty
 // renders map to null so rows without the datum sink to the bottom.
 const getDockerContainerSortValue = (
@@ -238,10 +226,10 @@ const getDockerContainerSortValue = (
     }
     case 'image':
       return asTrimmedString(resource.docker?.image) || null;
-    case 'state': {
-      const state = containerState(resource);
-      return state === '—' ? null : state;
-    }
+    case 'state':
+      return getDockerContainerStatePresentation(resource).label;
+    case 'uptime':
+      return getDockerContainerUptimeSeconds(resource) ?? null;
     case 'cpu':
       return getPlatformTableFiniteMetric(resource.cpu?.current) ?? null;
     case 'memory': {
@@ -378,15 +366,26 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   // User-controlled sorting layered over the attention-first default: rows
   // are pre-sorted by the status compare, so a user sort keeps that order for
   // ties and the table falls straight back to it when the sort is cleared.
+  // Where the layout has no Restarts column, a crash-looping container says
+  // so in its State cell instead.
+  const flagRestartsInState = createMemo(
+    () => !isDockerContainerColumnInLayout('restarts', layoutMode()),
+  );
+  const stateUnderName = createMemo(() => isDockerContainerStateUnderName(layoutMode()));
+  const stateFor = (resource: Resource) =>
+    getDockerContainerStatePresentation(resource, { flagRestarts: flagRestartsInState() });
   // Sorting reorders rows only; grouped mode re-buckets the sorted rows, so
   // the sort applies within each host group and stays orthogonal to grouping.
   const sort = createPlatformTableSortState({
     storageKey: 'dockerContainers',
     sortKeys: DOCKER_CONTAINER_SORTABLE_COLUMN_IDS,
-    descendingFirst: ['cpu', 'memory', 'restarts'],
+    descendingFirst: ['cpu', 'memory', 'restarts', 'uptime'],
   });
   const sortedRows = createMemo(() =>
-    sort.sortRows([...scopedRows()].sort(compareDockerContainers), getDockerContainerSortValue),
+    sort.sortRows([...scopedRows()].sort(compareDockerContainers), (resource, key) =>
+      // State sorts by the words the row shows, restart warning included.
+      key === 'state' ? stateFor(resource).label : getDockerContainerSortValue(resource, key),
+    ),
   );
   // Grouped-by-host view, mirroring the workloads table: preference persists
   // locally (not in the URL) and only applies once the fleet spans more than
@@ -402,6 +401,55 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const groupingMode = createMemo<GroupedTableMode>(() =>
     isGroupable() ? groupingModePreference() : 'flat',
   );
+  // Runtime is host-level data repeated on every container row; it only
+  // informs when the fleet actually mixes runtimes (docker vs podman).
+  const showRuntimeColumn = createMemo(() => {
+    const kinds = new Set<string>();
+    for (const resource of props.resources) {
+      const kind = (asTrimmedString(resource.docker?.runtime) ?? '').toLowerCase();
+      if (kind) kinds.add(kind);
+    }
+    return kinds.size > 1;
+  });
+  const showRestartColumn = createMemo(() =>
+    scopedRows().some(
+      (resource) =>
+        typeof resource.docker?.restartCount === 'number' && resource.docker.restartCount > 0,
+    ),
+  );
+  // A running container with a failing or starting health check needs the
+  // State column as much as a stopped one does.
+  const showStateColumn = createMemo(() =>
+    scopedRows().some((resource) => stateFor(resource).tone !== null),
+  );
+  const showUptimeColumn = createMemo(() =>
+    scopedRows().some((resource) => getDockerContainerUptimeSeconds(resource) !== undefined),
+  );
+  const visibleColumns = createMemo(() =>
+    getDockerContainerVisibleColumnsForLayout(
+      layoutMode(),
+      showRuntimeColumn(),
+      showRestartColumn(),
+      showStateColumn(),
+      {
+        groupedByHost: isGroupable() && groupingMode() === 'grouped',
+        singleHost: hostOptions().length <= 1,
+        includeUptime: showUptimeColumn(),
+      },
+    ),
+  );
+  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
+  // A sort applies only while its column shows. A saved sort on a column this
+  // layout hides (Host or Engine while grouped, State under a phone row's
+  // name, Uptime on a phone) would reorder rows with no visible indicator, so
+  // those rows fall back to the attention-first order; the preference stays
+  // saved for the layouts that show its column.
+  const displayRows = createMemo(() => {
+    const sortKey = sort.sortKey();
+    return sortKey && !visibleColumnIds().includes(sortKey)
+      ? [...scopedRows()].sort(compareDockerContainers)
+      : sortedRows();
+  });
   const hostResourceByName = createMemo(() => {
     const map = new Map<string, Resource>();
     for (const hostResource of props.hosts ?? []) {
@@ -418,7 +466,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   });
   const groupedRows = createMemo<DockerContainerHostGroup[]>(() => {
     const groups = new Map<string, Resource[]>();
-    for (const resource of sortedRows()) {
+    for (const resource of displayRows()) {
       const host = dockerHostName(resource);
       const rows = groups.get(host);
       if (rows) rows.push(resource);
@@ -438,37 +486,6 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     }
     return items;
   });
-  // Runtime is host-level data repeated on every container row; it only
-  // informs when the fleet actually mixes runtimes (docker vs podman).
-  const showRuntimeColumn = createMemo(() => {
-    const kinds = new Set<string>();
-    for (const resource of props.resources) {
-      const kind = (asTrimmedString(resource.docker?.runtime) ?? '').toLowerCase();
-      if (kind) kinds.add(kind);
-    }
-    return kinds.size > 1;
-  });
-  const showRestartColumn = createMemo(() =>
-    scopedRows().some(
-      (resource) =>
-        typeof resource.docker?.restartCount === 'number' && resource.docker.restartCount > 0,
-    ),
-  );
-  const showStateColumn = createMemo(() =>
-    scopedRows().some((resource) => {
-      const state = asTrimmedString(resource.docker?.containerState || resource.status);
-      return !!state && state.toLowerCase() !== 'running';
-    }),
-  );
-  const visibleColumns = createMemo(() =>
-    getDockerContainerVisibleColumnsForLayout(
-      layoutMode(),
-      showRuntimeColumn(),
-      showRestartColumn(),
-      showStateColumn(),
-    ),
-  );
-  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const drawerColSpan = createMemo(() => visibleColumns().length);
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -476,7 +493,16 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const renderContainerRow = (resource: Resource): JSX.Element => {
     const indicator = mapDockerContainerStatus(resource);
     const image = () => dockerTextValue(resource.docker?.image);
-    const state = () => containerState(resource);
+    const state = () => stateFor(resource);
+    const stateWords = () => (
+      <span
+        class={`block max-w-full truncate ${dockerStateTextToneClass(state().tone)}`}
+        title={state().title}
+        data-docker-container-state={state().tone ?? 'ok'}
+      >
+        {state().label}
+      </span>
+    );
     const runtime = () => runtimeSummary(resource);
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
@@ -499,13 +525,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const memoryPercentOnly = () =>
       memoryTotal() > 0 ? undefined : getPlatformTableFiniteMetric(resource.memory?.current);
     const hasMemoryMetric = () => memoryTotal() > 0 || memoryPercentOnly() !== undefined;
-    const restartCount = () => resource.docker?.restartCount ?? 0;
     const ports = () => dockerContainerPortsSummary(resource);
+    const portsCompact = () => dockerContainerPortsCompactSummary(resource);
     const networks = () => networksSummary(resource);
     const mounts = () => mountsSummary(resource);
     const updates = () => updateStatusLabel(resource);
     const updateTitle = () => updateStatusTitle(resource);
-    const action = containerUpdateAction(resource);
+    const action = getDockerContainerUpdateAction(resource);
     const detailRowId = () => drawer.detailRowId(resource);
     const isExpanded = () => drawer.isExpanded(resource);
     const renderColumnCell = (column: DockerContainerTableColumn): JSX.Element => {
@@ -515,6 +541,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <DockerResourceNameCell
               resource={resource}
               indicator={indicator}
+              detail={stateUnderName() ? stateWords() : undefined}
               detailToggle={
                 <PlatformResourceDetailToggleButton
                   expanded={isExpanded()}
@@ -544,17 +571,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'image':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span class="block max-w-full truncate" title={image()}>
-                {image()}
-              </span>
+              <DockerImageReferenceText reference={image()} class="max-w-full" />
             </TableCell>
           );
         case 'state':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span class="block max-w-full truncate" title={state()}>
-                {state()}
-              </span>
+              {stateWords()}
             </TableCell>
           );
         case 'cpu':
@@ -596,21 +619,30 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               >
                 <span
                   class={`tabular-nums ${
-                    restartCount() > RESTART_ATTENTION_THRESHOLD
-                      ? 'font-medium text-red-600 dark:text-red-400'
+                    dockerContainerRestartAttentionLabel(resource)
+                      ? dockerStateTextToneClass('warning')
                       : ''
                   }`}
+                  title={dockerContainerRestartCountTitle(resource.docker?.restartCount ?? 0)}
                 >
                   {resource.docker?.restartCount}
                 </span>
               </Show>
             </TableCell>
           );
+        case 'uptime':
+          return (
+            <TableCell
+              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content tabular-nums`}
+            >
+              {formatPlatformTableUptimeValue(getDockerContainerUptimeSeconds(resource))}
+            </TableCell>
+          );
         case 'ports':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate font-mono text-[11px]" title={ports()}>
-                {ports()}
+                {portsCompact()}
               </span>
             </TableCell>
           );
@@ -643,16 +675,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                   </span>
                 }
               >
-                {(updateAction) => (
-                  <UpdateButton
-                    agentId={updateAction().agentId}
-                    containerId={updateAction().containerId}
-                    containerName={updateAction().containerName}
-                    updateStatus={updateAction().updateStatus}
-                    resourceId={resource.id}
-                    actionReadiness={resource.actionReadiness}
-                  />
-                )}
+                {(updateAction) => <UpdateButton {...updateAction()} />}
               </Show>
             </TableCell>
           );
@@ -698,6 +721,20 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const indicator = group.hostResource
       ? getSimpleStatusIndicator(group.hostResource.status)
       : undefined;
+    // The host's own engine metadata is authoritative; without it, name every
+    // distinct engine its containers report rather than just the first row's.
+    const engine = () => {
+      const host = group.hostResource;
+      if (host) {
+        const hostSummary = runtimeSummary(host);
+        if (hostSummary !== '—') return hostSummary;
+      }
+      const summaries = [...new Set(group.rows.map((row) => runtimeSummary(row)))]
+        .filter((summary) => summary !== '—')
+        .sort((a, b) => a.localeCompare(b));
+      return summaries.length > 0 ? summaries.join(', ') : null;
+    };
+    const staleness = () => getResourceStaleness(group.hostResource);
     return (
       <TableRow class={getGroupedTableRowClass()} data-docker-host-group={group.host}>
         <TableCell class={getGroupedTableRowCellClass()} colspan={visibleColumns().length}>
@@ -721,6 +758,20 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
               {group.rows.length} {group.rows.length === 1 ? 'container' : 'containers'}
             </span>
+            <Show when={engine()}>
+              {(label) => <span class="shrink-0 text-[10px] text-muted">{label()}</span>}
+            </Show>
+            <Show when={staleness()}>
+              {(stale) => (
+                <span
+                  class="shrink-0 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                  title={`${stale().label}. Container states and metrics are the last values received.`}
+                  data-docker-host-group-stale
+                >
+                  {stale().label}
+                </span>
+              )}
+            </Show>
           </div>
         </TableCell>
       </TableRow>
@@ -783,6 +834,25 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         >
           <PlatformTableShell
             title={props.title ?? 'Containers'}
+            actions={
+              <Suspense fallback={null}>
+                <WorkloadWebLinksAction
+                  source={{
+                    kind: 'rows',
+                    noun: CONTAINER_WEB_LINKS_NOUN,
+                    rows: () => scopedRows().flatMap(toContainerWebLinkRows),
+                  }}
+                />
+              </Suspense>
+            }
+            footer={
+              <p
+                class="px-3 py-2 text-xs leading-relaxed text-muted"
+                data-testid="container-table-cpu-scale"
+              >
+                {CONTAINER_CPU_CAPACITY_DESCRIPTION}
+              </p>
+            }
             tableClass={`${getDockerContainerTableMinWidthClass()} table-fixed text-xs`}
             colgroup={
               <colgroup>
@@ -837,7 +907,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               <Show
                 when={groupingMode() === 'grouped'}
                 fallback={
-                  <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+                  <PlatformWindowedRows items={displayRows} estimatedRowHeight={32}>
                     {(resource) => renderContainerRow(resource)}
                   </PlatformWindowedRows>
                 }

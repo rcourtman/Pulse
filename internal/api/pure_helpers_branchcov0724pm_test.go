@@ -2,20 +2,18 @@ package api
 
 import (
 	"context"
-	"math"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
-// This file exercises four previously-uncovered pure builders/mutators in the
+// This file exercises three previously-uncovered pure builders/mutators in the
 // api package. Every test function is prefixed with TestBranchcov0724pm so the
 // run can be scoped with -run "^TestBranchcov0724pm".
 //
@@ -23,7 +21,6 @@ import (
 //   - restoreAgentExecMetadata                        (agent_exec_token_binding.go)
 //   - buildAlertConnectionSnapshotsWithRuntimeSources (connections_alerts.go)
 //   - mockProtectionPostures                          (recovery_handlers.go)
-//   - chartapi.BuildMockWorkloadMetricHistorySeries            (router.go)
 
 // ---------------------------------------------------------------------------
 // restoreAgentExecMetadata
@@ -390,80 +387,6 @@ func TestBranchcov0724pmMockProtectionPostures(t *testing.T) {
 		}
 		if !reflect.DeepEqual(first, second) {
 			t.Fatalf("postures not deterministic across runs")
-		}
-	})
-}
-
-// ---------------------------------------------------------------------------
-// chartapi.BuildMockWorkloadMetricHistorySeries
-// ---------------------------------------------------------------------------
-
-func TestBranchcov0724pmBuildMockWorkloadMetricHistorySeries(t *testing.T) {
-	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
-
-	t.Run("unsupported_metric_type_returns_nil", func(t *testing.T) {
-		for _, metricType := range []string{"smart_temp", "bogus", ""} {
-			got := chartapi.BuildMockWorkloadMetricHistorySeries(now, time.Hour, 100, "vm", "res-1", metricType, 50.0)
-			if got != nil {
-				t.Fatalf("metricType %q: expected nil, got %d points", metricType, len(got))
-			}
-		}
-	})
-
-	t.Run("supported_metric_types_produce_well_formed_series", func(t *testing.T) {
-		supported := []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
-		duration := 2 * time.Hour
-		maxPoints := 0
-		expectedLen := chartapi.TargetMockSeriesPoints(duration, maxPoints)
-
-		for _, metricType := range supported {
-			t.Run(metricType, func(t *testing.T) {
-				got := chartapi.BuildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", metricType, 50.0)
-				if len(got) != expectedLen {
-					t.Fatalf("expected %d points, got %d", expectedLen, len(got))
-				}
-				wantStart := now.Add(-duration)
-				if !got[0].Timestamp.Equal(wantStart) {
-					t.Fatalf("first timestamp = %v, want %v", got[0].Timestamp, wantStart)
-				}
-				if got[len(got)-1].Timestamp.After(now) {
-					t.Fatalf("last timestamp %v exceeds now %v", got[len(got)-1].Timestamp, now)
-				}
-				for i := 0; i < len(got); i++ {
-					if math.IsNaN(got[i].Value) || math.IsInf(got[i].Value, 0) {
-						t.Fatalf("value at index %d is not finite: %v", i, got[i].Value)
-					}
-					if i > 0 && !got[i].Timestamp.After(got[i-1].Timestamp) {
-						t.Fatalf("timestamps not strictly ascending at index %d: %v <= %v",
-							i, got[i].Timestamp, got[i-1].Timestamp)
-					}
-				}
-			})
-		}
-	})
-
-	t.Run("max_points_caps_series_length", func(t *testing.T) {
-		duration := 24 * time.Hour
-		maxPoints := 50
-		got := chartapi.BuildMockWorkloadMetricHistorySeries(now, duration, maxPoints, "vm", "res-1", "cpu", 50.0)
-		if len(got) != maxPoints {
-			t.Fatalf("expected %d points (capped by maxPoints), got %d", maxPoints, len(got))
-		}
-	})
-
-	t.Run("deterministic_for_same_inputs", func(t *testing.T) {
-		first := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
-		second := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
-		if !reflect.DeepEqual(first, second) {
-			t.Fatalf("series not deterministic for identical inputs")
-		}
-	})
-
-	t.Run("different_resource_ids_produce_different_series", func(t *testing.T) {
-		a := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-1", "cpu", 50.0)
-		b := chartapi.BuildMockWorkloadMetricHistorySeries(now, 2*time.Hour, 0, "vm", "res-2", "cpu", 50.0)
-		if reflect.DeepEqual(a, b) {
-			t.Fatalf("expected different series for different resource IDs")
 		}
 	})
 }

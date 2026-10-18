@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -114,15 +115,11 @@ func TestMetricWindowMergePrefersFreshInMemoryDuplicate(t *testing.T) {
 
 func TestMetricsHistoryResetClearsMetricWindowCache(t *testing.T) {
 	history := NewMetricsHistory(32, time.Hour)
-	history.metricWindowCache = map[string]metricWindowCacheEntry{
-		"vm\x00vm-1\x00cpu\x00300": {
-			points:    []alerts.MetricWindowPoint{{Timestamp: time.Now().UTC(), Value: 42}},
-			expiresAt: time.Now().Add(time.Minute),
-		},
-	}
+	now := time.Now().UTC()
+	history.cacheMetricWindow("vm\x00vm-1\x00cpu\x00300", []MetricPoint{{Timestamp: now, Value: 42}}, now)
 
 	history.Reset()
-	if history.metricWindowCache != nil {
+	if history.metricWindowCache != nil || history.metricWindowBytes != 0 || !history.metricWindowSweepAt.IsZero() {
 		t.Fatalf("metric window cache survived reset: %+v", history.metricWindowCache)
 	}
 }
@@ -132,12 +129,7 @@ func TestMetricWindowPointsKeepsHistorySnapshotDuringReplacement(t *testing.T) {
 	monitor := newChartFallbackTestMonitor(t)
 	history := monitor.metricsHistory
 	cacheKey := strings.Join([]string{"vm", "vm-1", "cpu", "300"}, "\x00")
-	history.metricWindowCache = map[string]metricWindowCacheEntry{
-		cacheKey: {
-			points:    []alerts.MetricWindowPoint{{Timestamp: now.Add(-time.Minute), Value: 42}},
-			expiresAt: now.Add(time.Minute),
-		},
-	}
+	history.cacheMetricWindow(cacheKey, []MetricPoint{{Timestamp: now.Add(-time.Minute), Value: 42}}, now)
 
 	resume := make(chan struct{})
 	var resumeOnce sync.Once
@@ -181,5 +173,92 @@ func TestMetricWindowPointsKeepsHistorySnapshotDuringReplacement(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("metricWindowPoints did not finish after history replacement")
+	}
+}
+
+func TestMetricWindowPointsPreservesCompleteWindowAtCacheCapacity(t *testing.T) {
+	for _, pressure := range []string{"none", "entries", "bytes"} {
+		t.Run(pressure, func(t *testing.T) {
+			monitor := newChartFallbackTestMonitor(t)
+			history := monitor.metricsHistory
+			now := time.Now().UTC().Truncate(time.Second)
+			writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "cpu", []MetricPoint{
+				{Timestamp: now.Add(-4 * time.Minute), Value: 0},
+				{Timestamp: now.Add(-2 * time.Minute), Value: 99},
+				{Timestamp: now.Add(-time.Minute), Value: 30},
+			})
+			history.AddGuestMetric("vm-1", "cpu", 55, now.Add(-2*time.Minute))
+			history.AddGuestMetric("vm-1", "cpu", 60, now.Add(-30*time.Second))
+
+			// Fill the optional cache, not the query source or live history.
+			// Its complete source result must still reach alert evaluation.
+			cacheNow := time.Now()
+			switch pressure {
+			case "entries":
+				for i := 0; i < metricWindowCacheMaxEntries; i++ {
+					history.cacheMetricWindow(fmt.Sprintf("other-%04d", i), nil, cacheNow)
+				}
+			case "bytes":
+				points := make([]MetricPoint, 4096)
+				for i := 0; i < 63; i++ {
+					history.cacheMetricWindow(fmt.Sprintf("other-%04d", i), points, cacheNow)
+				}
+				remaining := metricWindowCacheMaxBytes - history.metricWindowBytes
+				if remaining <= metricWindowCacheEntryBytes {
+					t.Fatal("fixture has no room for the final exact-budget entry")
+				}
+				history.cacheMetricWindow(strings.Repeat("x", remaining-metricWindowCacheEntryBytes), nil, cacheNow)
+				if history.metricWindowBytes != metricWindowCacheMaxBytes {
+					t.Fatalf("fixture filled %d bytes, want %d", history.metricWindowBytes, metricWindowCacheMaxBytes)
+				}
+			}
+			retainedEntries, retainedBytes := len(history.metricWindowCache), history.metricWindowBytes
+			request := alerts.MetricWindowRequest{
+				ResourceID: "vm-1", ResourceType: "vm", Metric: "cpu",
+				Start: now.Add(-5 * time.Minute), End: now,
+			}
+			want := []alerts.MetricWindowPoint{
+				{Timestamp: now.Add(-4 * time.Minute), Value: 0},
+				{Timestamp: now.Add(-2 * time.Minute), Value: 55},
+				{Timestamp: now.Add(-time.Minute), Value: 30},
+				{Timestamp: now.Add(-30 * time.Second), Value: 60},
+			}
+			assertWindow := func() {
+				t.Helper()
+				got, err := monitor.metricWindowPoints(request)
+				if err != nil || len(got) != len(want) {
+					t.Fatalf("window lost source coverage: got=%+v err=%v want=%+v", got, err, want)
+				}
+				for i := range want {
+					if !got[i].Timestamp.Equal(want[i].Timestamp) || got[i].Value != want[i].Value {
+						t.Fatalf("window changed source time/value or live-tail authority: got=%+v want=%+v", got, want)
+					}
+				}
+				// A returned result never owns the cache or next query's data.
+				got[0].Value = -1
+			}
+			assertWindow()
+			assertWindow()
+			cacheKey := strings.Join([]string{"vm", "vm-1", "cpu", "300"}, "\x00")
+			_, cached := history.cachedMetricWindow(cacheKey, time.Now())
+			if cached != (pressure == "none") {
+				t.Fatalf("optional copy admitted=%v under %q pressure", cached, pressure)
+			}
+			if pressure != "none" && (len(history.metricWindowCache) != retainedEntries || history.metricWindowBytes != retainedBytes) {
+				t.Fatal("refused optional copy changed the retained working set")
+			}
+			assertMetricWindowCacheAccounting(t, history)
+
+			// Reset releases capacity and live history, not the persistent source.
+			// The ordinary reader can cache again and still returns every point.
+			history.Reset()
+			history.AddGuestMetric("vm-1", "cpu", 55, now.Add(-2*time.Minute))
+			history.AddGuestMetric("vm-1", "cpu", 60, now.Add(-30*time.Second))
+			assertWindow()
+			if _, ok := history.cachedMetricWindow(cacheKey, time.Now()); !ok {
+				t.Fatal("reset did not restore ordinary cache admission")
+			}
+			assertMetricWindowCacheAccounting(t, history)
+		})
 	}
 }

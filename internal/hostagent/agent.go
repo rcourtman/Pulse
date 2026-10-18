@@ -191,6 +191,16 @@ type Agent struct {
 	commandClientMu        sync.Mutex
 	commandClientRunCancel context.CancelFunc
 	commandClientParentCtx context.Context
+	// commandClientRunCtx holds Run's context until the first acknowledged
+	// report releases it as commandClientParentCtx. The command channel must
+	// not register before Pulse has said which identity its token binding
+	// will hold: a first registration binds whatever ID it presents, and an
+	// agent that later restarts under the acknowledged ID is refused for good.
+	commandClientRunCtx context.Context
+	// commandIdentity is the command-channel identity Pulse acknowledged
+	// (commandAgentId on a report ack). Empty means Pulse named none, and the
+	// channel registers under agentID as it always has.
+	commandIdentity string
 	// commandAuthorityProfile is the immutable local install-time ceiling for
 	// this process. Remote configuration may disable and later re-enable a
 	// command-capable or legacy install, but it cannot promote monitoring-only.
@@ -330,13 +340,8 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("fetch host info: %w", err)
 	}
 
-	hostname := strings.TrimSpace(cfg.HostnameOverride)
-	if hostname == "" {
-		hostname = strings.TrimSpace(info.Hostname)
-	}
-	if hostname == "" {
-		hostname = "unknown-host"
-	}
+	identity := resolveHostIdentity(collector, info, cfg.HostnameOverride)
+	hostname := identity.hostname
 
 	displayName := hostname
 
@@ -351,22 +356,12 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	platform := normaliseRuntimePlatform(collector.GOOS(), info.Platform)
-	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
-	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
-	osName := strings.TrimSpace(info.Platform)
-	if osName == "" {
-		osName = strings.TrimSpace(info.PlatformFamily)
-	}
-	osVersion := strings.TrimSpace(info.PlatformVersion)
-	osName, osVersion = resolveHostOSIdentity(collector, osName, osVersion)
+	osName, osVersion := identity.osName, identity.osVersion
 	if profile, ok := platformsupport.AgentHostProfileForIdentity(osName, platform); ok {
 		platform = platformsupport.NormalizeRuntimePlatformForAgentHostProfile(profile.ID, platform)
 	}
 	kernelVersion := strings.TrimSpace(info.KernelVersion)
-	arch := strings.TrimSpace(info.KernelArch)
-	if arch == "" {
-		arch = runtime.GOARCH
-	}
+	arch := identity.arch
 	client, err := newAgentHTTPClient(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
@@ -503,6 +498,40 @@ func (a *Agent) nextReportSequenceID() string {
 	return agentshost.FormatReportSequenceID(a.reportStreamID, a.reportSequence.Add(1))
 }
 
+// hostIdentity is how the agent names its host to Pulse. Enrollment and
+// reporting both derive it here, so the server binds the runtime token to the
+// same hostname the agent then reports under.
+type hostIdentity struct {
+	hostname  string
+	osName    string
+	osVersion string
+	arch      string
+}
+
+func resolveHostIdentity(collector SystemCollector, info *gohost.InfoStat, hostnameOverride string) hostIdentity {
+	hostname := strings.TrimSpace(hostnameOverride)
+	if hostname == "" {
+		hostname = strings.TrimSpace(info.Hostname)
+	}
+	if hostname == "" {
+		hostname = "unknown-host"
+	}
+
+	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
+	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
+	osName := strings.TrimSpace(info.Platform)
+	if osName == "" {
+		osName = strings.TrimSpace(info.PlatformFamily)
+	}
+	osName, osVersion := resolveHostOSIdentity(collector, osName, strings.TrimSpace(info.PlatformVersion))
+
+	arch := strings.TrimSpace(info.KernelArch)
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	return hostIdentity{hostname: hostname, osName: osName, osVersion: osVersion, arch: arch}
+}
+
 func agentControlPlaneProxy(request *http.Request) (*url.URL, error) {
 	return resolveAgentControlPlaneProxy(request, http.ProxyFromEnvironment)
 }
@@ -607,12 +636,15 @@ func (a *Agent) Run(ctx context.Context) error {
 		return a.runOnce(ctx)
 	}
 
+	// The command channel waits for the first acknowledged report, which
+	// releases this context to it (adoptCommandIdentity).
 	a.commandClientMu.Lock()
-	a.commandClientParentCtx = ctx
+	a.commandClientRunCtx = ctx
 	commandClient := a.commandClient
 	a.commandClientMu.Unlock()
 	defer func() {
 		a.commandClientMu.Lock()
+		a.commandClientRunCtx = nil
 		a.commandClientParentCtx = nil
 		a.commandClientMu.Unlock()
 		a.stopCommandClient(true)
@@ -628,7 +660,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		// original was built with the bootstrap token during New().
 		if a.cfg.EnableCommands {
 			a.commandClientMu.Lock()
-			a.commandClient = a.newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+			a.commandClient = a.newCommandClient(a.cfg, a.commandRegistrationIdentityLocked(), a.hostname, a.platform, a.agentVersion)
 			commandClient = a.commandClient
 			a.commandClientMu.Unlock()
 		}
@@ -640,7 +672,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		go a.runProxmoxHealthCheckLoop(ctx)
 	}
 
-	// Start command client in background for AI command execution
+	// Stage the command client for AI command execution. It starts once the
+	// first report is acknowledged.
 	if commandClient != nil {
 		a.startCommandClient(commandClient)
 	}
@@ -794,6 +827,13 @@ func (a *Agent) startCommandClient(client *CommandClient) bool {
 		a.commandClientMu.Unlock()
 		return true
 	}
+	// A caller may hold a client that a concurrent disable already closed and
+	// cleared. Running it would occupy the run slot with a dead client, and
+	// the next enabled client would never start.
+	if a.commandClient != client {
+		a.commandClientMu.Unlock()
+		return false
+	}
 
 	parentCtx := a.commandClientParentCtx
 	if parentCtx == nil {
@@ -810,6 +850,84 @@ func (a *Agent) startCommandClient(client *CommandClient) bool {
 		}
 	}()
 	return true
+}
+
+// commandRegistrationIdentityLocked returns the agent ID the command channel
+// registers under: the identity Pulse acknowledged for it, or this agent's own
+// ID when Pulse named none. Callers hold commandClientMu.
+func (a *Agent) commandRegistrationIdentityLocked() string {
+	if a.commandIdentity != "" {
+		return a.commandIdentity
+	}
+	return a.agentID
+}
+
+// adoptCommandIdentity runs after every acknowledged report. Pulse resolves
+// this agent to its own host ID, which the agent persists and presents after a
+// restart, and names that ID as commandAgentId whenever the token's binding
+// holds it or would take it on first registration. The command channel must
+// register under it, because a token binds the first ID its channel presents
+// and never moves afterwards: registering under a configured --agent-id, or an
+// ID the server forked or kept from an earlier enrollment, strands the channel
+// on the next restart.
+//
+// An ack without commandAgentId keeps the identity already in use (an older
+// Pulse, or a token already bound to the ID this agent presents). The first
+// ack also releases Run's context, so the channel never registers before Pulse
+// has answered. A client under another ID is replaced while Pulse has never
+// admitted it (staged, or still retrying a refused registration). An admitted
+// client is never replaced: its token accepted it, and building a second
+// client would reopen the operation receipt store, which marks in-flight
+// operations interrupted. A new identity then applies to the next client this
+// process builds.
+func (a *Agent) adoptCommandIdentity(commandAgentID string) {
+	commandAgentID = strings.TrimSpace(commandAgentID)
+
+	a.configMu.RLock()
+	commandCfg := a.cfg
+	a.configMu.RUnlock()
+
+	a.commandClientMu.Lock()
+	if commandAgentID != "" && commandAgentID != a.commandIdentity {
+		a.commandIdentity = commandAgentID
+		if commandAgentID != a.agentID {
+			a.logger.Info().
+				Str("agent_id", a.agentID).
+				Str("command_agent_id", commandAgentID).
+				Msg("Registering the command channel under the identity Pulse acknowledged for this agent")
+		}
+	}
+	if a.commandClientParentCtx == nil && a.commandClientRunCtx != nil {
+		a.commandClientParentCtx = a.commandClientRunCtx
+	}
+	identity := a.commandRegistrationIdentityLocked()
+	client := a.commandClient
+	if client != nil && client.agentID != identity &&
+		(a.commandClientRunCancel == nil || client.retireIfNeverAdmitted()) {
+		if a.commandClientRunCancel != nil {
+			a.commandClientRunCancel()
+			a.commandClientRunCancel = nil
+		}
+		if err := client.Close(); err != nil {
+			a.logger.Debug().Err(err).Msg("Error closing command client staged under a superseded identity")
+		}
+		client = a.newCommandClient(commandCfg, identity, a.hostname, a.platform, a.agentVersion)
+		a.commandClient = client
+	}
+	a.commandClientMu.Unlock()
+
+	if client != nil {
+		a.startCommandClient(client)
+	}
+}
+
+// releaseCommandChannelWithoutReports lets the command channel register under
+// the identity it already has when Pulse refuses this token's reports outright
+// (403: the token lacks report scope). Pulse can then never name a command
+// identity, and a token that may still run commands keeps the channel it had
+// before registration waited for an acknowledgement.
+func (a *Agent) releaseCommandChannelWithoutReports() {
+	a.adoptCommandIdentity("")
 }
 
 func (a *Agent) stopCommandClient(clearClient bool) {
@@ -869,16 +987,16 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 				Err(err).
 				Str("endpoint", statusErr.Endpoint).
 				Int("status_code", statusErr.StatusCode).
-				Msg("Failed to send Unified Agent report (403 Forbidden). API token may lack 'Unified Agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
+				Msg("Failed to send Unified Agent report (403 Forbidden). Check the existing credential's 'Unified Agent reporting' (agent:report) scope and the endpoint's access policy. Command execution permission is not needed for host reporting. Do not disable host monitoring or reinstall solely on this error. Reports are dropped while reporting access is denied.")
+			a.releaseCommandChannelWithoutReports()
 			return nil
 		}
 		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized {
-			// 401 means the server does not recognise this agent's API token
-			// (for example after a Pulse restore or a v5 -> v6 upgrade that did
-			// not carry the token across). Retrying with the same token loops
-			// forever, so drop the report instead of buffering it and surface an
-			// actionable error the operator can act on. Throttle it so a
-			// permanently rejected token does not flood the log.
+			// The endpoint rejected authentication, but the status alone does
+			// not identify a lost credential, wrong instance or upstream policy.
+			// Drop rejected reports rather than growing an undeliverable buffer.
+			// Ordinary future polls can recover with the same credential after
+			// access is restored; throttle the diagnostic while rejection lasts.
 			a.logAuthFailure(statusErr)
 			return nil
 		}
@@ -948,7 +1066,9 @@ func (a *Agent) deliverObserverReport(ctx context.Context, observer *observerRep
 					Str("destination", observer.target.Name).
 					Str("role", "observer").
 					Str("pulse_url", observer.target.PulseURL).
-					Msg("Pulse observer rejected its API token; reports for this destination are dropped until the token is replaced")
+					Int("status_code", statusErr.StatusCode).
+					Str("endpoint", statusErr.Endpoint).
+					Msg("Pulse observer rejected host reporting. Check this destination's configured Pulse URL, existing API Access record and access policy; this status alone does not identify the cause. Do not replace credentials solely on this error or share token values or service files. Reports for this destination are dropped while access is rejected.")
 			}
 			return
 		}
@@ -1010,10 +1130,10 @@ func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
 		Int("status_code", statusCode).
 		Str("pulse_url", a.trimmedPulseURL)
 	if statusCode == http.StatusForbidden {
-		event.Msg("Pulse rejected this agent's API token (403 Forbidden). The token may lack the Unified Agent reporting scope. Re-run the agent install command from the Pulse UI to mint a correctly scoped token. Reports are dropped until the token is replaced.")
+		event.Msg("Pulse rejected this agent's API token (403 Forbidden). Check the existing credential's Unified Agent reporting (agent:report) scope and the endpoint's access policy. Command execution permission is not needed for host reporting. Do not disable host monitoring or reinstall solely on this error. Reports are dropped while reporting access is denied.")
 		return
 	}
-	event.Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI to mint a fresh token. Reports are dropped until the token is replaced.")
+	event.Msg("Pulse rejected this agent's API token (401 Unauthorized). Check that the configured Pulse URL targets the instance where the existing credential was issued, then check its API Access record for expiry or revocation. This status alone does not identify the cause; an upstream authentication layer can also reject the request. Do not reinstall or replace credentials solely on this error, and do not share token values or service files. Reports are dropped while authentication is rejected.")
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -1034,10 +1154,12 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			var statusErr *reportHTTPStatusError
 			if errors.As(err, &statusErr) &&
 				(statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden) {
-				// The token is rejected; buffered reports will never be
-				// accepted with it. Drop them so the buffer cannot grow
-				// unbounded across restarts, and surface the actionable error.
+				// Drop reports refused by the endpoint so the buffer cannot grow
+				// unbounded, without diagnosing the cause or changing credentials.
 				a.logAuthFailure(statusErr)
+				if statusErr.StatusCode == http.StatusForbidden {
+					a.releaseCommandChannelWithoutReports()
+				}
 				for {
 					if _, ok := a.reportBuffer.Pop(); !ok {
 						break
@@ -1421,15 +1543,18 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 
 	// Parse response to check for server-side config overrides
 	var reportResp struct {
-		Success       bool   `json:"success"`
-		AgentID       string `json:"agentId"`
-		ServerVersion string `json:"serverVersion"`
-		Config        *struct {
+		Success        bool   `json:"success"`
+		AgentID        string `json:"agentId"`
+		CommandAgentID string `json:"commandAgentId"`
+		ServerVersion  string `json:"serverVersion"`
+		Config         *struct {
 			CommandsEnabled *bool `json:"commandsEnabled"`
 		} `json:"config,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&reportResp); err != nil {
-		// Non-fatal: just log and continue
+		// Non-fatal: just log and continue. An unreadable ack is no answer, so
+		// the command channel keeps waiting: registering now could bind a
+		// fresh token to an ID the next readable ack would not name.
 		a.logger.Debug().Err(err).Msg("Failed to parse report response, ignoring config")
 		return nil
 	}
@@ -1452,6 +1577,17 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 	// Apply server config overrides
 	if reportResp.Config != nil && reportResp.Config.CommandsEnabled != nil {
 		a.applyRemoteConfig(*reportResp.Config.CommandsEnabled)
+	}
+
+	// Only a real acknowledgement answers for this process's identity: one
+	// that accepted the report and named its host, for a report that presents
+	// the agent ID and hostname this process registers with. A replayed report
+	// buffered by an earlier run may carry another of either, and Pulse judged
+	// its command identity for that one.
+	if reportResp.Success && canonicalAgentID != "" &&
+		strings.TrimSpace(report.Agent.ID) == a.agentID &&
+		strings.TrimSpace(report.Host.Hostname) == a.hostname {
+		a.adoptCommandIdentity(reportResp.CommandAgentID)
 	}
 
 	return nil
@@ -1617,7 +1753,7 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) (bool, bool) {
 	currentlyEnabled := a.commandClient != nil
 	switch {
 	case effectiveState && !currentlyEnabled:
-		clientToStart = a.newCommandClient(commandCfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		clientToStart = a.newCommandClient(commandCfg, a.commandRegistrationIdentityLocked(), a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
 	case !effectiveState && currentlyEnabled:
 		shouldStop = true

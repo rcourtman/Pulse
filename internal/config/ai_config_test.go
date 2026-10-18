@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -876,11 +877,10 @@ func TestAIConfig_GetChatModel(t *testing.T) {
 
 func TestAIConfig_NormalizeQuickstartModelAliases(t *testing.T) {
 	config := AIConfig{
-		Model:          "quickstart:minimax-2.5m",
-		ChatModel:      "pulse-hosted",
-		PatrolModel:    "quickstart:anything",
-		DiscoveryModel: "",
-		AutoFixModel:   "quickstart:legacy-provider-model",
+		Model:        "quickstart:minimax-2.5m",
+		ChatModel:    "pulse-hosted",
+		PatrolModel:  "quickstart:anything",
+		AutoFixModel: "quickstart:legacy-provider-model",
 	}
 
 	changed := config.NormalizeQuickstartModelAliases()
@@ -890,9 +890,6 @@ func TestAIConfig_NormalizeQuickstartModelAliases(t *testing.T) {
 
 	if config.Model != "" || config.ChatModel != "" || config.PatrolModel != "" || config.AutoFixModel != "" {
 		t.Fatalf("NormalizeQuickstartModelAliases() = %#v, want all quickstart fields cleared", config)
-	}
-	if config.DiscoveryModel != "" {
-		t.Fatalf("expected empty discovery model to remain empty, got %q", config.DiscoveryModel)
 	}
 }
 
@@ -1305,40 +1302,6 @@ func TestAIConfig_AlertTriggersInvestigation(t *testing.T) {
 	}
 }
 
-func TestAIConfig_GetDiscoveryAIAnalysisTimeout(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *AIConfig
-		expected time.Duration
-	}{
-		{
-			// Zero is omitted from the settings response and the UI displays
-			// (and may never re-submit) 300s, so discovery must agree with it.
-			name:     "Unset matches the advertised request timeout default",
-			config:   &AIConfig{},
-			expected: 300 * time.Second,
-		},
-		{
-			name:     "Explicit request timeout wins for slow local models",
-			config:   &AIConfig{RequestTimeoutSeconds: 600},
-			expected: 600 * time.Second,
-		},
-		{
-			name:     "Explicit request timeout below the default is honored",
-			config:   &AIConfig{RequestTimeoutSeconds: 10},
-			expected: 10 * time.Second,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if duration := tt.config.GetDiscoveryAIAnalysisTimeout(); duration != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, duration)
-			}
-		})
-	}
-}
-
 func TestAIConfig_GetRequestTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1368,26 +1331,6 @@ func TestAIConfig_GetRequestTimeout(t *testing.T) {
 	}
 }
 
-func TestAIConfig_GetDiscoveryModelFallbackChain(t *testing.T) {
-	// Discovery is high-fan-out background work: it follows the operator's
-	// background-work (Patrol) model before the shared default so scheduled
-	// context refreshes never silently burn a premium shared model.
-	cfg := AIConfig{Model: "gemini:gemini-flash-latest"}
-	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-flash-latest" {
-		t.Fatalf("with only the shared default set, GetDiscoveryModel() = %q, want the shared default", got)
-	}
-
-	cfg.PatrolModel = "gemini:gemini-2.5-flash-lite"
-	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-2.5-flash-lite" {
-		t.Fatalf("with a Patrol override set, GetDiscoveryModel() = %q, want the Patrol model", got)
-	}
-
-	cfg.DiscoveryModel = "ollama:qwen3:8b"
-	if got := cfg.GetDiscoveryModel(); got != "ollama:qwen3:8b" {
-		t.Fatalf("with an explicit discovery override set, GetDiscoveryModel() = %q, want the discovery override", got)
-	}
-}
-
 func TestAIConfigPatrolInvestigationBudgetIsAnEvidenceCallBudget(t *testing.T) {
 	cfg := AIConfig{PatrolInvestigationBudget: 12}
 	if got := cfg.GetPatrolInvestigationBudget(); got != 12 {
@@ -1399,5 +1342,71 @@ func TestAIConfigPatrolInvestigationBudgetIsAnEvidenceCallBudget(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), `"patrol_investigation_budget":12`) {
 		t.Fatalf("AI config lost investigation evidence budget: %s", payload)
+	}
+}
+
+func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
+	for _, level := range []string{ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous, "", "unknown"} {
+		for _, allowed := range []bool{false, true} {
+			t.Run(level+map[bool]string{true: "/entitled", false: "/unentitled"}[allowed], func(t *testing.T) {
+				cfg := NewDefaultAIConfig()
+				cfg.ControlLevel = level
+				cfg.PatrolAutonomyLevel = PatrolAutonomyFull
+				cfg.PatrolActionEmergencyStop = true
+				before := *cfg
+				want := ControlLevelReadOnly
+				if level == ControlLevelControlled || level == ControlLevelAutonomous {
+					want = ControlLevelControlled
+				}
+				if got := cfg.GetAssistantControlLevel(allowed); got != want {
+					t.Fatalf("interactive level = %s; want %s", got, want)
+				}
+				if !reflect.DeepEqual(before, *cfg) {
+					t.Fatal("projection mutated saved policy")
+				}
+				if cfg.IsAutonomous() != (level == ControlLevelAutonomous) {
+					t.Fatal("legacy approval-admission posture changed")
+				}
+				if cfg.GetPatrolAutonomyLevel() != PatrolAutonomyFull {
+					t.Fatal("Assistant projection changed Patrol mode")
+				}
+			})
+		}
+	}
+	var nilConfig *AIConfig
+	if nilConfig.GetAssistantControlLevel(true) != ControlLevelReadOnly {
+		t.Fatal("nil config must be read-only")
+	}
+	for _, unknown := range []string{"suggest", "AUTONOMOUS", " autonomous ", "not-a-mode"} {
+		if AssistantControlLevel(unknown) != ControlLevelReadOnly {
+			t.Fatalf("unmigrated input %q did not fail closed", unknown)
+		}
+	}
+}
+
+func TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls(t *testing.T) {
+	tests := []struct {
+		name     string
+		stored   string
+		licensed bool
+		chosen   bool
+		want     string
+	}{
+		{name: "never chose, licensed", stored: "", licensed: true, chosen: false, want: PatrolAutonomyApproval},
+		{name: "never chose, unlicensed", stored: "", licensed: false, chosen: false, want: PatrolAutonomyMonitor},
+		{name: "blank counts as never chose", stored: "  ", licensed: true, chosen: false, want: PatrolAutonomyApproval},
+		{name: "chose watch only, licensed", stored: PatrolAutonomyMonitor, licensed: true, chosen: true, want: PatrolAutonomyMonitor},
+		{name: "chose autopilot, licensed", stored: PatrolAutonomyFull, licensed: true, chosen: true, want: PatrolAutonomyFull},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &AIConfig{PatrolAutonomyLevel: tt.stored}
+			if got := cfg.PatrolAutonomyLevelChosen(); got != tt.chosen {
+				t.Fatalf("PatrolAutonomyLevelChosen() = %v, want %v", got, tt.chosen)
+			}
+			if got := cfg.ResolvedPatrolAutonomyLevel(tt.licensed); got != tt.want {
+				t.Fatalf("ResolvedPatrolAutonomyLevel(%v) = %q, want %q", tt.licensed, got, tt.want)
+			}
+		})
 	}
 }

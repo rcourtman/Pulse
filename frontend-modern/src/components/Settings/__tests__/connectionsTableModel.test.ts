@@ -3,6 +3,7 @@ import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import {
   connectionAgentIdentitySummary,
   fleetGovernanceSignalsForConnection,
+  primaryRowProblem,
   visibleFleetGovernanceSignals,
   type FleetGovernanceSignal,
 } from '../connectionsTableModel';
@@ -293,6 +294,70 @@ describe('visibleFleetGovernanceSignals', () => {
     );
 
     expect(visibleFleetGovernanceSignals(rawSignals).map((signal) => signal.label)).toEqual([]);
+  });
+});
+
+describe('primaryRowProblem', () => {
+  const outdatedFleet = (updateStatus: 'update-available' | 'failed' | 'disabled') =>
+    connectionFixture({
+      agentUpdate:
+        updateStatus === 'failed'
+          ? { state: 'error', autoUpdate: true, lastError: 'signature verification failed' }
+          : undefined,
+      fleet: {
+        enrollmentState: 'enrolled',
+        livenessState: 'active',
+        versionDrift: 'behind',
+        adapterHealth: 'healthy',
+        configRollout: 'reported',
+        credentialStatus: 'verified',
+        updateStatus,
+        remoteControl: 'disabled',
+      },
+    });
+
+  it('leaves an outdated agent to its Agent update badge instead of naming a problem', () => {
+    const highlights = visibleFleetGovernanceSignals(
+      fleetGovernanceSignalsForConnection(outdatedFleet('update-available')),
+    );
+    // The Manage drawer keeps the structured signals.
+    expect(highlights.map((signal) => signal.label)).toEqual([
+      'Version behind',
+      'Update available',
+    ]);
+    expect(primaryRowProblem(highlights)).toBeUndefined();
+  });
+
+  it("finds a failed update on a second attached agent behind another agent's version lag", () => {
+    const signals = [
+      ...fleetGovernanceSignalsForConnection(outdatedFleet('update-available')),
+      ...fleetGovernanceSignalsForConnection({
+        ...outdatedFleet('failed'),
+        id: 'agent:host-2',
+        name: 'host-2',
+      }),
+    ];
+    expect(primaryRowProblem(visibleFleetGovernanceSignals(signals, Infinity))).toMatchObject({
+      label: 'Agent update failed',
+      tone: 'critical',
+    });
+    // The capped highlight list leads with the problem, not the maintenance.
+    expect(visibleFleetGovernanceSignals(signals)[0]?.label).toBe('Agent update failed');
+  });
+
+  it('still names a failed update or disabled auto-update, which need a different action', () => {
+    expect(
+      primaryRowProblem(
+        visibleFleetGovernanceSignals(fleetGovernanceSignalsForConnection(outdatedFleet('failed'))),
+      ),
+    ).toMatchObject({ label: 'Agent update failed', tone: 'critical' });
+    expect(
+      primaryRowProblem(
+        visibleFleetGovernanceSignals(
+          fleetGovernanceSignalsForConnection(outdatedFleet('disabled')),
+        ),
+      ),
+    ).toMatchObject({ label: 'Auto-update off', tone: 'warning' });
   });
 });
 

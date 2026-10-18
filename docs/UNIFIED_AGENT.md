@@ -106,33 +106,96 @@ connection is usually enough for TrueNAS inventory and usage; an agent is
 optional for host-local data.
 
 1. In that shell, protect the file before opening the editor. Save only the
-   Pulse agent token, with no quotes or header. Use your own private directory
-   and regular files, not shared paths or symlinks:
+   Pulse agent token, with no quotes or header. This preparation preserves an
+   existing regular token file and refuses symlinked or non-regular credential
+   paths. **Stop if preparation fails**; do not continue to the installer:
 
    ```bash
-   umask 077
-   mkdir -p "$HOME/.config/pulse"
-   chmod 700 "$HOME/.config/pulse"
-   touch "$HOME/.config/pulse/agent-token"
-   chmod 600 "$HOME/.config/pulse/agent-token"
-   vi "$HOME/.config/pulse/agent-token"
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     credential_file="$config_dir/agent-token"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+       printf 'Refusing a symlinked credential path.\n' >&2
+       exit 1
+     fi
+     if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+       printf 'Credential file must be a regular file.\n' >&2
+       exit 1
+     fi
+     mkdir -p "$config_dir"
+     chmod 700 "$config_dir"
+     touch "$credential_file"
+     chmod 600 "$credential_file"
+     vi "$credential_file"
+   )
    ```
+
+   This is a plain token file, **not a shell script or `.env` file**. Do not
+   include `PULSE_TOKEN=`, `export`, comments or surrounding quotes. For an
+   existing authentication failure, use the [token-file format guidance](#token-file-format-is-not-shell-syntax)
+   before changing the saved credential or running another installation.
+
+   Before a first installation, check the complete value privately against the
+   token just generated, not only its visible ends. Current **Infrastructure →
+   Install on a host** tokens contain exactly **64 lowercase hexadecimal
+   characters** (`0–9`, `a–f`); duplicated characters or an internal space or
+   newline are not part of that value. This describes that generator, not every
+   legacy, manually supplied or bootstrap credential. A matching shape alone
+   does not authenticate a token. Keep the value out of commands, terminal
+   output, screenshots and reports.
 
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
-   in both the download and installation commands. Download to a file:
+   in both the download and installation commands. Download to a new private
+   file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
+   and does not follow redirects or overwrite an existing installer:
 
    ```bash
-   curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
-     --output "$HOME/.config/pulse/agent-install.sh" \
-     https://pulse.example.com/install.sh
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     installer_file="$config_dir/agent-install.sh"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ ! -d "$config_dir" ]; then
+       printf 'Prepare the private token directory first.\n' >&2
+       exit 1
+     fi
+     if [ -e "$installer_file" ] || [ -L "$installer_file" ]; then
+       printf 'Refusing to replace an existing installer path.\n' >&2
+       exit 1
+     fi
+     chmod 700 "$config_dir"
+     download_file=$(mktemp "$config_dir/agent-download.XXXXXX")
+     curl_exit=0
+     status=$(curl --disable --fail --silent --show-error --proto '=https' \
+       --connect-timeout 10 --max-time 60 --output "$download_file" \
+       --write-out '%{http_code}' https://pulse.example.com/install.sh) || curl_exit=$?
+     printf 'HTTP %s\n' "$status"
+     [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+     [ "$status" = 200 ]
+     mv -n "$download_file" "$installer_file"
+     [ ! -e "$download_file" ]
+   )
    ```
 
-   **Stop if the download fails.** Inspect the saved script before executing
-   it. Do not bypass certificate verification or pipe an unchecked response
-   into a privileged shell. For a private CA, add curl's `--cacert` with the
-   separately verified CA file, and supply the installer's `--cacert` option
-   for the agent connection as well. Do not substitute GitHub's top-level
-   `install.sh`: that installs the Pulse server, not the agent.
+   **Stop if the download fails.** A temporary download, redirect or TLS error
+   is not an installer; do not execute its temporary file. Inspect the saved
+   `agent-install.sh` only after a successful download. If that path already
+   exists, review it locally rather than deleting or overwriting it blindly;
+   retargeting needs the installer from the **new** server, not an older saved
+   copy. Preserve any earlier copy separately through normal maintenance
+   before downloading again.
+
+   Keep `--disable` first in the curl command: local settings could enable
+   tracing, redirects or a TLS bypass. Do not bypass certificate verification
+   or pipe an unchecked response into a privileged shell. For a private CA,
+   add curl's `--cacert` **after `--disable`**, using a separately verified CA
+   file, and supply the installer's `--cacert` option for the agent connection
+   as well. A successful download is not signature verification; inspect and
+   trust the serving Pulse installation before executing its script. Do not
+   substitute GitHub's top-level `install.sh`: that installs the Pulse server,
+   not the agent.
 
 3. Install with the private token file, adding a profile from
    [Installation Options](#installation-options) when needed:
@@ -215,6 +278,11 @@ separate install choices. `--least-privilege --enable-privileged-helper`
 selects the opt-in unprivileged collector and no-network helper. Adding
 `--enable-action-runner --action-token-file <private-file>` installs the
 root-owned runner with a separately issued, host-bound action credential.
+The runner verifies HTTPS using the host's system trust store, an explicit
+`--cacert` file, or a separately verified `--server-fingerprint`. A collector's
+saved `--insecure` setting does not disable runner verification or prevent
+enrollment once the host trusts the server certificate. Adding the internal CA
+to the host trust store also lets subsequent runner updates use normal trust.
 `--disable-action-runner` and `--uninstall-action-runner` remove remediation
 without removing the collector. The runner accepts only the documented typed
 host, Proxmox guest, and container operations; shell, generic exec,
@@ -467,14 +535,14 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | Flag | Env Var | Description | Default |
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
-| `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--token` | `PULSE_TOKEN` | API token. Required when enrolling (`--enroll`); otherwise the `token` file in the state directory is used when unset | *(none)* |
 | `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
 | `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining command/REST custom metrics and thresholds | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
 | `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker / Podman metrics | `false` (auto-detect if not configured) |
-| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force Docker / Podman runtime: `auto`, `docker`, or `podman` | `auto` |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Preferred Docker / Podman runtime: `auto`, `docker`, or `podman`. `docker` only uses an endpoint that reports Docker. `podman` is tried first, but if no Podman socket answers the agent falls back to a Docker endpoint and reports it as `docker` | `auto` |
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
@@ -493,7 +561,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
 | `--disable-registry-credentials` | `PULSE_DISABLE_REGISTRY_CREDENTIALS` | Do not read host Docker credentials (config.json / credential helpers) for registry update checks | `false` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
-| `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server that does not look local (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses). Sends the API token in cleartext; only for networks you fully control, e.g. internal networks numbered from public IP space | `false` |
+| `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server at an address that is not local. Local-network Pulse URLs (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses) already work over HTTP for the primary URL without this flag. The flag extends plain HTTP to any host, including servers numbered from public IP space. Sends the API token in cleartext; only for networks you fully control. Report-only observers still need their own `allowPlaintextHTTP` opt-in | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
@@ -506,7 +574,16 @@ Use `--health-addr :9191` only when another host must scrape the
 health/metrics endpoint over the network. Use `--health-addr ""` or
 `PULSE_HEALTH_ADDR=off` to disable that listener.
 
-**Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
+**Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → the `token` file in the state directory (`<state-dir>/token`; the default state directory is `/var/lib/pulse-agent` on Linux and macOS and `%ProgramData%\Pulse` on Windows).
+
+An explicitly selected token file must be readable by the agent service and
+contain a non-empty bare token, not quotes or a `PULSE_TOKEN=` assignment.
+Surrounding whitespace is ignored. A missing, unreadable or empty selected file
+stops startup rather than using an environment or implicit state-file token.
+The startup error does not print the file path or token. With `--enroll`, a
+previously stored non-empty `runtime.token` still takes precedence, so removing
+the bootstrap file does not break ordinary agent restarts. Do not share token
+contents, service environment contents or token hints when asking for help.
 
 ### Agent log level
 
@@ -533,11 +610,15 @@ Apply and verify the change:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl restart pulse-agent
-sudo journalctl -u pulse-agent --since "5 minutes ago"
 ```
 
-Set the value to `debug` temporarily when collecting diagnostics, then restore
-`info` or `warn`. For a container agent, set `LOG_LEVEL=warn` in the container
+These are configuration changes, not evidence-collection steps: apply them in
+a suitable maintenance window, not just to file a report. Inspect the existing
+journal with the [bounded agent log reader](#collect-agent-logs-safely).
+Start with the current log level; changing it to `debug` can expose more private
+details and a restart changes the run being investigated. Do not enable debug
+logging or restart the agent merely to manufacture a missing diagnostic entry.
+For a container agent, set `LOG_LEVEL=warn` in the container
 environment and recreate the container. Pro installations can also manage
 `log_level` with an [agent configuration profile](CENTRALIZED_MANAGEMENT.md).
 
@@ -598,14 +679,14 @@ Auto-detection behavior:
 
 - **Host metrics**: Enabled by default.
 - **Docker/Podman**: Enabled automatically by the agent if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set. A local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is a hard opt-out and is not re-enabled by auto-detection or remote profile config.
-- **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and `PULSE_ENABLE_KUBERNETES` was not explicitly set.
+- **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and none of `--enable-kubernetes`, `--disable-kubernetes` or `--kubeconfig` was passed. The Linux/macOS installer (`install.sh`) does not read `PULSE_ENABLE_KUBERNETES` from the environment; pass `--disable-kubernetes` to opt out at install time.
 - **Proxmox**: Enabled automatically by the installer when Proxmox is detected. Type auto-detects `pve` vs `pbs` if not specified.
 
 To disable auto-detection, explicitly set the relevant flags or env vars, for example:
 
 - `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
-- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
-- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
+- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false` (the Linux/macOS installer honours only the flag at install time)
+- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false` for the agent binary and `install.ps1`. `install.sh` ignores the environment variable; pass `--enable-proxmox=false` or `--disable-proxmox` to it instead.
 
 ### Inside-Guest Runtime Boundaries
 
@@ -615,10 +696,14 @@ and task inventory on the Docker page.
 
 Pulse does not use a Proxmox node agent to look inside LXCs by default. The
 node agent does automatically collect filesystem capacity for running LXCs
-when the local `pct` tool is available. It uses bounded `pct list` and
-`pct df <vmid>` calls and reports only mount keys, volume labels, mount paths,
-and capacity/usage values; it does not run commands inside a guest or read
-guest files. Stopped LXCs retain the normal API-derived disk view.
+when the local `pct` tool is available. On cgroup v2 PVE hosts it finds running
+guests from the node's container configs and cgroup state and measures mount
+capacity with statfs through each guest's init process in `/proc`; it falls back
+to bounded `pct list` and `pct df <vmid>` calls when that discovery or a
+per-container probe cannot establish a guest's state. It reports only mount
+keys, volume labels, mount paths, and capacity/usage values; it does not run
+commands inside a guest or read guest files. Stopped LXCs retain the normal
+API-derived disk view.
 
 The optional Proxmox-side LXC Docker hint is off unless the Pulse server is started
 with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint uses
@@ -786,16 +871,20 @@ Use HTTPS or a trusted local network for that legacy migration. For
 high-assurance environments, install the v6 `pulse-agent` through the signed
 installer path instead of relying on a plain-HTTP first hop.
 
-To disable auto-updates:
-```bash
-# After private-file preparation and successful installer inspection
-bash "$HOME/.config/pulse/agent-install.sh" \
-  --url https://pulse.example.com \
-  --token-file "$HOME/.config/pulse/agent-token" --disable-auto-update
+To disable auto-updates, set `PULSE_DISABLE_AUTO_UPDATE=true` (or pass
+`--disable-auto-update`) on the `pulse-agent` process itself. The agent
+installer (`agent-install.sh`) does not accept `--disable-auto-update`, and
+setting the variable in the shell that runs the installer does not reach the
+installed service. For an agent installed as a Linux systemd service, add a
+drop-in with `sudo systemctl edit pulse-agent`:
 
-# Or set environment variable
-PULSE_DISABLE_AUTO_UPDATE=true
+```ini
+[Service]
+Environment="PULSE_DISABLE_AUTO_UPDATE=true"
 ```
+
+Then apply it with `sudo systemctl daemon-reload` and
+`sudo systemctl restart pulse-agent`.
 
 ## Remote Configuration (Agent Profiles, Pro/legacy Pro+/Cloud)
 
@@ -804,7 +893,13 @@ Pro, legacy Pro+, and Cloud can push centralized settings to agents via Agent Pr
 Behavior:
 - The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
-- Profile changes take effect on the next agent restart.
+- With the host module running, current agents refresh about once a minute.
+  Host `interval`, `report_ip` and `disable_ceph` settings can apply live; other
+  profile keys require a successful startup fetch. A refresh is not an
+  all-module live reload, and a saved assignment is not applied-state proof.
+- Removing an assignment does not undo settings already applied to a running
+  process, revoke its token or stop monitoring. Keep incident recovery separate
+  from profile rollout; do not restart or re-enrol solely to diagnose a reading.
 - Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
@@ -814,16 +909,92 @@ See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys
 
 ## Uninstall
 
-Download and inspect the agent installer using the HTTPS preparation above
-before running this on the agent host. Uninstallation needs no new token:
+Uninstall is a **destructive removal**, not a repair for missing readings,
+authentication errors or duplicate agents. It interrupts agent monitoring and
+can remove the saved identity, connection/runtime credentials and local agent
+logs, as well as binaries, services, helper/runner state and platform boot
+entries. Keep any needed evidence with the [bounded private log reader](#collect-agent-logs-safely)
+before removal; never put credential files or full service configuration in a
+report. Arrange independent monitoring where needed.
+
+### Remove the whole agent
+
+Use the installer from the **same trusted Pulse instance** on the affected
+agent host. Download and inspect it using the preparation above; do not use
+GitHub's top-level `install.sh`, which removes the Pulse server instead.
+Uninstallation needs no new token: it uses saved connection and credential
+state where available. Do not reinstall or re-enrol to supply missing state.
+
+For Unix, the installer requires root. On a sudo host, run the privately
+prepared script by its existing path (the example assumes it was prepared in
+your current account):
 
 ```bash
-bash "$HOME/.config/pulse/agent-install.sh" --uninstall
+sudo bash "$HOME/.config/pulse/agent-install.sh" --uninstall
 ```
 
-This removes:
-- The agent binary
-- The systemd/launchd service
+On an appliance without sudo, use its authorised administrative shell and the
+actual inspected script path. An explicit `--state-dir` authorises removal of
+that directory; do not add it with a guessed path to force cleanup.
+
+On Linux systemd, full removal also tears down the separately installed action
+runner and typed helper. If only remediation should stop, use the runner-only
+path below instead. Unix removal with a known Pulse URL and an existing
+collector credential requires authenticated server confirmation before local
+collector teardown. **Do not attempt removal if a collector credential remains
+but the saved Pulse URL is missing.** The current Unix installer refuses before
+stopping services or deleting local state. An older served or prepared script
+may not have this refusal; do not rerun uninstall to test it. Keep the saved
+identity, credentials and connection files; do not erase
+them to force a local-only removal. Recover the original connection state or
+provide `--url` for the **same trusted Pulse instance** to the inspected
+installer, without a token on the command line. A different server or a new
+token cannot confirm removal of the original record. Retry only after restoring
+that connection; keep certificate verification enabled.
+
+Credential-free Unix state can still be removed locally, but local cleanup is
+not proof that Pulse removed a server record or revoked every credential.
+
+For Windows, use the [privately prepared PowerShell installer](#windows-powershell-run-as-administrator)
+in an Administrator session, not the Unix script. Use the same prepared
+session, or set `$installerFile` to the already inspected private script path:
+
+```powershell
+& $installerFile -Uninstall $true
+```
+
+Windows removes the service first and attempts server unregistration before
+local binary/state cleanup. A failed server notification can still be followed
+by local removal; its completion message does not prove server-side revocation.
+
+### Remove only the separate Linux action runner
+
+For an opted-in Linux systemd runner, use the same inspected Unix installer:
+
+```bash
+sudo bash "$HOME/.config/pulse/agent-install.sh" --uninstall-action-runner
+```
+
+This standalone option leaves the collector installed and running. Do not
+combine it with `--uninstall`, `--update` or `--enable-action-runner`. It stops
+and disables the runner before revoking its separate credential. If revocation
+cannot be confirmed, removal fails and retains the runner's local recovery
+material; **stopped is not revoked**. Do not delete that material or bypass TLS
+to turn the failure into a success. This option is not a replacement for
+removing legacy collector command authority; see [Agent Security](AGENT_SECURITY.md).
+
+### Check the actual result
+
+Keep the exit status and relevant redacted error. A failure can leave a partial
+result: full Unix removal can have removed the collector's server record before
+a later runner-revocation failure, and Windows may have removed the service
+before cleanup fails. Inspect the affected host's service manager and the
+same-instance **Settings → Infrastructure** record before deciding on another
+action. Do not infer complete removal from a disappearing row or installer
+message, or assume that all saved state was erased. Retained-state warnings can
+reflect intentional path protections; do not force removal with `rm -rf`, widen
+authority or blindly repeat the operation. Keep remaining credential and
+identity material private for safe recovery.
 
 ## Migration Notes
 
@@ -831,7 +1002,7 @@ Use the unified installer (`install.sh`) for all new and existing deployments.
 
 ## Health Checks & Metrics
 
-The agent exposes HTTP endpoints for health checks and Prometheus metrics on port 9191 by default.
+The agent exposes HTTP endpoints for health checks and Prometheus metrics on `127.0.0.1:9191` by default (loopback only; see `--health-addr` in the configuration table).
 
 ### Endpoints
 
@@ -849,6 +1020,8 @@ The agent exposes HTTP endpoints for health checks and Prometheus metrics on por
 | `pulse_agent_up` | Gauge | 1 when running, 0 when shutting down |
 
 ### Kubernetes Probes
+
+The default listener binds to `127.0.0.1`, which kubelet probes cannot reach because they connect to the pod IP. Set `PULSE_HEALTH_ADDR=:9191` (or `--health-addr :9191`) on the agent container before using these probes. That exposes `/healthz`, `/readyz` and `/metrics` on all pod interfaces, so restrict access with a NetworkPolicy.
 
 ```yaml
 livenessProbe:
@@ -871,6 +1044,220 @@ readinessProbe:
 Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
 
 ## Troubleshooting
+
+### Collect agent logs safely
+
+Prefer existing observations from the original failure. On a **Linux systemd
+agent host**, use this bounded Bash reader with an account already authorised
+to read that journal. Run it on the affected agent host, not the Pulse server
+or a different Proxmox node; use the actual service name and original time
+window if they differ from the example. This reads logs only: it does not
+contact Pulse, a container runtime or a guest agent.
+
+```bash
+(
+umask 077
+for tool in timeout bash head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Agent log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! agent_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Agent log read unavailable: private temporary file could not be created.\n' >&2
+  exit 1
+fi
+trap 'rm -- "$agent_log_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$agent_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+journalctl -u pulse-agent.service --since '15 minutes ago' --lines 200 --no-pager --output=cat 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! agent_log_bytes=$(wc -c < "$agent_log_file" 2>/dev/null); then
+    printf 'Agent log read unavailable: excerpt size could not be checked.\n' >&2
+    exit 1
+  fi
+  if [ "$agent_log_bytes" -gt 262144 ]; then
+    printf 'Agent log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$agent_log_file"
+else
+  agent_log_status=$?
+  printf 'Agent log read unavailable (exit %s); no partial excerpt shown.\n' "$agent_log_status" >&2
+  exit "$agent_log_status"
+fi
+)
+```
+
+This requires **GNU `timeout`** and the listed local utilities, reads at most
+200 records from the default 15-minute window, and limits the excerpt to
+**256 KiB**: a record limit alone does not bound bytes. The eight-second hard
+deadline kills only the read-only collection group, including the reader and
+byte limiter, not the agent. A failed, oversized or timed-out read is
+unavailable, not an empty search; partial output is withheld. Stop if a
+utility, service journal or existing access is
+unavailable; do not follow the journal indefinitely, remove the deadline or
+broaden permissions to collect it. A successful empty read is inconclusive:
+the event may be outside the window or absent at the configured log level.
+Do not restart, re-enrol or enable debug logging just to obtain an entry.
+
+Both streams are buffered in an owner-only temporary file, capped at 256 KiB
+plus one overflow-detection byte and removed when the subshell exits. If the
+shell is forcibly interrupted, a private `pulse-log.*` file may remain in its
+temporary directory; remove that exact file locally, not saved agent state.
+
+The excerpt is **not sanitised**. Review it locally before searching for the
+relevant error or sharing a manually redacted timestamp and failure stage.
+Tokens, cookies, URLs, private names or addresses can appear in errors; do not
+post the full excerpt, service environment, connection files or saved identity.
+A log message does not prove fresh readings, successful updates or delivery.
+
+For a container agent or a non-systemd host, use the existing deployment's log
+source instead; this journal recipe does not apply. Keep its read bounded and
+private, and report evidence as unavailable if safe collection is not possible.
+QNAP and Unraid log locations are described in the
+[space troubleshooting section](#installer-fails-with-not-enough-free-disk-space).
+
+### Agent lookup returns HTTP 401 or 403
+
+At `/api/agents/agent/lookup`, Pulse authenticates the request **before**
+searching for the host. **HTTP 401** is an authentication rejection;
+**HTTP 403** with `missing_scope` means the authenticated token lacks
+`agent:report`. An authenticated lookup can return **HTTP 404** when no matching
+host exists. A 401 alone does not identify a mistyped, expired or revoked token,
+the wrong Pulse instance, or an upstream authentication layer.
+
+The silent token prompt only keeps the secret out of the copied command and
+shell history; it does not change reporting permissions. The normal
+**Settings → Infrastructure → Install on a host** flow issues a monitoring
+token. It does not use `--enroll`; the separate cluster deployment flow exchanges
+a bootstrap token for a runtime token. Do not substitute a bootstrap token or
+assume an enrolment-specific correction applies to a normal host installation.
+
+Use the [bounded agent log reader](#collect-agent-logs-safely) on the affected
+agent host, or inspect an already retained excerpt privately. Distinguish:
+
+- `remote_config_client` reporting a lookup failure: this concerns configuration
+  retrieval and does not establish whether ordinary host reports were accepted.
+- **Pulse rejected this agent's API token** from host reporting: keep its HTTP
+  status and redacted error, separately from the lookup failure.
+
+If both lookup and host reporting return 401, this is not a lookup-only failure.
+An older host log's restore/upgrade explanation is generic, not an established
+cause for that installation. If you already tried reinstalling, do not repeat it
+to collect evidence; check the intended token record below first. A 401 alone
+does not require a replacement credential, and a 403 is not a reason to disable
+host monitoring or enable command execution. Ordinary reporting can recover with
+the same credential after the endpoint's access is restored.
+
+A running local service or successful-looking installer output does not prove
+that Pulse accepted a fresh report. No host-report error in the selected log
+window is inconclusive, not proof of successful reporting. Do not restart,
+re-enrol, delete identity or enable debug logging to manufacture that evidence.
+
+In your signed-in administrator session on the **same Pulse instance** the
+agent targets, open **Settings → API Access** in the Security group. Check
+whether the intended token is listed, its **Created** time, **Last used** value
+and **Scopes**, without revealing or copying its secret. A missing record and a
+listed record with `Never` are different observations; neither proves that the
+service is presenting the same token. Last-used metadata is not a token-use
+audit and does not identify which consumer authenticated. These observations
+do not prove that the running service is using that record.
+
+**If the listed record has only Docker reporting:** `docker:report` permits
+Docker/Podman telemetry, not the host module's lookup or OS, CPU and disk
+reports. A normal host needs **Agent reporting** (`agent:report`) and
+**Agent config fetch** (`agent:config:read`). Command execution and administrator
+scope are not required. Once authentication succeeds, a missing reporting scope
+returns 403 with `missing_scope`; Docker-only scope does not explain an earlier
+401 or prove which credential the service presented.
+
+The **Infrastructure → Install on a host → Generate token** flow includes both
+host scopes automatically. **API Access → Create token** allows a manually
+selected scope set. If the intended host record is Docker-only, retain which
+screen generated it before choosing a repair; do not generate another token,
+broaden its permissions, reinstall or probe the agent just to distinguish the
+two flows. Inventory presence and `Never` alone establish neither successful
+credential hand-off nor accepted reporting.
+
+**If the intended record is absent:** separate server registration from the
+agent's credential hand-off before another installation. On that same instance,
+open **Settings → Infrastructure → Install on a host**, give one new install
+token a distinct name and choose **Generate token**. Leave command execution
+disabled for a monitoring-only host. Before running any install command, reopen
+**Settings → API Access** and refresh the page: does that named record appear
+and remain? Generating the record alone does not change the Pi or any other
+agent's saved credential.
+
+If the new record is missing or disappears, stop there; do not generate more
+tokens, rerun the installer or restart Pulse to test it. Report only whether
+generation showed an error and whether the named record appeared after the page
+refresh, with any error manually redacted. If it remains, that establishes
+current registration, not persistence across a server restart, successful
+credential hand-off or accepted host reports. Retain the existing installation
+while those remaining distinctions are investigated. A listed record with
+`Never` is not, by itself, a reason to mint a replacement.
+
+#### Token-file format is not shell syntax
+
+If the intended record exists with the host scopes but lookup and reporting
+still return 401, keep credential selection separate from file contents.
+`--token-file` names a file; it does not establish which credential reached
+Pulse. An environment or explicit-token override is a separate possibility,
+not a diagnosis from `Never`.
+
+The agent trims whitespace at the beginning and end of a token file. It does
+**not** interpret shell syntax, strip quotes or extract a value from an
+assignment. These file forms therefore mean different things:
+
+| File form | What the agent reads |
+| --- | --- |
+| Bare token, possibly followed by a newline | The token value; this does not prove it matches the intended record or Pulse instance. |
+| Token surrounded by single or double quotes | The quotes remain part of the credential. |
+| Assignment prefix such as `PULSE_TOKEN=` or `export` | The prefix remains part of the credential; this is not an environment-file parser. |
+| Duplicated or missing characters, or whitespace inside a bare value | These change the credential; trimming the file's ends does not repair them. |
+| Unknown | The format and cause remain unknown; no new installation is needed to complete a report. |
+
+Quotes or a prefix can cause rejection even when the intended record has the
+right scopes. A rejected credential can leave that record showing `Never`;
+this does not identify the cause of a particular installation's failure.
+
+**Bare does not mean intact.** For a token from the current **Infrastructure →
+Install on a host** generator, privately check the 64-character lowercase
+hexadecimal shape described in [private-file installation](#private-file-installation-linux-macos-and-nas).
+
+A matching token hint confirms only the visible ends, not the whole token.
+The inventory's **Hint** shows only the first six and last four characters:
+duplicated or changed middle characters can leave both ends matching.
+Pulse authenticates the whole token: duplicated or missing characters in the
+middle can still cause rejection. Finding such a difference does not establish
+which step introduced the error. Even an intact shape and matching hint
+do not prove full equality, the intended Pulse instance or accepted reporting.
+
+Legacy token formats remain supported; do not replace a token merely because
+its length or format differs from a newly generated one. Do not apply this
+shape check to other token families or rotate a working credential because it
+looks different.
+
+Use how the file was saved or an existing private observation. If you cannot
+safely tell, say **unknown**. If asked, report only **bare**, **quoted**,
+**prefixed** or **unknown**, not the value, length, hint, screenshot or file.
+Do not print, source, upload or edit the installed token file, restart the
+service, generate a replacement or reinstall merely to classify it. A bare
+value still leaves credential selection, server record and instance matching
+to investigate; it is not proof of accepted reporting.
+
+If asked about the inventory, report only whether the record exists and the
+relevant metadata; do not share the token or its hint. Keep service environments,
+token files and connection files private; do not paste a credential into a
+command, URL or issue. Do not grant administrator scope, change Proxmox
+permissions or disable authentication/TLS to test a guess.
+
+If reporting this problem, say whether the existing error is lookup-only or
+also affects host reporting, and share only the failure stage, HTTP status and
+manually redacted error line. Keep the installation and saved credentials
+unchanged until the failing stage is understood; a 401 is not itself a reason
+to reinstall or rotate every token.
 
 ### pfSense service disabled after a major upgrade
 
@@ -897,33 +1284,64 @@ agent identity state when it is still present.
 
 ### Installer Fails With "Not enough free disk space"
 
-The installer stages the agent binary (~34 MiB) in a temporary directory before
-moving it to the install directory, and checks free space in both before
-downloading. On appliances whose root filesystem is a small RAM disk (QNAP QTS,
-Unraid), `/tmp` and `/usr/local/bin` share that filesystem, so both the staged
-and installed copy must fit at once.
+The installer checks space for both the staged download and installed binary
+before downloading. If both paths share a filesystem, it requires room for
+both copies there; moving staging cannot fix a full installation filesystem.
+Keep the paths and available/required sizes from the error, rather than assuming
+that every NAS installs to `/usr/local/bin`.
 
-If the check fails because `/tmp` is on a constrained root, point `TMPDIR` at a
-directory on a data volume and re-run the already downloaded and inspected
-agent installer from the private-file preparation above:
+On **QNAP QTS/QuTS hero**, the current installer selects a writable data volume
+and installs under `<data-volume>/.pulse-agent`. When `TMPDIR` is unset, it also
+tries to stage under that directory, avoiding the small RAM-backed root. An
+existing `TMPDIR` overrides this staging default. If no writable data volume is
+available, stop and check the volume's mount, health and access locally; do not
+force installation onto the root filesystem or change shared-folder permissions.
+
+Only when the error identifies staging as the constrained path, choose an
+existing writable data volume with enough space. This example uses
+`/share/CACHEDEV1_DATA`; replace it with the actual mounted volume. It creates
+a new private staging directory and runs the already downloaded and inspected
+installer from the private-file preparation above, keeping the same token file
+and collector options:
 
 ```bash
-TMPDIR=/share/CACHEDEV1_DATA/tmp bash "$HOME/.config/pulse/agent-install.sh" \
+(
+set -eu
+umask 077
+data_volume=/share/CACHEDEV1_DATA
+if [ ! -d "$data_volume" ] || [ ! -w "$data_volume" ]; then
+  printf 'Selected data volume is unavailable or not writable; stop.\n' >&2
+  exit 1
+fi
+staging_dir="$(mktemp -d "$data_volume/pulse-agent-stage.XXXXXX")"
+# Remove only this new directory, and only if the installer left it empty.
+trap 'rmdir "$staging_dir" 2>/dev/null || true' EXIT
+TMPDIR="$staging_dir" bash "$HOME/.config/pulse/agent-install.sh" \
   --url https://pulse.example.com \
   --token-file "$HOME/.config/pulse/agent-token"
+)
 ```
 
-(`mktemp` honours `TMPDIR`, so this moves the staging copy off the RAM root.
-Create the directory first if it does not exist.)
+Add the same collector options used for this agent, if any. `TMPDIR` affects
+this invocation only; it does not move the installed binary, saved identity or
+logs. If preparation or the installer fails, stop rather than loop, uninstall
+or delete state. Unexpected files left in the staging directory are preserved
+for local inspection, not recursively removed.
 
 On QNAP the agent's rotating log is written to the data volume
 (`<data-volume>/.pulse-agent/logs/pulse-agent.log`); on Unraid it is written to
 `/var/log/pulse-agent/pulse-agent.log` with size-capped rotation. If an older
-install filled `/var/log/pulse-agent.log` on the root filesystem, delete that
-file and re-run the installer to pick up the rotating configuration.
+`/var/log/pulse-agent.log` is large, check whether it is still growing and which
+installed agent writes it. Preserve a bounded redacted excerpt and, when needed,
+a private copy on a healthy data volume before planned log maintenance. Do not
+delete or truncate a live log, remove `.pulse-agent` or re-enrol an agent as a
+diagnostic fix. A newer installer does not establish that high CPU or an existing
+space problem is resolved; verify fresh reporting, free space and log growth
+after any planned repair. Keep log contents, connection files and tokens private.
 
 ### Agent Not Updating
-- Check logs: `journalctl -u pulse-agent -f`
+- Inspect existing errors with the [bounded agent log reader](#collect-agent-logs-safely);
+  a missing update entry is not proof that an update succeeded.
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
 - Confirm the agent can authenticate and that its saved connection state still
@@ -1068,11 +1486,23 @@ monitoring report or **Automatic updates ready** also does not prove that this
 separate WebSocket channel is working. Changing Proxmox API permissions cannot
 repair a Pulse command-channel connection.
 
-For a systemd agent, inspect the recent journal **locally on the affected node**:
+Before treating this as a connection failure, read the existing **Privilege**
+and **Action runner** lines. `root` is the collector's OS user; `commands legacy`
+is a compatibility profile, not proof that commands are enabled. A
+`monitoring credential` cannot authenticate the legacy command channel.
+`Credential not issued` or `Runner not connected` concerns the separate typed
+runner, not collector health; an absent runner alone does not exclude an
+authorised legacy command connection. Use the
+[workload-update authority guidance](DOCKER.md#command-agent-is-not-connected)
+to distinguish these cases without widening a token or converting the collector.
+Keep an intentionally monitoring-only installation unchanged. Choosing an
+execution-capable installation is a separate trust decision, not a connection
+test; remember whether that choice was made, or say it is unknown.
 
-```bash
-sudo journalctl -u pulse-agent.service --since '15 minutes ago' -n 200 --no-pager --output=cat
-```
+For a systemd agent, inspect the recent journal **locally on the affected node**
+with the [bounded agent log reader](#collect-agent-logs-safely) only when an
+authorised command connection was intended and its failure stage is still
+unknown. Do not collect more logs just to confirm the known monitoring scope.
 
 Look for **Connected and registered with Pulse command server**, or
 **WebSocket connection failed repeatedly, reconnecting** and its error. A
@@ -1103,10 +1533,10 @@ launchctl list | grep pulse
 
 If your Docker Swarm cluster isn't being detected:
 
-1. **Check runtime detection**: Pulse disables Swarm for Podman. Look for "Podman runtime detected" in logs:
-   ```bash
-   journalctl -u pulse-agent | grep -i podman
-   ```
+1. **Check runtime detection**: Pulse disables Swarm for Podman. Look locally
+   for "Podman runtime detected" in the existing excerpt from the
+   [bounded agent log reader](#collect-agent-logs-safely). An empty search does
+   not establish that Docker was detected or that Swarm collection succeeded.
 
 2. **Force Docker runtime**: If auto-detection is incorrect:
    ```bash
@@ -1126,29 +1556,56 @@ If your Docker Swarm cluster isn't being detected:
    typed-helper summary does not include Swarm inventory; granting broader
    socket access is a security decision, not a routine permission repair.
 
-5. **Enable debug logging**: For more detail:
-   ```bash
-   # Set the service to debug as described under "Agent log level", restart it,
-   # then follow the service journal.
-   journalctl -u pulse-agent -f
-   ```
+5. **Keep the original failure evidence**: retain the failure stage and a
+   reviewed, redacted error, or say that no relevant entry is available. Do
+   not enable debug logging, restart the agent or change its runtime merely
+   to obtain a log entry. Use the existing observations before deciding that
+   any configuration repair is needed.
 
 ### PVE Backups Not Showing (Recovery)
 
-If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
+Pulse's **server collects PVE backup inventory through the saved Proxmox API
+connection**, including storage and storage-content requests. A working host
+agent or successful `--enable-proxmox` setup does not prove that this separate
+API collection is current. Guest-agent disk readings are not backup inventory.
 
-1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
-   ```bash
-   pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
-   pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
-   ```
-   Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse.
-   Privilege-separated PVE tokens need the storage ACL on the token as well as the service user.
+1. **Check existing evidence in Proxmox first.** In the native PVE interface,
+   identify the existing archive's node, storage, guest type/ID and time. Do not
+   run another backup or restore to create evidence. A missing Pulse row is not
+   proof that the archive is absent, and an OK task does not prove guest thaw.
+2. **Compare the same source in Pulse.** Open **Proxmox → Backups → By date**
+   and check the selected connection and filters against that archive. Coverage
+   posture is a different reading: expand its explanation rather than treating
+   an unprotected badge as a missing backup. Direct PBS collection and backups
+   seen through PVE are distinct sources; see [PBS data sources](PBS.md#data-source-indicator)
+   and [Recovery](RECOVERY.md#missing-or-inconsistent-evidence).
+3. **Inspect ordinary collection, not a new probe.** In **Settings →
+   Infrastructure**, check the affected saved PVE connection and existing
+   status. Keep connection/agent liveness separate from backup collection
+   freshness; use existing collection timestamps where available, and retain
+   the original redacted error and time. The server checks online nodes and queryable storage configured for
+   backup content. A failed, unavailable or partial read is not an empty
+   inventory; a successful connection test is not proof of sustained collection.
+4. **Repair access only when the evidence supports it.** Ask the Proxmox
+   administrator to compare the actual rejected endpoint and installed PVE
+   version with the configured service user and token's effective storage
+   permissions. With privilege separation, both user and token ACLs must allow
+   the request, including the relevant scope and inheritance. Audit-only
+   inventory access does not establish access to every backup-content request.
+   Do not apply blanket storage-administrator ACLs merely because a table is
+   empty, disable privilege separation or use an administrator token as a test.
+   See [Proxmox permission checks](TROUBLESHOOTING.md#check-permissions-proxmox).
 
-2. **Re-run setup**: Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Recent versions grant this permission automatically.
+**Do not delete the monitored node, remove registration state or rerun setup as
+a diagnostic.** Setup can rotate an existing API token and change permissions;
+it is not a harmless refresh. Preserve the connection, credentials, registration
+state and backup/history data. Make any evidenced configuration repair through
+normal maintenance outside backups, then observe ordinary polling without
+manual guest-agent probes, restarts or repeated **Test Connection** requests.
 
-3. **Check state file**: If re-running doesn't trigger setup, remove the state file:
-   ```bash
-   rm /var/lib/pulse-agent/proxmox-pve-registered
-   ```
-   Then restart the agent.
+For freeze-enabled backups, follow the [backup safety precaution](VM_DISK_MONITORING.md#backup-safety).
+It is not an incident recovery procedure or proof of a repaired thaw failure.
+If reporting a continuing mismatch, retain the running server version, source,
+original time, relevant missing privilege or redacted error and the differing
+native/Pulse observations. Keep token secrets, full ACL listings and private
+infrastructure details out of public reports; follow [Getting Help](TROUBLESHOOTING.md#-getting-help).

@@ -1,5 +1,5 @@
 import { Show, createMemo, createSignal } from 'solid-js';
-import { AlertTriangle, ArrowRight } from 'lucide-solid';
+import { ArrowRight, Info } from 'lucide-solid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { OutdatedAgentHost } from './agentVersion';
@@ -26,18 +26,14 @@ type PlatformOutdatedAgentNoticeProps = {
 // is rendered only when there is an actually-outdated resource, so the page
 // stays clean in the healthy case. This is the breadcrumb that distinguishes a
 // genuinely-empty detail tab from one hidden by a stale agent.
+//
+// It is maintenance, not an incident, so it is one quiet line in the info tone
+// rather than a multi-line warning above every tab: the affected names sit
+// behind a toggle and the update action stays one click away.
 export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticeProps) {
   const count = createMemo(() => props.hosts.length);
   const names = createMemo(() => props.hosts.map((host) => host.name).join(', '));
   const [showAllHosts, setShowAllHosts] = createSignal(false);
-  const preview = createMemo(() => {
-    const firstNames = props.hosts
-      .slice(0, 3)
-      .map((host) => host.name)
-      .join(', ');
-    const remaining = count() - 3;
-    return remaining > 0 ? `${firstNames}, and ${remaining} more` : firstNames;
-  });
   const actionLabel = createMemo(() => props.actionLabel || 'Open Infrastructure settings');
   const subjectSingular = createMemo(() => props.subjectSingular || 'host');
   const subjectPlural = createMemo(() => props.subjectPlural || 'hosts');
@@ -49,14 +45,14 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
     if (count() === 1) {
       const host = props.hosts[0];
       if (copyVariant === 'latest-detail') {
-        return `${host.name} is running an older Pulse agent (${host.version}). Update it${target} for the latest ${props.missingLabel} on this ${subjectSingular()}.`;
+        return `${host.name} runs an older Pulse agent (${host.version}). Update it${target} for the latest ${props.missingLabel}.`;
       }
-      return `${host.name} is running an older Pulse agent (${host.version}). Update it${target} to see ${props.missingLabel} for this ${subjectSingular()}.`;
+      return `${host.name} runs an older Pulse agent (${host.version}), so ${props.missingLabel} for this ${subjectSingular()} may be missing.`;
     }
     if (copyVariant === 'latest-detail') {
-      return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} for the latest ${props.missingLabel}. Affected: ${preview()}.`;
+      return `${count()} ${subjectPlural()} run an older Pulse agent. Update them${target} for the latest ${props.missingLabel}.`;
     }
-    return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} to see ${props.missingLabel}. Affected: ${preview()}.`;
+    return `${count()} ${subjectPlural()} run an older Pulse agent, so ${props.missingLabel} may be missing.`;
   });
 
   return (
@@ -64,25 +60,37 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
       <InlineNotice
         role="status"
         data-testid="platform-outdated-agent-notice"
-        tone="warning"
-        icon={<AlertTriangle aria-hidden="true" />}
-        actionHref={props.actionHref}
-        actionLabel={actionLabel()}
-        actionIcon={<ArrowRight aria-hidden="true" />}
+        tone="info"
+        icon={<Info aria-hidden="true" />}
       >
-        <span>{message()}</span>{' '}
-        <Show when={count() > 3}>
+        <span>{message()}</span>
+        <Show when={count() > 1}>
+          {' '}
           <button
             type="button"
-            class="ml-1 font-medium underline underline-offset-2 hover:no-underline focus-visible:rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="font-medium underline underline-offset-2 hover:no-underline focus-visible:rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2"
             aria-expanded={showAllHosts()}
             onClick={() => setShowAllHosts((current) => !current)}
           >
-            {showAllHosts() ? 'Hide affected names' : `Show all ${count()} ${subjectPlural()}`}
+            {showAllHosts() ? 'Hide names' : `Which ${subjectPlural()}?`}
           </button>
-          <Show when={showAllHosts()}>
-            <p class="mt-1 wrap-break-word">Affected: {names()}.</p>
-          </Show>
+        </Show>
+        <Show when={props.actionHref}>
+          {(href) => (
+            <>
+              {' '}
+              <a
+                href={href()}
+                class="inline-flex items-center gap-1 whitespace-nowrap font-semibold underline-offset-2 hover:underline"
+              >
+                {actionLabel()}
+                <ArrowRight aria-hidden="true" class="h-3.5 w-3.5" />
+              </a>
+            </>
+          )}
+        </Show>
+        <Show when={count() > 1 && showAllHosts()}>
+          <p class="mt-1 wrap-break-word">Affected: {names()}.</p>
         </Show>
       </InlineNotice>
     </Show>

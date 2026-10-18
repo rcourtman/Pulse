@@ -52,10 +52,10 @@
     {
       "id": "operator-first-technical-section",
       "category": "drawer-information-hierarchy",
-      "summary": "Object drawers keep curated deeper inventory visible through the same compact section rows as Overview; only genuinely large or interactive provider-support material stays behind a disclosure.",
+      "summary": "Object drawers lift any warning or actionable inventory row in front (DrawerExceptionList), then keep the rest of their inventory, provider-support material included, under one shared collapsed Details disclosure (maintainer decision 2026-10-13, carried to every object drawer 2026-10-14).",
       "canonical": {
         "path": "src/components/shared/TechnicalDetailsDisclosure.tsx",
-        "export": "TechnicalDetailsSection"
+        "export": "TechnicalDetailsDisclosure"
       },
       "requiredConsumers": [
         {
@@ -117,15 +117,6 @@
         },
         {
           "path": "src/components/Alerts/AlertResourceTableRow.tsx"
-        },
-        {
-          "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx"
-        },
-        {
-          "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx"
-        },
-        {
-          "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx"
         },
         {
           "path": "src/features/docker/DockerNativeTableShared.tsx"
@@ -212,9 +203,6 @@
         "export": "InlineDetailTableRow"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx" },
         { "path": "src/components/Workloads/WorkloadPanel.tsx" },
         { "path": "src/features/docker/DockerAlertsTable.tsx" },
         { "path": "src/features/docker/DockerHostsTable.tsx" },
@@ -413,8 +401,6 @@
         "export": "TableCard"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx" },
         { "path": "src/components/Storage/StorageContentCard.tsx" },
         { "path": "src/components/Workloads/WorkloadsSurface.tsx" },
         { "path": "src/components/Workloads/WorkloadsTable.tsx" },
@@ -435,8 +421,6 @@
         "export": "TableCardHeader"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx" },
         { "path": "src/components/Storage/StorageContentCard.tsx" },
         { "path": "src/features/platformPage/sharedPlatformPage.tsx" }
       ],
@@ -448,13 +432,12 @@
     {
       "id": "compact-info-card-frame-shell",
       "category": "info-card",
-      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must compose InfoCardFrame for the common bordered surface frame instead of recreating local card-shell classes.",
+      "summary": "Compact drawer, resource-detail, and shared overview cards must compose InfoCardFrame for the common bordered surface frame instead of recreating local card-shell classes.",
       "canonical": {
         "path": "src/components/shared/InfoCardFrame.tsx",
         "export": "InfoCardFrame"
       },
       "requiredConsumers": [
-        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
         { "path": "src/components/Infrastructure/AvailabilityProbeStatusCard.tsx" },
         { "path": "src/components/Infrastructure/ResourceActionHistory.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
@@ -466,7 +449,6 @@
         { "path": "src/components/shared/cards/RootDiskCard.tsx" },
         { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
         { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
-        { "path": "src/components/Workloads/AvailabilityProbeSuggestionCard.tsx" },
         { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
         { "path": "src/features/docker/DockerHostDrawerOverview.tsx" },
         { "path": "src/features/storageBackups/detailPresentation.ts" }
@@ -507,7 +489,10 @@
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
-          "patterns": ["rounded-sm border border-red-200", "bg-red-50 dark:bg-red-900/25 px-2 py-1.5"]
+          "patterns": [
+            "rounded-sm border border-red-200",
+            "bg-red-50 dark:bg-red-900/25 px-2 py-1.5"
+          ]
         },
         {
           "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
@@ -549,7 +534,7 @@
           "path": "src/components/Settings/DiscoverySettingsForm.tsx",
           "patterns": [
             "rounded-md border border-amber-200 bg-amber-50/80",
-            "text-amber-900/25 dark:text-amber-100"
+            "text-amber-900 dark:text-amber-100"
           ]
         }
       ],
@@ -644,14 +629,14 @@
           "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900/25 underline-offset-2"
+            "text-amber-900 underline-offset-2"
           ]
         },
         {
           "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900/25 underline-offset-2"
+            "text-amber-900 underline-offset-2"
           ]
         }
       ],
@@ -820,7 +805,6 @@
         { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/shared/Button.tsx" },
-        { "path": "src/components/shared/DiscoveryLoadingFallback.tsx" },
         { "path": "src/components/shared/HistoryChartOverlay.tsx" },
         { "path": "src/components/shared/PulseDataGrid.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
@@ -944,7 +928,6 @@
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
         "src/components/shared/__tests__/HistoryChart.test.tsx",
         "src/components/shared/__tests__/PulseDataGrid.test.tsx",
         "src/components/AI/__tests__/FindingsPanel.test.ts",
@@ -953,59 +936,6 @@
         "src/components/patrol/__tests__/ApprovalSection.test.tsx",
         "src/components/patrol/__tests__/InvestigationSection.test.tsx",
         "src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
-      "id": "discovery-loading-fallback",
-      "category": "loading-indicator",
-      "summary": "Discovery tab Suspense fallbacks in resource and workload drawers must compose DiscoveryLoadingFallback for the centered loading row, canonical spinner, status semantics, and discovery loading copy instead of recreating local spinner/text markup.",
-      "canonical": {
-        "path": "src/components/shared/DiscoveryLoadingFallback.tsx",
-        "export": "DiscoveryLoadingFallback"
-      },
-      "requiredConsumers": [
-        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
-        { "path": "src/components/Workloads/GuestDrawer.tsx" },
-        { "path": "src/components/Workloads/NodeDrawer.tsx" },
-        { "path": "src/features/docker/DockerHostDrawer.tsx" }
-      ],
-      "forbiddenPatterns": [
-        {
-          "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx",
-          "patterns": [
-            "h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"
-          ]
-        },
-        {
-          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/components/Workloads/GuestDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/components/Workloads/NodeDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/features/docker/DockerHostDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        }
-      ],
-      "proof": [
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -1283,9 +1213,9 @@
           "path": "src/components/Settings/InfrastructureInstallerSection.tsx",
           "patterns": [
             "inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100"
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
           ]
         },
         {
@@ -1432,12 +1362,12 @@
           "patterns": [
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted",
             "shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors",
-            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
             "rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300",
             "order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0",
-            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25",
-            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25",
-            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60",
             "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45",
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
@@ -1445,7 +1375,7 @@
         {
           "path": "src/components/AI/Chat/MessageItem.tsx",
           "patterns": [
-            "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
+            "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
         },
         {
@@ -1488,7 +1418,6 @@
       "requiredConsumers": [
         { "path": "src/components/AI/Chat/MessageItem.tsx" },
         { "path": "src/components/AI/Chat/ToolExecutionBlock.tsx" },
-        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
         { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
       ],
@@ -1508,15 +1437,6 @@
             "lucide-solid/icons/copy",
             "lucide-solid/icons/check';",
             "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
-          ]
-        },
-        {
-          "path": "src/components/Discovery/DiscoveryTab.tsx",
-          "patterns": [
-            "interface CopyValueButtonProps",
-            "const CopyValueButton",
-            "CopyIcon class=\"h-3.5 w-3.5\"",
-            "CheckIcon class=\"h-3.5 w-3.5 text-emerald-600"
           ]
         },
         {
@@ -1595,10 +1515,10 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
-        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
         { "path": "src/components/Settings/AISettingsDialogs.tsx" },
         { "path": "src/components/Settings/APITokenManager.tsx" },
         { "path": "src/components/Settings/AgentIntegrationsPanel.tsx" },
+        { "path": "src/components/Settings/BackupTransferDialogs.tsx" },
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
         { "path": "src/components/Settings/SecurityOverviewPanel.tsx" },
         { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" }
@@ -1644,30 +1564,6 @@
       ]
     },
     {
-      "id": "copyable-code-row-shell",
-      "category": "copy-action",
-      "summary": "Copyable code/value rows must compose CopyableCodeRow for the shared code surface and copy action instead of recreating local font-mono row shells.",
-      "canonical": {
-        "path": "src/components/shared/CopyableCodeRow.tsx",
-        "export": "CopyableCodeRow"
-      },
-      "requiredConsumers": [{ "path": "src/components/Discovery/DiscoveryTab.tsx" }],
-      "forbiddenPatterns": [
-        {
-          "path": "src/components/Discovery/DiscoveryTab.tsx",
-          "patterns": [
-            "const CopyableCodeRow",
-            "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5"
-          ]
-        }
-      ],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/Button.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
       "id": "form-select-shell",
       "category": "form-control",
       "summary": "Native select controls must compose FormSelect for shared label/id/help wiring, value synchronization, and select chrome instead of recreating labelled select wrappers locally.",
@@ -1709,7 +1605,6 @@
         { "path": "src/components/shared/FilterToolbar.tsx" },
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
         { "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx" },
-        { "path": "src/features/alerts/AlertEscalationSection.tsx" },
         { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
         { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" }
       ],
@@ -1761,7 +1656,6 @@
         { "path": "src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx" },
         { "path": "src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx" },
         { "path": "src/components/Infrastructure/ResourceOperatorStateSection.tsx" },
-        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
         { "path": "src/components/Settings/AISettings.tsx" },
         { "path": "src/components/Settings/AuditLogPanel.tsx" },
         { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
@@ -2016,9 +1910,17 @@
         { "path": "src/components/patrol/RunHistoryEntry.tsx" },
         { "path": "src/components/patrol/RunToolCallTrace.tsx" },
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" }
+        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailSummary.tsx" }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/components/Infrastructure/ResourceDetailSummary.tsx",
+          "patterns": [
+            "inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]",
+            "inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px]"
+          ]
+        },
         {
           "path": "src/components/AI/FindingsPanel.tsx",
           "patterns": [
@@ -2304,7 +2206,6 @@
         { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
         { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
         { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
         { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -2318,10 +2219,6 @@
         },
         {
           "path": "src/features/truenas/TrueNASServicesTable.tsx",
-          "patterns": ["const titleCase"]
-        },
-        {
-          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
           "patterns": ["const titleCase"]
         },
         {
@@ -2550,21 +2447,11 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableDateTimeValue"
       },
-      "requiredConsumers": [
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
-      ],
+      "requiredConsumers": [{ "path": "src/features/truenas/TrueNASProtectionTable.tsx" }],
       "forbiddenPatterns": [
         {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx",
           "patterns": ["const formatPointTime", "formatPointTime(point)"]
-        },
-        {
-          "path": "src/features/vmware/VsphereActivityTable.tsx",
-          "patterns": [
-            "const formatActivityDate",
-            "formatActivityDate(activity.occurredAt || activity.observedAt)"
-          ]
         }
       ],
       "proof": [
@@ -2588,7 +2475,8 @@
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
         { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
         { "path": "src/features/standalone/AvailabilityChecksTable.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
+        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -2623,6 +2511,13 @@
         {
           "path": "src/features/standalone/AvailabilityChecksTable.tsx",
           "patterns": ["formatRelativeTime(availability?.lastChecked", "const formatChecked"]
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx",
+          "patterns": [
+            "const formatActivityDate",
+            "formatActivityDate(activity.occurredAt || activity.observedAt)"
+          ]
         }
       ],
       "proof": [
@@ -3263,21 +3158,6 @@
       ]
     },
     {
-      "id": "chart-visibility-toggle-button",
-      "category": "display-toggle",
-      "summary": "Summary-bearing filter surfaces must compose ChartVisibilityToggleButton for chart show/hide display actions instead of recreating one-off chart toggle buttons.",
-      "canonical": {
-        "path": "src/components/shared/FilterToolbar.tsx",
-        "export": "ChartVisibilityToggleButton"
-      },
-      "requiredConsumers": [{ "path": "src/components/Workloads/WorkloadsFilter.tsx" }],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/FilterToolbar.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
       "id": "column-picker-shell",
       "category": "column-picker",
       "summary": "Table column visibility controls must compose ColumnPicker instead of recreating column chooser trigger, panel, reset, or hidden-count chrome locally.",
@@ -3408,7 +3288,7 @@
       "scopes": ["src/components/AI/Chat/MessageItem.tsx"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
+        "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
       ],
       "legacyReason": "Retired migration debt. AI Chat queued message icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3457,7 +3337,7 @@
       "scopes": ["src/components/AI/Chat"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25"
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950"
       ],
       "legacyReason": "Retired migration debt. AI Chat accent icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3821,12 +3701,12 @@
       ]
     },
     {
-      "id": "drawer-discovery-local-loading-fallback",
+      "id": "drawer-local-border-loading-spinner-shell",
       "category": "loading-indicator",
-      "summary": "Resource and workload drawer discovery Suspense fallbacks must not recreate local border spinner rows; compose DiscoveryLoadingFallback so all drawer loading rows inherit the same spinner, spacing, copy, and status semantics.",
+      "summary": "Resource and workload drawers must not recreate local border spinner rows; compose LoadingSpinner so drawer loading states inherit the shared spinner and accessibility behavior.",
       "canonical": {
-        "path": "src/components/shared/DiscoveryLoadingFallback.tsx",
-        "export": "DiscoveryLoadingFallback"
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
       },
       "scopes": [
         "src/components/Infrastructure/ResourceDetailDrawer.tsx",
@@ -3837,11 +3717,10 @@
       ],
       "extensions": [".tsx"],
       "allPatterns": ["border-t-transparent", "animate-spin"],
-      "legacyReason": "Retired migration debt. Discovery tab fallbacks in drawers compose DiscoveryLoadingFallback instead of local centered border-spinner rows.",
+      "legacyReason": "Retired migration debt. Drawer loading rows compose LoadingSpinner instead of local centered border-spinner rows.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
@@ -4020,7 +3899,7 @@
     {
       "id": "compact-info-card-frame-local-shell",
       "category": "info-card",
-      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must not copy the bordered bg-surface p-3 shadow shell owned by InfoCardFrame.",
+      "summary": "Compact drawer, resource-detail, and shared overview cards must not copy the bordered bg-surface p-3 shadow shell owned by InfoCardFrame.",
       "canonical": {
         "path": "src/components/shared/InfoCardFrame.tsx",
         "export": "InfoCardFrame"
@@ -4469,7 +4348,7 @@
       "summary": "vSphere activity tables must not recreate compact activity-date helpers for timestamp cells.",
       "canonical": {
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
-        "export": "PlatformTableDateTimeValue"
+        "export": "PlatformTableRelativeTimeValue"
       },
       "scopes": ["src/features/vmware/VsphereActivityTable.tsx"],
       "extensions": [".tsx"],
@@ -4478,7 +4357,7 @@
         "toLocaleString(undefined, {",
         "minute: '2-digit'"
       ],
-      "legacyReason": "Retired migration debt. Compact platform timestamp cells must compose PlatformTableDateTimeValue so date parsing, empty markers, minimum-year handling, and tabular styling stay shared.",
+      "legacyReason": "Retired migration debt. vSphere activity reads as an age through PlatformTableRelativeTimeValue, with the exact time on hover and in the drawer, so date parsing, empty markers, and tabular styling stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [
@@ -4803,25 +4682,6 @@
       "allPatterns": ["aria-current={", "border-b-2", "border-b border-border"],
       "legacyReason": "Retired migration debt. Platform page section tabs must use PlatformSectionTabs; no page-local tab-bar exceptions are currently allowed.",
       "allowedPaths": [],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
-      "id": "chart-visibility-local-toggle-labels",
-      "category": "display-toggle",
-      "summary": "Summary-bearing surfaces must not copy the Show charts / Hide charts display-toggle labels owned by ChartVisibilityToggleButton.",
-      "canonical": {
-        "path": "src/components/shared/FilterToolbar.tsx",
-        "export": "ChartVisibilityToggleButton"
-      },
-      "scopes": ["src/components/Workloads", "src/features", "src/pages"],
-      "extensions": [".tsx"],
-      "allPatterns": ["Show charts", "Hide charts"],
-      "legacyReason": "Retired migration debt. Chart visibility display actions must use ChartVisibilityToggleButton; local show/hide chart toggle copies are not allowed.",
-      "allowedPaths": [],
-      "ignoredPaths": ["src/components/Workloads/__tests__/WorkloadsFilter.test.tsx"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
@@ -5698,28 +5558,6 @@
       ]
     },
     {
-      "id": "copyable-code-row-local-shell",
-      "category": "copy-action",
-      "summary": "Copyable code/value rows must not copy the local surface-alt font-mono row shell; use CopyableCodeRow.",
-      "canonical": {
-        "path": "src/components/shared/CopyableCodeRow.tsx",
-        "export": "CopyableCodeRow"
-      },
-      "scopes": ["src/components", "src/features", "src/pages"],
-      "extensions": [".tsx"],
-      "allPatterns": [
-        "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5",
-        "break-all font-mono text-xs text-base-content"
-      ],
-      "legacyReason": "Retired migration debt. Copyable code rows belong to CopyableCodeRow so code styling and copy behavior stay canonical.",
-      "allowedPaths": [],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/Button.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
       "id": "inline-detail-local-field-grid-shell",
       "category": "row-detail",
       "summary": "Inline platform detail content must not recreate local DetailField grids; use DetailSectionTable or InlineDetailPanel.",
@@ -6103,7 +5941,7 @@
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25"
+        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900"
       ],
       "legacyReason": "Retired migration debt. Positive outlined settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6124,7 +5962,7 @@
       },
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
-      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25"],
+      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900"],
       "legacyReason": "Retired migration debt. Positive ghost settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
@@ -6669,12 +6507,11 @@
         "src/features/vmware"
       ],
       "extensions": [".tsx"],
+      "pathExcludes": [".test.", "__tests__"],
       "triggerPatterns": ["data-inline", "TableRow"],
       "requiredPatterns": ["InlineDetailTableRow"],
       "allowedPaths": [],
-      "ignoredPaths": [
-        "src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx"
-      ],
+      "ignoredPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

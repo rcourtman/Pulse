@@ -726,8 +726,7 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 	service.SetGuestConfigProvider(nil)
 	service.SetBudgetChecker(func() error { return nil })
 
-	discoveryProvider := &mockDiscoveryProvider{}
-	service.SetDiscoveryProvider(discoveryProvider)
+	service.SetReadState(rs)
 	if service.contextPrefetcher == nil {
 		t.Fatalf("expected context prefetcher to be set")
 	}
@@ -743,14 +742,24 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 }
 
 func TestService_isAutonomousModeEnabled(t *testing.T) {
-	service := &Service{cfg: &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}}
-	if !service.isAutonomousModeEnabled() {
-		t.Fatalf("expected autonomous mode from config")
+	for _, level := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous, "suggest", "unknown", ""} {
+		t.Run(level, func(t *testing.T) {
+			service := &Service{cfg: &config.AIConfig{ControlLevel: level}}
+			if service.isAutonomousModeEnabled() {
+				t.Fatal("saved Assistant preference must not enable non-interactive investigation mode")
+			}
+			service.SetAutonomousMode(true)
+			if !service.isAutonomousModeEnabled() {
+				t.Fatal("expected explicit core-owned investigation mode")
+			}
+			service.SetAutonomousMode(false)
+			if service.isAutonomousModeEnabled() || service.cfg.ControlLevel != level {
+				t.Fatal("disabling investigation mode must not rewrite the saved preference")
+			}
+		})
 	}
-
-	service = &Service{}
-	if service.isAutonomousModeEnabled() {
-		t.Fatalf("expected autonomous mode to be false")
+	if (&Service{}).isAutonomousModeEnabled() {
+		t.Fatal("expected autonomous mode to be false without explicit investigation mode")
 	}
 }
 

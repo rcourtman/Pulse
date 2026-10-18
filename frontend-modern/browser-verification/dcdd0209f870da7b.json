@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "90fc6a0f7b3a50130731f6738ca07503bbdff714",
+  "verified_at": "2026-10-15T14:58:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
+    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "dcfdc3c011b4c18efe10b482a40babc53e1bf81ac47153acd8e05bfbd7831db7",
+    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx": "6f1a1660c7fbf0c3e7a8c54099d7db881b9feac68ee888a77536856afc1306a3",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "d3dda1ae19d8849df0c01aadda3aa2cd9643e287965cbc7fa51b9703d2c07d9e",
+    "frontend-modern/src/routing/resourceLinks.ts": "ef764fc47fd76b3ebc3fa3b50d6d0f165634cd110644b8e79583b4652761f6c0",
+    "frontend-modern/src/stores/websocket.ts": "72c108000b0067b22d7ba72544a58ff9436bcb5de015a7db8c25218361c52e97",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "5fd0e62a94e054f46ef0e3d62e023221142a47138ed73f90c31307feeee98d11"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (main): /alerts/history ignores ?alert=; a link could only open the whole history",
+    "After (1280): an active alert link (id with colons, slashes and spaces) stays in the 7d range, lists one row with its timeline open and a status notice \"Showing Container Health on nginx, opened from a link.\" with Show all alerts",
+    "A July alert link widens to All time once and opens its timeline; an id history no longer holds says \"That alert is no longer in Pulse's alert history.\"",
+    "Show all alerts removes the filter and keeps the range; at 375px the link opens the card drawer, which stays closed after Escape"
+  ],
+  "interactions": [
+    "Opened links for active, old resolved and unknown alert ids by full page load",
+    "Clicked Show all alerts; at phone width closed the drawer with Escape"
+  ]
+}

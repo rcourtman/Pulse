@@ -81,7 +81,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 </Show>
 
                 {/* Single bar for aggregate or single disk */}
-                <Show when={!presentation().useStackedSegments}>
+                <Show when={!presentation().useStackedSegments && !presentation().unavailable}>
                   <svg
                     aria-hidden="true"
                     class="absolute inset-0 h-full w-full"
@@ -104,11 +104,15 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 {/* Label overlay */}
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
                   <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-                    <span>
-                      <AnimatedNumber
-                        value={presentation().displayPercentValue}
-                        format={formatPercent}
-                      />
+                    <span
+                      data-stacked-disk-unavailable={presentation().unavailable ? '' : undefined}
+                    >
+                      <Show when={!presentation().unavailable} fallback="N/A">
+                        <AnimatedNumber
+                          value={presentation().displayPercentValue}
+                          format={formatPercent}
+                        />
+                      </Show>
                     </span>
                     <Show when={presentation().showMaxLabel}>
                       <span
@@ -252,11 +256,11 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         maxWidth={420}
       >
         <div class="w-[360px] max-w-full">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
+          <div class="font-medium mb-1 text-base-content border-b border-border pb-1">
             {presentation().tooltipTitle}
           </div>
-          <Show when={props.statusMessage}>
-            <p class="mb-1 text-xs text-muted">{props.statusMessage}</p>
+          <Show when={presentation().tooltipMessage}>
+            <p class="mb-1 text-xs text-muted">{presentation().tooltipMessage}</p>
           </Show>
           <For each={presentation().tooltipContent}>
             {(item, idx) => (
@@ -265,7 +269,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 classList={{ 'border-t border-border': idx() > 0 }}
               >
                 <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5">
-                  <span class="flex min-w-0 items-start gap-1.5 text-slate-300">
+                  <span class="flex min-w-0 items-start gap-1.5 text-base-content">
                     <svg aria-hidden="true" class="mt-0.5 h-2 w-2 shrink-0" viewBox="0 0 8 8">
                       <circle cx="4" cy="4" r="4" fill={item.color} />
                     </svg>

@@ -23,16 +23,7 @@ export type BackupServerColumnId =
   | 'dedup';
 
 export type CoverageColumnId =
-  | 'workload'
-  | 'type'
-  | 'targetId'
-  | 'node'
-  | 'posture'
-  | 'latest'
-  | 'pbs'
-  | 'archive'
-  | 'snapshot'
-  | 'task';
+  'workload' | 'type' | 'targetId' | 'node' | 'posture' | 'latest' | 'task';
 
 export type RecoverableColumnId =
   | 'workload'
@@ -182,66 +173,48 @@ export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = 
   { id: 'node', label: 'Node', kind: 'text' },
   { id: 'posture', label: 'Posture', kind: 'text' },
   { id: 'latest', label: 'Last backup', kind: 'numeric-value' },
-  { id: 'pbs', label: 'PBS snapshot', kind: 'text' },
-  { id: 'archive', label: 'PVE file', kind: 'text' },
-  { id: 'snapshot', label: 'Guest snapshot', kind: 'text' },
   { id: 'task', label: 'Task', kind: 'text' },
 ];
 
 const COVERAGE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly CoverageColumnId[]> = {
-  // On narrow surfaces answer: which workload, what posture, how recent is the
-  // newest independent backup, and did the latest task succeed? Provider-by-provider
-  // evidence is progressive detail in the expansion row; target identity folds
-  // beneath the name so the scan stays legible at 320px.
-  compact: ['workload', 'posture', 'latest', 'pbs', 'task'],
+  // Every layout answers: which workload, what posture, how recent is the
+  // newest independent backup, and did the latest task succeed? The
+  // provider-by-provider ages (PBS snapshot, PVE file, guest snapshot) are
+  // progressive detail in the expansion row at every width: side by side they
+  // made a stale backup look fresh beside a recent guest snapshot, which does
+  // not count as a backup. Target identity folds beneath the name on phones.
+  compact: ['workload', 'posture', 'latest', 'task'],
   basic: ['workload', 'node', 'posture', 'latest', 'task'],
   operational: ['workload', 'type', 'node', 'posture', 'latest', 'task'],
-  expanded: ['workload', 'type', 'node', 'posture', 'latest', 'pbs', 'archive', 'snapshot', 'task'],
-  full: COVERAGE_COLUMNS.map((column) => column.id),
+  expanded: ['workload', 'type', 'node', 'posture', 'latest', 'task'],
+  full: ['workload', 'type', 'targetId', 'node', 'posture', 'latest', 'task'],
 };
 
 const COVERAGE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<CoverageColumnId, number>>
 > = {
-  // Posture keeps its whole compact word ("Unknown"), the two age cells hold
-  // the suffix-free compact age, and the job dot takes what a "Job" header
-  // needs.
-  compact: { workload: 40, posture: 20, latest: 15, pbs: 15, task: 10 },
+  // Posture keeps its whole compact word ("Unknown"), the age cell holds the
+  // suffix-free compact age, and the job dot takes what a "Job" header needs.
+  compact: { workload: 46, posture: 22, latest: 18, task: 14 },
   // Above the phone projection the identity columns (workload, node) take the
   // slack that the short type badge, target id, and age cells cannot use, so
   // names stay whole instead of truncating beside empty space.
   basic: { workload: 31, node: 18, posture: 22, latest: 15, task: 14 },
   operational: { workload: 27, type: 8, node: 17, posture: 17, latest: 15, task: 16 },
-  expanded: {
-    workload: 19,
-    type: 6.5,
-    node: 13.5,
-    posture: 13.5,
-    latest: 9.5,
-    pbs: 9.5,
-    archive: 10,
-    snapshot: 9.5,
-    task: 9,
-  },
+  expanded: { workload: 27, type: 8, node: 17, posture: 17, latest: 15, task: 16 },
   full: {
-    workload: 17,
-    type: 5.5,
-    targetId: 8,
-    node: 11.5,
-    posture: 11,
-    latest: 8.5,
-    pbs: 10.5,
-    archive: 8.5,
-    snapshot: 12,
-    task: 7.5,
+    workload: 24,
+    type: 7,
+    targetId: 9,
+    node: 16,
+    posture: 16,
+    latest: 13,
+    task: 15,
   },
 };
 
 export interface CoverageSourceVisibility {
-  pbs: boolean;
-  archive: boolean;
-  snapshot: boolean;
   task: boolean;
 }
 
@@ -252,9 +225,6 @@ export const getCoverageColumns = (
   const layoutColumns = new Set(COVERAGE_VISIBLE[layout]);
   return COVERAGE_COLUMNS.filter((column) => {
     if (!layoutColumns.has(column.id)) return false;
-    if (column.id === 'pbs') return sourceVisibility.pbs;
-    if (column.id === 'archive') return sourceVisibility.archive;
-    if (column.id === 'snapshot') return sourceVisibility.snapshot;
     if (column.id === 'task') return sourceVisibility.task;
     return true;
   });
@@ -384,4 +354,68 @@ export const isCoverageEvidenceColumnVisible = (
   if (column === 'size')
     return layout === 'operational' || layout === 'expanded' || layout === 'full';
   return layout === 'expanded' || layout === 'full';
+};
+
+// What the backup health counts mean, stated from the server's own posture
+// policy so "17 attention" is never a number without a rule. The causes mirror
+// internal/recovery/posture.go. Null until the policy has loaded; the strip
+// then shows no rule rather than a guessed one.
+export const getBackupPostureRuleText = (
+  policy: { freshnessWindowSeconds: number } | null | undefined,
+): string | null => {
+  const seconds = policy?.freshnessWindowSeconds ?? 0;
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return `Attention: the newest backup is older than ${formatPostureWindow(seconds)}, a newer backup job failed, expected verification is missing or overdue, or Pulse can see only part of the backup history. Unprotected: Pulse sees the full history and no backup it can count. Guest snapshots alone do not count. Unknown: Pulse cannot read the backup history or has no backup source linked to the guest.`;
+};
+
+const formatPostureWindow = (seconds: number): string => {
+  if (seconds >= 86_400 && seconds % 86_400 === 0) {
+    const days = seconds / 86_400;
+    return days === 1 ? '1 day' : `${days} days`;
+  }
+  const hours = Math.max(1, Math.round(seconds / 3_600));
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+};
+
+const COVERAGE_RESTORE_EVIDENCE_LIMIT = 8;
+
+// Newest restore points for a coverage row's expansion. The newest point and
+// the newest completed point of every source always make the cut, so neither a
+// burst of recent guest snapshots nor a running or failed job can hide the
+// latest usable PBS or PVE backup now that the table carries no per-source
+// age columns.
+export const selectCoverageRestoreEvidence = <
+  T extends {
+    id: string;
+    sourceKind: string;
+    createdMs?: number;
+    running?: boolean;
+    failed?: boolean;
+  },
+>(
+  artifacts: readonly T[],
+  limit = COVERAGE_RESTORE_EVIDENCE_LIMIT,
+): T[] => {
+  const newestFirst = [...artifacts].sort(
+    (left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0),
+  );
+  const picked = new Set<string>();
+  const newestSeen = new Set<string>();
+  const completedSeen = new Set<string>();
+  for (const artifact of newestFirst) {
+    if (!newestSeen.has(artifact.sourceKind)) {
+      newestSeen.add(artifact.sourceKind);
+      picked.add(artifact.id);
+    }
+    if (!artifact.running && !artifact.failed && !completedSeen.has(artifact.sourceKind)) {
+      completedSeen.add(artifact.sourceKind);
+      picked.add(artifact.id);
+    }
+  }
+  const cap = Math.max(limit, picked.size);
+  for (const artifact of newestFirst) {
+    if (picked.size >= cap) break;
+    picked.add(artifact.id);
+  }
+  return newestFirst.filter((artifact) => picked.has(artifact.id));
 };

@@ -75,13 +75,54 @@ func (p reportBrandLicenseProvider) Service(context.Context) *pkglicensing.Servi
 
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/reporting", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/reporting", nil)
 	rr := httptest.NewRecorder()
 
 	handler.HandleGenerateReport(rr, req)
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+	if got := rr.Header().Get("Allow"); got != "GET, POST" {
+		t.Fatalf("expected Allow GET, POST, got %q", got)
+	}
+}
+
+func TestReportingHandlers_GenerateReportRejectsInvalidPOSTBody(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	for name, body := range map[string]string{
+		"empty":          ``,
+		"unknown field":  `{"resourceType":"node","resourceId":"node-1","narrate":true}`,
+		"trailing value": `{"resourceType":"node","resourceId":"node-1"} {}`,
+		"query shape":    `resourceType=node&resourceId=node-1`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/reporting", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.HandleGenerateReport(rr, req)
+		if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid_body") {
+			t.Fatalf("%s: expected 400 invalid_body, got %d body=%s", name, rr.Code, rr.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/reporting?resourceType=node&resourceId=node-1", strings.NewReader(`{}`))
+	rr := httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "missing_params") {
+		t.Fatalf("POST must read fields from the body, not the query: got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// A valid value followed by padding past the cap is too large, not malformed.
+	padded := `{"resourceType":"node","resourceId":"node-1"}` + strings.Repeat(" ", reportingMultiReportBodyMax)
+	req = httptest.NewRequest(http.MethodPost, "/api/reporting", strings.NewReader(padded))
+	rr = httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "body_too_large") {
+		t.Fatalf("expected 400 body_too_large for an oversized body, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -138,7 +179,7 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 
 	start := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	end := time.Now().UTC().Format(time.RFC3339)
@@ -193,7 +234,7 @@ func TestReportingHandlers_AttachesEntitledReportBranding(t *testing.T) {
 	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{
 			DisplayName: "Client Alpha MSP",
@@ -242,7 +283,7 @@ func TestReportingHandlers_StripsWorkspaceReportBrandLogoPath(t *testing.T) {
 	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{
 			DisplayName: "Client Path",
@@ -272,7 +313,7 @@ func TestReportingHandlers_GenerateReport_TrimsOptionalFields(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?format=pdf&resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
@@ -354,7 +395,7 @@ func TestReportingHandlers_GenerateReport_AcceptsCanonicalAppContainerType(t *te
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "docker-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?format=pdf&resourceType=app-container&resourceId=docker-1",
@@ -486,7 +527,7 @@ func TestReportingHandlers_GenerateMultiReport_TrimsOptionalFieldsAndUsesCanonic
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "vm-1")
 	body := `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"csv","metricType":" cpu ","title":" Fleet report "}`
 	req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(body))
 	rr := httptest.NewRecorder()
@@ -520,7 +561,7 @@ func TestReportingHandlers_GenerateReport_UsesCatalogDefaultRangeDuration(t *tes
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(
 		http.MethodGet,

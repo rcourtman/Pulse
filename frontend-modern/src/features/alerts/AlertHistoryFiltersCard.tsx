@@ -24,7 +24,9 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
     deserialize: deserializePlatformEstateCountsVisibility,
   });
   const severityCount = (value: AlertSeverityFilter): number | undefined =>
-    countsVisible() ? props.state.countForSeverity(value) : undefined;
+    countsVisible() && !props.state.loading() && !props.state.historyLoadError()
+      ? props.state.countForSeverity(value)
+      : undefined;
   const buildFilters = (): FilterDef[] => [
     {
       id: 'alert-period',

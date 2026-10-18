@@ -177,6 +177,12 @@ export interface Node {
   /** Typed telemetry from a linked Unified Agent, when this PVE node is hybrid. */
   sensors?: HostSensorSummary;
   temperature?: Temperature; // CPU/NVMe temperatures
+  /**
+   * The node's primary CPU temperature in Celsius, chosen by the backend
+   * (models.PrimaryCPUTemperatureCelsius) and recorded under the same rule in
+   * the node's history. Show this value; never recompute it from `temperature`.
+   */
+  cpuTemperature?: number;
   temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
   pendingUpdates?: number; // Number of pending apt updates
   pendingUpdatesCheckedAt?: string; // When updates were last checked
@@ -626,6 +632,9 @@ export interface HostDiskSMART {
   temperature: number; // Temperature in Celsius
   health?: string; // PASSED, FAILED, UNKNOWN
   standby?: boolean; // True if disk was in standby
+  // A non-available temperature state marks the value as last known, such as
+  // a host agent that stopped reporting.
+  collection?: import('./resource').PhysicalDiskCollectionStatus;
 }
 
 export interface HostRAIDArray {
@@ -1170,6 +1179,15 @@ export interface PBSJobHealthEvidence {
   error?: string;
 }
 
+/** Server-owned provenance of the selected guest-memory reading. */
+export interface MemoryObservation {
+  /** current, last-known or unavailable. Unrecognised/absent states are unknown. */
+  state: string;
+  source: string;
+  /** Original source time, never the refreshed resource LastSeen. */
+  observedAt?: string;
+}
+
 export interface Memory {
   total: number;
   used: number;
@@ -1178,6 +1196,7 @@ export interface Memory {
   cache?: number;
   /** Total is known, but no cache-aware source can establish current usage. */
   usageUnavailable?: boolean;
+  observation?: MemoryObservation;
   usage: number;
   balloon?: number;
   swapUsed?: number;
@@ -1366,14 +1385,54 @@ export interface Alert {
   ackUser?: string;
   correlation?: AlertCorrelation;
   metadata?: Record<string, unknown>;
+  /**
+   * Live evaluation behind an open threshold alert. `value`, `message` and
+   * `lastSeen` keep the last reading that met the trigger; this is the
+   * reading being evaluated now and why the alert has not cleared.
+   */
+  metricStatus?: MetricAlertStatus;
   operationalRecord?: OperationalRecord;
   latestTransition?: LifecycleTransition;
   transitions?: LifecycleTransition[];
   evidence?: EvidenceEnvelope[];
+  // Set only on a closed alert whose condition did not clear, such as a node
+  // metric handed to its Pulse agent. Absent for an ordinary recovery.
+  resolution?: AlertResolution;
+}
+
+// Why an alert closed without recovering (alerts.AlertResolution).
+export interface AlertResolution {
+  reason: 'moved_to_agent' | (string & {});
+  successorResourceId?: string;
+  successorName?: string;
+  // The alert engine's one-line account; carried on state snapshots only.
+  summary?: string;
 }
 
 export interface ResolvedAlert extends Alert {
   resolvedTime: string;
+}
+
+export type MetricAlertPhase = 'breaching' | 'latched' | 'recovering';
+
+export interface MetricAlertStatus {
+  phase: MetricAlertPhase;
+  /** Value compared with the rule (the average for a rolling-average rule). */
+  value: number;
+  /** Latest sample when the rule evaluates a rolling average. */
+  rawValue?: number;
+  evaluationWindowSeconds?: number;
+  unit?: string;
+  observedAt: string;
+  /** Dates Alert.value, not the newer held/recovering observation; absent when unknown. */
+  lastBreachAt?: string;
+  /** Opens at or above this value. */
+  trigger: number;
+  /** Clears after staying at or below this value for recoveryDelaySeconds. */
+  recovery: number;
+  recoveryDelaySeconds?: number;
+  recoveryStartedAt?: string;
+  recoveryElapsedSeconds?: number;
 }
 
 // One entry from the append-only alert event log

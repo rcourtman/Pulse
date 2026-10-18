@@ -13,6 +13,13 @@ import type {
   ConnectionFleetVersionDrift,
 } from '@/api/connections';
 import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
+import {
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildTrueNASPath,
+  buildVmwarePath,
+} from '@/routing/resourceLinks';
 
 export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string => {
   if (!lastSeen) return 'No activity yet';
@@ -256,6 +263,11 @@ export interface FleetGovernanceSignal {
   label: string;
   detail: string;
   tone: FleetGovernanceSignalTone;
+  // An agent that is behind or has an update waiting is maintenance, not a
+  // problem: the row's Agent update badge already says so and opens Agent
+  // Doctor, so the row does not repeat it as its problem line or count it as
+  // needing attention. The Manage drawer still lists the signal.
+  maintenance?: boolean;
 }
 
 const DEFAULT_FLEET_GOVERNANCE: ConnectionFleetGovernance = {
@@ -462,6 +474,7 @@ const versionSignal = (state: ConnectionFleetVersionDrift): FleetGovernanceSigna
         label: 'Version behind',
         detail: 'This agent is behind the current Pulse Agent target.',
         tone: 'warning',
+        maintenance: true,
       };
     case 'current':
       return {
@@ -686,6 +699,7 @@ const updateSignal = (
         label: 'Update available',
         detail: 'A newer Pulse Agent binary is available for this system.',
         tone: 'warning',
+        maintenance: true,
       };
     case 'checking':
       return {
@@ -906,8 +920,12 @@ export const fleetGovernanceSignalsForConnection = (
   return signals;
 };
 
+// The row shows at most three highlights. A row's problem is picked from the
+// whole visible list (limit Infinity) so a critical signal from a second
+// attached agent cannot fall behind the cap.
 export const visibleFleetGovernanceSignals = (
   signals: readonly FleetGovernanceSignal[],
+  limit = 3,
 ): FleetGovernanceSignal[] => {
   const hasPassiveAgentConfigConfirmation = signals.some(isPassiveAgentConfigConfirmationSignal);
   const visibleSignals = signals.filter((signal) => {
@@ -929,11 +947,14 @@ export const visibleFleetGovernanceSignals = (
     if (signal.key === 'command-policy' && signal.tone === 'info') return false;
     return true;
   });
+  // Problems lead; maintenance (an agent behind or with an update waiting)
+  // follows them, since the Agent update badge already carries it.
   const attention = visibleSignals.filter(
-    (signal) => signal.tone === 'critical' || signal.tone === 'warning',
+    (signal) => !signal.maintenance && (signal.tone === 'critical' || signal.tone === 'warning'),
   );
-  const control = visibleSignals.filter((signal) => signal.tone === 'info');
-  return [...attention, ...control].slice(0, 3);
+  const maintenance = visibleSignals.filter((signal) => signal.maintenance);
+  const control = visibleSignals.filter((signal) => !signal.maintenance && signal.tone === 'info');
+  return [...attention, ...maintenance, ...control].slice(0, limit);
 };
 
 const isPassiveAgentConfigConfirmationSignal = (signal: FleetGovernanceSignal): boolean => {
@@ -1017,17 +1038,40 @@ export interface InfrastructureSystemRow {
   canRemove: boolean;
   isAgent: boolean;
   isCluster: boolean;
+  /** Proxmox cluster name for cluster rows; the cluster agent deploy API is keyed on it. */
+  clusterName?: string;
   attachedConnections: Connection[];
   members: InfrastructureSystemMemberRow[];
   connection: Connection;
 }
 
+// The page that shows a connected system's data. Settings lists the
+// connection, but a PBS reads as Active here while its servers live under
+// Proxmox > Backups, which users did not find (#2905). Agent hosts appear on
+// different pages depending on what they run, and availability checks under
+// Machines, so neither has a single destination.
+const MONITORING_PATH_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, string>> = {
+  pve: buildProxmoxPath(),
+  pbs: buildProxmoxPath('backups'),
+  pmg: buildProxmoxPath('mail'),
+  vmware: buildVmwarePath(),
+  truenas: buildTrueNASPath(),
+  docker: buildDockerPath(),
+  kubernetes: buildKubernetesPath(),
+};
+
+export const infrastructureRowMonitoringPath = (
+  row: Pick<InfrastructureSystemRow, 'ownerType'>,
+): string | undefined => MONITORING_PATH_BY_CONNECTION_TYPE[row.ownerType];
+
 // Pick the single most important problem to surface in the row's status
 // column. Critical beats warning; otherwise first wins — the upstream
 // builder has already prioritised highlights (attention before info).
+// Maintenance signals never become the problem (see FleetGovernanceSignal).
 export const primaryRowProblem = (
-  signals: readonly FleetGovernanceSignal[],
+  allSignals: readonly FleetGovernanceSignal[],
 ): InfrastructureRowProblem | undefined => {
+  const signals = allSignals.filter((signal) => !signal.maintenance);
   const critical = signals.find((signal) => signal.tone === 'critical');
   if (critical) {
     return { label: critical.label, detail: critical.detail, tone: 'critical' };

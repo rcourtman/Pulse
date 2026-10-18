@@ -1,6 +1,10 @@
 package alerts
 
-func defaultAlertConfig() AlertConfig {
+// DefaultAlertConfig returns the factory alert configuration: the one a new
+// Manager starts with and the one a fresh install loads before alerts.json
+// exists. Callers that need factory values build them here instead of
+// declaring their own copy.
+func DefaultAlertConfig() AlertConfig {
 	alertOrphaned := true
 	return AlertConfig{
 		Enabled:                true,
@@ -106,9 +110,11 @@ func defaultAlertConfig() AlertConfig {
 			NetworkIn:   &HysteresisThreshold{Trigger: 0, Clear: 0},
 			NetworkOut:  &HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
-		TrueNASDiskDefaults: ThresholdConfig{
-			Temperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
-		},
+		// TrueNAS disk temperature is unset: each disk follows the disk
+		// temperature policy for its type (DiskTempByType) until the user
+		// saves a TrueNAS-wide value.
+		TrueNASDiskDefaults:          ThresholdConfig{},
+		TrueNASDiskTemperatureByType: true,
 		VMwareDefaults: ThresholdConfig{
 			CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
@@ -148,6 +154,7 @@ func defaultAlertConfig() AlertConfig {
 			"truenas-pool":     5,
 			"truenas-dataset":  5,
 			"truenas-disk":     5,
+			"proxmox-disk":     5,
 			"vmware-host":      5,
 			"vmware-vm":        5,
 			"vmware-datastore": 5,
@@ -162,7 +169,7 @@ func defaultAlertConfig() AlertConfig {
 				Enabled:  false, // OFF - users should opt-in to quiet hours
 				Start:    "22:00",
 				End:      "08:00",
-				Timezone: "America/New_York",
+				Timezone: "", // Unset: the server's local zone; the settings page offers the browser's zone
 				Days: map[string]bool{
 					"monday":    true,
 					"tuesday":   true,
@@ -194,9 +201,9 @@ func defaultAlertConfig() AlertConfig {
 			},
 		},
 		// Alert TTL defaults
-		MaxAlertAgeDays:           7,  // Cleanup unacknowledged alerts inactive for 7 days
-		MaxAcknowledgedAgeDays:    1,  // Auto-cleanup acknowledged alerts older than 1 day
-		AutoAcknowledgeAfterHours: 24, // Auto-acknowledge alerts after 24 hours
+		MaxAlertAgeDays:           7, // Cleanup unacknowledged alerts inactive for 7 days
+		MaxAcknowledgedAgeDays:    1, // Auto-cleanup acknowledged alerts older than 1 day
+		AutoAcknowledgeAfterHours: 0, // Off: a firing alert stays unacknowledged until someone acknowledges it
 		// Flapping detection defaults
 		FlappingEnabled:         true, // Enable flapping detection
 		FlappingWindowSeconds:   300,  // 5 minute window

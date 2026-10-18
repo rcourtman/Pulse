@@ -272,3 +272,45 @@ func TestBuildReportNarratorPayload_PeriodFormatting(t *testing.T) {
 		t.Errorf("Period.Hours = %d, want 24", payload.Period.Hours)
 	}
 }
+
+// A node alert that moved to its Pulse agent closed without recovering, so the
+// model must not see it as resolved: it gets the engine's account instead.
+func TestBuildReportNarratorPayload_HandoverIsNotARecovery(t *testing.T) {
+	resolvedAt := time.Date(2026, 10, 6, 15, 0, 0, 0, time.UTC)
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	payload := buildReportNarratorPayload(reporting.NarrativeInput{
+		Alerts: []reporting.AlertInfo{
+			{
+				Type:         "memory",
+				Level:        "warning",
+				Message:      "Node memory at 95%",
+				ResolvedTime: &resolvedAt,
+				Resolution: &reporting.AlertResolution{
+					Reason:              reporting.AlertResolutionMovedToAgent,
+					SuccessorResourceID: "agent:host-1",
+					SuccessorName:       "pve1 (Host Agent)",
+					Summary:             summary,
+				},
+			},
+			{Type: "cpu", Level: "warning", Message: "Node CPU at 91%", ResolvedTime: &resolvedAt},
+			{Type: "memory", Level: "warning", Message: "Agent memory at 94%", ResourceID: "agent:host-1"},
+		},
+	})
+	if len(payload.Alerts) != 3 {
+		t.Fatalf("alerts = %+v", payload.Alerts)
+	}
+	moved, recovered, successor := payload.Alerts[0], payload.Alerts[1], payload.Alerts[2]
+	if moved.Resolved || moved.Resolution != summary || !moved.SuccessorAlertListed {
+		t.Fatalf("moved alert must carry its resolution, point at the listed agent alert and not read as resolved, got %+v", moved)
+	}
+	if successor.Resolved || successor.Resolution != "" || successor.SuccessorAlertListed {
+		t.Fatalf("the agent's open alert is an ordinary open alert, got %+v", successor)
+	}
+	if !recovered.Resolved || recovered.Resolution != "" {
+		t.Fatalf("an ordinary recovery stays resolved, got %+v", recovered)
+	}
+	if !strings.Contains(reportNarratorSystemPrompt, `An alert with a "resolution" closed without recovering`) ||
+		!strings.Contains(reportNarratorSystemPrompt, `"successor_alert_listed": true`) {
+		t.Fatal("system prompt must tell the model a resolution is not a recovery and how to count it once")
+	}
+}

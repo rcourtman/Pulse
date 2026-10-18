@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "e72df20395b0659aadd08deacd4a1549cda9b26b",
+  "verified_at": "2026-10-14T13:37:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "095e0365fc6bf30c8a5b5d88ac03616576bd66a71496d21a158330817dbdff5d"
+  },
+  "routes": [
+    "browser-tests/proxmox-docker-rows.html (production DockerContainersTable row and ResourceDetailDrawer, Chromium via Playwright 1.56.1 on pulse-dev)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "running container failing its health check: row dot and drawer header dot both red \"Unhealthy\" (old code: header green)",
+    "exited container row unchanged",
+    "reviewed by Sol from the desktop and phone screenshots"
+  ],
+  "interactions": [
+    "row expand by pointer (desktop) and tap (phone)"
+  ]
+}

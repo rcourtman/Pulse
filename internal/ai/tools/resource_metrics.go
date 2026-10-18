@@ -34,6 +34,7 @@ func (e *PulseToolExecutor) resolvePerformanceResource(reference, kind string) (
 	var matches []unifiedresources.Resource
 	for _, resourceType := range []unifiedresources.ResourceType{
 		unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypeCeph,
 	} {
 		if kind != "" && canonicalQueryResourceType(kind) != string(resourceType) {
 			continue

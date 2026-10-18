@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDockerImageRegistryLink } from '../dockerImageReference';
+import { getDockerImageRegistryLink, splitDockerImageReference } from '../dockerImageReference';
 
 describe('getDockerImageRegistryLink', () => {
   it.each([
@@ -34,4 +34,27 @@ describe('getDockerImageRegistryLink', () => {
   ])('does not invent a public link for %s', (image) => {
     expect(getDockerImageRegistryLink(image)).toBeNull();
   });
+});
+
+describe('splitDockerImageReference', () => {
+  it.each([
+    [
+      'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+      'ghcr.io/pulse-demo/',
+      'backup-coordinator:2026.04',
+    ],
+    ['lscr.io/linuxserver/sonarr:latest', 'lscr.io/linuxserver/', 'sonarr:latest'],
+    ['registry.example.com:5000/team/app:1.2', 'registry.example.com:5000/team/', 'app:1.2'],
+    ['louislam/uptime-kuma:1.23.16', 'louislam/', 'uptime-kuma:1.23.16'],
+    ['quay.io/org/app@sha256:abc/def', 'quay.io/org/', 'app@sha256:abc/def'],
+  ])('keeps the repository and tag of %s in the tail', (reference, head, tail) => {
+    expect(splitDockerImageReference(reference)).toEqual({ head, tail });
+  });
+
+  it.each(['postgres:16.4', 'sha256:0123456789ab', '<none>:<none>', '—', '/app', 'team/'])(
+    'leaves %s whole when it has no repository path to split',
+    (reference) => {
+      expect(splitDockerImageReference(reference)).toEqual({ head: reference, tail: '' });
+    },
+  );
 });

@@ -33,7 +33,10 @@ import {
   getAlertOverviewHydrationState,
   getAlertsPageHeaderMeta,
 } from '@/utils/alertOverviewPresentation';
-import { getAlertConfigLeaveConfirmation } from '@/utils/alertConfigPresentation';
+import {
+  getAlertConfigLeaveConfirmation,
+  shouldConfirmAlertsLeave,
+} from '@/utils/alertConfigPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
@@ -181,12 +184,13 @@ export function Alerts() {
     });
   });
 
-  // Warn when navigating within the app
+  // Warn when navigating within the app. Narrowing the same page (the
+  // thresholds search lives in `?q=`, sections in `#`) keeps the edits, so it
+  // must not ask on every keystroke.
   useBeforeLeave((e) => {
-    if (hasUnsavedChanges()) {
-      if (!confirm(getAlertConfigLeaveConfirmation())) {
-        e.preventDefault();
-      }
+    if (!shouldConfirmAlertsLeave(e.to, e.from.pathname, hasUnsavedChanges())) return;
+    if (!confirm(getAlertConfigLeaveConfirmation())) {
+      e.preventDefault();
     }
   });
 
@@ -234,12 +238,11 @@ export function Alerts() {
         description={headerMeta().description}
         actions={
           <Show when={activeTab() === 'overview' && !readOnlySession()}>
-            <div class="flex items-center gap-3">
-              <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
+            <label class="flex cursor-pointer items-center gap-3">
+              <span class="text-sm font-medium text-base-content">
                 {alertActivationPresentation().label}
               </span>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <span class="sr-only">{t('alerts.nav.toggleAlerts')}</span>
+              <span class="relative inline-flex items-center">
                 <input
                   type="checkbox"
                   class="sr-only peer"
@@ -253,11 +256,11 @@ export function Alerts() {
                     }
                   }}
                 />
-                <div class={alertActivationPresentation().trackClass}>
+                <span class={alertActivationPresentation().trackClass}>
                   <span class={alertActivationPresentation().thumbClass} />
-                </div>
-              </label>
-            </div>
+                </span>
+              </span>
+            </label>
           </Show>
         }
       />

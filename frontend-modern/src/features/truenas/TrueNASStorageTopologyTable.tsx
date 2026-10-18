@@ -18,7 +18,6 @@ import {
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
-  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   type PlatformTableFilterOption,
   type PlatformTableSortState,
@@ -27,19 +26,31 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformIssueReason,
+  type PlatformIssue,
+  type PlatformIssueTone,
+} from '@/features/platformPage/PlatformIssueReason';
+import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+  getPhysicalDiskTemperaturePresentation,
+} from '@/features/storageBackups/diskTemperaturePresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import {
   buildTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRowsByKind,
-  getTrueNASResourceDisplayStatus,
-  mapTrueNASStorageStatus,
+  getTrueNASStorageDotStatus,
+  getTrueNASStorageIssue,
+  type TrueNASDiskTemperatureThresholdResolver,
+  type TrueNASStorageIssue,
   type TrueNASStorageStatusFilter,
   type TrueNASStorageKindFilter,
   type TrueNASStorageTopologyKind,
@@ -193,43 +204,55 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
   );
 };
 
-const riskLabel = (row: TrueNASStorageTopologyRow): string => {
-  const risk =
-    asTrimmedString(row.resource.storage?.risk?.level) ||
-    asTrimmedString(row.resource.physicalDisk?.risk?.level);
-  if (risk) return formatPlatformTableTitleCaseValue(risk);
-  const incidentCount = row.resource.incidentCount ?? row.resource.incidents?.length ?? 0;
-  if (incidentCount > 0) return `${incidentCount} alert${incidentCount === 1 ? '' : 's'}`;
-  const mapped = mapTrueNASStorageStatus(row.resource);
-  if (mapped === 'attention') return 'Attention';
-  if (mapped === 'offline') return 'Offline';
-  if (mapped === 'healthy') return 'Healthy';
-  return 'Unknown';
+// A disk row may carry a last known temperature it did not collect now, such
+// as a host agent's reading after the agent stopped reporting on a merged disk.
+const diskTemperatureReading = (row: TrueNASStorageTopologyRow) => {
+  const disk = row.kind === 'disk' ? row.resource.physicalDisk : undefined;
+  return disk
+    ? getPhysicalDiskTemperaturePresentation({
+        temperature: disk.temperature ?? 0,
+        collection: disk.collection,
+      })
+    : null;
 };
 
-const riskPillClass = (row: TrueNASStorageTopologyRow): string => {
-  const mapped = mapTrueNASStorageStatus(row.resource);
-  if (mapped === 'attention') {
-    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  }
-  if (mapped === 'offline') {
-    return 'border-red-300/50 bg-red-500/10 text-red-700 dark:text-red-300';
-  }
-  if (mapped === 'healthy') {
-    return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  }
-  return 'border-border bg-surface-alt text-muted';
+// A retained reading reads as last known, never as the disk's temperature now.
+const DiskTemperatureCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
+  const reading = () => diskTemperatureReading(props.row);
+  const value = () =>
+    props.row.kind === 'disk' ? props.row.resource.physicalDisk?.temperature : undefined;
+  return (
+    <Show
+      when={reading()?.current === false}
+      fallback={<PlatformTableTemperatureValue value={value()} emptyText="-" />}
+    >
+      <span
+        class={PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}
+        title={reading()?.title}
+        data-temperature-reading="last-known"
+      >
+        <PlatformTableTemperatureValue value={value()} />
+        <span class="sr-only">, last known</span>
+      </span>
+    </Show>
+  );
 };
 
-const RiskPill: Component<{ row: TrueNASStorageTopologyRow }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${riskPillClass(
-      props.row,
-    )}`}
-  >
-    {riskLabel(props.row)}
-  </span>
-);
+const ISSUE_TONES: Record<TrueNASStorageIssue['status'], PlatformIssueTone> = {
+  attention: 'warning',
+  offline: 'danger',
+  unknown: 'muted',
+};
+
+const toPlatformIssue = (issue: TrueNASStorageIssue | null): PlatformIssue | null =>
+  issue && { tone: ISSUE_TONES[issue.status], label: issue.label, reasons: issue.reasons };
+
+const HEALTH_SORT_RANK: Record<TrueNASStorageIssue['status'] | 'healthy', number> = {
+  attention: 0,
+  offline: 1,
+  unknown: 2,
+  healthy: 3,
+};
 
 // Columns a user can sort by. Usage / Size orders pools and datasets on their
 // used percentage and disks on their raw size, so same-kind siblings compare
@@ -249,6 +272,7 @@ type TrueNASStorageSortKey = (typeof TRUENAS_STORAGE_SORT_KEYS)[number];
 const getTrueNASStorageSortValue = (
   row: TrueNASStorageTopologyRow,
   key: TrueNASStorageSortKey,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): PlatformTableSortValue => {
   switch (key) {
     case 'resource':
@@ -267,12 +291,15 @@ const getTrueNASStorageSortValue = (
     case 'endurance':
       return row.kind === 'disk' ? (diskEndurance(row)?.value ?? null) : null;
     case 'temp': {
-      if (row.kind !== 'disk') return null;
-      const temperature = row.resource.physicalDisk?.temperature;
-      return typeof temperature === 'number' && Number.isFinite(temperature) ? temperature : null;
+      // Hottest first ranks current readings only; a last known one sorts as
+      // no reading.
+      const reading = diskTemperatureReading(row);
+      return reading?.current ? (row.resource.physicalDisk?.temperature ?? null) : null;
     }
     case 'health':
-      return riskLabel(row);
+      return HEALTH_SORT_RANK[
+        getTrueNASStorageIssue(row.resource, resolveDiskTemperatureThresholds)?.status ?? 'healthy'
+      ];
     default:
       key satisfies never;
       return null;
@@ -288,6 +315,7 @@ const getTrueNASStorageSortValue = (
 const sortTrueNASStorageTopologyRows = (
   rows: readonly TrueNASStorageTopologyRow[],
   sort: PlatformTableSortState<TrueNASStorageSortKey>,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): readonly TrueNASStorageTopologyRow[] => {
   if (!sort.sortKey()) return rows;
   const present = new Set(rows.map((row) => row.id));
@@ -305,7 +333,9 @@ const sortTrueNASStorageTopologyRows = (
   }
   const ordered: TrueNASStorageTopologyRow[] = [];
   const emit = (siblings: TrueNASStorageTopologyRow[]) => {
-    for (const row of sort.sortRows(siblings, getTrueNASStorageSortValue)) {
+    for (const row of sort.sortRows(siblings, (sibling, key) =>
+      getTrueNASStorageSortValue(sibling, key, resolveDiskTemperatureThresholds),
+    )) {
       ordered.push(row);
       const children = childrenByParent.get(row.id);
       if (children) emit(children);
@@ -325,7 +355,9 @@ export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
 const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: JSX.Element }> = (
   props,
 ) => {
-  const displayStatus = () => getTrueNASResourceDisplayStatus(props.row.resource);
+  const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
+  const displayStatus = () =>
+    getTrueNASStorageDotStatus(props.row.resource, getTrueNASDiskTemperatureThresholds);
   const indicator = () => getSimpleStatusIndicator(displayStatus());
   const name = () => resourceName(props.row.resource);
   return (
@@ -359,7 +391,12 @@ export const TrueNASStorageTopologyTable: Component<{
   kindFilter?: TrueNASStorageKindFilter;
   onKindFilterChange?: (value: TrueNASStorageKindFilter) => void;
 }> = (props) => {
-  const rows = createMemo(() => buildTrueNASStorageTopologyRows(props.resources));
+  // Disk heat follows the thresholds each disk's temperature alert fires at:
+  // its own override, the TrueNAS-wide value, then its type's policy.
+  const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
+  const rows = createMemo(() =>
+    buildTrueNASStorageTopologyRows(props.resources, getTrueNASDiskTemperatureThresholds),
+  );
   const [internalKindFilter, setInternalKindFilter] = createSignal<TrueNASStorageKindFilter>('all');
   const kindFilter = () => props.kindFilter ?? internalKindFilter();
   const setKindFilter = (value: TrueNASStorageKindFilter) => {
@@ -373,7 +410,8 @@ export const TrueNASStorageTopologyTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: scopedRows,
     initialStatus: 'all' as TrueNASStorageStatusFilter,
-    filter: filterTrueNASStorageTopologyRows,
+    filter: (rows, search, status) =>
+      filterTrueNASStorageTopologyRows(rows, search, status, getTrueNASDiskTemperatureThresholds),
   });
   const kindFilters = createMemo<FilterDef[]>(() => [
     {
@@ -390,6 +428,7 @@ export const TrueNASStorageTopologyTable: Component<{
             filterTrueNASStorageTopologyRowsByKind(rows(), option.value),
             tableState.search(),
             tableState.status(),
+            getTrueNASDiskTemperatureThresholds,
           ).length,
         })),
       value: kindFilter,
@@ -409,7 +448,13 @@ export const TrueNASStorageTopologyTable: Component<{
     sortKeys: TRUENAS_STORAGE_SORT_KEYS,
     descendingFirst: ['usage', 'disks', 'temp'],
   });
-  const sortedRows = createMemo(() => sortTrueNASStorageTopologyRows(tableState.filtered(), sort));
+  const sortedRows = createMemo(() =>
+    sortTrueNASStorageTopologyRows(
+      tableState.filtered(),
+      sort,
+      getTrueNASDiskTemperatureThresholds,
+    ),
+  );
 
   return (
     <Show
@@ -481,7 +526,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="usage"
-                  class="platform-table-mobile-w-25 md:w-[28%]"
+                  class="platform-table-mobile-w-25 md:w-[20%]"
                 >
                   <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
@@ -489,7 +534,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
-                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
                 </PlatformSortableTableHead>
@@ -497,15 +542,15 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[8%]`}
+                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[7%]`}
                 >
                   Temp
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
-                  kind="badge"
+                  kind="text"
                   sort={sort}
                   sortKey="health"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'platform-table-phone-hidden'} md:w-[14%]`}
+                  class="platform-table-phone-hidden md:w-[24%]"
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
@@ -516,6 +561,9 @@ export const TrueNASStorageTopologyTable: Component<{
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(row) => {
                     const resource = () => row.resource;
+                    const issue = createMemo(() =>
+                      getTrueNASStorageIssue(resource(), getTrueNASDiskTemperatureThresholds),
+                    );
                     const detailRowId = () => drawer.detailRowId(resource());
                     const isExpanded = () => drawer.isExpanded(resource());
                     return (
@@ -571,23 +619,15 @@ export const TrueNASStorageTopologyTable: Component<{
                               kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'
                             } text-base-content`}
                           >
-                            <PlatformTableTemperatureValue
-                              value={
-                                row.kind === 'disk'
-                                  ? row.resource.physicalDisk?.temperature
-                                  : undefined
-                              }
-                              emptyText="-"
-                            />
+                            <DiskTemperatureCell row={row} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} ${
-                              kindFilter() === 'disks'
-                                ? 'table-cell'
-                                : 'platform-table-phone-hidden'
-                            }`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
                           >
-                            <RiskPill row={row} />
+                            <PlatformIssueReason
+                              issue={toPlatformIssue(issue())}
+                              data-truenas-storage-health={issue()?.status}
+                            />
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

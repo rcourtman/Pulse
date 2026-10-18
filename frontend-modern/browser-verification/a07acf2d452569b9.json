@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "605ebed18c46754d0f4cce36b5a1358bce9b82f3",
+  "changed_paths": [
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "f7a01e0e4fd7b1b64cff64f9ca4e941fc9122aa1c5cf2d373a4be27dda9ee609"
+  },
+  "routes": [
+    "Workloads VM row and full drawer (synthetic observations)",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis"
+  ],
+  "states": [
+    "Windows missing read",
+    "Android retained read, quantitative values last known/no utilization bar",
+    "Provider-disabled agent",
+    "Unknown reason without raw-detail disclosure",
+    "Same guest current read removes uncertainty link/restores utilization bar"
+  ],
+  "interactions": [
+    "Keyboard Enter on desktop disclosure and help link",
+    "Trusted phone row tap and help link",
+    "Follow real Docs renderer and fragment destination; no off-origin or mutating requests"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-06T03:40:15.375Z",
+  "evidence": {
+    "script": "frontend-modern/browser-tests/guest-reading-help.cjs",
+    "script_sha256": "05cd1bce89467fe3918f748ea9dc1762f88bb8a7dcfc609f741a3332879804f2",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "chromium-desktop",
+        "browser": "141.0.7390.37",
+        "width": 1365
+      },
+      {
+        "name": "webkit-phone",
+        "browser": "26.0",
+        "width": 390
+      }
+    ],
+    "captures": [
+      {
+        "file": "chromium-desktop-missing-windows.png",
+        "sha256": "a9d2ce9280f8fa889d85a9c0d18ba32391dba23a1a0bacae4df2a5c9527798fa"
+      },
+      {
+        "file": "chromium-desktop-retained-android.png",
+        "sha256": "7770bfe63ff9d85531a4fac6effe9e6c34ebec539b68d58e91e7b692534ea0e0"
+      },
+      {
+        "file": "chromium-desktop-disabled.png",
+        "sha256": "81acb12c2404d612f994f0225caa71d878548bfb3eb6490013d67577164a3346"
+      },
+      {
+        "file": "chromium-desktop-unknown.png",
+        "sha256": "cd51e72118509a6684eac988a42af81455b56618a3df568691d871294a5c0c14"
+      },
+      {
+        "file": "webkit-phone-missing-windows.png",
+        "sha256": "f20d99d128b525ce2e6f4b26c124adc459ba9f871b80b7661a32c9053cbd6dfa"
+      },
+      {
+        "file": "webkit-phone-retained-android.png",
+        "sha256": "0ce9f5109d283a7501e92befb3fb01cdc44ae84a35604be70a44d94f59dc7277"
+      },
+      {
+        "file": "webkit-phone-disabled.png",
+        "sha256": "fd18d29e47d084abce6087114c1a10a94a49fbb21083f7cfc6ce8b81e3919d16"
+      },
+      {
+        "file": "webkit-phone-unknown.png",
+        "sha256": "b6b1182129540afcc0662e3b847379342256553da21e57d62b91d606a0ca7372"
+      }
+    ],
+    "limits": "Static production-component preview with synthetic observations/APIs. No native guest, collector, cause, thaw, writes, restart, installed or release acceptance.",
+    "note": "Fresh pass after copy audit punctuation correction. Prior receipt remains bound to its own parent and unchanged drawer content, not rebound."
+  }
+}

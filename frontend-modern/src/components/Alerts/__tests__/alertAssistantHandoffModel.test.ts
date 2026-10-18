@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Alert } from '@/types/api';
 import { buildAlertAssistantHandoff } from '../alertAssistantHandoffModel';
+import { makeSystemAlert, SYSTEM_ALERT_TYPES } from '@/features/alerts/__fixtures__/systemAlerts';
 
 function makeAlert(overrides: Partial<Alert> = {}): Alert {
   return {
@@ -22,6 +23,39 @@ function makeAlert(overrides: Partial<Alert> = {}): Alert {
 }
 
 describe('alertAssistantHandoffModel', () => {
+  it.each(SYSTEM_ALERT_TYPES)(
+    'explains Pulse %s without fabricated metric or resource context',
+    (type) => {
+      const alert = makeSystemAlert(type);
+      const { context } = buildAlertAssistantHandoff({ alert, resourceType: 'vm', vmid: 101 });
+      expect(context.targetType).toBeUndefined();
+      expect(context.targetId).toBeUndefined();
+      expect(context.handoffResources).toEqual([]);
+      expect(context.autonomousMode).toBe(false);
+      expect(context.handoffContext).toContain('Scope: Pulse itself (not a monitored resource)');
+      expect(context.handoffContext).toContain(alert.message);
+      expect(context.handoffContext).toContain(`Alert Identifier: ${alert.id}`);
+      expect(context.handoffContext).toContain('Operator Boundary:');
+      expect(context.handoffContext).not.toMatch(/Current Value:|Threshold:|Resource ID:|Node:/);
+      expect(context.context?.guestName).toBeUndefined();
+      expect(context.context?.vmid).toBeUndefined();
+      expect(context.briefing?.detailLines?.join('\n')).not.toMatch(/Current value|threshold/);
+    },
+  );
+
+  it('retains system scope for future types and legacy IDs carrying system metadata', () => {
+    const { context } = buildAlertAssistantHandoff({
+      alert: makeSystemAlert('future-condition', {
+        id: 'legacy-system-id',
+        resourceId: 'vm-wrong',
+        node: 'wrong-node',
+        metadata: { systemAlert: true, resourceType: 'vm' },
+      }),
+    });
+    expect(context.targetId).toBeUndefined();
+    expect(context.handoffResources).toEqual([]);
+    expect(context.handoffContext).not.toMatch(/wrong-node|vm-wrong/);
+  });
   it('builds a visible approval-required alert handoff without command payloads', () => {
     const handoff = buildAlertAssistantHandoff({
       alert: makeAlert(),
@@ -122,5 +156,117 @@ describe('alertAssistantHandoffModel', () => {
 
     const briefing = handoff.context.briefing as { detailLines: string[] };
     expect(briefing.detailLines).toContain('Current value 92.5% · threshold 80.0%');
+  });
+
+  it('hands the assistant the live reading, not the breach an open alert still holds', () => {
+    const handoff = buildAlertAssistantHandoff({
+      alert: makeAlert({
+        type: 'temperature',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        threshold: 80,
+        metricStatus: {
+          phase: 'recovering',
+          value: 72,
+          unit: '°C',
+          observedAt: '2026-05-07T10:04:50.000Z',
+          trigger: 80,
+          recovery: 75,
+          recoveryDelaySeconds: 300,
+          recoveryElapsedSeconds: 120,
+        },
+      }),
+      now: new Date('2026-05-07T10:05:00.000Z'),
+    });
+
+    const briefing = handoff.context.briefing as { detailLines: string[] };
+    expect(briefing.detailLines[0]).toContain('72.0°C');
+    expect(briefing.detailLines.join('\n')).not.toContain('Node temperature at 80.0°C');
+    expect(handoff.context.handoffContext).toContain('Current Value: 72.0°C');
+    expect(handoff.context.handoffContext).toContain('Alert Phase: recovering');
+    expect(handoff.context.handoffContext).toContain('Clears At: 75.0°C or lower for 300s');
+    expect(handoff.context.handoffContext).toContain('Recovery Progress: 120s of 300s');
+    expect(handoff.context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
+  });
+});
+
+const BREACH_NOW = new Date('2026-10-06T10:52:00Z');
+const heldAlert = (overrides: Partial<Alert> = {}): Alert =>
+  makeAlert({
+    type: 'temperature',
+    value: 80,
+    threshold: 80,
+    message: 'Node temperature at 80.0°C',
+    startTime: '2026-10-06T07:57:44Z',
+    lastSeen: '2026-10-06T10:51:59Z',
+    metricStatus: {
+      phase: 'latched',
+      value: 76,
+      unit: '°C',
+      observedAt: '2026-10-06T10:51:50Z',
+      lastBreachAt: '2026-10-06T11:31:59.123456789+01:00',
+      trigger: 80,
+      recovery: 75,
+      recoveryDelaySeconds: 300,
+    },
+    ...overrides,
+  });
+
+describe('Assistant held breach date evidence', () => {
+  it.each(['latched', 'recovering'] as const)(
+    'keeps the %s breach date distinct from current, poll and start time',
+    (phase) => {
+      const alert = heldAlert();
+      alert.metricStatus = { ...alert.metricStatus!, phase };
+      const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+      expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:31:59.123Z');
+      expect(context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
+      expect(context.handoffContext).toContain('Current Value: 76.0°C');
+      expect(context.autonomousMode).toBe(false);
+      expect(context.handoffContext).toContain('Operator Boundary:');
+    },
+  );
+
+  it('uses a valid legacy breach date only when no valid status date exists', () => {
+    const alert = heldAlert({ lastSeen: '2026-10-06T10:32:00Z' });
+    alert.metricStatus!.lastBreachAt = 'not-a-date';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:32:00.000Z');
+  });
+
+  it.each([
+    undefined,
+    '',
+    'unknown',
+    'bad',
+    '0001-01-01T00:00:00Z',
+    '2026-02-30T10:00:00Z',
+    '0',
+    0,
+  ])('omits unknown date evidence without replacing it with start or poll: %s', (date) => {
+    const alert = heldAlert({ lastSeen: date as string | undefined });
+    alert.metricStatus!.lastBreachAt = date as string | undefined;
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).not.toContain('Last Breach At:');
+    expect(context.handoffContext).toContain('Current Value: 76.0°C');
+  });
+
+  it('keeps a valid future-skewed date as evidence, rather than fabricating now', () => {
+    const alert = heldAlert();
+    alert.metricStatus!.lastBreachAt = '2026-10-06T11:52:00Z';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T11:52:00.000Z');
+  });
+
+  it('does not add held-breach copy when the alert is breaching or has no live status', () => {
+    const alert = heldAlert();
+    alert.metricStatus!.phase = 'breaching';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:31:59.123Z');
+    expect(context.briefing?.detailLines?.join('\n')).not.toContain('Last reading at or above');
+    alert.metricStatus = undefined;
+    const legacy = buildAlertAssistantHandoff({ alert, now: BREACH_NOW }).context;
+    expect(legacy.handoffContext).not.toContain('Last Breach At:');
+    expect(legacy.briefing?.detailLines).toContain('Message: Node temperature at 80.0°C');
   });
 });

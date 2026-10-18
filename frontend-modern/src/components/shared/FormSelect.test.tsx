@@ -20,6 +20,8 @@ describe('FormSelect', () => {
     expect(select).toBe(screen.getByTestId('delivery-mode'));
     expect(select).toHaveValue('cli');
     expect(select).toHaveClass('min-h-11', 'sm:min-h-9');
+    // appearance-none drops the native arrow, so the shared class draws one.
+    expect(select).toHaveClass('appearance-none', 'form-select-arrow');
   });
 
   it('preserves explicit ids and compact styling hooks', () => {

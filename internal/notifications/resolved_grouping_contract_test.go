@@ -27,11 +27,12 @@ func waitResolvedContract(t *testing.T, predicate func() bool) {
 // Ordinary firing establishes real receipts. Restart reloads those receipts;
 // no receipt or delivery job is manufactured by this test.
 func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
-	for _, stage := range []string{"same_process", "after_firing", "pending_recovery"} {
+	for _, stage := range []string{"same_process", "after_firing", "pending_recovery", "late_arrival"} {
 		t.Run(stage, func(t *testing.T) {
 			type payload struct {
-				Event  string          `json:"event"`
-				Alerts []*alerts.Alert `json:"alerts"`
+				Event      string          `json:"event"`
+				Alerts     []*alerts.Alert `json:"alerts"`
+				receivedAt time.Time
 			}
 			received := make(chan payload, 64)
 			server := newResolvedContractServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +40,7 @@ func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 					t.Error(err)
 				}
+				p.receivedAt = time.Now()
 				received <- p
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -82,39 +84,73 @@ func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
 			unseenHook.ID = "never-delivered"
 			m.AddWebhook(unseenHook)
 			resolvedAt := time.Now().Truncate(time.Second)
+			submittedAt := make(map[string]time.Time, len(batch))
 			for i, a := range batch {
 				if m.CancelAlert(a.ID) {
 					t.Fatal("delivered occurrence cancelled as unannounced")
 				}
+				submittedAt[a.ID] = time.Now()
 				m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: resolvedAt.Add(time.Duration(i) * time.Second)})
+				if stage == "late_arrival" && i == 0 {
+					// A completed enqueue has at most one extra second of rounding.
+					// Arrivals after its deadline belong to a new fixed window, even
+					// when the ordinary dispatcher has not yet claimed the first group.
+					time.Sleep(2100 * time.Millisecond)
+				}
 			}
+			burstFitsWindow := time.Since(submittedAt[batch[0].ID]) < time.Second
 			m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: &alerts.Alert{ID: "unannounced", ResourceName: "unannounced", StartTime: time.Now()}, ResolvedTime: resolvedAt})
 			if stage == "pending_recovery" {
 				m.Stop()
 				m = open()
 				m.AddWebhook(unseenHook)
 			}
-			select {
-			case p := <-received:
-				t.Fatalf("resolved delivery bypassed grouping window: event=%s alerts=%d", p.Event, len(p.Alerts))
-			case <-time.After(150 * time.Millisecond):
-			}
-			var recovery payload
-			select {
-			case recovery = <-received:
-			case <-time.After(12 * time.Second):
-				// The queue processes on its own ticker; the wait must exceed that
-				// interval so a grouped recovery is not raced by the poll period.
-				t.Fatal("no grouped recovery")
-			}
-			if recovery.Event != "resolved" || len(recovery.Alerts) != 15 {
-				t.Fatalf("recovery event=%s alerts=%d", recovery.Event, len(recovery.Alerts))
-			}
-			for i, a := range recovery.Alerts {
-				if a.ID != batch[i].ID || a.Metadata[metadataResolvedAt] != resolvedAt.Add(time.Duration(i)*time.Second).Format(time.RFC3339) {
-					t.Fatalf("lost occurrence/resolution metadata: %+v", a)
+			// Check receiver time against admission, not against the end of the
+			// loop/restart: slow emission can legitimately span fixed windows.
+			// A fast burst must still be one group, and all occurrences must be
+			// delivered exactly once with their original recovery metadata.
+			seen := make(map[string]bool, len(batch))
+			groups := 0
+			timer := time.NewTimer(12 * time.Second)
+			defer timer.Stop()
+			for len(seen) < len(batch) {
+				var recovery payload
+				select {
+				case recovery = <-received:
+				case <-timer.C:
+					t.Fatalf("grouped recovery missing occurrences: delivered=%d expected=%d", len(seen), len(batch))
+				}
+				if recovery.Event != "resolved" || len(recovery.Alerts) == 0 {
+					t.Fatalf("recovery event=%s alerts=%d", recovery.Event, len(recovery.Alerts))
+				}
+				if burstFitsWindow && len(recovery.Alerts) != len(batch) {
+					t.Fatalf("burst admitted within one window was split: alerts=%d", len(recovery.Alerts))
+				}
+				if stage == "late_arrival" && len(seen) == 0 && len(recovery.Alerts) != 1 {
+					t.Fatal("late arrivals extended the expired first group")
+				}
+				firstAdmission := submittedAt[recovery.Alerts[0].ID]
+				if firstAdmission.IsZero() || recovery.receivedAt.Before(firstAdmission.Add(time.Second)) {
+					t.Fatal("resolved delivery bypassed the first occurrence's grouping window")
+				}
+				groups++
+				previousIndex := -1
+				for _, a := range recovery.Alerts {
+					i := -1
+					for j, original := range batch {
+						if a.ID == original.ID {
+							i = j
+							break
+						}
+					}
+					if i < 0 || i <= previousIndex || seen[a.ID] || !a.StartTime.Equal(batch[i].StartTime) || a.Metadata[metadataResolvedAt] != resolvedAt.Add(time.Duration(i)*time.Second).Format(time.RFC3339) {
+						t.Fatalf("duplicate, unannounced or altered recovery occurrence: id=%s", a.ID)
+					}
+					seen[a.ID] = true
+					previousIndex = i
 				}
 			}
+			t.Logf("ordinary recovery: stage=%s groups=%d occurrences=%d burstFitsWindow=%t", stage, groups, len(seen), burstFitsWindow)
 			waitResolvedContract(t, func() bool { return len(m.filterResolvedJobsByDeliveryReceipt([]notificationDeliveryJob{job})) == 0 })
 			stats, err := m.GetQueue().GetQueueStats()
 			if err != nil {

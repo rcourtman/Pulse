@@ -33,15 +33,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 			if err != nil {
 				return nil, fmt.Errorf("normalize docker lifecycle evidence: %w", err)
 			}
-			status := unified.ActionVerificationContradicted
-			reason := "postcondition_contradicted"
-			if dockerLifecycleRunningHealthUnknown(req.Operation, facts.After) {
-				status = unified.ActionVerificationInconclusive
-				reason = "container_health_unknown"
-			} else if dockerLifecycleFactsMatch(req.Operation, facts.Before, facts.After) {
-				status = unified.ActionVerificationConfirmed
-				reason = ""
-			}
+			status, reason := dockerLifecycleVerification(req.Operation, facts.Before, facts.After)
 			verification = unified.ActionVerificationTruth{Status: status, EvidenceClass: unified.ActionEvidenceAgentAttested, ReasonCode: reason, Summary: summary, Evidence: []unified.ActionEvidence{evidence}}
 		}
 	}
@@ -65,12 +57,10 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 		if err != nil {
 			return nil, fmt.Errorf("normalize independent docker observation: %w", err)
 		}
-		status := unified.ActionVerificationContradicted
-		reason := "postcondition_contradicted"
-		if dockerLifecycleObservationFactsMatch(req.Operation, facts.Before, independent.Snapshot) {
-			status = unified.ActionVerificationConfirmed
-			reason = ""
-		}
+		status, reason := dockerLifecycleVerification(req.Operation, facts.Before, agentexec.DockerContainerLifecycleSnapshot{
+			ContainerID: independent.Snapshot.ContainerID, State: independent.Snapshot.State, Running: independent.Snapshot.Running,
+			Health: independent.Snapshot.Health, StartedAt: independent.Snapshot.StartedAt,
+		})
 		verification = unified.ActionVerificationTruth{Status: status, EvidenceClass: unified.ActionEvidenceIndependent, ReasonCode: reason, Summary: independentSummary, Evidence: []unified.ActionEvidence{evidence}}
 	}
 
@@ -265,7 +255,11 @@ func dockerUpdateFactsMatch(facts agentexec.DockerContainerUpdateResultPayload, 
 }
 
 func dockerContainerFactSummary(facts agentexec.DockerContainerLifecycleResultPayload) string {
-	return fmt.Sprintf("Container lifecycle: phase=%s; mutation started=%t; mutation completed=%t; readback ran=%t; before=%s/%s; after=%s/%s", strings.TrimSpace(facts.ExecutionPhase), facts.MutationStarted, facts.MutationCompleted, facts.ReadbackRan, strings.TrimSpace(facts.Before.State), dockerLifecycleHealthSummary(facts.Before.Health), strings.TrimSpace(facts.After.State), dockerLifecycleHealthSummary(facts.After.Health))
+	summary := fmt.Sprintf("Container lifecycle: phase=%s; mutation started=%t; mutation completed=%t; readback ran=%t; before=%s/%s; after=%s/%s", strings.TrimSpace(facts.ExecutionPhase), facts.MutationStarted, facts.MutationCompleted, facts.ReadbackRan, strings.TrimSpace(facts.Before.State), dockerLifecycleHealthSummary(facts.Before.Health), strings.TrimSpace(facts.After.State), dockerLifecycleHealthSummary(facts.After.Health))
+	if errText := strings.TrimSpace(facts.Error); errText != "" {
+		summary += "; error=" + errText
+	}
+	return summary
 }
 
 func dockerLifecycleHealthSummary(health string) string {
@@ -298,13 +292,20 @@ func dockerLifecycleFactsMatch(operation string, before, after agentexec.DockerC
 	}
 }
 
-func dockerLifecycleObservationFactsMatch(operation string, before agentexec.DockerContainerLifecycleSnapshot, after agentexec.DockerContainerObservationSnapshot) bool {
-	return dockerLifecycleFactsMatch(operation, before, agentexec.DockerContainerLifecycleSnapshot{
-		ContainerID: after.ContainerID, State: after.State, Running: after.Running, Health: after.Health,
-		StartedAt: after.StartedAt, RestartCount: after.RestartCount, ObservedAt: after.ObservedAt,
-	})
-}
-
 func dockerLifecycleRunningHealthUnknown(operation string, after agentexec.DockerContainerLifecycleSnapshot) bool {
 	return (operation == agentexec.DockerContainerOperationStart || operation == agentexec.DockerContainerOperationRestart) && !agentexec.IsDockerContainerHealth(after.Health)
+}
+
+func dockerLifecycleVerification(operation string, before, after agentexec.DockerContainerLifecycleSnapshot) (unified.ActionVerificationStatus, string) {
+	if dockerLifecycleFactsMatch(operation, before, after) {
+		return unified.ActionVerificationConfirmed, ""
+	}
+	if dockerLifecycleRunningHealthUnknown(operation, after) {
+		return unified.ActionVerificationInconclusive, "container_health_unknown"
+	}
+	if (operation == agentexec.DockerContainerOperationStart || operation == agentexec.DockerContainerOperationRestart) &&
+		after.Running && after.State == "running" && after.Health == agentexec.DockerContainerHealthStarting {
+		return unified.ActionVerificationInconclusive, "container_health_starting"
+	}
+	return unified.ActionVerificationContradicted, "postcondition_contradicted"
 }

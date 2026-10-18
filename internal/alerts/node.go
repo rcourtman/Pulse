@@ -93,98 +93,99 @@ func (m *Manager) CheckNode(node models.Node) {
 			m.clearNodeOfflineAlert(node)
 
 			// Check each metric (only if node is online and reachable)
-			// Check for host agent deduplication: if a host agent is running on this node,
-			// prefer the host agent alerts and skip node metric alerts to avoid duplicates.
-			if m.hasHostAgentForNode(node.Name) {
-				log.Debug().
-					Str("node", node.Name).
-					Msg("Skipping node metric alerts - host agent is monitoring this machine")
-			} else {
-				var memoryMetric *UnifiedResourceMetric
-				if node.Memory.HasKnownUsage() {
-					memoryMetric = &UnifiedResourceMetric{Percent: node.Memory.Usage}
-				}
-				m.evaluateUnifiedMetrics(&UnifiedResourceInput{
-					ID:       node.ID,
-					Type:     "node",
-					Name:     node.Name,
-					Node:     node.Name,
-					Instance: node.Instance,
-					CPU:      &UnifiedResourceMetric{Percent: node.CPU * 100},
-					Memory:   memoryMetric,
-					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
-				}, thresholds, nil)
-
-				// Check temperature if available
-				// We pass the check unconditionally so that if the threshold triggers are disabled (set to 0),
-				// any existing alerts will be properly cleared.
-				var temp float64
-				if node.Temperature != nil && node.Temperature.Available {
-					// Use CPU package temp if available, otherwise use max core temp
-					temp = node.Temperature.CPUPackage
-					if temp == 0 {
-						temp = node.Temperature.CPUMax
-					}
-				}
-				spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", thresholds.Temperature)
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Str("resourceID", node.ID).
-						Str("node", node.Name).
-						Msg("Skipping invalid canonical node temperature metric spec")
-				} else {
-					m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, thresholds.Temperature, nil)
-				}
+			// Check for host agent deduplication: a usage metric that a linked host
+			// agent evaluates belongs to the agent resource (CheckHost raises it), so
+			// the node releases its own copy instead of alerting twice. A metric the
+			// agent does not evaluate (agent alerts disabled, threshold off, usage
+			// unknown) stays with the node, so the machine is never left unmonitored.
+			owners := m.linkedHostAgentsForNode(node.ID)
+			input := &UnifiedResourceInput{
+				ID:       node.ID,
+				Type:     "node",
+				Name:     node.Name,
+				Node:     node.Name,
+				Instance: node.Instance,
 			}
+			released := make([]string, 0, 3)
+			if owners.cpu.cpu {
+				released = append(released, "cpu")
+			} else {
+				input.CPU = &UnifiedResourceMetric{Percent: node.CPU * 100}
+			}
+			if owners.memory.memory {
+				released = append(released, "memory")
+			} else if node.Memory.HasKnownUsage() {
+				input.Memory = &UnifiedResourceMetric{Percent: node.Memory.Usage}
+			}
+			if owners.disk.disk {
+				released = append(released, "disk")
+			} else {
+				input.Disk = &UnifiedResourceMetric{Percent: node.Disk.Usage}
+			}
+			m.releaseNodeMetricAlerts(node, owners, released...)
+			m.evaluateUnifiedMetrics(input, thresholds, nil, "temperature") // checkNodeTemperature owns its observation gaps.
+
+			// CPU temperature stays with the node even when a host agent runs on it:
+			// CheckHost has no CPU temperature metric, and the node poll already
+			// merges the agent's sensor readings into node.Temperature.
+			m.checkNodeTemperature(node, thresholds.Temperature)
 		}
 	}
 }
 
-// RegisterHostAgentHostname registers a host agent hostname for deduplication.
-// When a host agent is actively monitoring a machine, we prefer its alerts
-// over Proxmox node alerts to avoid duplicate monitoring of the same machine.
-func (m *Manager) RegisterHostAgentHostname(hostname string) {
-	normalized := strings.ToLower(strings.TrimSpace(hostname))
-	if normalized == "" {
+// checkNodeTemperature evaluates the node CPU temperature alert.
+// A disabled threshold (nil or trigger 0) is always passed through so any
+// existing alert is cleared. Otherwise a missing CPU reading is not evidence:
+// feeding 0°C would resolve an open alert without proving the node cooled down,
+// so the open alert is kept and only its timing runs are interrupted.
+func (m *Manager) checkNodeTemperature(node models.Node, threshold *HysteresisThreshold) {
+	// The alert judges the same reading the node's table, drawer and history
+	// show, so an alert never names a value the operator cannot find.
+	var temp float64
+	if primary := models.PrimaryCPUTemperatureCelsius(node.Temperature); primary != nil {
+		temp = *primary
+	}
+	spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", threshold)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", node.ID).
+			Str("node", node.Name).
+			Msg("Skipping invalid canonical node temperature metric spec")
 		return
 	}
-	m.mu.Lock()
-	m.hostAgentHostnames[normalized] = struct{}{}
-	m.mu.Unlock()
-
-	log.Debug().
-		Str("hostname", hostname).
-		Msg("Registered host agent hostname for deduplication")
-}
-
-// UnregisterHostAgentHostname removes a host agent hostname from deduplication tracking.
-func (m *Manager) UnregisterHostAgentHostname(hostname string) {
-	normalized := strings.ToLower(strings.TrimSpace(hostname))
-	if normalized == "" {
+	if temp <= 0 && !spec.Disabled {
+		m.interruptMetricRun(spec)
 		return
 	}
-	m.mu.Lock()
-	delete(m.hostAgentHostnames, normalized)
-	m.mu.Unlock()
-
-	log.Debug().
-		Str("hostname", hostname).
-		Msg("Unregistered host agent hostname from deduplication")
+	m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, threshold, nil)
 }
 
-// hasHostAgentForNode checks if a host agent is monitoring a machine with the same
-// hostname as the given Proxmox node. If so, we should suppress node alerts to
-// avoid duplicate alerting.
-func (m *Manager) hasHostAgentForNode(nodeName string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(nodeName))
-	if normalized == "" {
-		return false
+// releaseNodeMetricAlerts stops node-side evaluation of the given metrics the
+// same way a disabled threshold does: any pending run is dropped and any open
+// node alert is resolved. Without this, a node alert that was open when a host
+// agent registered would stay frozen until the agent went offline. Each close
+// names an agent that actually covers that metric, not an arbitrary sibling.
+func (m *Manager) releaseNodeMetricAlerts(node models.Node, owners hostAgentUsageOwners, metrics ...string) {
+	for _, metric := range metrics {
+		agent := owners.forMetric(metric)
+		resolution := &AlertResolution{
+			Reason:              AlertResolutionMovedToAgent,
+			SuccessorResourceID: hostResourceID(agent.agentID),
+			SuccessorName:       agent.agentName,
+		}
+		spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), metric, nil)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", node.ID).
+				Str("node", node.Name).
+				Str("metric", metric).
+				Msg("Skipping invalid canonical node metric spec")
+			continue
+		}
+		m.releaseCanonicalMetricAlert(spec, node.Name, node.Name, node.Instance, "node", 0, resolution)
 	}
-	m.mu.RLock()
-	_, exists := m.hostAgentHostnames[normalized]
-	m.mu.RUnlock()
-	return exists
 }
 
 // UpdateNodeDisplayName caches the display name for a node/host so alerts

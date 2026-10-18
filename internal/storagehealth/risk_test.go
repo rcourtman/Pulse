@@ -4,15 +4,15 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // --- AssessSample: comprehensive branch coverage ---
 
 func TestAssessSample_HealthyDisk(t *testing.T) {
 	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 35,
-		Wearout:     80,
+		Health:  "PASSED",
+		Wearout: 80,
 	})
 	if assessment.Level != RiskHealthy {
 		t.Errorf("expected healthy, got %s", assessment.Level)
@@ -307,38 +307,6 @@ func TestAssessSample_NVMePercentageUsedWarning(t *testing.T) {
 	}
 }
 
-func TestAssessSample_TemperatureCritical(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 72, // >=70 critical
-	})
-	if assessment.Level != RiskCritical {
-		t.Errorf("expected critical for temp=72, got %s", assessment.Level)
-	}
-}
-
-func TestAssessSample_TemperatureWarning(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 63, // >=60, <70 warning
-	})
-	if assessment.Level != RiskWarning {
-		t.Errorf("expected warning for temp=63, got %s", assessment.Level)
-	}
-}
-
-func TestAssessSample_TemperatureHealthy(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 45,
-	})
-	for _, r := range assessment.Reasons {
-		if r.Code == "temperature_high" {
-			t.Error("temp=45 should not trigger temperature_high")
-		}
-	}
-}
-
 func TestAssessSample_ReallocatedSectors(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health:             "PASSED",
@@ -370,10 +338,10 @@ func TestAssessSample_CRCErrors(t *testing.T) {
 
 func TestAssessSample_MultipleIssuesTakesHighest(t *testing.T) {
 	assessment := AssessSample(Sample{
-		Health:         "PASSED",
-		Temperature:    63, // warning
-		PendingSectors: 1,  // critical
-		UDMACRCErrors:  10, // monitor
+		Health:             "PASSED",
+		ReallocatedSectors: 1,  // warning
+		PendingSectors:     1,  // critical
+		UDMACRCErrors:      10, // monitor
 	})
 	if assessment.Level != RiskCritical {
 		t.Errorf("expected critical (highest), got %s", assessment.Level)
@@ -386,10 +354,11 @@ func TestAssessSample_MultipleIssuesTakesHighest(t *testing.T) {
 func TestAssessSample_ReasonsSortedBySeverityDescending(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health:             "PASSED",
-		Temperature:        63, // warning
 		PendingSectors:     1,  // critical
 		UDMACRCErrors:      10, // monitor
 		ReallocatedSectors: 1,  // warning
+		WearoutKnown:       true,
+		Wearout:            8, // warning
 	})
 	for i := 1; i < len(assessment.Reasons); i++ {
 		prevRank := severityRank(assessment.Reasons[i-1].Severity)
@@ -536,5 +505,23 @@ func TestAssessPhysicalDisk_RotationalZeroIsNotRisk(t *testing.T) {
 	})
 	if assessment.Level == RiskCritical {
 		t.Error("a rotational disk reporting 0 wearout reports no endurance at all and must not assess critical")
+	}
+}
+
+// Heat belongs to the alert disk temperature policy, which users tune per disk
+// type and per host. Disk risk cannot see that configuration, so it must not
+// judge temperature at all, however hot and however current the reading.
+func TestDiskAssessmentsNeverJudgeTemperature(t *testing.T) {
+	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}
+	for _, temperature := range []int{56, 63, 72, 95} {
+		disk := models.PhysicalDisk{Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: temperature, Collection: collected}
+		if got := AssessPhysicalDisk(disk); got.Level != RiskHealthy || len(got.Reasons) != 0 {
+			t.Errorf("%dC physical disk = %+v, want healthy with no reasons", temperature, got)
+		}
+
+		smart := models.HostDiskSMART{Device: "/dev/nvme0n1", Model: "Samsung 990 PRO", Type: "nvme", Health: "PASSED", Temperature: temperature, Collection: collected}
+		if got := AssessHostSMARTDisk(smart); got.Level != RiskHealthy || len(got.Reasons) != 0 {
+			t.Errorf("%dC host SMART disk = %+v, want healthy with no reasons", temperature, got)
+		}
 	}
 }

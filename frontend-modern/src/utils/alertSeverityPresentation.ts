@@ -95,13 +95,20 @@ export function getAlertSeverityCompactLabel(level: Alert['level'] | string): st
   return ALERT_SEVERITY_COMPACT_LABELS[normalized] || String(level).toUpperCase();
 }
 
-export function getAlertSeverityDotClass(level: Alert['level'] | string): string {
+// One fill per severity, so a legend dot and the chart segment it names match.
+// Each holds at least 3:1 against the chart's surface in both themes; yellow
+// on the light surface is under 2:1, so light-theme warnings use amber-700.
+export function getAlertSeverityFillClass(level: Alert['level'] | string): string {
   switch (normalizeAlertSeverity(level)) {
     case 'critical':
-      return 'h-2 w-2 rounded-full bg-red-500';
+      return 'bg-red-500';
     case 'warning':
-      return 'h-2 w-2 rounded-full bg-yellow-500';
+      return 'bg-amber-700 dark:bg-yellow-500';
     default:
-      return 'h-2 w-2 rounded-full bg-blue-500';
+      return 'bg-blue-500';
   }
+}
+
+export function getAlertSeverityDotClass(level: Alert['level'] | string): string {
+  return `h-2 w-2 rounded-full ${getAlertSeverityFillClass(level)}`;
 }

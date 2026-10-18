@@ -100,7 +100,7 @@ func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, 
 		}
 	}
 	if failedNodes == 0 && successfulNodes > 0 {
-		m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)
+		stagePVEGuestEffect(ctx, func() { m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects) })
 	}
 
 	preservedVMs := 0
@@ -122,34 +122,36 @@ func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, 
 
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
-		for _, vm := range allVMs {
-			if !guestObservedInCycle(vm.LastSeen, startTime) {
-				continue
+		stagePVEGuestEffect(ctx, func() {
+			for _, vm := range allVMs {
+				if !guestObservedInCycle(vm.LastSeen, startTime) {
+					continue
+				}
+				if vm.Status != "running" {
+					continue
+				}
+				diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
+					vm.DiskRead,
+					vm.DiskWrite,
+					vm.NetworkIn,
+					vm.NetworkOut,
+					vm.IORateValidity,
+				)
+				m.recordGuestMetric(
+					"vm",
+					vm.ID,
+					unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
+					historyMemoryUsage(vm.Memory),
+					historyMemoryUsed(vm.Memory),
+					vm.Disk.Usage,
+					diskRead,
+					diskWrite,
+					networkIn,
+					networkOut,
+					now,
+				)
 			}
-			if vm.Status != "running" {
-				continue
-			}
-			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
-				vm.DiskRead,
-				vm.DiskWrite,
-				vm.NetworkIn,
-				vm.NetworkOut,
-				vm.IORateValidity,
-			)
-			m.recordGuestMetric(
-				"vm",
-				vm.ID,
-				unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
-				historyMemoryUsage(vm.Memory),
-				historyMemoryUsed(vm.Memory),
-				vm.Disk.Usage,
-				diskRead,
-				diskWrite,
-				networkIn,
-				networkOut,
-				now,
-			)
-		}
+		})
 	}
 
 	duration := time.Since(startTime)

@@ -75,7 +75,9 @@ func TestGuestAgentCommandClientRejectsUnverifiableTransports(t *testing.T) {
 		}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			c := &Client{httpClient: client}
+			// Supply a valid admission identity so this control reaches the
+			// transport refusal, rather than the earlier endpoint-key check.
+			c := &Client{baseURL: "https://unverifiable-transport.invalid/api2/json", httpClient: client}
 			if _, err := c.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-transport-unverified" {
 				t.Fatalf("unverified transport admitted: %v", err)
 			}

@@ -1,7 +1,18 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render as solidRender, screen, within } from '@solidjs/testing-library';
 import { createSignal, type ComponentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
+
+// Coverage and read rows live in the Overview's Details, closed by default.
+// Opening it is a tap, not a hover, so these explanations stay reachable.
+const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
+  const result = solidRender(...args);
+  const details = result.container.querySelector<HTMLDetailsElement>(
+    '[data-testid="guest-technical-details"]',
+  );
+  if (details) details.open = true;
+  return result;
+};
 import type { WorkloadGuest } from '@/types/workloads';
 import type { VM } from '@/types/api';
 import {
@@ -58,11 +69,51 @@ function overviewProps(value: WorkloadGuest): ComponentProps<typeof GuestDrawerO
   };
 }
 
-const readRow = () => screen.getByText('Guest-agent reads').closest('tr')!;
+const readRow = () => {
+  const row = screen.getByText('Guest-agent reads').closest('tr')!;
+  // Details is closed by default; opening it is a tap, not a hover.
+  const details = row.closest('details');
+  if (details) details.open = true;
+  return row;
+};
 
 afterEach(cleanup);
 
 describe('guest agent coverage requires current state, not cached metadata', () => {
+  it.each([
+    'available',
+    'expected-unreachable',
+    'not-running',
+    'disabled',
+    'future-state-private-detail',
+    '',
+  ])('makes the %s explanation visible without hovering', (state) => {
+    const value = guest({ guestAgentStatus: state, agentVersion: '9.2' });
+    render(() => <GuestDrawerOverview {...overviewProps(value)} />);
+    const presentation = getGuestDrawerGuestReadPresentation(value)!;
+    expect(within(readRow()).getByText(presentation.detail)).toBeVisible();
+    expect(readRow()).not.toHaveTextContent('future-state-private-detail');
+    expect(readRow().querySelector('[tabindex]')).toBeNull();
+  });
+
+  it('updates the visible explanation without repeating the deferred safety notice', () => {
+    const [value, setValue] = createSignal(guest({ guestAgentStatus: 'available' }));
+    render(() => <GuestDrawerOverview {...overviewProps(value())} />);
+    const availableDetail = getGuestDrawerGuestReadPresentation(value())!.detail;
+    expect(within(readRow()).getByText(availableDetail)).toBeVisible();
+    setValue({ ...value(), lock: 'backup', diskStatusReason: 'prev-vm-locked' });
+    expect(within(readRow()).getByText('Deferred')).toBeVisible();
+    expect(within(readRow()).queryByText(availableDetail)).not.toBeInTheDocument();
+    expect(
+      within(readRow()).queryByText(getGuestDrawerGuestReadPresentation(value())!.detail),
+    ).not.toBeInTheDocument();
+    setValue({ ...value(), lock: '', diskStatusReason: '', guestAgentStatus: 'not-running' });
+    expect(
+      within(readRow()).getByText(getGuestDrawerGuestReadPresentation(value())!.detail),
+    ).toBeVisible();
+    expect(within(readRow()).queryByText(availableDetail)).not.toBeInTheDocument();
+  });
+
   it.each([
     ['deferred', 'Deferred'],
     ['expected-unreachable', 'Unreachable'],
@@ -257,5 +308,61 @@ describe('backup activity is not a confirmed VM lock', () => {
     expect(getGuestDrawerGuestReadPrecaution(value)).toContain('A backup is reported in progress');
     expect(getGuestDrawerGuestReadPrecaution(value)).not.toContain('VM operation lock');
     expect((value as VM).guestAgentStatus).toBe('available');
+  });
+});
+
+describe('existing filesystem guidance follows reading uncertainty, not an install diagnosis', () => {
+  it.each([
+    ['agent-not-running', 'Windows 11'],
+    ['agent-disabled', 'Windows 11'],
+    ['future-private-error', 'Android'],
+  ])('keeps %s readings on %s truthful with a safe help destination', (reason, os) => {
+    const [value, setValue] = createSignal(guest({ diskStatusReason: reason }));
+    render(() => <GuestDrawerOverview {...overviewProps(value())} guestOsSummary={os} />);
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toHaveAttribute(
+      'href',
+      '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+    expect(screen.getByTestId('guest-technical-details').textContent).not.toMatch(
+      /Install and start|Enable it in VM Options|qemu-guest-agent|future-private-error/,
+    );
+    setValue({
+      ...value(),
+      diskStatusReason: `prev-${reason}`,
+      disks: [{ mountpoint: '/data', total: 1024, used: 512, usage: 50 }],
+    });
+    expect(screen.getByText(/Using last known disk stats/)).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toBeVisible();
+    setValue({
+      ...value(),
+      diskStatusReason: '',
+      disks: [{ mountpoint: '/data', total: 1024, used: 256, usage: 25 }],
+    });
+    expect(
+      screen.queryByRole('link', { name: 'Filesystem reading guidance' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not direct an independent LXC read to QEMU setup', () => {
+    render(() => (
+      <GuestDrawerOverview
+        {...overviewProps(
+          guest({
+            type: 'lxc',
+            telemetryAvailability: {
+              cpu: true,
+              memory: true,
+              disk: false,
+              networkIO: true,
+              diskIO: true,
+              uptime: true,
+            },
+          }),
+        )}
+      />
+    ));
+    expect(
+      screen.queryByRole('link', { name: 'Filesystem reading guidance' }),
+    ).not.toBeInTheDocument();
   });
 });

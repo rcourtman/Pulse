@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
+import { makeSystemAlert } from '@/features/alerts/__fixtures__/systemAlerts';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 // ---------------------------------------------------------------------------
@@ -155,6 +156,44 @@ beforeEach(() => {
   notificationStoreMock.info.mockReset();
 });
 
+describe('system-alert investigation', () => {
+  it('retains resource Patrol for a monitored VM named Pulse', async () => {
+    const alert = makeAlert({ resourceName: 'Pulse' });
+    render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+    fireEvent.click(screen.getByRole('button', { name: 'Have Patrol investigate' }));
+    await waitFor(() => expect(triggerPatrolRunMock).toHaveBeenCalledTimes(1));
+    expect(triggerPatrolRunMock).toHaveBeenCalledWith({
+      resource_ids: ['vm-101'],
+      alert_identifier: alert.id,
+      alert_type: 'cpu',
+    });
+    expect(explainMock).not.toHaveBeenCalled();
+  });
+
+  it('retains metadata-only system scope on a historical ID', () => {
+    const alert = makeSystemAlert('future-condition', { id: 'legacy-id', resourceId: 'vm-wrong' });
+    render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Pulse Assistant about this alert' }));
+    expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+    expect(openedContext().targetId).toBeUndefined();
+    expect(openedContext().handoffResources).toEqual([]);
+  });
+
+  it.each([undefined, { systemAlert: true, resourceType: 'vm' }])(
+    'opens explanation, never resource Patrol, for a system alert with metadata %j',
+    (metadata) => {
+      const alert = makeSystemAlert('backup-evaluation', { resourceId: 'vm-wrong', metadata });
+      render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ask Pulse Assistant about this alert' }));
+      expect(explainMock).toHaveBeenCalledTimes(1);
+      expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+      expect(openedContext().targetId).toBeUndefined();
+      expect(openedContext().handoffResources).toEqual([]);
+      expect(formatAlertValueMock).not.toHaveBeenCalled();
+    },
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Rendering / visibility
 // ---------------------------------------------------------------------------
@@ -184,6 +223,41 @@ describe('InvestigateAlertButton', () => {
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
       expect(button).not.toHaveTextContent('Investigate');
+    });
+
+    // History repeats the icon on every row, so its name says which alert.
+    it('names the alert and its resource on the icon variant', () => {
+      render(() => (
+        <InvestigateAlertButton alert={makeAlert()} variant="icon" subjectLabel="CPU usage" />
+      ));
+      expect(
+        screen.getByRole('button', { name: 'Ask Pulse Assistant about CPU usage on test-vm' }),
+      ).toHaveAttribute('title', 'Ask Pulse Assistant about this alert');
+    });
+
+    it('adds the start time when the host gives one', () => {
+      render(() => (
+        <InvestigateAlertButton
+          alert={makeAlert()}
+          variant="icon"
+          subjectLabel="CPU usage"
+          subjectTime="15 Oct, 11:44"
+        />
+      ));
+      expect(
+        screen.getByRole('button', {
+          name: 'Ask Pulse Assistant about CPU usage on test-vm, 15 Oct, 11:44',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the locked explanation as the icon name when locked', () => {
+      render(() => (
+        <InvestigateAlertButton alert={makeAlert()} variant="icon" licenseLocked={true} />
+      ));
+      expect(
+        screen.getByRole('button', { name: 'Pro required to ask Pulse Assistant about alerts' }),
+      ).toBeInTheDocument();
     });
 
     it('renders text variant with "Ask Pulse Assistant" label', () => {

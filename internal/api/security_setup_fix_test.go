@@ -653,7 +653,9 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 	}
 }
 
-func TestEnsureSettingsWriteScopeAllowsOrgManagerSession(t *testing.T) {
+// Settings scope guards instance-wide settings, so an organization's owner is
+// refused there; routes that serve only that organization use the org variant.
+func TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession(t *testing.T) {
 	cfg := &config.Config{
 		AuthUser: "platform-admin",
 	}
@@ -674,13 +676,60 @@ func TestEnsureSettingsWriteScopeAllowsOrgManagerSession(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	result := ensureSettingsWriteScope(cfg, rr, req)
+	if ensureSettingsWriteScope(cfg, rr, req) {
+		t.Fatal("ensureSettingsWriteScope must refuse an org manager who is not an instance admin")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for org manager session on instance settings, got %d", rr.Code)
+	}
 
-	if !result {
-		t.Fatal("ensureSettingsWriteScope should allow org manager session users")
+	rr = httptest.NewRecorder()
+	if !ensureOrgSettingsWriteScope(cfg, rr, req) {
+		t.Fatal("ensureOrgSettingsWriteScope should allow org manager session users")
 	}
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for org manager session, got %d", rr.Code)
+	}
+}
+
+// A token bound to a tenant organization is held to the same split as that
+// organization's owner: its settings scope reaches the org variant only.
+func TestSettingsWriteScopeSplitsInstanceAndOrgBoundToken(t *testing.T) {
+	cfg := &config.Config{AuthUser: "platform-admin"}
+	request := func(orgID string, orgIDs ...string) *http.Request {
+		record, err := config.NewAPITokenRecord("settings-split-token.12345678", "settings", []string{config.ScopeSettingsWrite})
+		if err != nil {
+			t.Fatalf("NewAPITokenRecord: %v", err)
+		}
+		record.OrgID = orgID
+		record.OrgIDs = orgIDs
+		req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+		attachAPITokenRecord(req, record)
+		return req
+	}
+
+	for _, tc := range []struct {
+		name     string
+		req      *http.Request
+		instance bool
+	}{
+		{"unbound", request(""), true},
+		{"default org", request("default"), true},
+		{"tenant org", request("org-a"), false},
+		{"default and tenant orgs", request("", "default", "org-a"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			if got := ensureSettingsWriteScope(cfg, rr, tc.req); got != tc.instance {
+				t.Fatalf("ensureSettingsWriteScope = %v, want %v (status %d)", got, tc.instance, rr.Code)
+			}
+			if !tc.instance && rr.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 for org-bound token on instance settings, got %d", rr.Code)
+			}
+			if !ensureOrgSettingsWriteScope(cfg, httptest.NewRecorder(), tc.req) {
+				t.Fatal("ensureOrgSettingsWriteScope should allow a settings:write token")
+			}
+		})
 	}
 }
 

@@ -88,6 +88,8 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 	} else if connectivityStatus != "" && connectivityStatus != "unknown" {
 		// Clear any existing offline alert if storage is back online
 		m.clearStorageOfflineAlert(storage)
+	} else {
+		m.interruptStorageConnectivityRun(storage.ID)
 	}
 	// Missing connectivity evidence must not count as a healthy observation.
 	// Capacity and pool health below remain independently observable.
@@ -110,6 +112,8 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 	confirmedEmpty := storage.Usage == 0 && storage.Total > 0 && storage.Used == 0 && storage.Free == storage.Total
 	if connectivityStatus != "offline" && connectivityStatus != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
 		m.evaluateStorageCapacity(storage, thresholds, trend)
+	} else {
+		m.interruptMetricRunIDs(storage.ID, canonicalMetricSpecID(storage.ID, "usage"), canonicalMetricStateID(storage.ID, "usage"))
 	}
 
 	// Check ZFS pool status if this is ZFS storage
@@ -117,6 +121,21 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 		m.checkZFSPoolHealth(storage)
 	} else {
 		m.clearStorageZFSAlerts(storage)
+	}
+}
+
+// A missing status is not a healthy poll, nor another outage confirmation.
+// Preserve a firing occurrence while restarting both consecutive-observation
+// runs and any pending intent grace. Capacity remains independently observable.
+func (m *Manager) interruptStorageConnectivityRun(resourceID string) {
+	m.mu.Lock()
+	for _, state := range m.mirrorStatesNoLock() {
+		state.InterruptDiscreteRun(resourceID, canonicalConnectivitySpecID(resourceID))
+	}
+	intentChanged := m.clearIntentPendingNoLock(canonicalConnectivityStateID(resourceID))
+	m.mu.Unlock()
+	if intentChanged {
+		m.saveActiveAlertsAsync("storage connectivity observation gap")
 	}
 }
 
@@ -267,9 +286,14 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 
 	// Check pool state (DEGRADED, FAULTED, etc.)
 	stateAlertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
+	// Pool and device alerts are raised under "<storage>/zfs-pool:..." ids,
+	// which name nothing the resource registry can open. storageResourceId
+	// names the storage the pool belongs to, so the Alerts overview can open
+	// it on the Storage page.
 	stateMetadata := map[string]interface{}{
-		"pool_name":  pool.Name,
-		"pool_state": pool.State,
+		"pool_name":         pool.Name,
+		"pool_state":        pool.State,
+		"storageResourceId": storage.ID,
 	}
 	stateReasons := filterStorageHealthReasonsByCodes(poolAssessment.Reasons, zfsPoolAssessmentCodes)
 	stateResult, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
@@ -304,10 +328,11 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 		existingValue, exists := m.activeAlertValue(buildCanonicalStateID(errorsSpecResourceID, errorsSpecID))
 		if !exists || float64(totalErrors) > existingValue {
 			errorMetadata := map[string]interface{}{
-				"pool_name":       pool.Name,
-				"read_errors":     pool.ReadErrors,
-				"write_errors":    pool.WriteErrors,
-				"checksum_errors": pool.ChecksumErrors,
+				"pool_name":         pool.Name,
+				"read_errors":       pool.ReadErrors,
+				"write_errors":      pool.WriteErrors,
+				"checksum_errors":   pool.ChecksumErrors,
+				"storageResourceId": storage.ID,
 			}
 			errorReasons := filterStorageHealthReasonsByCodes(poolAssessment.Reasons, zfsPoolErrorAssessmentCodes)
 			result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
@@ -350,12 +375,13 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 		alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
 		deviceAssessment := zfsDeviceAssessment(device)
 		metadata := map[string]interface{}{
-			"pool_name":       pool.Name,
-			"device_name":     device.Name,
-			"device_state":    device.State,
-			"read_errors":     device.ReadErrors,
-			"write_errors":    device.WriteErrors,
-			"checksum_errors": device.ChecksumErrors,
+			"pool_name":         pool.Name,
+			"device_name":       device.Name,
+			"device_state":      device.State,
+			"read_errors":       device.ReadErrors,
+			"write_errors":      device.WriteErrors,
+			"checksum_errors":   device.ChecksumErrors,
+			"storageResourceId": storage.ID,
 		}
 		result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
 			SpecID:         storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "/device:" + sanitizeHostComponent(device.Name) + "-health",

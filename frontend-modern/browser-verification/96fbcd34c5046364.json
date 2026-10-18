@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "6aef85ac88e3fcb812388c52fa92842a6ef278f5",
+  "verified_at": "2026-10-16T23:27:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "6d3917fdd33adf43199becfcb2fc0e32e14c3d282bebefaf3566e586b6feb83d",
+    "frontend-modern/src/utils/memoryObservation.ts": "692666d2a7dbee34ecabde32aac5c4ad226282f96e95feb210b1a69d87a14bdd"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock backend built from origin/main; LXC auth-service-01 with a current cluster-resources memory observation",
+    "before (main's memoryObservation.ts): container drawer Details read 'Current · Proxmox (may include cache)' and showed 'About this reading' saying cached memory the container can reuse",
+    "after: container drawer Details read 'Current · Proxmox · <time>' with no cache caveat and no About this reading row",
+    "after: QEMU VM checkout-web-01 drawer still reads 'Proxmox (may include cache)' with the VM cache note",
+    "after at 390px: LXC row memory cell carries no cache cue, drawer reading has no caveat, no horizontal page scroll"
+  ],
+  "interactions": [
+    "opened the LXC row drawer and expanded Details",
+    "opened a VM row drawer and expanded Details",
+    "swapped main's memoryObservation.ts in via Vite HMR for the before view, then restored the fix and reloaded"
+  ]
+}

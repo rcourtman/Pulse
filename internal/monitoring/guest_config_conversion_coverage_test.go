@@ -209,7 +209,7 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorFrontendResourceType(tt.resource); got != tt.want {
+				if got := monitorFrontendResourceType(&tt.resource); got != tt.want {
 					t.Fatalf("monitorFrontendResourceType() = %q, want %q", got, tt.want)
 				}
 			})
@@ -320,7 +320,7 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorPlatformType(tt.resource, tt.resourceType); got != tt.want {
+				if got := monitorPlatformType(&tt.resource, tt.resourceType); got != tt.want {
 					t.Fatalf("monitorPlatformType() = %q, want %q", got, tt.want)
 				}
 			})
@@ -387,7 +387,7 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorPlatformID(tt.resource, tt.resourceType); got != tt.want {
+				if got := monitorPlatformID(&tt.resource, tt.resourceType); got != tt.want {
 					t.Fatalf("monitorPlatformID() = %q, want %q", got, tt.want)
 				}
 			})
@@ -482,7 +482,7 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorFrontendStatus(tt.resource, tt.resourceType); got != tt.want {
+				if got := monitorFrontendStatus(&tt.resource, tt.resourceType); got != tt.want {
 					t.Fatalf("monitorFrontendStatus() = %q, want %q", got, tt.want)
 				}
 			})
@@ -553,7 +553,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			},
 		}
 
-		payload := decodePlatformDataPayload(t, monitorPlatformData(resource, "node", "ignored"))
+		payload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "node", "ignored"))
 		if payload["instance"] != "pve-a" {
 			t.Fatalf("instance = %#v, want pve-a", payload["instance"])
 		}
@@ -584,7 +584,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			},
 		}
 
-		payload := decodePlatformDataPayload(t, monitorPlatformData(resource, "vm", "ignored"))
+		payload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "vm", "ignored"))
 		if payload["networkIn"] != float64(11) {
 			t.Fatalf("networkIn = %#v, want 11", payload["networkIn"])
 		}
@@ -614,7 +614,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			},
 		}
 
-		payload := decodePlatformDataPayload(t, monitorPlatformData(resource, "pbs", "ignored"))
+		payload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "pbs", "ignored"))
 		if payload["memoryUsed"] != float64(20) {
 			t.Fatalf("memoryUsed = %#v, want 20", payload["memoryUsed"])
 		}
@@ -630,7 +630,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			ParentID: &parent,
 		}
 
-		storagePayload := decodePlatformDataPayload(t, monitorPlatformData(resource, "storage", "pve-a"))
+		storagePayload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "storage", "pve-a"))
 		if storagePayload["instance"] != "pve-a" {
 			t.Fatalf("instance = %#v, want pve-a", storagePayload["instance"])
 		}
@@ -641,7 +641,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			t.Fatalf("active = %#v, want true", storagePayload["active"])
 		}
 
-		poolPayload := decodePlatformDataPayload(t, monitorPlatformData(resource, "pool", "pve-a"))
+		poolPayload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "pool", "pve-a"))
 		if poolPayload["active"] != true {
 			t.Fatalf("pool active = %#v, want true", poolPayload["active"])
 		}
@@ -667,7 +667,7 @@ func TestMonitorPlatformData(t *testing.T) {
 			},
 		}
 
-		payload := decodePlatformDataPayload(t, monitorPlatformData(resource, "storage", "ignored"))
+		payload := decodePlatformDataPayload(t, monitorPlatformData(&resource, "storage", "ignored"))
 		if payload["platform"] != "unraid" {
 			t.Fatalf("platform = %#v, want unraid", payload["platform"])
 		}
@@ -687,10 +687,10 @@ func TestMonitorPlatformData(t *testing.T) {
 	})
 
 	t.Run("nil payload branches", func(t *testing.T) {
-		if got := monitorPlatformData(unifiedresources.Resource{}, "agent", "id"); got != nil {
+		if got := monitorPlatformData(&unifiedresources.Resource{}, "agent", "id"); got != nil {
 			t.Fatalf("expected nil payload for agent without resource agent data, got %s", string(got))
 		}
-		if got := monitorPlatformData(unifiedresources.Resource{}, "unknown", "id"); got != nil {
+		if got := monitorPlatformData(&unifiedresources.Resource{}, "unknown", "id"); got != nil {
 			t.Fatalf("expected nil payload for unknown type, got %s", string(got))
 		}
 	})

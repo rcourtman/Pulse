@@ -164,8 +164,9 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					agentHost,
 					hasAgent,
 				)
+				previousMemory := m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID))
 				memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
-					m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID)),
+					previousMemory,
 					container.Status,
 					memorySource,
 					memTotal,
@@ -193,6 +194,13 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						Usage: memUsagePercent,
 					}
 				}
+				// The cluster path's provenance builder owns state, source and
+				// observation time here too, so a node polled through this
+				// fallback does not read as freshness unknown.
+				memory.Observation = m.guestMemoryObservation(instanceName, "lxc", n.Node, int(container.VMID), memory, guestMemoryObservationContext{
+					source: memorySource, providerObservedAt: counterObservedAt,
+					previous: previousMemory, linkedAgent: agentHost,
+				}, time.Now())
 
 				diskTotalBytes := clampToInt64(container.MaxDisk)
 				diskUsedBytes := clampToInt64(container.Disk)
@@ -297,25 +305,21 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					}
 				}
 
-				// Trigger guest metadata migration if old format exists
-				if m.guestMetadataStore != nil {
-					m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
-				}
+				stagePVEGuestEffect(ctx, func() {
+					m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
+						Name:           modelContainer.Name,
+						Status:         modelContainer.Status,
+						RetrievedAt:    modelContainer.LastSeen,
+						MemorySource:   memorySource,
+						FallbackReason: guestMemoryFallbackReason(memorySource),
+						Memory:         modelContainer.Memory,
+						Raw:            guestRaw,
+					})
 
-				m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
-					Name:           modelContainer.Name,
-					Status:         modelContainer.Status,
-					RetrievedAt:    modelContainer.LastSeen,
-					MemorySource:   memorySource,
-					FallbackReason: guestMemoryFallbackReason(memorySource),
-					Memory:         modelContainer.Memory,
-					Raw:            guestRaw,
+					// Check alerts
+					m.alertManager.CheckGuest(modelContainer, instanceName)
 				})
-
 				nodeContainers = append(nodeContainers, modelContainer)
-
-				// Check alerts
-				m.alertManager.CheckGuest(modelContainer, instanceName)
 			}
 
 			nodeDuration := time.Since(nodeStart)
@@ -355,7 +359,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 		}
 	}
 	if failedNodes == 0 && successfulNodes > 0 {
-		m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects)
+		stagePVEGuestEffect(ctx, func() { m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects) })
 	}
 
 	preservedContainers := 0
@@ -382,34 +386,36 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 	// Record guest metrics history for running containers (enables sparkline/trends view)
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
-		for _, ct := range allContainers {
-			if !guestObservedInCycle(ct.LastSeen, startTime) {
-				continue
+		stagePVEGuestEffect(ctx, func() {
+			for _, ct := range allContainers {
+				if !guestObservedInCycle(ct.LastSeen, startTime) {
+					continue
+				}
+				if ct.Status != "running" {
+					continue
+				}
+				diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
+					ct.DiskRead,
+					ct.DiskWrite,
+					ct.NetworkIn,
+					ct.NetworkOut,
+					ct.IORateValidity,
+				)
+				m.recordGuestMetric(
+					"container",
+					ct.ID,
+					unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
+					historyMemoryUsage(ct.Memory),
+					historyMemoryUsed(ct.Memory),
+					ct.Disk.Usage,
+					diskRead,
+					diskWrite,
+					networkIn,
+					networkOut,
+					now,
+				)
 			}
-			if ct.Status != "running" {
-				continue
-			}
-			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
-				ct.DiskRead,
-				ct.DiskWrite,
-				ct.NetworkIn,
-				ct.NetworkOut,
-				ct.IORateValidity,
-			)
-			m.recordGuestMetric(
-				"container",
-				ct.ID,
-				unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
-				historyMemoryUsage(ct.Memory),
-				historyMemoryUsed(ct.Memory),
-				ct.Disk.Usage,
-				diskRead,
-				diskWrite,
-				networkIn,
-				networkOut,
-				now,
-			)
-		}
+		})
 	}
 
 	duration := time.Since(startTime)

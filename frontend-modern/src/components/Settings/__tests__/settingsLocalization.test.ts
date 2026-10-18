@@ -23,11 +23,6 @@ describe('settings localization catalog', () => {
       title: 'Plans & Billing',
       description: 'Plan, license, and Patrol mode for this instance.',
     });
-    expect(SETTINGS_HEADER_META['system-ai-discovery']).toEqual({
-      title: 'Service Context',
-      description:
-        'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
-    });
   });
 
   it('localizes settings navigation groups and items for German', () => {
@@ -36,7 +31,6 @@ describe('settings localization catalog', () => {
     expect(groups[0]?.items[0]?.label).toBe('Infrastruktur');
     expect(getSettingsNavItem('system-updates', 'de')?.label).toBe('Updates');
     expect(getSettingsNavItem('system-ai-assistant', 'de')?.label).toBe('Assistant');
-    expect(getSettingsNavItem('system-ai-discovery', 'de')).toBeUndefined();
     expect(getSettingsNavItem('security-data-handling', 'de')?.label).toBe('Ressourcenschutz');
   });
 
@@ -46,7 +40,6 @@ describe('settings localization catalog', () => {
     expect(getSettingsNavItem('system-ai', 'es')?.label).toBe('Proveedores y modelos');
     expect(getSettingsNavItem('system-ai-patrol', 'es')?.label).toBe('Patrol');
     expect(getSettingsNavItem('system-ai-assistant', 'es')?.label).toBe('Assistant');
-    expect(getSettingsNavItem('system-ai-discovery', 'es')).toBeUndefined();
     expect(getSettingsNavItem('support-diagnostics', 'es')?.label).toBe('Diagnóstico y salud');
   });
 
@@ -98,11 +91,6 @@ describe('settings localization catalog', () => {
       title: 'Anbieter & Modelle',
       description:
         'Konfigurieren Sie Anbieter, Standardmodelle, Anbieterzustand, Budget und Nutzung fuer Pulse Intelligence.',
-    });
-    expect(getSettingsHeaderMeta('de')['system-ai-discovery']).toEqual({
-      title: 'Service-Kontext',
-      description:
-        'Konfigurieren Sie den KI-gestuetzten Service-Kontext fuer Assistant und Patrol. Infrastruktur-Erkennung und Onboarding bleiben unter Infrastruktur.',
     });
     expect(getSettingsHeaderMeta('de')['system-ai-assistant']).toEqual({
       title: 'Assistant',

@@ -12,6 +12,11 @@ import {
 } from '@/utils/aiFindingPresentation';
 import type { PatrolWorkTypeComposition } from '@/utils/aiFindingPresentation';
 import { getPatrolRunCoverageSummary } from '@/utils/patrolRunPresentation';
+import {
+  isPatrolConfigLevelCause,
+  PATROL_PROVIDER_AUTH_CAUSE,
+  PATROL_PROVIDER_CONNECTION_CAUSE,
+} from '@/utils/patrolRuntimeActions';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
@@ -57,10 +62,25 @@ export const PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION =
  * The setup workspace subtitle follows the block cause: a used-up cost budget
  * is a spending decision, not a model that failed the tool check (#1789).
  */
+export const PATROL_WORKSPACE_CONNECT_DESCRIPTION =
+  'Patrol needs an AI model before it can check your infrastructure.';
+
+export const PATROL_WORKSPACE_RECONNECT_DESCRIPTION =
+  'Your AI provider refused Patrol’s connection. Reconnect it so Patrol can run.';
+
+export const PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION =
+  'Pulse cannot reach your AI provider. Check its address and status on Provider & Models.';
+
+export const PATROL_WORKSPACE_SETUP_ACTIVE_DESCRIPTION =
+  'Connect a model and check it here. Patrol starts once the check passes.';
+
 export function getPatrolWorkspaceSetupDescription(cause?: string | null): string {
-  return cause === 'budget_exhausted'
-    ? PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION
-    : PATROL_WORKSPACE_SETUP_DESCRIPTION;
+  if (cause === 'budget_exhausted') return PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION;
+  // No provider or AI off: the model check is not the next step yet.
+  if (isPatrolConfigLevelCause(cause ?? undefined)) return PATROL_WORKSPACE_CONNECT_DESCRIPTION;
+  if (cause === PATROL_PROVIDER_AUTH_CAUSE) return PATROL_WORKSPACE_RECONNECT_DESCRIPTION;
+  if (cause === PATROL_PROVIDER_CONNECTION_CAUSE) return PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION;
+  return PATROL_WORKSPACE_SETUP_DESCRIPTION;
 }
 
 export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';

@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "914fabfc1fef6d728bf145cf3097557ef82eafe7",
+  "verified_at": "2026-10-05T13:09:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksAction.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadWebLinksState.ts",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts",
+    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/stores/sessionCapabilities.ts",
+    "frontend-modern/src/stores/sessionPresentationPolicy.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksAction.tsx": "319ff6e1265c7383699a0d916e0256a3d55d3844c06b33577197aa13f975e2e8",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx": "198f5688928616f5ef6f3b2fbfdfd95ab9ae54bc62a46faaa0067cabac46c2c6",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "e8bdb9ba10380b569366231a4e1a8324078c1ac5140ca3a0597d09e6f75689a1",
+    "frontend-modern/src/components/Workloads/useWorkloadWebLinksState.ts": "5c84b588fdbe003d1afb3d328aec05635c3e2f4c42a5bb543cb836f121f38389",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts": "5aa7607047001ad01a5090a06d714c7a30a1e77f446660fb25d9954346166342",
+    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx": "bf904f63e28ee27e571b55d48595b33058231686e4634c66fee248dd15dee784",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "4bcbc9060d78a78b4c2371cc2d5822bbf0ac01bd69f5ae476c7f050a6cbe5d1a",
+    "frontend-modern/src/stores/sessionCapabilities.ts": "77da62c75db732e85c78c5a7f60d53ac6bff5058e34ea14783bcafc27ac0636a",
+    "frontend-modern/src/stores/sessionPresentationPolicy.ts": "ed40857a67062002721738ad51e3a7a6c909c384f28a74569ca21f3aa695f648"
+  },
+  "routes": [
+    "/docker",
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack from this tree (backend :7701, Vite :5221): Docker page with 7 containers across a Docker host and Docker-in-LXC guests; Proxmox page with 31 guests.",
+    "Docker containers header shows Edit links; the panel says 'for each container', lists all 7 containers with host and image detail, keyed app-container:<host>:name:<name> exactly as toDiscoveryConfig resolves for the container drawer.",
+    "Saving two container links, then a mix of two additions and two removals, wrote each through PUT /api/guests/metadata, closed the panel and updated the table links; the network log showed exactly two /api/resources refetches per save regardless of how many links changed.",
+    "Token gate with the admin bypass off: a monitoring:read token saw the Proxmox guests (31 rows) and Docker containers without any Edit links action, and the guest drawer's Web Interface URL showed the saved URL, open and copy, and 'This session can open saved web interface URLs but not change them.' with no input, Save or Remove; the drawer header Open action stayed. A monitoring:read+write token saw Edit links and saved a container link successfully.",
+    "Phone 375x812: Docker editor full-width with 44px inputs and no horizontal overflow. Production build: WorkloadsSurface 69.08 kB, Docker 28.56 kB, DrawerDiskListCard unchanged at 6.08 kB, trigger 1.6 kB and panel 4.2 kB as separate lazy chunks; no bundle violations. Not physical-device, vSphere-estate or release acceptance.",
+    "Re-checked after the commit hook's Prettier pass reformatted two staged files (whitespace only): the Docker editor opened, saved inventory-api through PUT /api/guests/metadata, closed and the table gained the link."
+  ],
+  "interactions": [
+    "Opened Edit links on the Docker page at 1280 and 375 widths; typed links, cleared links, submitted the form; reopened to confirm saved values.",
+    "Loaded the app as a read-only API token and as a write-scoped token (local test tokens set in session storage) and opened the Proxmox guest drawer Manage tab and the Docker containers header in each."
+  ]
+}

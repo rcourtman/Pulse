@@ -1,67 +1,59 @@
 import { useLocation } from '@solidjs/router';
-import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  untrack,
+  type Accessor,
+} from 'solid-js';
+
+import { ResourceAPI } from '@/api/resources';
+import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
-import {
-  isSummarySeriesInGroupScope,
-  type SummarySeriesGroupScope,
-} from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
-import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
 import {
   workloadsHasHoveredWorkload,
-  workloadsHasVisibleWorkloadGroupScope,
   resolveWorkloadResourceSelection,
 } from './workloadSelectionModel';
+
+import { createGuestDrawerViewState } from './useGuestDrawerState';
 
 interface UseWorkloadsSelectionStateOptions {
   clearAdditionalPageStateOnEscape?: () => void;
   filteredGuests: Accessor<WorkloadGuest[]>;
-  summaryGroupScopes: Accessor<Map<string, SummarySeriesGroupScope>>;
   routeStateEnabled?: Accessor<boolean>;
 }
 
 export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOptions) {
   const location = useLocation();
 
+  const selectedGuestDrawerState = createGuestDrawerViewState();
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
-  const [selectedWorkloadGroupId, setSelectedWorkloadGroupIdRaw] = createSignal<string | null>(
-    null,
-  );
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
-  const [hoveredWorkloadGroupScope, setHoveredWorkloadGroupScope] =
-    createSignal<SummarySeriesGroupScope | null>(null);
-  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
-  const [handledWorkloadGroupId, setHandledWorkloadGroupId] = createSignal<string | null>(null);
+  let referenceLookup: AbortController | undefined;
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
 
   const [tableWrapperRef, setTableWrapperRefSignal] = createSignal<HTMLDivElement | undefined>(
     undefined,
   );
   const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
-  const focusedWorkloadGroupScope = createMemo<SummarySeriesGroupScope | null>(() => {
-    const selectedGroupId = selectedWorkloadGroupId();
-    if (!selectedGroupId) {
-      return null;
-    }
-    return options.summaryGroupScopes().get(selectedGroupId) ?? null;
-  });
 
   const clearPinnedSummaryScope = () => {
+    referenceLookup?.abort();
     preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
+      selectedGuestDrawerState.reset();
       setSelectedGuestIdRaw(null);
-      setSelectedWorkloadGroupIdRaw(null);
     });
   };
 
   const summaryInteraction = useSummaryPageInteractionState({
     clearPinnedScope: clearPinnedSummaryScope,
     hoveredSeriesId: hoveredWorkloadId,
-    hoveredGroupScope: hoveredWorkloadGroupScope,
     focusedSeriesId: selectedGuestId,
-    focusedGroupId: selectedWorkloadGroupId,
-    focusedGroupScope: focusedWorkloadGroupScope,
     onEscapeClear: () => {
       clearPinnedSummaryScope();
       options.clearAdditionalPageStateOnEscape?.();
@@ -81,63 +73,57 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     summaryInteraction.setClearSurfaceRootRef(element);
   };
 
-  const setSelectedGuestIdState = (id: string | null) => {
-    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
-      setSelectedGuestIdRaw(id);
-    });
+  // Row focus is local: it never navigates, so it must not stage an app-shell
+  // restore that the next unrelated route change would replay.
+  const applySelectedGuestId = (id: string | null) => {
+    if (id !== selectedGuestId()) selectedGuestDrawerState.reset();
+    setSelectedGuestIdRaw(id);
   };
 
   const setSelectedGuestId = (id: string | null) => {
-    capturePendingAppShellRestoreTop();
-    const activeFocusedGroupScope = focusedWorkloadGroupScope();
-    const nextGroupScope =
-      activeFocusedGroupScope && !isSummarySeriesInGroupScope(activeFocusedGroupScope, id)
-        ? null
-        : activeFocusedGroupScope;
-    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
-      setSelectedGuestIdRaw(id);
-      setSelectedWorkloadGroupIdRaw(nextGroupScope?.id ?? null);
-    });
+    referenceLookup?.abort();
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => applySelectedGuestId(id));
   };
 
-  const setFocusedWorkloadGroupScopeState = (scope: SummarySeriesGroupScope | null) => {
-    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
-      setSelectedWorkloadGroupIdRaw(scope?.id ?? null);
-      if (scope && !isSummarySeriesInGroupScope(scope, selectedGuestId())) {
-        setSelectedGuestIdRaw(null);
-      }
-    });
-  };
+  const routeReference = createMemo(() => resolveWorkloadResourceSelection(location.search));
+  createEffect(
+    on(
+      [() => location.pathname, routeReference, () => options.routeStateEnabled?.() ?? true],
+      ([, reference, enabled]) => {
+        if (!enabled) return;
+        referenceLookup?.abort();
+        // A route selects a destination. The shared focus bridge reveals it;
+        // retaining the previous scroll offset would undo that reveal.
+        applySelectedGuestId(reference);
+        if (!reference) return;
 
-  const setFocusedWorkloadGroupScope = (scope: SummarySeriesGroupScope | null) => {
-    setFocusedWorkloadGroupScopeState(scope);
-  };
-
-  createEffect(() => {
-    if (options.routeStateEnabled && !options.routeStateEnabled()) return;
-    const selection = resolveWorkloadResourceSelection(location.search);
-    if (!selection) {
-      if (handledResourceId() !== null) {
-        setSelectedGuestIdState(null);
-        setHandledResourceId(null);
-      }
-      if (handledWorkloadGroupId() !== null) {
-        setSelectedWorkloadGroupIdRaw(null);
-        setHandledWorkloadGroupId(null);
-      }
-      return;
-    }
-
-    const { resourceId, summaryGroupId } = selection;
-    if (summaryGroupId !== handledWorkloadGroupId()) {
-      setSelectedWorkloadGroupIdRaw(summaryGroupId);
-      setHandledWorkloadGroupId(summaryGroupId);
-    }
-    if (resourceId !== handledResourceId()) {
-      setSelectedGuestIdState(resourceId);
-      setHandledResourceId(resourceId);
-    }
-  });
+        // Exact current IDs need no translation. Historical/source references
+        // are resolved by the registry, which owns succession and ambiguity.
+        if (
+          untrack(options.filteredGuests).some(
+            (guest) => getCanonicalWorkloadId(guest) === reference,
+          )
+        )
+          return;
+        const controller = new AbortController();
+        referenceLookup = controller;
+        onCleanup(() => controller.abort());
+        void ResourceAPI.getResource(reference, { signal: controller.signal })
+          .then((resource) => {
+            if (
+              !controller.signal.aborted &&
+              selectedGuestId() === reference &&
+              resource.id?.trim()
+            ) {
+              applySelectedGuestId(resource.id);
+            }
+          })
+          .catch(() => {
+            // An unresolved or refused reference must not select another row.
+          });
+      },
+    ),
+  );
 
   createEffect(() => {
     const hoveredId = hoveredWorkloadId();
@@ -155,50 +141,14 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     }
   });
 
-  createEffect(() => {
-    const groupScope = hoveredWorkloadGroupScope();
-    if (!groupScope) {
-      return;
-    }
-    if (!workloadsHasVisibleWorkloadGroupScope(options.filteredGuests(), groupScope)) {
-      setHoveredWorkloadGroupScope(null);
-    }
-  });
-
-  createEffect(() => {
-    const selectedGroupId = selectedWorkloadGroupId();
-    if (!selectedGroupId) {
-      return;
-    }
-    if (!focusedWorkloadGroupScope()) {
-      setFocusedWorkloadGroupScope(null);
-    }
-  });
-
-  createEffect(() => {
-    const selectedId = selectedGuestId();
-    const groupScope = focusedWorkloadGroupScope();
-    if (!selectedId || !groupScope) {
-      return;
-    }
-    if (!isSummarySeriesInGroupScope(groupScope, selectedId)) {
-      setSelectedGuestId(null);
-    }
-  });
-
   return {
-    activeSummaryWorkloadGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
     clearPinnedSummaryScope,
-    focusedSummaryWorkloadGroupScope: focusedWorkloadGroupScope,
     hoveredWorkloadId,
-    hoveredSummaryWorkloadGroupScope: hoveredWorkloadGroupScope,
-    focusedSummaryWorkloadGroupId: selectedWorkloadGroupId,
     revealedGuestId,
+    selectedGuestDrawerState,
     selectedGuestId,
     setClearSurfaceRootRef,
-    setFocusedWorkloadGroupScope,
-    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,

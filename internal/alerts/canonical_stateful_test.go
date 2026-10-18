@@ -1,12 +1,14 @@
 package alerts
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -446,5 +448,314 @@ func TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications(t *testing.T) 
 	}
 	if got := len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationDispatched}})); got != 2 {
 		t.Fatalf("genuine recurrence produced %d total dispatches, want two", got)
+	}
+}
+
+// Replays obsolete PVE backup identities and timestamps. The live
+// PBS inventory is deliberately evaluated after the production restore timer,
+// matching a restart whose first successful backup check is still pending.
+func TestRestoredBackupRequiresFreshEvaluation(t *testing.T) {
+	for _, sqlite := range []bool{false, true} {
+		name := "recovery-mirror"
+		if sqlite {
+			name = "sqlite-authority"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			now := time.Now().UTC()
+			lastSeen := now.Add(-4 * 24 * time.Hour)
+			var fixtures []*Alert
+			for i, subject := range []string{"res-vm-legacy-1", "res-vm-legacy-2"} {
+				resourceID := "backup-subject:" + subject
+				specID := resourceID + "-backup-age"
+				backupTime := now.Add(-94*24*time.Hour + time.Duration(i)*15*time.Minute)
+				fixtures = append(fixtures, &Alert{
+					ID: resourceID + "::" + specID, Type: "backup-age", Level: AlertLevelCritical,
+					ResourceID: resourceID, ResourceName: fmt.Sprintf("backup-server-%d backup", i+1),
+					CanonicalSpecID: specID, CanonicalKind: "posture-threshold",
+					CanonicalState: resourceID + "::" + specID,
+					Message:        "Backup via proxmox-pve is 90.0 days old", Value: 90, Threshold: 84,
+					StartTime: backupTime.Add(84 * 24 * time.Hour), LastSeen: lastSeen,
+					Metadata: map[string]interface{}{
+						"source": "PVE", "providers": []string{"proxmox-pve"},
+						"lastBackupTime": backupTime, "ageDays": float64(90), "thresholdDays": float64(84),
+						"guestVmid": 0, "guestInstance": "", "guestNode": "", "guestType": "",
+						"guestName": fmt.Sprintf("backup-server-%d", i+1), "orphaned": false,
+						"resourceType": "vm", "rollupId": "res:" + subject[4:],
+						"canonicalAlertKind": "posture-threshold", "canonicalSpecID": specID,
+					},
+				})
+			}
+			writeActiveRecoveryFixture(t, dir, fixtures)
+			seed := NewManagerWithDataDir(dir)
+			if sqlite {
+				seed.EnableEventLog()
+				if !seed.activeStateAuthoritative.Load() {
+					t.Fatal("failed to establish SQLite authority")
+				}
+			}
+			if err := seed.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			seed.Stop()
+
+			m := NewManagerWithDataDir(dir)
+			t.Cleanup(m.Stop)
+			if sqlite {
+				m.EnableEventLog()
+			}
+			m.UpdateConfig(AlertConfig{Enabled: true, ActivationState: ActivationActive,
+				TimeThresholds: map[string]int{},
+				BackupDefaults: BackupAlertConfig{Enabled: true, WarningDays: 70, CriticalDays: 84}})
+			delivered := make(chan *Alert, 8)
+			m.SetAlertCallback(func(a *Alert) { delivered <- a.Clone() })
+			for _, a := range fixtures {
+				if !testHasActiveAlert(t, m, a.ID) {
+					t.Fatalf("the historical alert was not restored: %s", a.ID)
+				}
+			}
+
+			// Exercise the real ten-second startup timer without changing source.
+			select {
+			case a := <-delivered:
+				t.Errorf("restored stale backup warning dispatched before any fresh backup evaluation: id=%s lastSeen=%s lastBackupTime=%v",
+					a.ID, a.LastSeen.Format(time.RFC3339), a.Metadata["lastBackupTime"])
+			case <-time.After(12 * time.Second):
+			}
+
+			// The current PBS rollups use different resource identities.
+			var rollups []recovery.ProtectionRollup
+			guests := make(map[string]GuestLookup)
+			byVMID := make(map[string][]GuestLookup)
+			for i, resourceID := range []string{"vm-current-1", "vm-current-2"} {
+				vmid := 101 + i
+				node := fmt.Sprintf("pve%02d", i+1)
+				guest := GuestLookup{Name: fmt.Sprintf("backup-server-%d", i+1), Instance: "pve01", Node: node,
+					VMID: vmid, Type: "qemu", ResourceID: resourceID}
+				guests[BuildGuestKey("pve01", node, vmid)] = guest
+				byVMID[fmt.Sprint(vmid)] = []GuestLookup{guest}
+				success := now.Add(-2*24*time.Hour + time.Duration(i)*15*time.Minute)
+				rollups = append(rollups, recovery.ProtectionRollup{RollupID: "res:" + resourceID,
+					SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "pve01", Name: guest.Name,
+						ID: fmt.Sprintf("pve01:%s:%d", node, vmid), Class: node},
+					LastSuccessAt: &success, LastOutcome: recovery.OutcomeSuccess,
+					Providers: []recovery.Provider{recovery.ProviderProxmoxPBS}})
+			}
+			m.CheckBackups(rollups, guests, byVMID)
+			for _, a := range fixtures {
+				if testHasActiveAlert(t, m, a.ID) {
+					t.Errorf("fresh current PBS inventory did not clear historical warning: %s", a.ID)
+				}
+			}
+			select {
+			case a := <-delivered:
+				t.Fatalf("cleared historical backup emitted a notification: %s", a.ID)
+			case <-time.After(100 * time.Millisecond):
+			}
+		})
+	}
+}
+
+func startupBackupConfig() AlertConfig {
+	return AlertConfig{Enabled: true, ActivationState: ActivationActive,
+		TimeThresholds: map[string]int{},
+		BackupDefaults: BackupAlertConfig{Enabled: true, WarningDays: 70, CriticalDays: 84}}
+}
+
+// Seed through normal backup evaluation so revalidation must retain the same
+// canonical identity, acknowledgement, occurrence, and notification receipt.
+func restartOverdueBackup(t *testing.T, sqlite bool, edit func(*Alert)) (*Manager, []recovery.ProtectionRollup, *Alert) {
+	t.Helper()
+	dir := t.TempDir()
+	success := time.Now().Add(-94 * 24 * time.Hour)
+	rollups := []recovery.ProtectionRollup{{RollupID: "res:vm-startup-test",
+		SubjectRef:    &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "test", ID: "test:node:101"},
+		LastSuccessAt: &success, LastOutcome: recovery.OutcomeSuccess,
+		Providers: []recovery.Provider{recovery.ProviderProxmoxPBS}}}
+	seed := NewManagerWithDataDir(dir)
+	if sqlite {
+		seed.EnableEventLog()
+	}
+	seed.UpdateConfig(startupBackupConfig())
+	seed.CheckBackups(rollups, nil, nil)
+	active := seed.GetActiveAlerts()
+	if len(active) != 1 || active[0].Level != AlertLevelCritical {
+		seed.Stop()
+		t.Fatalf("expected one overdue backup incident, got %+v", active)
+	}
+	if edit != nil {
+		seed.mu.Lock()
+		current, _ := seed.getActiveAlertNoLock(active[0].ID)
+		edit(current)
+		seed.setActiveAlertNoLock(current.ID, current)
+		seed.mu.Unlock()
+	}
+	if err := seed.SaveActiveAlerts(); err != nil {
+		seed.Stop()
+		t.Fatal(err)
+	}
+	seed.Stop()
+	m := NewManagerWithDataDir(dir)
+	t.Cleanup(m.Stop)
+	if sqlite {
+		m.EnableEventLog()
+		if !m.activeStateAuthoritative.Load() {
+			t.Fatal("failed to restore SQLite active authority")
+		}
+	}
+	m.UpdateConfig(startupBackupConfig())
+	restored := m.GetActiveAlerts()
+	if len(restored) != 1 {
+		t.Fatalf("expected retained overdue backup incident, got %+v", restored)
+	}
+	return m, rollups, restored[0].Clone()
+}
+
+func TestRestoredBackupRevalidationDeliversOverdueOccurrence(t *testing.T) {
+	for _, sqlite := range []bool{false, true} {
+		t.Run(fmt.Sprintf("sqlite=%t", sqlite), func(t *testing.T) {
+			m, rollups, restored := restartOverdueBackup(t, sqlite, nil)
+			delivered := make(chan *Alert, 4)
+			m.SetAlertCallback(func(a *Alert) { delivered <- a })
+			if !m.ShouldSuppressNotification(restored) {
+				t.Fatal("restored snapshot can notify before a backup evaluation")
+			}
+			m.CheckBackups(rollups, nil, nil)
+			select {
+			case a := <-delivered:
+				if a.ID != restored.ID || !a.StartTime.Equal(restored.StartTime) || !a.LastSeen.After(restored.LastSeen) {
+					t.Fatalf("revalidation did not preserve the occurrence with fresh evidence: %+v", a)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("genuinely overdue backup did not notify after revalidation")
+			}
+			m.CheckBackups(rollups, nil, nil)
+			select {
+			case a := <-delivered:
+				t.Fatalf("unchanged overdue occurrence notified twice: %s", a.ID)
+			case <-time.After(100 * time.Millisecond):
+			}
+			if active := m.GetActiveAlerts(); len(active) != 1 || active[0].LastNotified == nil {
+				t.Fatalf("revalidated notification receipt was not retained: %+v", active)
+			}
+		})
+	}
+}
+
+func TestRestoredBackupWithoutValidEvidenceRetainsIncidentAndEscalation(t *testing.T) {
+	m, rollups, restored := restartOverdueBackup(t, true, nil)
+	delivered := make(chan *Alert, 4)
+	m.SetAlertCallback(func(a *Alert) { delivered <- a })
+	m.SetEscalateCallback(func(a *Alert, _ int) { delivered <- a })
+	cfg := startupBackupConfig()
+	cfg.Schedule.Escalation = EscalationConfig{Enabled: true, Levels: []EscalationLevel{{After: 5}}}
+	m.UpdateConfig(cfg)
+	spec, err := buildCanonicalPostureThresholdSpec(restored.CanonicalSpecID, restored.ResourceID,
+		restored.ResourceName, "vm", "backup-age-days", 70, 84, "", 0, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, valid := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec, AlertID: restored.ID, AlertType: "backup-age",
+		Evidence: alertspecs.AlertEvidence{ObservedAt: time.Now()},
+	}); valid {
+		t.Fatal("invalid backup evidence was accepted")
+	}
+	m.mu.Lock()
+	if m.dispatchAlert(restored, false) {
+		m.mu.Unlock()
+		t.Fatal("restored snapshot dispatched without valid evidence")
+	}
+	m.mu.Unlock()
+	m.checkEscalations()
+	if _, _, eligible := m.PrepareEscalationNotification(restored, 1); eligible {
+		t.Fatal("restored backup snapshot bypassed revalidation through escalation")
+	}
+	diagnosis, found := m.DiagnoseAlertDelivery(restored.ID)
+	if !found || diagnosis.Reason != alertDeliveryReasonBackupRevalidation {
+		t.Fatalf("delivery diagnosis did not explain the startup hold: %+v", diagnosis)
+	}
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || !active[0].StartTime.Equal(restored.StartTime) || active[0].LastEscalation != 0 || active[0].LastNotified != nil {
+		t.Fatalf("missing evidence mutated or resolved the retained incident: %+v", active)
+	}
+	select {
+	case <-delivered:
+		t.Fatal("missing evidence sent a firing or escalation notification")
+	case <-time.After(100 * time.Millisecond):
+	}
+	// Once collection succeeds, neither the overdue notification nor the
+	// previously held escalation level may be permanently lost.
+	m.CheckBackups(rollups, nil, nil)
+	select {
+	case <-delivered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("overdue notification was lost after collection succeeded")
+	}
+	m.checkEscalations()
+	if _, _, eligible := m.PrepareEscalationNotification(restored, 1); !eligible {
+		t.Fatal("freshly revalidated backup cannot escalate")
+	}
+}
+
+func TestRestoredBackupRevalidationRespectsAcknowledgementAndCooldown(t *testing.T) {
+	for _, policy := range []string{"acknowledged", "cooldown", "first-notification-only", "snoozed"} {
+		t.Run(policy, func(t *testing.T) {
+			m, rollups, restored := restartOverdueBackup(t, false, func(a *Alert) {
+				if policy == "acknowledged" {
+					a.Acknowledged = true
+					a.AckUser = "operator"
+				} else if policy != "snoozed" {
+					now := time.Now()
+					a.LastNotified = &now
+				}
+			})
+			if policy == "snoozed" {
+				if err := m.SnoozeAlert(restored.ID, "operator", time.Now().Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg := startupBackupConfig()
+			if policy == "cooldown" {
+				cfg.Schedule.Cooldown = 60
+			}
+			m.UpdateConfig(cfg)
+			delivered := make(chan *Alert, 2)
+			m.SetAlertCallback(func(a *Alert) { delivered <- a })
+			m.CheckBackups(rollups, nil, nil)
+			select {
+			case a := <-delivered:
+				t.Fatalf("revalidation bypassed %s: %+v", policy, a)
+			case <-time.After(100 * time.Millisecond):
+			}
+		})
+	}
+}
+
+func TestRestoredBackupRevalidationPreservesQuietHoursReplay(t *testing.T) {
+	m, rollups, restored := restartOverdueBackup(t, false, nil)
+	cfg := startupBackupConfig()
+	cfg.Schedule.QuietHours = QuietHours{Enabled: true, Start: "00:00", End: "23:59", Timezone: "UTC",
+		Days: map[string]bool{"monday": true, "tuesday": true, "wednesday": true, "thursday": true,
+			"friday": true, "saturday": true, "sunday": true},
+		Suppress: QuietHoursSuppression{Storage: true}}
+	m.UpdateConfig(cfg)
+	if !m.ShouldSuppressNotification(restored) || hasQuietHoursNotificationReplay(restored) {
+		t.Fatal("startup hold queued stale backup evidence for quiet-hours replay")
+	}
+	// Fresh evidence downgrades this retained occurrence to a warning, which
+	// normal quiet-hours policy defers. Critical backup-age alerts bypass it.
+	warningBackupTime := time.Now().Add(-75 * 24 * time.Hour)
+	rollups[0].LastSuccessAt = &warningBackupTime
+	delivered := make(chan *Alert, 2)
+	m.SetAlertCallback(func(a *Alert) { delivered <- a })
+	m.CheckBackups(rollups, nil, nil)
+	select {
+	case a := <-delivered:
+		if a.Level != AlertLevelWarning || !hasQuietHoursNotificationReplay(a) {
+			t.Fatal("revalidated overdue backup lost normal quiet-hours replay metadata")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("revalidated backup did not enter normal quiet-hours delivery")
 	}
 }

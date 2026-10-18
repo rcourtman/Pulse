@@ -117,6 +117,13 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('points Assistant protection at the per-resource lock instead of a protected guests list', () => {
+    expect(aiRuntimeControlsSectionSource).toContain('data-testid="ai-never-auto-remediate-hint"');
+    expect(aiRuntimeControlsSectionSource).toContain('turn on Never');
+    expect(aiRuntimeControlsSectionSource).not.toMatch(/protected.?guests/i);
+    expect(aiSettingsStateSource).not.toMatch(/protected.?guests/i);
+  });
+
   it('keeps the Patrol cost preview on the canonical cost-preview API and presentation helper', () => {
     // The price table and the install's run history live on the server; the
     // settings surface must not re-derive dollars from model names.
@@ -557,24 +564,31 @@ describe('settings architecture guardrails', () => {
     expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy({');
     expect(auditWebhookPanelSource).toContain('paidRuntimeRequired: paidRuntimeRequired()');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
+    // The only webhook page in Settings says it is not alert delivery and
+    // links to alert notifications, in both the gated and enabled states.
+    expect(auditWebhookPanelSource).toContain('getAuditWebhookNotificationsSignpost()');
+    expect(auditWebhookPanelSource).toContain("pathForTab('destinations')");
+    expect(auditWebhookPanelSource.match(/<AuditWebhookNotificationsSignpost \/>/g)).toHaveLength(
+      2,
+    );
     expect(reportingPanelSource).toContain('if (!catalog || !state || showUpgradePrompts())');
     expect(reportingPanelSource).toContain('title: `${state.title} unavailable`');
     expect(reportingPanelSource).toContain(
       'Reporting is locked for this session. The report builder appears when advanced reporting is available.',
     );
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
-    expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
-    expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Ask first - Assistant asks before chat-only actions',
+    expect(aiRuntimeControlsSectionSource).not.toContain('showAutonomousControlOption');
+    expect(aiRuntimeControlsSectionSource).not.toContain(
+      "state.form.controlLevel === 'autonomous'",
     );
     expect(aiRuntimeControlsSectionSource).toContain(
+      'Ask first - Assistant plans actions for your review',
+    );
+    expect(aiRuntimeControlsSectionSource).not.toContain(
       'Allow chat-only actions - Assistant may take eligible chat actions',
     );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'This controls actions started from Assistant chat only',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain('Patrol handles infrastructure');
+    expect(aiRuntimeControlsSectionSource).toContain('This sets what Assistant chat may plan');
+    expect(aiRuntimeControlsSectionSource).toContain("Patrol's own mode is set on the Patrol page");
     expect(aiRuntimeControlsSectionSource).not.toContain('Command auto-run');
     expect(aiRuntimeControlsSectionSource).not.toContain('without per-command approval');
     expect(aiRuntimeControlsSectionSource).not.toContain('Legal Disclaimer');
@@ -588,7 +602,6 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsSource).toContain("saveLabel: 'Save provider settings'");
     expect(aiSettingsSource).toContain("saveLabel: 'Save Patrol settings'");
     expect(aiSettingsSource).toContain("saveLabel: 'Save Assistant settings'");
-    expect(aiSettingsSource).toContain("saveLabel: 'Save service context settings'");
     expect(aiSettingsStatusAndActionsSource).toContain('props.saveLabel');
     expect(aiSettingsStatusAndActionsSource).not.toContain('Save changes</button>');
     expect(aiSettingsStateSource).toContain('options.savedLabel');
@@ -630,10 +643,10 @@ describe('settings architecture guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
 
     expect(ssoProvidersPanelSource).toContain(
@@ -804,11 +817,8 @@ describe('settings architecture guardrails', () => {
       '<span class="hidden sm:inline">Manage Access</span>',
     );
     expect(userAssignmentsPanelSource).toContain('<span class="hidden sm:inline">Remove</span>');
-    expect(reportingPanelSource).toContain('hidden w-[16%] px-3 py-2 font-semibold sm:table-cell');
-    expect(reportingPanelSource).toContain('text-xs font-normal text-muted sm:hidden');
-    expect(reportingPanelSource).toContain('<details class="group sm:hidden">');
-    expect(reportingPanelSource).toContain('aria-label={`Actions for ${schedule.name}`}');
-    expect(reportingPanelSource).toContain('class="hidden justify-end gap-1 sm:flex"');
+    // Scheduled reports use a list. ReportingPanel.test.tsx and the Reports
+    // browser matrix verify visible recovery actions instead of table markup.
   });
 
   it('keeps settings loading skeletons on the shared skeleton primitive', () => {
@@ -1085,30 +1095,6 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/readiness");
   });
 
-  it('keeps service context manual refresh on the canonical settings state', () => {
-    expect(aiSettingsStateSource).toContain(
-      "import { runDiscoveryRefresh } from '@/api/discovery';",
-    );
-    expect(aiSettingsStateSource).toContain('const handleRunDiscoveryRefresh = async () => {');
-    expect(aiSettingsStateSource).toContain('const result = await runDiscoveryRefresh();');
-    expect(aiSettingsStateSource).toContain('discoveryRunRunning');
-    expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
-    expect(aiRuntimeControlsSectionSource).toContain('Run context scan');
-    expect(aiRuntimeControlsSectionSource).toContain('Auto ${state.form.discoveryIntervalHours}h');
-    expect(aiRuntimeControlsSectionSource).toContain('Manual only');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Recurring service context scans will run at this interval.',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Recurring service context scans are off. Only manual refreshes will run.',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain('Runs the same scan used by the schedule.');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Manual-only mode: runs one scan without enabling recurring scans.',
-    );
-    expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
-  });
-
   it('hydrates the Patrol readiness advisor from the persisted settings snapshot', () => {
     expect(aiSettingsStateSource).toContain('hydratePatrolModelReadinessFromSettings');
     expect(aiSettingsStateSource).toContain('patrol_model_readiness');
@@ -1369,6 +1355,9 @@ describe('settings architecture guardrails', () => {
     expect(normalize(networkBoundarySettingsSectionSource)).not.toContain('Dashboard URL');
     expect(normalize(nodeModalBasicInfoSectionSource)).toContain('monitoring views');
     expect(normalize(nodeModalBasicInfoSectionSource)).not.toContain('dashboards');
+    // The server names an unnamed node from its host and disambiguates
+    // duplicates, so the form must not claim either is the user's job.
+    expect(normalize(nodeModalBasicInfoSectionSource)).not.toContain('must be unique');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('trim workload noise');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('Existing monitoring readings');
     expect(normalize(nodeModalMonitoringSectionSource)).not.toContain('dashboard readings');
@@ -1416,7 +1405,7 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain(
       'Used when Patrol checks, investigates, and verifies work.',
     );
-    expect(aiModelSelectionSectionSource).toContain("label: 'Service context model'");
+    expect(aiModelSelectionSectionSource).not.toContain("label: 'Service context model'");
     expect(aiModelSelectionSectionSource).toContain('export const AIModelOverrideField');
     expect(aiSettingsSource).toContain(
       '<AIModelOverrideField state={props.state} kind="assistant" />',
@@ -1424,11 +1413,7 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsSource).toContain(
       '<AIModelOverrideField state={props.state} kind="patrol" includePatrolReadiness />',
     );
-    expect(aiSettingsSource).toContain(
-      '<AIModelOverrideField state={props.state} kind="discovery" />',
-    );
-    expect(aiSettingsStateSource).toContain('discoveryModel:');
-    expect(aiSettingsStateSource).toContain('payload.discovery_model = form.discoveryModel');
+    expect(aiSettingsStateSource).not.toContain('discoveryModel');
 
     expect(aiSettingsModelSource).toContain('AIProviderTestResult');
     expect(aiSettingsModelSource).toContain('AISettings as AISettingsType');
@@ -1450,6 +1435,35 @@ describe('settings architecture guardrails', () => {
     expect(aiProviderConfigurationSectionSource).toContain(
       "autocomplete={extraField.type === 'password' ? 'new-password' : 'off'}",
     );
+  });
+
+  it('explains the container update risk lock through the canonical Patrol availability policy', () => {
+    expect(aiSettingsSource).toContain('getPatrolAlertAnalysisAvailabilityPresentation({');
+    expect(aiSettingsSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(aiSettingsSource).toContain(
+      'upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),',
+    );
+    expect(aiSettingsSource).toContain(
+      'runtimeCapabilityBlock: getRuntimeCapabilityBlock(PATROL_ALERT_ANALYSIS_FEATURE_KEY),',
+    );
+    expect(aiSettingsSource).toContain(
+      'planUpgradeDestination: getUpgradeActionDestination(PATROL_ALERT_ANALYSIS_FEATURE_KEY),',
+    );
+    expect(aiSettingsSource).toContain(
+      'disabled={props.state.saving() || alertAnalysisAvailability().locked}',
+    );
+    expect(aiSettingsSource).toContain(
+      '<p id={alertAnalysisLockId} class="mt-1 text-xs text-muted">',
+    );
+    expect(aiSettingsSource).toContain(
+      'alertAnalysisAvailability().locked ? alertAnalysisLockId : undefined',
+    );
+    // The shared Toggle declares locked/lockedMessage but never renders them,
+    // so the card must carry the explanation itself.
+    expect(aiSettingsSource).not.toContain('lockedMessage=');
+    expect(aiSettingsSource).not.toContain('Requires Pulse Pro');
   });
 
   it('keeps system AI save feedback tied to provider and Patrol readiness context', () => {
@@ -1532,10 +1546,15 @@ describe('settings architecture guardrails', () => {
     // The displayed verdict can come from the 24h localStorage cache, so the
     // Up to date state must carry the age of the check it came from through
     // the shared presentation helper, or a stale verdict reads as a live
-    // comparison (#1601). The copy stays in the presentation owner, never
-    // inline in the panel shell.
+    // comparison (#1601). The shared clock must keep that age moving while
+    // the panel stays mounted. The copy stays in the presentation owner,
+    // never inline in the panel shell.
     expect(updatesSettingsPanelSource).toContain(
-      'getUpdateCheckedLabel(updateStore.lastCheckedAt())',
+      "import { useRelativeTimeNow } from '@/utils/relativeTimeClock';",
+    );
+    expect(updatesSettingsPanelSource).toContain('const now = useRelativeTimeNow();');
+    expect(updatesSettingsPanelSource).toContain(
+      'getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())',
     );
     expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
     expect(updatesPresentationSource).toContain("return 'Not checked yet'");
@@ -1643,14 +1662,27 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Manage');
     expect(infrastructureSourceManagerSource).not.toContain('Detect address');
     expect(infrastructureSourceManagerSource).toContain("'Install agent'");
+    // Cluster members install in one step through the server-side deploy, so
+    // the install actions route through the canonical dialog and keep the
+    // scoped installer as the fallback instead of a hand-copied token.
+    expect(infrastructureSourceManagerSource).toContain("from './ClusterAgentDeployDialog'");
+    expect(infrastructureSourceManagerSource).toContain('<ClusterAgentDeployDialog');
+    expect(infrastructureSourceManagerSource).toContain(
+      'onUseInstaller={handleInstallAgentShortcut}',
+    );
+    expect(infrastructureSourceManagerSource).toContain('<Show when={clusterDeploy()} keyed>');
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).not.toContain('Monitor endpoint');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
     expect(infrastructureSourceManagerSource).toContain('Connection posture');
     expect(infrastructureSourceManagerSource).toContain("'system')} connected");
     expect(infrastructureSourceManagerSource).toContain('All active');
-    expect(infrastructureSourceManagerSource).toContain('needs attention');
-    expect(infrastructureSourceManagerSource).toContain('has limited coverage');
+    expect(infrastructureSourceManagerSource).toContain(
+      "{fleetAttentionSystemCount() === 1 ? 'needs' : 'need'} attention",
+    );
+    expect(infrastructureSourceManagerSource).toContain(
+      "{uncoveredAgentTargetCount() === 1 ? 'has' : 'have'} limited coverage",
+    );
     expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Infrastructure coverage');
     expect(infrastructureSourceManagerSource).not.toContain('Fleet governance');
@@ -1763,6 +1795,8 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('get savingTemperatureSetting()');
     expect(nodeCredentialSlotSource).not.toContain('editingNode: props.editingNode');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');
+    // The step summary follows the form's field order: endpoint, then name.
+    expect(nodeCredentialSlotSource).toContain('API address and name');
     expect(nodeCredentialSlotSource).toContain('<NodeModalAuthenticationSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
@@ -2155,5 +2189,24 @@ describe('node import preview authority boundary', () => {
       'setupHandoffDisabled: () => Boolean(props.importCandidate && !importApproved())',
     );
     expect(nodeCredentialSlotSource).toContain('if (saveBlockedByImportPlan())');
+  });
+});
+
+describe('ordinary uninstall copy surfaces', () => {
+  it('keeps both installer families reachable without an installation token and uses the shared state', () => {
+    const removal = infrastructureInstallerSectionSource.slice(
+      infrastructureInstallerSectionSource.indexOf('Uninstall agent'),
+    );
+    expect(removal).toContain('copyToClipboard(state.getUninstallCommand())');
+    expect(removal).toContain('copyToClipboard(state.getWindowsUninstallCommand())');
+    expect(removal).not.toContain('commandsUnlocked');
+    expect(removal).not.toContain('requiresToken');
+    expect(removal).not.toContain('handleGenerateToken');
+    expect(removal).toContain('saved connection');
+    expect(removal).not.toContain("If the agent can't reach this server");
+    expect(infrastructureWorkspaceSource).toContain('linux: operations.getUninstallCommand()');
+    expect(infrastructureWorkspaceSource).toContain(
+      'windows: operations.getWindowsUninstallCommand()',
+    );
   });
 });

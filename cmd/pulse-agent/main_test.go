@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -902,7 +903,10 @@ func TestResolveToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
+			got, err := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if got != tc.expected {
 				t.Fatalf("%s: expected %q, got %q", tc.name, tc.expected, got)
 			}
@@ -910,18 +914,124 @@ func TestResolveToken(t *testing.T) {
 	}
 
 	t.Run("truly empty", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", customStateDir, fakeReadFileNoDefault)
+		got, err := resolveTokenInternal("", "", "", customStateDir, fakeReadFileNoDefault)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != "" {
 			t.Fatalf("expected empty, got %q", got)
 		}
 	})
 
 	t.Run("custom state never borrows default token", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", filepath.Join(string(filepath.Separator), "missing-custom"), fakeReadFile)
+		got, err := resolveTokenInternal("", "", "", filepath.Join(string(filepath.Separator), "missing-custom"), fakeReadFile)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != "" {
 			t.Fatalf("custom state unexpectedly borrowed default token %q", got)
 		}
 	})
+}
+
+// Exercise flag parsing as well as the resolver: a resolver-only test cannot
+// detect an environment value accidentally installed as the --token default.
+func TestLoadConfigTokenSources(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		args         []string
+		envToken     string
+		fileToken    string
+		runtimeToken string
+		want         string
+		wantError    string
+	}{
+		{name: "selected file beats environment", args: []string{"--token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "selected file without environment", args: []string{"--token-file=FILE"}, fileToken: "file-token", want: "file-token"},
+		{name: "single dash file beats environment", args: []string{"-token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "explicit token beats file and environment", args: []string{"--token-file", "FILE", "--token", "argument-token"}, envToken: "environment-token", fileToken: "file-token", want: "argument-token"},
+		{name: "explicit token does not read lower priority file", args: []string{"--token", "argument-token", "--token-file", "MISSING"}, envToken: "environment-token", want: "argument-token"},
+		{name: "empty token flag does not mask selected file", args: []string{"--token=", "--token-file", "FILE"}, envToken: "environment-token", fileToken: "file-token", want: "file-token"},
+		{name: "environment beats implicit state file", envToken: "environment-token", want: "environment-token"},
+		{name: "implicit custom state file", want: "state-token"},
+		{name: "outer whitespace remains accepted", args: []string{"--token-file", "FILE"}, fileToken: " \tfile-token\r\n", want: "file-token"},
+		{name: "quotes are not part of the file format", args: []string{"--token-file", "FILE"}, fileToken: `"file-token"`, want: `"file-token"`},
+		{name: "assignment is not decoded as a credential", args: []string{"--token-file", "FILE"}, fileToken: "PULSE_TOKEN=file-token", want: "PULSE_TOKEN=file-token"},
+		{name: "missing selected file refuses environment and state fallback", args: []string{"--token-file", "MISSING"}, envToken: "environment-token", wantError: "cannot read --token-file"},
+		{name: "directory selected as a file refuses fallback", args: []string{"--token-file", "DIRECTORY"}, envToken: "environment-token", wantError: "cannot read --token-file"},
+		{name: "empty selected file refuses fallback", args: []string{"--token-file", "FILE"}, envToken: "environment-token", wantError: "--token-file is empty"},
+		{name: "whitespace selected file refuses fallback", args: []string{"--token-file", "FILE"}, fileToken: " \t\r\n", envToken: "environment-token", wantError: "--token-file is empty"},
+		{name: "enrollment restart keeps runtime credential", args: []string{"--enroll", "--token-file", "FILE", "--token", "argument-token"}, envToken: "environment-token", fileToken: "bootstrap-token", runtimeToken: "runtime-token\n", want: "runtime-token"},
+		{name: "enrollment restart survives removed bootstrap file", args: []string{"--enroll", "--token-file", "MISSING"}, runtimeToken: "runtime-token", want: "runtime-token"},
+		{name: "first enrollment still uses selected bootstrap", args: []string{"--enroll", "--token-file", "FILE"}, envToken: "environment-token", fileToken: "bootstrap-token", want: "bootstrap-token"},
+		{name: "empty runtime credential does not mask file failure", args: []string{"--enroll", "--token-file", "MISSING"}, runtimeToken: " \n", wantError: "cannot read --token-file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDir := t.TempDir()
+			file := filepath.Join(stateDir, "selected-token")
+			for name, content := range map[string]string{"token": "state-token", "selected-token": tc.fileToken} {
+				if err := os.WriteFile(filepath.Join(stateDir, name), []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.runtimeToken != "" {
+				if err := os.WriteFile(filepath.Join(stateDir, "runtime.token"), []byte(tc.runtimeToken), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"--url", "https://pulse.example.test", "--state-dir", stateDir, "--agent-id", "retained-agent-id", "--command-authority", "monitoring-only"}
+			for _, arg := range tc.args {
+				arg = strings.ReplaceAll(arg, "FILE", file)
+				arg = strings.ReplaceAll(arg, "MISSING", filepath.Join(stateDir, "missing-token"))
+				arg = strings.ReplaceAll(arg, "DIRECTORY", stateDir)
+				args = append(args, arg)
+			}
+			cfg, err := loadConfig(args, func(key string) string {
+				if key == "PULSE_TOKEN" {
+					return tc.envToken
+				}
+				return ""
+			})
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("expected actionable selected-file error, got %v", err)
+				}
+				for _, private := range []string{stateDir, "environment-token", "state-token", tc.fileToken} {
+					if private != "" && strings.Contains(err.Error(), private) {
+						t.Fatal("selected-file error disclosed private configuration")
+					}
+				}
+				if cfg.APIToken != "" {
+					t.Fatal("failed configuration retained a fallback credential")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.APIToken != tc.want {
+				t.Fatal("wrong credential source selected")
+			}
+			if cfg.EnableCommands || cfg.InsecureSkipVerify || !cfg.EnableHost || cfg.AgentID != "retained-agent-id" || cfg.StateDir != stateDir || cfg.CommandAuthorityProfile != hostagent.CommandAuthorityMonitoringOnly {
+				t.Fatal("credential selection changed identity, trust or monitoring-only authority")
+			}
+		})
+	}
+}
+
+func TestResolveTokenSelectedFileReadErrorIsPrivate(t *testing.T) {
+	calls := 0
+	readFile := func(path string) ([]byte, error) {
+		calls++
+		return nil, &os.PathError{Op: "open", Path: path, Err: os.ErrPermission}
+	}
+	got, err := resolveTokenInternal("", "private-path-with-token-value", "environment-token", "/implicit-state", readFile)
+	if err == nil || got != "" || calls != 1 {
+		t.Fatal("selected-file failure fell through to another credential source")
+	}
+	if strings.Contains(err.Error(), "private-path") || strings.Contains(err.Error(), "token-value") {
+		t.Fatal("selected-file error disclosed the configured path")
+	}
 }
 
 func TestCleanupDockerAgent(t *testing.T) {
@@ -1433,7 +1543,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("self-test", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-self-test"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-self-test"}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1441,7 +1551,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("invalid config", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-interval", "invalid"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-interval", "invalid"}, func(s string) string { return "" })
 		if err == nil {
 			t.Fatal("expected error for invalid config")
 		}
@@ -1449,7 +1559,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("version exits cleanly", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-version"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-version"}, func(s string) string { return "" })
 		if err != flag.ErrHelp {
 			t.Fatalf("expected flag.ErrHelp for -version, got %v", err)
 		}
@@ -1464,7 +1574,7 @@ func TestRun(t *testing.T) {
 		}()
 
 		// Use minimal config, no agents
-		err := run(ctx, []string{"-token", "T", "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
 		if err != nil && err != context.Canceled {
 			t.Errorf("expected nil or context.Canceled, got %v", err)
 		}
@@ -1491,7 +1601,7 @@ func TestRun(t *testing.T) {
 		}()
 
 		// Enable everything, but they will fail to init and log warnings, which is fine for coverage of run's branches
-		err := run(ctx, []string{"-token", "T", "-enable-host", "-enable-docker", "-enable-kubernetes", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host", "-enable-docker", "-enable-kubernetes", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
 		if err != nil && err != context.Canceled && !strings.Contains(err.Error(), "disabled for test") {
 			t.Errorf("expected nil or context.Canceled or disabled for test, got %v", err)
 		}
@@ -1509,7 +1619,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("auto-detect podman", func(t *testing.T) {
@@ -1524,7 +1634,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("goroutine error", func(t *testing.T) {
@@ -1565,7 +1675,7 @@ func TestDockerAutoDetectHonorsExplicitDisable(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	err := run(ctx, []string{"-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", ""}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", ""}, func(s string) string { return "" })
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		t.Fatalf("run returned unexpected error: %v", err)
 	}
@@ -1680,10 +1790,12 @@ func TestRun_Success(t *testing.T) {
 	defer cancel()
 
 	// Run in a separate goroutine so we can wait for it
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
 		// Enable all agents
 		errCh <- run(ctx, []string{
+			"-state-dir", stateDir,
 			"-token", "T",
 			"-enable-host=true",
 			"-enable-docker=true",
@@ -1729,6 +1841,7 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 		return &mockRunnable{}, nil
 	}
 
+	stateDir := filepath.Join(t.TempDir(), "share", "CACHEDEV1_DATA", ".pulse-agent")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -1736,17 +1849,244 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 		"-token", "deadbeef",
 		"-enable-docker=false",
 		"-enable-kubernetes=false",
-		"-state-dir", "/share/CACHEDEV1_DATA/.pulse-agent",
+		"-state-dir", stateDir,
 	}, func(string) string { return "" })
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		t.Fatalf("run returned error: %v", err)
 	}
 
-	if updaterCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
-		t.Fatalf("updater state dir = %q, want %q", updaterCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
+	if updaterCfg.StateDir != stateDir {
+		t.Fatalf("updater state dir = %q, want %q", updaterCfg.StateDir, stateDir)
 	}
-	if hostCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
-		t.Fatalf("host agent state dir = %q, want %q", hostCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
+	if hostCfg.StateDir != stateDir {
+		t.Fatalf("host agent state dir = %q, want %q", hostCfg.StateDir, stateDir)
+	}
+}
+
+// A deployed agent's first run must exchange its bootstrap token before it
+// builds anything that authenticates. The server revokes the bootstrap token
+// on exchange, so a module started with it keeps failing until a restart; the
+// remote config refresh did exactly that every minute on a freshly deployed
+// cluster node.
+func TestRunEnrollsBeforeBuildingAuthenticatedModules(t *testing.T) {
+	origEnroll, origUpdater, origHost := enrollAgent, newUpdater, newHostAgent
+	origDocker, origKube, origLook := newDockerAgent, newKubeAgent, lookPath
+	origGate := enrollBeforeModuleStartup
+	defer func() {
+		enrollAgent, newUpdater, newHostAgent = origEnroll, origUpdater, origHost
+		newDockerAgent, newKubeAgent, lookPath = origDocker, origKube, origLook
+		enrollBeforeModuleStartup = origGate
+	}()
+	enrollBeforeModuleStartup = true
+
+	var mu sync.Mutex
+	var events []string
+	record := func(event string) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, event)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		record(r.URL.Path + " token=" + r.Header.Get("X-API-Token"))
+		if r.URL.Path == "/api/agents/agent/canonical-agent/config" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"success":true,"agentId":"canonical-agent","config":{}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	var enrollCfg hostagent.EnrollmentConfig
+	enrollAgent = func(_ context.Context, cfg hostagent.EnrollmentConfig) (hostagent.EnrollmentResult, error) {
+		record("enroll")
+		enrollCfg = cfg
+		return hostagent.EnrollmentResult{APIToken: "runtime-tok", AgentID: "canonical-agent"}, nil
+	}
+	var updaterCfg agentupdate.Config
+	newUpdater = func(cfg agentupdate.Config) *agentupdate.Updater {
+		updaterCfg = cfg
+		return agentupdate.New(agentupdate.Config{
+			PulseURL:       "https://pulse.example.com",
+			AgentName:      cfg.AgentName,
+			CurrentVersion: "1.0.0",
+			StateDir:       cfg.StateDir,
+			Disabled:       true,
+		})
+	}
+	var hostCfg hostagent.Config
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfg = cfg
+		return &mockRunnable{}, nil
+	}
+	var dockerCfg dockeragent.Config
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		dockerCfg = cfg
+		return &mockRunnableCloser{}, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var kubeCfg kubernetesagent.Config
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		kubeCfg = cfg
+		cancel() // the last module is built; nothing else needs to run
+		return &mockRunnable{}, nil
+	}
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+
+	err := run(ctx, []string{
+		"-url", server.URL,
+		"-token", "bootstrap-tok",
+		"-enroll",
+		"-hostname", "delly2",
+		"-state-dir", stateDir,
+		"-enable-host", "-enable-docker", "-enable-kubernetes",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("run() error = %v", err)
+	}
+
+	if enrollCfg.APIToken != "bootstrap-tok" || enrollCfg.HostnameOverride != "delly2" || enrollCfg.StateDir != stateDir {
+		t.Fatalf("enrollment config = %+v, want the bootstrap token, hostname override, and state dir", enrollCfg)
+	}
+	mu.Lock()
+	seen := append([]string(nil), events...)
+	mu.Unlock()
+	if len(seen) == 0 || seen[0] != "enroll" {
+		t.Fatalf("events = %q, want enrollment before any request to Pulse", seen)
+	}
+	fetchedConfig := false
+	for _, event := range seen[1:] {
+		if !strings.HasSuffix(event, "token=runtime-tok") {
+			t.Fatalf("request %q did not use the runtime token", event)
+		}
+		if strings.HasPrefix(event, "/api/agents/agent/canonical-agent/config ") {
+			fetchedConfig = true
+		}
+	}
+	if !fetchedConfig {
+		t.Fatalf("events = %q, want a remote config fetch for the canonical agent ID", seen)
+	}
+
+	if updaterCfg.APIToken != "runtime-tok" {
+		t.Fatalf("updater token = %q, want the runtime token", updaterCfg.APIToken)
+	}
+	if hostCfg.APIToken != "runtime-tok" || hostCfg.AgentID != "canonical-agent" || hostCfg.Enroll {
+		t.Fatalf("host config token=%q agentID=%q enroll=%v, want the enrolled credentials and no second exchange", hostCfg.APIToken, hostCfg.AgentID, hostCfg.Enroll)
+	}
+	if dockerCfg.APIToken != "runtime-tok" || dockerCfg.AgentID != "canonical-agent" || len(dockerCfg.Targets) == 0 || dockerCfg.Targets[0].Token != "runtime-tok" {
+		t.Fatalf("docker config token=%q agentID=%q targets=%+v, want the enrolled credentials", dockerCfg.APIToken, dockerCfg.AgentID, dockerCfg.Targets)
+	}
+	if kubeCfg.APIToken != "runtime-tok" || kubeCfg.AgentID != "canonical-agent" || len(kubeCfg.Targets) == 0 || kubeCfg.Targets[0].Token != "runtime-tok" {
+		t.Fatalf("kubernetes config token=%q agentID=%q targets=%+v, want the enrolled credentials", kubeCfg.APIToken, kubeCfg.AgentID, kubeCfg.Targets)
+	}
+	if data, err := os.ReadFile(filepath.Join(stateDir, "agent-id")); err != nil || strings.TrimSpace(string(data)) != "canonical-agent" {
+		t.Fatalf("agent-id file = %q (err %v), want the canonical agent ID for the next start", data, err)
+	}
+}
+
+// A rejected bootstrap token must stop startup before any module is built
+// with a credential the server will never accept.
+func TestRunStopsBeforeModulesWhenEnrollmentIsRejected(t *testing.T) {
+	origEnroll, origUpdater, origHost := enrollAgent, newUpdater, newHostAgent
+	origGate := enrollBeforeModuleStartup
+	defer func() {
+		enrollAgent, newUpdater, newHostAgent = origEnroll, origUpdater, origHost
+		enrollBeforeModuleStartup = origGate
+	}()
+	enrollBeforeModuleStartup = true
+
+	enrollAgent = func(context.Context, hostagent.EnrollmentConfig) (hostagent.EnrollmentResult, error) {
+		return hostagent.EnrollmentResult{}, errors.New("bootstrap token already consumed (409 Conflict)")
+	}
+	newUpdater = func(agentupdate.Config) *agentupdate.Updater {
+		t.Fatal("updater built after a rejected enrollment")
+		return nil
+	}
+	newHostAgent = func(hostagent.Config) (Runnable, error) {
+		t.Fatal("host module built after a rejected enrollment")
+		return nil, nil
+	}
+
+	err := run(context.Background(), []string{
+		"-url", "http://127.0.0.1:1",
+		"-token", "spent-bootstrap-tok",
+		"-enroll",
+		"-state-dir", t.TempDir(),
+		"-enable-docker=false", "-enable-kubernetes=false",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err == nil || !strings.Contains(err.Error(), "enrollment failed") {
+		t.Fatalf("run() error = %v, want the enrollment failure", err)
+	}
+}
+
+// Windows startup runs before the service control dispatcher, so an
+// enrollment retry there could outlast the dispatcher's deadline. With the
+// gate off, the host module still receives --enroll and enrolls for itself.
+func TestRunLeavesEnrollmentToTheHostModuleWhenGatedOff(t *testing.T) {
+	origEnroll, origHost, origGate := enrollAgent, newHostAgent, enrollBeforeModuleStartup
+	defer func() { enrollAgent, newHostAgent, enrollBeforeModuleStartup = origEnroll, origHost, origGate }()
+	enrollBeforeModuleStartup = false
+
+	enrollAgent = func(context.Context, hostagent.EnrollmentConfig) (hostagent.EnrollmentResult, error) {
+		t.Fatal("enrollment ran before module startup with the gate off")
+		return hostagent.EnrollmentResult{}, nil
+	}
+	var hostCfg hostagent.Config
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfg = cfg
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	err := run(ctx, []string{
+		"-token", "bootstrap-tok",
+		"-enroll",
+		"-state-dir", t.TempDir(),
+		"-enable-docker=false", "-enable-kubernetes=false",
+		"-disable-auto-update",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !hostCfg.Enroll || hostCfg.APIToken != "bootstrap-tok" {
+		t.Fatalf("host config enroll=%v token=%q, want the host module to enroll with the bootstrap token", hostCfg.Enroll, hostCfg.APIToken)
+	}
+}
+
+func TestRunWithoutEnrollDoesNotExchangeTokens(t *testing.T) {
+	origEnroll, origHost := enrollAgent, newHostAgent
+	defer func() { enrollAgent, newHostAgent = origEnroll, origHost }()
+
+	enrollAgent = func(context.Context, hostagent.EnrollmentConfig) (hostagent.EnrollmentResult, error) {
+		t.Fatal("enrollment ran without --enroll")
+		return hostagent.EnrollmentResult{}, nil
+	}
+	var hostCfg hostagent.Config
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfg = cfg
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	err := run(ctx, []string{
+		"-token", "manual-tok",
+		"-state-dir", t.TempDir(),
+		"-enable-docker=false", "-enable-kubernetes=false",
+		"-disable-auto-update",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("run() error = %v", err)
+	}
+	if hostCfg.APIToken != "manual-tok" {
+		t.Fatalf("host token = %q, want the configured token unchanged", hostCfg.APIToken)
 	}
 }
 
@@ -2155,7 +2495,7 @@ func TestRun_AgentFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := run(ctx, []string{"-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -2190,6 +2530,7 @@ func TestRun_PropagatesDisableCephToHostAgent(t *testing.T) {
 	defer cancel()
 
 	err := run(ctx, []string{
+		"-state-dir", t.TempDir(),
 		"-token", "T",
 		"-enable-host=true",
 		"-enable-docker=false",
@@ -2498,7 +2839,7 @@ func TestRun_WindowsServiceError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := run(ctx, []string{"-token", "T"}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T"}, func(s string) string { return "" })
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -2533,9 +2874,10 @@ func TestRun_DockerRetry(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
-		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-state-dir", stateDir, "-token", "T", "-url", server.URL, "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
 	}()
 
 	select {
@@ -2637,10 +2979,11 @@ func TestRun_KubeRetry(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
 		// Only enable kubernetes
-		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-state-dir", stateDir, "-token", "T", "-url", server.URL, "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
 	}()
 
 	select {

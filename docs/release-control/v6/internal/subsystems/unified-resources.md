@@ -23,6 +23,302 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Docker object aliases do not identify their reporting host
+
+Containers and other Docker child objects own their native IDs, names and
+subject-typed discovery/metrics targets. Reporting-agent IDs, Docker host IDs,
+hostnames and task placement nodes remain routing metadata, not child aliases.
+Canonical hostname/platform presentation must not reintroduce those parent
+identities. Missing child targets cannot promote the parent to primary identity.
+Host aliases and same-entity host facets retain their existing semantics.
+
+`TestDockerChildIdentityDoesNotClaimItsCommandHost` covers all nine child kinds,
+owned aliases and missing-target boundaries. The registered Docker log-read
+control in `internal/ai/tools/internal_routing_identity_test.go` consumes actual
+registry ingestion with collected containers, images and networks. Genuine
+duplicate names must still fail closed. Source controls alone do not establish
+installed command transport or autonomous recovery.
+
+### Shared interpretation of selected guest memory
+
+`GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
+qualify only the selected numeric metric through `QualifyGuestMemory`. Presence
+and finite 0–100 values distinguish a measured zero from absence. Only current,
+dated cache-aware Proxmox/QGA/agent origins establish pressure; fallback/cache-
+inclusive, unknown and retained origins keep their limitations. Consumers cannot
+borrow raw-facet provenance or resource LastSeen. Collection owns current/last-
+known state and its lease; local observers additionally enforce their configured
+age on the original memory observation, without creating a new collection TTL.
+
+Source names are allowlisted before entering AI context; unknown names remain
+unknown. Other-platform readings without this Proxmox observation contract keep
+existing semantics. `TestGuestMemoryEvidenceQualification` covers these boundaries
+and `TestGuestMemoryEvidenceUsesSelectedMetricOnly` covers selected/raw disagreement,
+absence and refreshed rows in both views. This shared interpretation changes
+no registry wire format, metric selection, guest collection, History, correlation,
+identity or permission. AI query projections own their additional evidence fields.
+
+`QualifyGuestMemoryForKind` takes the Proxmox guest kind because one source name
+covers two accountings: an LXC's `cluster-resources` reading already excludes page
+cache and establishes pressure when current, while a QEMU guest's does not.
+`GuestMemoryEvidenceForResource` derives the kind from the resource type
+(system-container versus VM). `QualifyGuestMemory` keeps the conservative QEMU
+reading for callers that do not know the type. `TestGuestMemoryClusterResourcesIsTypeAware`
+covers both kinds, retained readings and the other cache-inclusive sources.
+
+### Selected guest memory observation in typed read state
+
+VM and system-container views expose a value-copy of the selected memory
+metric's observation and an explicit presence bit. A selected measured zero
+has presence; a missing selected metric does not. Empty metadata remains
+unknown and cannot be supplied by a conflicting raw platform memory facet or
+resource LastSeen. No wire, metric-priority, identity, history or correlation
+contract changes. `TestGuestViewMemoryObservationKeepsSelectedOrigin` in
+`views_test.go` covers selected-agent versus raw-Proxmox disagreement, absent
+metrics, legacy zero and value-copy isolation. Patrol owns interpretation of
+this evidence; the accessor does not establish pressure, recovery or permission
+to run a guest command.
+
+### Internal QGA query-eligibility evidence
+
+The native Proxmox guest facet carries `GuestAgentEvidence` internally. A full
+guest observation replaces this value, including explicit absence; a partial
+non-guest facet does not own it. Cloning and the VM view preserve the original
+time for the monitor's previous-state input. Resource/VM JSON, identity,
+correlation and linked Pulse-agent precedence do not change.
+`TestGuestAgentEvidenceDoesNotChangeWireOrIdentity` and
+`TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge` check wire equality,
+identity equality, clone isolation and loss/recovery replacement. The full-wire
+comparison fixes the independent construction clock for otherwise identical
+inputs; it does not omit a changed public field.
+
+
+### Internal guest disk observation provenance
+
+A Proxmox VM facet preserves the successful filesystem read's original source
+and time through adapter, clone, typed view and previous-guest projection.
+Complete guest facets replace this evidence in both directions, including a
+missing/expired origin; partial non-guest facets cannot renew or clear it.
+Linked agent selection remains independent and cannot become QGA fallback
+proof. `DiskObservation` is internal only (`json:"-"`): no JSON, identity,
+History key, source-priority or agent report contract changes.
+
+`TestGuestDiskObservationDoesNotChangeWireOrIdentity`,
+`TestGuestDiskObservationViewUsesOnlyItsOwnSource` and
+`TestGuestDiskObservationMergeReplacesMissingAndDifferentSource` verify exact
+public facet equality, internal cloning, missing-source access and authoritative
+replacement. Monitoring's disk observation contract covers the ordinary poll
+and served-reason boundary. These checks do not establish installed recovery.
+
+### Guest views retain exact governance identity for configuration reads
+
+VM and system-container views expose cloned canonical policy/AI-safe metadata
+for their own resource. This lets guest-config reads retain the chosen identity
+when names repeat across installations without a second name-based resolution.
+The accessor exposes no raw resource or mutation; classification/redaction rules
+are unchanged. `TestGuestViewGovernanceIdentity` checks distinct same-name guests,
+policy cloning and nil-view handling. Tool controls check its use at the provider
+boundary; these are not native installation recovery.
+
+
+### Native guest admission replaces the previous canonical facet
+
+A complete native Proxmox guest observation (non-zero VMID) owns its filesystem
+read reason, guest-agent state and expectation in both directions. Repeated
+ingestion must publish a new cooldown even when the retained disk number is
+unchanged, and clear the reason/expectation when the native guest recovers or is
+disabled. Non-guest partial Proxmox facets do not own these fields. Numeric
+source selection, original memory observation times and identity stay unchanged.
+
+`TestProxmoxGuestReadAdmissionReplacesPreviousFacet` covers available, paused,
+recovered, offline and disabled transitions through repeated registry ingestion,
+typed/detached reads and JSON. Monitoring's connected optional-command proof
+also consumes that same live registry and production broadcast JSON while
+checking History withholding. Source clearance is not independent guest thaw,
+covered-filesystem writes or native monitoring recovery.
+
+### Collected alert subjects share current canonical ownership
+
+`AlertResourceReferenceResolver` exposes the current-inventory identity owner
+used by history correlation to runtime consumers. Supported producer child
+references bind through durable source identities only. Resolution reads the
+owner, canonical type and source targets under one registry read lock. It never
+uses display names or retained history aliases to resurrect a removed owner.
+An agent's disk, temperature, RAID and custom observations remain owned when an
+operator link folds the agent into a VM, container or node. The presence of the
+agent facet is required for that cross-type ownership. Patrol can therefore
+select the canonical owner without interpreting alert strings independently.
+`alert_scope_test.go` verifies the registry and both read adapters, rejected
+references and absent current owners. Scoped Patrol tests cover linked owners
+and conflicting unqualified source IDs.
+
+### Resource CPU temperature uses the one primary rule
+
+`proxmox.temperature`, `agent.temperature` and a Kubernetes node's
+linked-host temperature come from `models.PrimaryCPUTemperatureCelsius` and
+`models.HostSensorPrimaryCPUTemperatureCelsius`, the rule node and agent
+history record under (see the monitoring contract). The adapter-local
+`maxNodeTemp`/`maxCPUTemp` copies are gone. `nodeFromResource` carries the
+resource's top-level temperature (the agent's reading first, then the
+node's: the same source as the drawer's history target) as
+`Node.cpuTemperature`; the node drawer shows that value and never rebuilds a
+headline from `temperatureDetails`. Proof: `adapters_test.go`
+(`TestResourceTemperatureUsesPrimaryCPURuleForNodeAndAgent`) and
+`resourceStateAdapters.test.ts`.
+
+### Proxmox node temperature cell follows its own open alert — issue #2068
+
+`ProxmoxNodesTable` finds the node's own temperature alert through
+`hostOverrideIdCandidates` and passes its severity (unless acknowledged) and
+the shared live-status copy to `TemperatureGauge`. Other node alerts never
+recolour the cell. The Mail Gateway drawer formats its attention rows through
+`getAlertAttentionCopy`.
+
+### Proxmox node drawer charts follow the node's own alerts
+
+`ProxmoxNodesTable` passes `NodeDrawer` two lists. `alerts` keeps the
+node-name match, so Needs attention also lists the node's guests. `ownAlerts`
+is the same `hostOverrideIdCandidates` identity match without the name, and
+only it draws dashed alert triggers on the drawer's Overview charts and tones
+their readings. Node alerts are keyed on the cluster-qualified id (for
+example `homelab-delly2`), which the drawer's own node record does not carry,
+so the drawer must not rebuild this match itself. `NodeDrawer.test.tsx` covers
+a guest alert that draws no line and a table-supplied node alert that draws
+one.
+
+### Canonical Discovery honours VM guest-read deferrals
+
+The canonical resource drawer uses the same fixed PVE VM lock, backup and
+read-deferral signals as the Workloads drawer. Typed and legacy PVE facets are
+checked independently: an available flag in one cannot cancel a pause in the
+other. Only the VM's own provider evidence is used; parent-node locks, an agent
+version and a Discovery target are not guest-liveness evidence. Containers,
+ordinary agents and unrelated provider facets retain their existing behaviour.
+
+Both embedded Analysis and the dedicated Discovery entry pass this pause to the
+existing manual-run guard. Saved results remain readable; same-ID updates block
+or release the existing control without an automatic scan, invented timestamp
+or cancellation claim for already-dispatched work. The wrapping precaution and
+existing safety-guide link remain visible across drawer tabs. Clearance is not
+independent thaw, covered-filesystem writes or safe monitoring resumption.
+
+`ResourceDetailDrawer.discovery.test.ts` covers both facets, every fixed reason,
+precedence and platform isolation. `ResourceDetailDrawer.guest-safety.test.tsx`
+mounts the real Discovery client/control, checks same-ID updates and no dispatch
+while paused, and preserves normal agent actions. The production browser fixture
+`browser-tests/resource-guest-safety.cjs` checks desktop keyboard and narrow touch
+with synthetic local responses. No backend, permission, collector or native
+recovery guarantee is added.
+
+### Broadcast bulk reads capture resources and history coordinates together
+
+`ListWithMetricsTargets` and the monitor adapter's matching optional read return
+detached resources and a detached target map from one locked registry generation.
+The existing source-mapping inversion runs once for this read when typed views
+are dirty; it does not build all typed views or add a retained generation cache.
+Clean typed views may supply their already-current inverse mapping. Legacy List,
+GetAll and individual target reads preserve their shapes and semantics.
+
+The target map stays separate from resources until presentation host coalescing
+selects the row identity. Missing coordinates remain missing in that capture;
+they never fall through to a later live registry. Mapping changes with unchanged
+LastSeen take effect on the next read. Returned resources, policy/identity blocks
+and target values remain caller-owned across mutations and adapter replacement.
+Projection cannot pair an earlier resource row with a later history identity.
+
+`registry_test.go`, `registry_projection_test.go` and
+`monitor_adapter_read_state_test.go` exercise full resource/point-target parity,
+same-time edits, concurrent mapping writes, detachments, empty/nil reads and
+tenant separation. Connected monitoring proof covers all nine demo providers,
+continuity overlays and complete served JSON. Paired cold/clean/dirty benchmarks
+measure whole materialization, not a new point-lookup envelope or native relief.
+
+Canonical resource History honours selected memory observation provenance and Proxmox VM filesystem deferrals instead of treating numeric carriers as fresh measurements.
+
+### Canonical resource History cannot promote retained guest readings
+
+`ResourceMetric.current` is a selected numeric carrier, not a freshness
+assertion. Canonical drawer History consumes its existing memory observation
+and Proxmox VM filesystem read reason as independent evidence, just as the
+dedicated guest drawer does. Current memory requires a usable original time
+when annotated; last-known/unknown/unavailable evidence has explicit labels.
+A VM read deferral withdraws current disk fallback, retaining a number only
+for the existing `prev-` reason vocabulary. LXC disk usage is not a QEMU
+filesystem read. Other platform/catalog metrics and capacity aliases stay
+unchanged. Same-ID replacement updates this presentation without remounting
+History or requesting another read. Clearing deferral is not native recovery.
+
+The full drawer regression in `ResourceDetailDrawer.history.test.tsx` covers
+retention, unavailable carriers, original timestamps, measured zero and recovery
+without invented chart points; model and browser controls retain source/access
+isolation. No wire schema, collector, alert, request identity or authority changes.
+
+### Bulk registry copies reuse mutation-bound canonical metadata
+
+`ResourceRegistry.List` and typed-view rebuilding share canonical identity,
+platform-scope and policy materialization under the registry write lock. Clean
+bulk readers take the shared lock and detach the derived blocks rather than
+re-derive them for every copied resource. A List-only consumer does not build
+all typed views. Arbitrary `cloneResource` callers and point reads still refresh
+metadata from their own current input; no caller-supplied metadata is trusted.
+
+Record/mapping changes invalidate at the locked mutation, not just the batch
+epilogue. Resource seeding, superseded-ID retention, Docker network relationship
+refresh, PBS host association and final parent/rollup assembly invalidate too.
+A real stale-source/status transition invalidates metadata and typed views; an
+unchanged stale pass does not. A reader rechecks dirtiness after lock upgrade,
+so an intervening mutation cannot leak a previous generation. Returned canonical
+aliases, superseded IDs, policy redaction hints and platform scopes are detached
+from the stored entries and retained views. This does not cache health, alerts,
+broadcast conversion, observation times or telemetry, and prunes no inventory.
+
+Verification: `registry_materialization_test.go` compares complete resources
+and wire content against the original always-refresh List implementation,
+including mid-batch changes, policy edits, supersession, staleness, ownership,
+lazy views, races and allocation cost. The external connected demo test includes
+all nine providers and its metadata-heavy estate. These are source invariants,
+not native fleet CPU/RSS relief, backup recovery or release availability.
+
+### Container CPU presentation explains its existing scale
+
+The existing Docker/Podman container table and drawer visibly explain that CPU
+is a percentage of total host capacity: 100% means all host CPUs. Runtime stats
+may use a per-core scale; the client never guesses core count or renormalises
+readings to match a screenshot. The explanation remains visible in Overview and
+History, including narrow screens, without relying on hover-only help.
+
+Small positive CPU labels stay distinct from true zero in the real responsive
+row and stored History inspection. Numeric sorting, metric identity, requests,
+collector/ingest units, stored values and alert thresholds remain unchanged.
+Connected container row/drawer controls establish presentation, not accurate
+native collection, every-container continuity, alert delivery or reporter relief.
+
+### Guest drawers consume selected memory provenance
+
+Existing guest drawers consume optional server-owned `memory.observation` and
+selected canonical/API metric annotations without renewing their original
+observation time from resource LastSeen, disk-read deferral or another platform
+facet. `useWorkloads`, `useUnifiedResources` and the legacy resource adapter
+preserve the selected annotation. A selected unannotated metric cannot borrow a
+conflicting raw platform annotation. Raw-memory fallback retains its own
+annotation only when its numeric reading is actually selected.
+
+Proxmox VM/LXC Overview states current, last known, unavailable or freshness
+unknown with the original known UTC time and an allowlisted source label.
+Missing, unrecognised or unusable provenance is not current. Unavailable usage
+keeps known capacity but never invents zero used/free/swap measurements. History
+keeps retained/unknown numeric context separate from current legends and stored
+points, dated inspection and denied source access. Same-guest source changes
+update without resetting the drawer or refetching History. Independent valid
+PVE/Pulse Agent readings remain current even while QGA disk reads are deferred;
+unannotated unrelated platforms keep existing presentation.
+
+Connected original-source/normalizer/adapter and mounted History controls plus
+`browser-tests/guest-memory-provenance.cjs` exercise these boundaries. They do
+not establish native thaw, covered-filesystem writes, liveness, reporter relief,
+publication or an installed containing release. No route, collection, numeric
+selection, retention, alert policy or diagnostic permission is added.
+
 ### Guest memory provenance follows metric selection
 
 Raw Proxmox `memory.observation` preserves the guest builder's state, source
@@ -71,37 +367,6 @@ wrong-type/range/metric, malformed, denied, valid-zero and empty bodies, keyboar
 retry/inspection and remounts. These synthetic controls do not diagnose #1723,
 establish native panels/identity or prove #2439 thaw or workload liveness.
 
-### Guest discovery evidence and UI state have exact owners
-
-The guest drawer's passive discovery lookup changes only when its explicit
-resource-type/agent/resource target changes, not on same-target metric or name
-snapshot refreshes. Retained/remount evidence is keyed by canonical guest and
-that target. A replacement target cannot display the predecessor's service,
-endpoint, URL suggestion or assurance suggestion while its own read is pending
-or failed. A successful absent-record read is empty; errors are not absence.
-The discovery detail reader preserves final HTTP401/403 on typed failures
-without reading the denied body, including agent-list/detail paths. Those
-failures withdraw cached evidence and show the fixed access message.
-A same-target transient failure may retain its own last successful details,
-but must visibly qualify them and provide an in-place retry without raw error
-text. This preserves the shared query's denial/cache-generation policy.
-
-A different canonical guest disposes its local tabs, range, forms, disclosures
-and outstanding read consumers. Same-ID updates stay mounted. Within that
-identity, a changed discovery target remounts only the existing Discovery tab,
-so late scan/notes completions cannot populate the successor's UI. Already
-sent server-side operations are not cancelled or retried by this boundary;
-saved operator URLs remain separate from derived suggestions.
-
-Verification: `discovery.test.ts` covers final status preservation on all
-three read paths and non-authoritative body claims. `GuestDrawer.test.tsx`
-covers replacement, source stability,
-late reads, HTTP401/403/cache withdrawal, transient retention/retry and
-canonical identity reset. `browser-tests/guest-discovery-identity.cjs` uses
-production drawer/DiscoveryTab/Manage/History, clients and CSS on desktop
-Chromium and touch WebKit. Its synthetic delayed scan is not a native command,
-QGA/thaw, fleet-performance, appliance identity or delivery proof.
-
 ### Native VM read outcomes survive browser projection and recovery
 
 The existing Proxmox guest read-state facet remains intact at the WorkloadGuest
@@ -132,7 +397,6 @@ measured zero, partial omissions and full/delta/fast recovery. The connected
 and History presentation in desktop Chromium and phone WebKit. Synthetic
 source proof does not establish native backup safety or shipped availability.
 
-
 ### Backup server counts retain their inventory availability
 
 The existing PBS server/datastore row takes backup-inventory read availability
@@ -152,6 +416,11 @@ server health or the other source's artifacts. Fixed diagnostics expose no
 response body. The inventory parser, mounted table and
 `browser-tests/backup-inventory-format.cjs` exercise that combined boundary.
 
+`BackupServerRow.continuesServer` is presentation only: every row still
+carries the server's host readings and resource snapshot, and the model test
+pins the readings on every row while the flag is true only for a server's
+later datastore rows.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,
@@ -163,7 +432,6 @@ without filesystem rows and is cleared by a same-identity fresh observation.
 The shared presentation and mounted regressions plus the production-component
 `browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
 they do not prove native QGA coordination, History freshness or delivery.
-
 
 ### Narrow controller and backup summaries retain their source facts
 
@@ -180,7 +448,6 @@ archive format is presentation only, with the provider identifier retained in
 hover and search. The recovery-model, table and guest regressions plus desktop/
 phone browser rendering verify attribution, visible facts and source composition.
 These frontend improvements change no collector, API authority or native status.
-
 
 ### Resource evidence fallback access boundaries
 
@@ -355,6 +622,30 @@ layer consumes it only as a fallback replacement for Proxmox LXC memory, so
 platform metric priority for a healthy agent is unchanged.
 `TestContainerViewLinkedAgentMemory` pins those boundaries.
 
+**Host-row agent source freshness (6 October 2026)**
+
+`HostView.SourceStatus(source)` exposes the per-source delivery freshness the
+registry already records, matching the VM, container, and physical-disk views.
+A host agent linked to a Proxmox node merges into one row whose `LastSeen`
+follows the freshest source, so consumers of agent-owned samples (monitoring's
+linked-agent node temperature lookup) must read the agent source's own sighting
+here instead of the row's `LastSeen`. The accessor returns a copy of the recorded
+status and adds no freshness policy of its own.
+`TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
+split.
+`NodeView.SourceStatus(source)` and `DockerHostView.SourceStatus(source)` do
+the same for node and Docker host rows. A merged node row takes its linked
+agent's status when the sources merge, and once any sighting goes stale the
+stale pass recomputes the status from the sightings: `online` while one is
+current, `warning` when every one is stale. `warning` is also a status a row
+that still reports can carry (a degraded Docker host, a node whose linked agent
+reports storage risk). The metrics-history live
+fallback therefore reads these sightings alongside the row's `offline` and
+`unknown` status to decide whether a row's readings are current. The accessors
+return a copy of the recorded status and add no freshness policy.
+`TestView_NodeViewSourceStatusSeparatesMergedSources` and
+`TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded` pin them.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows
@@ -369,7 +660,6 @@ metadata cannot establish an alert identity.
 read-only incident memory association. It does not rewrite event resource IDs,
 resource operator state, approvals, action request identity or execution
 capabilities. An unavailable canonical read remains an error.
-
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -443,7 +733,7 @@ API-only Proxmox hosts remain `agent` resources but their metrics target is
 linked Agent source retains priority and its `agent` store ID. Consumers must
 use that target rather than reconstructing storage coordinates from display
 identity or discovery routing. The node view carries the canonical target into
-its History tab. Discovery can route by a host name without an installed Agent,
+its Overview charts. Discovery can route by a host name without an installed Agent,
 so it does not establish a `linkedAgentId` or Agent-only disk-throughput coverage.
 The explicit Agent facet/link owns that evidence.
 
@@ -541,11 +831,12 @@ grouping metadata, not same-machine evidence; cross-instance equality requires
 the same node identity, the exact configured endpoint, or independently
 corroborated host evidence.
 Frontend REST and realtime resource mirrors must retain the canonical
-`hostnames`, `machineId`, and `dmiUuid` evidence used for that decision. When
-independent Proxmox connections expose the same native node hostname, browser
-compatibility coalescing must preserve the server-authored provider split; in
-an ambiguous hostname bucket, a separate agent row may join a provider node
-only through its explicit linked-agent identity rather than hostname alone.
+`hostnames`, `machineId`, and `dmiUuid` evidence. The browser never re-joins
+host rows, so when independent Proxmox connections expose the same native node
+hostname the server-authored provider split reaches the UI as delivered; in an
+ambiguous hostname bucket the server joins a separate agent row to a provider
+node only through its explicit linked-agent identity rather than hostname
+alone.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and
@@ -555,7 +846,11 @@ but registry IDs, merge keys, parent links, metrics targets, source-native
 guest IDs, external URLs, discovery targets, and actions must not. Children
 such as VMs, containers, and storage inherit the parent's presentation and
 native aliases so Overview, search, API/websocket/mobile, storage, backups,
-and filters agree. A linked agent may enrich the canonical node but cannot
+and filters agree. That inheritance stays in the child's `ProxmoxData`: only
+the node itself lists its node identity, native name, and native-name aliases
+as canonical aliases, because a child carrying them would answer to the node's
+alert resource ID and every guest would show each node alert as its own.
+A linked agent may enrich the canonical node but cannot
 replace a configured override with its hostname; same-name cluster identity
 remains provider scoped even after a native rename.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
@@ -594,7 +889,6 @@ downstream risk, presentation, and alert consumers cannot recover the
 distinction afterwards. The unified risk projection gates wearout on
 `storagehealth.WearoutReported` so its verdict and the server-side alert verdict
 about the same disk cannot diverge.
-
 
 ### Coverage rows preserve unknown backup chronology
 
@@ -664,6 +958,7 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
     34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
     34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
     34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
+    34d. `frontend-modern/src/features/docker/dockerContainerStatePresentation.ts`
 35. `frontend-modern/src/features/docker/DockerImagesTable.tsx`
 36. `frontend-modern/src/features/docker/DockerNativeTableShared.tsx`
 37. `frontend-modern/src/features/docker/DockerNetworksTable.tsx`
@@ -680,13 +975,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 48. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 50. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
-    50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-51. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-52. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-53. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-54. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-55. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-56. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
 57. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
 58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
 59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
@@ -696,14 +984,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
 64. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
-68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-    69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
-    69b. `frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx`
-    69c. `frontend-modern/src/components/Discovery/availabilityProposalModel.ts`
 70. `frontend-modern/src/utils/agentResources.ts`
 71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
@@ -801,13 +1081,33 @@ failed and server-denied observations alongside a no-invented-grant control.
 The Docker phone container projection keeps identity, state when applicable,
 CPU, memory and update; restart counts remain in the existing detail expansion
 and return at mobile width. Images retain image, size and update verdict on
-phones; host and consumers stay reachable in detail. Hidden header/body columns
+phones; host and consumers stay reachable in detail. The update verdict reads
+in full at every width: the Update check column keeps the ~122px its longest
+badge ("Update available", "Managed by Pulse") needs with cell padding, through
+a 23 percent tablet-band width taken from Size and a 19 percent md width taken
+from Host, Used by and Size. An equal band share and the old 16 percent md width cut
+the badge off between 600 and 800px. The container Updates column likewise keeps
+the 74px update states (Update, Current, Pinned, Failed) whole in every layout
+mode and optional-column set at the mode's narrowest table; the 100px states
+(Check failed, Updating..., Completed) fit in most layouts but can still clip at
+a layout's narrow end when several optional columns show. Its room comes only
+from the CPU bar, which never shows a sublabel, and the collapsed actions menu,
+so every other column, including the memory bar's used/total sublabel, keeps
+its width. Hidden header/body columns
 are symmetric. Swarm rollout tokens render as words with raw state retained in
 the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
 `browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
 a container action or claiming native appliance or release acceptance.
-
+Image references (the Images name, the Containers Image column and the Services
+Image column) render through `DockerImageReferenceText`, which splits before
+the repository name (`splitDockerImageReference`), because references that
+share a registry and namespace differ only at the end: a narrow cell truncates
+the head and keeps `name:tag` (`ghcr.io/pul…backup-coordinator:2026.04`), with
+the full reference on the title. End truncation left rows that all read
+`ghcr.io/pulse-demo…`. A selection inside one reference copies without the
+line break the two flex items would add. Sorting and the stored value are
+unchanged.
 
 ### PBS host history correlation
 
@@ -847,7 +1147,18 @@ workflow tab; legacy object routes such as `/kubernetes/pods`,
 `/kubernetes/autoscaling` are compatibility aliases for that workflow. Pods
 render through `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
 with Pod phase, container readiness, restart, owner, node, image, and age fields
-from the Kubernetes API projection. StatefulSet, DaemonSet, Job, and CronJob rows
+from the Kubernetes API projection. Each Kubernetes row's status words read in
+its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
+("CrashLoopBackOff" red, "Pending" amber, Running plain), a Deployment's Ready
+count while replicas are short, a controller's Exceptions. The Pods Status
+column takes 12 percent so a failure reason such as CrashLoopBackOff reads
+whole, and a phone, which hides that column, reads the same words under the
+Pod name. The TrueNAS and vSphere tables follow the same rule: a TrueNAS app,
+which has no State column, reads its state under its name at every width
+("Crashed" amber, Running plain); a share's State ("Disabled" red, "Attention"
+amber) and a vSphere activity's State ("Error" red) take the dot's tone; and
+where a phone hides a State column (shares, services, VMs, vSphere activity)
+the state, with any note such as "should be running", reads under the name. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job
@@ -903,8 +1214,16 @@ not fork a second projection or filter model. Routine pending or
 under-replicated workload attention stays attached to that shared workload
 toolbar as a compact count and review action; page-wide Kubernetes attention
 is reserved for node availability or critical health signals. Zero-valued
-attention facets must not occupy the summary. Node, service, storage,
-configuration, policy, and event object rows remain in their workflow tabs.
+attention facets must not occupy the summary. Both lead the Overview, above the
+cluster rows: active health signals through the shared Kubernetes alerts table
+without its toolbar, then node availability as the canonical nodes table
+limited to nodes that are not Ready, cordoned or degraded (titled "Nodes needing
+attention"), each rendered only while it has rows. The full node inventory stays
+on the Nodes tab. The nodes table names a node's state in a desktop Status
+column, as kubectl does, and on phones through a phone-only screen-reader
+label instead of a duplicate column. The remaining node inventory and the
+service, storage, configuration, policy, and event object rows remain in their
+workflow tabs.
 Any other future Overview that repeats a detailed table must retire the owning
 workflow, reduce the Overview content to aggregate signal, or establish an
 equally explicit shared-state contract.
@@ -926,7 +1245,47 @@ before text and status filters so metadata from an excluded disk cannot retain
 its pool or dataset ancestor. Physical-disk presentation may prioritize the
 canonical SMART health, temperature, and endurance evidence; absent wearout or
 percentage-used telemetry remains unknown rather than being rendered as zero
-remaining life.
+remaining life. Storage health is exception-first: `getTrueNASStorageIssue`
+returns nothing for healthy pools, datasets, and disks, so their Health cell
+stays empty and the status dot alone says healthy. A non-healthy row carries
+the reasons TrueNAS gave, in order: native TrueNAS alert text on that
+resource, storage and physical-disk risk summaries, then the dataset state tag
+(`state:locked`, `state:unmounted`, `state:readonly`, which is the only place
+the provider says why a dataset is impaired). Without any of those it falls
+back to the pool state, the disk health value, or an impaired TrueNAS source.
+The first reason renders in the desktop Health column on the row's single line,
+coloured by bucket, with a count for the rest and the full list in the title
+and screen-reader text. Phones keep the status dot and reach the reason through
+the row drawer. Health sorts by severity rank, not label text.
+Disk risk carries no heat, so the table judges it itself. A disk whose current
+reading has reached its type's alert disk temperature trigger is an Attention
+row with the reason "Disk temperature is 57°C, at or above its 55°C alert
+threshold.". The trigger comes from the alerts store's
+`getDiskTemperatureThresholds`, which the table passes to the row build,
+filter, counts, sort and issue. `isPhysicalDiskRunningHot` in
+`features/storageBackups/diskTemperaturePresentation.ts` makes the same call
+for the Physical Disks verdict. The heat reason follows any native TrueNAS
+alert text, and a hot disk's status dot turns warning though its source state
+stays `online`, because phones show only the dot.
+`truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
+The Temp column reads the same collection state through
+`getPhysicalDiskTemperaturePresentation`. A disk temperature that is not
+current, such as a host agent's last reading kept on a merged disk row after
+the agent stopped reporting, renders as last known: muted, with its reason as
+the title and screen-reader "last known" text. The Temp sort ranks it as no
+reading, and the tree sort orders each sibling group, so a retained value
+never leads its group hottest first.
+The vSphere Datastores and Networks tables follow the same exception-first
+Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
+nothing for a green row; otherwise the reasons are, in order, an impaired
+vCenter source, a datastore's inaccessible or maintenance state, the
+resource's incident summaries worst first, and, only when no incident explains
+the colour, vCenter's overall status or its active alarm count. Inaccessible,
+offline, red, or critical rows take the red tone. VMware incident summaries say
+only what vCenter flagged, the alarm's own name or `vCenter health is
+<colour>`, without the managed object ID or alarm colour: every surface that
+shows them (alert cards, notifications, the Overview and Health signal tables,
+the drawer, Patrol titles) already names the resource and its severity.
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource
@@ -1067,6 +1426,62 @@ platform-details disclosure. The `KubernetesControllersTable` phone projection
 keeps controller, kind, ready, and issues and demotes Target with
 `platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
 `StatefulSet` fit whole instead of clipping in a 15 percent track.
+Every relative age a unified-resource consumer derives from a timestamp reads
+the frontend-primitives shared relative-time clock (`useRelativeTimeNow`)
+rather than `Date.now()` at render, because rows and open drawers stay mounted
+while a timestamp that has stopped changing must keep aging: the Kubernetes
+controller Detail ages and the drawer's controller section, the drawer's Docker
+container Created, Started and Finished rows, its Last seen, and its Docker
+update-check and Mail Gateway updated ages, the Machines identity subtitle
+(`seen ...` while the Last seen column is hidden) and stale-agent Last report
+tooltip, and the Proxmox replication Last sync and Next sync in the row, phone
+projection and disclosure. A silent agent or a stalled pvesr scheduler is the
+case whose age matters most, so a replication Next sync turns overdue on the
+clock without new data. Replication jobs bypass the unified-resource stream,
+so `ProxmoxPageSurface` polls them in the background every 30 seconds,
+skipping a tick while the previous poll's read is still in flight unless that
+read has stalled past `STALLED_QUERY_READ_MS`; moving ages over a snapshot read
+once at mount would age a job that keeps syncing and count it overdue.
+`fetchReplicationJobs` takes the query's abort signal and passes it to
+`apiFetch`, so a replaced or unmounted replication read stops instead of
+running on in the background, and it throws `apiErrorFromResponse` errors that
+keep the HTTP status, so a 401 or 403 withdraws the jobs as an access failure.
+Kubernetes name columns hold the chevron, status dot and name inside one
+track, so their md widths leave the name room for a typical node or service
+name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
+cores, memory and pods label fits at 1100px and wider, and Status at 10.5,
+taken from CPU at 7.5 so the Degraded, NotReady and Unknown badges fit from
+768px and Unschedulable from about 900px while the memory sublabel keeps its
+room; the tablet band sizes each Nodes header and Degraded at a 34rem table),
+Events 24, and
+Services, Configuration, Storage, Controllers and Policy 22. Generated names
+render through `KubernetesNameText`, which splits off the trailing segment
+(`splitKubernetesNameTail`) so a narrow cell truncates the head and keeps the
+part that tells siblings apart (`checkout-api-6d…-x7k2p`, `prod…-03`), with the
+full name on the title. Pod names, the Pods table's Node column and controller
+names use it. Deployment names are chosen by people, so they keep plain end
+truncation. Head and tail are flex items, so a browser copy put a line break
+between them and a pasted `kubectl logs` argument broke; a copy whose selection
+sits inside one name now writes the name without the break, and wider
+selections such as a whole row copy as the browser builds them.
+With one cluster in view, every Kubernetes scope cell repeated the cluster
+name and crowded out the namespace that differs between rows, so the tables
+show the namespace alone (`Cluster` for cluster-scoped objects) through
+`kubernetesScopeDisplayLabel` and keep the full cluster/namespace scope on the
+title; several clusters keep the combined label. The Deployments table keeps
+Desired for wide tables only, because Ready already shows ready over desired,
+and sizes the tablet band for a long name beside short counts. The
+Configuration tables size their band and md widths for ConfigMap, Secret and
+RBAC names first, then the namespace scope, then the short Lifecycle and Data
+shape values, then Kind. Kubernetes summary cells truncate through a block span
+that fills the cell, so a long value ends in an ellipsis inside its own column
+on the row's text line; a fixed-width inline-block cap spilled past narrow
+cells without an ellipsis and sat above the row baseline. Docker image, network,
+volume, service, task, secret and config cells, Proxmox backup coverage,
+restore-evidence and recoverable cells, the Mail Gateway drawer's top domains,
+and vSphere host vCenter cells follow the same rule. The Docker service Update
+cell still wraps on phones and from md truncates inside its column instead of
+at a 10rem cap.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
@@ -1112,6 +1527,19 @@ the daemon tally as width shrinks, keeps one five-value phone projection
 (cluster, health, OSDs, pools, capacity) whose values each fit whole, and
 leaves quorum membership and the FSID to the cluster disclosure, where the
 FSID stays searchable and is shown in full.
+The Mail Gateway row reflects its open alerts, not only the provider status:
+a reachable gateway with an unacknowledged alert (mail queued past its age
+threshold, a backlog) renders and filters as needing attention, colours the
+number the alert is about (queue, deferred, quarantine, spam or virus) with
+the alert message on hover and for screen readers, and its expansion leads
+with the shared drawer attention section carrying the exact alert message. The
+row stays single-line: an alert with no column of its own, such as offline,
+rides on the status dot, a screen-reader summary, and the drawer. Alerts are matched across
+the row's identity aliases, because they are keyed by the PMG instance id while
+the row carries the unified id. Its phone projection is the five-track
+instance, uptime, mail, queue and deferred set with a 40 percent identity, so
+gateways that share a name prefix stay distinguishable; node count lives in the
+expansion.
 The Proxmox host table drops temperature from its phone projection
 (container widths under 440px) so the node name, expansion toggle, and
 status dot share the same five-column shape as the guest table beneath it,
@@ -1267,6 +1695,17 @@ names remain inert identity text, while the separate accessible launch target
 owns new-tab behavior and event containment. Proxmox host table columns are
 governed by `proxmoxHostTableModel.ts`; that model must not reintroduce a
 separate `Web` column, a linked row name, or a page-local launch implementation.
+When every node shares one cluster and none is standalone, the model drops
+the `cluster` column (it would repeat one value on every row) and
+`ProxmoxNodesTable` names that cluster in the table header instead, visible
+during search and independent of the inventory-count preference, so the
+cluster identity is never lost. Its Trends sparklines read node history
+through `useWorkloadTableMetricHistory` with `series: 'nodes'`; guest history
+stays with the embedded workloads table below it, so the nodes table adds no
+guest-history poll to the page. Workload status buckets read the canonical
+health too: a running workload whose unified health names an open
+`warning_alert` or `critical_alert` reason counts under Attention, while
+`backup_stale` and other non-alert reasons do not.
 The same presentation contract applies to Docker/Podman hosts and containers,
 standalone agents, PBS/PMG instances, Kubernetes clusters/nodes/workloads, and
 card or mobile variants. An absent URL is honestly absent, while an invalid or
@@ -1286,6 +1725,12 @@ pod UIDs, and generated registry IDs remain fallback migration, action,
 discovery, or metrics coordinates and must not be the primary metadata write
 key. Missing cluster/host, namespace, kind, or name scope must fail closed to
 the legacy resource key rather than constructing a broadened stable key.
+The Docker containers table's bulk web-link editor is a third writer of these
+records. It keys every row through `toDiscoveryConfig`, the container drawer's
+own metadata target, and lists only rows whose target is guest metadata, so
+bulk and drawer saves for a container read and write the same
+`app-container:<host>:name:<normalized-name>` record and the editor never
+falls back to a runtime-ID key.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through
@@ -1311,19 +1756,52 @@ Source freshness is a separate unified-resource status input, not a fixed
 global health timer. Snapshot rebuilds, resource seeding, supplemental record
 overlays, and cloned read-state overlays must preserve the monitoring-provided
 stale thresholds for Proxmox, PBS, and PMG sources so resources do not flap to
-warning/degraded between successful configured poll cycles.
+warning/degraded between successful configured poll cycles. A source merge
+into an existing row judges metric freshness by the ingest's thresholds and
+the stale pass's own threshold rule, so the merge's freshness gate never
+calls a source current that the stale pass marks stale, or the reverse. The
+gate decides only where no stronger rule does: a hypervisor-managed guest
+keeps its platform CPU even while that source is stale.
+The resources API's registry rebuild is resource seeding too, and the seed
+carries the thresholds its own registry generation judged it by. The monitor
+adapter records them per generation (`MonitorAdapter.StaleThresholds`):
+thresholds set since a rebuild wait for the next one, and the read-state
+overlays and live supplemental refreshes of a generation are judged by that
+generation's thresholds, since a listing already marked stale cannot be
+cleared by re-judging it. A monitor view lists the store's current
+generation together with those thresholds
+(`GetAllWithMetricsTargetsAndStaleThresholds` reads both from one registry
+pointer); a view the monitor builds from mock fixtures or a bare state
+snapshot was judged by the defaults and carries none. `UnifiedResourceSnapshotWithStaleThresholds`
+(per tenant, `UnifiedResourceSnapshotWithStaleThresholdsForTenant`) hands the
+view's listing, freshness marker and thresholds to the resources API, which
+builds its registry with `NewRegistryWithStaleThresholds`: every ingest or
+stale pass on that registry that passes no thresholds of its own uses them,
+and a cached registry built with other thresholds is rebuilt even at the same
+freshness marker. Presentation coalescing picks the source of a merged host
+row's readings with the metric merge's own rule (`metricSourceStale`):
+`ListForPresentation` passes the thresholds its registry was constructed
+with, and the websocket broadcast passes its view's, so on mock and snapshot
+views both follow the defaults and still agree. Before this the resources API judged by
+the defaults everywhere, so a Proxmox node polled every two minutes read
+stale, with warning status, in `/api/resources` ninety seconds after its poll
+while the broadcast called it online, and both views showed a silent agent's
+readings on a node whose agent keeps its own registry row. Patrol's scoped
+runtime state still rebuilds registries with the defaults. Regression
+coverage: `TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds` and
+`TestRegistryIngestThresholdsOverrideConstructionThresholds` in
+`registry_merge_policy_test.go`,
+`TestMonitorAdapterReportsTheThresholdsItsGenerationWasJudgedBy` in
+`monitor_adapter_read_state_test.go`,
+`TestUnifiedViewCarriesItsGenerationsStaleThresholds` in
+`internal/monitoring/monitor_host_agents_test.go`,
+`TestResourceAPIRebuildsWithTheSeedingMonitorStaleThresholds` in
+`code_standards_test.go`,
+`TestResourceListRebuildsWhenSeedStaleThresholdsChange` in
+`internal/api/resourceapi/resources_test.go`, and
+`TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` in
+`internal/api/contract_test.go`.
 
-Service-discovery readiness is a unified-resource payload contract, not a
-drawer-local decoration. Resource list/detail payloads that expose a
-`discoveryTarget` must also carry the backend-authored `discoveryReadiness`
-projection when the discovery owner is available. That projection is
-metadata-only (`fresh`, `stale`, `missing`, `running`, `failed`, `unavailable`,
-or `unsupported`, with provenance, generated/observed freshness, target
-coordinates, optional service/category, and bounded fact count) and must not
-include raw command output, provider commands, environment variables, config
-paths, or secret-bearing metadata. Workload and resource drawers, Assistant
-handoffs, and optional table columns consume this field instead of inferring
-freshness from independent discovery reads.
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and
@@ -1331,6 +1809,26 @@ legacy/direct object routes fall back to `Overview` when the requested workflow
 has no rows for the current setup. Signals outside unified-resource inventory,
 such as TrueNAS recovery protection points or vSphere activity timeline rows,
 must be treated as explicit tab evidence rather than permanent navigation.
+A vSphere event activity row reads as vCenter's own sentence. The VMware
+client asks `QueryEvents` for each event's `fullFormattedMessage` explicitly,
+since vCenter leaves it out when `disableFullMessage` is unset. The provider
+titles the event change with that message and falls back to the event class
+(`HostConnectedEvent`) only when vCenter sends none. The class stays in
+`vmwareEventType` metadata, where activity search and the row drawer's Event
+type row read it. Rows stored before that titling still carry the class as
+their title, so the page model prefers an event's `vmwareEventMessage` when it
+has one.
+The vSphere hosts, health-signal and activity tables show a vCenter column only
+when the page's vSphere inventory spans more than one vCenter connection.
+`isSingleVmwareVcenter` decides that from the page's whole vSphere resource set
+(on Overview, its hosts and VMs plus the datastores and networks its health
+signals cover), never from the rows a search or filter leaves, so narrowing a
+table does not drop the column. It counts connections by connection ID, and
+matches a resource without one to a known connection by name or vCenter host,
+so one vCenter is never counted twice. With
+one connection the name would repeat on every row; each row drawer still names
+it. The column reads the connection name, as the other vSphere tables do, with
+the vCenter host on hover.
 Primary platform navigation is also resource-evidence gated: runtime lenses such
 as Docker / Podman must be admitted from explicit Docker source scopes, Docker
 host or service resource types, or concrete runtime identity/inventory evidence
@@ -1409,19 +1907,23 @@ edge; that fallback must not match containers across Docker hosts. When a
 single network has many attached containers, relationship consumers must keep
 the attached container fields searchable and attention-filterable from the
 network detail disclosure instead of forcing operators to inspect a full
-container inventory table.
+container inventory table. Its Attention filter is the rows' verdict (the
+`mapDockerContainerStatus` dot), while Running and Other are Docker's run
+state, so an unhealthy or crash-looping container that still runs matches
+Running and Attention both; the sections stay one per row, Attention first.
+The network's State counts every Attention row ("3 need attention"). A
+network has no health of its own (the adapter reports it online unless its
+host is lost), so its row carries one dot, in the name cell: the network's
+own status when that is worse, otherwise amber while anything attached needs
+attention (degraded, not down; each container keeps its own severity in the
+expansion), otherwise green. The State words take that tone without a second
+dot, and the table's Healthy / Degraded / Offline chips filter by the same
+verdict. Inside the expansion each attached-container card's state words read
+in its own dot's colour ("Unhealthy" red, "12 restarts" amber), as the
+containers table's State words do. A phone row leaves Subnets and Driver, header and cell together, to
+the expansion's Network details.
 
-1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `performance-and-scalability`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
     The table is composed on the Proxmox Backups tab and must not be duplicated
     on Overview. The Backups placement keeps the canonical PBS row and drawer
@@ -1448,7 +1950,7 @@ container inventory table.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 19. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
@@ -1516,6 +2018,11 @@ typed action ids hand off to the route-backed Actions review through
 parameter is the canonical shareable review identity: opening it fetches the
 durable action directly, selects Open or History from the returned lifecycle
 state, and clearing the dialog removes the query without discarding the inbox.
+Open and History are routes (`/actions` and `/actions/history`) built and
+parsed by the same module, so either view can be bookmarked or shared and
+back/forward moves between them; a review switched to the other view by its
+lifecycle state replaces rather than pushes history and keeps the `action`
+query.
 Patrol must not create a parallel decision or execution client around that
 handoff.
 The shared review may offer decision or execution controls only when the
@@ -1628,6 +2135,14 @@ cannot create a browser mutation.
    `TrueNASData.Services` on the canonical top-level `agent` resource,
    preserving service name, boot enablement, runtime state, and process IDs
    through clone, merge, transport, and frontend decode paths.
+   The TrueNAS Services and VMs tables lead with condition rather than
+   configuration. Process IDs, bootloader, and device counts stay in the row
+   drawer instead of taking table columns. A service stopped while set to
+   start at boot, and a stopped VM set to autostart, say `should be running`
+   in the State cell beside the raw state, with the full sentence in the
+   title and a drawer Condition row (the VM drawer summary says it too) because
+   State is hidden on phones. A stopped VM without autostart carries no note: it was stopped on
+   purpose. Rows stay single-line, per the shared platform-table rhythm.
    Docker / Podman inventory extends that same canonical type contract beyond
    generic workload rows and Swarm services. Runtime containers must preserve
    Docker Engine container identity, owning host/runtime context, image,
@@ -1801,13 +2316,11 @@ canonical unified-resource lists must preserve one deterministic
 websocket-backed refreshes so equal-name resources do not silently reshuffle
 between cold hydrate and later runtime updates
 Realtime delta reconciliation must preserve exact display-object identity
-for untouched non-host resources, canonicalize changed and newly added rows,
-and re-evaluate exactly the host-merge groups the delta could have altered:
-a group refreshes when a flagged id names one of its current members, and a
-flagged id absent from the incoming snapshot (a removal, or a partner id an
-earlier coalesce folded away) conservatively refreshes every group. A tick
-that flags no member of a group must preserve that group's cached merged
-host row by object identity. Incremental and
+for untouched resources and canonicalize changed and newly added rows. Each
+server row is one display row: the server coalesced host views for
+presentation, and the browser runs no host-merge pass of its own, so a pair
+the server keeps apart (an operator split, a provider-scoped Proxmox site)
+renders as two rows. Incremental and
 full-snapshot paths must therefore produce the same canonical host identity,
 labels, and compatibility fields without cloning the entire estate per tick.
 The connection store publishes each reconciliation's changed IDs and resource
@@ -1816,9 +2329,9 @@ all-resources cache once and derives type-filtered route projections from the
 canonical result. An instance observing a revision the shared cache already
 holds must not re-read or deep-unwrap the realtime store, and the merging
 instance dereferences raw store subtrees only for rows the delta merge will
-clone (flagged ids, host-merge members, and ids absent from the shared
-cache). A sequential revision with unchanged route membership
-patches only the changed row indices plus the bounded agent coalescing set.
+clone (flagged ids and ids absent from the shared cache). A sequential
+revision with unchanged route membership patches only the changed row
+indices.
 The connection store retains a bounded per-revision changed-id history; an
 instance that resumes several revisions behind the shared cache must catch
 up through the unioned changed-id set as an incremental delta merge whenever
@@ -1838,8 +2351,9 @@ connection store and instance projections as per-key subtree writes rather
 than whole-row keyed reconciles. The fast output must stay
 content-equivalent to the full path (facet keeps, deletion semantics, and
 default-policy synthesis included), must never adopt raw-baseline subtrees
-by reference, and any row outside the allow-list — including agent rows,
-whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
+by reference, and any row outside the allow-list must take the full path.
+Agent rows still take it: the fast path has not been shown equivalent for
+their facet keeps since the browser stopped coalescing host rows. Route-prefetch and route-realtime
 activation are separate:
 a prefetched hidden surface may retain REST data without subscribing its full
 projection to every realtime tick, and activation catches up from the shared
@@ -1907,28 +2421,117 @@ Operator-facing storage posture wording is part of that same ownership:
 when multiple storage-risk reasons exist, shared posture helpers must prefer
 the most decision-useful protection loss summary such as lost parity over a
 generic disk-count aggregate, so resource drawers and incidents do not hide
-the actual protection boundary behind a broader count phrase. 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go` 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
-Drawer-level feature availability belongs to
-`frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`.
-It consumes the shared AI runtime settings store and fails closed until the
-runtime explicitly reports `discovery_enabled=true`. Resource, guest, node,
-and Docker host drawers must use that boundary for every Discovery tab,
-readiness badge, analysis reveal, identified-service suggestion, and
-passive discovery-record query. A disabled or unresolved feature must leave
-no Discovery mention in drawer chrome or content and must not start a
-drawer-local discovery read.
-Resource drawer secondary sections, action history, discovery run summaries,
-and other compact resource-detail cards may own their resource-specific
+the actual protection boundary behind a broader count phrase. 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
+Resource drawer secondary sections, action history, and other compact resource-detail cards may own their resource-specific
 labels, rows, filters, and actions, but the repeated bordered compact frame
 is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
-`ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
+and `ResourceActionHistory.tsx` must compose
 `InfoCardFrame` for that shell instead of restoring local card-frame
 classes.
+The Overview tab's Needs attention list merges open alerts with the health
+presenter's reasons (`getResourceHealthIssuePresentation`), skipping only the
+reasons an open alert already states, so one matching alert never hides the
+rest. The presenter keeps every incident summary, not only the rollup, adds a
+TrueNAS dataset's state (`state:readonly`, `state:locked`, `state:unmounted`)
+because a read-only dataset raises no incident, and uses the rollup's category
+label (Resource Health Issue, Capacity Pressure) only when no reason is more
+specific.
+Below the charts, the resource and Docker host Overviews read their
+inventory as unified-resource facts: `useResourceSummarySections` and
+`getResourceDrawerFacts` (`ResourceDetailSummary.tsx`) take Compose labels,
+image, agent CPU count, `memory`/`disk` used and total, and the primary
+address from the resource itself, state used amounts only for an online or
+running resource whose memory observation (if any) is current, and lift an
+offline resource's state with its `lastSeen`. A row an open alert of the
+resource's own already states (`getAlertStatedRowLabels`) stays in Details.
+The drawer header's status dot for an `app-container` uses the container
+row's mapper (`mapDockerContainerStatus`), so its run state and health check
+decide the colour and label in both places: a running container failing its
+health check is red "Unhealthy" in the row and the header alike. Other
+resources keep `getAgentStatusIndicator` on `status`.
+When a container reports no state of its own (blank counts as none), that
+mapper reads its unified status as other resources' dots do: lost contact
+(offline, error, failed, down, unreachable, disconnected, timeout) is danger,
+degraded/warning/partial/recovering is warning and unknown stays muted; a
+reported state, such as exited on a lost host, still wins.
+A container's update controls read its `docker.hostSourceId`, `containerId`,
+`updateStatus` and the resource's `actionReadiness` through one helper,
+`getDockerContainerUpdateAction`, shared by the containers table and the
+drawer, so an update the server refuses is refused the same way in both.
+Those open alerts come from the websocket `activeAlerts` map through
+`getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`, which
+the Docker host drawer (`DockerHostDrawerOverview.tsx`) uses the same way.
+Unified resources carry no embedded alert list: the frontend `ResourceAlert`
+type and the backend `ResourceFrontend.alerts` / `ResourceAlertInput` path were
+retired because no producer ever filled them, which left both drawers without
+their open alerts. The matcher keys a resource on its unified id, canonical
+primary and superseded ids, Proxmox source id and metrics target (PBS, PMG,
+storage); agent and Docker hosts also answer to `agent:<id>` and
+`docker:<host source id>` and to the component alerts nested under those keys
+(disks, RAID arrays, sensors, containers, services). An `app-container` answers
+to `docker:<host source id>/<container id>` (or `/name:<name>`), the key the
+alert engine writes for it. Drawer charts take triggers only from
+`getOwnAlertsForUnifiedResource` (exact keys, no nested components). A health reason counts as
+stated when it is a whole sentence of an open alert's text, because a unified
+incident alert on storage with consumers joins the incident summary and its
+impact ("... above threshold. Affects 2 dependent resources: ...") and neither
+may repeat beside it. The Docker hosts (`DockerHostsTable.tsx`) and Machines
+(`AgentsMachinesTable.tsx`) table rows tint from the same set through
+`getUnifiedResourceAlertStyles`, so a collapsed row never looks healthy while
+its drawer lists an unacknowledged alert (an expanded row drops the tint while
+its drawer shows the alerts); acknowledged alerts stay in the drawer without
+tinting the row. Kubernetes node rows (`KubernetesNodesTable.tsx`) tint the
+same way: a node that runs a Pulse agent is an agent row whose alerts are keyed
+`agent:<id>` and carry the hostname, so the earlier id-and-display-name match
+left it untinted while its drawer listed a critical alert. The Kubernetes
+overview's "Nodes needing attention" and the nodes table's default order rank
+a node by the stronger of its readiness state and those unacknowledged alerts
+(`getKubernetesNodeAttentionRank`), so a Ready node at 100% memory is named
+beside the NotReady ones. vSphere host and TrueNAS system rows keep
+`getAlertStyles` with the host name: their VMs', pools' and apps' alerts carry
+that name as their node, and no producer keys alerts on those rows' `agent:`
+aliases (a Pulse agent on a TrueNAS box stays a separate resource).
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
+A standalone host agent past its reporting lease reaches the Machines table as
+`offline`, as described in "Status follows each source's own verdict". The
+offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
+and temperature cells. The machine drawer drops a silent agent's uptime and
+marks its non-disk Thermals rows "(last known)" with the reason as title,
+keyed on `agent.stale` because those rows are that agent's own sensors.
+Its Disks card reads the agent's retained filesystem usage as last known on the
+same signal (`agentReadingsLastKnownReason`): each figure stays, muted and
+titled with the reason, without threshold colour or usage bars.
+Its RAID card and the Machines RAID column and tooltip read the agent's
+retained arrays the same way: every array and member state they show stays, as
+evidence of what the array was doing when the agent went quiet, but without
+live status colour. Where a retained rebuild percentage is shown, it reads
+"Rebuild was at N%" with no speed or progress bar, and a member that was not
+healthy names its state in its badge.
+A Pulse agent manually linked into a guest carries the same signal there.
+`AgentData.Stale` is always on the wire, because browsers merge agent facets
+field by field (`resourceStateAdapters.ts`) and would keep a resumed agent's
+omitted false as true; `TestAgentDataAlwaysSendsStale` pins it. That always
+present `stale` also marks a native agent facet, so one without `disks` has
+withdrawn them, and a native Proxmox VM facet's new guest-read outcome likewise
+drops `disks` it no longer reports; either way the other source's filesystems
+take over without a reload (`resourceStateAdapters.test.ts`). `VMView.DiskFromLinkedAgent` names the agent
+as the owner of a guest's selected disk metric, which the monitoring poller
+reads before it carries a Proxmox disk reading forward.
+For SMART disk
+temperatures on rows that still render, the provenance travels on
+`agent.sensors.smart[].collection`: the Machines temperature cell
+(`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
+drawer's Thermals rows (`resourceDetailMappers.ts`) read it through
+`isPhysicalDiskTemperatureCurrent`, so a retained disk reading never stands for
+the machine while another disk has a current one. A positive direct
+`temperature` or `temperatureCelsius` reading carries no collection state and
+still leads the cell. Without one, and with no current non-standby disk, the
+hottest retained non-standby disk reading shows as last known without
+threshold colour.
 The same boundary applies to availability facts, resource change-history
 metadata, Docker/PBS/PMG service facts, nested PMG queue/mail breakdowns, and
 Docker container-update management facts. It also covers action-history facts,
@@ -1997,29 +2600,18 @@ explicit cluster identity such as Kubernetes context or platform cluster
 labels; standalone resource names must never be repurposed as synthetic
 `clusterId` values. 13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
 surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
-`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,
-and `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` may expose
+and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+may expose
 provider identity or governed safe-summary posture when that context helps
 an operator, but the rendered labels must stay product-neutral and use
 `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
-generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
-shell. 14. Keep the operator-facing unified resource table width-aware at the table
-surface, not just at the browser viewport. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-must route its root ref through `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-owns the column-priority breakpoints for host and service infrastructure
-rows. When the app shell leaves tablet-sized space during live resize, the
-table hides lower-priority metadata first. At phone width, the state model
-must remove the old 640-pixel floor, preserve identity at exactly 30 percent
-of the table, and allocate the remaining width across the bounded
-source-relevant health and activity columns. Both the document and table
-shell must remain free of horizontal overflow; desktop and tablet stages
-retain their existing complete column contracts. 15. Keep shared policy-posture framing on the unified-resource card owner.
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-may accept caller-owned subtitle or resource-count wording when Patrol or
-another shared surface needs to explain how the same governed policy counts
-should be read, but those framing lines must extend the shared card API
-rather than spawning page-local policy summary shells. 16. Keep platform/runtime top-level route paths on the canonical resource-link
+generic `AI` or `AI-Safe` branding inside the resource drawer. 15. Keep governed policy-posture wording on the unified-resource
+presentation owner. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+owns the canonical sensitivity, routing, and redaction labels and their
+orderings. No shared card renders policy-posture counts today; if one
+returns, caller-owned framing such as subtitle or resource-count wording must
+extend that one card's API rather than spawning page-local policy summary
+shells. 16. Keep platform/runtime top-level route paths on the canonical resource-link
 helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
 `STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
 `VMWARE_PATH`, `PATROL_PATH`, `PATROL_CONTROL_ANCHOR`,
@@ -2068,6 +2660,9 @@ for the column when evidence later appears. The
 compact row action trigger chrome stays under the frontend-primitives
 `ActionIconButton` boundary rather than becoming a unified-resource-local
 button shell.
+The Machines outdated-agent notice names what an update brings in plain
+words, the latest fixes and machine details, and stays maintenance guidance
+rather than a membership or health signal.
 Machines list search and online-state narrowing are frontend route state,
 not new unified-resource membership fields. `StandalonePageSurface.tsx`
 owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
@@ -2096,12 +2691,31 @@ signal source instead of advertising empty object browsers. The
 canonical TrueNAS adapter (`internal/truenas/provider.go::
     truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
 appliance as a unified `agent` row tagged with the `truenas`
-platform, so TrueNAS defaults to `/truenas/overview` (the Systems
-sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
+platform, so TrueNAS defaults to `/truenas/overview`, whose Overview
+sub-tab lists those systems in `TrueNASSystemsTable`. `/truenas/storage`
+renders the TrueNAS-owned `TrueNASStorageTopologyTable`, not
+`StorageSurface`; only the Proxmox Storage tab embeds `StorageSurface`.
 Any future platform that wants to default to a Systems / Hosts
 overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder
 default still resolves to a populated table.
+
+`ALERT_BACKUP_THRESHOLDS_PATH` (`/alerts/thresholds/proxmox#backups`) names
+the Recovery thresholds whose fresh and stale hours colour every backup
+shield; the backup dialog links there and the thresholds page treats
+`#backups` like `#pbs` and `#pmg` (`resourceLinks.test.ts`).
+
+`buildAlertThresholdsPath(tab, { query })` builds a thresholds tab address
+already searched to one resource through `ALERT_THRESHOLDS_QUERY_PARAMS`,
+the `?q=` key the thresholds page owns; callers pass a resource's display
+label, never an id, because the thresholds search matches names
+(`resourceLinks.test.ts`).
+
+`buildAlertHistoryAlertPath(alertId)` builds `/alerts/history?alert=<id>`
+from `ALERT_HISTORY_QUERY_PARAMS` (`q`, `period`, `severity`, `alert`), which
+now live with the other route keys instead of inside the History hook. The
+`alert` key is a public address: notifications build the same link, so it
+must not be renamed (`resourceLinks.test.ts`).
 
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
@@ -2195,100 +2809,33 @@ application resource-provider or WebSocket lifecycle.
    `vmware` metadata plus shared `resource-incident` timeline entries on
    canonical `agent`, `vm`, `storage`, and `network` resources instead of creating
    provider-only resource kinds, identities, or history schemas.
-9. Keep summary-surface emphasis on canonical resource IDs. Infrastructure
-   summary row-hover, chart-hover, and route-focus behavior must keep using the
-   same unified-resource IDs that power the table rows, chart series, and
-   detail-route handoffs instead of introducing page-local summary IDs or
-   provider-local hover aliases when the selected series is highlighted.
-10. Keep infrastructure contextual focus route-backed and page-scoped. When an
-    infrastructure row opens its detail drawer, the selection must stay on the
-    same route through canonical resource query state, and the shared
-    summary-table focus/runtime contract plus the root app-shell restore path
-    must let direct row toggles open that drawer in place instead of looking
-    like a page refresh or remount. The
-    summary must keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-    rendering the full page-level series set while only the focused label and
-    highlight state change.
-11. Keep infrastructure summary hover scope on canonical unified-resource ids
-    even when one metric is empty. Shared chart hover may synchronize one
-    timestamp across all four infrastructure cards, but the active emphasis
-    must still resolve through the same unified-resource id that powers the
-    table row, line charts, density maps, and drawer route state instead of
-    dropping the highlight or inventing a metric-local summary identity when
-    disk or network data is missing in range. When a sibling infrastructure
-    card can resolve that same resource id locally, it should surface the
-    synchronized value through the shared summary-card readout instead of
-    spawning a second chart tooltip.
-    Infrastructure summary numeric readouts that reflect canonical resource
-    counts or capacity must use the shared `AnimatedNumber` primitive rather
-    than page-local counter state, so readout motion stays presentation-only and
-    canonical unified-resource identity and scope stay unchanged.
-12. Keep infrastructure chart hover non-destructive to the unified-resource
-    table. If the hovered resource row is already visible in
-    `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`,
-    the row may highlight in place through the shared active-resource id; if it
-    is off-screen, the page must offer an explicit `Jump to row` affordance
-    rather than auto-scrolling or collapsing the table on hover.
-    12a. Keep infrastructure summary visibility as display preference, not a
-    unified-resource filter. Platform/runtime pages and shared infrastructure
-    summary consumers may hide or restore chart sections through shared
-    presentation controls, but those controls must not mutate resource
-    identity, table membership, source scope, or summary-hover state. The
-    retired top-level `/infrastructure` page and its saved-view/route-state
-    machinery must not be reintroduced for this purpose.
-13. Keep infrastructure cluster headers as canonical summary scope. Grouped
-    headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-    must publish cluster scope from the same `ResourceGroup` / unified-resource
-    ids that power the table rows, and
-    `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-    must consume that scope through the shared page/group/entity interaction
-    contract rather than inventing infrastructure-local summary filters or
-    route-backed cluster hover state. Host and service infrastructure table
-    card frames must consume the frontend-primitives-owned `TableCard` wrapper;
-    unified-resource ownership remains on resource identity, grouping, and row
-    semantics rather than forking a table border/background shell. Deliberate
-    cluster focus must also stay
-    on the canonical infrastructure route through the shared `summaryGroup`
-    query state, so pinned scope is shareable, reversible, and owned by the
-    same route-backed summary contract as row focus. Infrastructure must stay
-    row-first here: the pinned cluster header remains the visible scoped
-    state, and explicit clearing belongs to the shared infrastructure table
-    card header action plus the shared `Escape` reset path rather than a
-    search-row fallback widget, page-level scope strip, or a second
-    scope/pinned pill inside the cluster row chrome. Background whitespace
-    clearing may remain a convenience, but infrastructure must not rely on it
-    as the only reversible control.
-14. Keep infrastructure row emphasis on the shared frontend presentation
-    contract. Host, PBS, and PMG table sections may decide whether a resource
-    is contextually active, but they must expose that state through
-    `data-summary-row-active` and rely on the shared row presentation owned by
-    `frontend-modern/src/index.css` instead of provider-specific background
-    classes that drift across resource tables or hide inline metric bars.
-    Cluster-member rows must also expose shared preview-versus-pinned group
-    emphasis through `data-summary-group-member-active`, so the whole cluster
-    block reads as the active scope without inventing a second infrastructure-
-    local outline or banner treatment.
-    Static grouped cluster-header emphasis must route through
-    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
-    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than infrastructure-local background or hover-fill classes.
-    Summary-linked infrastructure rows and cluster headers must also route
-    pointer preview and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while
-    deliberate expand/scope ownership must route through
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so the
-    unified-resource table does not fork mouse-only hover logic, focusable-row
-    button shims, touch-hostile synthetic hover, or provider-specific control
-    handling across host, PBS, and PMG sections. Those three resource rows are
-    themselves the compact touch disclosure target and must explicitly enable
-    the shared mobile-chevron suppression; their accessible row/button state
-    remains available without spending a visible summary-cell slot on a
-    duplicate control.
-15. Keep infrastructure search aligned with the governed display label. Shared
-    infrastructure filtering through
-    `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-    must match the user-visible safe label for governed resources instead of
-    reintroducing redacted hostnames through search-only fallback candidates.
+9. Keep summary-surface emphasis on canonical resource IDs. A page that pairs
+   summary charts with resource rows must keep row-hover, chart-hover, and
+   route-focus behavior on the same unified-resource IDs that power the table
+   rows, chart series, and detail-route handoffs instead of introducing
+   page-local summary IDs or provider-local hover aliases when the selected
+   series is highlighted.
+10. Keep row contextual focus page-scoped. Pages whose rows share summary focus
+    through `useSummaryPageInteractionState` in
+    `frontend-modern/src/components/shared/summaryTableFocus.ts` (today the
+    Workloads and Storage pages) must let a direct row toggle open its detail
+    in place through that shared runtime and the root app-shell restore path,
+    instead of looking like a page refresh or remount.
+12. Keep summary-chart visibility a display preference, not a unified-resource
+    filter. The workload and infrastructure summary chart sections are
+    retired and no platform page exposes a chart show/hide control today. If a
+    governed product decision brings one back, hiding or restoring it must not
+    mutate resource identity, table membership, source scope, or summary-hover
+    state. The retired top-level
+    `/infrastructure` page, its summary chart strip, and its
+    saved-view/route-state machinery must not be reintroduced for this purpose.
+15. Keep operator-local resource search on the operator's own names.
+    Resource-policy redaction is a transmission boundary (`docs/PRIVACY.md`),
+    so local search over unified resources, such as the `ResourcePicker` and
+    `useResources` search filters, matches the raw name from
+    `getPreferredInfrastructureDisplayName(...)` plus the resource ID rather
+    than the governed safe label. Provider-bound labels keep the governed
+    `getPreferredResourceDisplayName(...)` path.
 16. Preserve provider-backed storage backing-pool identity on canonical
     storage resources. `internal/unifiedresources/types.go`,
     `internal/unifiedresources/adapters.go`, `internal/unifiedresources/views.go`,
@@ -2332,10 +2879,11 @@ application resource-provider or WebSocket lifecycle.
 18. Keep storage summary target selection on canonical unified-resource truth.
     Storage-summary consumers may detect storage presence from canonical
     `isStorage(...)` resources and their shared metrics-target IDs, but once
-    storage exists they must reuse the owned compact
-    `/api/charts/storage-summary` contract instead of rebuilding page-local
-    per-resource storage history fetches, storage-type aliases, or full
-    storage-page `/api/storage-charts` fetches.
+    storage exists they must reuse the shared `/api/storage-charts` summary
+    response through `frontend-modern/src/utils/storageSummaryCache.ts`
+    instead of rebuilding page-local per-resource storage history fetches or
+    storage-type aliases. The retired `/api/charts/storage-summary` route must
+    not return as a second storage summary transport.
 19. Keep infrastructure framing presentation-only on active product surfaces.
     Platform/runtime pages, shared infrastructure tables, and Settings
     infrastructure panels may render page or section headers, but canonical
@@ -2376,10 +2924,9 @@ application resource-provider or WebSocket lifecycle.
 21. Keep post-execution verification outcome on the canonical execution
     result. `ExecutionResult.Verification` carries
     `ActionVerificationResult` with `Ran`, `Command`, `Output`,
-    `Success`, `RanAt`, and `Note`. The broker runs the
-    class-derived read-after-write check after a successful dispatch
-    and persists the outcome through the existing `result_json`
-    column; no schema migration is required. Verification is
+    `Success`, `RanAt`, and `Note`. When a read-after-write check runs
+    after a successful dispatch, its outcome persists through the
+    existing `result_json` column; no schema migration is required. Verification is
     best-effort: classes without a derivable check leave
     `Verification` nil rather than fabricating a verified=true entry,
     matching the no-fabrication rule used elsewhere in the trust
@@ -2396,13 +2943,11 @@ application resource-provider or WebSocket lifecycle.
     approved a different action vs approval window passed) and audit
     review and operator UI surfaces should treat them differently. The
     drift contract is "the operator approved exactly this (command,
-    target, reason) combination"; the freshly-recomputed
-    approval-equivalent hash and the recorded `planHash` are how we
-    enforce that. New broker call sites that introduce additional
-    governed-action paths must either reuse the existing approval-
-    equivalent hash or extend the canonical hash set in
-    `internal/ai/tools/action_audit.go` rather than adding ad-hoc
-    comparison logic.
+    target, reason) combination"; the freshly recomputed plan hash and
+    the recorded `planHash` are how we enforce that. New broker call
+    sites that introduce additional governed-action paths must reuse
+    the canonical plan hash from `internal/actionplanner/planner.go`
+    rather than adding ad-hoc comparison logic.
 23. Keep the `ActionVerificationResult` frontend mirror canonical and
     pin the operator-facing render location.
     `frontend-modern/src/types/actionAudit.ts` defines the TS
@@ -2443,7 +2988,7 @@ application resource-provider or WebSocket lifecycle.
     (`canonical_id` ↔ machine ID / DMI UUID / cluster / hostname) in the
     `resource_identities` table (`ResourceStore.UpsertResourceIdentityPins`
     / `ListResourceIdentityPins`, written diff-aware after monitor-adapter
-    rebuilds) and completes weak incoming identities from those pins
+    rebuilds; manual-link sides write through `ReplaceResourceIdentityPins`) and completes weak incoming identities from those pins
     before matching and ID derivation
     (`internal/unifiedresources/canonical_id_pins.go`). Persisted primary
     hostnames preserve their normalized dotted form. The pin index resolves
@@ -2459,7 +3004,15 @@ application resource-provider or WebSocket lifecycle.
     must not mint host canonical IDs from snapshot-content-dependent
     identity subsets without consulting the pins, and pin writes stay on
     the durable store-backed registry (ephemeral per-request registries
-    consult, never write). Pinned hostnames preserve the full dotted name
+    consult, never write). A pin records the identity a resource derives
+    from its own sources rather than a manual link's merged projection:
+    each side of a link writes the pin captured before the link merged
+    them, keeping its row's other fields unless another resource holds that
+    key, and a pinnable folded side keeps its pin under its own canonical
+    ID, less any strong key a live resource or an earlier folded side
+    holds. Capture follows pin completion, so a key an earlier release
+    borrowed into a side's row can still reach the capture (see "Operator
+    links reach record-ingested resources"). Pinned hostnames preserve the full dotted name
     (`NormalizeFullHostname`): distinct machines that share a short
     hostname (`cloud.rnd-lax1` vs `cloud.gce-or1`) must keep distinct
     pins, distinct pin-index buckets, and distinct presentation host rows.
@@ -2494,7 +3047,9 @@ application resource-provider or WebSocket lifecycle.
     ID and drops the superseded pin row (`ApplyCanonicalIDSuccessions`
     in `internal/unifiedresources/canonical_id_succession.go`).
     Successions never fire while the old ID still belongs to a live
-    resource, never follow a contradicting machine key (a reinstalled
+    resource or to one a manual link folded into its primary (see
+    "Operator links reach record-ingested resources"), never follow a
+    contradicting machine key (a reinstalled
     machine mints fresh, it does not absorb the old host's operator
     state), and never rewrite change-journal rows. Known limitation:
     machine-keyless hosts whose history already merged under a collapsed
@@ -2544,7 +3099,7 @@ application resource-provider or WebSocket lifecycle.
     become a per-row store pattern.
     Regression coverage:
     `TestSQLiteStoreActionAuditOriginRoundTrip`,
-    `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
+    `TestActionAuditOriginReaderReturnsLatestTransition`, and the matching
     memory/batch reader tests in `internal/unifiedresources/store_test.go`.
     Incident next-step fallback follows the same canonical resource boundary:
     storage guidance is reserved for storage, physical-disk, network-share,
@@ -2575,8 +3130,9 @@ application resource-provider or WebSocket lifecycle.
     `ResourceRegistry.IngestRecords` applies the same
     `ApplyCanonicalIDSuccessions` semantics as pin-driven successions
     (operator state and action audits re-key, the superseded pin row
-    drops, never while the old ID belongs to a live resource, journal
-    rows never rewritten). Regression coverage:
+    drops, never while the old ID belongs to a live resource or one a
+    manual link folded into its primary, journal rows never rewritten).
+    Regression coverage:
     `TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct` /
     `TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs` /
     `TestIngestRecordsDoNotCompleteTrueNASIdentityFromPins` in
@@ -2651,11 +3207,59 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
-Discovery-led availability proposals present their evidence and canonical
-attachment boundary as short, complete sentences in both the inline card and
-machine-wide review. The colocated component test pins that operator-facing
-copy so the shared copy-style audit cannot regress it back to semicolon-joined
-instructions.
+### Retained Machines and Debug status (11 October 2026)
+
+The Machines row status, health chip counts and selected filter membership
+read the same existing classifier and shared clock. A held online agent is
+Degraded in the toolbar once its row becomes Stale under the unchanged five-minute
+fallback; clock ticks neither renew its report nor set its canonical stale flag.
+The row retains identity and metric values, and an actual report or offline
+status still updates its presentation and membership. Explicit warning/Unknown
+rows are Degraded, red rows are Offline, and unclassified muted rows remain
+visible in All without being promoted to Healthy or Offline. Search and the
+route-owned selected filter survive reclassification; no new posture card is
+added. Attention sorting classifies each input
+resource once per call, retains the priority/name order and never caches status
+across calls or mutates the input inventory.
+
+Debug source status, error and last-seen are reactive by section ID even when
+source payload sections stay mounted. New status records withdraw obsolete
+errors; absent/invalid timestamps do not acquire an age. Source payload,
+disclosure and focus survive status-only updates and quiet age ticks.
+
+Verification: the Machines table, standalone page-model and Debug relative-age
+tests cover the retained-row boundary, per-resource classification count,
+arriving/withdrawn reports, unknown/offline membership and ordinary source-status
+replacement. `browser-tests/machines-health-filters.cjs` compares chip counts,
+Healthy/Degraded clicks and selected results on the composed parent and final
+desktop/phone sources; `browser-tests/pr2600-monitoring.cjs`
+compares exact-parent and repaired production surfaces on desktop Chromium and
+touch-phone WebKit using synthetic local data. It establishes presentation,
+not a probe, guest thaw/writes/liveness/restoration, native collector recovery,
+whole-fleet CPU relief, publication or release availability.
+
+### AI Discovery removed (2026-10-11)
+
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns removed service-identification fields and compatibility behavior. Resource
+context retains `discoveryTarget` coordinates in its Runtime projection.
+
+### Interface-associated display addresses
+
+VM and LXC projections retain the collector's interface-associated IP order in
+canonical identity and broadcast. Agent-host display address selection also
+recognises Podman interface names as secondary, retaining every address and the
+explicit `--report-ip` preference. The shared `pkg/netutil` name hint does not
+drop management bridges, bonds, VLANs or tunnels, prove a default route, or
+change the agent's separate MAC-based machine-ID fallback. The existing MAC
+metadata sequence keeps its legacy classifier; Podman preference affects only
+displayed IPs. No identity key or wire shape changes.
+`TestIssue2757AgentDisplayPrefersNonContainerInterfaces`
+and `TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses` bind Podman,
+management-interface, supplied identity and explicit-override controls to the
+production host adapter; monitoring's #2757 fixtures bind guest list/broadcast
+order and name/address/traffic association. Native readings and publication
+remain separate evidence.
 
 ### Provider workflows hydrate only their active route inventory
 
@@ -2676,6 +3280,36 @@ or force every provider type back into the active route payload. Docker,
 Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
 maps, and the shared hook test pins facet normalization.
 
+### Proxmox node verdicts over disks arrive on the node
+
+The Proxmox page hydrates one query per workflow, and only its Storage tab
+loads `physical_disk` rows, so a node verdict that depends on the node's disks
+is derived in the registry and carried on the node, never rebuilt in the page
+from disk rows. `ProxmoxData.SensorSetupOutdated` (`proxmox.sensorSetupOutdated`
+on REST and websocket rows) is that verdict for the outdated sensor setup
+notice. `refreshProxmoxSensorSetupLocked`
+(`internal/unifiedresources/proxmox_sensor_setup.go`) runs after
+`buildChildCounts` on every ingest path and gives every Proxmox node an
+explicit true or false (other resources omit it), because browser facet merges
+read an omitted field as a partial snapshot and would keep an earlier true. It
+is true when the node's temperature payload is available and in the legacy
+`sensors -j` format (`models.Temperature.LegacySensorsFormat`) and a disk whose
+canonical parent is the node has no reading collected now
+(`diskinventory.TemperatureCollected`) and a type whose temperature a PVE node
+gets only through SMART: `sata`, `sas`, or the `hdd` and `ssd` form factors
+Proxmox's own inventory reports. Proxmox also types a non-rotational USB device
+`ssd`, so a USB device without SMART counts. A retained reading does not count
+as current, including one kept while a host agent reports the disk in standby;
+a reading a linked host agent collects now clears the disk. NVMe disks never
+set it, because kernel hwmon reports them even on a legacy setup, and a host
+agent the registry has not linked to the node contributes no disks. The
+verdict reflects the registry's node and disk state at each ingest.
+`TestProxmoxNodeSensorSetupOutdatedFromItsDisks` and
+`TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives` in
+`internal/unifiedresources/registry_test.go` pin the rule, the linked-agent
+case, the explicit false on the wire and the presented JSON;
+`resourceStateAdapters.test.ts` pins that a false clears a merged true.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox
@@ -2693,13 +3327,23 @@ canonical WebSocket snapshot, including the public `vmware-vsphere` alias for
 the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
-and one explicit refresh path.
-Its page-owned workload toolbar consumes the complete shared
+and one explicit refresh path. It passes no option that adds host metrics to
+grouped rows: the shared Workloads group row carries host identity only, with
+no drawer, hover preview, or group pin, and per-host stats and details stay in
+the page's own hosts table. The Workloads route model no longer parses a
+`summaryGroup` param, because no group focus remains to hydrate.
+Its page-owned workload toolbar, the only one on the page because the embedded
+`WorkloadsSurface` renders none, consumes the complete shared
 `getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
-Trends, Details, History, range, and first-use discovery contract as every
-other `WorkloadsSurface` consumer. The page must not select only display and
+Trends, Details, History, range, and first-use discovery contract as the
+Proxmox overview, the only other `WorkloadsSurface` consumer. The page must not select only display and
 range props while silently dropping row-hover state from that shared resource
-projection.
+projection. The vSphere surface mount carries only that page-owned state, the
+locked platform, the `vm` view and its empty-state copy; every resource and
+workload option stays on the page's `useWorkloadsState` call, the surface's
+only data input. That call carries no `vms`, `containers`, `nodes` or
+`useWorkloads` option; the vSphere snapshot it receives is the state's only
+guest inventory.
 Docker and Kubernetes page owners use the same source-aware projection for
 their complete provider type families. Their linked agent rows remain visible
 because canonical merge preserves the provider source beside the agent source;
@@ -2838,9 +3482,10 @@ in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 route to `/kubernetes/workloads` rather than building
 retired aggregate workload URLs; the legacy context/namespace query filter
 does not carry forward because the new Kubernetes Workloads tab does not
-consume those parameters. Workloads, storage, and recovery route-state helpers
-in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
-only; the owning platform/runtime route supplies the pathname. New drawer or
+consume those parameters. The workloads and storage route-state helpers in
+`frontend-modern/src/routing/resourceLinks.ts` serialize query state only, and
+the owning platform/runtime route supplies the pathname; the recovery
+serializer was deleted once nothing read it. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
 The Proxmox Backups route-state vocabulary includes the opaque `location`
@@ -2862,8 +3507,9 @@ recreate raw labelled `<select>` controls for those filters locally.
 The Proxmox platform page is a route-level consumer of canonical unified
 resources, not a new resource source. It filters the existing resource snapshot
 to Proxmox VE, Backup Server, Mail Gateway, storage, disk, and workload rows,
-then composes the existing Workloads, Storage, Recovery, and infrastructure
-table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
+then composes the existing Workloads and Storage surfaces, its own Backups
+tab tables, and the infrastructure table owners; no Recovery surface exists to
+compose. Proxmox host row version, uptime, temperature, CPU, memory, disk,
 network I/O, and disk I/O presentation must derive from canonical resource
 facets and the shared `nodeFromResource` adapter; platform pages must not
 rebuild resource identity, merge policy, or metric-target inference locally.
@@ -2873,6 +3519,19 @@ footer after the visible rows. The footer may dim the final row edge and expose
 the remaining-row count, but expanding or collapsing it only changes the
 client-side visible slice; it must not refetch, reorder, or redefine the
 canonical resource collection.
+The shared `nodeFromResource` adapter selects a node's temperature record as
+before: the platform temperature record, else the Proxmox temperature record,
+else the agent facet. When that selection yields no usable reading, it uses
+`proxmox.temperatureDetails` if that holds a current CPU reading, ahead of the
+bare scalar fallback. That field is
+the Proxmox poller's full reading for a node without a host agent, including
+the CPU low and record values the poller supplies; `proxmox.temperature` is
+only the scalar maximum. The adapter forwards those values; keeping them across
+polls is the poller's job (`monitor_previous_state.go` and the temperature carry
+in monitoring). A bare scalar reading carries no history, so the adapter leaves
+the CPU low and record unset rather than repeating the current value, and the
+node drawer omits those rows. `resourceStateAdapters.test.ts` pins these cases
+with the API's payload shape.
 The registry and presentation coalescer also own metric-source freshness. When
 two source facets contribute the same metric, source priority decides only if
 both sources have equivalent freshness. A stale source must not hold CPU,
@@ -2920,7 +3579,11 @@ silently move operator intent. Weekdays normalize to unique Monday-through-
 Sunday order. `maintenanceScope` defaults to `resource`; the only inherited
 value is `resource_and_descendants`, resolved against the canonical registry
 parent chain with cycle protection. Concrete occurrence start/end boundaries
-are derived by the same model for Alerts and post-window verification. SQLite
+are derived by the same model for Alerts, Patrol and post-window verification;
+consumers read the active occurrence, never the one-shot fields, which a
+recurring schedule leaves nil. `ActiveMaintenanceCoverageAt` is the one
+inheritance rule: own window plus ancestor windows scoped
+`resource_and_descendants`, latest active end wins, maintenance only. SQLite
 persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
@@ -2984,21 +3647,287 @@ below its explanatory copy so the button cannot squeeze policy text into a
 narrow side column; desktop retains the compact side-by-side layout.
 The UI must never infer eligibility from capability names, severity, or the
 human approval floor.
+Each control's help says what it does to Alerts, Patrol and automatic fixes in
+plain words, never in implementation terms (no "persisted resource policy",
+"action broker", "dispatch" or "canonical inventory hierarchy"). The
+maintenance-window help says it silences alerts and dismisses new Patrol
+findings, because an active window suppresses alert activation and
+auto-dismisses new findings while keeping them in history. The descendant-scope
+help says descendants' alerts are silenced and their new Patrol findings
+dismissed, because Alerts and Patrol resolve maintenance through the one
+`ActiveMaintenanceCoverageAt` rule over the live canonical parent chain. The `Never auto-remediate` label stays as named, because
+help pages and the Assistant's refusal message refer to it; its help and lock
+confirmation say it blocks every automated fix, including approved ones, and
+that blocked runs are logged as failed actions (an Assistant planning refusal
+creates no action record).
 
 The `/api/resources/{id}/operator-state` API surface (GET / PUT /
 DELETE) in `internal/api/resources_operator_state.go` is the
 operator-facing consumer of this contract; the URL canonical_id always wins over the
 body, server-side `setAt` / `setBy` populate from request time and
 authenticated identity, and validation rejections surface a stable
-`operator_state_invalid` error code. The action broker
-(`executeCommandWithAudit`) consults the same store on every dispatch
-and refuses with `ErrResourceRemediationLocked` when the operator has
-set `NeverAutoRemediate=true`; the refusal is persisted as a Failed
-audit record with `resource_remediation_locked:` prefix on the
-`ErrorMessage` so audit-UI filters and alert rules can branch on the
-stable token. Finding-suppression integrations consume the same
+`operator_state_invalid` error code. The Pulse Actions lifecycle
+(`validateExecutionPolicy` in `internal/actionlifecycle/service.go`)
+consults the same store at the dispatch decision point and refuses with
+`ErrResourceRemediationLocked` when the operator has set
+`NeverAutoRemediate=true`; the API reports it as
+`resource_remediation_locked` so audit-UI filters and alert rules can
+branch on the stable token. Finding-suppression integrations consume the same
 `ResourceOperatorState` shape via the
 `ResourceOperatorStateProvider` interface in `internal/ai`.
+
+A remediation lock follows the resource through the identity changes the
+stores can see. The planner, the action broker and the dispatch gate
+(`validateExecutionPolicy`) read the row keyed by the one canonical ID the
+registry lists, so a lock left on an ID the registry no longer lists would let
+Pulse act on a resource the operator told it never to touch. The members of a
+live manual-link component therefore share the block
+(`shareRemediationLockAcrossLinksSQL`, `CarryRemediationLock`). `AddLink` writes
+a block held by any member of the linked component to every member, in the
+link's own transaction, because the store cannot see resource types and so
+cannot know which member the registry keeps (a guest outlives an agent running
+inside it whichever way the link points); a chain of links is one component.
+`AddExclusion` does the same just before an unlink splits the pair, so each
+member the unlink leaves keeps the lock the merged resource carried.
+`ApplyCanonicalIDSuccessions` carries the predecessor's block onto a successor
+row that already exists, which would otherwise shadow it. The IDs the
+predecessor's and successor's links joined before the re-key stay one group:
+once the re-key has run (so a successor with no row still receives the
+predecessor's whole row, retirement, maintenance, notes and attribution
+included), the group shares the block even where re-keying a link onto the
+successor lets a newer exclusion supersede it. Successions apply hop by hop in
+the order they are declared; the stores do not reorder a batch, so a chain
+declared against its direction in one batch, or into an intermediate ID whose
+own succession was recorded earlier, carries one hop per succession. A
+succession applies once per predecessor in both stores, so a lock the operator
+lifts on the successor, by editing or clearing its row, is not brought back by
+a re-declared succession. Opening a store that has not run the one-shot
+upgrade carry (`migrateRemediationLockCarry`, recorded in
+`resource_store_migrations`) restores the locks that earlier links and
+already-recorded successions dropped, following a recorded chain to every ID
+that still has a row and repeating with the links until nothing changes; it
+records itself done only once it has converged, does not run again after that,
+so a lock lifted afterwards stays lifted, and a failure is logged and retried
+at the next start rather than keeping the store closed. Sharing after a
+succession batch waits until every predecessor's row in the batch has moved
+and follows each group's members through the re-keys applied after it, in
+application order, so a block-only row made
+for one predecessor cannot take the place of another's whole row and an ID a
+later succession in the batch re-keyed away is not given a row. The link reads
+that settle a lock take only the columns that decide a pair and treat a time
+the driver cannot read as the zero time, so a malformed link row cannot stop a
+succession, a link or an unlink.
+
+What crosses is the block only, as `NeverAutoRemediate`, and `Retired` counts
+as a block: retirement also silences alerts and Patrol attention, which is
+monitoring posture rather than a safety property, so a retired donor does not
+retire the survivor. Every other setting an existing survivor row holds is left
+untouched, a member with no row gets a row carrying the block alone, and the
+carried row is attributed `system:identity-change` rather than to a person.
+The operator lifts the lock on the resource the registry lists, which is where
+the operator-state API resolves a folded ID to, and a restart, a rebuild or a
+re-declared succession does not put it back. The copies the sharing wrote on
+folded members cannot be reached through that API while the pair is linked, so
+they share again at the component's next link, unlink or succession. Unlinking
+the pair removes no carried lock from either side; once no other link still
+joins them, each member can be edited or cleared on its own.
+
+The sharing is bounded by when it runs, and the contract does not claim more.
+A lock written to a linked ID after the link was recorded reaches the other
+members at the component's next link, unlink or succession, and reaches the
+survivor at once only when the ID resolves through the registry, as the operator-state API
+resolves a folded ID to its holder; a lock written while the registry cannot
+resolve the ID (a member absent from the current generation) stays on that ID
+until then. The store cannot see which links the registry declines to fold
+(availability-owned endpoints, a node and agent pair a newer split separated),
+so those share too, which can lock a host because a linked probe was retired.
+Re-recording an existing link shares again.
+
+A rebuild applies the successions it finds to the store before it publishes
+the generation that lists the successors, and the generation it replaces keeps
+serving in between. The planner, the Patrol broker and the dispatch gates
+(`validateExecutionPolicy`, `isResourceRemediationLocked`) read the row of the ID
+that generation lists, so for the length of the rebuild they ask for an ID whose
+row has just moved. `GetResourceOperatorState` therefore follows the recorded
+successions (`canonical_id_successions`) in both stores when the ID it is asked
+about holds no row (`followRetiredID`, one walker for both): it answers as the
+ID its chain ends on would, with that row's remediation block alone
+(`retiredIDRemediationLock`, which is `CarryRemediationLock` into an empty
+survivor), as `NeverAutoRemediate`, attributed `system:identity-change` and
+dated by the row it came from so two reads agree (a plan's policy revision
+hashes the state). Nothing is written, so `ListResourceOperatorStates` still
+lists only the rows the stores hold. The end of the chain decides, because it is
+the ID the next generation lists: a lock the operator lifted there, by editing
+or clearing its row, is not read back from the stale row a succession leaves on
+an ID before it when its successor already had a row, and an unlocked stale row
+does not hide a lock held at the end. An ID that holds a row of its own answers
+with that row. A chain is as long as the identity changes were and has no cap;
+a chain that returns to an ID it has seen has no end, so a lock held anywhere on
+it counts. Only the block crosses, so while the window is open the retired ID
+reads none of the row's other settings (retirement as a lifecycle state,
+maintenance windows, criticality, notes), as it read none before. The walk is
+one snapshot: the SQLite store reads the ID's own row and every hop in one
+transaction, because a succession that commits between two of the statements
+can move the lock onto an ID the walk has already passed. The window ends when
+the new generation publishes: that generation lists the successor, and a
+lifecycle plan made against the retired ID drifts (`resource ... is no longer
+present`). An operator edit to the retired ID inside the window goes to the
+retired ID's own row, not the successor's: the operator-state API writes the ID
+the registry it consults lists, and a succession applies once per predecessor.
+A lock set there does not reach the successor, which the next generation lists
+and reads, and a lock lifted there leaves the successor's lock in place, which
+is the safe direction; the retired ID's own row still answers reads of that ID.
+A retired ID that a different resource later mints again, with no row of its
+own, reads the successor's lock until the operator writes it a row.
+
+A host or Docker reporter that had no machine ID, DMI UUID or cluster slot is
+keyed by its source-specific ID (unless a link or match folds it into another
+resource) and held no identity pin (a pin needs one of those keys), so when a
+report first carries a key, its own or one its pin completes, no pin names the
+ID it leaves. The registry declares that ID itself, as it does a Proxmox guest's
+retired IDs, because the report recomputes it: `noteReporterEraLocked` notes
+the reporter's source-specific ID against the resource its report landed on,
+and the snapshot or record ingest hands the batch to `applyRecordSuccessions`
+(`takeReporterEras`), which skips an ID still observed live or folded into a
+link. Only `SourceAgent` and `SourceDocker` reporters do this, and only in an
+ingest that may write (a registry with a store, not saved-host continuity):
+they own their identity, whereas a Proxmox node borrows its linked agent's key
+and a link or split can move that borrow either way, so a borrowed key is not
+an era. Two kinds of source-specific ID are left out. One that holds an
+identity pin belongs to pin succession, which decides whether another key is
+the same host and lets a different machine mint fresh, so a keyless-era ID that
+gained a cluster-only pin on the way is carried only if that succession names
+it, which it does not for a later machine key. One an operator split names is
+the candidate of a source kept apart from another resource, and a succession
+would rewrite that pair into an exclusion of the resource from itself in a
+generation where the other side is absent, erasing the split, so the
+declaration leaves that reporter's rows alone (pin succession refuses the same
+pair, see the split paragraph below). Reporters that gain a key declare
+their era on every rebuild and the stores re-key a predecessor once, to the
+successor it first had (the record is keyed by the predecessor), so a lock the
+operator set on the keyless ID is carried onto the keyed one (the whole row
+when the keyed ID has none). The first rebuild after an upgrade declares the
+era of every keyed reporter that passes those checks, in the batches of its
+ingest passes, and also restores a lock or row an earlier keyless-to-keyed
+change left behind, even where the operator has edited the keyed row since. An ID held under a report ID the reporter no longer sends is
+not recomputable. Like every succession, the move happens while the previous
+generation is still being served, which is why a read of the old ID follows the
+succession (above); a link the succession rewrites takes effect in the next
+generation, because a registry loads its links when it is built (the lock is
+shared across the pair at once).
+
+Pin succession does not join two IDs the operator split. It reads two pins that
+share a strong key as one host's eras, and a source split from a sibling that
+reports the same machine key pins that key on its own source-specific ID
+while the sibling is present (the store keeps one pin per key and deletes the
+other's row, so which of the two holds it follows the write order). In a
+generation where the sibling is absent and the split source's pin holds the key,
+the source mints the sibling's ID and its pin names its candidate as that ID's
+earlier era; applying the pair would rewrite the exclusion into one of the ID
+from itself, and the sibling's return would merge the two. `PersistIdentityPins`
+therefore declares a succession only when its retired ID is no longer observed
+and the operator has not excluded that ID from its successor, and
+`withoutSplitFanInLocked` drops a batch's successions that retire two IDs the
+operator split from each other onto one successor (a pin matching one
+predecessor by machine key and the other by cluster slot). The registry owns
+both checks, beside the observed-ID check, so a rebuild that could not read its
+decisions guards the split from the exclusions it carried
+(`carryOverridesFrom`). A split that pairs the retired ID with a third resource
+is re-keyed onto the successor with the other rows, as before. The refused
+pair leaves its operator rows where they are, and the pin write of the same
+rebuild still hands the shared key to the sibling's ID: while the sibling is
+absent the split source is listed under the sibling's ID, and an operator lock
+set on the candidate ID does not apply to it until the sibling returns (the
+same boundary as the reporter-era rule above, and the boundary that already
+held when the sibling's pin held the key; before this check a split source
+holding the key had the lock carried onto the sibling's ID, with the split
+erased). Limits: record-declared eras (`applyRecordSuccessions`) are not
+checked, as reporter eras already skip every ID a split names and the
+predecessor IDs that Proxmox guest and TrueNAS records declare are older IDs
+of the record's own resource; only the successions of one batch are composed,
+so a chain through stale carried decisions can still reach a self pair, and a
+predecessor the stores already recorded still counts toward a fan-in, which
+holds a safe migration back rather than letting a split go; and a split
+recorded after the registry read its decisions is seen by the next rebuild
+whose decision reads succeed. Proof:
+`TestPinSuccessionKeepsASplitSourceApart` in
+`internal/unifiedresources/registry_test.go`.
+
+Canonical ID changes that reach neither a link nor `ApplyCanonicalIDSuccessions`
+carry nothing: a physical disk re-keyed in place to a machine-scoped ID
+(`rekeyPhysicalDiskLocked` moves no operator state, and the disk takes the
+unscoped ID again when the other machine's copy goes away, finding the old row
+as it was). For the lock that is a boundary, not a gap, because the planner
+plans only a capability the resource advertises and no producer gives a
+physical disk one, so no dispatch can reach a disk's ID. A producer that adds
+one must first make the lock follow the disk;
+`TestPhysicalDiskResourcesAdvertiseNoActionCapability` fails when one of the
+registry's producers does (a Proxmox disk, an agent's SMART disk, an Unraid
+array disk, a record-fed disk), and `TestProviderDiskRecordsAdvertiseNoActionCapability`
+in `internal/truenas/provider_test.go` when the TrueNAS provider's records do.
+The disk's other operator settings (retirement, muting, maintenance windows,
+criticality, notes) are not carried either, and that is a decision, not a gap.
+The readers that resolve a disk's reference (alert intent, Patrol's
+operator-state provider, the resources API and the agent resource context) read
+the row of the ID it resolves to, so after the re-key they read none unless a
+row already sits on that scoped ID (a row written on a scoped ID applies again
+whenever a copy with the same serial and machine scope is scoped again). On the
+rebuild after the other machine's copy goes away the disk takes the unscoped ID
+back and its original row applies again, over anything written on the scoped ID
+since. A row left on an ID the disk no longer holds stays stored (the
+maintenance sentinel still enumerates every persisted row, and a read that
+names the ID literally still finds it), but resolving the live disk's reference
+does not select it. The registry cannot tell which copy a row was set for: one
+disk seen from two machines (a dual-ported SAS shelf) and two disks behind one
+serial (fixed-serial USB bridges, cloned VMs with an explicit serial) look
+alike. Carrying the row to one copy, say the one that held the unscoped ID,
+picks a winner without knowing which disk the operator meant. Carrying it to
+every copy, as a split recorded against the unscoped ID applies to every copy,
+is right for the shelf and wrong for the two disks, and the outcomes differ in
+kind: an exclusion that reaches an extra copy only costs an extra row, but a
+retirement or mute that reaches a disk the operator never silenced can hide
+that disk's failure alerts. Leaving the row makes the disk eligible to alert
+again at the split, and the operator sets the posture on the copy. It is not
+safe throughout: when the other machine goes away the original row applies
+again, and if the operator had written a row on the scoped ID that suppresses
+less (a restored monitoring state, a shorter window) the original silences the
+disk again over it. That is accepted because the sequence it takes is narrow (a
+split, such a write, and the other machine leaving) and the fixes considered all
+need more. A copy that keeps the original would bring a cleared row back at the
+next rebuild unless a durable record says it was made (a clear deletes the row),
+and a move needs a policy for the return; a read-side fallback to the unscoped
+row needs no record but extends one disk's posture to unrelated disks and
+cannot be cleared per copy; keeping a serial scoped once it has split, so the
+unscoped ID does not return, needs a durable marker and its own policy for a
+scope that changes when the machine resolves. No report of a posture lost this
+way is known (#1516 and #1654 concern missing and duplicated disks). Revisit on
+such a report, or when a disk gains an action capability, which already
+requires the lock to follow the disk (above).
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit` drives the monitor
+adapter's rebuild on both stores and reads as alert intent does; it does not run
+the API write path, Patrol's provider or the other readers, so a carry added
+there is for review to catch. In short, the disk's other operator settings are
+orphaned by the same re-key and are not carried. Proof:
+`TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes`,
+`TestReporterGainingAStrongKeyKeepsItsRemediationLock`,
+`TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains`,
+`TestPhysicalDiskResourcesAdvertiseNoActionCapability`,
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit`,
+`TestResourceRegistry_ManualLinkFoldKeepsRemediationLock`,
+`TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings`,
+`TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks`,
+`TestSQLiteStoreRestoresLocksEarlierIdentityChangesDropped` and
+`TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains` in
+`internal/unifiedresources/registry_test.go`, and
+`TestCanonicalIDSuccessionCarriesRemediationLockOntoExistingSuccessorRow`,
+`TestRetiredCanonicalIDReadsTheLockItsSuccessorHolds`,
+`TestRetiredCanonicalIDReadFollowsASuccessionChain`,
+`TestRetiredCanonicalIDReadsWhatTheEndOfItsChainHolds`,
+`TestRetiredCanonicalIDReadEndsOnARecordedLoop`,
+`TestCanonicalIDSuccessionRekeysAPredecessorOnce`,
+`TestCanonicalIDSuccessionLockReachesLinkedSurvivor` and
+`TestCanonicalIDSuccessionKeepsLinkedMembersTogether` in
+`internal/unifiedresources/canonical_id_succession_test.go`.
 
 `actions.go` now owns the canonical action preflight and audit-normalization
 contract. Action plans must carry dry-run availability, safety checks, and
@@ -3060,17 +3989,19 @@ to the exact resource-owned lifecycle capability and consume the canonical
 Proxmox source status/timestamp; it must not reconstruct action availability or
 freshness from guest power state or a locally hard-coded polling window.
 
-`InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
-`degraded` and `alerting` resource counts alongside the existing `online` and
-`offline` totals. `buildInfrastructureResourceCounts` is the canonical owner of
-this health-state projection: it must derive counts only from the resources
-accessor already available to the summary state, not from a separate API call or
-a re-projection of websocket state outside the shared summary pipeline.
+A page summary that shows `degraded` or `alerting` resource counts beside
+`online` and `offline` totals must derive them from the unified resources its
+page already holds, not from a separate API call or a re-projection of
+websocket state outside the shared resource pipeline.
 
-`resourceBadgePresentation.ts` now owns the Infrastructure table system
-identity resolver. That resolver must prefer provider/API platform identity,
-then reported host OS or appliance identity, before falling back to Docker or
-other runtime capability labels.
+`resourceBadgePresentation.ts` owns the canonical system identity resolver,
+`getInfrastructureSystemIdentityBadges(...)`, which feeds the resource drawer's
+header badges and, through `getDockerHostSystemBadge(...)` in
+`frontend-modern/src/features/docker/dockerPageModel.ts` (which drops
+runtime-only Docker/Podman labels), the Docker hosts table's System column.
+That resolver must prefer provider/API platform
+identity, then reported host OS or appliance identity, before falling back to
+Docker or other runtime capability labels.
 
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
@@ -3102,6 +4033,20 @@ It owns probe status, incidents, history, evidence, and the outgoing `checks`
 relationship. The matched resource carries every correlated check in the canonical
 `availabilityChecks` facet, keyed by saved target id, while `availability`
 remains an additive singular compatibility summary selected from that set.
+The summary is the worst check: a confirmed outage first, then any other
+observed failure, then an unchecked, ambiguous or unresolved check, then a
+passing one, ties going to the first saved target id. A confirmed outage is an
+enabled check whose observed failures reach its failure threshold, with an
+unavailable aggregate when one is reported and an outcome that is not
+indeterminate. That is the gate the availability poller applies before it
+raises `availability_unreachable`, so a probe agent that stops reporting keeps
+its old failure count but confirms nothing. `availabilityOutageConfirmed` in
+`internal/unifiedresources/availability.go` holds that rule for both the
+ranking and `EvaluateResourceHealth`, which reads the summary. A confirmed
+outage on any attached check therefore makes the resource's health critical
+even when a check that sorts earlier has failed below its threshold, with the
+`availability_failed` reason unless a critical alert explains the verdict
+first.
 Adding a second explicit or unambiguously correlated check must retain both
 source-owned endpoint rows, project both facets onto the same resource, and
 emit one `checks` relationship per target from the check to that resource.
@@ -3148,10 +4093,22 @@ as separate buckets in `standalonePageModel.ts`, include every source-owned
 `network-endpoint` regardless of correlation state, exclude matched machine or
 service projections from the check inventory by resource type, and let
 `AvailabilityChecksTable.tsx` render saved probe method, target, latest result,
-check age, failure count, and cadence from the canonical availability payload.
+24h uptime, check age, last healthy time and failure count from the canonical
+availability payload, with cadence restored only on the widest tables. Uptime
+comes from the shared availability history summary the fleet view reads and
+stays blank below 90 percent observed. The failure count reads "N in a row",
+with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
+The probe source chip ("via Edge 01", or "2/2 locations reporting" for a
+multi-location check, the same wording Settings uses) shares the result's
+single line: the result keeps its full width at the cell's right edge and the
+chip takes the room left, truncating with its full text on hover. Before, the
+chip pushed "failed" out of its column at every width up to 1440px. Rows stay
+one line because the table windows them at a single measured height. On
+phones the method and target columns hide so the check name reads, and both
+stay in the row drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -3199,6 +4156,24 @@ remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
 retain their historical device-scoped shape; controller members sharing one
 block path add controller/target scope so they cannot collapse into one
 resource. Topology correlation is parent-scoped and ambiguity fails closed.
+That scope is added once. A controller member without a usable serial or WWN
+keeps its history under a source ID that already names the member: the host
+agent's `HostSMARTDiskMetricID`, and the Proxmox `PhysicalDiskMetricID`, which
+returns `ProxmoxPhysicalDiskSourceID`. `PhysicalDiskMetaMetricID` therefore
+returns a fallback that already ends in the disk's own device, controller and
+target unchanged as the metrics target. It appends that topology only to a
+fallback without it: a Proxmox source ID from before members were scoped,
+which `PhysicalDiskMetricID` scopes the same way, or the canonical resource ID
+`PhysicalDiskView.MetricResourceID` falls back to. The suffix survives a merge
+because a member target only reaches a disk together with the controller the
+agent reported beside it (the multiplexed smartctl path sets both), and the
+Proxmox row copies both from that agent row. A registry rehydrated from
+persisted resources rebuilds the agent source ID in the same scoped shape
+(`seedAgentPhysicalDiskSourceIDLocked`). TrueNAS disks carry no controller
+target and keep their fallback. The reader used to append the topology to an
+already scoped source ID as well, so such a member's chart read a key no
+writer used. Proof: `TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce`,
+`TestIdentitylessControllerMembersReadTheirWritersHistory`.
 
 Host reports, monitoring models, registry merges, typed physical-disk views,
 API resources, websocket/REST snapshot merges, and storage presentation must
@@ -3208,6 +4183,67 @@ the five field statuses for serial, temperature, I/O, controller, and pool.
 `unavailable`, `unsupported`, or `missing` state may retain a prior value for
 continuity, but the state and reason must survive so the consumer cannot claim
 fresh evidence or synthesize controller-level activity for one member.
+The one exception is a source withdrawing its own evidence: when the agent
+row reports a field as no longer available, that supersedes an `available`
+state the Proxmox row still carries from the same source
+(`diskinventory.MergeReportedStatus`), in either ingest order. A host agent
+past its reporting lease must not stay "collected" through the Proxmox row's
+copy of the agent's own state, including when its host is down and no disk
+poll refreshes that copy.
+Each merge step then presents the shown temperature under a state that belongs
+to it (`pairPhysicalDiskTemperatureState`). The value is still chosen by source
+preference and the field states merged as above, so the shown value could
+otherwise sit under another row's state: a silent agent's retained reading
+under a Proxmox row's current `available`, or a legacy agent's stateless
+reading under a Proxmox inventory row's `unsupported`. One merged state per
+field cannot say whose reading is shown once a disk has three or more rows, so
+the registry keeps each row's own temperature reading and state on the merged
+disk (merge-time only, never serialized) and derives the state from the
+readings of the shown value. Each counts its own state, except that a state a
+non-agent row copied from an agent source gives way to an agent row's own
+withdrawal of that source (a legacy agent's sourceless withdrawal matches its
+`host_agent` copy through `diskinventory.LegacyHostAgentStatus`, the rule
+monitoring stamps the copy with); that withdrawal is the only state taken from
+a reading of another value, and it never grants `available`. A collected
+reading is presented over one that is not and an agent's own report over a
+copy, so while a current reading holds the shown value, the order in which
+different rows arrive does not change the state. A second agent reporting the
+same disk is not a copy: its withdrawal leaves another agent's own collected
+reading collected. A row that reports again replaces its reading. When source
+preference keeps showing a value no current reading holds (the row that
+reported it went into standby, or reported again without the SMART attributes
+that made its value preferred), the value keeps the state it was presented with
+and the row that state belonged to, under that row's later withdrawal, and the
+agent's withdrawal of its source still supersedes it; a row's earlier report
+never competes as current evidence. Such a kept state depends on the history of
+reports, as the kept value itself does, and stays `available` when its row now
+reports a different collected value. A disk that arrives without the record, or
+no longer presents the value and state it was built for (edited), stands as one
+reading of unknown rows: an incoming agent row's withdrawal of the source of
+its state supersedes it, and when the agent is among its sources its own
+withdrawal still supersedes an incoming copy. A disk entering the registry as a
+new row is that row alone. Two boundaries lose rows. JSON keeps only the
+presented state, so a withdrawal it does not show cannot supersede a copy
+merged after a round trip; the production rebuild ingests every row into a
+fresh registry and never merges across JSON. A manual link keeps the primary
+disk's readings and drops the other disk's, so rows merged after the link
+(supplemental records) meet only the primary's.
+`registry_merge_policy_test.go`
+(`TestPhysicalDiskMergePairsEveryShownTemperatureWithItsRowState`) checks every
+ingest order of a catalog of agent, Unraid, Proxmox and TrueNAS rows against
+this rule, and `TestPhysicalDiskMergeTemperatureReadingsAcrossIngestBoundaries`
+pins the boundaries.
+Unraid array-inventory rows carry no per-field provenance, so the adapter
+derives the state of a positive temperature taken from one (a row without a
+temperature claims no state): `unavailable` from `unraid`
+with "host agent stopped reporting" once `State.ExpireHostTelemetry` has marked
+the host offline, or with "disk is reported spun down" for a spun-down disk,
+and otherwise `available`. The value is kept as last-known context; it is
+collected again only when a reporting host sends a positive reading for a disk
+that is no longer spun down. The Unraid-native disk row carries that state, and
+so does a SMART row that falls back to the inventory reading because it has
+none of its own. The adapter's risk assessment of an Unraid row judges no
+temperature at all; heat belongs to the alert disk temperature policy.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
@@ -3225,7 +4261,10 @@ reported hostname or machine-identity changes, and separate connections with
 the same hostname remain distinct. Legacy hostname-derived IDs may be exposed
 as explicit `SupersededCanonicalIDs`; registry persistence may re-key owned
 operator state and delete the retired pin, while ordinary aliases remain
-read-only lookup compatibility. Identity pins from an unrelated Pulse Agent
+read-only lookup compatibility. A successor row that already exists keeps
+its own settings, but on the succession's first application the predecessor's
+remediation lock is carried onto it (`CarryRemediationLock`) and across the
+successor's links rather than shadowed. Identity pins from an unrelated Pulse Agent
 must not complete or merge a TrueNAS connection identity.
 
 `canonicalIdentity.supersededIds` is preserved across backend projection and
@@ -3265,7 +4304,12 @@ metadata.
 ### Protection posture identity consumer
 
 `ProxmoxCoverageTable` remains a unified-resource identity consumer while
-storage/recovery owns protection truth. Live VM/LXC rows carry the exact
+storage/recovery owns protection truth. Its explanation copy for rows without a
+canonical workload identity says so in user terms ("does not match a guest
+Pulse currently monitors, so it is not rated"); the identity rule itself is
+unchanged. Dropping the per-source age columns
+from its rows changes no identity input: rows still key posture by the exact
+canonical `Resource.id`. Live VM/LXC rows carry the exact
 canonical `Resource.id` into one bounded posture batch; the table must not parse
 its presentation key, VMID, name, node, or instance to mint a replacement
 resource identity. Host and orphaned backup artifacts have no canonical live
@@ -3307,8 +4351,12 @@ not part of `ActionRequest`, durable plan identity, or `planHash`; a resource
 rename therefore cannot change action authority. Opaque canonical resource IDs
 remain in the row's accessible name and title, while the visual row prefers the
 API-supplied name and type and falls back to the bounded ID-derived type plus
-short suffix only when the resource projection is unavailable. Read-only demo
-posture is quiet supporting context rather than a page-level callout. The
+short suffix only when the resource projection is unavailable. When the row is
+too narrow for both, the resource name keeps its width and only the type, with
+its separator, gives way: on a phone they used to shrink together, so the row
+read "analytics-ba… · Virtual ma…" and hid which resource the action touches.
+Read-only demo posture is quiet supporting context rather than a page-level
+callout. The
 empty Open queue must explain producer state rather than promising content:
 when the effective Patrol mode is Watch only (read via the canonical
 `/api/ai/patrol/autonomy` settings read, failing closed to the generic calm
@@ -3488,12 +4536,6 @@ unambiguous: `ResourceID` scopes saved vCenter connection replacement to
 `ConnectionID`, while host UUID / DMI identity matching belongs to the
 machine-identity selector path, so editing one connection cannot strip an
 unrelated VMware host whose UUID happens to equal that connection ID.
-That shared consumer ownership now includes same-tab summary hydration too.
-`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-may keep an in-memory remount cache for canonical resource charts, but the key
-must carry an explicit summary contract version so a long-lived browser tab
-cannot resurrect older unified-resource summary shapes after the chart model or
-identity mapping changes.
 That same consumer ownership now also includes infrastructure drawer history
 fetches. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 may hydrate canonical facet and intelligence data for the selected resource,
@@ -3604,19 +4646,6 @@ provider facet must be merged onto the shared resource so source identity,
 health, routing, and detail payloads cannot disagree. Operator-facing source
 filters may accept the `vmware-vsphere` alias for the VMware platform, but the
 emitted shared source family remains canonical `vmware`.
-That same canonical identity boundary now also applies to infrastructure
-summary emphasis. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-may vary card presentation, but the active sparkline or density-map series must
-still resolve through the shared resource ID already emitted by unified
-resources so table hover, focused detail state, and summary highlight all point
-to the same resource identity.
-That same unified-resource boundary now also applies to infrastructure
-contextual focus plumbing. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for
-interactive-series filtering, focused-resource naming, and active-series
-resolution so the infrastructure summary stays page-scoped while still
-highlighting the same canonical resource IDs used by the unified-resource
-table and route state.
 TrueNAS application resources now carry the same shared source boundary.
 `internal/truenas/provider.go` projects native app API records into
 `TrueNASData.App`, while `internal/unifiedresources/types.go`,
@@ -3627,19 +4656,27 @@ across backend clone/merge and frontend transport. The owning resource remains
 the canonical `app-container`; the TrueNAS facet explains the platform-native
 app shape, and Docker metadata remains secondary runtime compatibility rather
 than the source of truth for the TrueNAS overview.
-That same infrastructure focus boundary now also owns deliberate drawer reveal.
-When an infrastructure row opens inline detail on the same route, the page must
-tag that detail with the canonical active resource ID. Direct row toggles that
-already have the row in view must capture the current `.app-scroll-shell`
-position through `frontend-modern/src/utils/appShellScrollRestoration.ts`, so
-the remounted root shell in `frontend-modern/src/App.tsx` can stay anchored,
-and then still hand off to the shared summary-table/contextual-focus helpers
-when the opened drawer would otherwise fall below the fold. That reveal must
-scroll only enough of the infrastructure table to keep the row header plus the
-start of the detail visible, not leave the drawer clipped and not hard-center
+Deliberate drawer reveal after a same-route selection write is owned by the
+Workloads table
+(`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`,
+governed in `performance-and-scalability`). Platform resource tables open their
+inline drawer through local component state, most through
+`createPlatformResourceDetailState(...)` in
+`frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+while the Docker hosts and Proxmox nodes tables keep their own selection
+signal, and write no route state. An infrastructure table that moves drawer selection
+into route state must tag the opened detail with the canonical active resource
+ID; its route write must go through the shared same-path route-state scheduler
+in `frontend-modern/src/utils/routeStateNavigation.ts`, which alone stages the
+`.app-scroll-shell` position in
+`frontend-modern/src/utils/appShellScrollRestoration.ts` at the moment it
+navigates, so the root shell in `frontend-modern/src/App.tsx` stays anchored.
+The row toggle itself stages nothing: the root shell applies a staged position
+on the next route change, whatever caused it. The table must then hand off to the
+shared summary-table/contextual-focus helpers when the opened drawer would fall
+below the fold. That reveal scrolls only enough to keep the row header plus the
+start of the detail visible, never leaving the drawer clipped or hard-centering
 the selected row.
-`useUnifiedResourceTableViewportSync.ts` must stay viewport-only; it may not
-grow a second selected-row reveal path or a resource-local centering rule.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`
@@ -3658,7 +4695,7 @@ That same registry/view boundary now also applies to provider-backed storage.
 `internal/unifiedresources/registry.go` must attach the resolved
 `MetricsTarget` onto cached view clones before `ReadState` exposes
 `StoragePoolView` or `PhysicalDiskView`, so `/api/resources`, storage summary
-selection, `/api/storage-charts`, and `/api/charts/storage-summary` all see
+selection, and `/api/storage-charts` all see
 the same canonical history
 identity instead of splitting between view-cache resource IDs and API
 serialization-time metric IDs.
@@ -3746,6 +4783,14 @@ incidents during cross-source merges. A provider alert such as TrueNAS
 `truenas_smart` is not presentation-only context; it must become a canonical
 `physicalDisk.risk.reasons` entry so hybrid agent/API disk resources keep one
 shared disk-health truth after deduplication.
+That shared risk contract never judges temperature, collected or retained.
+Heat belongs to the alert disk temperature policy, which no registry can see,
+so neither the adapter assessment nor the registry's recompute from merged
+metadata (`physicalDiskAssessmentFromMeta`) passes a temperature into
+`storagehealth`. A 72C disk keeps its reading on the resource, adds no
+`temperature_high` reason and stays `online`. Proof:
+`TestPhysicalDiskRiskNeverJudgesTemperature` in
+`internal/unifiedresources/registry_test.go`.
 That same canonical disk contract now also owns recent aggregate temperature
 history. When a provider such as TrueNAS can supply `disk.temperature_agg`
 min/avg/max readings, it must project those onto
@@ -3821,7 +4866,7 @@ agent resources may include `agent.sensors.thermalState` even when
 `agent.temperature` and `agent.sensors.temperatureCelsius` are absent, so
 platform consumers can show macOS pressure without creating provider-local
 thermal payloads or fake Celsius values.
-AI discovery and query surfaces now follow the same rule. Assistant runtime
+Assistant query and resource-context surfaces follow the same rule. Runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
 canonical `agent`, `vm`, `app-container`, `storage`, and `physical-disk`
 resources through those shared contracts, filtering dataset-topology storage
@@ -3854,6 +4899,25 @@ such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
 AI-local annotations. Snooze and resume projections must preserve the actor
 and exact suppression expiry when present; they pause delivery and escalation
 without acknowledging, resolving, or replacing the underlying incident.
+An `alert_resolved` change for a close that was not a recovery carries the
+alert engine's summary as its reason and the reason code as `alert_resolution`
+metadata (`AlertTimelineChange.ResolutionReason` and `ResolutionSummary`), so
+incident projection titles the close with where the alert went instead of
+"Alert resolved: <breach message>". Frontend readers label the change through
+`getResourceChangePresentation(change)` rather than by kind alone: with the
+metadata set, the drawer's change history titles the entry `Alert moved` and
+the `ResourceChangeSummary` badge reads `Alert moved` in the neutral blue of
+the alert history's "moved to agent" badge (`Alert closed` for a reason code
+the build does not know), and
+`formatResourceChangeHeadline` uses the summary as the whole headline instead
+of prefixing `Alert resolved:`. A node's own drawer does not list the move yet: node and guest
+alert changes are still recorded under their legacy alert resource IDs
+(`MonitorAdapter.RecordChange` maps only Docker IDs), and Proxmox platform
+rows open the drawer in the `table-row` presentation, which fetches no
+remote history. The facet badges
+still count these changes under `alert_resolved`, because the counts carry no
+metadata. Ordinary recoveries omit the key, and every other lifecycle kind
+ignores the fields.
 Alert-scoped
 incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
@@ -3991,7 +5055,8 @@ and platform alert detail fields must use
 `formatPlatformAlertDetailDateTime` from
 `frontend-modern/src/utils/alertDetailPresentation.ts` instead of restoring
 table-local provider code, resource-type, entity-type, or timestamp formatter
-helpers,
+helpers (the Started cell reads as an age with the exact time as its hover
+title, the drawer keeps the exact time),
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,
@@ -4006,31 +5071,30 @@ raw backup, sync, verify, prune, and garbage job arrays travel through the
 unified-resource metadata contract in `frontend-modern/src/types/resource.ts`
 and `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`,
 `resourceDetailDrawerServiceModel.ts` owns active-task status classification and
-shared activity wording, and both
-`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-and `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
+shared activity wording, and
+`frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
-overview and debug drawer surfaces,
+overview and debug drawer surfaces (the `Identity` card shows each identifier
+once: Discovery and Metrics Target rows appear only when they name something
+not already on screen, meaning the header's `getPreferredInfrastructureDisplayName`,
+the rows above, or the Platform ID row, and Aliases omits the same displayed
+values; candidate names the drawer never shows do not count, a shown Platform
+ID counts as identity data for the empty state, and a Machines agent drawer
+used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
-The infrastructure summary surface now follows the same shell/runtime/model
-shape: `InfrastructureSummary.tsx` is the render shell,
-`useInfrastructureSummaryState.ts` owns chart polling, cache hydration,
-org-scope lifecycle, and focused-summary state, and
-`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
-selection, empty-state wording, and summary-series/metric derivation.
 The retired dashboard overview trend hook must not return as a second
-infrastructure sparkline consumer. Infrastructure summary surfaces must consume
-the infrastructure summary chart cache and shared unified-resource series
-matching logic instead of issuing bespoke per-resource
-`/api/metrics-store/history` fetches for overview cards. That keeps summary
-sparklines aligned with canonical resource identity matching, agent-facet
-fallback behavior, and first-sample empty-state semantics already owned by the
-infrastructure summary surface.
+infrastructure sparkline consumer. Node-row sparklines read the infrastructure
+summary route through
+`frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts` and
+match series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`
+(node ID, linked agent ID, and node name variants) instead of issuing bespoke
+per-node `/api/metrics-store/history` fetches.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -4059,15 +5123,14 @@ The same policy presenter now also owns the routing-scope labels used across
 AI-facing policy surfaces, while the resource detail drawer stays on
 per-resource policy lines instead of reconstructing a separate
 `Allowed`/`Blocked` row or `Cloud Summary` decision row locally.
-The infrastructure host-table shell now treats the default
-`Internal` + `Cloud Summary` posture as canonical policy metadata that should
-stay available in the drawer and AI/governance surfaces without being promoted
-to always-on row chrome. Inline row badges are reserved for blocking policy
-states such as `local-only` routing or `restricted` sensitivity, while
-`sensitive` + `local-first` and redaction-only posture remains visible in Data
-Handling, detail, and AI/governance surfaces. The table must not imply that
-ordinary sensitive resources carry an operator-actionable infrastructure
-exception.
+The default `Internal` + `Cloud Summary` posture is canonical policy metadata
+that stays available in the drawer and AI/governance surfaces without being
+promoted to always-on row chrome. A table that shows inline policy badges
+reserves them for blocking policy states such as `local-only` routing or
+`restricted` sensitivity, while `sensitive` + `local-first` and redaction-only
+posture remains visible in Data Handling, detail, and AI/governance surfaces.
+A table must not imply that ordinary sensitive resources carry an
+operator-actionable infrastructure exception.
 The resource drawer now applies the same rule to its investigation-context
 governance block: the default posture remains part of the canonical policy
 contract, but the drawer only surfaces the governance section when the policy
@@ -4129,26 +5192,29 @@ reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency relationships without rebuilding correlation
-reasoning from raw events. The Patrol intelligence page now also renders that
-correlation evidence through the shared
+reasoning from raw events. The drawer renders that correlation evidence
+through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the same learned-edge list stays governed by one frontend surface
-instead of separate page-local implementations. That shared card also owns
+card, and is that card's only caller today; the Patrol page renders no learned
+correlations and the frontend does not load the global correlation list. Any later surface
+that shows learned edges must reuse that card instead of a page-local
+implementation. That shared card also owns
 the first-class relationship-map surface for canonical `resource.relationships`,
 the correlation ordering, and the truncation rule, so callers pass raw
 relationships and correlation lists instead of encoding their own sort or
 top-N behavior.
 Canonical parent edges now also originate in this subsystem: `ParentID` is
 folded into the facet relationship set through
-`ResourceRelationshipsWithCanonicalParent` before any drawer or Patrol
-consumer renders a relationship map, so pages do not rederive parent topology
+`ResourceRelationshipsWithCanonicalParent` before any consumer renders a
+relationship map, so pages do not rederive parent topology
 from raw resource fields or invent relationship-map fallbacks locally.
-The same surfaces now also render recent changes through the shared
+The drawer renders recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops. Callers may suppress
-resource-change metadata badges only for compact operator-context surfaces such
-as Patrol's supporting context; the shared card still owns headline/reason
+resource-change metadata badges only for compact operator-context surfaces;
+no caller does today, and the Patrol page renders no recent changes. The
+shared card still owns headline/reason
 dedupe so prefixed backend reasons do not render as duplicated visible copy.
 Assistant finding handoffs are part of that same timeline contract: when the AI
 runtime needs recent changes for product-originated handoff resources, it should
@@ -4166,34 +5232,14 @@ The same shared agent-resource module now also owns the canonical cluster-name
 helpers, so Kubernetes context prefixes, Proxmox cluster labels, and
 cluster-name fetch keys stay aligned instead of each surface rebuilding its
 own pod, namespace, and VM routing fallbacks.
-The shared node-state adapter also routes Proxmox cluster labels through that
-same helper, so infrastructure summary projections keep the same canonical
-cluster name as the rest of the unified resource model instead of rewriting
-the label locally.
-The unified resource table now routes reactive table-state composition,
-grouping, and row-windowing through
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-while pure table-state derivation, service sorting, sort-cycle policy, and
-responsive column layout now route through
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`,
-and viewport reveal plus scroll synchronization now route through
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
-so the shared consumer model is no longer interleaving selector derivation,
-layout policy, and DOM viewport coordination inside one mixed state boundary.
-That viewport controller must consume
-`frontend-modern/src/components/shared/windowedPageScroll.ts` for scroll-
-ancestor selection, wheel normalization, and listener lifecycle. Wheel may
-prewarm the bounded row runway, but touch remains compositor-native and updates
-the runway only through the passive native page-scroll event; unified-resource
-tables must not register their own touch listener.
-The mobile shell class from that shared state model now uses `min-w-full` for
-the phone stage and restores the existing wider-stage floor above it. Mobile
-column weights must sum to the available table width, retain the prioritized
-identity and operational set, and avoid both local and document-level
-horizontal scrolling. This is a phone projection only; wider stages keep the
-established desktop distribution.
-The native provider rollout now applies the same projection to Proxmox backup,
-coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
+The shared node-state adapter (`nodeFromResource` in
+`frontend-modern/src/utils/resourceStateAdapters.ts`) also routes Proxmox
+cluster labels through that same helper into the node's `clusterName`, so the
+Proxmox host drawer keeps the same canonical cluster name as the rest of the
+unified resource model instead of rewriting the label locally.
+Native provider tables keep a phone projection: prioritized identity and
+operational columns sized to the available width, with no local or
+document-level horizontal scrolling, for Proxmox backup, coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
 and Swarm inventories; Kubernetes native inventories; TrueNAS systems and
 workflows; vSphere hosts and workflows; and Standalone machines. The shared
 `platform-table-phone-hidden` marker removes secondary or duplicate tracks at
@@ -4203,17 +5249,6 @@ demotion while promoting identity to a 40-percent track. Docker rows whose full 
 labels, image references, or placement values cannot fit now expose those
 values in the same touch- and keyboard-operable inline detail pattern used by
 the other platform tables rather than relying on hover titles.
-That same unified-resource consumer contract now also owns CSP-safe table
-presentation for infrastructure rows. Host, PBS, and PMG table sections must
-consume the shared column presentation owner and render canonical table sizing
-through classes plus DOM width/height attributes rather than lane-local inline
-style objects, so the same unified-resource dataset can reach the public demo
-without transport-specific DOM drift.
-That same consumer contract now also owns full-width desktop balance for the
-infrastructure tables. The shared column presentation owner must publish an
-explicit desktop `Resource` width for host, PBS, and PMG sections so wide
-shells redistribute surplus width across the remaining columns instead of
-turning the first column into blank filler that hides metric density.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
@@ -4272,11 +5307,10 @@ The frontend now also consumes those facet reads through
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the relationship and timeline inline.
 The canonical routing owner now also lives in
-`frontend-modern/src/routing/resourceLinks.ts`, including the
-workload-to-infrastructure href builder used by Workloads row and drawer
-consumers. Future workload-to-resource navigation changes must extend through
-that shared routing contract instead of reintroducing workload-local path
-builders.
+`frontend-modern/src/routing/resourceLinks.ts`. Its workload-to-infrastructure
+href builder was retired with the legacy `/infrastructure` route, so future
+workload-to-resource navigation must extend that shared routing contract
+instead of reintroducing workload-local path builders.
 That same shared routing boundary now also owns the canonical Patrol
 destination used by cross-surface findings and drill-down links. Shared
 dashboard, alert, and settings referrals may target `/patrol` through
@@ -4293,47 +5327,57 @@ top-level system is a merged hybrid surface, the route-state helper must
 resolve the deep-link source from the canonical merged source set before
 falling back to raw `platformType`, so TrueNAS-backed hybrid systems do not
 lose their storage context just because agent telemetry is also present.
+Storage route state names no `summaryGroup` param: `STORAGE_QUERY_PARAMS`,
+`parseStorageLinkSearch(...)` and `buildStorageRouteSearch(...)` dropped it
+with the Storage pool-group pin, no link builder passed one, and a leftover
+param in a saved URL is ignored.
 That same routing contract now also owns workload platform scoping without
-restoring the retired `/workloads` top-level route. Shared workloads links,
-dashboard URL-sync state, and infrastructure drill-down helpers must preserve
-`platform=<owned-source-key>` for API-backed workloads such as TrueNAS
+restoring the retired `/workloads` top-level route. Workloads URL-sync state,
+and any workload link built through the shared `buildWorkloadsRouteSearch(...)`
+helper, must preserve `platform=<owned-source-key>` for API-backed workloads
+such as TrueNAS
 app-containers instead of collapsing those routes back to generic agent or
 Docker-only semantics when host telemetry is also present. Runtime-local
 filters like `agent` or cluster context may still be added as secondary scope,
 but the canonical platform query must remain the first-class route-state
 boundary for shared workload navigation.
-That same shared workload-route contract also owns exact guest selection for
-node-scoped workloads. Proxmox VM and system-container links must emit the
-canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
-`resource` query rather than an opaque unified-resource id, so direct route
-loads and cross-surface drill-downs reopen the correct workload drawer instead
-of landing on an unselected table state.
-That same routing contract now also owns recovery route-state vocabulary for
-unified resources without restoring the retired `/recovery` top-level route.
-Infrastructure drawers and other cross-surface consumers must carry canonical
-`platform` and `node` query state into an owning platform/runtime route instead
-of rebuilding drawer-local recovery links, assuming only PBS services can
-expose recovery handoffs from infrastructure, or sending operators to a
-standalone aggregate workspace URL.
-When shared recovery links include protected-inventory posture, they must use
-the recovery-owned `state` query instead of overloading event `status`. Event
-outcome `status` remains recovery-history state, and compatibility input such
-as legacy `stale=1` must be normalized by the recovery route owner before
-cross-surface links are rebuilt.
-That same shared routing boundary now also owns alert-investigation handoffs.
-Resource-incident panels and other alert-side resource drill-down consumers
-must route operators back through canonical infrastructure resource detail and
-then into platform-owned workload, storage, and recovery surfaces via
-`frontend-modern/src/routing/resourceLinks.ts` route-state vocabulary, instead
-of treating alert investigation as a provider-local dead end, freezing
-per-surface route strings outside the unified-resource contract, or reviving
+Shared workload routes, rows and selection use the exact unified `Resource.id`
+for every workload kind. Moving a Proxmox guest to another node does not create
+a new selection identity. Existing node-scoped bookmarks resolve through the
+registry's current/declared-succession/unique-alias boundary, with ambiguity
+refused. Provider coordinates remain explicit compatibility inputs for guest
+metadata, native collection and History targets. They must not be rebuilt into
+primary row identity or used to merge independent instance clones.
+History uses an explicit backend metrics target when present. Its legacy
+Proxmox fallback formats the current instance, node and VMID through the shared
+native guest formatter, independently of the canonical selection ID. A guest
+move changes that native target while retaining the selected canonical row.
+The workload target tests and current-source desktop, intermediate and phone
+browser matrix cover both supplied targets and missing-target fallback.
+Unified resources carry no recovery route-state vocabulary. The recovery
+query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
+`buildRecoveryRouteSearch`) was deleted from
+`frontend-modern/src/routing/resourceLinks.ts` after the aggregate Recovery page
+that read it went on 2026-05-26, and the protected-inventory `state`, event
+`status`, and legacy `stale=1` rules went with it. Infrastructure drawers and
+other cross-surface consumers that expose recovery context must land in the
+owning platform tab (the Proxmox Backups tab or the TrueNAS Protection tab)
+instead of rebuilding drawer-local recovery links, assuming only PBS services
+can expose recovery from infrastructure, or sending operators to a standalone
+aggregate workspace URL.
+Alert investigation offers no resource cross-jump links. The
+resource-incident panel names its resource through the unified-resource lookup
+and links to no other surface (its Pulse Assistant handoff aside): its
+cross-jump chips were retired on 2026-05-16, and an alert card's single
+resource link opens the owning platform page. Alert-side consumers must not freeze
+per-surface route strings outside the unified-resource contract or revive
 retired aggregate workspace URLs.
-That same routing contract also owns Patrol finding handoffs. Expanded
-Patrol-finding rows and scoped-run finding snapshots must resolve the backing
-unified resource and surface the same platform-owned workload/storage/recovery
-route-state vocabulary there, including exact workload and physical-disk route
-state when the selected resource is itself the workload or disk, instead of
-stopping at finding text, rebuilding patrol-local route strings, or reviving
+Patrol findings stay in place the same way: expanded Patrol-finding rows
+carry the finding's own primary action and manual controls rather than
+surface-link chips, and
+`frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts` keeps
+`buildResolvedResourceSurfaceLinks` and `useResources()` out of the panel. A
+future finding handoff must not rebuild patrol-local route strings or revive
 retired aggregate workspace URLs.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
@@ -4345,18 +5389,10 @@ while Docker update mutations route through
 and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 stays the composition owner, so unified-resource history, investigation, and
 drawer-local action runtime no longer accumulate inline beside the model layer.
-The infrastructure summary path now routes chart polling, cache hydration, and
-org-scope lifecycle through
-`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`,
-while chart matching and summary-series derivation route through
-`frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-and `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-stays the render shell, so summary charts are no longer an unowned mixed
-resource consumer surface.
-The shared summary chart contract now also requires the backend feed to
-normalize tiered infrastructure history into equal-time summary buckets, so
-long-range unified-resource cards do not expose storage-tier density changes as
-right-edge chart compression.
+The shared summary chart contract requires the backend feed to normalize
+tiered infrastructure history into equal-time summary buckets, so long-range
+node sparklines do not expose storage-tier density changes as right-edge chart
+compression.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource
@@ -4435,43 +5471,6 @@ already shown elsewhere in the drawer.
 The analysis panel now expands directly inside the outer `Access` disclosure
 instead of as a second peer support block, so the access surface reads as one
 flattened reveal instead of another card group under the overview.
-That access-side analysis surface still follows the same shell/runtime split as
-the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
-while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
-note/discovery mutations.
-Discovery validity in that runtime state must defer to the shared
-`discoveryPresentation.ts` meaningful-context gate. CLI access, confidence, and
-diagnostics may support an audit trail, but they must not turn placeholder
-records such as unknown service/category/version with no ports, paths, facts,
-or suggested URL into a valid identified result. Generic workload types such
-as `service`, `container`, or `lxc` remain placeholders until Discovery also
-provides a more specific service signal.
-Discovery endpoint candidates are support context, not authoritative resource
-links. Resource and workload drawers may pass observed Discovery URLs into the
-shared web-interface field with visible provenance, copy/open affordances, and
-an explicit adopt/save path, but row-name links and persisted metadata must
-continue to use the operator-saved web-interface URL. Version, config-path,
-port, and endpoint facts surfaced outside the Discovery sub-tab must be
-labelled as Discovery-observed so API-owned resource facts and command-derived
-facts remain distinguishable.
-Availability proposals are the bounded exception that can become active
-resource evidence only through explicit review. The resource drawer supplies
-the canonical resource ID; the proposal surface previews inferred endpoint and
-behavior separately from operator-controlled name, cadence, and observation
-location; and the final action posts one enabled target with that exact
-`linkedResourceId`. Equivalent attached or standalone endpoints are detected
-before creation. Machine-scoped review may dismiss or restore several service
-proposals, but an item without the current canonical resource context remains
-review-only rather than attaching by hostname, address, or display name.
-That label must be visible through the shared Discovery provenance marker on
-compact cards, suggested URL panels, and other out-of-tab Discovery values
-rather than buried in helper text or inferred from the tab where the operator
-found the value.
-Command-availability guidance inside that analysis surface must consume the
-shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
-and scan-error copy instead of hard-coding legacy settings labels such as
-Unified Agents, API Tokens, or `/settings/integrations/api`; the canonical API
-access route is `/settings/security/api`.
 The overview keeps access, investigation detail, service detail, and host
 detail as collapsed sibling disclosures under the primary card pair, so the
 drawer keeps
@@ -4666,12 +5665,14 @@ falls back to the canonical redacted label if that governed summary is
 missing, so path-only and IP-only redactions do not regress to raw identity
 leakage or over-redaction in chat context. That same unified-resource contract
 now also owns the canonical mention identity path for shared Assistant reads:
-chat surfaces must carry the backend-issued unified resource ID for canonical
-`agent`, `vm`, `storage`, and `app-container` records, and backend mention
-resolution must be able to recover those resources by canonical ID and
-canonical name through the shared read-state instead of relying on
-provider-local route families or frontend reconstruction of VMware- or
-TrueNAS-specific coordinates.
+chat surfaces carry the backend-issued ID for every supported mention kind.
+ResolveResourceReferenceContext binds explicit selections to one owned record.
+ResolveResourceContext allows unique name lookup for callers without a
+selection. Both share current native coordinates and provider-scoped parent
+ownership. Unknown selections and duplicated names refuse routing. Provider
+renames update current display names without replacing canonical identity or
+overriding a present higher-priority source. Native and legacy wire formats
+remain bounded input compatibility, never a second primary identity model.
 Assistant finding handoffs now resolve product-originated resource references
 through the same canonical unified-resource helper before building policy
 context, so handoff handling guidance uses `CanonicalGovernanceMetadata(...)`,
@@ -4683,11 +5684,10 @@ The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary value stays
 aligned with the same policy-aware contract that governs sensitivity and
 routing metadata without re-normalizing locally.
-The resource detail drawer and unified resource table now also render that
-governed display label through the same policy-aware helper, and they suppress
-the raw alternate name when policy requires governed handling, so the visible
-label stays aligned with the backend redaction boundary instead of
-reconstructing a local name fallback.
+The resource detail drawer's governance summary now also renders that
+governed label through the same policy-aware helper, so it stays aligned with
+the backend redaction boundary instead of reconstructing a local name
+fallback.
 The resource detail drawer now also resolves its AI-safe summary through that
 same helper, so governed resources still present the canonical redacted label
 when the backend summary is missing instead of dropping the governed summary
@@ -4695,25 +5695,20 @@ block entirely.
 The shared frontend resource identity helper now owns that policy-aware
 display contract, so infrastructure surfaces that ask for the preferred
 resource label no longer need to re-encode the governed summary boundary by
-hand. Settings quick-picks, infrastructure selectors, and the connected-
-infrastructure / monitored-system projections now all stay on that same
-preferred-label helper instead of carrying a separate raw-name fallback fork.
+hand. Provider-bound frontend labels, such as Assistant chat resource labels
+and organization sharing, stay on that same preferred-label helper instead of
+carrying a separate raw-name fallback fork. Operator-local pickers such as the
+Settings `ResourcePicker` use `getPreferredInfrastructureDisplayName(...)` on
+purpose, under the operator-local resource search obligation above.
 That same helper also owns platform-id redundancy suppression for
 infrastructure drawers, so surfaces only render platform IDs when they add
 identity context beyond the canonical display name or hostname instead of
 repeating the same identifier chrome in both runtime and identity sections.
-The shared workloads-link helper now also uses that preferred-label helper
-for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
-context stays inside the same governed resource-label boundary instead of
-repeating a raw display-name fork.
-That same shared workloads-link path now also owns top-level TrueNAS system
-handoffs to the canonical app-container workloads route, so infrastructure
-drawers and related-link surfaces do not strand canonical `truenas` resources
-on infrastructure-only navigation while API-backed apps already exist in the
-shared workloads model. That same helper must also honor merged
-`agent`+`truenas` source sets for top-level systems, so hybrid TrueNAS
-surfaces keep the same workload handoff even when the resource shape presents
-through the canonical host path instead of a raw `type='truenas'` row.
+The shared workloads-link helper, which labelled Kubernetes-cluster
+navigation fallbacks and handed top-level TrueNAS systems to the workloads
+route, was retired with the drawer's related-links injection described above.
+New drawer or table links follow the local operator identity rule for
+infrastructure links and land inside the owning platform page.
 The resource drawer's Kubernetes namespace and deployment tabs use the
 canonical cluster-name helper for backend fetch keys, keeping lookup identity
 separate from the governed display-label contract.
@@ -4751,10 +5746,12 @@ cluster name, namespace, or surface-local aliases.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the Workloads path stay aligned on the
 same cluster-name source of truth.
-The workload projection and workloads-link route helpers also share
-the same Kubernetes context prefix helper in the shared agent-resource
-layer, so pod grouping and cluster navigation keep the same cluster-context
-prefix before any surface-specific display fallback is applied.
+The workload projection and the resource drawer also share the Kubernetes
+context helper `getPreferredResourceKubernetesContext(...)` in
+`frontend-modern/src/utils/agentResources.ts`, directly in `useWorkloads` and
+through `getPreferredResourceClusterName(...)` in the drawer, so pod grouping
+and drawer cluster context keep the same cluster-context prefix before any
+surface-specific display fallback is applied.
 The unified-resource projection also reuses that same prefix helper for
 projected Kubernetes `clusterId`, so the shared resource store stays aligned
 with the Workloads and detail surfaces on the same canonical cluster-context
@@ -4914,6 +5911,150 @@ serial or WWN only inside a compatible physical-disk parent scope; when those
 identifiers are absent or placeholders, host/device/topology fallback identity
 is authoritative. An exact seeded source mapping may be reused after restart
 only when its resource type and parent scope still agree.
+A usable serial or WWN identifies a disk on one machine only, and the canonical
+ID a new disk takes must honour that, not just matching. Dual-ported SAS
+shelves, cloned VMs with an explicit serial, fixed-serial USB bridges and
+TrueNAS systems report one identifier on several machines, and merging them on
+a hardware-keyed ID collision dropped every machine but the last from
+inventory. `physicalDiskIDForMachineLocked` resolves each disk's parent to its
+machine (the nearest host ancestor, so a TrueNAS pool or Unraid array counts as
+its system or host) and treats two disks carrying one identity as different
+machines only on evidence: one reporter placing the identity on two machines
+(for a single-source disk rehydrated without per-source parents, its own
+parent), or differing machines whose hostnames share nothing. Reporters on one
+machine still join across grouping parents and unmerged host resources (the
+TrueNAS API and the agent on that box), and an unknown machine never splits a
+disk. A split (operator exclusion) recorded against any ID the disk can hold,
+unscoped, current or machine-scoped, keeps the observation on its
+source-specific ID, keyed to its machine when another machine's disk already
+holds that ID (an agent disk's source-specific ID hashes its bare serial or
+WWN, below). Once the identity
+spans machines the unscoped ID no longer names one disk, so a split recorded
+against it applies to every copy, erring towards an extra row rather than a
+merge the operator forbade, and a manual link recorded against it stops
+applying. More than one joinable disk joins none, except that the holder of the
+unscoped ID keeps it. Once an identity spans machines, every copy not split off
+onto its source-specific ID takes the identity keyed to the machine of its
+canonical parent at that point, and the holder of the unscoped ID is re-keyed
+with its source mappings, retired-ID claims and relationship endpoints.
+Machines may be ingested in any order, and the unscoped ID never passes between
+disks that coexist on different machines. A disk only one machine reports keeps
+its unscoped ID, apart from observations an operator split off. Residuals: like
+any serial-keyed ID, the unscoped ID still passes to a same-serial disk that
+appears once the previous holder is gone; a disk's ID changes when a
+same-serial disk first appears on another machine and back when it goes away,
+and alert-history rows owned under the unscoped ID do not follow a re-key, nor
+do its operator-state rows, which is a decision (see the remediation-lock
+paragraph); a
+disk two reporters share is scoped to its canonical parent when the identity
+first spans machines, which the fixed ingest order (snapshot sources, then
+supplemental records) and source priority decide; and across reporters,
+hostnames that normalize alike (default TrueNAS names, short names across
+domains) still join. `IdentityMatcher` keeps one resource per machine ID, so
+the registry indexes disks by hardware key (`physicalDisksByHardware`) to see
+every copy.
+An agent disk's source ID carries its host, because the registry keeps one
+resource per source ID: when it was the bare serial, same-serial agent disks on
+different hosts shared one `SourceAgent` mapping, every disk but the last
+ingested lost its agent source target, and a disk only the agent reports lost
+its metrics target and chart. `HostSMARTDiskSourceID` and
+`HostUnraidDiskSourceID` key a disk with a usable serial or WWN as
+`<agent ID>/physical-disk:<serial or WWN>`, which the SMART and Unraid
+observations of one disk share when both report its serial; a disk without
+hardware identity keeps its host/device/topology key. A registry seeded from
+unified resources rebuilds one key from the agent ID the host above the disk
+retains, directly or above its Unraid array or cache pool, and the merged
+disk's serial or WWN (`seedAgentPhysicalDiskSourceIDLocked`), so a rehydrated
+disk, which is what the resource API serves, keeps an agent source target,
+though not every key its observations ingest under (a SMART row missing the
+serial its Unraid row reports, or a host several agent IDs report from); with
+no agent host found, a disk with hardware identity seeds its bare serial or
+WWN. Canonical IDs do not move: a disk with hardware identity is keyed by it,
+and `SourceSpecificID` hashes an agent disk's bare serial or WWN without the
+host (`sourceSpecificIDKey`), so a disk split off onto its source-specific ID,
+and the exclusion that split it, keep the IDs recorded before the host joined
+the source ID. Every host's split copy shares that ID, so a split observation
+takes it keyed to its machine when another machine's disk holds it, and joins
+the holder on its own machine, whether the split reaches it through
+`physicalDiskIDForMachineLocked` or `findMatch`. A split therefore cannot
+separate observations of one disk that one machine reports under several agent
+IDs: they meet on that ID, as they met on one source key before. Disk history stays keyed by
+hardware identity, not host: `HostSMARTDiskMetricID`, like the Proxmox and
+TrueNAS writers and `PhysicalDiskMetaMetricID`, prefers the reported serial or
+WWN, so a drive keeps one SMART and I/O history across a move between hosts and
+across sources that report it by the same identifier, and both hosts of a
+dual-ported SAS disk chart the one drive. A host-scoped history key would
+orphan the stored history of every agent disk with hardware identity for the
+rare collision. Residual: distinct drives that share a usable serial on
+different hosts (cloned VM disks with an explicit serial, fixed-serial USB
+bridges) interleave their samples in one series, as they already merge into one
+disk on a single host. Proof:
+`TestSameSerialAgentDisksOnTwoHostsEachKeepTheirMetricsTarget`,
+`TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost`,
+`TestRehydratedAgentDisksKeepTheirLiveSourceIDs`,
+`TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther`.
+A SMART row that reports no serial, smartctl's standby row among them, takes
+the serial the host's Unraid inventory reports for the same disk
+(`hostSMARTDiskSerial` over `matchUnraidDisk`). The adapter shows that serial
+and the disk's metrics target reads it, so `HostSMARTDiskMetricID` resolves the
+same serial, and the disk I/O writer keys a device with no SMART reading by its
+Unraid serial (`HostUnraidDeviceMetricID`) before its Proxmox and host/device
+fallbacks. The writers used to key such a row on its WWN or host/device key,
+which the chart did not read, so the disk's SMART temperature and I/O history
+never appeared. The row's source ID stays its own (`HostSMARTDiskSourceID`
+reads only the row), so its SMART and Unraid observations still ingest under
+two keys onto one disk. Samples already written under the old key stay there:
+the chart did not read that key while the Unraid row named the disk (only
+Unraid OS reports an Unraid inventory, and it is never a Proxmox node whose
+disk row could replace the serial), and a device-keyed series can hold another
+disk's samples once device letters move. The key follows the inventory: while the host
+reports no Unraid row for the disk, the row's own key is both written and read.
+A row matches its Unraid row by device path alone, so a row on a path several
+of the host's SMART rows share, controller members behind one block device,
+takes no serial from it, and the I/O writer still files that device's counter
+under no member. The I/O writer's inventory fallback also skips a device
+several Unraid rows name, while a SMART row keeps the adapter's first match.
+A row's own serial is kept even when it is a placeholder, as the
+adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
+`TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
+The adapters' disk temperature rule is shared with the agent disk history
+writer. `HostSMARTDiskTemperature` returns the temperature and collection state
+a SMART row's disk shows: the row's own reading, or, when it has none, its
+Unraid row's under `unraidDiskTemperatureStatus`. `matchUnraidDisk` finds that
+Unraid row by the SMART row's usable serial anywhere in the inventory before
+any device path, and a placeholder serial matches nothing. The fallback, like
+the serial a row without one takes (`hostSMARTDiskSerial`), comes only from an
+Unraid row that describes the row's disk (`unraidDiskDescribesSMARTRow`): one
+carrying the row's usable serial, or one naming the row's device path when the
+row is that whole kernel block device. A controller member, even the only one
+reported, and a row sharing its path with other SMART rows are not, because
+the Unraid row describes the block device as a whole. `HostUnraidDiskTemperature`
+returns what a disk built from an Unraid row alone shows, and
+`HostUnraidDiskMetricID` returns the key that disk's metrics target reads: its
+usable serial, else its `HostUnraidDiskSourceID`, and nothing for a row without
+a device, which is not ingested. The writer used to take only the SMART row's
+own reading, so a temperature shown from the Unraid inventory, for a disk whose
+SMART probe returned none or one excluded from SMART collection, was never
+charted. Proof: `TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget`.
+`HostDiskTemperatureReadings` lists the reading each disk of a host agent shows
+for consumers that judge disk heat, the agent disk temperature alerts in
+`CheckHost`: one per SMART row the registry ingests (no virtual block device),
+then one per Unraid row whose disk key (`HostUnraidDiskMetricID`) no SMART row's
+`HostSMARTDiskMetricID` equals, the history writer's rule, with a row without a
+device skipped as the registry skips it. Rows with one key are one registry
+disk whatever device labels they carry, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`). When smartctl and Unraid
+report different usable serials for one device the registry shows both disks,
+and both are listed. Each reading is taken from the disk resource
+`resourceFromHostSMARTDisk` or `resourceFromHostUnraidPhysicalDisk` builds, so
+its temperature, collection state and disk type are the ones that row's disk
+shows. Unraid rows on different devices that share a key and no SMART row are
+one registry disk but keep a reading each, since alerts are keyed by device.
+Proof: `TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows` compares
+each reading with the ingested disk, including two disks on one device and a
+controller member Unraid lists under its block device.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
@@ -4930,34 +6071,26 @@ path-policy coverage, so new unified-resource-owned runtime files must be added
 to a concrete proof route instead of falling back to subsystem-default
 verification.
 
-The infrastructure table, selector, and detail-mapper frontend consumers are
-now governed as explicit shared boundaries with the performance lane rather
-than implicit downstream usage. That means future fleet-scale table changes
-must preserve both canonical unified-resource semantics and the table
-performance proof route. The shared resource table and resource drawer now
-surface compact timeline summary chips, so facet presentation changes must
-continue to flow through the same governed resource-row surface rather than
-inventing a separate ad hoc summary path. Dense table rows must bound those
-chips with an explicit visible limit and overflow label, while row-level
-policy chips are limited to blocking `local-only`/`restricted` posture so
-mock-rich canonical resources cannot stack or overstate governance badges
-inside the resource column. Those row summaries now prefer canonical
-`facetCounts` on the
+The detail-mapper frontend consumer is governed as an explicit shared
+boundary with the performance lane rather than implicit downstream usage, so
+future fleet-scale changes there must preserve both canonical unified-resource
+semantics and the performance proof route. The resource drawer surfaces
+compact timeline summary chips through the shared `ResourceFacetSummary`, so
+facet presentation changes must continue to flow through that component rather
+than inventing a separate ad hoc summary path. A dense table row that adopts
+those chips must first give the shared component a visible limit and overflow
+label, and any row-level policy chip stays limited to blocking
+`local-only`/`restricted` posture so mock-rich canonical resources cannot stack
+or overstate governance badges inside the resource column. Those summaries now
+prefer canonical `facetCounts` on the
 resource object when available, so the backend list/read shapes remain the
 source of truth instead of forcing the frontend to infer totals only from
 loaded slices. The drawer now fetches those facets
 through one backend bundle endpoint, and that shared facet bundle preserves
 the timeline slice plus recent-change counts so the overview card and history
 summary can report the loaded history instead of collapsing to the currently
-loaded page when the timeline endpoint is paginated. Timeline references in
-that drawer now route
-through the canonical infrastructure resource filter, so the resource history
-remains navigable from the history surface instead of being purely
-descriptive text.
-The same infrastructure selector pipeline now also uses the policy-aware
-display contract for search candidates, so governed resources do not reappear
-through raw-name search forks even though the selector stays on the same
-hot-path budget.
+loaded page when the timeline endpoint is paginated. Related resources on
+those timeline entries render through the drawer's resource-label resolver.
 The shared recent-change presentation boundary is also owned here now.
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 is the canonical shared card for recent resource-change timelines, while
@@ -4977,17 +6110,14 @@ labels, relationship labels, headline formatting, summary wording, and canonical
 relationship/correlation ordering. Correlation and relationship badge text must
 preserve the formatter's human-readable title case instead of forcing visual
 uppercase over enum-like payloads such as `ALERT → ALERT`.
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-is the canonical shared card for governed policy-posture counts, while
 `frontend-modern/src/utils/resourcePolicyPresentation.ts` owns the canonical
-sensitivity, routing, and redaction labels and aggregate count summaries.
-That shared policy card also owns caller-supplied framing lines such as
-subtitle and resource-count wording, so Patrol or other shared surfaces may
-clarify whether the same governed counts read as policy-covered-resource
-context without rebuilding their own policy-posture card shell. New
-shared-surface framing needs such as Patrol's `policy-covered resources`
-count label or explanatory subtitle should extend that card API instead of
-forking a second page-local policy summary.
+sensitivity, routing, and redaction labels and their orderings for governed
+policy posture. No shared unified-resource card renders policy-posture counts
+today: the card that once did lost its last mount on the Patrol page and was
+removed together with its aggregate count-summary helpers. If a shared
+posture card returns, caller-supplied framing such as a subtitle or a
+resource-count label must extend that one card's API instead of forking a
+page-local policy summary.
 Future correlation or policy-posture wording changes should extend those
 unified-resource owners instead of drifting into page-local loops in AI,
 Patrol, or infrastructure surfaces.
@@ -4998,9 +6128,8 @@ validation flows, `frontend-modern/src/utils/resourceTypeCompat.ts` owns
 frontend canonicalization from legacy or alias type tokens, and
 `frontend-modern/src/utils/resourceTypePresentation.ts` owns canonical
 resource-type labels and badge styling. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-and `frontend-modern/src/components/Infrastructure/resourceBadges.ts` then
-own the shared resource/source/platform badge composition used by unified
-resource tables, drawers, and infrastructure summary cards. Future resource
+then owns the shared resource/source/platform badge composition used by
+resource tables and drawers. Future resource
 type or badge wording changes should extend these unified-resource owners
 instead of rebuilding type-label or badge mapping logic inside infrastructure,
 settings, alerts, recovery, or dashboard-local helpers.
@@ -5018,41 +6147,53 @@ should extend these unified-resource owners instead of rebuilding status or
 badge logic inside PMG, recovery, dashboard, or infrastructure-local views.
 The shared resource-runtime adapter boundary is also owned here now.
 `frontend-modern/src/utils/agentResources.ts` owns canonical actionable
-resource identities, agent-facet detection, cluster-name fallbacks, and
-resource-derived chart-key candidates. `frontend-modern/src/utils/resourcePlatformData.ts`
+resource identities, agent-facet detection, and cluster-name fallbacks. It no
+longer carries a resource-wide chart-key candidate list: workload table
+sparklines match chart series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
+`frontend-modern/src/utils/resourcePlatformData.ts`
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.
+Legacy flat fields may synthesize a Proxmox facet only when current sources
+include Proxmox, or source ownership is absent and the legacy shape applies.
+Storage `instance` and `node` coordinates do not override VMware, TrueNAS or
+agent ownership. Explicit ownership facets remain authoritative.
 Future resource-to-runtime mapping changes should extend these unified-resource
 owners instead of rebuilding ad hoc platform-data parsing or action-target
 fallback logic inside alerts, settings, recovery, AI, or infrastructure-local
 state owners.
 Those runtime adapters must preserve the same operator-facing local identity
-boundary as the infrastructure tables and selectors: node, PBS, and PMG view
+boundary as the platform tables: node, PBS, and PMG view
 models keep canonical local instance labels for summary rows, drawers, and
 settings selectors, while governed summaries remain available for policy/detail
 surfaces rather than replacing per-instance operator identity.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip
-wording stays aligned across table, drawer, and intelligence surfaces.
+wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
-The unified resource table now also supplies a canonical resource-label
-resolver into the resource drawer, so related-resource timeline chips can use
-the same governed display labels as the table without adding a new
-detail-local lookup path.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
+Platform tables supply the resource-label resolver to the resource drawer
+through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
+in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+resolves an ID against the page's own resources through
+`getPreferredInfrastructureDisplayName(...)`, so related-resource timeline
+chips show the operator-local display name rather than a raw ID, without adding
+a detail-local lookup path. A table that passes no resolver leaves those chips
+on the raw resource ID.
 The resource drawer now also passes that same resolver into the shared
-correlation summary, so dependency and dependent chips stay on governed
-labels in the investigation path while the AI summary page keeps its broader
-raw-ID fallback.
+correlation summary, its only consumer, so dependency and dependent chips stay
+on those labels in the investigation path.
 The same timeline and facet-bundle reads now also accept governed `kind` and
 `sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
 provenance drill-down, so history can narrow by canonical change class and
@@ -5071,50 +6212,20 @@ contract for reporting/ignored infrastructure state; future settings-row
 grouping or reporting-surface scope changes must be routed through that backend
 projection instead of teaching the frontend to reinterpret raw resource facets
 or removed-runtime arrays locally.
-Canonical route-state helpers must also preserve recovery-specific drill-down
-state when they serialize governed resource views. Recovery timeline day
-selection is part of the durable route-state contract, so recovery query state
-must round-trip the selected day inside an owning platform/runtime route
-instead of dropping it as transient local UI state or restoring `/recovery`.
-The same recovery route-state contract also applies to the selected timeline
-range: canonical recovery query state must preserve explicit non-default chart
-windows such as `7d`, `90d`, and `1y` so recovery drill-down transport does
-not widen back to the default `30d` window on reload or shared navigation.
-That same shared recovery route-state contract also owns the primary recovery
-workspace selection. When an operator explicitly switches between protected
-items and recovery events, canonical recovery query state must round-trip that
-`view` selection unless the active `rollupId` or selected day already implies
-the default recovery-events workspace.
-That same shared recovery route helper contract now also owns canonical
-protected-inventory posture encoding. Visible recovery inventory filters must
-round-trip through the owned `state=<value>` query form instead of leaking ad
-hoc booleans, overloading event `status`, or disappearing from shared links on
-reload. Legacy `stale=1` may be parsed only as compatibility input that
-rewrites to canonical inventory state.
-That same route-state contract now also owns the canonical recovery `itemType`
-query. Recovery query state must round-trip a provider-neutral item category
-such as `vm`, `dataset`, or `pvc`, and
-`frontend-modern/src/routing/resourceLinks.ts` may canonicalize provider-native
-aliases like `proxmox-vm` into that shared vocabulary during parse/build, but
-recovery route state must not drift back to raw platform-specific
-`subjectType` values in shared navigation.
-That same route-state contract also owns the canonical recovery `platform`
-query. Recovery query state must emit `platform=<owned-source-key>` as the
-shared operator-facing shape, while accepted legacy `provider` aliases may be
-parsed only as compatibility input that rewrites back to canonical platform
-route state. `frontend-modern/src/routing/resourceLinks.ts` must not keep
-legacy `provider` as a first-class build option once parse-time compatibility
-has converted it back to canonical recovery route state.
-Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
-prefer canonical `platform` / `platforms` response fields over legacy
-`provider` aliases, so unified resource drill-downs and shared recovery links
-carry the same platform vocabulary on both route and payload boundaries.
-That same shared drill-down contract also owns which primary recovery workspace
-an upstream surface is targeting. Infrastructure service links that open
-platform-level recovery activity must emit canonical recovery route state with
-`view=events` inside an owning platform/runtime destination instead of
-inheriting the inventory default, and those entry links should describe the
-destination as recovery events rather than platform-specific backup wording.
+No shared helper serializes recovery drill-down state any more: the
+recovery timeline day, chart range, workspace `view`, inventory `state`,
+`itemType`, and `platform` route-state rules served the deleted aggregate
+Recovery page. The Proxmox Backups tab owns its own day selection through
+`PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
+of `/api/recovery/*` payloads must still prefer canonical `platform` /
+`platforms` response fields over legacy `provider` aliases. The frontend's
+only recovery-points reader is `useRecoveryPoints.ts`, and
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites `provider`,
+`subjectRef`, and `display.subjectLabel` onto `platform`, `itemRef`, and
+`display.itemLabel` at decode time. The TrueNAS Protection tab
+(`TrueNASProtectionTable.tsx`, `truenasPageModel.ts`) reads only those
+canonical fields; the normalized `RecoveryPoint` type does not declare the
+subject names.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request
@@ -5143,6 +6254,18 @@ Shared grouping may attach `qnap` to `qnap.local` when one surface reports the
 short hostname and another reports the FQDN, but it must not collapse two
 distinct fully-qualified hosts that merely share the same short prefix across
 different domains.
+Fallback owner buckets are pass-local priority-ordered slices, rebuilt from
+each complete group snapshot. A maximum-priority group cannot be better than
+any query and is omitted only from the temporary candidate index. Queries visit
+only strictly better-priority owners; a second distinct qualifying root still rejects attachment even when
+its priority or evidence kind differs. The unique root keeps lexical exact-host
+evidence before full short/FQDN evidence before lexical exact-IP evidence.
+Comparable/short-form keys only prune candidates: the full hostname equivalence
+check remains authoritative. No index survives a grouping pass or caller, and
+no resource, reporting surface or ambiguous identity is discarded. Exhaustive
+all-group target/evidence enumeration, immediate-parent content comparisons,
+multi-pass identity changes and connected provider/Infrastructure controls
+verify this unchanged grouping contract.
 That same projection contract now also owns structured replacement selectors
 and detailed previews. Shared callers may serialize source-native selector
 fields such as hostname, host URL, machine or agent identity, and source-owned
@@ -5197,12 +6320,7 @@ ReadState resource-resolution lookups must also normalize surrounding
 whitespace on the incoming name before matching canonical resources. A valid
 resource must not look missing just because a consumer asked for `" myserver "`
 instead of `"myserver"`.
-The infrastructure summary surfaces now use the shared normalized identity
-lookup helper for these matches, so dotted hostnames such as
-`tower.example.local` collapse to the same canonical lookup variants as the
-resource table and resource detail surfaces instead of each view inventing
-its own comparison rule.
-The same identity surfaces also share the trimmed-string helper from
+Frontend identity helpers share the trimmed-string helper from
 `frontend-modern/src/utils/stringUtils.ts` so resource-id, hostname, and
 linked-node normalization keep the same fail-closed whitespace trimming rules
 instead of reimplementing ad hoc local string cleanups.
@@ -5270,14 +6388,8 @@ Unknown source types may contribute identity and source-label evidence, but
 they must not outrank the known canonical primary-type order when a merged host
 contains a governed connector such as `proxmox-pve` or `agent`.
 
-Infrastructure selector consumers must also preserve the canonical
-`KnownSourcePlatform` normalization boundary when collecting source filters and
-status facets. The selector layer may accept arbitrary user-visible filter
-strings, but it must not widen the canonical unified-resource source/status
-contracts that feed the infrastructure table and workload links.
-
-The same source-filter boundary now also applies to infrastructure source UI
-options in Settings and platform/runtime pages. Those surfaces may render
+The canonical `KnownSourcePlatform` source-filter boundary applies to
+infrastructure source UI options in Settings and platform/runtime pages. Those surfaces may render
 friendly string keys, but membership checks against available sources must
 normalize through the shared `frontend-modern/src/utils/sourcePlatforms.ts`
 helper before consulting `KnownSourcePlatform` sets.
@@ -5295,12 +6407,12 @@ because the legacy backend resource projection leaves `platformType` empty on
 several canonical resource types; the helper falls back to the resource's
 `sources` array via the existing source-platform normalization so mock
 fixtures and live backends produce the same client-side platform grouping.
-That same boundary also owns the infrastructure table's operator-facing system
-identity vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
-`frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
-unified resource table sections may preserve full merged-source detail in
-tooltips and accessibility metadata, but visible table headers, sort keys, and
-row badges must answer what system the operator is looking at. Provider/API
+That same boundary also owns the operator-facing system identity vocabulary.
+`frontend-modern/src/utils/resourceBadgePresentation.ts` and its consumers, the
+Docker hosts table's System column through `getDockerHostSystemBadge(...)` and
+the resource drawer header, may preserve full merged-source detail in tooltips
+and accessibility metadata, but visible headers, sort keys, and badges must
+answer what system the operator is looking at. Provider/API
 platforms such as Proxmox, TrueNAS, VMware, and Kubernetes outrank collection
 methods; reported agent OS or appliance identity such as Unraid or Ubuntu
 outranks a generic container-runtime capability; and the shared generic source
@@ -5409,8 +6521,8 @@ projection, so the AI summary and any other backend policy posture surface do
 not re-sort redaction labels locally.
 They also own the canonical sensitivity and routing order used to format
 policy-posture count summaries with human-readable labels, so the AI summary
-and frontend policy card both read the same presentation sequence from the
-shared resource model.
+and any frontend posture presentation read the same presentation sequence
+from the shared resource model.
 Canonical resources now carry first-class relationship, capability, and
 timeline fields: `Capabilities` (bounded action definitions with approval
 levels), `Relationships` (typed inter-resource links with direction and
@@ -5434,6 +6546,145 @@ action requests, approvals, links or exclusions. Separate monitor, API and
 Assistant store handles must see current persisted aliases. Missing identity
 storage is an error, not evidence of empty history. Retention removes an alias
 only after neither identity has retained journal records.
+Other alert source references resolve at `MonitorAdapter.RecordChange`
+through `ResourceRegistry.resolveHistoryReference`, which accepts only durable
+identities: the canonical ID, a retired era, a source ID (Proxmox node, guest
+and storage IDs), a node-scoped Proxmox guest reference after migration, or
+`agent:<host ID>`. Names and hostnames never bind history, unlike the wider
+`ResolveReferenceID` used by alert policy, so a resource named like a system
+reference cannot capture its events. A reference two resources answer to binds
+to neither: its event keeps its own reference and creates or changes no
+binding, though an earlier binding still covers that reference on read. Like
+any unbound reference it is retried, and once a later generation resolves it
+to one resource it binds there, replacing an earlier binding. A
+reference no resource
+answers to follows its retained binding after inventory removal, or keeps its
+own history. Docker container references never take this path. Alert journal references
+without a binding (read once per process, plus any written before inventory
+named their resource) are retried on each published registry generation for
+`legacyHistoryBindWindow`. Bound rows keep their recorded resource ID, so a
+change list may show the source reference on rows written before the binding.
+Only the full-presentation `ResourceDetailDrawer` reads this history in the UI
+(facets and resource intelligence); the `table-row` drawer used by Proxmox node
+and Agents rows, and the guest and storage drawers, do not request it.
+Assistant and Patrol resource contexts read it from the store. Proof:
+`TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences` and
+`TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations` in
+`internal/unifiedresources/history_identity_test.go`.
+Docker host alerts (`docker:<host ID>`) and Swarm service alerts
+(`docker:<host ID>/service/<service ID>`) resolve only through the registry's
+Docker source identities: the host ID is the Docker host's source ID, and a
+service reference names the service with that exact ID in the host's Swarm
+cluster, whichever manager reported it. A hostname in the host position is
+only ever looked up as a Docker host source ID. The registry keys a service
+without an ID by its raw name, so the service entry must also carry exactly
+the referenced ID. A container or service reported without an ID alerts under
+its name, marked in the ID position (`docker:<host ID>/name:<name>` and
+`docker:<host ID>/service/name:<name>`, from `alerts.DockerContainerResourceID`
+and `alerts.DockerServiceResourceID`). Docker and Swarm IDs never contain a
+colon, so such a reference never equals its host's reference or another
+service's ID reference, and `dockerHostHistoryReference` treats a service slot
+with a colon as a name. These name references, hostless `docker-service:`
+references, container names and shortened container IDs never bind and are
+never retried against later inventory. Rows journaled before name references
+existed keep the reference they were written under: an ID-less container's
+rows stay in its host's history, and an ID-less service's rows bind only to a
+service in that cluster whose ID equals its normalized name.
+Sub-resource alert references name no resource of their own and bind to the
+owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
+device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the
+storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
+the array storage with that agent source ID, and host filesystem, SMART disk,
+disk temperature, RAID and custom-sensor alerts (`agent:<host ID>/disk:`,
+`/disk_temp:`, `/raid:`, `/custom:`) to the host. The owner reference must
+resolve to exactly one resource of the expected type; an ambiguous or
+incompatible owner is a conflict, so the event keeps its own reference,
+follows no retained binding and is retried. Pool, mount and kernel device labels are names,
+and a device name can denote a different disk after a reboot, so these alerts
+never bind a physical disk. Any other sub-resource shape stays unbound until
+its producer and this list change together. The Docker, storage and platform
+host-row drawers do not request per-resource history, so these bindings reach
+the facets, timeline and intelligence APIs and Assistant resource context, not
+a drawer. Patrol's scoped change feed matches the stored resource ID without
+expanding bindings, so it includes events recorded under the owner's
+canonical ID but not rows journaled before their binding.
+Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`
+and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+producers.
+PVE disk health and wearout alerts (`ProxmoxPhysicalDiskAlertResourceID`,
+`<instance>:<node>:disk:<device key>`) never bind, although
+`ResolveReferenceID` resolves the same reference to the physical disk at that
+path for operator mutes (#2112). A device path is not hardware identity: a
+replacement disk in the same slot, or a reboot that reorders devices, takes
+over the path, and disk alerts are evaluated before their poll's disks reach
+the registry. A binding belongs to the reference string and would carry every
+row and every read of the path to whichever disk held it last. Each lifecycle
+row is owned on its own instead (`proxmoxDiskAlertOwner` in
+`internal/unifiedresources/pve_disk_alert_history.go`). The same ownership
+decision is exposed on immutable unified snapshots by
+`ProxmoxPhysicalDiskAlertOwner` for subject reports; the registry and snapshot
+entry points share the implementation, including ambiguity, moved paths,
+identity-less fallback and derived-ID collision checks
+(`TestProxmoxDiskAlertOwnerDecisions`). Reporting admits only the reference's
+canonical health/wearout alert identifiers and keeps resolution-window bounds
+(`TestReportPhysicalDiskAlertsFollowRecordedHardware` in `internal/api`).
+The alert records the
+evaluated disk's serial and WWN (`disk_serial`, `disk_wwn`), and
+`MonitorAdapter.RecordChange` writes the row under the one physical disk the
+registry knows by that hardware identity (`diskinventory.HardwareIdentityMatch`),
+wherever it sits now. A differing WWN does not rule a disk out, because the
+registry keeps a merged agent observation's WWN, which smartctl frames
+differently from PVE; of two matching disks, a WWN only one of them shares
+with the row decides. The registry only translates identity into a
+canonical ID: the path never breaks a tie, so a generation that still places
+another disk at the path never gains a row that disk does not match by
+identity, and no check precedes a later write. With no such disk in inventory
+(a new disk before its first poll reaches the registry, or a removed one), the
+row takes the canonical ID the registry mints for an identity it
+knows by nothing else (`MachineIdentityCanonicalID`), unless another resource
+holds that ID. A row without usable identity names only the one identity-less
+disk at its path. Every other row, missing, unusable or ambiguous, stays under
+the reference and is never retried. An owned row records its alert's
+reference as `alert_resource_id`. A read by the reference returns the rows
+journaled under it plus the rows owned away from it, matched through the
+indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
+history Resource action therefore still lists every occurrence raised under
+the path, across the disks that held it, and alert-centric reads keep their
+occurrences (see the AI runtime contract's incident-history queries). Rows
+journaled under the reference before ownership existed stay there,
+unrewritten, until the journal's 30-day retention removes them. The disk
+drawer requests no change history, so ownership reaches the facets, timeline
+and intelligence APIs, Assistant resource context and Patrol's scoped change
+feed. History follows inventory where inventory merges: the registry merges
+disks that report the same serial, and a disk whose poll reports no serial
+keeps the serial last seen at its path (`preserveUnavailablePhysicalDiskEvidence`).
+A disk the registry correlates with its agent's observation by path (an
+identity-less or SAS agent disk) keeps that observation's ID and its serial
+and WWN. When the identifiers PVE records for it share nothing with the
+agent's (a SAS address reported as the serial, with no common WWN), or the
+alert fired before the PVE observation reached the registry, the row carries
+the minted ID: the disk's own history omits it, and reads by the reference
+still return it. A disk the registry keys by its agent's WWN alone also
+carries the serial PVE reports, so another disk reporting that serial, before
+its own first poll reaches the registry, has its row written under the first
+disk. Proof:
+`TestHistoryIdentityNeverBindsProxmoxDiskAlertReferences`,
+`TestProxmoxDiskAlertRowsFollowRecordedHardwareIdentity`,
+`TestProxmoxDiskAlertOwnerDecisions` and
+`TestProxmoxDiskAlertReferenceReadUsesIndexes` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestProxmoxDiskAlertTimelineFollowsRecordedHardware` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+manager.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.
@@ -5496,8 +6747,8 @@ hydration and unsupported filtered queries, but canonical live freshness for
 supported resource snapshots must flow from websocket `state.resources`
 instead of layering confirmatory REST refresh loops on top of already-owned
 resource updates.
-Shared infrastructure consumers such as the unified resource table and detail
-drawer must present that owned metadata through shared helpers instead of
+Shared infrastructure consumers such as platform tables and the resource
+detail drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
 
@@ -5545,6 +6796,14 @@ merge the PBS service and host, change either metrics target, or turn PBS API
 polls into a host-agent time series. A missing or ambiguous host leaves the
 link absent.
 
+`PBSInstanceView.NodeName()` hands read-state consumers the hostname the PBS
+server reports about itself (`PBSData.NodeName`), which is not `Hostname()`, the
+host of the endpoint Pulse was configured with. Consumers that rebuild a
+`models.PBSInstance` from the view, such as `Monitor.PBSInstancesSnapshot()`
+feeding the connections ledger, must carry it: it is empty only when the
+connection cannot read the node-name endpoint (API tokens).
+`TestView_PBSAndPMGInstanceViewAccessors` pins the accessor.
+
 PBS does not supply the SMART inventory. Disk identity, health, temperature,
 and other typed physical-disk facts therefore remain agent-owned, while the
 PBS source mapping and PBS-parent relationship make the existing disk
@@ -5561,6 +6820,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
+The TrueNAS physical-disk drawer judges a current temperature reading by the
+disk temperature policy, like the TrueNAS storage table:
+`useResourceDetailDrawerDerivedState.ts` passes the alerts store's
+`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
+Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
+says the reading reached its disk type's alert trigger. A retained reading
+keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must
 keep canonical sources such as `truenas` and `availability` present in their
@@ -5628,6 +6894,104 @@ to that boolean. Identity succession continues to rekey the same state row.
 `resource_operator_state_policy_test.go` pin normalization, validation,
 round-trip persistence, attention suppression, and the retired remediation
 lock.
+
+### Status follows each source's own verdict
+
+A sighting's `SourceStatus.Status` describes delivery, not the resource:
+`online` means the source delivered recently and `stale` that it has gone
+quiet. Ingest records on each sighting the status that source reported for the
+resource, as an unexported verdict, and `aggregateStatus` reads it. The stale
+pass and manual links both apply that function:
+
+- While any source with a verdict is current, only the current sources decide,
+  in the priority order `chooseStatus` uses at merge time. The highest-priority
+  verdict wins (agent, then Proxmox or vSphere, then Docker, then the rest), and
+  the best of equal ones. A quiet source drops out of that decision.
+- Once every source is quiet, an `offline` verdict survives and any other
+  verdict reads `warning`. The best of those wins.
+- A current facet sighting carries no verdict (the PBS host-agent association).
+  It counts as `online` only when no current source has a verdict, and reads
+  `warning` once quiet.
+- Availability checks projected onto a monitored resource rank like that facet,
+  but their shared sighting is not their verdict. `availabilityChecksProveOnline`
+  judges each check at the pass's `now` by its own evidence window
+  (`Evidence.ValidUntil`: two poll intervals for a single local check, the
+  probe report window for a remote or multi-location one). An enabled,
+  passing check with current evidence proves the resource answers and reads
+  `online` once one of the resource's own sources has gone quiet and none that
+  is current has a verdict. Every other check abstains, current or quiet: a
+  failing check proves only that one port or service does not answer, and a
+  pass whose evidence lapsed proves nothing now. A check's own row keeps the ordinary
+  rules.
+
+The stale pass used to read delivery as the verdict. A Proxmox node the cluster
+reported offline on a live poll came back `online` once its linked agent fell
+silent, which is what a powered-off machine's agent does. The Proxmox nodes
+table then put an amber dot beside its own "Offline" label, while the drawer
+led with a critical "Node is offline" alert. A node `preserveOrExpireNodes`
+expired after failed polls read `warning` ("Degraded"), and the stopped guests
+on it counted as needing attention. A silent standalone agent past its
+reporting lease reached every consumer as `warning`, with its last report
+rendered as current readings in the Machines table.
+
+The push reporters keep their lease meaning. The host agent, Docker and
+Kubernetes collectors mark the machine, Docker host or cluster offline only
+once its reporting lease runs out. An agent past its lease is `offline` and
+takes the existing offline treatment: frontend danger gates, the health
+verdict's `offline` reason, offline filters and counts. One that is late but
+inside its lease stays `warning`. A Docker host past its shorter lease stays
+offline after its sighting crosses the 120-second stale threshold. A live
+source still carries a merged row. A Proxmox node whose live poll reports it
+online stays `online` when its linked agent stops reporting. A live agent keeps
+a node `online` when the Proxmox poll reports it offline, which the Proxmox
+nodes table reads with `connectionHealth: error` as a stale provider. When a
+guest's or container's only source goes quiet, a running one stays `warning`
+and a stopped one stays `offline`. In each quiet case a projected availability
+check with current evidence lifts the resource to `online`, as described
+below.
+
+The sighting still reads `stale`, so health keeps its `telemetry_stale` reason
+and monitored-system reasons are unchanged. In-memory clones keep the verdicts,
+including a facet's missing one. A serialized copy carries none, so
+`IngestResources` gives each sighting of a copy that lost them all the stored
+resource status; a merged row's separate source verdicts do not survive that
+round trip, and a copy whose status a passing check supplied gives that status
+to every source. A manual link that joins two resources reported by one source keeps
+the fresher sighting. `registry_merge_policy_test.go` pins the node,
+poller-expired, guest, round-trip, copy, agent, Docker, Kubernetes,
+mixed-source and manual-link cases, and the aggregation table.
+
+Availability checks used to count by delivery too. With every source that
+has a verdict quiet, a current failing check kept a node `preserveOrExpireNodes`
+expired `online`, and a quiet one lifted it to `warning`. Several checks share
+one sighting whose freshness comes from whichever check was projected last, so
+a failing check that just ran could also vouch for another check's old pass.
+Each check is now judged by its own evidence. A failing probe no longer holds
+an expired node `online`, and it never makes a guest read stopped to the
+consumers that count `offline` as stopped (the workloads summary, the Proxmox
+page counts). The failure stays on the check's own row, which raises an
+outage incident once the check confirms one (past its failure threshold, from
+every location). A check observed from several locations relies on the poller
+ageing out a location that stopped running and lasting an available check's
+evidence only as long as its newest reachable path (monitoring.md), so one
+location's fresh failure cannot lend its freshness to another location's old
+pass.
+
+The verdict is read from the checks on the resource when status is
+aggregated. Projecting, re-running or retargeting a check also re-applies the
+stale pass's rule to every target it touches whose status that pass owns,
+because a check is not a delivery from the target's own sources and the
+resources API replays checks after its stale pass. The pass owns a status only
+through the target's own sightings: the checks' sighting going quiet neither
+hands it the target nor, once removed, takes the target away, so a target
+whose own sources have not gone quiet keeps the status they gave it. A check
+retargeted away therefore takes its verdict with it at once. A
+manual link keeps only the primary's own checks, so the merged resource is
+judged by the checks it shows and never by the linked resource's fresher
+sighting. `registry_test.go` pins the expired-node and quiet-guest cases, both
+projection orders, re-judging on check changes, ownership through the
+target's own sightings and the manual link; the aggregation table pins the
+check rules.
 
 ### Canonical object drawer hierarchy
 
@@ -5701,6 +7065,23 @@ A failed admission HTTP refresh is not an empty estate either: retain the last
 valid facet on request failure. A successful response still replaces it,
 including all-false admission; first-load failure remains unresolved.
 
+### Docker tables state silence and drop per-row host context
+
+`EvaluateResourceHealth` keeps the first reason as the one that explains the
+verdict, and when a stronger verdict (an alert, an availability failure, an
+offline host) wins while a source is stale, it appends a trailing
+`telemetry_stale` reason with the backend-formatted age, so the summary API's
+top reason is unchanged while surfaces can still tell that a resource stopped
+reporting. That reason, alone under a `stale` verdict or trailing another, is
+the only staleness signal platform tables read, through
+`features/platformPage/resourceStaleness.ts`; tables never derive staleness
+from `lastSeen` themselves. A stale Docker host dims its CPU, memory and
+disk cells and shows the age under Uptime ("No report for 1h" on hover and
+for assistive tech), and its container group header says the same. In
+grouped-by-host mode the containers table drops the Host and Engine
+columns, which repeat one value per group, and the group header names the
+engine once; flat mode keeps both columns.
+
 ### Existing Docker update and expanded identity text remain readable
 
 DockerContainersTable marks its update cell as the phone reflow boundary for both
@@ -5717,13 +7098,464 @@ host name and the Update control render whole; the percentage-only CPU and
 memory bars yield the difference. Swarm services show the rollout state as
 words ("Rollback started") with the raw token, message and completion time in
 the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
-the title, matching every other platform table's time cells.
+the title, matching every other platform table's time cells. A service's dot
+names Docker's mid-change update states as themselves ("Update paused",
+"Rolling back", "Rollback paused"; `rollback_started` used to read "Rollback
+paused"), and no replicas running outranks a rollout. The cell behind each
+Swarm dot's verdict reads in its tone: a service's Running count (with
+"/desired" on phones, where Desired is hidden) and its Update words, a task's
+Current state (the dot's own word, Docker's token and error on hover and the
+error in the expansion), a node's Reachability or Availability.
+The containers table's State cell says what `docker ps` would flag, through
+`dockerContainerStatePresentation.ts` over `mapDockerContainerStatus`, so the
+row dot and the words agree: Unhealthy and Starting for a running container's
+health check, Exited (139) for a crash, Restarting, and muted Exited or Paused
+for a container stopped on purpose, with the full sentence on hover. A health
+status only counts for a running container, because Docker keeps the last one
+on a stopped container (#1724). The State column appears when any row in view
+has one of those states, including an unhealthy running container. A narrow
+table (under 360 pixels, most phones) has no State column: beside the shared
+40 percent name it cut "Unhealthy" to "Unhe…", so the same words read under
+the container name on every row, and a saved State sort waits for a layout
+that shows its header. A running container that Docker has restarted more
+than five times gets one verdict, from `mapDockerContainerStatus`: warning,
+"N restarts". The row dot, the drawer header dot and the attention-first sort
+read it everywhere; where the row has a Restarts column the count reads amber
+there and State keeps Docker's own word, and where it has none State says
+"N restarts". The drawer's Restarts row is amber too, and its observed state
+stays Docker's word so the restart is lifted once. Amber, not red: the
+container is running. Docker's count is a total, not a rate, as its hover
+says; the alert engine owns the windowed restart-loop alert. From the
+compact layout up an Uptime column shows the current run (none for a stopped
+container, whose leftover uptime is not time spent running), which marks a
+container that just restarted; narrower rows keep it in the drawer. The Ports
+cell drops the all-interfaces address and folds the IPv4/IPv6 pair Docker
+reports for one mapping, keeping a specific bind address; the title, drawer
+and search keep the full form.
+The resource drawer's Runtime context agrees with that row for a Docker
+container: Observed state is Docker's own state (Running, Exited (137)) rather
+than the unified online/offline status, a running container's health check
+gets its own row (Failing, Starting, Passing), and Uptime is the current run,
+so a stopped container shows neither a stale health check nor leftover
+uptime. Both surfaces read `dockerContainerStatePresentation.ts`.
+Below a 720px table the containers table has no Restarts column (its header
+cannot fit beside State, the metric bars and the Update control), so a running
+container that restarted more than five times says `N restarts` in its State
+cell there instead; wider tables keep the count in its own column.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the
 full heading. This shared drawer rule applies across resource types. The 390px
 browser qualification checks heading fit and keyboard expansion; no data model,
 authorisation, action dispatch or resource admission contract changes.
+
+### Operator links reach record-ingested resources
+
+Every registry ingest path applies the operator's manual links: snapshot
+ingest, resource ingest and record ingest (`IngestRecords`,
+`IngestRecordsWithStaleThresholds` and the read-state overlay's record pass).
+Either side of a link can arrive only as a supplemental record, such as a
+vSphere or TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host,
+and the monitor's rebuild ingests those records after the snapshot. While only
+snapshot and resource ingest applied links, the rebuilt registry behind the
+websocket broadcast and `/api/state` kept both rows. The resources API, which
+seeds through resource ingest, showed them merged, and so did the published
+inventory whenever an unrelated absent machine made continuity hydration
+clone the registry. Mock mode builds its unified view from fixtures and
+applies the same links there ("Mock-mode unified view applies operator
+links" below).
+
+- The monitor adapter passes its configured stale thresholds to record
+  ingest, so a link joined there judges each side's metrics the way a
+  snapshot-time link does. Ordinary source merges into an existing row use
+  the same thresholds on every ingest path: snapshot and record ingest hold
+  the caller's thresholds while they run, and `mergeInto` judges each
+  metric's freshness with them through `sourceStaleThreshold`, the rule the
+  stale pass reads. Before this, those merges used the defaults, so a
+  Proxmox node polled every two minutes showed a silent auto-linked agent's
+  readings while the stale pass called the node's poll current, and a
+  supplemental refresh of a linked vSphere VM kept the agent's memory over
+  vSphere's current reading. Outside mock mode the monitor configures only
+  Proxmox, PBS and PMG; mock mode also configures TrueNAS, vSphere and
+  availability. Regression coverage:
+  `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` (rebuild,
+  supplemental refresh, overlay, node with auto-linked agent),
+  `TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds` and
+  `TestMetricMergeFreshnessMatchesTheStalePass`.
+- Continuity records never merge into a link. A saved enrollment only fills
+  an absent machine, so it stays its own row instead of lending its linked
+  guest an offline verdict and an old agent payload. The link still names one
+  identity, so the pass holds the saved row beside the primary
+  (`holdLinkedResourceLocked`): every reference that resolves to the saved
+  row (its canonical ID, `agent:<host ID>`, its machine ID or an alias it
+  shares with the primary) resolves to the primary instead, through
+  `ResolveReferenceID`, `GetByReference` and the alias index, as a
+  reference to a folded resource does. An availability check resolved after
+  the hold, as the resources API replays checks onto its seed, attaches to
+  the primary too; the monitor's read state does not re-resolve checks after
+  continuity, so a check naming the saved agent stays as the published
+  registry left it. Reference lookups by the saved agent's ID (a resource
+  detail read, the agent resource context), operator-state reads and writes
+  through the resources API, Patrol's finding projection and alert intent
+  therefore all reach the guest the agent was folded into before the
+  restart, while each row keeps its own telemetry. Saved rows carry an
+  in-memory marker (`Resource.continuityOnly`) that rides clones, so the
+  resources API, which
+  seeds a registry from the monitor's read state and re-applies the links,
+  holds them too instead of merging the saved agent into the guest; an
+  observation that later merges into the row clears it. A live member never
+  resolves to a saved one: when the saved row is the link's primary (a link
+  made from an agent's page to a resource that is not its guest), both rows
+  answer for themselves until the agent reports and the link folds them, so
+  intent set on the pair under the agent's ID does not reach the live
+  member's references in that window. Holds are recomputed on every link
+  pass. A saved row answers to the row its link partner folds into, found
+  through the fold record when an earlier pass of the rebuild, or the
+  monitor a registry was seeded from, already folded the partner away; a
+  saved row held under a saved primary follows that primary's hold, and a
+  cycle of saved rows resolves each to itself. A saved row that several
+  links would fold answers to the best of the rows their partners fold into,
+  found after the folds (a partner a seeded listing carries inside a row the
+  links now fold away is ranked by the row it survives in), by the chain
+  precedence below with each row judged by its own identity and an observed
+  row ranked before a saved one; the first link the store lists no longer
+  decides. Exact reads are untouched: `Get` still
+  returns the saved row, so the saved agent's own drawer reads its own facet
+  bundle and history, while its operator-state section reads and writes the
+  guest's state.
+- Links apply as chains (`manual_link_chains.go`). Links that share a
+  member name one identity, so a link pass folds every connected set of
+  observed members into one row, whatever order the store lists the links
+  in. Applied one at a time, a link naming a member an earlier link had
+  folded away found nothing: an agent linked into a VM that a second link
+  folds into storage joined the chain in one order and stayed its own row in
+  the other, and a saved agent whose partner the published registry had
+  already folded answered for itself. Standing the row that holds a folded
+  member in for it fixed neither, because that row then outranked the
+  link's own primary (a VM folded into a pool that had taken the agent
+  first) and hid the agent-into-guest direction once the guest was folded.
+  A link member is the resource the link names, judged by its own shape
+  (agent, hypervisor-managed guest) after a link folds it too: the holding
+  row takes a guest's Proxmox payload and would read as a guest itself.
+  Fold records keep both sides' shapes, so later passes and a registry
+  seeded from a listing judge a member alike. Each link keeps its pair rule:
+  the stated primary, except that an agent named primary over a guest folds
+  into the guest. A chain's root is picked from the members no link folds,
+  or from every member when the directions form a cycle. Rows compete, each
+  by its own identity: a member an earlier pass folded stands as the row
+  holding it, since a fold is not undone. When every candidate row is an
+  agent and the chain holds a guest, the rows holding guests compete
+  instead, including a row an earlier fold put a guest into, so an agent
+  never ends up holding a guest. Among candidates a hypervisor-managed guest
+  wins, then any non-agent resource over an agent, then the primary of the
+  earliest-created link, then the lowest canonical ID. A single link keeps
+  its effective primary, and so does a chain whose directions agree, unless
+  that primary is an agent and the chain holds a guest. The node and agent
+  rules judge each link before it joins a chain: a link between a Proxmox
+  node and an agent a newer split separates is dropped, and a link whose one
+  side a joined node-and-agent row already holds records that side's fold on
+  the row before any link resolves its members, so a second link naming the
+  folded side joins the chain whichever link the store lists first; the
+  fold record keeps both sides' agent shape, so a guest linked to the
+  folded node still outranks storage.
+- The monitor's rebuild holds the link pass back until the snapshot and
+  every record source except availability are in
+  (`deferManualLinks`, `applyDeferredManualLinks`), so its chains are judged
+  over the assembled estate; the availability batch that follows runs its
+  own pass, which finds the chains already folded. A link pass after each source folded members as
+  their sources arrived, and a later source's member could then outrank a
+  member already folded: a cycle through a Proxmox storage, a TrueNAS VM
+  and a vSphere VM kept the storage or the vSphere VM, where judging the
+  whole cycle keeps the TrueNAS VM. Availability checks still follow the
+  links, so a check linked to a folded resource projects onto its primary.
+  Record ingest into an existing registry still runs a link pass per call:
+  a live supplemental refresh that brings a member the last rebuild had not
+  seen judges it against the rows the rebuild left, until the next rebuild
+  judges the whole chain. A refresh can also recreate a folded member whose
+  source maps to a holder of another type; the recreated row competes as
+  itself, as it did in the rebuild, and folds back along the fold records
+  its chain carries, so identical records leave the pair set and every
+  folded ID as they were. The resources API's snapshot-seeded fallback,
+  used only while the monitor has published no unified listing, still
+  ingests the snapshot and each supplemental source with a pass per call.
+  The mock-mode fixture build (`internal/mock`) delegates to
+  `MonitorAdapter.PopulateSnapshotAndSupplemental` (see "Mock-mode unified
+  view applies operator links"), so it shares the monitor's rebuild boundary
+  rather than reproducing source-order and link policy.
+- Rows fold along the chain's links, deepest first, so each fold record
+  names a stored link's pair. The links form a spanning tree from the root
+  that follows the fold records the rows already carry before any other
+  link: a row a record pass recreated folds back through a link a record
+  names in the direction it folded, and a chain with several recreated
+  members folds back along its recorded ancestry, instead of reaching one
+  through a member another row holds, which would turn that member's record
+  round and leave its ID resolving nowhere. A cycle's closing link is
+  recorded in its own direction, so it counts as a recorded link only where
+  that direction matches, and a recreated row may fold back through it; the
+  pair set and every folded ID stay as they were. Links no record names
+  join once those are exhausted, breadth first from the root. The pass then records every other link of the
+  chain on the root (the link closing a cycle, or one whose sides an earlier
+  pass already joined, recorded with the link's effective direction though
+  it folded nothing in), so a report-merge that excludes every recorded pair
+  undoes every link of the chain. The pass records each fold before it
+  merges the folded row into the holder, as the own-sources record needs. A
+  pair is recorded once and keeps the
+  direction it was first recorded in, since a seeded listing can carry
+  records from an older generation of the links, and turning one would leave
+  the ID it folded in without a row. When a row must fold into another
+  and its own records name members it took in, its records are oriented
+  away from an anchor: the surviving row's own ID when they name it (a
+  recreated row that now roots the chain, or a link changed after the
+  listing was published), else the member the link names. Each record points
+  from the side nearer the anchor to the side farther (records between two
+  members equally far keep their direction), so the folded row's own ID
+  becomes a folded ID and keeps resolving, and the anchor is never recorded
+  as folded: a record naming the surviving row as folded, such as a cycle's
+  closing link, would leave report-merge no holder that no link folded to
+  infer the root from once that row is re-keyed. Hanging the records from
+  the member when the surviving row lies between that member and the folded
+  row would leave a member with no incoming fold. Each turned record lists
+  all of the row's sources, since the row no longer knows which member
+  brought which. A row whose records reach neither, such as a physical disk re-keyed
+  after it took the member in, stays standing rather than leave its own ID
+  resolving nowhere. A turned record keeps each side's own sources with the
+  side, and a record the pass adds for a link closing a cycle carries them
+  too, so report-merge (above), which picks links by member from these
+  records, can cut a reported member from every path of the chain.
+  Availability-owned members stay
+  unmerged, and saved members never join a chain: two live rows that only a
+  saved row links stay apart until it reports.
+  `TestManualLinkChainsFoldTheSameWayInAnyLinkOrder` (`registry_test.go`)
+  rebuilds twelve chains in every link order and checks both rebuilds, a live
+  refresh of each record source, the read-state overlay and a registry
+  seeded from it: one row of the expected type, every member resolving to
+  it, every link pair recorded and the same fold records in every order. On
+  main ten of the twelve leave a member standing, pick another root or miss
+  a link pair in some order; the other two (a record-sourced storage chain
+  and one recreated member) guard what already worked.
+  `TestManualLinkChainRefreshNeverLeavesAnAgentHoldingAGuest` refreshes in
+  a vSphere host the rebuild had not seen and checks the storage holding the
+  guest keeps the chain until the next rebuild keeps the guest.
+  `TestManualLinkToAJoinedNodeFoldsTheSameWayInAnyLinkOrder` links a
+  Proxmox node's own ID, which the inferred join with its agent consumed,
+  and a pool, in both orders: the joined row's fold of the node is recorded
+  before any link resolves its members, so the pool link joins the chain
+  whichever link the store lists first.
+  `TestSavedLinkMemberHoldsFollowTheChainInAnyLinkOrder` (`resolve_test.go`)
+  holds a saved agent under the pool its VM partner folds into, and under
+  its guest over a competing pool, in both orders, in the overlay and the
+  resources API's seeded registry; on main each case answers to the wrong
+  row in one order.
+- A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
+  an agent chosen as primary over a TrueNAS system still carries the
+  system's facet, and the system's pools re-parent to the merged row.
+- The registry remembers each resource a manual link folded into its
+  primary. A folded resource is still observed, so neither pin-driven nor
+  record-declared succession may succeed its ID: that re-keyed the link onto
+  the primary itself, which split the pair on the next rebuild, and already
+  broke snapshot links whose primary is a machine-keyless agent-type row,
+  such as a Proxmox node.
+- Each side of a link is pinned only from its own identity, captured when
+  the link first joins it in a rebuild (`recordLinkOwnPin`). A side with no
+  pinnable identity (not agent-shaped, or no strong key) writes no pin, and
+  a pinnable folded side keeps its pin under its own canonical ID. The merged
+  primary used to be pinned with both sides' keys, and the store's
+  one-owner-per-key rule then deleted the folded side's pin. A Proxmox node's
+  pin records its qualified endpoint as the hostname, so the node's next
+  rebuild completed the linked agent's machine key from that merged pin,
+  minted the agent's machine-derived ID and merged with the agent by ID
+  before the link applied. With the node as primary, succession then
+  rewrote the link into a self-link on the agent's ID; in either direction,
+  removing the link left the pair merged.
+- A link side rewrites its whole row (`ReplaceResourceIdentityPins`)
+  instead of upserting it. Like an upsert it keeps the stored fields its
+  own pin leaves empty, so evidence from an earlier observation survives a
+  weaker one, but it never keeps a machine, DMI or cluster-and-hostname key
+  another resource holds this rebuild, including a cluster key a kept
+  hostname would complete. That is how a key an earlier release borrowed
+  into the row from the merged identity leaves it; a key a resource reports
+  now also beats one a link side's row only kept, as the store already
+  hands a moved key to the new pin. The store gives each strong key one
+  owner and deletes any other row holding a key a written pin carries, so a
+  folded side drops each own key held by a live non-link resource's
+  upserted row (an upsert cannot drop a field), a live link side's own pin,
+  or a folded side earlier in canonical-ID order. It writes no pin when no
+  strong key is left, or when it would lose the machine or DMI key it
+  reports: a cluster-only row reads as a machine-keyless host's, which
+  cluster-slot succession lets a later machine in that slot absorb. A row kept for a side that writes no pin goes
+  when another written pin carries one of its keys, such as the folded
+  agent's own pin carrying the machine key an earlier release borrowed into
+  a Proxmox node's row. That hand-back only reaches a row the node cannot
+  complete from: while the node's qualified endpoint, or its cluster and
+  name, still resolve to that row, completion supplies the borrowed key
+  before any link applies, so the pair merges by ID and succession rewrites
+  the link into a self-link, as it did before this change. A link side whose
+  row loses a borrowed machine key becomes a machine-keyless row, open to
+  the cluster-slot succession any machine-keyless host gets. Two live resources that share a strong key
+  still take it from each other on alternate rebuilds, as before. Evidence
+  a later record pass of the same rebuild merges into an already-joined row
+  reaches neither side's pin.
+- A folded resource's canonical ID resolves to the primary holding it. The
+  registry indexes the folded IDs named by the merged resource's link fold
+  record (`linkFolds`, `recordManualLinkFold`), which covers IDs folded along
+  a chain of links, both when a link applies and when resource seeding
+  copies the record in. The monitor's rebuild, a registry seeded from its listing (the resources API,
+  which then replays availability checks) and a read-state overlay therefore
+  resolve them alike. The index follows the holding rows, so a holder that a
+  later link merges away or that is re-keyed in place keeps the answer
+  consistent. An availability check configured against an agent later
+  linked into its guest lands on the merged row, as a check configured
+  against the primary would. "A manual link keeps only the primary's own
+  checks" still holds: the merge never carries the folded resource's
+  projected checks; only the check's own reference resolves again.
+  `ResolveReferenceID` and `GetByReference` follow the fold as well, as the
+  folded agent's alert reference (`agent:<host ID>`) already did through the
+  merged row's canonical aliases. Alert intent, operator-state reads and
+  writes through the resources API, Patrol's finding operator-state
+  projection and resource lookups by the folded ID
+  (`GET /api/resources/{id}`) therefore reach the merged row. Patrol
+  resolves a finding's reference through the monitor's current read
+  state before it reads, so a finding raised before the link reads the
+  merged row's maintenance and monitoring mode, not an operator-state
+  row left under the folded ID, whenever that read state folds the
+  agent, or holds the saved agent beside the guest after a restart
+  (above). The folded row's remediation lock is the one part of it that
+  does not stay behind: the store shares it across the link's component when
+  the link is recorded or unlinked, and once on upgrade for earlier links, so
+  the gates, which read the merged row's ID, still refuse (the remediation
+  lock note under the operator-state contract above, which also states its
+  limits). History does
+  not follow the fold: a history binding persists, and
+  `expandHistoryAliases` walks bindings in both directions, so binding a
+  folded ID would join the two journals for good. Folded IDs are never
+  `SupersededCanonicalIDs`, which alert-configuration and availability-link
+  migrations rewrite permanently; the stored link stays as the operator
+  wrote it. A live row with a folded ID answers for itself. Two rows holding
+  one folded ID resolve to neither, without falling through to weaker
+  matches such as a hostname alias. Folds ride in-memory clones only; a
+  serialized listing loses them, as it loses source parents.
+  `availability_link_test.go` pins both link directions through two
+  rebuilds in all three registries
+  (`TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary`), a chain
+  (`TestAvailabilityLinkFollowsChainedLinkFolds`) and the index cases
+  (`TestLinkFoldIndexFollowsItsHolders`).
+  `TestResourceUnlinkSplitsManuallyLinkedPair` pins the API lookup: the
+  folded agent's ID answers with the VM while linked and with the agent's own
+  row once unlinked.
+  `internal/api/ai_handlers_more_test.go`
+  (`TestPatrolFindingOperatorStateFollowsLinkFoldedReference`) pins the
+  Patrol read against the resources API's write.
+
+`registry_merge_policy_test.go` pins the record links in both directions
+through two rebuilds and the live supplemental refresh, and checks that a
+registry seeded from the monitor's listing through resource ingest, as the
+resources API seeds, lists the same rows
+(`TestManualLinksJoinRecordIngestedResourcesInMonitorRebuild`). The same file
+pins the node case (`TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence`),
+record-declared succession (`TestRecordDeclaredSuccessionSparesALinkFoldedResource`)
+and both payloads (`TestManualLinkKeepsProviderPayloadsThePrimaryLacks`).
+It also pins each side's own pin for a qualified-endpoint node linked to an
+agent, standalone and clustered, in both directions, through three rebuilds
+with no steady-state pin writes and a separate pair once the link is removed
+(`TestManualLinkPinsEachSideFromItsOwnIdentity`), an unclaimed stored field
+kept without a rewrite every rebuild
+(`TestManualLinkSideKeepsAnUnclaimedStoredField`), a shared
+cluster-and-hostname key kept by the live primary while the folded side keeps
+its machine key, and handed to the folded side when the primary's row only
+kept it (`TestManualLinkFoldedSideNeverTakesALiveResourcesKey`), a kept
+hostname refused where it would complete another resource's cluster key
+(`TestManualLinkSideKeepsNoHostnameThatCompletesAHeldClusterKey`), no pin for a
+folded side whose machine key another host holds
+(`TestManualLinkFoldedSideWritesNoPinWithoutItsMachineKey`), a folded side
+re-pinned after the primary's new pin deletes its widened row
+(`TestManualLinkFoldedSideKeepsItsPinWhenAPrimaryClaimsItsWiderRow`), and the
+agent's own pin taking back the machine key an earlier release borrowed into
+a node's row (`TestManualLinkReturnsABorrowedMachineKeyToItsAgent`).
+`store_test.go` (`TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps`) pins
+replace against upsert on both stores.
+`monitor_adapter_read_state_test.go`
+(`TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds`) pins the
+thresholds on the rebuild, supplemental and overlay paths, and
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins the
+published inventory with no continuity, an unrelated absent machine and the
+linked agent's own saved enrollment, and in each case that the read state,
+alert intent and a registry seeded from the read state resolve the agent to
+the guest without merging the saved agent into it.
+`resolve_test.go` pins the hold in the read state and the
+resources-API registry, the fold once the agent reports
+(`TestContinuityAgentLinkedIntoLiveGuestAnswersToTheGuest`), a saved primary
+that leaves the live member its own identity
+(`TestContinuityPrimaryLeavesLiveLinkMemberItsOwnIdentity`), an observation
+merging into a saved row (`TestObservationMergedIntoASavedRowLetsItsLinkFold`)
+and holds through later folds, saved primaries and cycles
+(`TestLinkHoldsFollowTheirPrimaryThroughThePass`); `clone_test.go`
+(`TestCloneResourceKeepsContinuityMarker`) pins the marker riding clones and
+resource seeding.
+`internal/api/resources_link_continuity_test.go`
+(`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest`) pins the
+resources API's write and Patrol's read on the same store.
+
+### Mock-mode unified view applies operator links
+
+The mock fixture graph uses MonitorAdapter.PopulateSnapshotAndSupplemental for
+the same resource generation boundary as the live monitor. It ingests snapshot
+and supplemental records, applies operator links over the assembled estate,
+ingests availability last, and makes the final freshness verdict. Supplemental
+sightings age under the monitor's source thresholds, including TrueNAS-only VMs.
+Fixtures still synthesize provider data. This shared generation does not exercise
+provider collection or every poller merge/rebase.
+
+The fixture registry has no store. NewRegistryWithManualLinks supplies the links
+from the monitor adapter's current generation. Rebuilding a storeless registry
+carries explicit links and exclusions from its previous generation. It carries
+no previous resource data and cannot persist identity pins, canonical-ID
+successions or change records. A store-backed rebuild uses freshly loaded
+decisions when its store is readable and retains previous decisions when
+loading fails.
+
+Links are judged across all non-availability sources, so a chain sees every
+member before choosing its primary. Availability references to folded resources
+project onto that primary, whether expressed through source references or
+canonical IDs. An agent linked into a guest leaves the agent listing and the
+guest carries its facet. GetAllWithMetricsTargets captures metrics targets with
+the resources and indexes source mappings once for the view.
+
+The broadcast, /api/state, GetUnifiedReadStateOrSnapshot and
+UnifiedResourceSnapshot read this fixture view. Links reach it when the
+monitor's next rebuild loads them, as in live mode. The data view cache compares
+fixture freshness and each link's pair, primary and creation time. The structure
+view compares the fixture structure revision and the same link fields. Creation
+time matters because changing the oldest link in a chain can change its primary.
+Link changes rebuild both views without a fixture tick. No-link readers use the
+shared memoized snapshot. Linked readers build their monitor's own view when
+fixture data or links change. Concurrent cache misses can each build a view.
+
+Freshness is assigned in publication order. A view with identical fixture
+freshness and links retains its predecessor's value. Every different view gets
+a later value than all previous publications, including a slow build that
+finishes after a newer one. The resources API reuses its registry only while
+that published freshness is unchanged.
+
+The fixture factory supplies links but no exclusions. Presentation readers
+consult their monitor or store-backed registry exclusions, but cannot undo an
+automatic merge already made within the fixture graph. This existing limitation
+remains at the fixture input boundary.
+
+Proof in internal/mock/platform_fixtures_test.go:
+TestFixtureGraphMatchesMonitorSupplementalFreshness compares fresh and aged
+TrueNAS sightings with the live generation. TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary
+checks cross-source chains and availability projection.
+TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked checks
+memo isolation. TestMonitorAdapterKeepsInMemoryManualLinksAcrossGenerations in
+internal/unifiedresources/monitor_adapter_generation_test.go checks storeless
+rebuilds. TestMonitorGenerationAppliesManualLinksAcrossSources and
+TestMonitorGenerationJudgesLinkedReadingsWithConfiguredThresholds in
+internal/unifiedresources/registry_merge_policy_test.go exercise the canonical
+boundary. TestMockUnifiedViewAppliesOperatorManualLinks and
+TestMockUnifiedViewFollowsALinkCreationTimeChange in
+internal/monitoring/monitor_host_agents_test.go preserve broadcast, API, cache,
+creation-time and no-durable-history behavior.
 
 ### Provider link network corroboration
 
@@ -5781,6 +7613,197 @@ ambiguity test rejects multiple opposite-source candidates in both directions.
 These are synthetic source proofs, not appliance acceptance or a claim about
 which collector produced a reporter's row.
 
+### Linked SAS path join refuses a contradicting WWN
+
+`resolveLinkedPhysicalDisk` falls back to joining a Proxmox disk to its linked
+agent's disk on the same path when the agent reports SAS, because Proxmox may
+report a SAS address as the serial (#1595). That path fallback is refused when
+both sides carry WWNs that name different disks
+(`diskinventory.HardwareIdentityConflict`, under which the agent's NAA field
+spelling equals the Proxmox WWN and udev's 64-bit NAA 6 prefix is no
+conflict): the agent's row may be the slot's previous occupant, retained by a
+silent agent, and the join would hand the replacement that disk's serial,
+readings and canonical resource. A hardware identity match still joins on its
+own, and without a WWN on either side the path fallback stands. The seeded
+source mapping a rehydrated registry reuses applies the same refusal (next
+section). `TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale
+row and both same-disk shapes; monitoring's SMART merge applies the matching
+guard first.
+
+### Linked disk join honours operator splits
+
+`resolveLinkedPhysicalDisk` joins an agent SMART disk and the Proxmox disk
+under one linked host by hardware identity or, for SAS and identity-less
+disks, by device path, ahead of `findMatch`. It read no exclusions, so
+`POST /api/resources/{id}/report-merge` on such a disk (the drawer's Split
+merged resource) recorded its exclusions and answered 200 while the disks
+merged again on every rebuild. `resolveLinkedResource` now refuses the join
+when an exclusion separates the observation's source-specific candidate ID
+from the one disk it matched; a refusal never makes another candidate unique,
+so the path join's ambiguity rule stands. `physicalDiskSplitLocked` decides
+this for the three joins that match a disk observation by identity or path
+(this one, `findMatch` and `physicalDiskIDForMachineLocked`): the exclusion
+may name the existing disk's current ID, or the unscoped hardware-keyed or
+machine-scoped ID either disk's identity mints. So a split survives the
+re-key a same-serial disk on another machine causes, in either direction
+(`findMatch` used to read only the current ID), and an agent disk that
+smartctl finds in standby, reported without its serial and so keyed by its
+device, stays apart from a Proxmox observation still carrying that serial.
+Agent disks reach the registry only through the snapshot, which ingests them
+before Proxmox disks, so the agent's row holds the merged ID and keeps it,
+and the Proxmox observation is the one report-merge's pair against that ID
+names. Split, the Proxmox row takes the ID it holds alone or, when both carry
+one hardware identity (which the agent's row holds), its source-specific ID
+through `findMatch`'s excluded branch; that row takes the identity's ID
+while the agent's disk is absent or reports no serial, as for any identity
+split. An exclusion naming only the agent's candidate splits nothing, since
+the agent's row holds the merged ID, so a report-merge filtered to the agent
+source leaves the disks merged (it answers 200, or 400 "No exclusions
+created" where the merged ID is the agent's own candidate); the drawer sends
+every merged source. The monitor rebuild and a resources API registry built from the
+snapshot apply the split on their next build; the registry seeded from the
+monitor's listing follows once the monitor has rebuilt.
+
+The PVE disk poller honours the split too. `mergeHostAgentSMARTIntoDisks`
+pairs the linked agent's SMART rows with Proxmox disks by WWN, serial or path
+before the registry sees either, and asks
+`MonitorAdapter.ProxmoxDiskAgentSMARTSplit`
+(`internal/unifiedresources/physical_disk_agent_split.go`) about each pair it
+is about to make. The answer is `physicalDiskSplitLocked`'s, applied to the
+agent's disk as the registry generation holds it (as its row would key it
+when the generation does not hold it) and to the Proxmox observation by its
+slot's source-specific candidate ID, so the exclusions that keep the
+registry's rows apart keep the poller's pair apart, in the same forms: one
+naming only the agent's candidate splits nothing, a replacement in the slot
+inherits no split recorded against the disk it replaced, and a manual link
+that leaves the generation holding both observations as one disk is the
+operator's later decision, so the poller pairs them again while it stands. The
+decision reads the exclusions and that mapping, never what the pairing would
+fill into the Proxmox row, whose serial it re-keys. A split Proxmox row takes
+nothing from the agent's row: not its SMART attributes or I/O, health, serial,
+WWN, type, controller, pool or temperature, whether from the row or from the
+node's sensor lists. The node poll takes the SMART list from the linked agent
+while the agent is reporting and its report carries a usable temperature (the
+SSH collector's otherwise), and `mergeNVMeTempsIntoDisks` matches a list's rows
+to the disk by the same identity, so `dropNodeSensorTemperature` drops a
+reading taken from the agent's list, and the legacy NVMe list's guess by order,
+which names no disk, while a reading from the SSH collector's list stays. The
+rule is read from the agent's report as the disk poll sees it, so a report that
+changed since the node poll can misjudge one poll. Nor does the disk
+keep the agent's claim on its temperature alert (`AgentSMARTReported`): the
+agent's `CheckHost` alerts on the agent's own disk and the PVE disk check has
+no agent-supplied reading of the split disk to judge, so one reading never
+alerts twice, and Proxmox's own health and wearout verdicts of the disk are
+evaluated as for any disk. A refused row never makes another row match. The
+record is marked `AgentSMARTSplit`, so the poll's evidence retention
+(`preserveUnavailablePhysicalDiskEvidence`) restores nothing into it: nothing
+records which retained value Proxmox collected and which the agent filled, so
+its serial or ZFS pool is absent for a poll that cannot collect it and returns
+with the next that can, and a Proxmox serial that goes unreported for a poll
+can move the disk to a WWN- or slot-keyed ID, and its history to that key,
+until it returns. The decider is asked once per matched row, about the
+observation under its own ID, the key the registry holds it by, so the poller
+follows the registry exactly: a split recorded under another key of the same
+disk (a controller member's stand-in is keyed by its target, a Proxmox poll's
+record by device alone) names an observation the other key's rows do not
+carry, as for the registry. When the Proxmox disk query fails,
+`physicalDisksFromHostAgentSMART` stands in for the node's disks except for
+the rows the operator split from the Proxmox disk in their slot, judged under
+the stand-in's own ID. Such a disk gets no stand-in, which would be the
+agent's disk again, so while the query fails its Proxmox record is not listed
+unless every row of the node is split, when the node keeps its last records as
+any node Proxmox cannot be queried for does.
+
+What the split does not reach. The poller applies a split on the first full
+disk poll that collects the node from Proxmox and matches the agent's row
+after the registry generation holds it. Until then a Proxmox record already
+merged keeps the agent's data (the next full poll, five minutes by default,
+`PhysicalDiskPollingMinutes`): the skipped polls between mark the record split
+and drop its node-sensor temperature but leave the rest as it is, a node
+Proxmox cannot be queried for keeps its last records, and a poll in which
+the agent does not list the disk marks nothing, so retention restores the
+earlier record's temperature, I/O, controller, target, serial and pool as
+last-known evidence. The query-failure fallback judges its stand-in row by the
+row's own identity, so it does not apply a split that names identity only the
+Proxmox disk carries (an agent disk in standby reports no serial). Two split
+rows that share a serial read one serial-keyed history
+(`PhysicalDiskMetaMetricID`), and a PVE disk alert lifecycle row whose
+recorded identity matches both, with no WWN only one of them shares, stays
+under its PVE reference (`proxmoxDiskAlertOwner` never breaks a tie by path),
+so neither row's canonical history lists it. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a split disk that Proxmox reports under
+another device path is a new observation the exclusions do not name and
+joins again until split again. A split names IDs: one recorded while the
+agent's disk reported no serial, or against an agent disk whose identity
+Proxmox does not carry (a SAS disk whose Proxmox serial is its transport
+address), stops applying while the agent's disk reports otherwise, as every
+exclusion keyed by a canonical ID does. In a registry seeded from a listing
+where another disk was split onto a slot's source-specific ID, a refused
+observation at that slot (next section) whose linked join a split refuses
+lands on that same ID and merges into the refused disk, as the slot guard's
+own replacement ID would; no production path replays Proxmox disks over a
+seeded registry.
+`TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost` pins the exclusions
+report-merge records (all candidates, or the Proxmox candidate alone), one
+naming only the agent's candidate and an unrelated one, for four shapes (a
+SAS disk whose Proxmox serial is its transport address, matching NVMe
+serials, an agent disk without a serial behind a USB bridge, and Proxmox's
+literal `unknown` serial), through three rebuilds of a SQLite-backed monitor
+adapter in the monitor listing and the resources API's registry seeded from
+the rebuilt listing or built from the snapshot, plain and for presentation;
+then a relink of the split rows, the exclusions report-merge records on the
+relinked disk (the link's own pair and both candidates), the agent's disk in
+standby, a same-serial disk appearing on another machine, and a split
+recorded while such a disk was present that holds once it leaves. At each of
+those steps the test also asks `ProxmoxDiskAgentSMARTSplit` what the poller
+would, and `TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` drives the poller itself
+through the same four requests for a SAS disk paired by path and an NVMe disk
+paired by serial, with an open PVE temperature alert, the health alert the
+agent's failure raised, and a failing Proxmox disk query.
+
+### Seeded slot mapping refuses a replaced disk
+
+`ingestRecord` honours a source key's existing mapping, such as one
+`IngestResources` seeds from persisted unified resources, before any
+identity matching. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a disk swapped into the slot arrived
+under the previous disk's key, and `mergeInto` kept that disk's canonical ID
+and, where an agent report had been merged in, its serial, WWN, temperature
+and failed health. A Proxmox disk observation now refuses the mapping when
+the two carry hardware identities naming different disks
+(`proxmoxDiskSlotHoldsAnotherDisk`: `HardwareIdentityConflict` after
+`HardwareIdentityMatch`). Only fields reported on both sides count, so a
+missing serial or WWN, including Proxmox's literal `unknown`, is no evidence.
+Differing serials are no evidence when either side is SAS, because Proxmox
+may report the SAS address there (#1595), or when the mapped disk was merged
+with an agent report, whose serial `mergeInto` may have kept (collection
+status does not reliably say which serial it holds), unless Proxmox read the
+drive's own serial too, by the rule monitoring's
+`hostAgentSMARTSerialComparable` applies: NVMe on both sides, or an agent
+SATA disk under Proxmox vendor `ATA` that Proxmox does not type `usb`, not a
+SCSI designator or a USB bridge's serial. A refused key falls through to the linked-disk join,
+`findMatch` and `chooseNewID` like an unmapped one, except that none of them
+may merge it into the refused disk: an ID that lands on it is replaced with
+the key's source-specific ID. Agreement still wins, as it does in identity
+matching, so drives that share a serial they do not own, such as a USB
+bridge's, read as one disk: a second swap in the same enclosure joins the
+first replacement, which reported the same bridge serial. That belongs to
+identity matching, not this guard. The refused disk keeps its Proxmox
+facet and is not updated, so until the registry is rebuilt both disks answer
+to the slot's PVE alert reference, and canonical reference resolution treats
+that reference as ambiguous rather than handing it to either. A later
+rehydration may seed the slot key to the old disk again, and the refusal
+repeats. No current caller ingests Proxmox disk records over a seeded
+mapping: the monitor rebuilds a fresh registry each poll, and the resource
+API, host-continuity and Patrol registries seeded from unified resources do
+not replay Proxmox disk records. This closes the registry contract, not a
+reported symptom. `TestRegistrySeededSlotMappingRefusesReplacedDisk` covers
+SATA (with and without a new WWN), SAS, USB-enclosure and Proxmox-only
+replacements, plus eight same-disk controls (including a SCSI designator
+from an agent without collection status and a USB bridge serial under
+Proxmox vendor `ATA`), each through two rehydrations.
+
 ### Drawer tab selection survives a transient snapshot change (#1723)
 
 The shared resource detail drawer keeps the operator's selected tab while a
@@ -5788,14 +7811,27 @@ live snapshot is being replaced. `useResourceDetailDrawerState` falls back to
 Overview only when the drawer starts showing a different resource; it must not
 reset merely because the current tab is momentarily absent from the derived tab
 list. A merged host's metrics target can be omitted for one snapshot during a
-refresh, and treating that as a permanent loss of the History tab made the
-Proxmox -> Backups drawer silently jump back to Overview. Each tab body already
-renders its own availability notice while its tab is unavailable, so the
-selection can be retained and recovered without manufacturing a target. The
+refresh, and treating that as a permanent loss of the then History tab made
+the Proxmox -> Backups drawer silently jump back to Overview. History charts
+now sit on Overview and simply withdraw while the target is absent; the other
+tab bodies render their own availability notice while their tab is
+unavailable, so the selection can be retained and recovered without
+manufacturing a target. The
 `ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
-drawer at desktop and narrow widths: selecting History, dropping the merged
-metrics target, and restoring it must keep the selection and recover the chart.
+drawer at desktop and narrow widths: selecting Manage, dropping the merged
+metrics target, and restoring it must keep the selection and bring the Overview
+charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,
+supplies an explicit offline WebSocket context like the other drawer fixtures;
+it threw before rendering until 2026-10-14. With the #1723 reset reintroduced
+(dropping the target sends the drawer to Overview) the proof fails at both
+widths, so it detects the regression it guards.
+`scripts/check-pbs-host-history-correlation.cjs` uses the same fixture and
+asserts the Overview tab stays selected with stable chart paths and Identity
+rows across refreshes; it accepts the Metrics Target row's absence when the
+Identity card suppresses a repeated identifier, and still requires the
+intercepted history request to name the host series (forcing the service key
+makes it fail).
 
 ### Canonical reference resolution uses a derived alias index
 
@@ -5833,3 +7869,607 @@ The Actions page now hides its Patrol Watch only guidance while the
 presentation only: the action audit list, approval counts, review dialog,
 routing and every recorded action outcome are read and rendered exactly as
 before, and no resource or action identity changes.
+
+### Action review links to the resource it acts on
+
+The governed action review tells the operator to check the actual resource
+before approving, retrying or closing an action whose outcome is unknown, but
+linked only back to Patrol. With `showResourceLink`, `ActionReviewDialog`
+resolves `audit.request.resourceId` through `useResolvedResource`
+(`frontend-modern/src/features/platformNavigation/useResolvedResource.ts`)
+and shows `Open resource` from `buildResourcePagePath`, with the audit's
+recorded resource name and type as the fallback while the registry answers or
+when it cannot resolve the id. Only the Actions page passes it: it keeps the
+review in `?action=`, so Back from the resource reopens the same review.
+Patrol holds its review in memory and already links the subject, and the
+Docker container controls open the review from the resource itself, so they
+get no link and no lookup. It is a link only: the action ledger, plan,
+decision and every recorded outcome are read and rendered as before, and no
+resource or action identity changes (`ActionReviewDialog.test.tsx`,
+`Actions.requestOwnership.test.tsx`).
+
+### vSphere Overview leads with vCenter health signals
+
+The vSphere Overview answers "is anything in trouble?" before inventory, as
+the TrueNAS Overview does. While the Overview is active the page also
+hydrates the Health tab's resource query (hosts, VMs, datastores and
+networks) and, when `buildVmwareIncidentRows` returns any rows from those
+resources' canonical `incidents`, renders the shared `VsphereAlertsTable`
+above the hosts table without its filter toolbar. Nothing renders when
+vCenter reports no signals. The Overview's own model, workload snapshot and
+navigation facets still come from the Overview query; the Health tab keeps
+the filterable table.
+
+### Correlated guest disks retain the independent agent source
+
+`VMView.LinkedAgentDisks`, `ContainerView.LinkedAgentDisks` and
+`HostView.CurrentAgentDisks` expose detached agent-owned filesystem inventory
+with the agent source's own receipt time, independently of agent memory.
+Missing, non-online, expired, stale, undated or future agent sources cannot
+supply current disks just because the platform row keeps reporting. The
+registry's configured source lease remains authoritative; this adds no new
+expiry duration. Existing `HostView.Disks` retains last-known presentation.
+
+`linked_agent_disks_test.go` covers selection, source timestamps, nil views
+and detached inventory across all three views. No public model field, inferred
+link, guest command or safety-pause clearance is introduced.
+
+### Unlink replaces the pair's operator link
+
+`POST /api/resources/{id}/link` records a `ResourceLink`; unlink and
+report-merge record a `ResourceExclusion`. An operator decides each resource
+pair one way, and the later decision replaces the earlier: the store's
+`AddExclusion` deletes the pair's link rows and `AddLink` deletes its
+exclusion rows, in the same transaction as the write, matching both ID
+orders because canonical-ID succession can store either. Unlink used to add
+only the exclusion. The link row survived, and `applyManualLinks`, which
+never consults exclusions, kept the pair folded in the monitor's rebuilds and
+in the resources API's registry, so the agent facet stayed on the VM and the
+agent row stayed hidden although the API answered "Resources unlinked".
+`GetLinks` and `GetExclusions` return only each pair's latest decision
+(`effectiveManualPairDecisions` in `manual_link_decisions.go`), so a store
+that still holds both rows for a pair, written before this change or
+rewritten onto one pair by succession, reads its later write, and a tie
+reads as apart. Every registry loads its links and exclusions from its store
+when it is constructed, so the monitor's rebuild and the resources API's
+store-backed registry apply one decision with no exclusion check in
+`applyManualLinks`. Unlink keeps the exclusion, so identity matching and
+presentation coalescing also keep a pair apart that would otherwise match
+automatically.
+
+Identity pins honour the exclusion too. While a Proxmox node was linked to a
+standalone agent, the merged resource's pin could record the node's endpoint
+hostname with the agent's machine key. After unlink the node completed that
+key in `completeIdentityFromPins`, minted the agent's machine-derived ID and
+folded into the agent by ID, a path no exclusion check sees, so the pair
+stayed merged with the link row gone. A pin whose canonical ID the operator
+excluded from the ID the record takes without the pin (its `chooseNewID` or
+source-specific ID) now completes nothing. This covers pins already written
+that way, not only new ones. A Proxmox node's link to an agent honours the
+split as well; the next paragraphs cover it.
+
+An operator's split overrides a Proxmox node's link to a pulse-agent. That
+link is normally Pulse's own inference rather than a resource-store
+decision: monitoring links a node to the one agent whose endpoint address or
+hostname matches it (the agents API can also set it by hand), and the
+registry joined the pair in `resolveLinkedResource` (a link both sides
+declare, or a node-side link the agent's hostname corroborates) before
+`findMatch` ran. The linked node had already taken the agent's identity in
+`resourceFromProxmoxNode`, and with an agent reporting a machine key it
+minted the agent's machine-derived canonical ID before the agent was
+ingested. Neither path read exclusions, so the drawer's Split merged
+resource (report-merge) on a node and its agent answered "Resource split
+applied" and left the pair merged on every rebuild, in the monitor and in
+the resources API. Cloned machines and reused short hostnames are where that
+link is wrong, and report-merge exists for wrong merges, so the split wins.
+
+`nodeAgentSplit` (`proxmox_node_links.go`) decides the pair: the operator
+split the node off when an exclusion names one of the node's own IDs (its
+source-specific ID, or the ID its identity derives without a machine key,
+which a Proxmox node never reports itself) against one of the agent's (its
+source-specific ID, the ID its identity derives, the ID it holds, or the ID
+the joined pair derives). Unlink and report-merge name the merged ID and the
+`SourceTargets` candidate IDs, and the split node can hold an ID it did not
+hold while joined, so the decision is read across those sets, not one exact
+pair. Where the pair merged under the agent's machine-derived ID, an
+exclusion naming only the agent's candidate against that ID does not count:
+report-merge records the same pair when it splits another source, such as a
+Docker host, off the agent. Where it merged under the node's own ID (an agent
+reporting no machine key), that exclusion splits the agent off the node.
+`splitProxmoxNodeLink` keeps a split node from taking the agent's identity in
+`ingestSnapshot` and remembers the agent for identity-pin completion, which
+refuses the agent's machine key from a pin written while they were joined
+when the node is split from the agent its own link or an agent row holding
+the pin's ID names, or from the remembered agent where the pin can be that
+agent's (no machine key or DMI UUID both report differs), so also while the
+agent is missing from the snapshot or stops reporting its machine ID;
+`resolveLinkedResource` refuses the link from either side. The registry adds
+no `LinkedAgentID` to the node: guests, agent deployment and service
+discovery act on a node's linked agent. The node then holds the ID its own
+identity derives, with only its hostname and endpoint address, which
+identity matching scores at 0.80 at most, under the 0.85 auto-merge floor.
+The agent holds the ID its own identity derives once pins complete it (its
+machine-derived ID when it has a machine key).
+
+The latest decision across the two sets wins, so a link between them that
+postdates the newest exclusion joins the pair again even where it names
+another pair than the exclusions do, as a relink of the two rows a
+report-merge left does (a registry now keeps each exclusion's `CreatedAt`);
+a tie keeps the pair apart. Once a relink rejoins them, the declared link
+folds one of the rows it names into the other's ID, and `applyManualLinks`
+records that as a `ManualLinkFold` on the joined row (it recognises the
+node's own IDs from the row's Proxmox facet, and the agent's source-specific
+ID), so pin succession treats the folded ID as observed and keeps the link
+instead of re-keying it onto the joined ID and handing the decision back to
+the older exclusions, and report-merge of the joined row names that pair. The paths
+that join rows after ingest apply the same decision: `applyManualLinks`
+skips a link between a node row and an agent row split after it, and the
+presentation filter (`ListForPresentation` and the broadcast) keeps such
+rows apart when no single exclusion names their IDs; an exclusion naming
+the two rows exactly keeps them apart there even against a newer link
+across the sets, which only a listing older than the registry's rebuild can
+present as two rows. It shares the
+presentation limit the broadcast paragraph below names: a third same-host
+row (another agent reporting no machine ID, say) that merges with one side
+first carries the pair into one row. `TestOperatorSplitOverridesProxmoxNodeAgentLink`
+pins report-merge, unlink naming the node's candidate or the split rows, an
+exclusion between the two candidates and one naming only the agent's
+candidate, for seven link shapes (declared both ways, node-side only and
+agent-side only, unclustered and clustered, an agent hostname in a different
+form, and an agent reporting no machine key), through three rebuilds of a
+SQLite-backed monitor adapter in the monitor listing, the broadcast coalesce
+and the resources API's registry seeded from the listing or the snapshot,
+after agent-first ingests (with and without the host in the snapshot) taken
+while the joined-era pins still stand; then a relink of the rows (also
+followed by an agent-first rebuild that persists its pins) and the same
+request again. An exclusion naming the merged ID
+against an unrelated ID leaves the pair merged, and the split node names the
+agent only where its monitor record does.
+`TestOperatorSplitFromOneAgentKeepsAnotherAgentsPin` keeps a node's own
+agent's pin while another agent it was split from declares it, and
+`TestOperatorSplitHoldsWhenTheAgentStopsReportingItsMachineID` keeps a split
+whose agent comes back without its machine ID.
+
+Monitoring's own link honours the split as well, at each place it reads the
+link as evidence: besides the readers below, the temperature read for a
+polled node skips a split agent in its exact-hostname fallback (the held-back
+link would otherwise leave the agent "unlinked" and matchable by name), while
+the check that drops a carried reading once its agent's lease lapses still
+finds a split agent whose hostname is the node's name, so a reading it
+supplied earlier does not outlive that lease. An agent the link tied to the
+node by address (an FQDN, say) is no longer found once split, and a reading it
+supplied earlier stays until the ordinary carry window ends: readings carry
+no source to find it by. `UpdateNodesForInstance` holds the link back before the
+merge key reads it, for the polled instance's nodes and for the retained
+nodes of the other instances, so an agent the operator split from a node
+never proves two connections' views of that node to be one machine. The node's
+`LinkedAgentID` and the agent's `LinkedNodeID` in `models.State` are what
+the agent's SMART inventory as the node's disk fallback, its disk-exclude
+patterns on the node's disks, guest discovery and commands (guests inherit
+the node's linked agent), agent deployment (`already_agent`), service
+discovery, the agent's LXC filesystems and the node and agent's shared
+alert correlation read, so leaving that link standing kept treating the
+two machines as one. The resource store holds the one record of the
+split. `MonitorAdapter.ProxmoxNodeAgentSplit` implements
+`models.NodeAgentSplitDecider` with `splitProxmoxNodeLink`'s rule over the
+two records, and the state holds back both sides of every link it splits
+wherever a link is written (the node poll's link before its merge key reads
+it, the reconcile after manual intent, an agent report). The decider reads
+the adapter's current generation and confirms a split it finds against the
+store's latest decisions. Monitoring writes links before the rebuild that
+loads a newer decision, so without that check a relink would stay held back
+for one more poll, and that rebuild would join the rows by the manual link
+alone, under the link's primary ID (for an agent reporting no machine key, a
+different ID from the one the node's link joins them under). A split
+monitoring misses for the poll before that rebuild is applied by the
+registry to the node's link on that rebuild, as above. With the link held
+back, the registry ingests a node naming no agent and an agent naming no
+node. Every server-side view keeps them apart, within the presentation limit
+this section records for a third same-host row, and the browser's realtime
+coalesce is the limit recorded below. A relink joins them again once
+monitoring infers the link on its next poll.
+
+The decider reads the agent under the ID the registry holds it under too,
+so an agent that stops reporting its machine key, whose pin keeps its
+machine-derived ID, stays split from the node in monitoring as in the
+registry. The agents API's node link (`Monitor.LinkHostAgent`) is the
+operator's newest decision about the pair, so before it records manual
+intent it removes from the store the exclusions that split that node from
+that agent (`LiftProxmoxNodeAgentSplit`, across the same ID sets). If the
+intent then fails to persist, it records them again with their original
+times (`RestoreProxmoxNodeAgentSplit`), and a removal that fails part way
+restores the ones already removed. A restore only fills a pair the operator
+has not decided about since: `ResourceStore.RestoreExclusion` declines a pair
+that has an exclusion in either order or a link recorded at or after the
+exclusion's time, checking and inserting in one transaction, so it does not
+replace a newer decision (it compares the records' times, so a decision
+written with an earlier clock reading looks older), while a link row older
+than the exclusion, left beside it by older data or canonical-ID succession,
+is superseded by it as it was before the take. The pair joins in
+monitoring at once and
+in the registry on its next rebuild. Report-merge's exclusion of the agent's
+own candidate from the machine-derived ID stays, because it never split the
+node. A split recorded after a manual link ends that intent on the agent's
+next report that finds the split confirmed in the store
+(`ProxmoxNodeAgentSplitConfirmed`), which records the agent's link as
+automatic in host continuity. The node is then no longer reserved for that
+agent, and the split holds back the inferred link. Until then, and while
+the store cannot be read, the persisted intent keeps its node. The agents
+API's unlink records no store decision: it clears monitoring's link, so the
+registry stops joining the pair through it, but a resources API link
+between their rows still joins them in the registry, and so can identity
+matching where a node completes a joined-era pin's machine key.
+`TestMonitorStateHoldsBackAnOperatorSplitNodeAgentLink` (`store_test.go`)
+runs the six requests above over four link shapes (unclustered, clustered,
+an agent hostname in another form, an agent reporting no machine key)
+through a `models.State` holding the adapter's decisions, over three
+poll-and-rebuild cycles per step in every view. It checks the state's links
+from the second cycle, checks that a report alone keeps a split pair apart,
+then a relink, an agent-first rebuild that persists its pins, and the
+request again. `TestMonitorStateHoldsBackSplitLinksItStartsWith` holds back
+the links a state already has when the decider is installed, and a manual
+link restored from host continuity once the reconcile writes it.
+`TestOperatorSplitStopsMonitoringTreatingNodeAndAgentAsLinked`
+follows a report-merge through the monitor's readers of the link and keeps
+them all linked under an unrelated exclusion.
+`TestManualNodeLinkReplacesAnOperatorSplit` covers the agents API's link
+after a split (and that a link to another node lifts nothing), a split after
+it, and a resources API relink.
+
+What the split does not reach: a relink through
+`POST /api/resources/{id}/link` joins the registry's rows, but monitoring
+links the pair again only where it infers the link or the agents API sets
+it, so a pair that only that link joins is one row that monitoring does not
+link, as for any manual link. The alert manager's record of which node an
+agent's usage alerts cover (`hostAgentNodeLinks`) changes when it checks the
+agent's next report, or when the agent goes offline, so the node's CPU,
+memory and disk alerts stay with the agent until then. Mock mode's
+consumers read the fixture graph, whose links ignore operator decisions,
+as the mock-mode view does. A rebuild that cannot read the store's links or
+exclusions carries the decisions of the generation it replaces, whole
+(`carryOverridesFrom`), even when only one of the two reads failed, so for
+that generation the registry keeps the pair split and applies the same manual
+links, and the decider finds the same split (it still confirms a split
+against the store's latest decisions when they can be read); the next
+readable rebuild loads the store's current decisions, one recorded or lifted during
+the outage included. Carried decisions keep the IDs they were loaded under,
+so a canonical-ID succession during the outage reaches them when the store
+can be read again. Only the decisions are carried: the rebuild still
+publishes its snapshot, since stale resource data is worse than stale
+decisions. The overlay a read builds for saved-host continuity carries them
+the same way. The resources API's own registry, rebuilt from the store for a
+listing, does not. A first generation built while the store is unreadable
+has nothing to carry and holds only what its reads returned. An exclusion that
+names the node by its source-specific ID stops naming it if the node's
+source ID changes, like every exclusion keyed by a canonical ID. A report
+reads the split before it stores the agent and the state reads it again
+when it does (for the agent's own link, then for each node linked to it),
+and the report uses the link the state kept, so a split the decider sees
+between those checks does not reach the node's back link, the agent's
+container filesystem readings, its alert coverage or its persisted
+continuity. The decider answers from the adapter's generation and confirms a
+split it finds against the store, so a split recorded since the last
+rebuild takes effect from the rebuild that loads it, and is applied to the
+link the next report finds. When that report drops the agent's link, or ends
+its manual intent, it also clears the container filesystem readings the
+agent had cached for the node's containers. Those readings are also checked
+when they are shown: a cached reading is not shown for a node the operator
+split from the agent that cached it (`State.NodeSplitFromAgent`), whether or
+not a report ever cleared it, so a report that infers no node for the agent
+(its name no longer matches, or matches several) and clears nothing does not
+leave it on show. The check is the split only: a reading whose link ended
+for another reason is used until it expires, as before.
+Physical disks inside one host join through `resolveLinkedPhysicalDisk`,
+which now honours their operator exclusions ("Operator split separates disks
+inside a linked host" above, upstream #2748). A node split also puts the two
+sides' disks under different parents, so they no longer meet there. The node
+split and the disk split remain independent operator decisions.
+Cluster- and hostname-derived IDs carry no source, so an exclusion recorded
+against another resource that derives the node's own ID (a Docker Swarm host
+reporting no machine key, named like the node in a swarm named like its
+cluster) also splits that node from its agent, and one splitting the node's
+candidate off its own ID while another source was merged there (a Docker
+host linked into it) also splits it from a later agent reporting no machine
+key, which joins under that ID. A rebuild that sees the agent in neither the
+snapshot nor the registry, with no node link naming it, cannot tie an
+exclusion naming the agent only by its candidate ID to the agent's key on a
+joined-era pin, so until the agent reports again the node takes that key
+and the agent's ID. The other way round, a node split from an agent that
+reports no machine key and declares it refuses any joined-era pin while its
+own linked agent is missing, keeping its own ID until that agent reports. An exclusion keyed by the
+agent's machine-derived ID stops naming the agent if the agent's effective
+canonical key changes (it stops reporting a machine ID and no pin restores
+it), as every exclusion keyed by a canonical ID does. The browser renders
+the split as the server presents it; see "The browser renders those rows as
+delivered" below.
+
+The resources API seeds its registry from the monitor's listing, which
+already has the link applied, so it cannot split the pair itself: an unlink
+shows on REST, `/api/state` and the websocket from the monitor's next
+registry rebuild, the same generation in which a new link reaches the
+broadcast. REST applies a new link at once, because its own registry applies
+the store's links on top of the seed. The mock-mode view now applies the
+current monitor generation's operator links too ("Mock-mode unified view
+applies operator links" above), so a mock unlink likewise needs that
+monitor rebuild to remove the fold from the seed. Mock fixtures that identity
+matching merged stay merged on every surface: the fixture graph is built
+without the store's exclusions.
+
+The websocket broadcast coalesced host views with
+`CoalescePresentationHostResources`, which honours no exclusions, while the
+resources API's `ListForPresentation` honours the registry's, so a host pair
+the operator split could be one broadcast row and two REST rows. The
+broadcast now coalesces through `Monitor.coalesceResourcesForPresentation`,
+which asks the read state that listed the rows for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh). The mock view and other views built from an
+already-unified list sit on a store-less registry, which declines, so the
+resource store's adapter supplies the exclusions instead. Either applies its
+current registry's exclusions through the same `presentationExclusionFilter`
+that `ListForPresentation` uses; a rebuild published between listing the
+rows and coalescing them is judged by the newer generation's exclusions for
+that one broadcast. Both surfaces share one known limit: the filter compares
+the IDs of the rows being merged, so a third same-host fragment that merges
+first can carry an excluded pair into one row.
+
+The browser renders those rows as delivered. Its realtime merge
+(`mergeCanonicalResourceSnapshot` and `mergeCanonicalResourceDeltaSnapshot`
+in `resourceStateAdapters.ts`, used by the websocket store and
+`useUnifiedResources`) used to join an agent-only row and a platform row
+(Proxmox, Docker, Kubernetes, vSphere or TrueNAS) that shared a hostname
+unless their machine IDs, DMI UUIDs or Proxmox provider scopes disagreed. It
+read no exclusions, so a host pair the operator split reached the browser as
+two rows and rendered as one. Every realtime payload (the websocket
+snapshot, its deltas and `/api/state`) already carries the server's
+presentation coalesce, so the browser now merges each row only with the
+previous row of its ID and never joins host rows. A split usually leaves one
+side on the joined row's ID, and that per-ID merge keeps what the incoming
+row omits, so the agent kept the node's Proxmox facts: the flattened
+`platformData` the Proxmox facet is rebuilt from, its platform scopes,
+`clusterId`, identity fields and canonical aliases. When the incoming row's
+own `sources` list lacks a source the previous row of its ID listed,
+`mergeCanonicalResource` rebuilds the row from the incoming one instead of
+merging. A list inferred from the facets a thin row carries is no such
+evidence. The rebuilt row keeps the REST-only enrichments the realtime
+payload never carries where the departed sources did not own them: platform
+scopes minus the departed sources' own that no surviving source, Docker LXC
+host or non-host facet supports (a Docker container in a Proxmox LXC stays on
+the Proxmox page when its availability check is removed, because its host ID
+still places it there, and an agent-reported disk keeps the Proxmox scope its
+ownership facet gives it; a host row's facets are no evidence, since
+canonicalizing flattened platform data synthesizes them), the source status
+of the sources that remain (status the pruning empties is deleted), discovery
+readiness unless a coordinate it names (`targetId` the reporter, `resourceId`
+the resource) differs from the same coordinate of the row's discovery target
+(realtime carries a target only for agent and Docker host rows, so a row
+without one keeps it unless the agent left), and action readiness unless the
+agent left. Everything else REST adds returns with the next REST refresh. The fast merge path never rebuilds
+a row: `sources` is outside its allow-list, so it patches the previous display
+row and a rebuild waits for the row's next full merge (see the limits below).
+
+Three rules keep REST enrichment from outliving a source. Source status is
+REST enrichment, since the realtime payload carries none, and the platform data
+merge and the top-level merge prune its entries to the sources the merged row
+lists (only a list the row carries itself counts; canonicalizing a thin row
+that carries none synthesizes one from its facets, which the merge cannot tell
+apart, so a thin row can prune the status of a source its facets omit); a
+joined host's `proxmox` entry otherwise kept the Machines page from
+listing the agent that was split off it, because that page reads source status
+as provider ownership. A previous row claims every source either of its own
+lists names, its top-level `sources` and its `platformData.sources`, so a row
+whose two lists disagree, because an enrichment of another generation landed on
+it or a shared array changed under it, is rebuilt as soon as the realtime row
+drops the extra source instead of carrying that source's metadata on. And the
+resources hook's full merge no longer hands the websocket store's rows to the
+merge: the store reconciles server changes into its own rows in place, and cache
+rows that shared a nested array with them, such as `sources`, flipped to the
+split value while keeping the REST enrichment of the joined era. It clones the
+store's rows once on that path, as the delta path clones each changed row.
+Known limits: a hook's own store is still created from its cache's rows, so a
+store commit can edit rows another cache entry shares (the claimed-sources rule
+rebuilds such a row on its next merge), and the fast merge path is
+content-equivalent to the full path only for a display row whose own lists
+agree, so enrichment of another generation can leave a departed source's status
+on a non-agent row until its next full merge. After a rebuild the browser
+judges whether REST-only scopes and readiness still belong to the row from
+names and target coordinates alone, because the realtime payload carries no
+provenance for them: a facet canonicalization synthesized from flattened
+platform data on a row that is not a host (a guest's `disks`, a storage
+row's `instance`, a Kubernetes node's kernel version) can keep the scope it
+names, a Docker host row (`docker-host`) can keep the agent scope through its
+synthesized agent facet, and a guest without a discovery target keeps the
+previous reporter's readiness when its reporter changes in the same interval
+without an `agent` source leaving (and loses it when an in-guest agent is
+unlinked while the node's reporter still serves discovery). The next REST
+refresh restores every one of these. `keeps an
+operator-split node and agent as two rows through snapshots and deltas`
+(`resourceStateAdapters.test.ts`), `keeps an operator-split host pair as two
+rows through a snapshot and deltas` (`websocket-unified.test.ts`), `keeps an
+operator-split host pair as two rows and an unchanged agent peer by identity`
+and `drops REST enrichment of a departed source when the store reconciles a
+split in place` (`useUnifiedResources.test.ts`) pin a split pair in the
+broadcast's shape through full snapshots, the delta that splits a joined row,
+later deltas and the resources hook (the last also that hook rows share no
+array with the store's), `rebuilds a row whose own source lists disagree once
+the realtime row drops the extra source` pins the claimed-sources rule, and
+`prunes source status entries of sources the merged row no longer lists` pins
+the status rule.
+
+A write leaves one row for its pair: `AddLink` and `AddExclusion` also delete
+a row of their own kind that succession stored in the other order, and the
+in-memory store replaces a pair's rows on every write and stamps `CreatedAt`
+as SQLite does. Reads keep the newest link per pair, so an older reversed copy
+cannot win with its primary, and drop exclusions older than it; duplicate
+exclusions already stored stay, which changes no decision. A registry resolves its `GetLinks` and `GetExclusions` results
+together in `loadOverrides`, so an unlink committed between the two reads
+cannot load both decisions for one generation. Report-merge undoes a link
+the same way (see "Report-merge splits operator-linked resources" below).
+`TestManualPairDecisionReplacesThePreviousOne` and
+`TestManualPairDecisionReadsResolveStoredConflictsByRecency` pin the store
+rule on SQLite and the in-memory store,
+`TestUnlinkSplitsHostPairWhosePinTookTheOtherSidesKey` links and unlinks
+node and agent pairs (IP and FQDN endpoints, either side primary) through
+three monitor rebuilds per step,
+`TestRegistryResolvesDecisionsAcrossItsTwoReads` loads a link read before an
+unlink and the exclusion read after it,
+`TestResourceUnlinkSplitsManuallyLinkedPair` drives link, unlink and relink
+through the API handlers against a monitor adapter rebuilt twice per step,
+and `TestMonitorAdapterCoalesceForPresentationHonoursExclusions`,
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pin broadcast
+and REST row counts for a split host pair.
+
+### Report-merge splits operator-linked resources
+
+`POST /api/resources/{id}/report-merge` records exclusions for the reported
+sources. For each reported source mapped to the merged resource it excludes
+the merged resource's ID and the candidate ID that source's record takes when
+no match is allowed (`ResourceRegistry.SourceTargets`), as before, which
+keeps an identity match apart. That candidate is derived from the merged
+resource's type, so for a source an operator link brought in it named
+neither side of the link: an agent linked into a VM got a `vm-`
+candidate, and an agent linked with a node or a Docker host keyed by its
+machine ID got a source-specific one. No link row matched, the link stayed
+applied, and the API answered "Merge reported" while the drawer's Split
+dialog toasted "Resource split applied". Two linked agents share their only
+source, so the API refused them as "Resource is not merged"; an applied link
+now marks a merge as well (the drawer still offers Split only for a resource
+listing two sources).
+
+`applyManualLinks` now records each link it applies on the merged resource
+(`recordManualLinkFold`): the link row's own pair, the resource that took the
+other in and the one folded into it, plus the sources the folded side
+brought, including anything links had already folded into it, so every link
+along a chain keeps its own pair. A pair is recorded once, since record
+ingest can recreate a folded side whose source mapping points at a holder of
+another type and fold it again, so a repeated pair adds its sources to the
+fold already recorded (the holder still carries what the earlier fold
+brought). The record is unexported and rides in-memory
+clones, so it reaches the resources API's registry, which seeds from the
+monitor's already-linked listing and never holds the folded row.
+A fold's `Sources` is its folded side's whole subtree, so it cannot say
+which member of a chain a source belongs to. Selecting links by it undid every
+link on the way to a reported source (a Docker host linked into an agent
+linked into a VM: naming Docker split the agent from the VM too), and where
+links form a cycle it left the reported member joined through the link it did
+not name. Each fold therefore also records what its two sides are on their own
+(`HolderOwn`, `FoldedOwn`): the sources the side's row listed before any link
+folded something into it, which a side that already took members in reads from
+the record its first fold made. `recordManualLinkFold` runs before the other
+side is merged for that reason, and a repeated pair unions the own sources as
+it does `Sources`.
+
+Report-merge picks links by member (`ReportedManualLinkFolds`, fed by
+`ResourceRegistry.ManualLinkFolds`). A member whose own sources include a
+reported source is reported, whatever it took in; the resource being reported
+on never is, since it is what stays. A link is undone when it joins a reported
+member to a member that stays, one the resource still reaches without passing
+through a reported member, or to another reported member. A member that hangs
+below a reported one and carries no reported source goes with it, and the link
+holding it there stays: the report names a source that is not theirs to undo.
+Where links form a cycle, a reported member linked both to the resource and to
+a member that stays is cut from both, so the surviving link cannot fold it
+back in. The store's one-decision-per-pair rule deletes each undone link row,
+so the pair splits on every surface from the monitor's next rebuild, as with
+unlink. The drawer reports every merged source, which undoes every link, and
+so does a report naming none. A fold recorded without its sides' own sources
+falls back to its folded subtree, and a member several folds name takes the
+union of what they record, since a refold unions into its own pair's fold
+only. A resource the records no longer name (re-keyed after the links folded)
+is replaced by the one holder no link folded; when no single holder qualifies,
+which the recorder does not produce, the folds' subtrees decide, as before.
+
+A link joins only the pair its row names. Canonical-ID succession re-keys
+link endpoints with `UPDATE OR IGNORE` but moves `primary_id`
+unconditionally, so a row whose re-key collided with the successor's own row
+kept the retired endpoint and took the successor as its primary.
+`applyManualLinks` honoured that primary and merged the successor through a
+row no exclusion of the merged pair removes, so an unlink or report-merge of
+that pair came back on the next rebuild. A primary that names neither side
+of its row now falls back to the row's first side, which leaves such a row
+inert while the retired ID is gone.
+
+`TestResourceReportMergeSplitsOperatorLinkedPair` links and reports through
+the API handlers against a monitor adapter on the same SQLite store, rebuilt
+three times per step, for VM/agent, node/agent and agent/Docker pairs linked
+from either side and for two linked agents. Every two-source case but a node
+linked from its agent fails with the previous handler, whose candidate for
+that node happened to be the node's own source-specific ID.
+`TestResourceReportMergeSplitsPairBehindASuccessionShadowedRow` reports a
+pair that a shadowed row also named,
+`TestResourceReportMergeSourceFilterSelectsLinks` pins the source filter,
+`TestResourceReportMergeSplitsIdentityMergedPair` keeps an identity-merged
+agent and Docker host apart through the rebuilds,
+`TestManualLinkFoldsNameEachLinkPairAlongAChain` pins a chain's pairs on the
+monitor's registry and on one seeded from its listing, and
+`TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests` folds a TrueNAS
+system into a VM across repeated record ingests, and
+`TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
+sources than it first brought. `TestManualLinkFoldOwnSourcesComeFromTheFirstRecord`
+keeps a holder's own sources from growing with what it takes in.
+`TestReportedManualLinkFoldsDetachMembersCarryingTheSource` selects links for a
+leaf, a holder, both and a cycle (a TrueNAS VM taking in a Proxmox storage and
+a vSphere VM that is also linked to the storage), and
+`TestReportedManualLinkFoldsLeaveNoReportedMemberJoined` checks that no
+reported member stays joined to the resource through the links left, which the
+subtree rule fails on that cycle. `TestResourceReportMergeSourceFilterDetachesChainMembers`
+reports a Docker host linked into an agent linked into a VM through the API,
+for the leaf, the holder, both, every source and no filter, on the monitor and
+the REST surface. `TestResourceAPIReportMergeExcludesRegistryLinkFolds` keeps
+the handler on the registry's fold record.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
+
+### TrueNAS disk policy consumers use the disk's alert identity
+
+The AI/Patrol physical-disk consumers classify TrueNAS disks through
+`alerts.IsTrueNASDiskResource`, the same classifier as unified alert evaluation.
+They resolve temperature policy under the disk's canonical resource ID, not its
+parent system's synthetic agent ID. Merged agent/TrueNAS disks retain that
+classification; ordinary agent disks still follow their reporting host's policy.
+Registry identity, source precedence and retained-reading semantics are unchanged.
+`TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` exercise the unified registry
+projection and its consumer boundaries. Table/drawer frontend acceptance is described below and remains
+separate from these backend tests.
+
+### TrueNAS disk-specific heat presentation (8 October 2026)
+
+`TrueNASDiskTemperatureThresholdResolver` receives the disk resource (including
+its canonical ID), not just a disk type. The table's status dot, reason,
+Attention filter/count and drawer temperature row use the same resolved tiers.
+A retained temperature is not current heat under any override. Changing alert
+configuration updates those judgments without changing inventory identity.
+
+Verification: `truenasPageModel.test.ts`,
+`resourceDetailDrawerTrueNASModel.coverage2.test.ts` and
+`browser-tests/truenas-disk-thresholds.cjs` cover disk overrides, TrueNAS-wide
+limits, Off and last-known readings. Synthetic browser observations do not
+establish sustained native metrics, History, revocation or release availability.
+
+### Availability recovery replaces complete check records (10 October 2026)
+
+A present availability summary, its platformData mirror and plural check set
+replace the previous complete record. Optional failure/application/certificate/
+location fields omitted after recovery or summary-target change are withdrawn;
+an absent record retains enrichment only while its explicit source remains.
+The plural mirror must leave with that source and cannot reappear on hydration.
+Other provider facets keep their own partial/native-withdrawal rules, including
+linked-agent and guest filesystems. Snapshot, rebuilt websocket merge-patch and
+source-removal controls cover both canonical and mirrored records.
+
+The availability table, fleet, open probe card and loaded Settings resource
+classification use the existing shared clock for freshness and ages. No clock
+tick initiates a probe, grants health, changes thresholds or widens token scope.
+The vSphere VM table has one h2 title, including kiosk and filtered-empty state;
+its count follows filtered rows only when the page-owned toolbar state is ready.

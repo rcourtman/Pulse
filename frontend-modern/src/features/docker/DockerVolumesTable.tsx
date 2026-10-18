@@ -246,7 +246,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-48 truncate"
+                              class="block truncate"
                               title={formatPlatformTableDateTimeValue(resource.docker?.createdAt)}
                             >
                               <PlatformTableRelativeTimeValue
@@ -259,7 +259,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
                             <span
-                              class="inline-block max-w-88 truncate"
+                              class="block truncate"
                               title={dockerTextValue(resource.docker?.mountpoint)}
                             >
                               {dockerTextValue(resource.docker?.mountpoint)}

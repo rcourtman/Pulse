@@ -21,6 +21,7 @@ import {
   getAlertDestinationsDeliveryRefreshLabel,
 } from '@/utils/alertDestinationsPresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import { describeAlertEventReason } from './deliveryDiagnosisPresentation';
 
@@ -76,6 +77,9 @@ const outcomeBadgeClasses: Record<NotificationDeliveryLogEntry['outcome'], strin
 };
 
 export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
+  // Log rows stay mounted between refreshes and their times never change, so
+  // the age in each row's tooltip reads the shared clock.
+  const now = useRelativeTimeNow();
   // Destination ids are opaque on purpose (hashes for email/apprise, config
   // ids for webhooks); only webhook ids can be resolved to a configured name.
   const destinationLabel = (entry: NotificationDeliveryLogEntry): string => {
@@ -215,7 +219,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                       <time
                         class="ml-auto shrink-0 text-xs text-gray-500 dark:text-gray-400"
                         dateTime={row.entry.timestamp}
-                        title={formatRelativeTime(row.entry.timestamp)}
+                        title={formatRelativeTime(row.entry.timestamp, { now: now() })}
                       >
                         {absoluteTimestamp(row.entry.timestamp)}
                       </time>
@@ -259,7 +263,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                       <time
                         class="ml-auto shrink-0 text-xs text-gray-500 dark:text-gray-400"
                         dateTime={row.event.occurredAt}
-                        title={formatRelativeTime(row.event.occurredAt)}
+                        title={formatRelativeTime(row.event.occurredAt, { now: now() })}
                       >
                         {absoluteTimestamp(row.event.occurredAt)}
                       </time>

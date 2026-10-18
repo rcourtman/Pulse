@@ -341,33 +341,11 @@ async function mockBlockedPatrolRuntimeState(
     });
   });
 
-  await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ correlations: [], count: 0 }),
-    });
-  });
-
   await page.route("**/api/ai/intelligence", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(staleHealthySummary),
-    });
-  });
-
-  await page.route("**/api/ai/circuit/status", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        state: "closed",
-        can_patrol: true,
-        consecutive_failures: 0,
-        total_successes: 42,
-        total_failures: 0,
-      }),
     });
   });
 
@@ -505,14 +483,6 @@ async function mockScopedTriggerPatrolRuntimeState(
     });
   });
 
-  await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ correlations: [], count: 0 }),
-    });
-  });
-
   await page.route("**/api/ai/intelligence", async (route) => {
     await route.fulfill({
       status: 200,
@@ -535,20 +505,6 @@ async function mockScopedTriggerPatrolRuntimeState(
           info: 0,
           total: 1,
         },
-      }),
-    });
-  });
-
-  await page.route("**/api/ai/circuit/status", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        state: "closed",
-        can_patrol: true,
-        consecutive_failures: 0,
-        total_successes: 42,
-        total_failures: 0,
       }),
     });
   });

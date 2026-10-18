@@ -20,15 +20,39 @@ import (
 
 // MockUpdateManager implements UpdateManager interface for testing
 type MockUpdateManager struct {
-	CheckOptionsFunc       func(context.Context, updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
-	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
-	GetReleaseNotesFunc    func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
-	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
-	RollbackToBackupFunc   func(ctx context.Context, req updates.RollbackRequest) error
-	GetStatusFunc          func() updates.UpdateStatus
-	GetSSECachedStatusFunc func() (updates.UpdateStatus, time.Time)
-	AddSSEClientFunc       func(w http.ResponseWriter, clientID string) *updates.SSEClient
-	RemoveSSEClientFunc    func(clientID string)
+	CheckOptionsFunc        func(context.Context, updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
+	CheckForUpdatesFunc     func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	GetReleaseNotesFunc     func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
+	GetReleaseNoteImageFunc func(ctx context.Context, version, name string) ([]byte, error)
+	ApplyUpdateFunc         func(ctx context.Context, req updates.ApplyUpdateRequest) error
+	RollbackToBackupFunc    func(ctx context.Context, req updates.RollbackRequest) error
+	GetStatusFunc           func() updates.UpdateStatus
+	GetSSECachedStatusFunc  func() (updates.UpdateStatus, time.Time)
+	AddSSEClientFunc        func(w http.ResponseWriter, clientID string) *updates.SSEClient
+	RemoveSSEClientFunc     func(clientID string)
+	CheckProRuntimeFunc     func(ctx context.Context, channel string) (*updates.ProRuntimeSwitch, error)
+	ApplyProRuntimeFunc     func(ctx context.Context, channel string, by updates.InitiatedBy, via updates.InitiatedVia) error
+}
+
+func (m *MockUpdateManager) GetReleaseNoteImage(ctx context.Context, version, name string) ([]byte, error) {
+	if m.GetReleaseNoteImageFunc != nil {
+		return m.GetReleaseNoteImageFunc(ctx, version, name)
+	}
+	return nil, updates.ErrReleaseNotFound
+}
+
+func (m *MockUpdateManager) CheckProRuntimeSwitch(ctx context.Context, channel string) (*updates.ProRuntimeSwitch, error) {
+	if m.CheckProRuntimeFunc != nil {
+		return m.CheckProRuntimeFunc(ctx, channel)
+	}
+	return &updates.ProRuntimeSwitch{Reason: updates.ProRuntimeSwitchReasonNotActivated}, nil
+}
+
+func (m *MockUpdateManager) ApplyProRuntimeSwitch(ctx context.Context, channel string, by updates.InitiatedBy, via updates.InitiatedVia) error {
+	if m.ApplyProRuntimeFunc != nil {
+		return m.ApplyProRuntimeFunc(ctx, channel, by, via)
+	}
+	return nil
 }
 
 func (m *MockUpdateManager) GetReleaseNotes(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error) {
@@ -207,6 +231,54 @@ func TestHandleGetReleaseNotesRejectsDevelopmentBuild(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleGetReleaseNoteImage(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		tag         string
+		development bool
+		source      bool
+		upstream    error
+		status      int
+	}{
+		{name: "running release", tag: "v6.6.0", status: 200},
+		{name: "other release", tag: "v6.5.0", status: 404},
+		{name: "development build", tag: "v6.6.0", development: true, status: 404},
+		{name: "source build", tag: "v6.6.0", source: true, status: 404},
+		{name: "missing image", tag: "v6.6.0", upstream: updates.ErrReleaseNotFound, status: 404},
+		{name: "upstream failure", tag: "v6.6.0", upstream: errors.New("offline"), status: 502},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			manager := &MockUpdateManager{GetReleaseNoteImageFunc: func(_ context.Context, version, name string) ([]byte, error) {
+				calls++
+				if version != "6.6.0" || name != "release-note-backups-now.png" {
+					t.Fatal("wrong release asset")
+				}
+				return []byte("PNG fixture"), tc.upstream
+			}}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h := NewUpdateHandlersWithContext(manager, nil, ctx)
+			h.getCurrentVersion = func() (*updates.VersionInfo, error) {
+				return &updates.VersionInfo{Version: "6.6.0", IsDevelopment: tc.development, IsSourceBuild: tc.source}, nil
+			}
+			w := httptest.NewRecorder()
+			h.HandleGetReleaseNoteImage(w, httptest.NewRequest(http.MethodGet, "/api/updates/release-notes/assets/"+tc.tag+"/release-note-backups-now.png", nil))
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+			if tc.development || tc.source || tc.tag != "v6.6.0" {
+				if calls != 0 {
+					t.Fatal("ineligible build fetched screenshots")
+				}
+			}
+			if tc.status == 200 && (w.Header().Get("Content-Type") != "image/png" || w.Header().Get("Cache-Control") != "private, max-age=86400, immutable") {
+				t.Fatal("missing PNG/cache headers")
+			}
+		})
 	}
 }
 
@@ -1060,6 +1132,41 @@ func TestUpdateHandlersRegistryProvidesPlans(t *testing.T) {
 	}
 }
 
+func TestHandleGetUpdatePlan_DockerSavedDeployment(t *testing.T) {
+	setMockModeForTest(t, true)
+	t.Setenv("PULSE_DOCKER_IMAGE_REPO", "registry.example:5000/team/pulse")
+	h := NewUpdateHandlers(nil, nil)
+	// Exercise the real registered adapter through the handler, independent
+	// of the test host's deployment detection and without a Docker daemon.
+	h.registry.Register("mock", updates.NewDockerUpdater())
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v6.5.0", nil)
+	h.HandleGetUpdatePlan(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("plan status = %d: %s", w.Code, w.Body.String())
+	}
+	var plan updates.UpdatePlan
+	if err := json.NewDecoder(w.Body).Decode(&plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.CanAutoUpdate || plan.RequiresRoot || !plan.RollbackSupport {
+		t.Fatalf("Docker plan capabilities changed: %+v", plan)
+	}
+	if len(plan.Instructions) != 5 || plan.Instructions[0] != "docker pull 'registry.example:5000/team/pulse:6.5.0'" {
+		t.Fatalf("copyable Docker plan = %v", plan.Instructions)
+	}
+	for _, instruction := range plan.Instructions[1:] {
+		if strings.HasPrefix(instruction, "docker ") || strings.Contains(instruction, "--name pulse") {
+			t.Fatalf("wire plan guesses a deployment mutation: %q", instruction)
+		}
+	}
+	if !strings.Contains(plan.Instructions[2], "original Compose file") ||
+		!strings.Contains(plan.Instructions[3], "leave the running container unchanged") ||
+		len(plan.Prerequisites) != 2 {
+		t.Fatalf("saved-deployment safety did not reach the API: %+v", plan)
+	}
+}
+
 func TestHandleGetUpdatePlan_IncludesUpgradeReadiness(t *testing.T) {
 	setMockModeForTest(t, true)
 
@@ -1208,6 +1315,21 @@ func TestClassifyApplyUpdateStartError_ProActivation(t *testing.T) {
 	}
 }
 
+// TestClassifyApplyUpdateStartError_ProStablePrerelease keeps the Pro broker's
+// stable-channel refusal (also reached by the Pro runtime switch) a 409 whose
+// explanation reaches the UI, not the generic 500 "Failed to start update".
+func TestClassifyApplyUpdateStartError_ProStablePrerelease(t *testing.T) {
+	err := errors.New("stable channel cannot install prerelease builds (the private Pulse Pro channel currently serves 6.1.0-rc.1)")
+
+	status, msg := classifyApplyUpdateStartError(err)
+	if status != http.StatusConflict {
+		t.Fatalf("expected 409 for the stable-channel prerelease refusal, got %d", status)
+	}
+	if !strings.Contains(msg, "6.1.0-rc.1") {
+		t.Fatalf("expected the refusal message to pass through, got %q", msg)
+	}
+}
+
 func TestHandleCheckUpdatesFreshness(t *testing.T) {
 	for _, tc := range []struct {
 		query  string
@@ -1238,4 +1360,116 @@ func TestHandleCheckUpdatesFreshness(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHandleProRuntimeSwitch covers GET /api/updates/pro-runtime and
+// POST /api/updates/pro-runtime/apply: the apply re-checks eligibility and only
+// starts an in-place switch.
+func TestHandleProRuntimeSwitch(t *testing.T) {
+	inPlace := &updates.ProRuntimeSwitch{Available: true, InstallInPlace: true, CurrentVersion: "6.5.0", Version: "6.5.0"}
+
+	t.Run("check returns the manager result", func(t *testing.T) {
+		var gotChannel string
+		h := NewUpdateHandlers(&MockUpdateManager{CheckProRuntimeFunc: func(ctx context.Context, channel string) (*updates.ProRuntimeSwitch, error) {
+			gotChannel = channel
+			return inPlace, nil
+		}}, nil)
+		rec := httptest.NewRecorder()
+		h.HandleCheckProRuntimeSwitch(rec, httptest.NewRequest(http.MethodGet, "/api/updates/pro-runtime?channel=stable", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+		}
+		var got updates.ProRuntimeSwitch
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if !got.Available || !got.InstallInPlace || got.Version != "6.5.0" || gotChannel != "stable" {
+			t.Fatalf("unexpected result %+v (channel %q)", got, gotChannel)
+		}
+		if rec.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("check must not be cached, got %q", rec.Header().Get("Cache-Control"))
+		}
+	})
+
+	t.Run("check rejects other methods and bad channels", func(t *testing.T) {
+		h := NewUpdateHandlers(&MockUpdateManager{}, nil)
+		rec := httptest.NewRecorder()
+		h.HandleCheckProRuntimeSwitch(rec, httptest.NewRequest(http.MethodPost, "/api/updates/pro-runtime", nil))
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("POST status = %d", rec.Code)
+		}
+		rec = httptest.NewRecorder()
+		h.HandleCheckProRuntimeSwitch(rec, httptest.NewRequest(http.MethodGet, "/api/updates/pro-runtime?channel=beta", nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("bad channel status = %d", rec.Code)
+		}
+	})
+
+	t.Run("manager without the switch reports not implemented", func(t *testing.T) {
+		h := NewUpdateHandlers(struct{ UpdateManager }{&MockUpdateManager{}}, nil)
+		rec := httptest.NewRecorder()
+		h.HandleCheckProRuntimeSwitch(rec, httptest.NewRequest(http.MethodGet, "/api/updates/pro-runtime", nil))
+		if rec.Code != http.StatusNotImplemented {
+			t.Fatalf("status = %d", rec.Code)
+		}
+	})
+
+	t.Run("apply refuses when no in-place switch is offered", func(t *testing.T) {
+		for _, result := range []*updates.ProRuntimeSwitch{
+			{Reason: updates.ProRuntimeSwitchReasonNotEligible},
+			{Available: true, Docker: &updates.DockerUpdateCommands{Version: "v6.5.0"}},
+		} {
+			applied := false
+			h := NewUpdateHandlers(&MockUpdateManager{
+				CheckProRuntimeFunc: func(context.Context, string) (*updates.ProRuntimeSwitch, error) { return result, nil },
+				ApplyProRuntimeFunc: func(context.Context, string, updates.InitiatedBy, updates.InitiatedVia) error {
+					applied = true
+					return nil
+				},
+			}, nil)
+			rec := httptest.NewRecorder()
+			h.HandleApplyProRuntimeSwitch(rec, httptest.NewRequest(http.MethodPost, "/api/updates/pro-runtime/apply", nil))
+			if rec.Code != http.StatusConflict || applied {
+				t.Fatalf("expected 409 without apply for %+v, got %d (applied=%v)", result, rec.Code, applied)
+			}
+		}
+	})
+
+	t.Run("apply starts an in-place switch as a user action", func(t *testing.T) {
+		applied := make(chan [2]string, 1)
+		h := NewUpdateHandlers(&MockUpdateManager{
+			CheckProRuntimeFunc: func(context.Context, string) (*updates.ProRuntimeSwitch, error) { return inPlace, nil },
+			ApplyProRuntimeFunc: func(_ context.Context, _ string, by updates.InitiatedBy, via updates.InitiatedVia) error {
+				applied <- [2]string{string(by), string(via)}
+				return nil
+			},
+		}, nil)
+		rec := httptest.NewRecorder()
+		h.HandleApplyProRuntimeSwitch(rec, httptest.NewRequest(http.MethodPost, "/api/updates/pro-runtime/apply", nil))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"started"`) {
+			t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+		}
+		select {
+		case got := <-applied:
+			if got != [2]string{string(updates.InitiatedByUser), string(updates.InitiatedViaUI)} {
+				t.Fatalf("initiated as %v", got)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("switch was not started")
+		}
+	})
+
+	t.Run("apply surfaces an immediate refusal as a conflict", func(t *testing.T) {
+		h := NewUpdateHandlers(&MockUpdateManager{
+			CheckProRuntimeFunc: func(context.Context, string) (*updates.ProRuntimeSwitch, error) { return inPlace, nil },
+			ApplyProRuntimeFunc: func(context.Context, string, updates.InitiatedBy, updates.InitiatedVia) error {
+				return errors.New("the Pulse Pro runtime is at 6.4.0, older than this install's 6.5.0; switch after the next Pulse Pro release")
+			},
+		}, nil)
+		rec := httptest.NewRecorder()
+		h.HandleApplyProRuntimeSwitch(rec, httptest.NewRequest(http.MethodPost, "/api/updates/pro-runtime/apply", nil))
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "older than this install") {
+			t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+		}
+	})
 }

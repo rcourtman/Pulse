@@ -11,6 +11,11 @@ import {
 
 type RawClusterEndpoint = Partial<ClusterEndpoint>;
 
+export type NodeConnectionTestTLSOptions = {
+  verifySSL?: boolean;
+  fingerprint?: string;
+};
+
 const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint => ({
   nodeId: trimmedString(endpoint.nodeId),
   nodeIdentity: trimmedString(endpoint.nodeIdentity),
@@ -239,7 +244,10 @@ export class NodesAPI {
     });
   }
 
-  static async testExistingNode(nodeId: string): Promise<{
+  static async testExistingNode(
+    nodeId: string,
+    tls?: NodeConnectionTestTLSOptions,
+  ): Promise<{
     status: string;
     message?: string;
     latency?: number;
@@ -247,6 +255,7 @@ export class NodesAPI {
   }> {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}/test`, {
       method: 'POST',
+      body: tls === undefined ? undefined : JSON.stringify(tls),
     });
   }
 

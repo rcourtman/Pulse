@@ -36,21 +36,12 @@ func (s *stubAgentProfileManager) GetAgentScope(ctx context.Context, agentID str
 func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 
-	exec.SetContext("vm", "101", true)
+	exec.SetContext("vm", "101")
 	assert.Equal(t, "vm", exec.targetType)
 	assert.Equal(t, "101", exec.targetID)
-	assert.True(t, exec.isAutonomous)
-
-	exec.SetAutonomousMode(false)
-	assert.Equal(t, "vm", exec.targetType)
-	assert.Equal(t, "101", exec.targetID)
-	assert.False(t, exec.isAutonomous)
 
 	exec.SetControlLevel(ControlLevelControlled)
 	assert.Equal(t, ControlLevelControlled, exec.controlLevel)
-
-	exec.SetProtectedGuests([]string{"100", "101"})
-	assert.Equal(t, []string{"100", "101"}, exec.protectedGuests)
 
 	metadataUpdater := &stubMetadataUpdater{}
 	exec.SetMetadataUpdater(metadataUpdater)

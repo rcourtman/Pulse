@@ -3,13 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 type UseReportingPanelStateModule = typeof import('../useReportingPanelState');
+type ReportingPanelState = ReturnType<UseReportingPanelStateModule['useReportingPanelState']>;
 
-const flushAsync = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-};
+// The hook loads the catalog on mount and, once reporting is enabled, the
+// schedules. Reading a fetch Response body takes a different number of
+// microtasks on each Node release (8 on Node 20, 3 on Node 24), so tests wait
+// for those loads to finish instead of flushing a fixed number of ticks.
+const settleMountLoads = (hookState: ReportingPanelState) =>
+  vi.waitFor(() => {
+    expect(hookState.reportingCatalogLoading()).toBe(false);
+    expect(hookState.reportingCatalog() !== null || hookState.reportingCatalogError() !== '').toBe(
+      true,
+    );
+    expect(hookState.reportSchedulesLoading()).toBe(false);
+  });
 
 const catalogPayload = {
   id: 'advanced_reporting',
@@ -28,6 +35,7 @@ const catalogPayload = {
     title: 'Performance Reports',
     description: 'Historical performance reporting',
     singleResourceEndpoint: '/api/admin/reports/generate',
+    singleResourceMethod: 'POST',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     singleFilenameSubject: 'resource_id',
@@ -82,13 +90,13 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 function buildCatalogAndSchedulesFetchMock(
-  catalogResponse: Response = jsonResponse(catalogPayload),
+  catalogResponse: () => Response = () => jsonResponse(catalogPayload),
 ) {
   return vi.fn((url: string) => {
     if (url === '/api/admin/reports/schedules') {
       return Promise.resolve(jsonResponse(schedulesPayload));
     }
-    return Promise.resolve(catalogResponse);
+    return Promise.resolve(catalogResponse());
   });
 }
 
@@ -100,6 +108,7 @@ describe('useReportingPanelState', () => {
   let loadCommercialLicenseStatusMock: ReturnType<typeof vi.fn>;
   let aiEnabled: boolean | null;
   let showWarningMock: ReturnType<typeof vi.fn>;
+  let showSuccessMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -108,6 +117,7 @@ describe('useReportingPanelState', () => {
     hasReportingFeature = true;
     aiEnabled = null;
     showWarningMock = vi.fn();
+    showSuccessMock = vi.fn();
     loadRuntimeLicenseStatusMock = vi.fn();
     loadCommercialLicenseStatusMock = vi.fn();
 
@@ -128,7 +138,7 @@ describe('useReportingPanelState', () => {
     });
 
     vi.doMock('@/utils/toast', () => ({
-      showSuccess: vi.fn(),
+      showSuccess: showSuccessMock,
       showWarning: showWarningMock,
     }));
 
@@ -179,8 +189,7 @@ describe('useReportingPanelState', () => {
   it('seeds reporting selections from the backend catalog defaults', async () => {
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
     expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
@@ -196,8 +205,7 @@ describe('useReportingPanelState', () => {
     hasReportingFeature = false;
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
@@ -250,8 +258,7 @@ describe('useReportingPanelState', () => {
 
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
     expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
@@ -313,15 +320,13 @@ describe('useReportingPanelState', () => {
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(hookState.reportingCatalog()).toBeNull();
     expect(hookState.reportingCatalogError()).toBe('temporary failure');
 
     hookState.reloadReportingCatalog();
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(
       apiFetchMock.mock.calls.filter(([url]) => url === '/api/admin/reports/catalog'),
@@ -336,9 +341,10 @@ describe('useReportingPanelState', () => {
     vi.resetModules();
 
     apiFetchMock = buildCatalogAndSchedulesFetchMock(
-      new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
-        status: 503,
-      }),
+      () =>
+        new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
+          status: 503,
+        }),
     );
 
     vi.doMock('@/utils/apiClient', async () => {
@@ -376,8 +382,7 @@ describe('useReportingPanelState', () => {
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(hookState.reportingCatalog()).toBeNull();
     expect(hookState.reportingCatalogError()).toBe('Catalog is unavailable right now');
@@ -389,7 +394,7 @@ describe('useReportingPanelState', () => {
     vi.resetModules();
 
     apiFetchMock = buildCatalogAndSchedulesFetchMock(
-      new Response('404 page not found', { status: 404 }),
+      () => new Response('404 page not found', { status: 404 }),
     );
 
     vi.doMock('@/utils/apiClient', async () => {
@@ -427,8 +432,7 @@ describe('useReportingPanelState', () => {
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     expect(hookState.reportingCatalogError()).toBe('');
     expect(hookState.reportingCatalog()?.performanceReport.singleResourceEndpoint).toBe(
@@ -442,20 +446,20 @@ describe('useReportingPanelState', () => {
   it('offers the Patrol weekly summary only while the session reports Patrol can run', async () => {
     aiEnabled = null;
     const first = mountHook();
-    await flushAsync();
+    await settleMountLoads(first.hookState);
     expect(first.hookState.patrolDigestAvailable()).toBe(false);
     first.dispose();
 
     aiEnabled = true;
     const second = mountHook();
-    await flushAsync();
+    await settleMountLoads(second.hookState);
     expect(second.hookState.patrolDigestAvailable()).toBe(true);
     second.dispose();
   });
 
   it('pins a Patrol weekly summary to a weekly email and drops any picked resources', async () => {
     const { hookState, dispose } = mountHook();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     hookState.startCreateSchedule();
     hookState.updateScheduleForm({ cadenceType: 'monthly', deliveryMethod: 'disk' });
@@ -478,6 +482,48 @@ describe('useReportingPanelState', () => {
     dispose();
   });
 
+  it('posts a single-resource report as a JSON body through apiFetch', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url === '/api/admin/reports/generate') {
+        return Promise.resolve(new Response('%PDF', { status: 200 }));
+      }
+      if (url === '/api/admin/reports/schedules') {
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      }
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:report');
+    URL.revokeObjectURL = vi.fn();
+    try {
+      const { hookState, dispose } = mountHook();
+      await settleMountLoads(hookState);
+
+      hookState.setSelectedResources([{ id: 'vm-1', type: 'vm', name: 'vm-a' }]);
+      await hookState.handleGenerate();
+
+      const generate = apiFetchMock.mock.calls.filter(([url]) =>
+        String(url).startsWith('/api/admin/reports/generate'),
+      );
+      expect(generate).toHaveLength(1);
+      expect(generate[0][0]).toBe('/api/admin/reports/generate');
+      expect(generate[0][1]).toMatchObject({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(JSON.parse(String(generate[0][1].body))).toMatchObject({
+        resourceType: 'vm',
+        resourceId: 'vm-1',
+        format: catalogPayload.performanceReport.defaultFormat,
+      });
+      expect(showWarningMock).not.toHaveBeenCalled();
+      dispose();
+    } finally {
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+    }
+  });
+
   it('saves a Patrol weekly summary without a resource scope', async () => {
     const savedSchedule = {
       id: 'digest-1',
@@ -489,24 +535,25 @@ describe('useReportingPanelState', () => {
       format: 'email',
       delivery: { method: 'email', to: [], attach: false, save_to_disk: false },
     };
+    let scheduleSaved = false;
     apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/admin/reports/schedules' && init?.method === 'POST') {
+        scheduleSaved = true;
         return Promise.resolve(jsonResponse(savedSchedule));
       }
       if (url === '/api/admin/reports/schedules') {
-        return Promise.resolve(jsonResponse(schedulesPayload));
+        return Promise.resolve(jsonResponse({ schedules: scheduleSaved ? [savedSchedule] : [] }));
       }
       return Promise.resolve(jsonResponse(catalogPayload));
     });
 
     const { hookState, dispose } = mountHook();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     hookState.startCreateSchedule();
     hookState.updateScheduleForm({ name: 'Weekly Patrol', timezone: 'UTC' });
     hookState.setScheduleKind('patrol_digest');
     await hookState.saveReportSchedule();
-    await flushAsync();
 
     expect(showWarningMock).not.toHaveBeenCalled();
     const post = apiFetchMock.mock.calls.find(
@@ -525,9 +572,39 @@ describe('useReportingPanelState', () => {
     dispose();
   });
 
+  it('saves an inventory CSV schedule without leaking old resources or tags', async () => {
+    apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/admin/reports/schedules' && init?.method === 'POST') {
+        return Promise.resolve(jsonResponse({ ...JSON.parse(String(init.body)), id: 'inventory' }));
+      }
+      if (url === '/api/admin/reports/schedules')
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    hookState.startCreateSchedule();
+    hookState.updateScheduleForm({ name: 'Inventory', tagFilter: 'old-client' });
+    hookState.setScheduleResources([{ id: 'vm-old', name: 'Old VM', type: 'vm' }]);
+    hookState.setScheduleKind('vm_inventory');
+    expect(hookState.scheduleResources()).toEqual([]);
+    await hookState.saveReportSchedule();
+    expect(showWarningMock).not.toHaveBeenCalled();
+    const post = apiFetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/admin/reports/schedules' && init?.method === 'POST',
+    );
+    expect(post).toBeDefined();
+    expect(JSON.parse(String(post![1].body))).toMatchObject({
+      kind: 'vm_inventory',
+      format: 'csv',
+      scope: { resources: [], tags: [] },
+    });
+    dispose();
+  });
+
   it('still requires a scope for a performance report schedule', async () => {
     const { hookState, dispose } = mountHook();
-    await flushAsync();
+    await settleMountLoads(hookState);
 
     hookState.startCreateSchedule();
     hookState.updateScheduleForm({ name: 'Monthly clients' });
@@ -540,6 +617,120 @@ describe('useReportingPanelState', () => {
       ),
     ).toBe(false);
 
+    dispose();
+  });
+  const deliverySchedule = (status: 'failed' | 'retrying' | 'unconfirmed' = 'failed') => ({
+    id: 'weekly',
+    name: 'Client report',
+    enabled: true,
+    cadence: { type: 'weekly' as const, weekday: 'monday', time: '09:00', timezone: 'UTC' },
+    scope: { resources: [], tags: [] },
+    format: 'csv' as const,
+    delivery: { method: 'email' as const, to: [], attach: true, save_to_disk: true },
+    last_run_status: status,
+    run_window_end: '2026-10-17T09:00:00Z',
+    last_error: 'Mail server rejected this report.',
+  });
+
+  it('uses the retry endpoint and retains the actionable failed response', async () => {
+    const failed = deliverySchedule();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/run')) return Promise.resolve(jsonResponse({ schedule: failed }, 500));
+      if (url === '/api/admin/reports/schedules')
+        return Promise.resolve(jsonResponse({ schedules: [failed] }));
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    await hookState.runReportScheduleNow(failed);
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/reports/schedules/weekly/run?retry=true',
+      { method: 'POST' },
+    );
+    expect(showWarningMock).toHaveBeenCalledWith(failed.last_error);
+    expect(hookState.reportSchedules()[0].last_run_status).toBe('failed');
+    dispose();
+  });
+
+  it('requires deliberate confirmation before retrying uncertain acceptance', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    apiFetchMock.mockClear();
+    await hookState.runReportScheduleNow(deliverySchedule('unconfirmed'));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('risk of a duplicate'));
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    confirm.mockRestore();
+    dispose();
+  });
+
+  it('refreshes a pending delivery after returning to the page and cleans up', async () => {
+    const pending = deliverySchedule('retrying');
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/admin/reports/schedules' ? { schedules: [pending] } : catalogPayload,
+        ),
+      ),
+    );
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    apiFetchMock.mockClear();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/schedules'),
+    );
+    await settleMountLoads(hookState);
+    dispose();
+    apiFetchMock.mockClear();
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps row identity through refreshes so open details and keyboard focus survive', async () => {
+    let outcome = 'retrying';
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/admin/reports/schedules'
+            ? { schedules: [{ ...deliverySchedule('retrying'), last_run_status: outcome }] }
+            : catalogPayload,
+        ),
+      ),
+    );
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    const row = hookState.reportSchedules()[0];
+    hookState.reloadReportSchedules();
+    await settleMountLoads(hookState);
+    expect(hookState.reportSchedules()[0]).toBe(row);
+    outcome = 'ok';
+    hookState.reloadReportSchedules();
+    await vi.waitFor(() => expect(row.last_run_status).toBe('ok'));
+    expect(hookState.reportSchedules()[0]).toBe(row);
+    dispose();
+  });
+
+  it('does not send the transient configuration check back when toggling', async () => {
+    const failed = { ...deliverySchedule(), delivery_check: { ready: false, message: 'Disabled' } };
+    let scheduleEnabled = true;
+    apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        scheduleEnabled = false;
+        expect(JSON.parse(String(init.body))).not.toHaveProperty('delivery_check');
+        return Promise.resolve(jsonResponse({ ...failed, enabled: false }));
+      }
+      if (url === '/api/admin/reports/schedules')
+        return Promise.resolve(
+          jsonResponse({ schedules: [{ ...failed, enabled: scheduleEnabled }] }),
+        );
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    await hookState.toggleReportSchedule(hookState.reportSchedules()[0]);
+    expect(hookState.reportSchedules()[0].enabled).toBe(false);
+    expect(showSuccessMock).toHaveBeenCalledWith('Report schedule disabled');
     dispose();
   });
 });

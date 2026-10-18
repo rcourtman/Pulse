@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "e02edd9989c88fbe6e5459afdf488c73538ddd24",
+  "verified_at": "2026-10-07T12:56:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sensorSetup.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sensorSetup.ts": "18e4da01eb9206bce83a2e7d2fbb9f97313685c5655d620092a9e0ca51804ef5",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "db074960c69c59bb030814a04028a50ee5b347b7cf16b04b4c6edea708ffd782",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "77cc56a11213f951e051ceabd05bc2bf3161adedadc3586f2badee98bf1056c3",
+    "frontend-modern/src/types/resource.ts": "37e3ddb2e1334472a280e0ef93053292002567acabf84aace9fed1735a763b57"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (8-node estate) built from this tree with a local-only generator overlay: pve2, pve3 and pve5 report the legacy sensors -j payload; pve2 has a Proxmox-inventory hdd disk with no temperature, pve3 a SATA disk whose reading is retained (host agent stopped reporting), pve5 a SATA disk with no temperature.",
+    "Overview, Storage, Replication and Backups each show the warning notice naming pve2, pve3 and pve5 at both viewports. The Overview query is type=agent,vm,system-container,oci-container and no physical_disk request is made on Overview, Replication or Backups; only Storage requests disk rows.",
+    "Before control on the same stack with origin/main's ProxmoxPageSurface.tsx and sensorSetup.ts swapped in: no notice on Overview, Replication or Backups, and Storage names only pve5 (hdd type and retained reading missed).",
+    "Websocket frames carry sensorSetupOutdated true on every tab. Fresh desktop load: no console errors and no 5xx responses. Notice text fits the 390px viewport without overflow; the node table stays below it in reading order.",
+    "Mock data only; not a real pre-rc.6 SSH node, installed upgrade or release acceptance."
+  ],
+  "interactions": [
+    "Navigated each tab by URL at 1440x900 and 390x844 and waited 20s on Overview to outlast websocket row merges; the notice stayed.",
+    "Live clearing without reload: switching pve5's disk to a current 37C reading dropped pve5 from the notice (3 nodes to pve2, pve3) on the next websocket update. Control with the earlier omitempty backend kept pve5 for 90s.",
+    "Open Infrastructure settings link targets /settings/infrastructure (contract test)."
+  ]
+}

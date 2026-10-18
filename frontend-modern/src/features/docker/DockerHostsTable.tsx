@@ -1,3 +1,5 @@
+import WifiOffIcon from 'lucide-solid/icons/wifi-off';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -8,7 +10,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { getAlertStyles } from '@/utils/alerts';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -372,9 +374,17 @@ export const DockerHostsTable: Component<{
                     const isSelected = () => selectedHostId() === host.id;
                     const toggleDrawer = () =>
                       setSelectedHostId((current) => (current === host.id ? null : host.id));
+                    // The same open alerts the host's drawer lists: Docker alerts
+                    // are keyed on the Docker host id and carry the hostname, so
+                    // matching the row's id or display name finds none of them.
                     const hostAlertStyles = createMemo(() =>
-                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
+                      getUnifiedResourceAlertStyles(host, activeAlerts, alertsEnabled()),
                     );
+                    // Metrics from a host that stopped reporting are its last
+                    // values, not live readings; say so instead of showing them
+                    // as current.
+                    const staleness = createMemo(() => getResourceStaleness(host));
+                    const staleMetricClass = () => (staleness() ? 'opacity-50' : '');
                     const hostAlertBg = () => {
                       const s = hostAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
@@ -437,7 +447,9 @@ export const DockerHostsTable: Component<{
                           >
                             {containerCount()}
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <ResponsiveMetricCell
                               class="w-full"
                               value={cpuPercent() ?? 0}
@@ -448,7 +460,9 @@ export const DockerHostsTable: Component<{
                               thresholds={cpuThresholds()}
                             />
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
                               fallback={<PlatformTableMetricFallback />}
@@ -462,7 +476,9 @@ export const DockerHostsTable: Component<{
                               />
                             </Show>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
                               fallback={<PlatformTableMetricFallback />}
@@ -478,13 +494,34 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content sm:hidden md:table-cell`}
                           >
-                            {formatPlatformTableUptimeValue(host.uptime ?? docker()?.uptimeSeconds)}
+                            <Show
+                              when={staleness()}
+                              fallback={formatPlatformTableUptimeValue(
+                                host.uptime ?? docker()?.uptimeSeconds,
+                              )}
+                            >
+                              {(stale) => (
+                                <span
+                                  class="inline-flex items-center justify-end gap-1 font-medium text-amber-700 dark:text-amber-300"
+                                  title={`${stale().label}. CPU, memory and disk show the last values received.`}
+                                  data-docker-host-stale
+                                >
+                                  <WifiOffIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+                                  <span aria-hidden="true">{stale().age ?? '—'}</span>
+                                  <span class="sr-only">{stale().label}</span>
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}
                           >
                             <PlatformTableTemperatureValue
-                              value={host.temperature ?? docker()?.temperature}
+                              value={
+                                canRenderMetrics()
+                                  ? (host.temperature ?? docker()?.temperature)
+                                  : undefined
+                              }
                             />
                           </TableCell>
                           <Show when={showSwarmColumn()}>

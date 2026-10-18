@@ -2,6 +2,8 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
+import type { PlatformIssue } from '@/features/platformPage/PlatformIssueReason';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 
 export type VmwarePageTabId = 'overview' | 'storage' | 'networks' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
@@ -84,6 +86,9 @@ export type VmwareActivityRow = {
   activityType: string;
   stateBucket: VmwareActivityStateBucket;
   title: string;
+  // vCenter's event class (HostConnectedEvent); the title reads as vCenter's
+  // own message when it sent one, so the class is kept for search and detail.
+  eventType: string;
   state: string;
   message: string;
   description: string;
@@ -163,6 +168,35 @@ export const getVmwarePageTabSpecs = (
 
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const vmwareConnectionFields = (resource: Resource) => ({
+  id: resource.vmware?.connectionId?.trim().toLowerCase() || '',
+  aliases: [resource.vmware?.connectionName, resource.vmware?.vcenterHost]
+    .map((value) => value?.trim().toLowerCase() || '')
+    .filter(Boolean),
+});
+
+// Whether the page's vSphere inventory comes from one vCenter connection, which
+// makes a vCenter column repeat on every row. Decided from the whole inventory,
+// never from filtered rows, so a search that narrows to one vCenter does not
+// drop the column. A resource without a connection ID is matched to a known
+// connection by its name or host, so one vCenter is never counted twice.
+export const isSingleVmwareVcenter = (resources: readonly Resource[]): boolean => {
+  const fields = resources.map(vmwareConnectionFields);
+  const idByAlias = new Map<string, string>();
+  for (const { id, aliases } of fields) {
+    if (id) aliases.forEach((alias) => idByAlias.set(alias, id));
+  }
+  const connections = new Set<string>();
+  for (const { id, aliases } of fields) {
+    const key = id || aliases.map((alias) => idByAlias.get(alias)).find(Boolean) || aliases[0];
+    if (key) connections.add(key);
+  }
+  return connections.size <= 1;
+};
+
+export const vmwareVcenterLabel = (resource: Resource): string =>
+  resource.vmware?.connectionName?.trim() || resource.vmware?.vcenterHost?.trim() || '';
 
 export const getVmwareResourceDisplayStatus = (resource: Resource): string =>
   hasImpairedResourceSource(resource, 'vmware-vsphere') ? 'degraded' : resource.status;
@@ -413,6 +447,106 @@ export function mapVmwareNetworkStatus(
   }
   if (['online', 'running'].includes(status) || overall === 'green') return 'healthy';
   return 'unknown';
+}
+
+const ATTENTION_OVERALL_STATUSES = new Set(['red', 'yellow']);
+
+// Why a datastore or network row is not green, in the order a user should
+// read them. Stale vCenter data comes first, since everything else on the row
+// may be out of date; then vCenter's own alarms, worst first. vCenter's
+// overall colour only shows when no alarm explains it.
+const vmwareAttentionReasons = (resource: Resource, leading: string[] = []): string[] => {
+  const reasons: string[] = [];
+  const push = (value: unknown) => {
+    const text = trimString(value);
+    if (text && !reasons.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
+      reasons.push(text);
+    }
+  };
+  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) {
+    push('vCenter has not updated this recently');
+  }
+  leading.forEach(push);
+  const incidents = (resource.incidents ?? [])
+    .filter(hasIncidentSignal)
+    .sort(
+      (a, b) => incidentSeverityRank(b.severity ?? '') - incidentSeverityRank(a.severity ?? ''),
+    );
+  const beforeIncidents = reasons.length;
+  incidents.forEach((incident) =>
+    push(incident.summary || vmwareIncidentLabel(resource, incident)),
+  );
+  if (reasons.length === beforeIncidents) {
+    const overall = normalize(resource.vmware?.overallStatus);
+    const alarms = resource.vmware?.activeAlarmCount ?? 0;
+    if (ATTENTION_OVERALL_STATUSES.has(overall)) push(`vCenter health is ${overall}`);
+    else if (alarms > 0) push(`${alarms} active vCenter alarm${alarms === 1 ? '' : 's'}`);
+  }
+  return reasons;
+};
+
+const hasCriticalVmwareSignal = (resource: Resource): boolean =>
+  normalize(resource.vmware?.overallStatus) === 'red' ||
+  (resource.incidents ?? []).some(
+    (incident) => mapVmwareIncidentSeverity(incident.severity) === 'critical',
+  );
+
+// A row's status dot and its Health reason come from one classification, so a
+// datastore in maintenance or a network with an active alarm never shows a
+// green dot beside an amber reason.
+export const getVmwareRowIndicator = (
+  resource: Resource,
+  issue: PlatformIssue | null,
+): StatusIndicator =>
+  issue
+    ? { variant: issue.tone === 'danger' ? 'danger' : 'warning', label: issue.label }
+    : getSimpleStatusIndicator(getVmwareResourceDisplayStatus(resource));
+
+// Health sorts the worst rows first: red, then amber, then healthy.
+export const vmwareIssueSortRank = (issue: PlatformIssue | null): number =>
+  issue ? (issue.tone === 'danger' ? 0 : 1) : 2;
+
+const DATASTORE_ISSUE_LABELS = {
+  inaccessible: 'Inaccessible',
+  maintenance: 'Maintenance',
+  attention: 'Attention',
+} as const;
+
+export function getVmwareDatastoreIssue(resource: Resource): PlatformIssue | null {
+  const bucket = mapVmwareDatastoreStatus(resource);
+  if (bucket === 'accessible' || bucket === 'unknown') return null;
+  // The bucket picks one filter, but a datastore in maintenance can also be
+  // unreachable or carry a critical alarm: each condition gives its reason,
+  // and the worst sets the colour.
+  const inaccessible =
+    resource.vmware?.datastoreAccessible === false ||
+    normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
+  const leading: string[] = [];
+  if (inaccessible) leading.push('vCenter reports it inaccessible');
+  if (bucket === 'maintenance') {
+    leading.push(
+      normalize(resource.vmware?.maintenanceMode).includes('entering')
+        ? 'Entering maintenance mode'
+        : 'In maintenance mode',
+    );
+  }
+  const reasons = vmwareAttentionReasons(resource, leading);
+  return {
+    tone: inaccessible || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
+    label: DATASTORE_ISSUE_LABELS[bucket],
+    reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+  };
+}
+
+export function getVmwareNetworkIssue(resource: Resource): PlatformIssue | null {
+  if (mapVmwareNetworkStatus(resource) !== 'attention') return null;
+  const offline = normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
+  const reasons = vmwareAttentionReasons(resource);
+  return {
+    tone: offline || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
+    label: 'Attention',
+    reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+  };
 }
 
 const titleize = (value: string): string =>
@@ -693,7 +827,10 @@ const buildActivityRow = (
   const metadata = change.metadata;
   const activityType = metadataString(metadata, 'activity_type');
   const activityKind = mapVmwareActivityKind(activityType, metadata);
+  // An event reads as vCenter's own message. The provider titles new events
+  // with it; records stored before that carry the event class as their title.
   const title =
+    (activityKind === 'event' ? metadataString(metadata, 'vmwareEventMessage') : '') ||
     metadataString(metadata, 'activity_title', 'vmwareTaskName', 'vmwareEventType') ||
     trimString(change.reason) ||
     'vSphere activity';
@@ -703,6 +840,7 @@ const buildActivityRow = (
     metadataString(metadata, 'activity_message', 'vmwareTaskError', 'vmwareEventMessage') ||
     trimString(change.reason);
   const description = metadataString(metadata, 'vmwareTaskDescription', 'vmwareEventMessage');
+  const eventType = metadataString(metadata, 'vmwareEventType');
   const actor = trimString(change.actor) || metadataString(metadata, 'vmwareEventUser');
   const nativeId = metadataString(metadata, 'activity_native_id', 'vmwareTask', 'vmwareEvent');
   const observedAt = trimString(change.observedAt);
@@ -727,6 +865,7 @@ const buildActivityRow = (
     activityType,
     stateBucket: mapVmwareActivityStateBucket(state),
     title,
+    eventType,
     state,
     message,
     description,
@@ -1010,6 +1149,7 @@ const activitySearchHaystack = (row: VmwareActivityRow): string =>
     row.activityKind,
     row.activityType,
     row.title,
+    row.eventType,
     row.state,
     row.message,
     row.description,

@@ -104,21 +104,42 @@ Use any of the install paths above. The rest of this guide assumes
 ### 2. Mint an API token
 
 Pulse fetches the live capabilities manifest first, and every tool
-description includes its required auth scope. For a read-only external
-agent, start with `monitoring:read`. For the full published Pulse
-Intelligence surface, mint a token with the current manifest scopes:
+description includes its required auth scope. Start with a dedicated, suitably
+expiring `monitoring:read` token, retaining its organisation/resource
+restrictions. The whole-surface scope union below is **not a recommended default
+or the minimum for read-only use**:
 <!-- pulse-mcp-scope-list:start -->
 `monitoring:read`, `monitoring:write`, `settings:read`, `settings:write`, `ai:execute`, `actions:plan`, `actions:approve`, and `actions:execute`
 <!-- pulse-mcp-scope-list:end -->
 
-You can also mint narrower tokens for specific workflows. For example,
-omit `settings:write` if the client should not add or edit monitored
-infrastructure sources, and omit `ai:execute` if it should not review
-Patrol findings or plan, approve, or execute governed actions. Mint the
-token in **Settings →
-Security → API Tokens**.
+Grant additional scopes only for the specific workflow you intend to delegate,
+not to make every tool callable or an all-scope readiness indicator pass.
+`monitoring:write` can change operator state without the action-plan approval
+loop, and `settings:write` can change infrastructure configuration. Planning,
+approval and execution have separate action scopes; the legacy `ai:execute`
+scope also permits those stages. Omitting it is not a control boundary if you
+still grant `actions:approve` or `actions:execute`. A scope alone does not bypass
+actor binding, permissions, separation of duties, step-up or live readiness.
+Mint the token in **Settings → API Access** and follow the
+[read-only connection and action boundaries](../../docs/AGENT_SUBSTRATE.md#connect-without-granting-control).
+A tool listing is not permission to call every listed tool.
 
 ### 3. Wire it into your client
+
+**The generated snippets below contain placeholders, not secret storage.** Keep
+real tokens in your client's private, user-local configuration or supported
+secret store, outside shared projects and repositories. Do not put a real token
+in a project-shared `.mcp.json` or `opencode.json`, command argument, URL or
+transcript. Do not export a token through a shell command containing its value.
+The adapter reads its environment; the client process and local administrators
+can still read that environment. Use only a client and model provider permitted
+to receive the returned infrastructure context, findings and action output.
+
+`http://localhost:7655` applies only when the client runs on the Pulse host.
+Otherwise use your existing verified HTTPS origin and preserve the proxy's
+access policy. Do not expose the backend or disable certificate verification to
+make a desktop client connect. Revoke an unused or exposed token in **API
+Access**; deleting the client configuration alone does not revoke it.
 
 <!-- pulse-mcp-client-config:start -->
 Most MCP clients need the same manifest-owned runtime facts: server name `pulse`, command `pulse-mcp`, base URL flag `--base-url`, default URL `http://localhost:7655`, and token environment variable `PULSE_API_TOKEN`.
@@ -183,8 +204,9 @@ Use command `pulse-mcp`, pass `--base-url http://localhost:7655`, set `PULSE_API
 | `--token-env` | `PULSE_API_TOKEN` | Env var holding the API token |
 | `--emit-notifications` | `false` | Translate Pulse SSE events into JSON-RPC notifications on stdout |
 
-The token is always read from an environment variable, never a flag, so
-it does not appear in process listings.
+The token is read from an environment variable, never a token flag, keeping it
+out of command arguments. This does not make the environment or the client's
+saved configuration inaccessible to local administrators.
 
 ### About `--emit-notifications`
 
@@ -202,6 +224,14 @@ The `params` object is the SSE event's `data` payload verbatim, so an
 agent that already knows the substrate's wire shape sees identical
 content to what an HTTP SSE consumer would. Transport plumbing
 (`stream.connected`, `heartbeat`) is filtered out.
+
+`action.completed` also covers failed or refused terminal actions; its name
+alone is not a successful dispatch or recovery receipt. Inspect the result and
+verification evidence. Missing checks or `ran: false` do not establish the
+intended state. Even a verified check establishes only that postcondition at
+its recorded time. After a timeout or lost response, a change may already have
+happened: retain the action identity and inspect existing context/history rather
+than executing again. See [outcome interpretation](../../docs/AGENT_SUBSTRATE.md#read-action-outcomes-without-repeating-them).
 
 It is off by default because not every MCP client surfaces
 server-initiated notifications. Enable it when wiring an autonomous
@@ -354,23 +384,29 @@ make sure your client's `env` block (or shell environment) sets
 **"manifest GET returned 401" on startup.**
 Discovery is supposed to be unauthenticated. If your Pulse instance is
 behind a reverse proxy that adds auth in front of the public paths,
-the proxy is gating the manifest endpoint. Make sure
-`/api/agent/capabilities` is reachable without a credential, the same
-way `/api/health` is.
+the proxy may be enforcing its own access policy. Public inside Pulse does not
+mean publicly reachable through your proxy. Check the existing authorised client
+path; do not exempt discovery or health from proxy authentication, expose a
+backend or copy a browser session cookie into the adapter to bypass that policy.
+The environment API token authenticates Pulse, not an unrelated proxy login.
 
 **Tools work, but a write or action tool returns 403 access_denied.**
-Your token is missing that tool's required scope. Run `tools/list` and
-check the `required scope` line in the tool description. Operator-state
-writes need `monitoring:write`, provisioning tools need `settings:read`
-or `settings:write`, and Patrol finding plus governed action tools need
-`ai:execute`. Mint a narrower or broader token depending on which
-external-agent workflows you want to allow.
+Read the relevant error and live tool metadata privately. A 403 is not by
+itself proof of a missing scope: permissions, organisation/resource boundaries
+or action policy can also refuse it. If the client is meant to be read-only,
+leave it denied. Do not add `ai:execute`, approval or execution scopes merely to
+clear an error. For an intended write, check the specific scope and authority
+against [the separate action steps](../../docs/API.md#unified-action-planning);
+operator-state writes instead use `monitoring:write` and scope-only policy.
+Do not run a write, induce a finding or enable Debug as a connectivity test.
 
 **Tools list is empty.**
 The adapter filters `subscribe_events` out (it is not request/response
 shaped). If literally nothing else shows up, your Pulse instance's
-manifest is empty, which is a Pulse-side bug; check
-`curl http://your-pulse/api/agent/capabilities` directly.
+manifest may be empty or the client may not have completed initialisation.
+Inspect the existing manifest and client error privately before diagnosing it.
+Use the [bounded private-response HTTP reads](../../docs/AGENT_SUBSTRATE.md#connect-without-granting-control),
+not credential-bearing logs, a public backend or an action as a probe.
 
 ## Implementation notes
 

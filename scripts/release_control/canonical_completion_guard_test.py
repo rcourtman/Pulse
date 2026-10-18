@@ -1,4 +1,6 @@
 import io
+import canonical_completion_guard
+import json
 import os
 import subprocess
 import tempfile
@@ -18,6 +20,7 @@ from canonical_completion_guard import (
     is_ignored_runtime_file,
     is_test_or_fixture,
     load_subsystem_rules,
+    main,
     path_policy_matches,
     parse_args,
     prettier_only_contract_neutral_reason,
@@ -155,14 +158,46 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
     return "DEFAULT"
 
 
-RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-    "tests/integration/tests/17-recovery-layout.spec.ts",
-]
-
-
 class CanonicalCompletionGuardTest(unittest.TestCase):
+    def test_staged_scope_keeps_resolutions_and_modes_but_not_inherited_merge_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = os.environ.copy()
+            strip_local_git_env(env)
+            env["GIT_CONFIG_GLOBAL"] = os.devnull
+            env["GIT_CONFIG_SYSTEM"] = os.devnull
+
+            def git(*args: str) -> None:
+                subprocess.run(
+                    ["git", "-c", "user.name=Proof Fixture", "-c", "user.email=proof@example.invalid", *args],
+                    cwd=root, env=env, check=True, capture_output=True, text=True,
+                )
+
+            git("init", "-b", "main")
+            for name in ("resolved.go", "mode.go", "removed.go", "old name.go"):
+                (root / name).write_text("base\n", encoding="utf-8")
+            git("add", "resolved.go", "mode.go", "removed.go", "old name.go")
+            git("commit", "-m", "Base fixture")
+            git("checkout", "-b", "reviewed")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            (root / "inherited.go").write_text("reviewed\n", encoding="utf-8")
+            git("rm", "removed.go")
+            git("mv", "old name.go", "new name.go")
+            git("add", "resolved.go", "inherited.go")
+            git("commit", "-m", "Reviewed fixture")
+            git("checkout", "main")
+            git("merge", "--no-commit", "--no-ff", "reviewed")
+            (root / "resolved.go").write_text("combined resolution\n", encoding="utf-8")
+            git("add", "resolved.go")
+            git("update-index", "--chmod=+x", "mode.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["mode.go", "resolved.go"])
+            git("reset", "--hard", "HEAD")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            git("add", "resolved.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["resolved.go"])
+
     def test_registry_exists_and_contains_required_subsystems(self):
         self.assertTrue(SUBSYSTEM_REGISTRY.exists())
         rules = load_subsystem_rules()
@@ -252,45 +287,15 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertTrue(
             monitoring["verification"]["require_explicit_path_policy_coverage"]
         )
-        self.assertEqual(
-            monitoring["verification"]["exact_files"],
-            ["internal/unifiedresources/code_standards_test.go"],
-        )
+        self.assertEqual(monitoring["verification"]["exact_files"], [])
         policy_ids = [policy["id"] for policy in monitoring["verification"]["path_policies"]]
+        self.assertIn("monitoring-runtime", policy_ids)
+        requirements = monitoring["verification_requirements"]
         self.assertEqual(
-            policy_ids,
             [
-                "service-discovery-assurance-runtime",
-                "maintenance-verification-runtime",
-                "availability-certificate-runtime",
-                "discovery-provider-runtime",
-                "host-agent-ingest-runtime",
-                "truenas-runtime",
-                "metrics-hot-path",
-                "metrics-history-runtime",
-                "storage-risk-runtime",
-                "memory-source-runtime",
-                "docker-collect-runtime",
-                "docker-swarm-runtime",
-                "kubernetes-native-agent-runtime",
-                "runtime-report-model",
-                "proxmox-guest-counter-runtime",
-                "proxmox-zfs-runtime",
-                "proxmox-cluster-client-runtime",
-                "proxmox-ceph-runtime",
-                "proxmox-backup-identity-monitoring",
-                "container-entrypoint-runtime",
-                "mock-runtime-fixtures",
-                "pbs-client-runtime",
-                "pbs-protection-evidence-runtime",
-                "diskinventory-collection-trust",
-                "agent-fleet-diagnostics-runtime",
-                "monitoring-runtime",
-                "filesystem-observations",
+                {key: value for key, value in requirement.items() if key != "exact_files"}
+                for requirement in requirements
             ],
-        )
-        self.assertEqual(
-            monitoring["verification_requirements"],
             [
                 {
                     "id": "monitoring-runtime",
@@ -298,43 +303,20 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "touched_runtime_files": ["internal/monitoring/monitor.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "internal/config/docker_metadata_test.go",
-                        "internal/config/guest_metadata_test.go",
-                        "internal/monitoring/availability_poller_test.go",
-                        "internal/monitoring/availability_probe_agent_test.go",
-                        "internal/monitoring/availability_udp_test.go",
-                        "internal/monitoring/canonical_guardrails_test.go",
-                        "internal/monitoring/ceph_test.go",
-                        "internal/monitoring/deadman_test.go",
-                        "internal/monitoring/issue1485_unraid_lifecycle_test.go",
-                        "internal/monitoring/issue1595_collection_trust_test.go",
-                        "internal/monitoring/issue1613_contract_test.go",
-                        "internal/monitoring/issue1638_dns_cache_test.go",
-                        "internal/monitoring/issue1913_host_continuity_test.go",
-                        "internal/monitoring/metric_window_provider_test.go",
-                        "internal/monitoring/monitor_additional_test.go",
-                        "internal/monitoring/monitor_alert_handling_test.go",
-                        "internal/monitoring/monitor_alert_intent_test.go",
-                        "internal/monitoring/monitor_alert_override_migration_test.go",
-                        "internal/monitoring/monitor_backups_readstate_test.go",
-                        "internal/monitoring/monitor_docker_test.go",
-                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
-                        "internal/monitoring/monitor_host_agents_test.go",
-                        "internal/monitoring/monitor_mock_alerts_test.go",
-                        "internal/monitoring/monitor_notification_startup_test.go",
-                        "internal/monitoring/monitor_pve_cluster_refresh_test.go",
-                        "internal/monitoring/monitor_pve_guest_lxc_test.go",
-                        "internal/monitoring/physical_disk_roundtrip_test.go",
-                        "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
-                        "internal/monitoring/pve_protection_observation_test.go",
-                        "internal/monitoring/ratetracker_test.go",
-                        "internal/monitoring/reload_test.go",
-                        "internal/monitoring/truenas_poller_test.go",
-                        "internal/unifiedresources/code_standards_test.go",
-                    ],
                 }
             ],
+        )
+        proofs = [
+            "internal/config/guest_metadata_writer_test.go",
+            "internal/monitoring/guest_poll_ownership_test.go",
+        ]
+        self.assertEqual(
+            staged_verification_files_for_requirement(
+                monitoring,
+                requirements[0],
+                proofs + ["internal/api/action_runner_credentials_test.go"],
+            ),
+            proofs,
         )
 
     def test_docker_collect_runtime_change_requires_monitoring_contract(self):
@@ -659,7 +641,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/actionrunner/runner.go",
                         "internal/dockeragent/action_runtime.go",
                     ],
-                    "allow_same_subsystem_tests": True,
+                    "allow_same_subsystem_tests": False,
                     "test_prefixes": ["internal/actionrunner/"],
                     "exact_files": [
                         "cmd/pulse-agent-runner/main_test.go",
@@ -798,6 +780,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/commands_host_update_test.go",
                         "internal/hostagent/commands_storage_cleanup_test.go",
                         "internal/hostagent/docker_lifecycle_test.go",
+                        "internal/hostagent/enroll_test.go",
                         "internal/hostagent/issue1595_sas_collection_test.go",
                         "internal/hostagent/observer_delivery_test.go",
                         "internal/hostagent/package_updates_test.go",
@@ -906,7 +889,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_auto_update_script_change_uses_deployment_script_policy(self):
+    def test_auto_update_script_change_uses_unattended_update_policy(self):
         required = infer_impacted_subsystems(["scripts/pulse-auto-update.sh"])
         self.assertEqual(set(required), {"deployment-installability"})
 
@@ -923,21 +906,59 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             installability["verification_requirements"],
             [
                 {
-                    "id": "deployment-script-runtime",
-                    "label": "deployment script runtime proof",
+                    "id": "unattended-update-runtime",
+                    "label": "unattended updater runtime proof",
                     "touched_runtime_files": ["scripts/pulse-auto-update.sh"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "scripts/installtests/install_docker_sh_test.go",
-                        "scripts/installtests/install_ps1_test.go",
-                        "scripts/installtests/install_sh_test.go",
+                        "scripts/installtests/pulse_auto_update_consent_test.go",
                         "scripts/installtests/pulse_auto_update_test.go",
-                        "scripts/installtests/root_install_sh_test.go",
                     ],
                 }
             ],
         )
+
+    def test_standalone_consent_proof_is_confined_to_unattended_updater(self):
+        rule = next(
+            rule for rule in load_subsystem_rules()
+            if rule["id"] == "deployment-installability"
+        )
+        proof = "scripts/installtests/pulse_auto_update_consent_test.go"
+        update_requirement = build_verification_requirements(
+            rule, ["scripts/pulse-auto-update.sh"]
+        )[0]
+        self.assertEqual(update_requirement["id"], "unattended-update-runtime")
+        self.assertEqual(
+            staged_verification_files_for_requirement(rule, update_requirement, [proof]),
+            [proof],
+        )
+        for unmatched in [[], ["scripts/installtests/unrelated_test.go"]]:
+            with self.subTest(unmatched=unmatched):
+                self.assertEqual(
+                    staged_verification_files_for_requirement(
+                        rule, update_requirement, unmatched
+                    ),
+                    [],
+                )
+        for runtime in [
+            "install.sh",
+            "scripts/install.ps1",
+            "scripts/install-docker.sh",
+            "scripts/install-container-agent.sh",
+            "docker-compose.yml",
+        ]:
+            with self.subTest(runtime=runtime):
+                requirements = build_verification_requirements(rule, [runtime])
+                self.assertTrue(requirements)
+                for requirement in requirements:
+                    self.assertNotEqual(requirement["id"], "unattended-update-runtime")
+                    self.assertEqual(
+                        staged_verification_files_for_requirement(
+                            rule, requirement, [proof]
+                        ),
+                        [],
+                    )
 
     def test_vite_config_change_uses_frontend_build_output_policy(self):
         required = infer_impacted_subsystems(["frontend-modern/vite.config.ts"])
@@ -1321,6 +1342,39 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         other = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])["api-contracts"]
         self.assertNotIn(proof, other["verification_requirements"][0]["exact_files"])
 
+    def test_unattended_reporting_proofs_do_not_satisfy_unrelated_runtime_changes(self):
+        cases = [
+            (
+                "api-contracts", "internal/api/metrics_reporting_handlers.go",
+                "internal/api/report_schedule_inventory_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "api-contracts", "internal/api/router_helpers.go",
+                "internal/api/reporting_monitor_reload_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "monitoring", "internal/monitoring/resource_stale_thresholds.go",
+                "internal/monitoring/unified_inventory_read_refresh_test.go",
+                "internal/monitoring/monitor.go",
+            ),
+        ]
+        rules = {rule["id"]: rule for rule in load_subsystem_rules()}
+        for subsystem, runtime, proof, unrelated in cases:
+            with self.subTest(runtime=runtime):
+                rule = rules[subsystem]
+                requirement = build_verification_requirements(rule, [runtime])[0]
+                self.assertEqual(
+                    staged_verification_files_for_requirement(rule, requirement, [proof]),
+                    [proof],
+                )
+                other = build_verification_requirements(rule, [unrelated])[0]
+                self.assertEqual(
+                    staged_verification_files_for_requirement(rule, other, [proof]),
+                    [],
+                )
+
     def test_organization_rbac_backend_change_requires_organization_settings_and_api_contracts(self):
         required = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])
         self.assertEqual(set(required), {"api-contracts", "organization-settings"})
@@ -1353,16 +1407,21 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/alerting/notifications_test.go",
                         "internal/api/audit_handlers_test.go",
                         "internal/api/availability_handlers_test.go",
+                        "internal/api/chartapi/history_activity_test.go",
+                        "internal/api/configapi/config_handlers_connection_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/docker_agents_report_size_test.go",
                         "internal/api/docker_container_action_executor_test.go",
                         "internal/api/docker_container_action_result_test.go",
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                        "internal/api/investigation_evidence_parity_test.go",
                         "internal/api/issue1640_readiness_gate_test.go",
                         "internal/api/issue1640_readiness_transport_test.go",
                         "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
                         "internal/api/runtime_inventory_sources_test.go",
+                        "internal/api/telemetry_history_reads_test.go",
+                        "internal/api/truenas_disk_history_integration_test.go",
                         "pulse-enterprise:test/extensions_contract_test.go",
                     ],
                 }
@@ -2464,12 +2523,17 @@ None yet.
                         "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
                         "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertHistoryFrequencyCard.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertHistoryMobileList.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertHistoryTableSection.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIncidentSynthesisSummary.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertOverviewAlertCard.system-scope.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/alertHistoryModel.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsState.test.tsx",
@@ -2554,6 +2618,57 @@ None yet.
             ["frontend-modern/src/api/__tests__/alerts.test.ts"],
         )
         self.assertEqual(matches, ["frontend-modern/src/api/__tests__/alerts.test.ts"])
+
+    def test_check_staged_contracts_reads_same_subsystem_tests_from_ownership(self):
+        # The guards hand the impacted entry, not the registry rule, to
+        # staged_verification_files_for_requirement. Before the entry carried
+        # owned_prefixes/owned_files, a same-subsystem test never satisfied a
+        # requirement that allowed one, while subsystem_lookup and the BLOCKED
+        # message both said it would. The live registry keeps the flag false
+        # (registry_audit rejects true), so a synthetic rule pins the plumbing.
+        synthetic_rule = {
+            "id": "synthetic",
+            "contract": "docs/release-control/v6/internal/subsystems/synthetic.md",
+            "owned_prefixes": ["synthetic/"],
+            "owned_files": [],
+            "verification": {
+                "allow_same_subsystem_tests": False,
+                "test_prefixes": [],
+                "exact_files": [],
+                "require_explicit_path_policy_coverage": True,
+                "path_policies": [
+                    {
+                        "id": "synthetic-runtime",
+                        "label": "synthetic runtime proof",
+                        "match_prefixes": ["synthetic/"],
+                        "match_files": [],
+                        "allow_same_subsystem_tests": True,
+                        "test_prefixes": [],
+                        "exact_files": ["synthetic/listed_test.go"],
+                    }
+                ],
+            },
+        }
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
+            patch(
+                "canonical_completion_guard.load_subsystem_rules",
+                return_value=[synthetic_rule],
+            ),
+            patch("canonical_completion_guard.required_contract_updates", return_value={}),
+            redirect_stderr(stderr),
+        ):
+            accepted = check_staged_contracts(
+                ["synthetic/runtime.go", "synthetic/nested/other_test.go"]
+            )
+            blocked = check_staged_contracts(
+                ["synthetic/runtime.go", "elsewhere/other_test.go"]
+            )
+
+        self.assertEqual(accepted, 0)
+        self.assertEqual(blocked, 1)
+        self.assertIn("same-subsystem test/spec files are also accepted", stderr.getvalue())
 
     def test_patrol_autopilot_runtime_accepts_only_dedicated_verification(self):
         rules = {rule["id"]: rule for rule in load_subsystem_rules()}
@@ -2761,8 +2876,11 @@ None yet.
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/api/truenas_disk_history_integration_test.go",
+                        "internal/monitoring/disk_drawer_native_history_test.go",
                         "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
                         "internal/monitoring/monitor_metrics_slo_test.go",
+                        "internal/monitoring/storage_history_test.go",
                     ],
                 }
             ],
@@ -3730,9 +3848,9 @@ class ContractNeutralOverrideTest(unittest.TestCase):
 class DiffBaseContractComparisonTest(unittest.TestCase):
     """The guard runs in two modes. Pre-commit compares HEAD against the
     index, where the pending contract update is staged. CI has nothing
-    staged (index == HEAD), so it must compare the push-range base against
-    HEAD instead; before --diff-base existed, CI misreported every staged
-    contract as having no substantive change."""
+    staged (index == HEAD), so it must compare the diff base against the
+    evaluated commit instead; before --diff-base existed, CI misreported
+    every staged contract as having no substantive change."""
 
     CONTRACT_PATH = "docs/release-control/v6/internal/subsystems/deployment-installability.md"
     BASE_TEXT = "## Current State\n\nExisting obligation.\n"
@@ -3778,10 +3896,10 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
             )
 
     def test_check_staged_contracts_threads_diff_base_into_comparison(self):
-        seen: list[tuple[str, str | None]] = []
+        seen: list[tuple[str, str | None, str]] = []
 
-        def record(path, diff_base=None):
-            seen.append((path, diff_base))
+        def record(path, diff_base=None, revision="HEAD"):
+            seen.append((path, diff_base, revision))
             return True
 
         with (
@@ -3799,10 +3917,27 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
             ),
         ):
             self.assertEqual(
-                check_staged_contracts([self.CONTRACT_PATH], diff_base="0d787a4b1"),
+                check_staged_contracts(
+                    [self.CONTRACT_PATH],
+                    diff_base="0d787a4b1",
+                    revision="5e1f00d2c",
+                ),
                 0,
             )
-        self.assertEqual(seen, [(self.CONTRACT_PATH, "0d787a4b1")])
+        self.assertEqual(seen, [(self.CONTRACT_PATH, "0d787a4b1", "5e1f00d2c")])
+
+    def test_diff_base_mode_compares_base_against_evaluated_revision(self):
+        blobs = {
+            f"0d787a4b1:{self.CONTRACT_PATH}": self.BASE_TEXT,
+            f"5e1f00d2c:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+            f"HEAD:{self.CONTRACT_PATH}": self.BASE_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertTrue(
+                staged_contract_has_substantive_change(
+                    self.CONTRACT_PATH, "0d787a4b1", "5e1f00d2c"
+                )
+            )
 
     def test_resolve_diff_base_returns_merge_base_sha(self):
         head = subprocess.run(
@@ -3817,6 +3952,273 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
     def test_resolve_diff_base_falls_back_to_raw_ref(self):
         zero_sha = "0" * 40
         self.assertEqual(resolve_diff_base(zero_sha), zero_sha)
+
+
+class EvaluatedCommitContractComparisonTest(unittest.TestCase):
+    """CI and dev-prepush walk a branch's commits with HEAD at the branch tip
+    and evaluate each commit against its own parent, as the pre-commit hook
+    did. The contract-text comparison must read the evaluated commit, not
+    HEAD. Pulse PR 2494 failed CI because its second commit reverted a
+    Current State paragraph its first commit wrote, so parent-vs-HEAD saw no
+    contract change for a commit the pre-commit hook had correctly passed.
+    The same comparison let a bare runtime commit pass when a later commit
+    carried the contract update."""
+
+    CONTRACT_PATH = "docs/release-control/v6/internal/subsystems/performance-and-scalability.md"
+    RUNTIME_PATH = "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
+    ORIGINAL = (
+        "## Contract Metadata\n\n"
+        "- Status: active\n\n"
+        "## Current State\n\n"
+        "Spacer geometry and the inverse scroll-to-index mapping must share one\n"
+        "representative item height. The controller samples leading siblings.\n"
+    )
+    REWRITTEN = ORIGINAL.replace(
+        "The controller samples leading siblings.",
+        "A table runway measures every mounted row.",
+    )
+    METADATA_ONLY = ORIGINAL.replace("- Status: active", "- Status: active (reviewed)")
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.repo = Path(temp_dir.name)
+        # Hook runs export GIT_DIR/GIT_INDEX_FILE for the real repository;
+        # the guard's git calls must reach the temporary repository instead.
+        env_patch = patch.dict(os.environ, strip_local_git_env(os.environ.copy()), clear=True)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        root_patch = patch("canonical_completion_guard.REPO_ROOT", self.repo)
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Pulse Test")
+        self.git("config", "user.email", "pulse-test@example.invalid")
+        self.commit_contract(self.ORIGINAL, "base")
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def commit_contract(self, text: str, message: str) -> str:
+        contract = self.repo / self.CONTRACT_PATH
+        contract.parent.mkdir(parents=True, exist_ok=True)
+        contract.write_text(text, encoding="utf-8")
+        runtime = self.repo / self.RUNTIME_PATH
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        runtime.write_text(f"// {message}\n", encoding="utf-8")
+        self.git("add", self.CONTRACT_PATH, self.RUNTIME_PATH)
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def run_guard(self, commit: str) -> tuple[int, str]:
+        stderr = io.StringIO()
+        with (
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={},
+            ),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={
+                    self.CONTRACT_PATH: {
+                        "subsystem": "performance-and-scalability",
+                        "touched_runtime_files": [self.RUNTIME_PATH],
+                    }
+                },
+            ),
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}),
+            patch("sys.stdin", io.StringIO(f"{self.CONTRACT_PATH}\n{self.RUNTIME_PATH}\n")),
+            redirect_stderr(stderr),
+        ):
+            status = main(["--files-from-stdin", "--diff-base", f"{commit}^", "--commit", commit])
+        return status, stderr.getvalue()
+
+    def test_later_revert_does_not_block_the_commit_that_wrote_the_contract(self) -> None:
+        wrote = self.commit_contract(self.REWRITTEN, "rewrite the runway paragraph")
+        self.commit_contract(self.ORIGINAL, "revert the runway paragraph")
+
+        # HEAD now matches the parent of `wrote`; only the evaluated commit
+        # carries the substantive Current State change.
+        self.assertTrue(
+            staged_contract_has_substantive_change(self.CONTRACT_PATH, f"{wrote}^", wrote)
+        )
+        self.assertFalse(
+            staged_contract_has_substantive_change(self.CONTRACT_PATH, f"{wrote}^", "HEAD")
+        )
+        status, stderr = self.run_guard(wrote)
+        self.assertEqual(status, 0, stderr)
+
+    def test_later_contract_update_does_not_pass_an_earlier_bare_commit(self) -> None:
+        bare = self.commit_contract(self.METADATA_ONLY, "touch only contract metadata")
+        self.commit_contract(
+            self.METADATA_ONLY.replace(
+                "The controller samples leading siblings.",
+                "A table runway measures every mounted row.",
+            ),
+            "record the runway paragraph",
+        )
+
+        status, stderr = self.run_guard(bare)
+        self.assertEqual(status, 1)
+        self.assertIn(
+            f"contract {self.CONTRACT_PATH} is staged but does not include a "
+            "substantive section update",
+            stderr,
+        )
+
+    def test_resolve_diff_base_anchors_on_the_evaluated_commit(self) -> None:
+        first = self.commit_contract(self.REWRITTEN, "first")
+        self.commit_contract(self.ORIGINAL, "second")
+        parent = self.git("rev-parse", f"{first}^")
+        self.assertEqual(resolve_diff_base(f"{first}^", first), parent)
+
+
+class EvaluatedCommitGovernanceSourceTest(unittest.TestCase):
+    """The registry and contract index decide which contracts a commit owes.
+    In CI they must come from the evaluated commit, as the pre-commit hook
+    read them from that commit's index, not from the branch tip: a later
+    commit (or main merged under the branch) that adds a contract reference
+    blocked an earlier commit that was complete when written, and one that
+    drops ownership let an earlier incomplete commit pass."""
+
+    SUBSYSTEMS = "docs/release-control/v6/internal/subsystems"
+    REGISTRY = f"{SUBSYSTEMS}/registry.json"
+    ALPHA = f"{SUBSYSTEMS}/alpha.md"
+    BETA = f"{SUBSYSTEMS}/beta.md"
+    RUNTIME = "app/alpha/widget.go"
+    PROOF = "app/alpha/widget_test.go"
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.repo = Path(temp_dir.name)
+        for target in (
+            patch.dict(os.environ, strip_local_git_env(os.environ.copy()), clear=True),
+            patch("canonical_completion_guard.REPO_ROOT", self.repo),
+            patch("canonical_completion_guard.SUBSYSTEM_REGISTRY", self.repo / self.REGISTRY),
+            patch("repo_file_io.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.CONTRACTS_DIR", self.repo / self.SUBSYSTEMS),
+        ):
+            target.start()
+            self.addCleanup(target.stop)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Pulse Test")
+        self.git("config", "user.email", "pulse-test@example.invalid")
+        self.commit(
+            "base",
+            {
+                self.REGISTRY: self.registry(["app/alpha/"]),
+                self.ALPHA: self.contract("alpha", "Alpha owns the widget."),
+                self.BETA: self.contract("beta", "Beta renders summaries."),
+                self.RUNTIME: "package alpha\n",
+            },
+        )
+
+    @staticmethod
+    def registry(alpha_prefixes: list[str]) -> str:
+        def rule(subsystem_id: str, prefixes: list[str]) -> dict:
+            return {
+                "id": subsystem_id,
+                "contract": f"docs/release-control/v6/internal/subsystems/{subsystem_id}.md",
+                "owned_prefixes": prefixes,
+                "owned_files": [],
+                "verification": {
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [f"app/{subsystem_id}/"],
+                    "exact_files": [],
+                    "require_explicit_path_policy_coverage": False,
+                    "path_policies": [],
+                },
+            }
+
+        rules = [rule("alpha", alpha_prefixes), rule("beta", ["app/beta/"])]
+        return json.dumps({"subsystems": rules}, indent=2) + "\n"
+
+    @staticmethod
+    def contract(subsystem_id: str, current_state: str, shared_boundary: str = "") -> str:
+        boundary = f"1. `{shared_boundary}` feeds this subsystem.\n" if shared_boundary else ""
+        return (
+            f"# {subsystem_id} contract\n\n"
+            "## Contract Metadata\n\n"
+            "```json\n"
+            f'{{"subsystem_id": "{subsystem_id}"}}\n'
+            "```\n\n"
+            "## Shared Boundaries\n\n"
+            f"{boundary}\n"
+            "## Current State\n\n"
+            f"{current_state}\n"
+        )
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def commit(self, message: str, files: dict[str, str]) -> str:
+        for rel, text in files.items():
+            path = self.repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        self.git("add", *files)
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def run_guard(self, commit: str) -> tuple[int, str]:
+        files = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}),
+            patch("sys.stdin", io.StringIO(files + "\n")),
+            redirect_stderr(stderr),
+        ):
+            status = main(["--files-from-stdin", "--diff-base", f"{commit}^", "--commit", commit])
+        return status, stderr.getvalue()
+
+    def test_later_contract_reference_does_not_block_an_earlier_complete_commit(self) -> None:
+        complete = self.commit(
+            "change the widget with its contract",
+            {
+                self.RUNTIME: "package alpha\n\nconst Size = 2\n",
+                self.PROOF: "package alpha\n",
+                self.ALPHA: self.contract("alpha", "Alpha owns the widget and its size."),
+            },
+        )
+        self.commit(
+            "beta starts depending on the widget",
+            {
+                self.BETA: self.contract(
+                    "beta", "Beta renders widget summaries.", shared_boundary=self.RUNTIME
+                ),
+            },
+        )
+
+        status, stderr = self.run_guard(complete)
+        self.assertEqual(status, 0, stderr)
+
+    def test_later_ownership_change_does_not_pass_an_earlier_incomplete_commit(self) -> None:
+        incomplete = self.commit(
+            "change the widget without its contract",
+            {
+                self.RUNTIME: "package alpha\n\nconst Size = 3\n",
+                self.PROOF: "package alpha\n",
+            },
+        )
+        self.commit("retire alpha's ownership of app/alpha", {self.REGISTRY: self.registry([])})
+
+        status, stderr = self.run_guard(incomplete)
+        self.assertEqual(status, 1)
+        self.assertIn(f"- subsystem alpha: missing contract {self.ALPHA}", stderr)
 
 
 class ReleaseCycleArtifactGuardTest(unittest.TestCase):
@@ -3901,6 +4303,11 @@ class DevPrepushScriptTest(unittest.TestCase):
                 (REPO_ROOT / "scripts" / "dev-prepush.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            # This case checks per-commit contract binding, not browser proof.
+            # Real browser admission is exercised by test_dev_prepush_frontend.
+            (repo / "scripts" / "release_control" / "browser_verification_guard.py").write_text(
+                "import sys\nsys.exit(0)\n", encoding="utf-8",
+            )
             (repo / "scripts" / "release_control" / "canonical_completion_guard.py").write_text(
                 """#!/usr/bin/env python3
 import os
@@ -3909,7 +4316,7 @@ import sys
 files = ",".join(line.strip() for line in sys.stdin if line.strip())
 with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
     reason = os.environ.get("PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT", "").strip()
-    log.write(f"{reason}\\t{files}\\n")
+    log.write(f"{reason}\\t{files}\\t{' '.join(sys.argv[1:])}\\n")
 """,
                 encoding="utf-8",
             )
@@ -3955,9 +4362,25 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
             )
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            first, second = (
+                subprocess.run(
+                    ["git", "rev-parse", ref],
+                    cwd=repo,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                ).stdout.strip()
+                for ref in ("HEAD^", "HEAD")
+            )
+            # Each commit is judged as itself, not as the branch tip.
             self.assertEqual(
                 guard_log.read_text(encoding="utf-8").splitlines(),
-                ["dependency-only test\tfirst.txt", "\tsecond.txt"],
+                [
+                    "dependency-only test\tfirst.txt\t"
+                    f"--files-from-stdin --diff-base {first}^ --commit {first}",
+                    f"\tsecond.txt\t--files-from-stdin --diff-base {second}^ --commit {second}",
+                ],
             )
 
 

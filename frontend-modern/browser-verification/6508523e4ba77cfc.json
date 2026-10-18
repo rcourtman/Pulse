@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "base_sha": "8c9c137ef755b7e393f218b9ba909561eecd73e6",
+  "verified_at": "2026-10-10T09:08:01.562Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "c7cb1f9c1832e9fa2225118cb282547abcf970d6650545cd5b6ce01e926d458e"
+  },
+  "routes": [
+    "/qualification/save (local fixture for the existing /alerts/notifications and /alerts/schedule settings; not a product route)"
+  ],
+  "viewports": [
+    {
+      "name": "desktop-light",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "desktop-dark",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "phone-light",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "narrow-dark",
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production AlertsConfigurationSurface, real state owners, payload builders, API adapters and CSS against synthetic local endpoints; Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 and WebKit 26.0, light/dark desktop and narrow viewports.",
+    "Pending writes keep Save and Discard disabled, Saving\u2026 and aria-busy visible, while fields stay editable. Later SMTP/Apprise drafts and dirty status survive earlier acknowledgements, settings-tab navigation and a failed multi-endpoint save.",
+    "A held destination reload is superseded by a synthetic settings-context event. The current context finishes loading, the old response is ignored, and the obsolete spinner does not persist.",
+    "Sixteen pending/newer-draft/rejected/recovered screenshots inspected across all four variants. Save controls and unsaved notice fit at 320px/390px with no horizontal overflow; inherited narrow panel descriptions still truncate.",
+    "The fixture does not mount the global toast layer or prove backend tenant isolation, native SMTP/Apprise delivery, physical-phone, release or installed acceptance. Already-issued requests are not cancelled or undone."
+  ],
+  "interactions": [
+    "36 assertion groups: keyboard Save; prevent duplicate click and Discard; edit during both pending requests; switch settings tabs; verify exact click-time wire fields; preserve newer inputs and dirty status.",
+    "Reject Apprise after email acknowledgement: no later watchdog write, draft retained, Save restored. Deliberate retry clears dirty status only after all writes; explicit idle Discard reloads accepted settings. Earlier accepted writes are not atomic rollback.",
+    "Start a clean tab reload, hold its email GET, replace the settings context, accept its current response, then release the old GET. Current inputs remain and both old and current loading indicators are clear.",
+    "No Test, retained-queue Retry/Dismiss, Relay/provider/native call, unexpected API request or page error. Browser and preview server closed. Earlier browser attempts and parent reproductions remain separate."
+  ],
+  "evidence_sha256": {
+    "script": "b816a1ba2b2a73bbbf68841165eac088c6afd964eb42e0b03b49e7bc36cce463",
+    "results": "59a38d17ddf97afcc6ae45c17d55dc5e3f98664fd3de8851f08e6e80a29ceef1",
+    "captures": {
+      "desktop-light-pending.png": "32b9df8ffe90c51ddc0a57dd99ca4471dedfb733785a6666df97f33838878504",
+      "desktop-light-newer-draft.png": "a8cfc2b225b338492c5ca601d5acd8ca066f68411107b8425233a9a08dd75c62",
+      "desktop-light-rejected.png": "107b86fdc0dcb921ca05dc1efca4af5d3f07b4f55fd5a5e2a525969c07c720ce",
+      "desktop-light-superseded-read-recovered.png": "4f7eceaf4cc62e816fd0af4f9bfa11436dd07b1bebf7377303733c7531e4d735",
+      "desktop-dark-pending.png": "0138e7d6dc493179a78464b1ecf6437bcbea68b8a6bb53e1d5cf08a0c7404781",
+      "desktop-dark-newer-draft.png": "6543161b16915631a09d7b02de19812604d7f97a6c88ecf1f4159a4ffb2ec54d",
+      "desktop-dark-rejected.png": "52681139f628438da5dc2ae3da60b1b1c24d9e1cdde8c662c3d914341a0a2400",
+      "desktop-dark-superseded-read-recovered.png": "600dc492588d7accd19b73b15f6e7efa7553e3fb421714f315511d76065fb742",
+      "phone-light-pending.png": "6b0f83a2a856bb6be392824f5faff73d912057fbefa457530a4c1057a33f1a86",
+      "phone-light-newer-draft.png": "2522bc0e27391c6d92dbae5a708b061510941b7d9bb599c4367e32da4d25d2be",
+      "phone-light-rejected.png": "1031f63447b3bdb644c43b8dd858217c24070e271a691bfa39be222cc3aa602d",
+      "phone-light-superseded-read-recovered.png": "4ea8b5a582c5a6a905bff53c1096398f7bd7cdee215250a363ed560adcb7ebf2",
+      "narrow-dark-pending.png": "a381801af85908330b8f01c2aa57a5b40efd50433134a853a364b75a088dbe2c",
+      "narrow-dark-newer-draft.png": "ea47defc947bee70042cef517a8f3caaf7ddc353f67bca85c35d13b5197c8fe7",
+      "narrow-dark-rejected.png": "8c3d6e495e31b6ed95157bccffdeb7b0a4e4ef8bbc784e206e6eb9492803e063",
+      "narrow-dark-superseded-read-recovered.png": "ec0abe91742f6e4cec84996929e4f4bc366b2a8ead07a45a94bed6e1fc595805"
+    }
+  }
+}

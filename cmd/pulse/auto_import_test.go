@@ -40,7 +40,7 @@ func TestPerformAutoImport_ValidPayload(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", dir)
 
 	pass := "test-passphrase"
-	cp := config.NewConfigPersistence(dir)
+	cp := config.NewConfigPersistence(t.TempDir())
 	exported, err := cp.ExportConfig(pass)
 	if err != nil {
 		t.Fatalf("ExportConfig: %v", err)
@@ -88,13 +88,13 @@ func TestPerformAutoImport_File(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", dir)
 
 	pass := "test-passphrase"
-	cp := config.NewConfigPersistence(dir)
+	cp := config.NewConfigPersistence(t.TempDir())
 	exported, err := cp.ExportConfig(pass)
 	if err != nil {
 		t.Fatalf("ExportConfig: %v", err)
 	}
 
-	importFile := filepath.Join(dir, "import.enc")
+	importFile := filepath.Join(t.TempDir(), "import.enc")
 	if err := os.WriteFile(importFile, []byte(exported), 0600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestPerformAutoImport_FileNormalizeError(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", dir)
 	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
 
-	importFile := filepath.Join(dir, "empty.enc")
+	importFile := filepath.Join(t.TempDir(), "empty.enc")
 	if err := os.WriteFile(importFile, []byte("   "), 0600); err != nil {
 		t.Fatalf("write import file: %v", err)
 	}

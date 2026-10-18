@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "bbb169ca2095e3f51ac05e312650418bd48c11a6",
+  "verified_at": "2026-10-10T21:50:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "91876b6db629e0f25e7cebf6bf022317b0567b44843286a0044ad6965640296a",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "b0074114ab442df633b24008fbb5eaebb7bb4a8ad3fc9e0ba0e7d139951b76fb",
+    "frontend-modern/src/utils/memoryObservation.ts": "73d7c187a92141a8eb757cb9f09c091351ea78b6381a0cc87a0d9da0877dd01f"
+  },
+  "routes": [
+    "/proxmox/overview?type=vm",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock estate from the sidecar build (6 nodes, 78 guests): 10 of 33 VMs read from Proxmox's cache-inclusive value show 'May include cache' under the bar at 1440 and 'Cache?' at 375; VMs on the guest agent or a Pulse agent show nothing; 3 stopped VMs read Unavailable/N/A; no VM reads Freshness unknown",
+    "375 phone width: every compact label sits inside its memory cell (measured text box against the cell, none clipped) and the page has no horizontal scroll; an earlier 'Incl. cache' label did clip there and was replaced",
+    "VM drawer (a Windows Server VM on the cache-inclusive source): Memory reading shows 'Current \u00b7 Proxmox (may include cache)' and a stacked, full-width 'About this reading' note with the caveat and the Pulse agent / Linux QEMU guest agent advice, 4 lines at 1440",
+    "container drawer on the cgroup source (billing-worker-01): same note naming only the Pulse agent, no row label on any of the 45 container rows; a container on a Pulse agent (auth-service-01) shows Current \u00b7 Pulse Agent and no note; the note was 7 lines at an 800 px pane width once stacked (about 25 before)",
+    "light mode at 1024x768 was read on the previous label wording only and is not claimed for these bytes; the Alerts and Patrol pages were surveyed but not changed"
+  ],
+  "interactions": [
+    "opened the VM and container drawers from the row chevrons",
+    "resized between 1440x900, 768x1024, 1024x768 and 375x812 on earlier bytes and re-measured the labels; re-measured 1440x900 and 375x812 on these bytes",
+    "restarted the private backend between builds; the console showed 500 and WebSocket errors only during those restarts, and after the final restart the socket opened and /api/resources answered 200"
+  ]
+}

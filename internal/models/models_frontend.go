@@ -1060,12 +1060,11 @@ type ResourceFrontend struct {
 	Uptime      *int64                   `json:"uptime,omitempty"`
 
 	// Metadata
-	Tags      []string                `json:"tags"`
-	Labels    map[string]string       `json:"labels"`
-	CustomURL string                  `json:"customUrl,omitempty"`
-	LastSeen  int64                   `json:"lastSeen"` // Unix milliseconds
-	Health    json.RawMessage         `json:"health,omitempty"`
-	Alerts    []ResourceAlertFrontend `json:"alerts"`
+	Tags      []string          `json:"tags"`
+	Labels    map[string]string `json:"labels"`
+	CustomURL string            `json:"customUrl,omitempty"`
+	LastSeen  int64             `json:"lastSeen"` // Unix milliseconds
+	Health    json.RawMessage   `json:"health,omitempty"`
 
 	IncidentCount         int    `json:"incidentCount,omitempty"`
 	IncidentCode          string `json:"incidentCode,omitempty"`
@@ -1128,9 +1127,6 @@ func (r ResourceFrontend) NormalizeCollections() ResourceFrontend {
 	if r.Labels == nil {
 		r.Labels = map[string]string{}
 	}
-	if r.Alerts == nil {
-		r.Alerts = []ResourceAlertFrontend{}
-	}
 	if r.Identity != nil {
 		identity := r.Identity.NormalizeCollections()
 		r.Identity = &identity
@@ -1157,17 +1153,6 @@ type ResourceNetworkFrontend struct {
 type ResourceDiskIOFrontend struct {
 	ReadRate  *int64 `json:"readRate,omitempty"`
 	WriteRate *int64 `json:"writeRate,omitempty"`
-}
-
-// ResourceAlertFrontend represents an alert on a resource.
-type ResourceAlertFrontend struct {
-	ID        string  `json:"id"`
-	Type      string  `json:"type"`
-	Level     string  `json:"level"`
-	Message   string  `json:"message"`
-	Value     float64 `json:"value"`
-	Threshold float64 `json:"threshold"`
-	StartTime int64   `json:"startTime"` // Unix milliseconds
 }
 
 // ResourceIdentityFrontend contains identity info for deduplication.

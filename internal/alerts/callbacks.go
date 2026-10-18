@@ -430,7 +430,13 @@ func (m *Manager) safeCallResolvedAlertCallback(resolved *ResolvedAlert, fallbac
 	}
 	// Record the resolution before the callback guard: this funnel is the
 	// resolve seam for every lifecycle path, with or without subscribers.
-	m.recordAlertEvent(eventlog.TypeResolved, alert, fallbackID, "", "Alert resolved.", nil)
+	eventReason, eventMessage := "", "Alert resolved."
+	if alert != nil {
+		if summary := alert.Resolution.Summary(); summary != "" {
+			eventReason, eventMessage = string(alert.Resolution.Reason), summary
+		}
+	}
+	m.recordAlertEvent(eventlog.TypeResolved, alert, fallbackID, eventReason, eventMessage, nil)
 
 	callbacks := m.getResolvedCallbacks()
 	resolvedCallback := m.callbacks.resolvedAlertCallback()

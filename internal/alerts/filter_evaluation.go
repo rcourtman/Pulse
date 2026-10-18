@@ -19,18 +19,20 @@ func (m *Manager) evaluateFilterCondition(guest any, condition FilterCondition) 
 
 // guestMetrics holds common metrics for filter evaluation
 type guestMetrics struct {
-	CPU            float64 // CPU usage as percentage (0-100)
-	MemUsage       float64 // Memory usage percentage
-	DiskUsage      float64 // Disk usage percentage
-	DiskRead       int64   // Bytes/s
-	DiskWrite      int64   // Bytes/s
-	NetworkIn      int64   // Bytes/s
-	NetworkOut     int64   // Bytes/s
-	IORateValidity models.IORateValidity
-	Name           string
-	Node           string
-	ID             string
-	Status         string
+	CPU               float64 // CPU usage as percentage (0-100)
+	MemUsage          float64 // Memory usage percentage
+	DiskUsage         float64 // Disk usage percentage
+	MemoryUnavailable bool
+	DiskUnavailable   bool
+	DiskRead          int64 // Bytes/s
+	DiskWrite         int64 // Bytes/s
+	NetworkIn         int64 // Bytes/s
+	NetworkOut        int64 // Bytes/s
+	IORateValidity    models.IORateValidity
+	Name              string
+	Node              string
+	ID                string
+	Status            string
 }
 
 // extractGuestMetrics extracts common metrics from a VM or Container
@@ -57,8 +59,14 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 		case "cpu":
 			value = metrics.CPU
 		case "memory":
+			if metrics.MemoryUnavailable {
+				return false
+			}
 			value = metrics.MemUsage
 		case "disk":
+			if metrics.DiskUnavailable {
+				return false
+			}
 			value = metrics.DiskUsage
 		case "diskread":
 			if !validity.DiskRead {

@@ -10,6 +10,11 @@ Keep Pulse authentication enabled; TLS termination does not authenticate users.
 For identity supplied by an IdP/proxy, follow the separate
 [proxy authentication guide](PROXY_AUTH.md), including its Header Trust Boundary.
 
+A same-origin reverse proxy needs no CORS exception. Keep the UI and API on the
+same public origin rather than adding `*` to repair a login or routing error.
+For a separate trusted browser app, follow the
+[exact-origin CORS checks](TROUBLESHOOTING.md#cors-errors).
+
 **Forwarded HTTPS headers are trusted only from a configured immediate peer.**
 Set `PULSE_TRUSTED_PROXY_CIDRS` in Pulse's deployment configuration to the proxy
 address **as seen by Pulse**, not the browser's address or the public hostname.
@@ -124,9 +129,15 @@ ProxyPassReverse / http://127.0.0.1:7655/
 
 If your reverse proxy terminates SSL but Pulse shows "HTTPS: HTTP only" in Settings → Security:
 
-Pulse recognises direct TLS, or `X-Forwarded-Proto: https` from an immediate
-peer in `PULSE_TRUSTED_PROXY_CIDRS`. An untrusted peer's header is ignored even
-when the browser used HTTPS. Adding the header alone is not sufficient.
+Pulse's secure-cookie and request-origin logic recognises direct TLS, or
+`X-Forwarded-Proto: https` from an immediate peer in
+`PULSE_TRUSTED_PROXY_CIDRS`; a header from any other peer is ignored for those
+decisions, even when the browser used HTTPS. Adding the header alone is not sufficient.
+The Security Posture HTTPS
+indicator is different: it is true when the request has direct TLS or any
+`X-Forwarded-Proto: https` header, whatever the peer. A passing indicator
+therefore does not prove that proxy trust is configured correctly, and
+"HTTP only" means neither TLS nor that header reached Pulse.
 
 Check the proxy's actual backend connection address and the effective Pulse
 setting first, then check that the TLS proxy sends exactly `https`. For Nginx,
@@ -145,7 +156,7 @@ HTTP/error status, not cookies, proxy secrets or a full network export.
 
 ### Other Issues
 
-- **"Connection Lost"**: WebSocket upgrade failed. Check `Upgrade` and `Connection` headers.
+- **"Connection lost" (Workloads) or "Disconnected", "Reconnecting...", "Sync reconnecting" or "Backend healthy" in the header status badge**: the live data stream is not connected, which can happen when the WebSocket upgrade fails. Check the proxy's `Upgrade` and `Connection` headers.
 - **502 Bad Gateway**: Check Pulse's actual listener and the proxy's upstream address, port and network reachability; this does not by itself prove Pulse is stopped. Container `localhost` refers to that container, not another service.
 - **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` if needed.
 - **OIDC redirects fail**: Ensure `X-Forwarded-Proto` is set (see above).

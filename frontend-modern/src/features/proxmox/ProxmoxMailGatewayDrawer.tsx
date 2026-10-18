@@ -1,4 +1,9 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
+import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
@@ -217,6 +222,8 @@ function InOutBar(props: {
 export const ProxmoxMailGatewayDrawer: Component<{
   instanceRow: Resource;
   onClose?: () => void;
+  /** Open alerts for this gateway, matched across its identity aliases by the table. */
+  alerts?: Alert[];
 }> = (props) => {
   const id = () => {
     const meta = props.instanceRow.pmg;
@@ -224,6 +231,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
   };
   const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
 
+  const now = useRelativeTimeNow();
   const stats = createMemo(() => instance()?.mailStats);
   const quarantine = createMemo(() => instance()?.quarantine);
   const nodes = createMemo<PMGNodeStatus[]>(() => instance()?.nodes ?? []);
@@ -236,7 +244,19 @@ export const ProxmoxMailGatewayDrawer: Component<{
   );
   const relayDomains = createMemo(() => instance()?.relayDomains ?? []);
 
-  const health = () => classifyHealth(instance()?.status ?? props.instanceRow.status);
+  // A reachable gateway with open alerts reads as needing attention, matching
+  // its table row, rather than a green "Healthy" beside the alert below.
+  const health = () => {
+    const base = classifyHealth(instance()?.status ?? props.instanceRow.status);
+    const open = (props.alerts ?? []).filter((alert) => !alert.acknowledged);
+    if (open.length === 0 || base.variant === 'danger') return base;
+    return {
+      variant: open.some((alert) => alert.level === 'critical')
+        ? ('danger' as const)
+        : ('warning' as const),
+      label: 'Needs attention',
+    };
+  };
   const name = () =>
     asTrimmedString(instance()?.name) ||
     asTrimmedString(props.instanceRow.name) ||
@@ -329,6 +349,18 @@ export const ProxmoxMailGatewayDrawer: Component<{
           </ObjectDrawerHeader>
         )}
       </Show>
+
+      {/* The exact problem first: a phone cannot hover the row's short reason. */}
+      <DrawerAttentionSection
+        items={(props.alerts ?? []).map((alert) => ({
+          id: alert.id,
+          ...getAlertAttentionCopy(alert, now),
+          subject: name(),
+          metric: alertTypeDisplayLabel(alert.type),
+          severity: alert.level,
+          acknowledged: alert.acknowledged,
+        }))}
+      />
 
       <Show
         when={!instance.error}
@@ -620,7 +652,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] text-base-content`}
                           >
-                            <span class="inline-block max-w-56 truncate" title={domain.domain}>
+                            <span class="block truncate" title={domain.domain}>
                               {domain.domain || '—'}
                             </span>
                           </TableCell>

@@ -7,8 +7,11 @@ import {
   getMetricTextColorClass,
   getDefaultDisplayMetricThresholds,
   getDefaultMetricDisplayThresholds,
+  getPulseRelaxedGuestTrigger,
+  hasPulseRelaxedGuestTag,
   resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
+  resolveTrueNASDiskTemperatureDisplayThresholds,
   METRIC_THRESHOLDS,
   type MetricType,
 } from '@/utils/metricThresholds';
@@ -20,7 +23,7 @@ import {
   FACTORY_TRUENAS_DISK_DEFAULTS,
   FACTORY_VMWARE_DEFAULTS,
 } from '@/utils/alertThresholdDefaults';
-import type { AlertConfig } from '@/types/alerts';
+import type { AlertConfig, HysteresisThreshold } from '@/types/alerts';
 
 describe('metricThresholds', () => {
   describe('getMetricSeverity', () => {
@@ -307,6 +310,167 @@ describe('metricThresholds', () => {
       expect(getMetricColorClass(99, 'disk', null)).toContain('bg-metric-critical-bg');
     });
 
+    describe('pulse-relaxed guests', () => {
+      const relaxedConfig = (overrides: AlertConfig['overrides'] = {}) =>
+        ({
+          enabled: true,
+          guestDefaults: {
+            cpu: { trigger: 80, clear: 75 },
+            memory: { trigger: 85, clear: 80 },
+            disk: { trigger: 90, clear: 85 },
+          },
+          nodeDefaults: {},
+          storageDefault: { trigger: 85, clear: 80 },
+          overrides,
+        }) as AlertConfig;
+
+      it('turns critical where the relaxed alert fires, keeping the configured clear', () => {
+        const config = relaxedConfig();
+        const tags = ['batch', 'pulse-relaxed'];
+
+        // applyRelaxedGuestThresholds lifts the trigger and keeps a clear
+        // below it, so the warning band starts at the configured clear.
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', [], tags)).toEqual({
+          warning: 80,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'disk', [], tags)).toEqual({
+          warning: 85,
+          critical: 95,
+        });
+
+        // 88% memory raises no alert below the 92% relaxed trigger, so the
+        // bar must not read critical; untagged, the same reading does.
+        const relaxedMemory = resolveMetricDisplayThresholds(config, 'guest', 'memory', [], tags);
+        expect(getMetricSeverity(88, 'memory', relaxedMemory)).toBe('warning');
+        expect(getMetricSeverity(92, 'memory', relaxedMemory)).toBe('critical');
+        const plainMemory = resolveMetricDisplayThresholds(config, 'guest', 'memory', []);
+        expect(getMetricSeverity(88, 'memory', plainMemory)).toBe('critical');
+      });
+
+      it('matches the tag the way the backend parses it', () => {
+        const config = relaxedConfig();
+        expect(hasPulseRelaxedGuestTag([' Pulse-Relaxed '])).toBe(true);
+        expect(hasPulseRelaxedGuestTag(['pulse-relaxed-later', 'relaxed'])).toBe(false);
+        expect(hasPulseRelaxedGuestTag(null)).toBe(false);
+        expect(
+          resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], [' PULSE-RELAXED ']),
+        ).toEqual({ warning: 75, critical: 95 });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], ['relaxed'])).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+      });
+
+      it('keeps higher overrides and Off thresholds, and floors unset ones', () => {
+        const config = relaxedConfig({
+          'guest:cluster-a:100': {
+            cpu: { trigger: 97, clear: 90 },
+            memory: { trigger: -1, clear: 0 },
+          },
+        });
+        const ids = ['guest:cluster-a:100'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 90,
+          critical: 97,
+        });
+        // Relaxing never turns on an alert the config switched off.
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toBeNull();
+
+        const unset = { ...relaxedConfig(), guestDefaults: {} } as AlertConfig;
+        expect(resolveMetricDisplayThresholds(unset, 'guest', 'memory', [], tags)).toEqual({
+          warning: 87,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(null, 'guest', 'disk', [], tags)).toEqual({
+          warning: 90,
+          critical: 95,
+        });
+      });
+
+      it('fills a missing clear before lifting, and moves a clear the trigger passes', () => {
+        const config = relaxedConfig({
+          'guest:cluster-a:101': {
+            cpu: { trigger: 85 } as HysteresisThreshold,
+            // Legacy overrides stored a bare trigger number.
+            memory: 90 as unknown as HysteresisThreshold,
+            disk: { trigger: 93, clear: 96 },
+          },
+        });
+        const ids = ['guest:cluster-a:101'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 80,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toEqual({
+          warning: 85,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'disk', ids, tags)).toEqual({
+          warning: 90,
+          critical: 95,
+        });
+      });
+
+      it('fills a missing clear five below the trigger whatever the hysteresis margin', () => {
+        // ensureHysteresisThreshold uses a fixed 5, not hysteresisMargin.
+        const config = {
+          ...relaxedConfig({
+            'guest:cluster-a:102': {
+              cpu: { trigger: 85 } as HysteresisThreshold,
+              memory: 90 as unknown as HysteresisThreshold,
+            },
+          }),
+          hysteresisMargin: 10,
+        } as AlertConfig;
+        const ids = ['guest:cluster-a:102'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 80,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toEqual({
+          warning: 85,
+          critical: 92,
+        });
+      });
+
+      it('relaxes only guest CPU, memory and disk', () => {
+        const config = {
+          ...relaxedConfig(),
+          dockerDefaults: { cpu: { trigger: 80, clear: 75 } },
+        } as AlertConfig;
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'docker', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'node', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+      });
+
+      it('derives the relaxed trigger from the configured one', () => {
+        expect(getPulseRelaxedGuestTrigger('cpu', 80)).toBe(95);
+        expect(getPulseRelaxedGuestTrigger('memory', 85)).toBe(92);
+        expect(getPulseRelaxedGuestTrigger('disk', 97)).toBe(97);
+        expect(getPulseRelaxedGuestTrigger('disk', undefined)).toBe(95);
+        expect(getPulseRelaxedGuestTrigger('cpu', 0)).toBeNull();
+        expect(getPulseRelaxedGuestTrigger('cpu', -1)).toBeNull();
+      });
+    });
+
     it('honors disabled docker defaults and storage usage aliases', () => {
       const config = {
         enabled: true,
@@ -371,6 +535,189 @@ describe('metricThresholds', () => {
       expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', 'host-1')).toEqual({
         warning: 75,
         critical: 80,
+      });
+    });
+
+    it('switches every disk type off with the agent disk temperature default', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 0, clear: 0 } },
+        diskTempByType: {
+          nvme: { trigger: 70, clear: 65 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: { 'host-1': { diskTemperature: { trigger: 80, clear: 75 } } },
+      } as AlertConfig;
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'sata')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, '')).toBeNull();
+      // An explicit host override still applies, as CheckHost applies it.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', 'host-1')).toEqual({
+        warning: 75,
+        critical: 80,
+      });
+    });
+
+    it('judges a disk by the alert overrides of the machine that reports it', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'host-raised': { diskTemperature: { trigger: 80, clear: 75 } },
+          'host-memory-only': { memory: { trigger: 95, clear: 90 } },
+          'host-off': { disabled: true },
+        },
+      } as AlertConfig;
+      // The machine's first matching key decides, as CheckHost's chain does.
+      expect(
+        resolveDiskTemperatureDisplayThresholds(config, 'nvme', [
+          'agent:host-raised',
+          'host-raised',
+        ]),
+      ).toEqual({ warning: 75, critical: 80 });
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-memory-only'])).toEqual(
+        {
+          warning: 65,
+          critical: 70,
+        },
+      );
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-plain'])).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+      // A host whose alerts are switched off raises no disk temperature alert,
+      // so none of its disks is judged hot.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-off'])).toBeNull();
+      // An agent default that switches every host's alerts off does the same.
+      const agentsOff = {
+        ...config,
+        agentDefaults: { ...config.agentDefaults, disabled: true },
+      } as AlertConfig;
+      expect(
+        resolveDiskTemperatureDisplayThresholds(agentsOff, 'nvme', ['host-raised']),
+      ).toBeNull();
+    });
+
+    it('judges a TrueNAS disk by the tiers its temperature alert resolves', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: {
+          nvme: { trigger: 70, clear: 65 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'disk-raised': { temperature: { trigger: 75, clear: 70 } },
+          'disk-off-value': { temperature: { trigger: 0, clear: 0 } },
+          'disk-minus-one': { temperature: { trigger: -1, clear: 0 } },
+          'disk-muted': { disabled: true },
+          'disk-note-only': { note: 'spare shelf' },
+          'disk-agent-key': { diskTemperature: { trigger: 80, clear: 75 } },
+        },
+      } as AlertConfig;
+      const resolve = (cfg: AlertConfig, diskType: string, id: string) =>
+        resolveTrueNASDiskTemperatureDisplayThresholds(cfg, diskType, id);
+
+      // Without a TrueNAS-wide value each disk follows its type's policy.
+      expect(resolve(config, 'nvme', 'disk-plain')).toEqual({ warning: 65, critical: 70 });
+      expect(resolve(config, 'SATA', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      // An empty or unknown type, or one with no entry, takes the Disk Temp
+      // default, as the backend's per-type lookup does.
+      expect(resolve(config, '', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      expect(resolve(config, 'scsi', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      expect(resolve(config, 'sas', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+
+      // The disk's own temperature override beats the type, raising or
+      // switching it off; an override that mutes the disk's alerts is off too.
+      expect(resolve(config, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      expect(resolve(config, 'nvme', 'disk-off-value')).toBeNull();
+      expect(resolve(config, 'nvme', 'disk-minus-one')).toBeNull();
+      expect(resolve(config, 'nvme', 'disk-muted')).toBeNull();
+      // An override without a temperature, or with only the agent disk
+      // temperature metric, leaves the default tiers.
+      expect(resolve(config, 'nvme', 'disk-note-only')).toEqual({ warning: 65, critical: 70 });
+      expect(resolve(config, 'nvme', 'disk-agent-key')).toEqual({ warning: 65, critical: 70 });
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(config, 'nvme', null)).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+
+      // A TrueNAS-wide value replaces the type's policy for every disk, and a
+      // disk override still beats it. Zero switches it off.
+      const trueNASWide = {
+        ...config,
+        truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+      } as AlertConfig;
+      expect(resolve(trueNASWide, 'nvme', 'disk-plain')).toEqual({ warning: 57, critical: 62 });
+      expect(resolve(trueNASWide, 'sata', 'disk-plain')).toEqual({ warning: 57, critical: 62 });
+      expect(resolve(trueNASWide, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      const trueNASOff = {
+        ...config,
+        truenasDiskDefaults: { temperature: { trigger: 0, clear: 0 } },
+      } as AlertConfig;
+      expect(resolve(trueNASOff, 'nvme', 'disk-plain')).toBeNull();
+      expect(resolve(trueNASOff, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      // An empty TrueNAS Disks entry is unset: the type's policy applies.
+      const trueNASUnset = { ...config, truenasDiskDefaults: {} } as AlertConfig;
+      expect(resolve(trueNASUnset, 'nvme', 'disk-plain')).toEqual({ warning: 65, critical: 70 });
+      // TrueNAS Disks defaults that switch alerts off skip every disk's
+      // evaluation, its own override included.
+      const trueNASMuted = {
+        ...config,
+        truenasDiskDefaults: { disabled: true, temperature: { trigger: 62, clear: 57 } },
+      } as AlertConfig;
+      expect(resolve(trueNASMuted, 'nvme', 'disk-plain')).toBeNull();
+      expect(resolve(trueNASMuted, 'nvme', 'disk-raised')).toBeNull();
+    });
+
+    it('reaches a TrueNAS disk only through the agent Disk Temp value', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {},
+      } as AlertConfig;
+      // No host agent reports a TrueNAS disk, so the agent default's alert
+      // switch leaves it judged.
+      const agentsMuted = {
+        ...config,
+        agentDefaults: { ...config.agentDefaults, disabled: true },
+      } as AlertConfig;
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(agentsMuted, 'nvme', 'd')).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+      // A switched-off Disk Temp default switches the per-type tier off, but a
+      // TrueNAS-wide value still applies.
+      const diskTempOff = {
+        ...config,
+        agentDefaults: { diskTemperature: { trigger: 0, clear: 0 } },
+      } as AlertConfig;
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(diskTempOff, 'nvme', 'd')).toBeNull();
+      expect(
+        resolveTrueNASDiskTemperatureDisplayThresholds(
+          { ...diskTempOff, truenasDiskDefaults: { temperature: { trigger: 60, clear: 55 } } },
+          'nvme',
+          'd',
+        ),
+      ).toEqual({ warning: 55, critical: 60 });
+      // Without config, the factory per-type triggers apply.
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(null, 'nvme', 'd')).toEqual({
+        warning: 65,
+        critical: 70,
       });
     });
 
@@ -440,7 +787,7 @@ describe('metricThresholds', () => {
         usage: 85,
         temperature: 80,
       });
-      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: 55 });
+      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: undefined });
       expect(FACTORY_VMWARE_DEFAULTS).toEqual({
         cpu: 80,
         memory: 85,

@@ -1,12 +1,65 @@
 package unifiedresources
 
 import (
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
+
+func TestGuestDiskObservationMergeReplacesMissingAndDifferentSource(t *testing.T) {
+	original := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, DiskObservation: original, DiskStatusReason: "prev-agent-error"}
+	for _, tc := range []struct {
+		name     string
+		incoming ProxmoxData
+		want     models.GuestDiskObservation
+	}{
+		{"expired original clears", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent"}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"missing full guest origin clears", ProxmoxData{VMID: 105}, models.GuestDiskObservation{}},
+		{"current linked source does not inherit QGA", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "agent"}},
+		{"new successful filesystem read replaces", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"non-guest partial facet does not own origin", ProxmoxData{NodeDisplayName: "node"}, original},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.want
+			if !tc.incoming.DiskObservation.ObservedAt.IsZero() {
+				want.ObservedAt = tc.incoming.DiskObservation.ObservedAt
+			}
+			merged := mergeProxmoxData(existing, &tc.incoming)
+			if merged.DiskObservation != want || existing.DiskObservation != original {
+				t.Fatal("merge renewed/resurrected old evidence or mutated its source")
+			}
+		})
+	}
+}
+
+func TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge(t *testing.T) {
+	origin := models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, GuestAgentEvidence: origin}
+	for _, incoming := range []ProxmoxData{
+		{VMID: 105, GuestAgentEvidence: origin},
+		{VMID: 105, GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true}},
+		{VMID: 105},
+		{NodeDisplayName: "partial"},
+	} {
+		merged := mergeProxmoxData(existing, &incoming)
+		want := incoming.GuestAgentEvidence
+		if incoming.VMID == 0 {
+			want = origin
+		}
+		if merged.GuestAgentEvidence != want || existing.GuestAgentEvidence != origin {
+			t.Fatal("merge renewed/resurrected evidence or mutated its source")
+		}
+	}
+}
 
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
@@ -127,6 +180,2458 @@ func TestHostnameIPDoesNotAutoMerge(t *testing.T) {
 	resources := registry.List()
 	if len(resources) != 2 {
 		t.Fatalf("expected hostname+ip to stay separate, got %d resources", len(resources))
+	}
+}
+
+func onlyResourceOfType(t *testing.T, rr *ResourceRegistry, resourceType ResourceType) Resource {
+	t.Helper()
+	resources := rr.ListByType(resourceType)
+	if len(resources) != 1 {
+		t.Fatalf("expected one %s resource, got %d: %+v", resourceType, len(resources), resources)
+	}
+	return resources[0]
+}
+
+// An operator who splits a Proxmox node from the pulse-agent Pulse linked it
+// to (the drawer's report-merge, or unlink naming the node's side) must see
+// the split on every monitor rebuild and in the resources API. The
+// node<->agent link merged the pair in resolveLinkedResource before
+// findMatch, and the linked node had already taken the agent's machine
+// identity, so the pair stayed merged although the request answered 200.
+// Each step is judged over three rebuilds of a store-backed adapter (pins
+// persist on one rebuild and steer the next) and in every view: the
+// monitor's listing, the broadcast coalesce, and the resources API's
+// registry seeded from that listing or from the snapshot.
+func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
+	now := time.Now().UTC()
+	for _, link := range []struct {
+		name          string
+		nodeLinked    bool
+		agentLinked   bool
+		cluster       string
+		agentHostname string
+		machineID     string
+	}{
+		{"declared-both-ways", true, true, "", "pve1", "0123456789abcdef"},
+		// A node-side link the agent does not declare joins only when the
+		// two share a hostname (findCorroboratedOneSidedProxmoxLink).
+		{"node-side-only", true, false, "", "pve1", "0123456789abcdef"},
+		{"agent-side-only", false, true, "", "pve1", "0123456789abcdef"},
+		// A clustered node's own ID is cluster-derived, not one the
+		// candidate exclusions name, and its identity pin is found by
+		// cluster and hostname, carrying the agent's machine key.
+		{"clustered-node", true, true, "lab", "pve1", "0123456789abcdef"},
+		{"clustered-agent-side-only", false, true, "lab", "pve1", "0123456789abcdef"},
+		// The joined row's first hostname is the agent's when the agent
+		// is ingested first.
+		{"clustered-agent-fqdn", true, true, "lab", "pve1.example", "0123456789abcdef"},
+		// An agent reporting no machine key joins under the node's own ID.
+		{"clustered-machine-keyless-agent", true, true, "lab", "pve1", ""},
+	} {
+		for _, request := range []struct {
+			name string
+			// exclusions returns the pairs the request records.
+			exclusions func(ids splitRequestIDs) [][2]string
+			split      func(ids splitRequestIDs) bool
+		}{
+			{"report-merge", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}, {ids.merged, ids.agentCandidate}}
+			}, splitAlways},
+			{"unlink-naming-node", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}}
+			}, splitAlways},
+			// The ID the node row holds once split (cluster-derived for a
+			// clustered node), as an unlink of the two rows records it.
+			{"unlink-naming-node-row", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.nodeOwn, ids.agentOwn}}
+			}, func(ids splitRequestIDs) bool { return ids.nodeOwn != ids.agentOwn }},
+			// Neither row's ID: a relink of the rows replaces no exclusion
+			// row, so the newer decision across the pair's IDs must decide.
+			{"unlink-naming-both-candidates", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.agentCandidate, ids.nodeCandidate}}
+			}, splitAlways},
+			// The agent's candidate against the agent's machine-derived ID,
+			// under which the pair merged, is also what report-merge records
+			// when it splits another source (a Docker host, say) off the
+			// agent, so it does not split the node from the agent. Merged
+			// under the node's own ID, it splits the agent off the node.
+			{"exclusion-naming-only-the-agent", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}}
+			}, func(ids splitRequestIDs) bool { return ids.merged == ids.nodeOwn }},
+			{"unrelated-exclusion", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, "agent-00000000deadbeef"}}
+			}, func(splitRequestIDs) bool { return false }},
+		} {
+			t.Run(link.name+"/"+request.name, func(t *testing.T) {
+				store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+
+				node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: link.cluster, Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now}
+				host := models.Host{
+					ID:        "host-pve1",
+					Hostname:  link.agentHostname,
+					MachineID: link.machineID,
+					Status:    "online",
+					LastSeen:  now,
+					// The node's endpoint address and a MAC: what a correct
+					// link shares, and enough for identity matching to merge
+					// the pair again if the node kept the agent's identity.
+					NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", MAC: "aa:bb:cc:dd:ee:01", Addresses: []string{"10.0.0.5/24"}}},
+				}
+				if link.nodeLinked {
+					node.LinkedAgentID = host.ID
+				}
+				if link.agentLinked {
+					host.LinkedNodeID = node.ID
+				}
+				snapshot := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host}}
+				// The IDs each side holds on its own, with nothing to link to.
+				alone := NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+				nodeAlone := hostRowsByFacet(t, alone.List()).node
+				alone = NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Hosts: []models.Host{host}})
+				agentAlone := hostRowsByFacet(t, alone.List()).agent
+				adapter := NewMonitorAdapter(NewRegistry(store))
+
+				adapter.PopulateFromSnapshot(snapshot)
+				merged := hostRowsByFacet(t, adapter.GetAll())
+				if merged.joined == "" || nodeAlone == "" || agentAlone == "" {
+					t.Fatalf("fixture did not link the node and the agent: %+v (alone: node %q, agent %q)", merged, nodeAlone, agentAlone)
+				}
+				reportMerge := func(mergedID string) (nodeCandidate, agentCandidate string) {
+					t.Helper()
+					for _, target := range adapter.currentRegistry().SourceTargets(mergedID) {
+						switch target.Source {
+						case SourceProxmox:
+							nodeCandidate = target.CandidateID
+						case SourceAgent:
+							agentCandidate = target.CandidateID
+						}
+					}
+					if nodeCandidate == "" || agentCandidate == "" || nodeCandidate == mergedID || agentCandidate == mergedID {
+						t.Fatalf("merged %s lists candidates node=%q agent=%q", mergedID, nodeCandidate, agentCandidate)
+					}
+					return nodeCandidate, agentCandidate
+				}
+				nodeCandidate, agentCandidate := reportMerge(merged.joined)
+				ids := splitRequestIDs{merged: merged.joined, nodeCandidate: nodeCandidate, agentCandidate: agentCandidate, nodeOwn: nodeAlone, agentOwn: agentAlone}
+				for _, pair := range request.exclusions(ids) {
+					if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				// Split, each side returns to the ID it holds alone (for an
+				// agent reporting a machine key, the ID the pair merged
+				// under); otherwise the pair stays merged under its ID.
+				split := request.split(ids)
+				want := nodeAgentRows{joined: merged.joined}
+				if split {
+					want = nodeAgentRows{node: nodeAlone, agent: agentAlone}
+				}
+				assertViews := func(step string, rebuilds int, want nodeAgentRows) {
+					t.Helper()
+					for rebuild := 1; rebuild <= rebuilds; rebuild++ {
+						adapter.PopulateFromSnapshot(snapshot)
+						listed, _, thresholds := adapter.GetAllWithMetricsTargetsAndStaleThresholds()
+						broadcast, ok := adapter.CoalesceForPresentation(listed, thresholds)
+						if !ok {
+							t.Fatal("store-backed adapter did not coalesce with its exclusions")
+						}
+						rest := NewRegistry(store)
+						rest.IngestResources(listed)
+						restFromSnapshot := NewRegistry(store)
+						restFromSnapshot.IngestSnapshot(snapshot)
+						for view, resources := range map[string][]Resource{
+							"monitor":                    listed,
+							"broadcast":                  broadcast,
+							"rest":                       rest.List(),
+							"rest presentation":          rest.ListForPresentation(),
+							"rest from snapshot":         restFromSnapshot.List(),
+							"rest presentation snapshot": restFromSnapshot.ListForPresentation(),
+						} {
+							if got := hostRowsByFacet(t, resources); got != want {
+								t.Fatalf("%s rebuild %d %s: got %+v, want %+v", step, rebuild, view, got, want)
+							}
+						}
+					}
+				}
+				// Snapshots ingest nodes first. A registry that meets the agent
+				// first, which already holds its machine-derived ID, splits the
+				// same way, also when the snapshot then lacks the host: before
+				// any split rebuild rewrites the pins, the node's pin from the
+				// joined era alone carries the agent's machine key.
+				if split {
+					withoutHost := snapshot
+					withoutHost.Hosts = nil
+					for name, nodes := range map[string]models.StateSnapshot{"with host": snapshot, "without host": withoutHost} {
+						agentFirst := NewRegistry(store)
+						agentFirst.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host)})
+						agentFirst.IngestSnapshot(nodes)
+						for view, resources := range map[string][]Resource{"list": agentFirst.List(), "presentation": agentFirst.ListForPresentation()} {
+							if got := hostRowsByFacet(t, resources); got != want {
+								t.Fatalf("agent ingested first, snapshot %s, %s: got %+v, want %+v", name, view, got, want)
+							}
+						}
+					}
+				}
+				assertViews("after the request", 3, want)
+				if !split {
+					return
+				}
+				// The split node names the agent only where the monitor's own
+				// node record does: guest actions, deploy and service
+				// discovery act on a node's linked agent.
+				for _, resource := range adapter.GetAll() {
+					if resource.ID == want.node && resource.Proxmox.LinkedAgentID != node.LinkedAgentID {
+						t.Fatalf("split node links agent %q, its record links %q", resource.Proxmox.LinkedAgentID, node.LinkedAgentID)
+					}
+				}
+
+				// Linking the rows the split left joins the pair again, although
+				// report-merge recorded exclusions against other IDs.
+				if err := store.AddLink(ResourceLink{ResourceA: want.agent, ResourceB: want.node, PrimaryID: want.agent, CreatedAt: time.Now().UTC()}); err != nil {
+					t.Fatal(err)
+				}
+				assertViews("after relink", 2, nodeAgentRows{joined: merged.joined})
+				// The inferred join can consume the node row before manual
+				// links run. Its fold must still reach current succession and
+				// the API seed, rather than an obsolete registry-wide ID set.
+				seeded := NewRegistry(store)
+				seeded.IngestResources(adapter.GetAll())
+				for name, registry := range map[string]*ResourceRegistry{"monitor": adapter.currentRegistry(), "API seed": seeded} {
+					found := false
+					for _, fold := range registry.ManualLinkFolds(merged.joined) {
+						nodeFold := fold.HolderID == want.agent && fold.FoldedID == want.node && slices.Contains(fold.Sources, SourceProxmox)
+						agentFold := fold.HolderID == want.node && fold.FoldedID == want.agent && slices.Contains(fold.Sources, SourceAgent)
+						// A machine-keyless agent rejoins under the node's ID,
+						// so the same pair is folded in the opposite direction.
+						if nodeFold || agentFold {
+							found = true
+						}
+					}
+					if !found {
+						t.Fatalf("%s lost the relink's pair fold: %+v", name, registry.ManualLinkFolds(merged.joined))
+					}
+				}
+				// A rebuild that meets the agent first orders the joined row's
+				// hostnames the agent's way; persisting its pins must not
+				// re-key the relink onto the joined ID either.
+				reordered := NewRegistry(store)
+				reordered.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host)})
+				reordered.IngestSnapshot(snapshot)
+				reordered.PersistIdentityPins()
+				assertViews("after an agent-first rebuild persisted its pins", 2, nodeAgentRows{joined: merged.joined})
+
+				// The same request after that relink splits them again. Where
+				// it names a pair other than the relinked rows, the store keeps
+				// the older link, which must lose to the newer split.
+				nodeCandidate, agentCandidate = reportMerge(merged.joined)
+				ids = splitRequestIDs{merged: merged.joined, nodeCandidate: nodeCandidate, agentCandidate: agentCandidate, nodeOwn: nodeAlone, agentOwn: agentAlone}
+				for _, pair := range request.exclusions(ids) {
+					if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				assertViews("after splitting again", 2, want)
+			})
+		}
+	}
+}
+
+// A node split from one agent keeps another agent's pin. The node links
+// agent A, whose joined-era pin carries A's machine key for the node's
+// cluster and hostname; while A is missing from a rebuild, agent B declares
+// the node, and the operator has split the node from B. The pin is A's, so
+// the node still completes A's key and keeps the ID it holds with A, as any
+// boot window before A checks in does.
+func TestOperatorSplitFromOneAgentKeepsAnotherAgentsPin(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-a"}
+	agentA := models.Host{ID: "host-a", Hostname: "pve1", MachineID: "aaaaaaaaaaaaaaaa", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+	agentB := models.Host{ID: "host-b", Hostname: "pve1", MachineID: "bbbbbbbbbbbbbbbb", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agentA, agentB}})
+	var joinedWithA string
+	for _, resource := range adapter.GetAll() {
+		if resource.Proxmox != nil && resource.Agent != nil && resource.Agent.AgentID == agentA.ID {
+			joinedWithA = resource.ID
+		}
+	}
+	if joinedWithA == "" {
+		t.Fatalf("fixture did not join the node with agent A: %+v", adapter.GetAll())
+	}
+	splitFromB := ResourceExclusion{
+		ResourceA: SourceSpecificID(ResourceTypeAgent, SourceProxmox, node.ID),
+		ResourceB: SourceSpecificID(ResourceTypeAgent, SourceAgent, agentB.ID),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.AddExclusion(splitFromB); err != nil {
+		t.Fatal(err)
+	}
+
+	withoutA := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agentB}}
+	rebuilt := NewRegistry(store)
+	rebuilt.IngestSnapshot(withoutA)
+	for _, resource := range rebuilt.List() {
+		if resource.Proxmox == nil {
+			continue
+		}
+		if resource.ID != joinedWithA {
+			t.Fatalf("node took %s while agent A was missing, want %s from A's pin", resource.ID, joinedWithA)
+		}
+		if resource.Agent != nil && resource.Agent.AgentID == agentB.ID {
+			t.Fatalf("node joined agent B, which the operator split it from")
+		}
+	}
+}
+
+// An agent that stops reporting its machine ID stays split from the node.
+// The joined-era pin carries the agent's old machine key for the clustered
+// node's cluster and hostname, and the node record names no agent (only the
+// agent declares the node), so nothing but the split drop ties the pin to
+// the agent: its keyless report must not count as another agent's.
+func TestOperatorSplitHoldsWhenTheAgentStopsReportingItsMachineID(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now}
+	agent := models.Host{ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agent}})
+	merged := hostRowsByFacet(t, adapter.GetAll())
+	if merged.joined == "" {
+		t.Fatalf("fixture did not join the node and the agent: %+v", merged)
+	}
+	alone := NewRegistry(nil)
+	alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+	nodeAlone := hostRowsByFacet(t, alone.List()).node
+	if err := store.AddExclusion(ResourceExclusion{
+		ResourceA: SourceSpecificID(ResourceTypeAgent, SourceProxmox, node.ID),
+		ResourceB: SourceSpecificID(ResourceTypeAgent, SourceAgent, agent.ID),
+		CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	agent.MachineID = ""
+	rebuilt := NewRegistry(store)
+	rebuilt.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agent}})
+	got := hostRowsByFacet(t, rebuilt.List())
+	if got.joined != "" || got.node != nodeAlone || got.agent == "" {
+		t.Fatalf("keyless agent rebuild: got %+v, want the node apart on %s", got, nodeAlone)
+	}
+}
+
+// splitRequestIDs are the IDs an unlink or report-merge of a joined node and
+// agent can name: the merged row, its SourceTargets candidates, and the IDs
+// the two rows hold once split.
+type splitRequestIDs struct {
+	merged, nodeCandidate, agentCandidate, nodeOwn, agentOwn string
+}
+
+func splitAlways(splitRequestIDs) bool { return true }
+
+type nodeAgentRows struct {
+	node   string // a row with the Proxmox facet only
+	agent  string // a row with the agent facet only
+	joined string // a row with both
+}
+
+func hostRowsByFacet(t *testing.T, resources []Resource) nodeAgentRows {
+	t.Helper()
+	var rows nodeAgentRows
+	set := func(slot *string, id string) {
+		if *slot != "" {
+			t.Fatalf("two host rows of one kind: %s and %s", *slot, id)
+		}
+		*slot = id
+	}
+	for _, resource := range resources {
+		if resource.Type != ResourceTypeAgent {
+			continue
+		}
+		switch {
+		case resource.Proxmox != nil && resource.Agent != nil:
+			set(&rows.joined, resource.ID)
+		case resource.Proxmox != nil:
+			set(&rows.node, resource.ID)
+		case resource.Agent != nil:
+			set(&rows.agent, resource.ID)
+		}
+	}
+	return rows
+}
+
+// A host agent past its reporting lease is offline. Its source sighting is
+// stale too, and the stale pass used to rank that above offline, so the
+// machine reached the frontend as a warning with its last report rendered
+// as current readings.
+func TestLeaseExpiredHostAgentStaysOffline(t *testing.T) {
+	lastReport := time.Now().UTC().Add(-14 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-silent",
+			MachineID:       "machine-silent",
+			Hostname:        "silent",
+			Status:          "offline",
+			LastSeen:        lastReport,
+			IntervalSeconds: 30,
+			CPUUsage:        32,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline for an agent past its lease", resource.Status)
+	}
+	if resource.Agent == nil || !resource.Agent.Stale {
+		t.Fatalf("expected the agent facet to stay flagged stale, got %+v", resource.Agent)
+	}
+	// Status describes the resource; the sighting keeps describing delivery
+	// freshness, which health and monitored-system reasons read.
+	if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+		t.Fatalf("agent sighting = %q, want stale", got)
+	}
+
+	// The monitor adapter runs the stale pass again after record sources.
+	rr.MarkStale(time.Now().UTC(), nil)
+	if got, _ := rr.Get(resource.ID); got.Status != StatusOffline {
+		t.Fatalf("second stale pass changed status to %q, want offline", got.Status)
+	}
+
+	health := EvaluateResourceHealth(resource, nil, time.Now().UTC())
+	if health.Verdict != HealthCritical || len(health.Reasons) < 2 ||
+		health.Reasons[0].Code != "offline" || health.Reasons[1].Code != "telemetry_stale" {
+		t.Fatalf("health = %+v, want critical offline with the stale reason after it", health)
+	}
+}
+
+// An agent that is late but still inside its lease keeps the warning: the
+// monitor has not decided it is gone, so its last readings are only stale.
+func TestLateHostAgentInsideLeaseStaysWarning(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-late",
+			MachineID:       "machine-late",
+			Hostname:        "late",
+			Status:          "online",
+			LastSeen:        time.Now().UTC().Add(-90 * time.Second),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusWarning {
+		t.Fatalf("status = %q, want warning for a late agent inside its lease", resource.Status)
+	}
+}
+
+// A Proxmox node whose linked agent stopped reporting stays online through
+// the PVE poll (issue #1515). Only the agent sighting carries the lease.
+func TestLeaseExpiredAgentOnLiveProxmoxNodeStaysOnline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-pve1"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-pve1",
+			Name:        "pve1",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+			LastSeen:    now,
+		}},
+		Hosts: []models.Host{{
+			ID:              machineID,
+			MachineID:       machineID,
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "offline",
+			LastSeen:        now.Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if _, ok := resource.SourceStatus[SourceProxmox]; !ok {
+		t.Fatalf("expected the node and its agent to share one resource, got sources %+v", resource.SourceStatus)
+	}
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live PVE poll", resource.Status)
+	}
+	if resource.Agent == nil || !resource.Agent.Stale {
+		t.Fatalf("expected the dead agent to stay flagged stale, got %+v", resource.Agent)
+	}
+}
+
+// A source merge into an existing row judges metric freshness by the ingest's
+// stale thresholds, as the stale pass that ends the ingest does. With PVE
+// polled every two minutes the monitor allows Proxmox four minutes, so a node
+// polled ninety seconds ago is current while its agent, silent for seventy-five
+// seconds, is stale, and the row shows the node's readings. Without thresholds
+// both sources are stale by the defaults and the agent keeps its precedence.
+func TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "homelab-pve1",
+			Name:          "pve1",
+			Instance:      "homelab",
+			Status:        "online",
+			LinkedAgentID: "host-pve1",
+			CPU:           0.12,
+			Memory:        models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+			LastSeen:      now.Add(-90 * time.Second),
+		}},
+		Hosts: []models.Host{{
+			ID:              "host-pve1",
+			MachineID:       "machine-pve1",
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "online",
+			CPUUsage:        80,
+			Memory:          models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+			LastSeen:        now.Add(-75 * time.Second),
+			IntervalSeconds: 30,
+		}},
+	}
+
+	for _, tc := range []struct {
+		name        string
+		thresholds  map[DataSource]time.Duration
+		proxmoxPoll string
+		want        DataSource
+		wantCPU     float64
+		wantMemory  float64
+	}{
+		{"configured", map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}, "online", SourceProxmox, 12, 25},
+		{"defaults", nil, "stale", SourceAgent, 80, 75},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshotWithStaleThresholds(snapshot, tc.thresholds)
+
+			resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+			if got := resource.SourceStatus[SourceProxmox].Status; got != tc.proxmoxPoll {
+				t.Fatalf("Proxmox sighting = %q, want %q: %+v", got, tc.proxmoxPoll, resource.SourceStatus)
+			}
+			if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+				t.Fatalf("agent sighting = %q, want stale", got)
+			}
+			if resource.Metrics == nil || resource.Metrics.CPU == nil || resource.Metrics.Memory == nil {
+				t.Fatalf("merged row lost its readings: %+v", resource.Metrics)
+			}
+			if cpu := resource.Metrics.CPU; cpu.Source != tc.want || cpu.Percent != tc.wantCPU {
+				t.Fatalf("CPU = %.0f%% from %s, want %.0f%% from %s", cpu.Percent, cpu.Source, tc.wantCPU, tc.want)
+			}
+			if memory := resource.Metrics.Memory; memory.Source != tc.want || memory.Percent != tc.wantMemory {
+				t.Fatalf("memory = %.0f%% from %s, want %.0f%% from %s", memory.Percent, memory.Source, tc.wantMemory, tc.want)
+			}
+		})
+	}
+}
+
+// The metric merge and the stale pass read one threshold rule, so a source
+// sighting the merge treats as current is never one the pass marks stale.
+func TestMetricMergeFreshnessMatchesTheStalePass(t *testing.T) {
+	now := time.Now().UTC()
+	configured := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute, SourceVMware: 5 * time.Minute}
+	for _, tc := range []struct {
+		name       string
+		source     DataSource
+		sighting   SourceStatus
+		thresholds map[DataSource]time.Duration
+		wantStale  bool
+	}{
+		{"proxmox by default", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, nil, true},
+		{"proxmox by configuration", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, configured, false},
+		{"vsphere by default", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, nil, true},
+		{"vsphere by configuration", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, configured, false},
+		{"agent without its own threshold", SourceAgent, SourceStatus{LastSeen: now.Add(-75 * time.Second)}, configured, true},
+		{"slow disk inventory", SourceProxmox, SourceStatus{LastSeen: now.Add(-5 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, false},
+		{"missed two disk inventory polls", SourceProxmox, SourceStatus{LastSeen: now.Add(-21 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := map[DataSource]SourceStatus{tc.source: tc.sighting}
+			if got := metricSourceStale(now, status, tc.source, tc.thresholds); got != tc.wantStale {
+				t.Fatalf("metric merge stale = %v, want %v", got, tc.wantStale)
+			}
+
+			rr := NewRegistry(nil)
+			rr.resources["resource"] = &Resource{
+				ID:           "resource",
+				Status:       StatusOnline,
+				Sources:      []DataSource{tc.source},
+				SourceStatus: map[DataSource]SourceStatus{tc.source: tc.sighting},
+			}
+			rr.MarkStale(now, tc.thresholds)
+			if got := rr.resources["resource"].SourceStatus[tc.source].Status == "stale"; got != tc.wantStale {
+				t.Fatalf("stale pass stale = %v, want %v", got, tc.wantStale)
+			}
+		})
+	}
+}
+
+// staleThresholdEstateSnapshot is a Proxmox estate polled every two minutes,
+// read ninety seconds after its last poll: a node merged with its auto-linked
+// agent, silent for seventy-five seconds; a node with no agent; and a node
+// whose agent the registry keeps as its own row, which presentation coalesces
+// into the node by hostname.
+func staleThresholdEstateSnapshot(now time.Time) models.StateSnapshot {
+	polled := now.Add(-90 * time.Second)
+	agentSilent := now.Add(-75 * time.Second)
+	return models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID: "homelab-pve1", Name: "pve1", Instance: "homelab", Status: "online",
+				LinkedAgentID: "host-pve1", CPU: 0.12,
+				Memory:   models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+				Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: polled,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID: "host-pve1", MachineID: "machine-pve1", Hostname: "pve1", LinkedNodeID: "homelab-pve1",
+				Status: "online", CPUUsage: 80,
+				Memory:   models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+				LastSeen: agentSilent, IntervalSeconds: 30,
+			},
+			{
+				ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3",
+				Status: "online", CPUUsage: 70,
+				Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+				LastSeen: agentSilent, IntervalSeconds: 30,
+			},
+		},
+		LastUpdate: now,
+	}
+}
+
+// presentedNodeRows indexes the coalesced rows that carry a Proxmox sighting
+// by name.
+func presentedNodeRows(t *testing.T, resources []Resource) map[string]Resource {
+	t.Helper()
+	rows := make(map[string]Resource)
+	for _, resource := range resources {
+		if _, ok := resource.SourceStatus[SourceProxmox]; !ok {
+			continue
+		}
+		if _, dup := rows[resource.Name]; dup {
+			t.Fatalf("two presented rows carry Proxmox node %q", resource.Name)
+		}
+		rows[resource.Name] = resource
+	}
+	return rows
+}
+
+// A registry rebuilt from the monitor's resources, as the resources API
+// rebuilds one, judges source freshness by the monitor's configured
+// thresholds: its stale pass, and the presentation coalesce of both views,
+// agree with the monitor's own registry. With the defaults the rebuild called
+// every node's poll stale at ninety seconds (warning status), and both views
+// showed the silent agent's readings on the node whose agent stays its own
+// row.
+func TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	thresholds := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}
+	snapshot := staleThresholdEstateSnapshot(now)
+
+	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), thresholds)
+	adapter.PopulateFromSnapshot(snapshot)
+	adapter.PopulateFromSnapshot(snapshot)
+
+	broadcast := presentedNodeRows(t, CoalescePresentationHostResourcesWithStaleThresholds(adapter.GetAll(), thresholds))
+	seeded := NewRegistryWithStaleThresholds(nil, thresholds)
+	seeded.IngestResources(adapter.GetAll())
+	api := presentedNodeRows(t, seeded.ListForPresentation())
+
+	want := map[string]struct {
+		cpu, memory float64
+		agent       bool
+	}{
+		"pve1": {cpu: 12, memory: 25, agent: true},
+		"pve2": {cpu: 30, memory: 50},
+		"pve3": {cpu: 20, memory: 12.5, agent: true},
+	}
+	for view, rows := range map[string]map[string]Resource{"broadcast": broadcast, "resources API": api} {
+		if len(rows) != len(want) {
+			t.Fatalf("%s presents %d node rows, want %d", view, len(rows), len(want))
+		}
+		for name, expected := range want {
+			row, ok := rows[name]
+			if !ok {
+				t.Fatalf("%s lost node %s", view, name)
+			}
+			if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+				t.Errorf("%s %s Proxmox sighting = %q, want online: ninety seconds is within the configured four minutes", view, name, poll.Status)
+			}
+			if row.Status != StatusOnline {
+				t.Errorf("%s %s status = %q, want online", view, name, row.Status)
+			}
+			if agent, ok := row.SourceStatus[SourceAgent]; ok != expected.agent || (ok && agent.Status != "stale") {
+				t.Errorf("%s %s agent sighting = %+v (present %v), want a stale one present %v", view, name, agent, ok, expected.agent)
+			}
+			if row.Metrics == nil || row.Metrics.CPU == nil || row.Metrics.Memory == nil {
+				t.Fatalf("%s %s lost its readings: %+v", view, name, row.Metrics)
+			}
+			if cpu, memory := row.Metrics.CPU, row.Metrics.Memory; cpu.Source != SourceProxmox || cpu.Percent != expected.cpu ||
+				memory.Source != SourceProxmox || memory.Percent != expected.memory {
+				t.Errorf("%s %s cpu %.1f%% from %s, memory %.1f%% from %s; want the current poll's %.1f%% and %.1f%%",
+					view, name, cpu.Percent, cpu.Source, memory.Percent, memory.Source, expected.cpu, expected.memory)
+			}
+		}
+	}
+
+	// The fixture sits where the thresholds decide: a rebuild judged by the
+	// defaults calls the same polls stale.
+	defaults := NewRegistry(nil)
+	defaults.IngestResources(adapter.GetAll())
+	defaultRows := presentedNodeRows(t, defaults.ListForPresentation())
+	if len(defaultRows) != len(want) {
+		t.Fatalf("default-threshold rebuild presents %d node rows, want %d", len(defaultRows), len(want))
+	}
+	for name, row := range defaultRows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "stale" {
+			t.Fatalf("default-threshold rebuild %s Proxmox sighting = %q, want stale; the fixture no longer exercises the thresholds", name, poll.Status)
+		}
+	}
+}
+
+// An ingest that passes thresholds of its own keeps them over the registry's.
+func TestRegistryIngestThresholdsOverrideConstructionThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := staleThresholdEstateSnapshot(now)
+	registry := NewRegistryWithStaleThresholds(nil, map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute})
+	registry.IngestSnapshotWithStaleThresholds(snapshot, map[DataSource]time.Duration{SourceProxmox: 60 * time.Second})
+	rows := presentedNodeRows(t, registry.List())
+	if len(rows) != 3 {
+		t.Fatalf("registry lists %d Proxmox node rows, want 3", len(rows))
+	}
+	for name, row := range rows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "stale" {
+			t.Fatalf("%s Proxmox sighting = %q, want stale under the ingest's own sixty seconds", name, poll.Status)
+		}
+	}
+}
+
+// Docker hosts hold a shorter lease than the registry's Docker stale
+// threshold, so a silent Docker host was offline for a while and then
+// flipped to warning once its sighting went stale.
+func TestLeaseExpiredDockerHostStaysOfflineAfterSightingGoesStale(t *testing.T) {
+	lastReport := time.Now().UTC().Add(-5 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-silent",
+			AgentID:         "docker-agent-silent",
+			Hostname:        "docker-silent",
+			MachineID:       "machine-docker-silent",
+			Status:          "offline",
+			LastSeen:        lastReport,
+			IntervalSeconds: 30,
+			Containers: []models.DockerContainer{{
+				ID:    "container-web",
+				Name:  "web",
+				State: "running",
+			}},
+		}},
+	})
+
+	host := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if host.Status != StatusOffline {
+		t.Fatalf("docker host status = %q, want offline after its sighting went stale", host.Status)
+	}
+	if got := host.SourceStatus[SourceDocker].Status; got != "stale" {
+		t.Fatalf("docker sighting = %q, want stale", got)
+	}
+
+	// Containers are what the host reports about, not lease holders: a
+	// running container on a silent host is stale, not known to be down.
+	container := onlyResourceOfType(t, rr, ResourceTypeAppContainer)
+	if container.Status != StatusWarning {
+		t.Fatalf("container status = %q, want warning on a silent host", container.Status)
+	}
+}
+
+// A machine reporting through both the host agent and Docker is offline once
+// both leases expire. The Docker lease ends first, so its sighting can still
+// be fresh when the agent's goes stale.
+func TestMachineWithExpiredAgentAndDockerLeasesIsOffline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-both"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-both",
+			MachineID:       machineID,
+			Hostname:        "both",
+			Status:          "offline",
+			LastSeen:        now.Add(-3 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-both",
+			AgentID:         "host-both",
+			Hostname:        "both",
+			MachineID:       machineID,
+			Status:          "offline",
+			LastSeen:        now.Add(-90 * time.Second),
+			IntervalSeconds: 10,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if _, ok := resource.SourceStatus[SourceDocker]; !ok {
+		t.Fatalf("expected agent and Docker to share one resource, got sources %+v", resource.SourceStatus)
+	}
+	if got := resource.SourceStatus[SourceDocker].Status; got != "online" {
+		t.Fatalf("docker sighting = %q, want it still inside the stale threshold", got)
+	}
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline once both leases expired", resource.Status)
+	}
+}
+
+// A live reporter still carries the machine when the other lease expired.
+func TestMachineWithLiveDockerReporterStaysOnline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-split"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-split",
+			MachineID:       machineID,
+			Hostname:        "split",
+			Status:          "offline",
+			LastSeen:        now.Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-split",
+			AgentID:         "docker-agent-split",
+			Hostname:        "split",
+			MachineID:       machineID,
+			Status:          "online",
+			LastSeen:        now,
+			IntervalSeconds: 10,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live Docker reporter", resource.Status)
+	}
+}
+
+// The lease marker is unexported, so a resource that went through JSON (a
+// persisted or remote copy) must recover it from its stored status.
+func TestLeaseExpiredHostAgentStaysOfflineAfterJSONRoundTrip(t *testing.T) {
+	source := NewRegistry(nil)
+	source.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-silent",
+			MachineID:       "machine-silent",
+			Hostname:        "silent",
+			Status:          "offline",
+			LastSeen:        time.Now().UTC().Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+	payload, err := json.Marshal(source.List())
+	if err != nil {
+		t.Fatalf("marshal resources: %v", err)
+	}
+	var copied []Resource
+	if err := json.Unmarshal(payload, &copied); err != nil {
+		t.Fatalf("unmarshal resources: %v", err)
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestResources(copied)
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline after a JSON round trip", resource.Status)
+	}
+}
+
+// A manual link can join two resources reported by the same source, such as
+// an agent reinstalled under a new id. The expired sighting of the old one
+// must not replace the live sighting of the new one.
+func TestManualLinkKeepsTheLiveSightingOfASharedSource(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{
+		ResourceA: "agent-reinstalled",
+		ResourceB: "agent-retired",
+		PrimaryID: "agent-reinstalled",
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{
+		{
+			ID:       "agent-reinstalled",
+			Type:     ResourceTypeAgent,
+			Name:     "tower",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "online", LastSeen: now},
+			},
+			Agent: &AgentData{AgentID: "host-new", Hostname: "tower"},
+		},
+		{
+			ID:       "agent-retired",
+			Type:     ResourceTypeAgent,
+			Name:     "tower",
+			Status:   StatusOffline,
+			LastSeen: now.Add(-14 * time.Minute),
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "stale", LastSeen: now.Add(-14 * time.Minute)},
+			},
+			Agent: &AgentData{AgentID: "host-old", Hostname: "tower", Stale: true},
+		},
+	})
+
+	resource, ok := rr.Get("agent-reinstalled")
+	if !ok {
+		t.Fatal("linked resource missing")
+	}
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live reinstalled agent", resource.Status)
+	}
+	if got := resource.SourceStatus[SourceAgent]; !got.LastSeen.Equal(now) {
+		t.Fatalf("agent sighting = %+v, want the live sighting", got)
+	}
+}
+
+// Either side of an operator link can arrive as a supplemental record: a
+// vSphere VM with a Pulse agent inside, or an agent on a TrueNAS host. The
+// monitor's rebuild ingests records after the snapshot, so it must join them
+// there too, keep the record side's provider payload, and list what the
+// resources API lists after seeding from it.
+func TestManualLinksJoinRecordIngestedResourcesInMonitorRebuild(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "host-app-guest", Hostname: "app-guest", MachineID: "machine-app-guest", Status: "online", LastSeen: now},
+			{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas-a", Status: "online", LastSeen: now},
+		},
+		LastUpdate: now,
+	}
+	vmRecord := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type:       ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     StatusOnline,
+			LastSeen:   now,
+			VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	records := map[DataSource][]IngestRecord{
+		SourceVMware: {vmRecord},
+		SourceTrueNAS: {
+			{
+				SourceID: "system:tn-1",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "nas-a",
+					Status:   StatusOnline,
+					LastSeen: now,
+					TrueNAS:  &TrueNASData{Hostname: "nas-a"},
+				},
+				Identity: ResourceIdentity{Hostnames: []string{"nas-a"}},
+			},
+			{
+				SourceID:       "system:tn-1:pool:tank",
+				ParentSourceID: "system:tn-1",
+				Resource: Resource{
+					Type:     ResourceTypeStorage,
+					Name:     "tank",
+					Status:   StatusOnline,
+					LastSeen: now,
+					Storage:  &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+				},
+			},
+		},
+	}
+
+	for _, agentPrimary := range []bool{false, true} {
+		name := "record-primary"
+		if agentPrimary {
+			name = "agent-primary"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := NewMemoryStore()
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+
+			var vmID, guestAgentID, systemID, nasAgentID string
+			for _, resource := range adapter.GetAll() {
+				switch {
+				case resource.VMware != nil:
+					vmID = resource.ID
+				case resource.TrueNAS != nil:
+					systemID = resource.ID
+				case resource.Name == "app-guest":
+					guestAgentID = resource.ID
+				case resource.Name == "nas-a-mgmt":
+					nasAgentID = resource.ID
+				}
+			}
+			if vmID == "" || guestAgentID == "" || systemID == "" || nasAgentID == "" {
+				t.Fatalf("unlinked estate = %v, want the VM, both agents and the TrueNAS system", resourceIDs(adapter.GetAll()))
+			}
+			guestPrimary, nasPrimary := vmID, systemID
+			if agentPrimary {
+				guestPrimary, nasPrimary = guestAgentID, nasAgentID
+			}
+			for _, link := range []ResourceLink{
+				{ResourceA: vmID, ResourceB: guestAgentID, PrimaryID: guestPrimary},
+				{ResourceA: systemID, ResourceB: nasAgentID, PrimaryID: nasPrimary},
+			} {
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+
+			assertJoined := func(stage string) {
+				t.Helper()
+				resources := adapter.GetAll()
+				if len(resources) != 3 {
+					t.Fatalf("%s: resources = %v, want the linked VM, the linked TrueNAS system and its pool", stage, resourceIDs(resources))
+				}
+				// An agent inside a guest supplements the guest, whichever
+				// side the operator chose as primary.
+				guest, ok := adapter.currentRegistry().Get(vmID)
+				if !ok {
+					t.Fatalf("%s: linked vSphere VM %s missing from %v", stage, vmID, resourceIDs(resources))
+				}
+				if guest.Type != ResourceTypeVM || guest.VMware == nil || guest.Agent == nil {
+					t.Fatalf("%s: linked VM type=%s vmware=%t agent=%t, want the VM carrying its agent", stage, guest.Type, guest.VMware != nil, guest.Agent != nil)
+				}
+				if !slices.Contains(guest.Sources, SourceVMware) || !slices.Contains(guest.Sources, SourceAgent) {
+					t.Fatalf("%s: linked VM sources = %v, want vmware and agent", stage, guest.Sources)
+				}
+				system, ok := adapter.currentRegistry().Get(nasPrimary)
+				if !ok {
+					t.Fatalf("%s: linked TrueNAS system %s missing from %v", stage, nasPrimary, resourceIDs(resources))
+				}
+				if system.TrueNAS == nil || system.Agent == nil {
+					t.Fatalf("%s: linked system truenas=%t agent=%t, want the primary carrying both payloads", stage, system.TrueNAS != nil, system.Agent != nil)
+				}
+				if !slices.Contains(system.Sources, SourceTrueNAS) || !slices.Contains(system.Sources, SourceAgent) {
+					t.Fatalf("%s: linked system sources = %v, want truenas and agent", stage, system.Sources)
+				}
+				pool := onlyResourceOfType(t, adapter.currentRegistry(), ResourceTypeStorage)
+				if pool.ParentID == nil || *pool.ParentID != nasPrimary {
+					t.Fatalf("%s: pool parent = %v, want the linked system %s", stage, pool.ParentID, nasPrimary)
+				}
+
+				// Identity pins persisted by the rebuild must not re-key a link
+				// onto its own primary.
+				links, err := store.GetLinks()
+				if err != nil {
+					t.Fatalf("%s: get links: %v", stage, err)
+				}
+				for _, link := range links {
+					if link.ResourceA == link.ResourceB {
+						t.Fatalf("%s: link collapsed onto %s", stage, link.ResourceA)
+					}
+				}
+
+				// The resources API seeds its registry from this listing
+				// through resource ingest and must agree with it.
+				rest := NewRegistry(store)
+				rest.IngestResources(resources)
+				if got, want := resourceIDs(rest.List()), resourceIDs(resources); !slices.Equal(got, want) {
+					t.Fatalf("%s: a registry seeded from the monitor lists %v, monitor lists %v", stage, got, want)
+				}
+			}
+
+			next := snapshot
+			next.LastUpdate = now.Add(time.Second)
+			adapter.PopulateSnapshotAndSupplemental(next, records)
+			assertJoined("rebuild")
+
+			adapter.PopulateSupplementalRecords(SourceVMware, records[SourceVMware])
+			adapter.PopulateSupplementalRecords(SourceTrueNAS, records[SourceTrueNAS])
+			assertJoined("supplemental refresh")
+
+			next.LastUpdate = now.Add(2 * time.Second)
+			adapter.PopulateSnapshotAndSupplemental(next, records)
+			assertJoined("second rebuild")
+		})
+	}
+}
+
+// A Proxmox node that absorbs a linked agent carries the agent's machine key,
+// so the rebuild pins the node with it. The agent is still observed: that pin
+// must not succeed the agent's ID onto the node, which re-keyed the link onto
+// the node itself and split the pair on the next rebuild.
+func TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: "lab-pve1", Name: "pve1", Instance: "lab",
+			Host: "https://192.0.2.10:8006", Status: "online", LastSeen: now,
+		}},
+		Hosts: []models.Host{{
+			ID: "host-box", Hostname: "box-x", MachineID: "machine-box", Status: "online", LastSeen: now,
+		}},
+		LastUpdate: now,
+	}
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID, agentID string
+	for _, resource := range adapter.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		} else if resource.Agent != nil {
+			agentID = resource.ID
+		}
+	}
+	if nodeID == "" || agentID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node and a separate agent", resourceIDs(adapter.GetAll()))
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: nodeID, ResourceB: agentID, PrimaryID: nodeID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(rebuild) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{nodeID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked node %s", rebuild, got, nodeID)
+		}
+		links, err := store.GetLinks()
+		if err != nil {
+			t.Fatalf("get links: %v", err)
+		}
+		if len(links) != 1 || links[0].ResourceA != nodeID || links[0].ResourceB != agentID {
+			t.Fatalf("rebuild %d: links = %+v, want %s -> %s kept", rebuild, links, nodeID, agentID)
+		}
+	}
+}
+
+// pinCountingStore counts identity pin writes, so tests can tell a
+// steady-state rebuild (no writes) from one that rewrites a row every tick.
+type pinCountingStore struct {
+	*MemoryStore
+	pinWrites int
+}
+
+func (s *pinCountingStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	s.pinWrites++
+	return s.MemoryStore.UpsertResourceIdentityPins(pins)
+}
+
+func (s *pinCountingStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	s.pinWrites++
+	return s.MemoryStore.ReplaceResourceIdentityPins(pins)
+}
+
+// manualLinkPinSnapshot is a Proxmox node and an unrelated host agent. With a
+// cluster name the node is a cluster member whose instance names the cluster,
+// so its identity carries the cluster.
+func manualLinkPinSnapshot(now time.Time, clusterName string) models.StateSnapshot {
+	instance := "lab"
+	if clusterName != "" {
+		instance = clusterName
+	}
+	return models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: instance + "-pve1", Name: "pve1", Instance: instance, ClusterName: clusterName, IsClusterMember: clusterName != "",
+			Host: "https://pve1.example.test:8006", Status: "online", LastSeen: now,
+		}},
+		Hosts: []models.Host{{
+			ID: "host-box", Hostname: "box-x", MachineID: "machine-box", Status: "online", LastSeen: now,
+		}},
+		LastUpdate: now,
+	}
+}
+
+// A manual link joins two resources for display; it does not make them one
+// machine, so each side keeps pinning its own identity. A Proxmox node whose
+// configured endpoint is a qualified name pins that name. Pinned with the
+// linked agent's machine key instead, the node's next rebuild completed that
+// key, minted the agent's machine-derived ID and merged with the agent before
+// the link applied, and removing the link could not separate them.
+func TestManualLinkPinsEachSideFromItsOwnIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		clusterName string
+		nodePrimary bool
+	}{
+		{name: "standalone node primary", nodePrimary: true},
+		{name: "standalone agent primary"},
+		{name: "cluster node primary", clusterName: "lab-cluster", nodePrimary: true},
+		{name: "cluster agent primary", clusterName: "lab-cluster"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			snapshot := manualLinkPinSnapshot(now, tc.clusterName)
+			store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			rebuild := func(step int) {
+				next := snapshot
+				next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+				adapter.PopulateSnapshotAndSupplemental(next, nil)
+			}
+			rebuild(0)
+			var nodeID, agentID string
+			for _, resource := range adapter.GetAll() {
+				if resource.Proxmox != nil {
+					nodeID = resource.ID
+				} else if resource.Agent != nil {
+					agentID = resource.ID
+				}
+			}
+			if nodeID == "" || agentID != MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box") || nodeID == agentID {
+				t.Fatalf("unlinked estate = %v, want a node and the machine-keyed agent", resourceIDs(adapter.GetAll()))
+			}
+			assertOwnPins := func(step string) {
+				t.Helper()
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("%s: list identity pins: %v", step, err)
+				}
+				agentPinned, nodePinned := false, false
+				for _, pin := range pins {
+					switch pin.CanonicalID {
+					case agentID:
+						if pin.MachineID != "machine-box" || pin.Hostname != "box-x" || pin.ClusterName != "" {
+							t.Fatalf("%s: agent pin = %+v, want its own machine key and hostname", step, pin)
+						}
+						agentPinned = true
+					case nodeID:
+						if pin.MachineID != "" || pin.ClusterName != tc.clusterName || pin.Hostname != "pve1.example.test" {
+							t.Fatalf("%s: node pin = %+v, want only its own cluster and endpoint", step, pin)
+						}
+						nodePinned = true
+					default:
+						t.Fatalf("%s: unexpected pin %+v", step, pin)
+					}
+				}
+				if !agentPinned {
+					t.Fatalf("%s: pins = %+v, want the agent's own machine-keyed pin", step, pins)
+				}
+				if tc.clusterName != "" && !nodePinned {
+					t.Fatalf("%s: pins = %+v, want the cluster node's own pin", step, pins)
+				}
+			}
+			assertOwnPins("unlinked")
+
+			primaryID, otherID := agentID, nodeID
+			if tc.nodePrimary {
+				primaryID, otherID = nodeID, agentID
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: primaryID, ResourceB: otherID, PrimaryID: primaryID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			for step := 1; step <= 3; step++ {
+				writesBefore := store.pinWrites
+				rebuild(step)
+				if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{primaryID}) {
+					t.Fatalf("rebuild %d: resources = %v, want only the linked primary %s", step, got, primaryID)
+				}
+				links, err := store.GetLinks()
+				if err != nil {
+					t.Fatalf("get links: %v", err)
+				}
+				if len(links) != 1 || links[0].ResourceA != primaryID || links[0].ResourceB != otherID {
+					t.Fatalf("rebuild %d: links = %+v, want %s -> %s kept", step, links, primaryID, otherID)
+				}
+				assertOwnPins("linked rebuild")
+				if step > 1 && store.pinWrites != writesBefore {
+					t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", step, store.pinWrites-writesBefore)
+				}
+			}
+
+			// Removing the link separates the pair on the next rebuild:
+			// nothing the link lent either side may outlive it.
+			store.mu.Lock()
+			store.links = nil
+			store.mu.Unlock()
+			rebuild(4)
+			if got, want := resourceIDs(adapter.GetAll()), resourceIDs([]Resource{{ID: nodeID}, {ID: agentID}}); !slices.Equal(got, want) {
+				t.Fatalf("after unlink: resources = %v, want %v", got, want)
+			}
+			for _, resource := range adapter.GetAll() {
+				if resource.ID == nodeID && (resource.Agent != nil || resource.Identity.MachineID != "") {
+					t.Fatalf("after unlink: node = %+v, want no agent payload or borrowed machine key", resource)
+				}
+			}
+			assertOwnPins("after unlink")
+		})
+	}
+}
+
+// Earlier releases pinned a link's primary with the merged identity, so an
+// agent primary's row can still hold the linked node's cluster. No resource
+// holds that cluster with the agent's hostname, so the row keeps it, as an
+// upsert keeps any stored field, and is not rewritten on every rebuild.
+func TestManualLinkSideKeepsAnUnclaimedStoredField(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := manualLinkPinSnapshot(now, "lab-cluster")
+	snapshot.Nodes[0].Host = "https://192.0.2.10:8006"
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box")
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	widened := ResourceIdentityPin{
+		CanonicalID: agentID, ResourceType: ResourceTypeAgent,
+		MachineID: "machine-box", ClusterName: "lab-cluster", Hostname: "box-x",
+	}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{widened}); err != nil {
+		t.Fatalf("seed widened pin: %v", err)
+	}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		}
+	}
+	if nodeID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node beside agent %s", resourceIDs(unlinked.GetAll()), agentID)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: nodeID, PrimaryID: agentID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	for step := 0; step < 3; step++ {
+		writesBefore := store.pinWrites
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{agentID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked agent %s", step, got, agentID)
+		}
+		if step > 0 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", step, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		for _, pin := range pins {
+			if pin.CanonicalID == agentID && pin != widened {
+				t.Fatalf("rebuild %d: agent pin = %+v, want the stored row kept %+v", step, pin, widened)
+			}
+		}
+	}
+}
+
+// The store gives each strong key one owner. Two hosts can keep separate
+// machine IDs yet share a pool name and hostname (an old and a replacement
+// enrollment); linked, the live primary keeps that key and the folded side
+// keeps only its machine key, rather than the two taking the pool from each
+// other every rebuild. A key the primary's row only kept from an earlier
+// release's merged pin goes to the folded side that reports it.
+func TestManualLinkFoldedSideNeverTakesALiveResourcesKey(t *testing.T) {
+	newPin := ResourceIdentityPin{CanonicalID: "agent-new", ResourceType: ResourceTypeAgent, MachineID: "machine-new", ClusterName: "pool-a", Hostname: "xcp1"}
+	oldPin := ResourceIdentityPin{CanonicalID: "agent-old", ResourceType: ResourceTypeAgent, MachineID: "machine-old", ClusterName: "pool-a", Hostname: "xcp1"}
+	ownNewPin, ownOldPin := newPin, oldPin
+	ownNewPin.ClusterName, ownOldPin.ClusterName = "", ""
+	for _, tc := range []struct {
+		name        string
+		primaryPool string
+		seed        []ResourceIdentityPin
+		want        []ResourceIdentityPin
+	}{
+		{name: "both report the pool", primaryPool: "pool-a", want: []ResourceIdentityPin{newPin, ownOldPin}},
+		{name: "primary row borrowed the pool", seed: []ResourceIdentityPin{newPin}, want: []ResourceIdentityPin{ownNewPin, oldPin}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			host := func(id, machineID, pool string) Resource {
+				return Resource{
+					ID: id, Type: ResourceTypeAgent, Name: "xcp1", Status: StatusOnline, LastSeen: now,
+					Sources:  []DataSource{SourceAgent},
+					Agent:    &AgentData{AgentID: id, Hostname: "xcp1"},
+					Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{"xcp1"}},
+				}
+			}
+			store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+			if err := store.UpsertResourceIdentityPins(tc.seed); err != nil {
+				t.Fatalf("seed pins: %v", err)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: "agent-new", ResourceB: "agent-old", PrimaryID: "agent-new"}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			for rebuild := 1; rebuild <= 3; rebuild++ {
+				writesBefore := store.pinWrites
+				registry := NewRegistry(store)
+				registry.IngestResources([]Resource{host("agent-new", "machine-new", tc.primaryPool), host("agent-old", "machine-old", "pool-a")})
+				registry.PersistIdentityPins()
+				if rebuild > 1 && store.pinWrites != writesBefore {
+					t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+				}
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("list identity pins: %v", err)
+				}
+				slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+				if !slices.Equal(pins, tc.want) {
+					t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// Two hosts can share a cloned machine ID while an exclusion keeps them
+// apart. A folded side whose machine key the other host holds writes no pin
+// rather than a cluster-only one: cluster-slot succession treats a
+// machine-keyless row as a host a later machine in that slot may absorb.
+func TestManualLinkFoldedSideWritesNoPinWithoutItsMachineKey(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool, hostname string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: hostname, Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id, Hostname: hostname},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{hostname}},
+		}
+	}
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-primary", ResourceB: "agent-clone", PrimaryID: "agent-primary"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	registry := NewRegistry(store)
+	registry.IngestResources([]Resource{
+		host("agent-original", "machine-cloned", "", "swarm-a"),
+		host("agent-clone", "machine-cloned", "swarm", "swarm-b"),
+		host("agent-primary", "machine-primary", "", "primary"),
+	})
+	registry.PersistIdentityPins()
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("list identity pins: %v", err)
+	}
+	for _, pin := range pins {
+		if pin.CanonicalID == "agent-clone" {
+			t.Fatalf("folded clone pinned as %+v, want no pin without its machine key", pin)
+		}
+	}
+	if len(pins) != 2 {
+		t.Fatalf("pins = %+v, want the original's and the primary's", pins)
+	}
+}
+
+// A link side's row keeps a stored hostname its own pin lacks, but never
+// where that hostname would complete a cluster key another resource holds:
+// the store would delete that resource's whole row.
+func TestManualLinkSideKeepsNoHostnameThatCompletesAHeldClusterKey(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool string, hostnames ...string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: id, Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: hostnames},
+		}
+	}
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", ClusterName: "pool-d", Hostname: "h1",
+	}}); err != nil {
+		t.Fatalf("seed pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-a", ResourceB: "agent-f", PrimaryID: "agent-a"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	want := []ResourceIdentityPin{
+		{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", ClusterName: "pool-c"},
+		{CanonicalID: "agent-b", ResourceType: ResourceTypeAgent, MachineID: "machine-b", ClusterName: "pool-c", Hostname: "h1"},
+		{CanonicalID: "agent-f", ResourceType: ResourceTypeAgent, MachineID: "machine-f", Hostname: "f1"},
+	}
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		writesBefore := store.pinWrites
+		registry := NewRegistry(store)
+		registry.IngestResources([]Resource{
+			host("agent-a", "machine-a", "pool-c"),
+			host("agent-b", "machine-b", "pool-c", "h1"),
+			host("agent-f", "machine-f", "", "f1"),
+		})
+		registry.PersistIdentityPins()
+		if rebuild > 1 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+		if !slices.Equal(pins, want) {
+			t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, want)
+		}
+	}
+}
+
+// A folded side's own pin can be narrower than a row an earlier release
+// widened with a pool its primary now reports. The primary's new pin claims
+// that pool and hostname, so the store deletes the folded side's whole row;
+// the folded side's own pin is written after it, so the side stays pinned.
+func TestManualLinkFoldedSideKeepsItsPinWhenAPrimaryClaimsItsWiderRow(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: "xcp1", Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id, Hostname: "xcp1"},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{"xcp1"}},
+		}
+	}
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: "agent-old", ResourceType: ResourceTypeAgent,
+		MachineID: "machine-old", ClusterName: "pool-a", Hostname: "xcp1",
+	}}); err != nil {
+		t.Fatalf("seed widened pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-new", ResourceB: "agent-old", PrimaryID: "agent-new"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	want := []ResourceIdentityPin{
+		{CanonicalID: "agent-new", ResourceType: ResourceTypeAgent, MachineID: "machine-new", ClusterName: "pool-a", Hostname: "xcp1"},
+		{CanonicalID: "agent-old", ResourceType: ResourceTypeAgent, MachineID: "machine-old", Hostname: "xcp1"},
+	}
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		writesBefore := store.pinWrites
+		registry := NewRegistry(store)
+		registry.IngestResources([]Resource{host("agent-new", "machine-new", "pool-a"), host("agent-old", "machine-old", "")})
+		registry.PersistIdentityPins()
+		if rebuild > 1 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+		if !slices.Equal(pins, want) {
+			t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, want)
+		}
+	}
+}
+
+// An earlier release pinned a linked node primary with the agent's machine
+// key and dropped the agent's own pin. The node has nothing of its own to
+// pin, so the agent's own pin takes the key back on the next rebuild.
+func TestManualLinkReturnsABorrowedMachineKeyToItsAgent(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := manualLinkPinSnapshot(now, "")
+	snapshot.Nodes[0].Host = "https://192.0.2.10:8006"
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		}
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box")
+	if nodeID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node beside agent %s", resourceIDs(unlinked.GetAll()), agentID)
+	}
+
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: nodeID, ResourceType: ResourceTypeAgent, MachineID: "machine-box", Hostname: "pve1",
+	}}); err != nil {
+		t.Fatalf("seed borrowed pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: nodeID, ResourceB: agentID, PrimaryID: nodeID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	for step := 0; step < 2; step++ {
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{nodeID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked node %s", step, got, nodeID)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		if len(pins) != 1 || pins[0].CanonicalID != agentID || pins[0].MachineID != "machine-box" || pins[0].Hostname != "box-x" {
+			t.Fatalf("rebuild %d: pins = %+v, want only the agent's own pin", step, pins)
+		}
+	}
+	links, err := store.GetLinks()
+	if err != nil {
+		t.Fatalf("get links: %v", err)
+	}
+	if len(links) != 1 || links[0].ResourceA != nodeID || links[0].ResourceB != agentID {
+		t.Fatalf("links = %+v, want %s -> %s kept", links, nodeID, agentID)
+	}
+}
+
+// A record may name an older canonical ID as superseded on every ingest. When
+// that ID belongs to a resource a manual link folded into the record's own
+// resource, it is still observed: succeeding it on a later refresh would
+// re-key the link onto its primary.
+func TestRecordDeclaredSuccessionSparesALinkFoldedResource(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts:      []models.Host{{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas-a", Status: "online", LastSeen: now}},
+		LastUpdate: now,
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-nas-a")
+	records := []IngestRecord{{
+		SourceID:               "system:tn-1",
+		SupersededCanonicalIDs: []string{agentID},
+		Resource: Resource{
+			Type:     ResourceTypeAgent,
+			Name:     "nas-a",
+			Status:   StatusOnline,
+			LastSeen: now,
+			TrueNAS:  &TrueNASData{Hostname: "nas-a"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"nas-a"}},
+	}}
+
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceTrueNAS: records})
+	var systemID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.TrueNAS != nil {
+			systemID = resource.ID
+		}
+	}
+	if systemID == "" || !slices.Contains(resourceIDs(unlinked.GetAll()), agentID) {
+		t.Fatalf("unlinked estate = %v, want agent %s and a TrueNAS system", resourceIDs(unlinked.GetAll()), agentID)
+	}
+
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: systemID, ResourceB: agentID, PrimaryID: systemID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceTrueNAS: records})
+	adapter.PopulateSupplementalRecords(SourceTrueNAS, records)
+
+	if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{systemID}) {
+		t.Fatalf("resources = %v, want only the linked system %s", got, systemID)
+	}
+	links, err := store.GetLinks()
+	if err != nil {
+		t.Fatalf("get links: %v", err)
+	}
+	if len(links) != 1 || links[0].ResourceA != systemID || links[0].ResourceB != agentID {
+		t.Fatalf("links = %+v, want %s -> %s kept", links, systemID, agentID)
+	}
+}
+
+// A link merge folds the other resource's provider payloads into the primary
+// where the primary has none, whichever side the operator chose.
+func TestManualLinkKeepsProviderPayloadsThePrimaryLacks(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: "agent-nas", ResourceB: "truenas-system", PrimaryID: "agent-nas"},
+		{ResourceA: "agent-esxi", ResourceB: "vmware-host", PrimaryID: "agent-esxi"},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	host := func(id, name string, sources ...DataSource) Resource {
+		status := make(map[DataSource]SourceStatus, len(sources))
+		for _, source := range sources {
+			status[source] = SourceStatus{Status: "online", LastSeen: now}
+		}
+		return Resource{ID: id, Type: ResourceTypeAgent, Name: name, Status: StatusOnline, LastSeen: now, Sources: sources, SourceStatus: status}
+	}
+	agentNAS := host("agent-nas", "nas-a-mgmt", SourceAgent)
+	agentNAS.Agent = &AgentData{AgentID: "agent-nas", Hostname: "nas-a-mgmt"}
+	system := host("truenas-system", "nas-a", SourceTrueNAS)
+	system.TrueNAS = &TrueNASData{Hostname: "nas-a"}
+	agentESXi := host("agent-esxi", "esxi-01", SourceAgent)
+	agentESXi.Agent = &AgentData{AgentID: "agent-esxi", Hostname: "esxi-01"}
+	esxi := host("vmware-host", "esxi-01.lab", SourceVMware)
+	esxi.VMware = &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "host-101", EntityType: "host"}
+
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{agentNAS, system, agentESXi, esxi})
+
+	if got := resourceIDs(rr.List()); !slices.Equal(got, []string{"agent-esxi", "agent-nas"}) {
+		t.Fatalf("resources = %v, want the two linked primaries", got)
+	}
+	if nas, _ := rr.Get("agent-nas"); nas.TrueNAS == nil || nas.Agent == nil {
+		t.Fatalf("linked TrueNAS system truenas=%t agent=%t, want both payloads", nas.TrueNAS != nil, nas.Agent != nil)
+	}
+	if host, _ := rr.Get("agent-esxi"); host.VMware == nil || host.Agent == nil {
+		t.Fatalf("linked vSphere host vmware=%t agent=%t, want both payloads", host.VMware != nil, host.Agent != nil)
+	}
+}
+
+// Each operator link folded into a resource is recorded with the link row's
+// own pair, also along a chain (a Docker host linked to an agent, the agent
+// linked into a VM), and the record rides the monitor's listing into a
+// registry seeded from it, which never holds the folded rows.
+func TestManualLinkFoldsNameEachLinkPairAlongAChain(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	snapshot := models.StateSnapshot{
+		LastUpdate:  now,
+		VMs:         []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:       []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "docker-box", Hostname: "dock-box", Status: "online", LastSeen: now}},
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	var vmID, agentID, dockerID string
+	for _, resource := range adapter.GetAll() {
+		switch {
+		case resource.Type == ResourceTypeVM:
+			vmID = resource.ID
+		case resource.Agent != nil:
+			agentID = resource.ID
+		case resource.Docker != nil:
+			dockerID = resource.ID
+		}
+		if len(resource.linkFolds) != 0 {
+			t.Fatalf("unlinked resource %s carries link folds %+v", resource.ID, resource.linkFolds)
+		}
+	}
+	if vmID == "" || agentID == "" || dockerID == "" || len(adapter.GetAll()) != 3 {
+		t.Fatalf("fixture did not produce a separate VM, agent and Docker host: %+v", adapter.GetAll())
+	}
+
+	// Links apply in store order, so the agent takes in the Docker host before
+	// the VM takes in the agent.
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: dockerID, PrimaryID: agentID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: agentID, CreatedAt: now.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	adapter.PopulateFromSnapshot(snapshot)
+	merged := adapter.GetAll()
+	if len(merged) != 1 || merged[0].ID != vmID {
+		t.Fatalf("links did not fold the chain into the VM: %+v", merged)
+	}
+
+	// The agent linked from its own side still folds into the guest it runs
+	// in, and the fold names the link's pair either way.
+	// Each side also records what it is on its own: the agent's fold into the VM
+	// lists the Docker host's source too, but the agent is only the agent.
+	want := []ManualLinkFold{
+		{
+			HolderID: agentID, FoldedID: dockerID, Sources: []DataSource{SourceDocker},
+			HolderOwn: []DataSource{SourceAgent}, FoldedOwn: []DataSource{SourceDocker},
+		},
+		{
+			HolderID: vmID, FoldedID: agentID, Sources: []DataSource{SourceAgent, SourceDocker},
+			HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceAgent},
+		},
+	}
+	if got := adapter.currentRegistry().ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("monitor folds = %+v, want %+v", got, want)
+	}
+
+	seeded := NewRegistry(store)
+	seeded.IngestResources(adapter.GetAll())
+	if got := seeded.ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("seeded registry folds = %+v, want %+v", got, want)
+	}
+	if got := seeded.ManualLinkFolds(agentID); got != nil {
+		t.Fatalf("folded agent ID reports folds %+v", got)
+	}
+}
+
+// Record ingest recreates a folded side whose source mapping points at a
+// holder of another type (an agent-type TrueNAS record linked into a VM) and
+// the record-ingest epilogue folds it again, so the pair must be recorded
+// once however often the records arrive.
+func TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+	}
+	records := []IngestRecord{{
+		SourceID: "nas-1",
+		Resource: Resource{Type: ResourceTypeAgent, Name: "nas-1", Status: StatusOnline, LastSeen: now},
+		Identity: ResourceIdentity{MachineID: "abcdef0123456789"},
+	}}
+	probe := NewRegistry(store)
+	probe.IngestSnapshot(snapshot)
+	probe.IngestRecords(SourceTrueNAS, records)
+	var vmID, systemID string
+	for _, resource := range probe.List() {
+		switch resource.Type {
+		case ResourceTypeVM:
+			vmID = resource.ID
+		case ResourceTypeAgent:
+			systemID = resource.ID
+		}
+	}
+	if vmID == "" || systemID == "" {
+		t.Fatalf("fixture did not produce a separate VM and TrueNAS system: %+v", probe.List())
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: vmID, ResourceB: systemID, PrimaryID: vmID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := NewRegistry(store)
+	rr.IngestSnapshot(snapshot)
+	for i := 0; i < 3; i++ {
+		rr.IngestRecords(SourceTrueNAS, records)
+	}
+	if listed := rr.List(); len(listed) != 1 {
+		t.Fatalf("link did not fold the TrueNAS system into the VM: %+v", listed)
+	}
+	want := []ManualLinkFold{{
+		HolderID: vmID, FoldedID: systemID, Sources: []DataSource{SourceTrueNAS},
+		HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceTrueNAS},
+	}}
+	if got := rr.ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("folds after repeated record ingests = %+v, want %+v", got, want)
+	}
+}
+
+// A folded side recreated with fewer sources than it brought before (one of
+// an identity-merged agent's records replayed) folds again; the holder still
+// carries everything the earlier fold brought, so the fold keeps every
+// source and a report naming any of them still selects the link.
+func TestManualLinkFoldRepeatedPairKeepsEarlierSources(t *testing.T) {
+	holder := &Resource{ID: "vm-1"}
+	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker}}, "agent-1")
+	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent}}, "agent-1")
+	want := []ManualLinkFold{{
+		HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker},
+		FoldedOwn: []DataSource{SourceAgent, SourceDocker},
+	}}
+	if !reflect.DeepEqual(holder.linkFolds, want) {
+		t.Fatalf("folds = %+v, want %+v", holder.linkFolds, want)
+	}
+}
+
+// A holder that already took a member in lists that member's sources too, so
+// its own sources come from the record the first fold made, not from its row.
+func TestManualLinkFoldOwnSourcesComeFromTheFirstRecord(t *testing.T) {
+	holder := &Resource{ID: "vm-1", Sources: []DataSource{SourceProxmox}}
+	first := &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent}}
+	recordManualLinkFold(holder, "vm-1", first, "agent-1")
+	holder.Sources = addSources(holder.Sources, first.Sources)
+	second := &Resource{ID: "docker-1", Sources: []DataSource{SourceDocker}}
+	recordManualLinkFold(holder, "vm-1", second, "docker-1")
+
+	if got := holder.linkFolds[1].HolderOwn; !reflect.DeepEqual(got, []DataSource{SourceProxmox}) {
+		t.Fatalf("second fold lists the holder's own sources as %v, want only %v", got, SourceProxmox)
+	}
+
+	// The VM then folds into another resource: the member it was keeps its own
+	// sources, not the ones it took in.
+	root := &Resource{ID: "node-1", Sources: []DataSource{SourceTrueNAS}}
+	recordManualLinkFold(root, "node-1", holder, "vm-1")
+	last := root.linkFolds[len(root.linkFolds)-1]
+	if last.FoldedID != "vm-1" || !reflect.DeepEqual(last.FoldedOwn, []DataSource{SourceProxmox}) {
+		t.Fatalf("fold of the holder lists its own sources as %v, want only %v", last.FoldedOwn, SourceProxmox)
+	}
+	if !reflect.DeepEqual(last.HolderOwn, []DataSource{SourceTrueNAS}) {
+		t.Fatalf("fold into the root lists its own sources as %v, want only %v", last.HolderOwn, SourceTrueNAS)
+	}
+}
+
+// ReportedManualLinkFolds picks the links a source-filtered report undoes by
+// member. The members here are the estate that exposed the fold subtree
+// rule: a TrueNAS VM V takes in a Proxmox storage S and a vSphere VM W, and
+// the operator also linked S into W, so recording every link of the chain
+// leaves three pairs with W reachable through two of them.
+func TestReportedManualLinkFoldsDetachMembersCarryingTheSource(t *testing.T) {
+	pair := func(holder, folded string, sources, holderOwn, foldedOwn []DataSource) ManualLinkFold {
+		return ManualLinkFold{HolderID: holder, FoldedID: folded, Sources: sources, HolderOwn: holderOwn, FoldedOwn: foldedOwn}
+	}
+	named := func(names ...DataSource) func(...DataSource) bool {
+		return func(sources ...DataSource) bool {
+			if len(names) == 0 {
+				return true
+			}
+			for _, source := range sources {
+				if slices.Contains(names, source) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	pairs := func(folds []ManualLinkFold) []string {
+		out := make([]string, 0, len(folds))
+		for _, fold := range folds {
+			out = append(out, fold.HolderID+">"+fold.FoldedID)
+		}
+		slices.Sort(out)
+		return out
+	}
+	truenas, proxmox, vmware := []DataSource{SourceTrueNAS}, []DataSource{SourceProxmox}, []DataSource{SourceVMware}
+	cycle := []ManualLinkFold{
+		pair("V", "S", proxmox, truenas, proxmox),
+		pair("V", "W", vmware, truenas, vmware),
+		pair("W", "S", proxmox, vmware, proxmox),
+	}
+	// A leaf below a holder below the root: V takes in A (agent), which took
+	// in D (docker), so A's fold lists both sources.
+	agent, docker := []DataSource{SourceAgent}, []DataSource{SourceDocker}
+	tree := []ManualLinkFold{
+		pair("A", "D", docker, agent, docker),
+		pair("V", "A", []DataSource{SourceAgent, SourceDocker}, proxmox, agent),
+	}
+
+	for _, tc := range []struct {
+		name  string
+		root  string
+		folds []ManualLinkFold
+		named []DataSource
+		want  []string
+	}{
+		{"cycle: member reachable two ways is cut from both", "V", cycle, []DataSource{SourceVMware}, []string{"V>W", "W>S"}},
+		{"cycle: the storage leaves, the VM keeps the other link", "V", cycle, []DataSource{SourceProxmox}, []string{"V>S", "W>S"}},
+		{"cycle: both reported members leave", "V", cycle, []DataSource{SourceVMware, SourceProxmox}, []string{"V>S", "V>W", "W>S"}},
+		{"cycle: the root's own source selects nothing", "V", cycle, []DataSource{SourceTrueNAS}, nil},
+		{"cycle: no filter undoes every link", "V", cycle, nil, []string{"V>S", "V>W", "W>S"}},
+		{"tree: a leaf's source leaves its holder's link alone", "V", tree, []DataSource{SourceDocker}, []string{"A>D"}},
+		{"tree: a holder leaves and keeps what it took in", "V", tree, []DataSource{SourceAgent}, []string{"V>A"}},
+		{"tree: both reported, both leave", "V", tree, []DataSource{SourceAgent, SourceDocker}, []string{"A>D", "V>A"}},
+		{"tree: the root's own source selects nothing", "V", tree, []DataSource{SourceProxmox}, nil},
+		{"tree: no filter undoes every link", "V", tree, nil, []string{"A>D", "V>A"}},
+		// A refold of the agent unions a source into the VM's fold of it only,
+		// so the agent's two records disagree; the member is the union.
+		{"tree: a member whose refold gained the source is reported by it", "V", []ManualLinkFold{
+			pair("A", "D", docker, agent, docker),
+			pair("V", "A", []DataSource{SourceAgent, SourceDocker}, proxmox, []DataSource{SourceAgent, SourceDocker}),
+		}, []DataSource{SourceDocker}, []string{"A>D", "V>A"}},
+		{"root re-keyed after the links folded", "V-renamed", tree, []DataSource{SourceDocker}, []string{"A>D"}},
+		{"ambiguous root falls back to the folded subtree", "elsewhere", []ManualLinkFold{
+			pair("X", "Y", docker, nil, nil), pair("P", "Q", agent, nil, nil),
+		}, []DataSource{SourceDocker}, []string{"X>Y"}},
+		{"folds recorded without own sources use the folded subtree", "V", []ManualLinkFold{
+			{HolderID: "V", FoldedID: "A", Sources: []DataSource{SourceAgent, SourceDocker}},
+			{HolderID: "A", FoldedID: "D", Sources: docker},
+		}, []DataSource{SourceDocker}, []string{"A>D", "V>A"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pairs(ReportedManualLinkFolds(tc.root, tc.folds, named(tc.named...)))
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("report of %v selected %v, want %v", tc.named, got, tc.want)
+			}
+		})
+	}
+}
+
+// Whatever links a report undoes, no member carrying a reported source may
+// stay joined to the root through the links left. The rule the registry
+// replaced selected folds whose subtree sources named the report, and left W
+// joined through S in the cycle: its control here fails the same check.
+func TestReportedManualLinkFoldsLeaveNoReportedMemberJoined(t *testing.T) {
+	truenas, proxmox, vmware := []DataSource{SourceTrueNAS}, []DataSource{SourceProxmox}, []DataSource{SourceVMware}
+	cycle := []ManualLinkFold{
+		{HolderID: "V", FoldedID: "S", Sources: proxmox, HolderOwn: truenas, FoldedOwn: proxmox},
+		{HolderID: "V", FoldedID: "W", Sources: vmware, HolderOwn: truenas, FoldedOwn: vmware},
+		{HolderID: "W", FoldedID: "S", Sources: proxmox, HolderOwn: vmware, FoldedOwn: proxmox},
+	}
+	joinedToRoot := func(folds []ManualLinkFold, left map[string]bool, member string) bool {
+		reached := map[string]bool{"V": true}
+		for changed := true; changed; {
+			changed = false
+			for _, fold := range folds {
+				if left[exclusionKey(fold.HolderID, fold.FoldedID)] {
+					continue
+				}
+				if reached[fold.HolderID] != reached[fold.FoldedID] {
+					reached[fold.HolderID], reached[fold.FoldedID] = true, true
+					changed = true
+				}
+			}
+		}
+		return reached[member]
+	}
+	undone := func(selected []ManualLinkFold) map[string]bool {
+		out := make(map[string]bool, len(selected))
+		for _, fold := range selected {
+			out[exclusionKey(fold.HolderID, fold.FoldedID)] = true
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		reported DataSource
+		member   string
+	}{{SourceVMware, "W"}, {SourceProxmox, "S"}} {
+		named := func(sources ...DataSource) bool { return slices.Contains(sources, tc.reported) }
+		got := ReportedManualLinkFolds("V", cycle, named)
+		if joinedToRoot(cycle, undone(got), tc.member) {
+			t.Errorf("after a report of %s, %s is still joined to V through %v", tc.reported, tc.member, got)
+		}
+
+		// The control: folds selected by their folded side's subtree.
+		var bySubtree []ManualLinkFold
+		for _, fold := range cycle {
+			if named(fold.Sources...) {
+				bySubtree = append(bySubtree, fold)
+			}
+		}
+		if tc.reported == SourceVMware && !joinedToRoot(cycle, undone(bySubtree), tc.member) {
+			t.Errorf("control: selecting by subtree sources detached %s, so the cycle no longer shows the defect", tc.member)
+		}
+	}
+}
+
+func TestLeaseExpiredKubernetesClusterStaysOffline(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:              "cluster-silent",
+			AgentID:         "k8s-agent-silent",
+			Name:            "silent",
+			Status:          "offline",
+			LastSeen:        time.Now().UTC().Add(-5 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	cluster := onlyResourceOfType(t, rr, ResourceTypeK8sCluster)
+	if cluster.Status != StatusOffline {
+		t.Fatalf("cluster status = %q, want offline after its sighting went stale", cluster.Status)
+	}
+}
+
+// Pull sources keep the stale-to-warning rule: a stale PVE sighting means
+// Pulse lost its poller, not that the node reported itself gone.
+func TestStaleProxmoxNodeStaysWarning(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-pve9",
+			Name:        "pve9",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+			LastSeen:    time.Now().UTC().Add(-5 * time.Minute),
+		}},
+	})
+
+	node := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if node.Status != StatusWarning {
+		t.Fatalf("node status = %q, want warning for a stale PVE sighting", node.Status)
+	}
+}
+
+// A Proxmox node the cluster reports offline on a live poll (pollPVENode
+// stamps LastSeen now) stays offline when its linked agent falls silent, as a
+// powered-off machine's agent does. The stale pass used to read the live PVE
+// sighting as online, because it only says the poll delivered, and lifted the
+// node back to online.
+func TestProxmoxNodeReportedOfflineStaysOfflineWhenItsAgentFallsSilent(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name        string
+		agentStatus string
+		agentSeen   time.Time
+	}{
+		{name: "agent late inside its lease", agentStatus: "online", agentSeen: now.Add(-90 * time.Second)},
+		{name: "agent past its lease", agentStatus: "offline", agentSeen: now.Add(-5 * time.Minute)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const machineID = "machine-pve1"
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(models.StateSnapshot{
+				Nodes: []models.Node{{
+					ID:               "homelab-pve1",
+					Name:             "pve1",
+					Instance:         "homelab",
+					ClusterName:      "homelab",
+					Status:           "offline",
+					ConnectionHealth: "error",
+					LastSeen:         now,
+				}},
+				Hosts: []models.Host{{
+					ID:              machineID,
+					MachineID:       machineID,
+					Hostname:        "pve1",
+					LinkedNodeID:    "homelab-pve1",
+					Status:          tc.agentStatus,
+					LastSeen:        tc.agentSeen,
+					IntervalSeconds: 30,
+				}},
+			})
+
+			resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+			if got := resource.SourceStatus[SourceProxmox].Status; got != "online" {
+				t.Fatalf("proxmox sighting = %q, want the live poll's delivery", got)
+			}
+			if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+				t.Fatalf("agent sighting = %q, want stale", got)
+			}
+			if resource.Status != StatusOffline {
+				t.Fatalf("status = %q, want offline as the live poll reported", resource.Status)
+			}
+			nodes := rr.Nodes()
+			if len(nodes) != 1 || nodes[0].Status() != StatusOffline {
+				t.Fatalf("node view status = %v, want offline", nodes)
+			}
+
+			rr.MarkStale(time.Now().UTC(), nil)
+			if got, _ := rr.Get(resource.ID); got.Status != StatusOffline {
+				t.Fatalf("second stale pass changed status to %q, want offline", got.Status)
+			}
+		})
+	}
+}
+
+// preserveOrExpireNodes marks a node offline once its poll has failed past
+// the grace period and keeps its old LastSeen. That verdict is the poller's
+// own and survives the sighting going stale; it used to read as warning.
+func TestPollerExpiredProxmoxNodeStaysOffline(t *testing.T) {
+	expiredAt := time.Now().UTC().Add(-10 * time.Minute)
+	node := models.Node{
+		ID:               "homelab-pve9",
+		Name:             "pve9",
+		Instance:         "homelab",
+		ClusterName:      "homelab",
+		Status:           "offline",
+		ConnectionHealth: "error",
+		LastSeen:         expiredAt,
+	}
+
+	t.Run("node alone", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{node}})
+
+		resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+		if got := resource.SourceStatus[SourceProxmox].Status; got != "stale" {
+			t.Fatalf("proxmox sighting = %q, want stale", got)
+		}
+		if resource.Status != StatusOffline {
+			t.Fatalf("status = %q, want offline for a node the poller expired", resource.Status)
+		}
+		// The sighting still reports the lost poller to health.
+		health := EvaluateResourceHealth(resource, nil, time.Now().UTC())
+		if health.Verdict != HealthCritical || len(health.Reasons) < 2 ||
+			health.Reasons[0].Code != "offline" || health.Reasons[1].Code != "telemetry_stale" {
+			t.Fatalf("health = %+v, want critical offline with the stale reason after it", health)
+		}
+	})
+
+	t.Run("node and its silent agent", func(t *testing.T) {
+		const machineID = "machine-pve9"
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{
+			Nodes: []models.Node{node},
+			Hosts: []models.Host{{
+				ID:              machineID,
+				MachineID:       machineID,
+				Hostname:        "pve9",
+				LinkedNodeID:    node.ID,
+				Status:          "offline",
+				LastSeen:        expiredAt,
+				IntervalSeconds: 30,
+			}},
+		})
+
+		resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+		if _, ok := resource.SourceStatus[SourceAgent]; !ok {
+			t.Fatalf("expected the node and its agent to share one resource, got sources %+v", resource.SourceStatus)
+		}
+		if resource.Status != StatusOffline {
+			t.Fatalf("status = %q, want offline when both sources last reported it offline", resource.Status)
+		}
+	})
+}
+
+// Guests take the same rule: a guest Proxmox last saw stopped stays offline
+// when the poll goes quiet, while a running one is only known to be stale.
+func TestQuietProxmoxPollKeepsEachGuestsLastVerdict(t *testing.T) {
+	lastPoll := time.Now().UTC().Add(-10 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "homelab-pve9-101", VMID: 101, Name: "stopped-vm", Node: "pve9", Instance: "homelab", Type: "qemu", Status: "stopped", LastSeen: lastPoll},
+			{ID: "homelab-pve9-102", VMID: 102, Name: "running-vm", Node: "pve9", Instance: "homelab", Type: "qemu", Status: "running", LastSeen: lastPoll},
+		},
+	})
+
+	want := map[string]ResourceStatus{"stopped-vm": StatusOffline, "running-vm": StatusWarning}
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != len(want) {
+		t.Fatalf("expected %d VMs, got %d", len(want), len(vms))
+	}
+	for _, vm := range vms {
+		if got := vm.SourceStatus[SourceProxmox].Status; got != "stale" {
+			t.Fatalf("%s sighting = %q, want stale", vm.Name, got)
+		}
+		if vm.Status != want[vm.Name] {
+			t.Fatalf("%s status = %q, want %q", vm.Name, vm.Status, want[vm.Name])
+		}
+	}
+}
+
+// A copy that went through JSON loses the unexported verdicts and recovers
+// them from its stored status, so a node reported offline with a silent
+// agent does not come back online.
+func TestProxmoxNodeReportedOfflineStaysOfflineAfterJSONRoundTrip(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-pve1"
+	source := NewRegistry(nil)
+	source.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:               "homelab-pve1",
+			Name:             "pve1",
+			Instance:         "homelab",
+			ClusterName:      "homelab",
+			Status:           "offline",
+			ConnectionHealth: "error",
+			LastSeen:         now,
+		}},
+		Hosts: []models.Host{{
+			ID:              machineID,
+			MachineID:       machineID,
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "offline",
+			LastSeen:        now.Add(-5 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+	payload, err := json.Marshal(source.List())
+	if err != nil {
+		t.Fatalf("marshal resources: %v", err)
+	}
+	var copied []Resource
+	if err := json.Unmarshal(payload, &copied); err != nil {
+		t.Fatalf("unmarshal resources: %v", err)
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestResources(copied)
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline after a JSON round trip", resource.Status)
+	}
+}
+
+// An in-memory copy keeps its verdicts, and a facet sighting that has none
+// on purpose (the PBS host-agent association) must not take the stored
+// status as one: that would let the facet decide once the agent goes quiet.
+func TestIngestResourcesKeepsAFacetSightingWithoutAVerdict(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{{
+		ID:       "agent-pbs-host",
+		Type:     ResourceTypeAgent,
+		Name:     "pbs-host",
+		Status:   StatusWarning,
+		LastSeen: now,
+		Sources:  []DataSource{SourceAgent, SourcePBS},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceAgent: {Status: "online", LastSeen: now, reported: StatusWarning},
+			SourcePBS:   {Status: "online", LastSeen: now},
+		},
+		Agent: &AgentData{AgentID: "host-pbs", Hostname: "pbs-host"},
+	}})
+
+	resource, ok := rr.Get("agent-pbs-host")
+	if !ok {
+		t.Fatal("resource missing")
+	}
+	if got := resource.SourceStatus[SourceAgent].reported; got != StatusWarning {
+		t.Fatalf("agent verdict = %q, want the copied warning", got)
+	}
+	if got := resource.SourceStatus[SourcePBS].reported; got != "" {
+		t.Fatalf("PBS facet verdict = %q, want none", got)
+	}
+	if resource.Status != StatusWarning {
+		t.Fatalf("status = %q, want the agent's warning", resource.Status)
+	}
+}
+
+// aggregateStatus is the one rule the stale pass and manual links apply.
+// Current sources decide by their own verdicts in chooseStatus's priority
+// order; quiet sources only decide when no source is current. Availability
+// checks on a monitored resource are judged by their own evidence, not their
+// shared sighting.
+func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
+	now := time.Now().UTC()
+	lapsed := now.Add(-10 * time.Minute)
+	current := func(reported ResourceStatus) SourceStatus {
+		return SourceStatus{Status: "online", reported: reported}
+	}
+	quiet := func(reported ResourceStatus) SourceStatus {
+		return SourceStatus{Status: "stale", reported: reported}
+	}
+	check := func(passing bool, checkedAt time.Time) []AvailabilityData {
+		return []AvailabilityData{{
+			TargetID: "probe-1", Enabled: true, Available: passing, LastChecked: &checkedAt,
+			Evidence: availabilityProbeEvidence(t, "probe-1", checkedAt),
+		}}
+	}
+	for _, tc := range []struct {
+		name         string
+		resourceType ResourceType
+		sightings    map[DataSource]SourceStatus
+		checks       []AvailabilityData
+		want         ResourceStatus
+	}{
+		{
+			name:      "live poll reports offline, agent quiet",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAgent: quiet(StatusOnline)},
+			want:      StatusOffline,
+		},
+		{
+			name:      "live poll reports online, agent past its lease",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOnline), SourceAgent: quiet(StatusOffline)},
+			want:      StatusOnline,
+		},
+		{
+			name:      "live agent outranks a poll that reports offline",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAgent: current(StatusOnline)},
+			want:      StatusOnline,
+		},
+		{
+			name:      "live agent warning holds as at merge time",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOnline), SourceAgent: current(StatusWarning), SourceDocker: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "quiet source that reported offline keeps it",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline)},
+			want:      StatusOffline,
+		},
+		{
+			name:      "quiet source that reported online is a warning",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "best of quiet sources",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline), SourceAgent: quiet(StatusOffline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "current facet without a verdict counts as online",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourcePBS: current("")},
+			want:      StatusOnline,
+		},
+		{
+			name:      "a facet without a verdict never outranks a current verdict",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourcePBS: current("")},
+			want:      StatusOffline,
+		},
+		{
+			name:      "a current failing check abstains",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: current("")},
+			checks:    check(false, now),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a quiet failing check abstains rather than lifting an offline verdict to warning",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(false, lapsed),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a passing check whose evidence lapsed abstains under a current sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline), SourceAvailability: current("")},
+			checks:    check(true, lapsed),
+			want:      StatusWarning,
+		},
+		{
+			name:      "a passing check with current evidence proves the target answers under a quiet sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(true, now),
+			want:      StatusOnline,
+		},
+		{
+			name:      "a passing check never lifts a resource whose own sources have not gone quiet",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: {Status: "unknown"}, SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusUnknown,
+		},
+		{
+			name:      "a passing check never outranks a current verdict",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its quiet verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: quiet(StatusOffline)},
+			want:         StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its current verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: current(StatusWarning)},
+			want:         StatusWarning,
+		},
+		{
+			name:      "current unknown verdict leaves the quiet sources to decide",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusUnknown), SourceAgent: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "no delivered sightings",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: {Status: "unknown"}},
+			want:      StatusUnknown,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resource := &Resource{Type: tc.resourceType, SourceStatus: tc.sightings, AvailabilityChecks: tc.checks}
+			if got := aggregateStatus(resource, now); got != tc.want {
+				t.Fatalf("aggregateStatus = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -555,5 +3060,1640 @@ func TestProxmoxOneWayLinkRejectsHostLocalEndpointCorroboration(t *testing.T) {
 	host.ReportIP = "172.17.0.1"
 	if !trustedProxmoxNodeHostLink(node, host) {
 		t.Fatal("explicit private report-IP corroboration lost")
+	}
+}
+
+// The Proxmox disk row carries a copy of the agent's collection state from the
+// last disk poll. When the agent's own row later withdraws a reading (its
+// reporting lease expired), the canonical disk must follow the agent in either
+// ingest order, even if no disk poll has refreshed the Proxmox copy (a host that
+// is down entirely is never disk-polled).
+func TestPhysicalDiskMergeFollowsAgentWithdrawalOfItsOwnReadings(t *testing.T) {
+	proxmoxDisk := func(agent diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-SILENT1", Temperature: 41,
+				Collection: &diskinventory.CollectionStatus{
+					Serial:      diskinventory.Available("proxmox_disks"),
+					Temperature: agent,
+					Pool:        diskinventory.Available("proxmox_zfs"),
+				},
+			},
+		}
+	}
+	agentDisk := func(temperature diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-SILENT1", Temperature: 41,
+				Collection: &diskinventory.CollectionStatus{
+					Serial:      diskinventory.Available("smartctl"),
+					Temperature: temperature,
+				},
+			},
+		}
+	}
+	identity := ResourceIdentity{MachineID: "WD-SILENT1", Hostnames: []string{"node1"}}
+	collected := diskinventory.Available("smartctl")
+	expired := diskinventory.Unavailable("smartctl", "host agent stopped reporting")
+
+	for _, tc := range []struct {
+		name         string
+		proxmoxFirst bool
+		agent        diskinventory.FieldStatus
+		want         diskinventory.FieldStatus
+	}{
+		{"proxmox then expired agent", true, expired, expired},
+		{"expired agent then proxmox", false, expired, expired},
+		{"proxmox then reporting agent", true, collected, collected},
+		{"reporting agent then proxmox", false, collected, collected},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry(nil)
+			// The Proxmox row still holds the earlier "collected" copy.
+			ingestProxmox := func() { registry.ingest(SourceProxmox, "pve1-node1-sdb", proxmoxDisk(collected), identity) }
+			ingestAgent := func() { registry.ingest(SourceAgent, "agent-1-sdb", agentDisk(tc.agent), identity) }
+			if tc.proxmoxFirst {
+				ingestProxmox()
+				ingestAgent()
+			} else {
+				ingestAgent()
+				ingestProxmox()
+			}
+			disks := registry.ListByType(ResourceTypePhysicalDisk)
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil || disks[0].PhysicalDisk.Collection == nil {
+				t.Fatalf("expected one merged disk, got %+v", disks)
+			}
+			collection := disks[0].PhysicalDisk.Collection
+			if collection.Temperature != tc.want {
+				t.Fatalf("temperature collection = %+v, want %+v", collection.Temperature, tc.want)
+			}
+			if disks[0].PhysicalDisk.Temperature != 41 {
+				t.Fatalf("last-known temperature was not retained: %d", disks[0].PhysicalDisk.Temperature)
+			}
+			if collection.Pool != diskinventory.Available("proxmox_zfs") {
+				t.Fatalf("Proxmox-owned evidence changed: %+v", collection.Pool)
+			}
+		})
+	}
+}
+
+// A merged disk must never present its temperature under a state the
+// reading's own row does not claim. A silent agent's retained reading stays as
+// last-known context under the agent's own state, whatever the Proxmox row
+// collected or copied; a resumed agent's fresh reading stays collected over a
+// Proxmox copy of its earlier withdrawal; a standby withdrawal keeps the
+// pre-sleep reading as last-known.
+func TestPhysicalDiskMergePairsTemperatureWithItsCollectionState(t *testing.T) {
+	disk := func(temperature int, status diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-PAIR1", Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: status},
+			},
+		}
+	}
+	// The Proxmox row can also carry the SMART attributes copied from the
+	// agent's earlier report, which changes whose value the merge shows.
+	withSMART := func(r Resource) Resource {
+		powerOnHours := int64(1000)
+		r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+		return r
+	}
+	identity := ResourceIdentity{MachineID: "WD-PAIR1", Hostnames: []string{"node1"}}
+	retained := diskinventory.Unavailable("host_agent", "host agent stopped reporting")
+	nodeSMART := diskinventory.Available("proxmox_node_smart")
+	smartctl := diskinventory.Available("smartctl")
+	withdrawn := diskinventory.Unavailable("smartctl", "host agent stopped reporting")
+	standby := diskinventory.Unavailable("smartctl", "disk is in standby")
+	noProxmoxTemp := diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")
+	// An agent from before collection provenance withdraws without a source;
+	// monitoring copies its readings onto the Proxmox row as host_agent.
+	legacyWithdrawn := diskinventory.Unavailable("", "host agent stopped reporting")
+	legacyCopy := diskinventory.Available(diskinventory.LegacyHostAgentSource)
+
+	for _, tc := range []struct {
+		name           string
+		agent, proxmox Resource
+		// wantTemperature 0 accepts either row's value: source preference,
+		// not this rule, decides which one is shown.
+		wantTemperature int
+		wantState       diskinventory.FieldStatus
+	}{
+		{"silent agent, Proxmox collected", disk(72, retained), disk(40, nodeSMART), 72, retained},
+		{"silent agent, no Proxmox reading", disk(72, retained), disk(0, noProxmoxTemp), 72, retained},
+		{"reporting agent, Proxmox collected", disk(41, smartctl), disk(40, nodeSMART), 41, smartctl},
+		{"silent agent, Proxmox copy of its earlier reading", disk(72, withdrawn), disk(41, smartctl), 72, withdrawn},
+		{"silent agent, Proxmox copy with SMART attributes", disk(72, withdrawn), withSMART(disk(41, smartctl)), 0, withdrawn},
+		{"resumed agent, Proxmox copy of its withdrawal", disk(50, smartctl), disk(41, withdrawn), 50, smartctl},
+		{"resumed agent, same value as a Proxmox copy of its withdrawal with SMART attributes", disk(41, smartctl), withSMART(disk(41, withdrawn)), 41, smartctl},
+		{"legacy agent past its lease, Proxmox copy with SMART attributes", disk(72, legacyWithdrawn), withSMART(disk(41, legacyCopy)), 0, legacyWithdrawn},
+		{"standby agent, Proxmox copy of its pre-sleep reading", disk(0, standby), disk(41, smartctl), 41, standby},
+	} {
+		for _, proxmoxFirst := range []bool{true, false} {
+			registry := NewRegistry(nil)
+			ingestProxmox := func() { registry.ingest(SourceProxmox, "pve1-node1-sdb", tc.proxmox, identity) }
+			ingestAgent := func() { registry.ingest(SourceAgent, "agent-1-sdb", tc.agent, identity) }
+			if proxmoxFirst {
+				ingestProxmox()
+				ingestAgent()
+			} else {
+				ingestAgent()
+				ingestProxmox()
+			}
+			disks := registry.ListByType(ResourceTypePhysicalDisk)
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+				t.Fatalf("%s (proxmox first=%v): expected one merged disk, got %+v", tc.name, proxmoxFirst, disks)
+			}
+			got := disks[0].PhysicalDisk
+			var state diskinventory.FieldStatus
+			if got.Collection != nil {
+				state = got.Collection.Temperature
+			}
+			valueOK := got.Temperature == tc.wantTemperature ||
+				(tc.wantTemperature == 0 && (got.Temperature == tc.agent.PhysicalDisk.Temperature || got.Temperature == tc.proxmox.PhysicalDisk.Temperature))
+			if !valueOK || state != tc.wantState {
+				t.Errorf("%s (proxmox first=%v): temperature=%d state=%+v, want %d with %+v",
+					tc.name, proxmoxFirst, got.Temperature, state, tc.wantTemperature, tc.wantState)
+			}
+		}
+	}
+}
+
+// Three rows for one disk, none collected now: the agent's SMART row withdrew
+// its reading, the Unraid inventory row is past the same lease, and the
+// Proxmox row still carries a copy of the agent's earlier "available" state.
+// Whatever the ingest order, the merged disk must not present a reading as
+// collected, including when the Unraid inventory and the Proxmox copy happen
+// to hold the same value, so that an earlier merge step's single state cannot
+// tell whose reading is shown.
+func TestPhysicalDiskMergeNeverPresentsAWithdrawnTemperatureAsCollected(t *testing.T) {
+	disk := func(temperature int, status diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-THREE1", Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: status},
+			},
+		}
+	}
+	identity := ResourceIdentity{MachineID: "WD-THREE1", Hostnames: []string{"tower"}}
+	for _, unraidTemperature := range []int{37, 41} {
+		rows := []physicalDiskMergeRow{
+			{SourceAgent, "agent-1-sdb", disk(72, diskinventory.Unavailable("smartctl", "host agent stopped reporting"))},
+			{SourceAgent, "agent-1-unraid-sdb", disk(unraidTemperature, diskinventory.Unavailable("unraid", "host agent stopped reporting"))},
+			{SourceProxmox, "pve1-node1-sdb", disk(41, diskinventory.Available("smartctl"))},
+		}
+		for _, order := range physicalDiskMergeOrders(len(rows)) {
+			got := mergePhysicalDiskRows(t, rows, order, identity)
+			if diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+				t.Errorf("unraid %d, order %v: withdrawn temperature presented as collected: temperature=%d collection=%+v",
+					unraidTemperature, order, got.Temperature, got.Collection)
+			}
+		}
+	}
+}
+
+// A legacy agent (before collection provenance) sends only readings it
+// collected, with no state. Its reading must stay collected whatever other
+// rows the disk has: a Proxmox inventory row that cannot read temperatures
+// must not lend it "unsupported", and a second Proxmox row collecting a
+// different value must not change which state belongs to which value.
+func TestPhysicalDiskMergeKeepsALegacyAgentReadingCollected(t *testing.T) {
+	disk := func(temperature int, status *diskinventory.FieldStatus) Resource {
+		meta := &PhysicalDiskMeta{DevPath: "/dev/sdb", Serial: "WD-LEGACY1", Temperature: temperature}
+		if status != nil {
+			meta.Collection = &diskinventory.CollectionStatus{Temperature: *status}
+		}
+		return Resource{Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline, PhysicalDisk: meta}
+	}
+	unsupported := diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")
+	nodeSMART := diskinventory.Available("proxmox_node_smart")
+	identity := ResourceIdentity{MachineID: "WD-LEGACY1", Hostnames: []string{"node1"}}
+	legacy := physicalDiskMergeRow{SourceAgent, "agent-1-sdb", disk(50, nil)}
+	inventory := physicalDiskMergeRow{SourceProxmox, "pve1-node1-sdb", disk(0, &unsupported)}
+	otherNode := physicalDiskMergeRow{SourceProxmox, "pve2-node2-sdb", disk(40, &nodeSMART)}
+
+	for _, rows := range [][]physicalDiskMergeRow{{legacy, inventory}, {legacy, inventory, otherNode}} {
+		for _, order := range physicalDiskMergeOrders(len(rows)) {
+			got := mergePhysicalDiskRows(t, rows, order, identity)
+			var state diskinventory.FieldStatus
+			if got.Collection != nil {
+				state = got.Collection.Temperature
+			}
+			want := map[int]diskinventory.FieldStatus{50: {}, 40: nodeSMART}
+			if wantState, ok := want[got.Temperature]; !ok || state != wantState {
+				t.Errorf("%d rows, order %v: temperature=%d state=%+v, want 50 without state or 40 with %+v",
+					len(rows), order, got.Temperature, state, nodeSMART)
+			}
+		}
+	}
+}
+
+// Whatever rows a disk has and whatever order they arrive in, the merged
+// temperature must carry a state that belongs to a row holding that value,
+// after the agent's own withdrawal of a source supersedes another row's copy
+// of that source's earlier "available" state. The merge may still choose
+// which row's value to show by source preference; it may not pair the value
+// with another row's state. The catalog covers a reporting, silent, standby
+// and legacy agent, a SMART row with and without attributes, the Unraid
+// inventory (collected, past the lease, spun down), and Proxmox rows that
+// read nothing, collect their own reading, or carry a fresh or stale copy of
+// the agent's.
+func TestPhysicalDiskMergePairsEveryShownTemperatureWithItsRowState(t *testing.T) {
+	disk := func(temperature int, status *diskinventory.FieldStatus, smart bool) Resource {
+		meta := &PhysicalDiskMeta{DevPath: "/dev/sdb", Serial: "WD-CATALOG1", Temperature: temperature}
+		if status != nil {
+			meta.Collection = &diskinventory.CollectionStatus{Temperature: *status}
+		}
+		if smart {
+			powerOnHours := int64(1000)
+			meta.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+		}
+		return Resource{Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline, PhysicalDisk: meta}
+	}
+	state := func(status diskinventory.FieldStatus) *diskinventory.FieldStatus { return &status }
+	present := func(resource Resource) *Resource { return &resource }
+	stopped := "host agent stopped reporting"
+	agentRows := []Resource{
+		disk(41, state(diskinventory.Available("smartctl")), false),
+		disk(50, state(diskinventory.Available("smartctl")), true),
+		disk(72, state(diskinventory.Unavailable("smartctl", stopped)), false),
+		disk(41, state(diskinventory.Unavailable("smartctl", stopped)), true),
+		disk(0, state(diskinventory.Unavailable("smartctl", "disk is in standby")), false),
+		disk(50, nil, false),
+		disk(72, state(diskinventory.Unavailable("host_agent", stopped)), false),
+		disk(72, state(diskinventory.Unavailable("", stopped)), false),
+	}
+	unraidRows := []*Resource{
+		nil,
+		present(disk(41, state(diskinventory.Unavailable("unraid", stopped)), false)),
+		present(disk(37, state(diskinventory.Available("unraid")), false)),
+		present(disk(41, state(diskinventory.Unavailable("unraid", "disk is reported spun down")), false)),
+	}
+	proxmoxRows := []Resource{
+		disk(0, state(diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")), false),
+		disk(40, state(diskinventory.Available("proxmox_node_smart")), false),
+		disk(41, state(diskinventory.Available("smartctl")), false),
+		disk(41, state(diskinventory.Available("smartctl")), true),
+		disk(41, state(diskinventory.Unavailable("smartctl", stopped)), true),
+		disk(72, state(diskinventory.Available("host_agent")), false),
+		disk(41, state(diskinventory.Available("host_agent")), true),
+	}
+	// TrueNAS rows carry no collection state.
+	trueNASRows := []*Resource{nil, present(disk(40, nil, true))}
+	identity := ResourceIdentity{MachineID: "WD-CATALOG1", Hostnames: []string{"node1"}}
+
+	for _, agent := range agentRows {
+		for _, unraid := range unraidRows {
+			for _, proxmox := range proxmoxRows {
+				for _, trueNAS := range trueNASRows {
+					rows := []physicalDiskMergeRow{
+						{SourceAgent, "agent-1-sdb", agent},
+						{SourceProxmox, "pve1-node1-sdb", proxmox},
+					}
+					if unraid != nil {
+						rows = append(rows, physicalDiskMergeRow{SourceAgent, "agent-1-unraid-sdb", *unraid})
+					}
+					if trueNAS != nil {
+						rows = append(rows, physicalDiskMergeRow{SourceTrueNAS, "truenas-1-sdb", *trueNAS})
+					}
+					for _, order := range physicalDiskMergeOrders(len(rows)) {
+						assertPhysicalDiskTemperaturePairedWithItsRows(t, rows, order, mergePhysicalDiskRows(t, rows, order, identity))
+					}
+				}
+			}
+		}
+	}
+}
+
+// assertPhysicalDiskTemperaturePairedWithItsRows checks a merged disk against
+// its rows: a shown temperature carries the state of a row reporting that
+// value, preferring a collected reading, then the agent's own report over a
+// copy.
+func assertPhysicalDiskTemperaturePairedWithItsRows(t *testing.T, rows []physicalDiskMergeRow, order []int, got *PhysicalDiskMeta) {
+	t.Helper()
+	if got.Temperature <= 0 {
+		return
+	}
+	var shown diskinventory.FieldStatus
+	if got.Collection != nil {
+		shown = got.Collection.Temperature
+	}
+	type candidate struct {
+		state diskinventory.FieldStatus
+		rank  int
+	}
+	var candidates []candidate
+	bestRank := -1
+	for _, row := range rows {
+		if row.resource.PhysicalDisk.Temperature != got.Temperature {
+			continue
+		}
+		state := physicalDiskRowTemperatureStateAfterWithdrawals(row, rows)
+		rank := 0
+		if !diskinventory.TemperatureCollected(got.Temperature, &diskinventory.CollectionStatus{Temperature: state}) {
+			rank += 2
+		}
+		if row.source != SourceAgent {
+			rank++
+		}
+		candidates = append(candidates, candidate{state, rank})
+		if bestRank < 0 || rank < bestRank {
+			bestRank = rank
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.rank == bestRank && candidate.state == shown {
+			return
+		}
+	}
+	t.Errorf("rows %s, order %v: temperature %d shown under %+v, but its rows say %+v (best rank %d)",
+		describePhysicalDiskMergeRows(rows), order, got.Temperature, shown, candidates, bestRank)
+}
+
+type physicalDiskMergeRow struct {
+	source   DataSource
+	sourceID string
+	resource Resource
+}
+
+// physicalDiskRowTemperatureStateAfterWithdrawals is the test oracle: a row's
+// own temperature state, unless the row is not the agent's own report and the
+// agent withdrew the source of the state it copied, which then gives way to
+// that withdrawal. An agent withdrawal without a source is a legacy agent's,
+// whose copies carry the legacy agent source.
+func physicalDiskRowTemperatureStateAfterWithdrawals(row physicalDiskMergeRow, rows []physicalDiskMergeRow) diskinventory.FieldStatus {
+	own := func(r physicalDiskMergeRow) diskinventory.FieldStatus {
+		if r.resource.PhysicalDisk.Collection == nil {
+			return diskinventory.FieldStatus{}
+		}
+		return r.resource.PhysicalDisk.Collection.Temperature
+	}
+	state := own(row)
+	if row.source == SourceAgent || state.State == "" {
+		return state
+	}
+	for _, other := range rows {
+		withdrawal := own(other)
+		source := withdrawal.Source
+		if source == "" {
+			source = diskinventory.LegacyHostAgentSource
+		}
+		if other.source == SourceAgent && withdrawal.State != "" && withdrawal.State != diskinventory.FieldAvailable &&
+			strings.EqualFold(source, state.Source) {
+			return withdrawal
+		}
+	}
+	return state
+}
+
+func mergePhysicalDiskRows(t *testing.T, rows []physicalDiskMergeRow, order []int, identity ResourceIdentity) *PhysicalDiskMeta {
+	t.Helper()
+	registry := NewRegistry(nil)
+	for _, i := range order {
+		row := rows[i]
+		resource := row.resource
+		resource.PhysicalDisk = clonePhysicalDiskMeta(row.resource.PhysicalDisk)
+		registry.ingest(row.source, row.sourceID, resource, identity)
+	}
+	disks := registry.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+		t.Fatalf("rows %s, order %v: expected one merged disk, got %d", describePhysicalDiskMergeRows(rows), order, len(disks))
+	}
+	return disks[0].PhysicalDisk
+}
+
+// physicalDiskMergeOrders returns every ingest order of n rows.
+func physicalDiskMergeOrders(n int) [][]int {
+	if n == 0 {
+		return [][]int{{}}
+	}
+	var orders [][]int
+	for _, rest := range physicalDiskMergeOrders(n - 1) {
+		for position := 0; position <= len(rest); position++ {
+			order := append(append(append([]int{}, rest[:position]...), n-1), rest[position:]...)
+			orders = append(orders, order)
+		}
+	}
+	return orders
+}
+
+func describePhysicalDiskMergeRows(rows []physicalDiskMergeRow) string {
+	parts := make([]string, 0, len(rows))
+	for _, row := range rows {
+		meta := row.resource.PhysicalDisk
+		state := "none"
+		if meta.Collection != nil {
+			state = string(meta.Collection.Temperature.State) + "(" + meta.Collection.Temperature.Source + ")"
+		}
+		smart := ""
+		if meta.SMART != nil {
+			smart = "+smart"
+		}
+		parts = append(parts, string(row.source)+":"+strconv.Itoa(meta.Temperature)+"/"+state+smart)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
+// The readings behind a merged disk's temperature describe the rows that
+// registry merged. A disk cloned out and seeded back continues from them; a
+// disk known only by its presented value and state (read back from JSON, or
+// edited) stands as one reading of unknown rows, which an agent's later word
+// supersedes and which still withdraws for the agent; a disk that enters as a
+// new row is that row alone; and a row that reports again replaces its own
+// earlier reading. A second agent reporting the same disk is not a copy of the
+// first, so its withdrawal leaves the other agent's own reading collected.
+func TestPhysicalDiskMergeTemperatureReadingsAcrossIngestBoundaries(t *testing.T) {
+	disk := func(temperature int, status diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-BOUNDARY1", Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: status},
+			},
+		}
+	}
+	identity := ResourceIdentity{MachineID: "WD-BOUNDARY1", Hostnames: []string{"node1"}}
+	smartctl := diskinventory.Available("smartctl")
+	standby := diskinventory.Unavailable("smartctl", "disk is in standby")
+	stopped := diskinventory.Unavailable("smartctl", "host agent stopped reporting")
+	spunDown := diskinventory.Unavailable("unraid", "disk is reported spun down")
+	only := func(t *testing.T, registry *ResourceRegistry) *PhysicalDiskMeta {
+		t.Helper()
+		disks := registry.ListByType(ResourceTypePhysicalDisk)
+		if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+			t.Fatalf("expected one merged disk, got %d", len(disks))
+		}
+		return disks[0].PhysicalDisk
+	}
+	stateOf := func(meta *PhysicalDiskMeta) diskinventory.FieldStatus {
+		if meta.Collection == nil {
+			return diskinventory.FieldStatus{}
+		}
+		return meta.Collection.Temperature
+	}
+	// presented is a merged disk known only by what it presents.
+	presented := func(temperature int, status diskinventory.FieldStatus) Resource {
+		resource := disk(temperature, status)
+		resource.ID = "physical-disk:WD-BOUNDARY1"
+		resource.Identity = identity
+		resource.Sources = []DataSource{SourceAgent, SourceProxmox}
+		return resource
+	}
+	expect := func(t *testing.T, registry *ResourceRegistry, temperature int, state diskinventory.FieldStatus) {
+		t.Helper()
+		if got := only(t, registry); got.Temperature != temperature || stateOf(got) != state {
+			t.Fatalf("temperature=%d state=%+v, want %d under %+v", got.Temperature, stateOf(got), temperature, state)
+		}
+	}
+
+	t.Run("a cloned disk seeded back continues from its rows", func(t *testing.T) {
+		first := NewRegistry(nil)
+		first.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+		first.ingest(SourceAgent, "agent-1-unraid-sdb", disk(0, spunDown), identity)
+		second := NewRegistry(nil)
+		second.IngestResources(first.ListByType(ResourceTypePhysicalDisk))
+		second.ingest(SourceProxmox, "pve1-node1-sdb", disk(41, smartctl), identity)
+		expect(t, second, 41, standby)
+	})
+
+	t.Run("an edited clone starts again from what it presents", func(t *testing.T) {
+		first := NewRegistry(nil)
+		first.ingest(SourceAgent, "agent-1-sdb", disk(50, smartctl), identity)
+		first.ingest(SourceProxmox, "pve1-node1-sdb", disk(40, diskinventory.Available("proxmox_node_smart")), identity)
+		resources := first.ListByType(ResourceTypePhysicalDisk)
+		if len(resources) != 1 || resources[0].PhysicalDisk.Temperature != 50 {
+			t.Fatalf("expected one merged disk showing the agent's 50, got %+v", resources)
+		}
+		resources[0].PhysicalDisk.Collection.Temperature = stopped
+		second := NewRegistry(nil)
+		second.IngestResources(resources)
+		second.ingest(SourceProxmox, "pve1-node1-sdb", disk(50, smartctl), identity)
+		if got := only(t, second); diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+			t.Fatalf("temperature=%d state=%+v, want the edited withdrawal to stand over the Proxmox copy", got.Temperature, stateOf(got))
+		}
+	})
+
+	t.Run("a presented disk's withdrawal still supersedes a copy", func(t *testing.T) {
+		registry := NewRegistry(nil)
+		registry.IngestResources([]Resource{presented(50, stopped)})
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(50, smartctl), identity)
+		if got := only(t, registry); diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+			t.Fatalf("temperature=%d state=%+v, want the presented withdrawal to stand over the Proxmox copy", got.Temperature, stateOf(got))
+		}
+	})
+
+	t.Run("an agent's later word supersedes a presented disk's availability", func(t *testing.T) {
+		registry := NewRegistry(nil)
+		registry.IngestResources([]Resource{presented(50, smartctl)})
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(50, stopped), identity)
+		expect(t, registry, 50, stopped)
+	})
+
+	t.Run("an agent's later word is presented over a presented disk's state", func(t *testing.T) {
+		registry := NewRegistry(nil)
+		registry.IngestResources([]Resource{presented(41, stopped)})
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(41, standby), identity)
+		expect(t, registry, 41, standby)
+	})
+
+	t.Run("a merged disk ingested again as a Proxmox row is a copy", func(t *testing.T) {
+		first := NewRegistry(nil)
+		first.ingest(SourceAgent, "agent-1-sdb", disk(50, smartctl), identity)
+		first.ingest(SourceProxmox, "pve1-node1-sdb", disk(40, diskinventory.Available("proxmox_node_smart")), identity)
+		resources := first.ListByType(ResourceTypePhysicalDisk)
+		if len(resources) != 1 {
+			t.Fatalf("expected one merged disk, got %d", len(resources))
+		}
+		second := NewRegistry(nil)
+		second.IngestRecords(SourceProxmox, []IngestRecord{{SourceID: "pve1-node1-sdb", Resource: resources[0], Identity: identity}})
+		second.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+		expect(t, second, 50, standby)
+	})
+
+	t.Run("an agent row reporting again replaces its own reading", func(t *testing.T) {
+		registry := NewRegistry(nil)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(41, smartctl), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(41, smartctl), identity)
+		expect(t, registry, 41, standby)
+	})
+
+	t.Run("a value kept after its row reports again keeps the row's later word", func(t *testing.T) {
+		rows := map[string]physicalDiskMergeRow{
+			"silent":  {SourceAgent, "agent-1-sdb", disk(72, stopped)},
+			"standby": {SourceAgent, "agent-1-sdb", disk(0, standby)},
+			"proxmox": {SourceProxmox, "pve1-node1-sdb", disk(40, diskinventory.Available("proxmox_node_smart"))},
+		}
+		for _, sequence := range [][]string{{"silent", "standby", "proxmox"}, {"silent", "proxmox", "standby"}} {
+			registry := NewRegistry(nil)
+			for _, name := range sequence {
+				registry.ingest(rows[name].source, rows[name].sourceID, rows[name].resource, identity)
+			}
+			if got := only(t, registry); got.Temperature != 72 || stateOf(got) != standby {
+				t.Errorf("%v: temperature=%d state=%+v, want the retained 72 under the agent's standby", sequence, got.Temperature, stateOf(got))
+			}
+		}
+	})
+
+	t.Run("a value kept from another source takes its row's later withdrawal", func(t *testing.T) {
+		// The SMART row first borrowed the Unraid inventory's reading, then
+		// reported its own standby without a temperature.
+		proxmox := func(registry *ResourceRegistry) {
+			registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(40, diskinventory.Available("proxmox_node_smart")), identity)
+		}
+		for _, proxmoxFirst := range []bool{false, true} {
+			registry := NewRegistry(nil)
+			if proxmoxFirst {
+				proxmox(registry)
+			}
+			registry.ingest(SourceAgent, "agent-1-sdb", disk(72, diskinventory.Available("unraid")), identity)
+			registry.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+			if !proxmoxFirst {
+				proxmox(registry)
+			}
+			expect(t, registry, 72, standby)
+		}
+	})
+
+	t.Run("a kept value stays paired however often its row reports again", func(t *testing.T) {
+		withSMART := func(r Resource) Resource {
+			powerOnHours := int64(1000)
+			r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+			return r
+		}
+		registry := NewRegistry(nil)
+		registry.ingest(SourceAgent, "agent-1-sdb", withSMART(disk(72, stopped)), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(41, smartctl), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(42, smartctl), identity)
+		expect(t, registry, 72, stopped)
+	})
+
+	t.Run("a kept legacy reading takes its row's later withdrawal", func(t *testing.T) {
+		legacy := func(temperature int, smart bool) Resource {
+			r := Resource{
+				Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+				PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sdb", Serial: "WD-BOUNDARY1", Temperature: temperature},
+			}
+			if smart {
+				powerOnHours := int64(1000)
+				r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+			}
+			return r
+		}
+		legacyStopped := diskinventory.Unavailable("", "host agent stopped reporting")
+		registry := NewRegistry(nil)
+		registry.ingest(SourceAgent, "agent-1-sdb", legacy(72, true), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", legacy(41, false), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(0, legacyStopped), identity)
+		expect(t, registry, 72, legacyStopped)
+	})
+
+	t.Run("a kept copy gives way to the agent's later withdrawal", func(t *testing.T) {
+		withSMART := func(r Resource) Resource {
+			powerOnHours := int64(1000)
+			r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+			return r
+		}
+		registry := NewRegistry(nil)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", withSMART(disk(72, smartctl)), identity)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(40, smartctl), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+		expect(t, registry, 72, standby)
+	})
+
+	t.Run("a row's earlier value is not current evidence", func(t *testing.T) {
+		withSMART := func(r Resource) Resource {
+			powerOnHours := int64(1000)
+			r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+			return r
+		}
+		nodeSMART := diskinventory.Available("proxmox_node_smart")
+		registry := NewRegistry(nil)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(72, nodeSMART), identity)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(40, nodeSMART), identity)
+		registry.ingest(SourceAgent, "agent-1-sdb", withSMART(disk(72, stopped)), identity)
+		expect(t, registry, 72, stopped)
+	})
+
+	t.Run("a reported row is presented over a presented disk's stand-in", func(t *testing.T) {
+		registry := NewRegistry(nil)
+		registry.IngestResources([]Resource{presented(41, diskinventory.Unavailable("unraid", "host agent stopped reporting"))})
+		registry.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+		registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(41, smartctl), identity)
+		expect(t, registry, 41, standby)
+	})
+
+	t.Run("an agent's later withdrawal supersedes a presented disk's older one", func(t *testing.T) {
+		for _, withCopy := range []bool{false, true} {
+			registry := NewRegistry(nil)
+			registry.IngestResources([]Resource{presented(41, stopped)})
+			registry.ingest(SourceAgent, "agent-1-sdb", disk(0, standby), identity)
+			if withCopy {
+				registry.ingest(SourceProxmox, "pve1-node1-sdb", disk(41, smartctl), identity)
+			}
+			if got := only(t, registry); got.Temperature != 41 || stateOf(got) != standby {
+				t.Errorf("with Proxmox copy=%v: temperature=%d state=%+v, want 41 under the agent's standby", withCopy, got.Temperature, stateOf(got))
+			}
+		}
+	})
+
+	t.Run("two agents' withdrawals of one source settle the same in any order", func(t *testing.T) {
+		rows := []physicalDiskMergeRow{
+			{SourceAgent, "agent-1-sdb", disk(0, standby)},
+			{SourceAgent, "agent-2-sdb", disk(0, stopped)},
+			{SourceProxmox, "pve1-node1-sdb", disk(41, smartctl)},
+		}
+		var first diskinventory.FieldStatus
+		for i, order := range physicalDiskMergeOrders(len(rows)) {
+			got := mergePhysicalDiskRows(t, rows, order, identity)
+			if got.Temperature != 41 || diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+				t.Fatalf("order %v: temperature=%d state=%+v, want the copied 41 withdrawn", order, got.Temperature, stateOf(got))
+			}
+			if i == 0 {
+				first = stateOf(got)
+			} else if stateOf(got) != first {
+				t.Errorf("order %v: state=%+v, but another order gave %+v", order, stateOf(got), first)
+			}
+		}
+	})
+
+	t.Run("a second agent's withdrawal is not the first agent's", func(t *testing.T) {
+		rows := []physicalDiskMergeRow{
+			{SourceAgent, "agent-1-sdb", disk(41, smartctl)},
+			{SourceAgent, "agent-2-sdb", disk(41, stopped)},
+		}
+		for _, order := range physicalDiskMergeOrders(len(rows)) {
+			if got := mergePhysicalDiskRows(t, rows, order, identity); got.Temperature != 41 || stateOf(got) != smartctl {
+				t.Errorf("order %v: temperature=%d state=%+v, want the first agent's collected 41", order, got.Temperature, stateOf(got))
+			}
+		}
+	})
+}
+
+const sharedDiskSerial = "SHARED-SERIAL-1"
+
+// sharedSerialDiskSnapshot puts one /dev/sda carrying sharedDiskSerial under
+// each named PVE node of one instance, optionally with a linked host agent
+// reporting that disk over SMART on every node. pve1 also carries a disk whose
+// serial no other machine reports.
+func sharedSerialDiskSnapshot(now time.Time, withAgents bool, nodeNames ...string) models.StateSnapshot {
+	var snapshot models.StateSnapshot
+	for _, name := range nodeNames {
+		node := models.Node{
+			ID:       proxmoxNodeSourceID("pve", name),
+			Name:     name,
+			Instance: "pve",
+			Host:     "https://" + name + ":8006",
+			Status:   "online",
+			LastSeen: now,
+		}
+		if withAgents {
+			node.LinkedAgentID = "host-" + name
+			snapshot.Hosts = append(snapshot.Hosts, models.Host{
+				ID:           "host-" + name,
+				Hostname:     name,
+				MachineID:    "machine-" + name,
+				LinkedNodeID: node.ID,
+				Status:       "online",
+				LastSeen:     now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device:      "/dev/sda",
+					Model:       "SEAGATE ST4000NM0023",
+					Serial:      sharedDiskSerial,
+					Type:        "sas",
+					Temperature: 31,
+					Health:      "PASSED",
+				}}},
+			})
+		}
+		snapshot.Nodes = append(snapshot.Nodes, node)
+		snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+			ID:          ProxmoxPhysicalDiskSourceID("pve", name, "/dev/sda", "", ""),
+			Instance:    "pve",
+			Node:        name,
+			DevPath:     "/dev/sda",
+			Model:       "SEAGATE ST4000NM0023",
+			Serial:      sharedDiskSerial,
+			Type:        "sas",
+			Health:      "PASSED",
+			LastChecked: now,
+		})
+		if name == "pve1" {
+			snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+				ID:          ProxmoxPhysicalDiskSourceID("pve", name, "/dev/sdb", "", ""),
+				Instance:    "pve",
+				Node:        name,
+				DevPath:     "/dev/sdb",
+				Model:       "Samsung SSD 870",
+				Serial:      "UNIQUE-SERIAL-1",
+				Type:        "ssd",
+				Health:      "PASSED",
+				LastChecked: now,
+			})
+		}
+	}
+	return snapshot
+}
+
+// reversedSnapshot reverses every slice sharedSerialDiskSnapshot fills, so a
+// test can prove IDs do not depend on ingest order.
+func reversedSnapshot(snapshot models.StateSnapshot) models.StateSnapshot {
+	slices.Reverse(snapshot.Nodes)
+	slices.Reverse(snapshot.Hosts)
+	slices.Reverse(snapshot.PhysicalDisks)
+	return snapshot
+}
+
+// sharedSerialDisksByNode indexes the registry's sharedDiskSerial disks by
+// Proxmox node, failing when two claim one node or one lost its node.
+func sharedSerialDisksByNode(t *testing.T, rr *ResourceRegistry) map[string]Resource {
+	t.Helper()
+	byNode := make(map[string]Resource)
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		if disk.PhysicalDisk == nil || disk.PhysicalDisk.Serial != sharedDiskSerial {
+			continue
+		}
+		if disk.Proxmox == nil || disk.Proxmox.NodeName == "" {
+			t.Fatalf("disk %s has no Proxmox node: %+v", disk.ID, disk.Proxmox)
+		}
+		if _, dup := byNode[disk.Proxmox.NodeName]; dup {
+			t.Fatalf("two disks claim node %s", disk.Proxmox.NodeName)
+		}
+		byNode[disk.Proxmox.NodeName] = disk
+	}
+	return byNode
+}
+
+func TestPhysicalDisksSharingASerialStayOnEachMachine(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name       string
+		withAgents bool
+		sources    []DataSource
+	}{
+		{name: "proxmox only", sources: []DataSource{SourceProxmox}},
+		{name: "linked host agents", withAgents: true, sources: []DataSource{SourceProxmox, SourceAgent}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(sharedSerialDiskSnapshot(now, tc.withAgents, "pve1", "pve2", "pve3"))
+
+			byNode := sharedSerialDisksByNode(t, rr)
+			if len(byNode) != 3 {
+				t.Fatalf("shared-serial disks by node = %d, want one per node", len(byNode))
+			}
+			bareID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: sharedDiskSerial})
+			for _, name := range []string{"pve1", "pve2", "pve3"} {
+				disk := byNode[name]
+				nodeID := rr.bySource[SourceProxmox][proxmoxNodeSourceID("pve", name)]
+				if disk.ParentID == nil || *disk.ParentID != nodeID {
+					t.Fatalf("disk on %s parent = %v, want its node %s", name, disk.ParentID, nodeID)
+				}
+				for _, source := range tc.sources {
+					if !containsDataSource(disk.Sources, source) {
+						t.Fatalf("disk on %s sources = %v, want %s merged in", name, disk.Sources, source)
+					}
+				}
+				if !slices.ContainsFunc(rr.GetChildren(nodeID), func(child Resource) bool { return child.ID == disk.ID }) {
+					t.Fatalf("node %s does not list its disk %s as a child", name, disk.ID)
+				}
+				// No machine keeps the unscoped ID, so it can never pass
+				// from one machine's disk to another's.
+				if disk.ID == bareID {
+					t.Fatalf("disk on %s holds the unscoped ID %s shared by every machine", name, bareID)
+				}
+			}
+
+			uniqueID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: "UNIQUE-SERIAL-1"})
+			if unique, ok := rr.Get(uniqueID); !ok || unique.PhysicalDisk == nil || unique.PhysicalDisk.Serial != "UNIQUE-SERIAL-1" {
+				t.Fatalf("a disk only one machine reports must keep its unscoped ID %s", uniqueID)
+			}
+
+			reordered := NewRegistry(nil)
+			reordered.IngestSnapshot(reversedSnapshot(sharedSerialDiskSnapshot(now, tc.withAgents, "pve1", "pve2", "pve3")))
+			for name, disk := range sharedSerialDisksByNode(t, reordered) {
+				if disk.ID != byNode[name].ID {
+					t.Fatalf("reversed ingest moved the disk on %s from %s to %s", name, byNode[name].ID, disk.ID)
+				}
+			}
+		})
+	}
+}
+
+func TestPhysicalDiskIDsHoldAcrossRehydrationWhenAMachineJoins(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	first := NewRegistry(nil)
+	first.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve2", "pve3"))
+	before := sharedSerialDisksByNode(t, first)
+
+	rehydrated := NewRegistry(nil)
+	rehydrated.IngestResources(first.List())
+	rehydrated.IngestSnapshot(sharedSerialDiskSnapshot(now.Add(time.Minute), false, "pve1", "pve2", "pve3"))
+	after := sharedSerialDisksByNode(t, rehydrated)
+	if len(after) != 3 {
+		t.Fatalf("shared-serial disks by node = %d, want one per node", len(after))
+	}
+	for name, disk := range before {
+		if after[name].ID != disk.ID {
+			t.Fatalf("disk on %s moved from %s to %s when pve1 joined", name, disk.ID, after[name].ID)
+		}
+	}
+
+	fresh := NewRegistry(nil)
+	fresh.IngestSnapshot(sharedSerialDiskSnapshot(now.Add(time.Minute), false, "pve1", "pve2", "pve3"))
+	for name, disk := range sharedSerialDisksByNode(t, fresh) {
+		if after[name].ID != disk.ID {
+			t.Fatalf("disk on %s is %s after rehydration but %s after a fresh rebuild", name, after[name].ID, disk.ID)
+		}
+	}
+}
+
+// trueNASDiskRecords describes one TrueNAS system holding one disk, under a
+// pool when pool is set.
+func trueNASDiskRecords(now time.Time, system, hostname, pool, serial string) []IngestRecord {
+	records := []IngestRecord{{
+		SourceID: "system:" + system,
+		Resource: Resource{Type: ResourceTypeAgent, Name: hostname, Status: StatusOnline, LastSeen: now, TrueNAS: &TrueNASData{Hostname: hostname}},
+		Identity: ResourceIdentity{Hostnames: []string{hostname}},
+	}}
+	diskParent := "system:" + system
+	if pool != "" {
+		diskParent = "pool:" + system + ":" + pool
+		records = append(records, IngestRecord{
+			SourceID:       diskParent,
+			ParentSourceID: "system:" + system,
+			Resource:       Resource{Type: ResourceTypeStorage, Name: pool, Status: StatusOnline, LastSeen: now},
+			Identity:       ResourceIdentity{Hostnames: []string{hostname}},
+		})
+	}
+	return append(records, IngestRecord{
+		SourceID:       "disk:" + system + ":sda",
+		ParentSourceID: diskParent,
+		Resource: Resource{
+			Type: ResourceTypePhysicalDisk, Name: "sda", Status: StatusOnline, LastSeen: now,
+			PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda", Serial: serial, Wearout: WearoutUnreported},
+		},
+		Identity: ResourceIdentity{MachineID: serial, Hostnames: []string{hostname}},
+	})
+}
+
+func TestPhysicalDiskReportersOnOneMachineJoinAcrossGroupingParents(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agentOnArchive := models.StateSnapshot{Hosts: []models.Host{{
+		ID: "host-archive", Hostname: "archive", MachineID: "machine-archive", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "WDC WD80EFAX", Serial: sharedDiskSerial, Type: "sata", Temperature: 30, Health: "PASSED",
+		}}},
+	}}}
+
+	// The TrueNAS API and the agent on the same box report one disk under
+	// different parents (pool and agent host) that the registry never merged.
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(agentOnArchive)
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 || !containsDataSource(disks[0].Sources, SourceAgent) || !containsDataSource(disks[0].Sources, SourceTrueNAS) {
+		t.Fatalf("disks = %+v, want the agent and TrueNAS rows of one box merged", disks)
+	}
+
+	// A cloned TrueNAS keeps both the serial and the hostname; one reporter
+	// placing the serial on two systems still proves two disks.
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive", "tank", sharedDiskSerial))
+	disks = rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 2 {
+		t.Fatalf("disks = %d, want the cloned system's disk kept apart", len(disks))
+	}
+	bySystem := make(map[string]Resource)
+	for _, disk := range disks {
+		for _, source := range []string{"disk:a:sda", "disk:b:sda"} {
+			if rr.bySource[SourceTrueNAS][source] == disk.ID {
+				bySystem[source] = disk
+			}
+		}
+	}
+	if len(bySystem) != 2 {
+		t.Fatalf("TrueNAS disk mappings = %+v, want one disk per system", rr.bySource[SourceTrueNAS])
+	}
+	if !containsDataSource(bySystem["disk:a:sda"].Sources, SourceAgent) {
+		t.Fatalf("system a disk sources = %v, want the agent row still merged", bySystem["disk:a:sda"].Sources)
+	}
+
+	// A disk moving into a pool on the same machine is the same disk.
+	moved := NewRegistry(nil)
+	moved.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "", sharedDiskSerial))
+	moved.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now.Add(time.Minute), "a", "archive", "tank", sharedDiskSerial))
+	if disks := moved.ListByType(ResourceTypePhysicalDisk); len(disks) != 1 {
+		t.Fatalf("disks after moving into a pool = %d, want 1", len(disks))
+	}
+}
+
+func TestPhysicalDiskWithoutItsNodeRowJoinsItsOwnMachinesDisk(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	snapshot := sharedSerialDiskSnapshot(now, false, "pve1", "pve2")
+	// pve3 has an agent but no node row this poll, so its PVE disk arrives
+	// without a parent while the serial already spans other machines.
+	snapshot.Hosts = append(snapshot.Hosts, models.Host{
+		ID: "host-pve3", Hostname: "pve3", MachineID: "machine-pve3", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+		}}},
+	})
+	snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+		ID: ProxmoxPhysicalDiskSourceID("pve", "pve3", "/dev/sda", "", ""), Instance: "pve", Node: "pve3",
+		DevPath: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Health: "PASSED", LastChecked: now,
+	})
+
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	byNode := sharedSerialDisksByNode(t, rr)
+	if len(byNode) != 3 {
+		t.Fatalf("shared-serial disks by node = %d, want one per node", len(byNode))
+	}
+	if sources := byNode["pve3"].Sources; !containsDataSource(sources, SourceAgent) || !containsDataSource(sources, SourceProxmox) {
+		t.Fatalf("pve3 disk sources = %v, want its agent and parentless PVE rows merged", sources)
+	}
+}
+
+func TestPhysicalDiskSiblingJoinHonoursManualExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	// An agent on pve1 that the registry never linked to the node reports the
+	// disk after both nodes' rows; hostname evidence alone joins it to pve1's.
+	agentOnPVE1 := models.StateSnapshot{Hosts: []models.Host{{
+		ID: "host-pve1", Hostname: "pve1", MachineID: "machine-pve1", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+		}}},
+	}}}
+	ingest := func(store ResourceStore) *ResourceRegistry {
+		rr := NewRegistry(store)
+		rr.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+		rr.IngestSnapshot(agentOnPVE1)
+		return rr
+	}
+
+	joined := ingest(nil)
+	pve1Disk := sharedSerialDisksByNode(t, joined)["pve1"]
+	if !containsDataSource(pve1Disk.Sources, SourceAgent) {
+		t.Fatalf("pve1 disk sources = %v, want the agent row joined", pve1Disk.Sources)
+	}
+
+	store := NewMemoryStore()
+	agentCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceAgent)+":"+normalizeSourceID(sharedDiskSerial))
+	if err := store.AddExclusion(ResourceExclusion{ResourceA: pve1Disk.ID, ResourceB: agentCandidate}); err != nil {
+		t.Fatal(err)
+	}
+	split := ingest(store)
+	if disk, ok := split.Get(pve1Disk.ID); !ok || containsDataSource(disk.Sources, SourceAgent) {
+		t.Fatalf("excluded pve1 disk = %+v, want it kept apart from the agent row", disk)
+	}
+	if agentDisk, ok := split.Get(agentCandidate); !ok || !containsDataSource(agentDisk.Sources, SourceAgent) {
+		t.Fatalf("agent row should keep its source-specific ID %s once excluded", agentCandidate)
+	}
+}
+
+func TestPhysicalDiskClonesStayApartAfterSerializedRehydration(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	first := NewRegistry(nil)
+	first.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+	payload, err := json.Marshal(first.List())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted []Resource
+	if err := json.Unmarshal(payload, &persisted); err != nil {
+		t.Fatal(err)
+	}
+
+	rehydrated := NewRegistry(nil)
+	rehydrated.IngestResources(persisted)
+	// A clone keeps the hostname; the persisted disk lost its per-source
+	// parents, so only its own parent says which system TrueNAS saw it on.
+	rehydrated.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive", "tank", sharedDiskSerial))
+	if disks := rehydrated.ListByType(ResourceTypePhysicalDisk); len(disks) != 2 {
+		t.Fatalf("disks = %d, want the clone's disk kept apart after rehydration", len(disks))
+	}
+}
+
+func TestPhysicalDiskRekeyCarriesRetiredIDClaims(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	records := trueNASDiskRecords(now, "a", "archive-a", "tank", sharedDiskSerial)
+	records[len(records)-1].SupersededCanonicalIDs = []string{"physical_disk-retired"}
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceTrueNAS, records)
+	bareID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: sharedDiskSerial})
+	if got := rr.supersededResourceIDLocked("physical_disk-retired"); got != bareID {
+		t.Fatalf("retired ID resolves to %q, want the disk %s", got, bareID)
+	}
+
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive-b", "tank", sharedDiskSerial))
+	systemADisk := rr.bySource[SourceTrueNAS]["disk:a:sda"]
+	if systemADisk == bareID || systemADisk == "" {
+		t.Fatalf("system a disk = %q, want it re-keyed off the unscoped ID", systemADisk)
+	}
+	if got := rr.supersededResourceIDLocked("physical_disk-retired"); got != systemADisk {
+		t.Fatalf("retired ID resolves to %q after the re-key, want %s", got, systemADisk)
+	}
+}
+
+func TestPhysicalDiskSplitSurvivesARekey(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agentDisk := func(id, hostname string) models.Host {
+		return models.Host{
+			ID: id, Hostname: hostname, MachineID: "machine-" + hostname, Status: "online", LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda", Model: "WDC WD80EFAX", Serial: sharedDiskSerial, Type: "sata", Temperature: 30, Health: "PASSED",
+			}}},
+		}
+	}
+	trueNASCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceTrueNAS)+":"+normalizeSourceID("disk:a:sda"))
+	bareID := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, sharedDiskSerial)
+	ingest := func(t *testing.T, excludedID string, hosts ...models.Host) *ResourceRegistry {
+		t.Helper()
+		store := NewMemoryStore()
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: excludedID, ResourceB: trueNASCandidate}); err != nil {
+			t.Fatal(err)
+		}
+		rr := NewRegistry(store)
+		rr.IngestSnapshot(models.StateSnapshot{Hosts: hosts})
+		rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+		return rr
+	}
+	split := func(t *testing.T, rr *ResourceRegistry) {
+		t.Helper()
+		trueNASDisk, ok := rr.Get(trueNASCandidate)
+		if !ok || containsDataSource(trueNASDisk.Sources, SourceAgent) {
+			t.Fatalf("TrueNAS row = %+v, want it kept on %s apart from the agent row", trueNASDisk, trueNASCandidate)
+		}
+	}
+
+	t.Run("split recorded against the unscoped ID after another machine re-keyed the disk", func(t *testing.T) {
+		rr := ingest(t, bareID, agentDisk("host-archive", "archive"), agentDisk("host-other", "other"))
+		if _, ok := rr.Get(bareID); ok {
+			t.Fatalf("the unscoped ID %s should be re-keyed once two machines report the serial", bareID)
+		}
+		split(t, rr)
+	})
+	t.Run("split recorded against the scoped ID before the serial spans machines", func(t *testing.T) {
+		scoped := ingest(t, bareID, agentDisk("host-archive", "archive"), agentDisk("host-other", "other"))
+		archiveAgentDisk := ""
+		for _, disk := range scoped.ListByType(ResourceTypePhysicalDisk) {
+			if disk.ParentID != nil && *disk.ParentID == scoped.bySource[SourceAgent]["host-archive"] {
+				archiveAgentDisk = disk.ID
+			}
+		}
+		if archiveAgentDisk == "" || archiveAgentDisk == bareID {
+			t.Fatalf("archive agent disk = %q, want a machine-scoped ID", archiveAgentDisk)
+		}
+		split(t, ingest(t, archiveAgentDisk, agentDisk("host-archive", "archive")))
+	})
+}
+
+func TestPhysicalDiskExclusionFallbackStaysPerMachine(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agents := models.StateSnapshot{}
+	for _, name := range []string{"pve1", "pve2"} {
+		agents.Hosts = append(agents.Hosts, models.Host{
+			ID: "host-" + name, Hostname: name, MachineID: "machine-" + name, Status: "online", LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+			}}},
+		})
+	}
+	probe := NewRegistry(nil)
+	probe.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+	byNode := sharedSerialDisksByNode(t, probe)
+
+	// Both nodes' disks are split from the agent observation, whose
+	// source-specific ID is the same on every host.
+	store := NewMemoryStore()
+	agentCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceAgent)+":"+normalizeSourceID(sharedDiskSerial))
+	for _, name := range []string{"pve1", "pve2"} {
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: byNode[name].ID, ResourceB: agentCandidate}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rr := NewRegistry(store)
+	rr.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+	rr.IngestSnapshot(agents)
+
+	agentDisks := 0
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		if !containsDataSource(disk.Sources, SourceAgent) {
+			continue
+		}
+		agentDisks++
+		if containsDataSource(disk.Sources, SourceProxmox) {
+			t.Fatalf("disk %s merged an excluded agent row into a node's disk", disk.ID)
+		}
+	}
+	if agentDisks != 2 {
+		t.Fatalf("agent disks = %d, want one per host rather than both hosts on the shared fallback ID", agentDisks)
+	}
+}
+
+// An operator split separates the disks the registry joins inside one linked
+// host. resolveLinkedPhysicalDisk joins an agent SMART disk and the Proxmox
+// disk under the same parent by hardware identity or, for SAS and
+// identity-less disks, by device path, ahead of findMatch, and it used to
+// ignore exclusions: report-merge answered 200 while the disks merged again
+// on every rebuild. The registry ingests agent disks first, so the agent's
+// row holds the merged ID and keeps it; the Proxmox row takes the ID it holds
+// alone, or its source-specific ID where both share a hardware identity (the
+// agent holds that ID), as findMatch's excluded branch does. The PVE disk
+// poller asks ProxmoxDiskAgentSMARTSplit before it pairs the agent's SMART
+// row with the Proxmox disk, and it answers as the exclusions split the rows.
+func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
+	now := time.Now().UTC()
+	for _, shape := range []struct {
+		name  string
+		agent models.HostDiskSMART
+		pve   models.PhysicalDisk
+	}{
+		// Proxmox reports the SAS transport address as the serial (#1595),
+		// so only the device path joins the two.
+		{"sas-path",
+			models.HostDiskSMART{Device: "sda", Model: "ST4000NM0023", Serial: "Z1Z0ABCD", Type: "sas", Temperature: 34, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sda", Node: "pve1", Instance: "lab", DevPath: "/dev/sda", Model: "ST4000NM0023", Serial: "5000c500a1b2c3d4", Type: "hdd", Health: "PASSED", LastChecked: now}},
+		// One serial on both sides: the linked join matches before findMatch.
+		{"matching-serial",
+			models.HostDiskSMART{Device: "nvme0n1", Model: "Samsung 990 PRO", Serial: "S6B0NL0W123456", Type: "nvme", Temperature: 40, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-nvme0n1", Node: "pve1", Instance: "lab", DevPath: "/dev/nvme0n1", Model: "Samsung 990 PRO", Serial: "S6B0NL0W123456", Type: "nvme", Health: "PASSED", LastChecked: now}},
+		// smartctl reads no serial through this USB bridge.
+		{"agent-without-identity",
+			models.HostDiskSMART{Device: "sdb", Model: "USB Disk", Type: "sat", Temperature: 30, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sdb", Node: "pve1", Instance: "lab", DevPath: "/dev/sdb", Model: "USB Disk", Serial: "WD-ABC123", Type: "usb", Health: "PASSED", LastChecked: now}},
+		// PVE's literal "unknown" serial and WWN carry no identity.
+		{"proxmox-unknown-serial",
+			models.HostDiskSMART{Device: "sdc", Model: "CT1000MX500SSD1", Serial: "2117E59AB1C2", Type: "sata", Temperature: 31, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sdc", Node: "pve1", Instance: "lab", DevPath: "/dev/sdc", Model: "CT1000MX500SSD1", Serial: "unknown", WWN: "unknown", Type: "ssd", Health: "PASSED", LastChecked: now}},
+	} {
+		node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-pve1"}
+		host := models.Host{ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", Status: "online", LastSeen: now, LinkedNodeID: node.ID}
+		host.Sensors.SMART = []models.HostDiskSMART{shape.agent}
+		snapshot := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host}, PhysicalDisks: []models.PhysicalDisk{shape.pve}}
+		// A host on another machine reporting the agent's serial, as a
+		// cloned VM does. Its hosts sort first, so its disk holds the
+		// unscoped hardware ID until the host's own disk re-keys both.
+		clone := models.Host{ID: "host-clone", Hostname: "clone1", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}
+		clone.Sensors.SMART = []models.HostDiskSMART{shape.agent}
+		withClone := snapshot
+		withClone.Hosts = []models.Host{clone, host}
+
+		// The IDs each disk holds alone under the joined host.
+		alone := func(snapshot models.StateSnapshot) linkedDiskRows {
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(snapshot)
+			return linkedDiskRowsOn(t, registry.List())
+		}
+		agentOnly := snapshot
+		agentOnly.PhysicalDisks = nil
+		agentAlone := alone(agentOnly).agent
+		pveOnly := snapshot
+		pveOnly.Hosts = []models.Host{host}
+		pveOnly.Hosts[0].Sensors.SMART = nil
+		pveAlone := alone(pveOnly).proxmox
+
+		for _, request := range []struct {
+			name       string
+			exclusions func(ids diskSplitIDs) [][2]string
+			split      bool
+		}{
+			{"report-merge", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}, {ids.merged, ids.proxmoxCandidate}}
+			}, true},
+			// Report-merge filtered to the Proxmox source, or an unlink
+			// naming the merged disk and the Proxmox candidate.
+			{"proxmox-candidate-only", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.proxmoxCandidate}}
+			}, true},
+			// Report-merge records this pair whenever it splits any source
+			// off a disk the agent reports. It names the agent, whose row
+			// holds the merged ID, not the observation that joins it.
+			{"agent-candidate-only", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}}
+			}, false},
+			{"unrelated-exclusion", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, "physical_disk-00000000deadbeef"}}
+			}, false},
+		} {
+			t.Run(shape.name+"/"+request.name, func(t *testing.T) {
+				store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateFromSnapshot(snapshot)
+				merged := linkedDiskRowsOn(t, adapter.GetAll()).joined
+				if merged == "" || merged != agentAlone || pveAlone == "" {
+					t.Fatalf("fixture did not join the disks under the agent's ID: merged %q, alone: agent %q, proxmox %q", merged, agentAlone, pveAlone)
+				}
+				ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+				// The PVE disk poller asks the adapter before it pairs the
+				// agent's SMART row with the Proxmox disk on the agent's node.
+				pollerSplit := func(step string, host models.Host, smart models.HostDiskSMART, want bool) {
+					t.Helper()
+					if got := adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, smart); got != want {
+						t.Fatalf("%s: poller split = %v, want %v", step, got, want)
+					}
+				}
+				pollerSplit("before the request", host, shape.agent, false)
+				addExclusions(t, store, request.exclusions(ids))
+
+				want := linkedDiskRows{joined: merged}
+				if request.split {
+					want = linkedDiskRows{agent: agentAlone, proxmox: pveAlone}
+					if pveAlone == agentAlone {
+						want.proxmox = ids.proxmoxCandidate
+					}
+				}
+				assertViews := func(step string, snapshot models.StateSnapshot, want func(linkedDiskRows) bool, describe string) {
+					t.Helper()
+					for rebuild := 1; rebuild <= 3; rebuild++ {
+						adapter.PopulateFromSnapshot(snapshot)
+						listed := adapter.GetAll()
+						rest := NewRegistry(store)
+						rest.IngestResources(listed)
+						restFromSnapshot := NewRegistry(store)
+						restFromSnapshot.IngestSnapshot(snapshot)
+						for view, resources := range map[string][]Resource{
+							"monitor":                    listed,
+							"rest":                       rest.List(),
+							"rest presentation":          rest.ListForPresentation(),
+							"rest from snapshot":         restFromSnapshot.List(),
+							"rest presentation snapshot": restFromSnapshot.ListForPresentation(),
+						} {
+							if got := linkedDiskRowsOn(t, resources); !want(got) {
+								t.Fatalf("%s rebuild %d %s: got %+v, want %s", step, rebuild, view, got, describe)
+							}
+						}
+					}
+				}
+				exactly := func(want linkedDiskRows) (func(linkedDiskRows) bool, string) {
+					return func(got linkedDiskRows) bool { return got == want }, fmt.Sprintf("%+v", want)
+				}
+				apart := func(got linkedDiskRows) bool {
+					return got.joined == "" && got.agent != "" && got.proxmox != "" && got.agent != got.proxmox
+				}
+
+				check, describe := exactly(want)
+				assertViews("after the request", snapshot, check, describe)
+				pollerSplit("after the request", host, shape.agent, request.split)
+				// A generation that has not ingested the agent's disk yet judges
+				// its row by the ID and identity the row would be keyed under.
+				unseen := NewMonitorAdapter(NewRegistry(store))
+				if got := unseen.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent); got != request.split {
+					t.Fatalf("a generation without the agent's disk judged the split = %v, want %v", got, request.split)
+				}
+				if !request.split {
+					return
+				}
+
+				// A link between the rows the split left joins them again,
+				// and report-merge on the relinked disk splits them again:
+				// it excludes the link's own pair, which replaces the link.
+				if err := store.AddLink(ResourceLink{ResourceA: want.agent, ResourceB: want.proxmox, PrimaryID: want.agent, CreatedAt: time.Now().UTC()}); err != nil {
+					t.Fatal(err)
+				}
+				check, describe = exactly(linkedDiskRows{joined: merged})
+				assertViews("after relink", snapshot, check, describe)
+				// The link is the operator's later decision, whether it
+				// replaced an exclusion (the Proxmox row held its candidate
+				// ID) or left it standing: the generation holds the
+				// observations as one disk, so the poller pairs them again.
+				pollerSplit("after relink", host, shape.agent, false)
+				relinked := adapter.currentRegistry()
+				var again [][2]string
+				for _, fold := range relinked.ManualLinkFolds(merged) {
+					again = append(again, [2]string{fold.HolderID, fold.FoldedID})
+				}
+				ids = diskSplitCandidates(t, relinked, merged)
+				again = append(again, [2]string{merged, ids.agentCandidate}, [2]string{merged, ids.proxmoxCandidate})
+				addExclusions(t, store, again)
+				check, describe = exactly(want)
+				assertViews("after splitting again", snapshot, check, describe)
+				pollerSplit("after splitting again", host, shape.agent, true)
+
+				// The split names the IDs of the disks it separated, not the
+				// Proxmox slot, so a replacement in the slot (different
+				// hardware on both sides) is a different disk the poller pairs.
+				replacedPVE, replacedAgent := shape.pve, shape.agent
+				replacedPVE.Serial = "REPLACEMENT-0009"
+				replacedAgent.Serial = "Z9Z9REPLACED"
+				if shape.pve.Serial == shape.agent.Serial {
+					replacedAgent.Serial = replacedPVE.Serial
+				}
+				replacedHost := host
+				replacedHost.Sensors.SMART = []models.HostDiskSMART{replacedAgent}
+				if adapter.ProxmoxDiskAgentSMARTSplit(replacedPVE, replacedHost, replacedAgent) {
+					t.Fatalf("a replacement in the slot inherited the split recorded against the disk it replaced")
+				}
+
+				// smartctl reads no serial from a disk in standby, so the
+				// agent's row takes its device-keyed ID. A Proxmox
+				// observation still carrying the serial the split named
+				// stays apart from it, on the serial's ID meanwhile.
+				if shape.pve.Serial == shape.agent.Serial {
+					asleep := snapshot
+					asleep.Hosts = []models.Host{host}
+					asleep.Hosts[0].Sensors.SMART = []models.HostDiskSMART{{Device: shape.agent.Device, Model: shape.agent.Model, Type: shape.agent.Type, Standby: true}}
+					assertViews("while the agent's disk is in standby", asleep, func(got linkedDiskRows) bool {
+						return apart(got) && got.proxmox == merged
+					}, "the disks apart, the Proxmox row on "+merged)
+					pollerSplit("while the agent's disk is in standby", asleep.Hosts[0], asleep.Hosts[0].Sensors.SMART[0], true)
+					check, describe = exactly(want)
+					assertViews("once the agent's disk wakes", snapshot, check, describe)
+					pollerSplit("once the agent's disk wakes", host, shape.agent, true)
+				}
+
+				// A same-serial disk on another machine re-keys the agent's
+				// disk to its machine-scoped ID; the split, recorded against
+				// the unscoped ID, still holds.
+				if shape.agent.Serial != "" {
+					assertViews("after a same-serial disk appears elsewhere", withClone, apart, "the disks apart")
+					pollerSplit("after a same-serial disk appears elsewhere", host, shape.agent, true)
+				}
+			})
+		}
+
+		// A split recorded while a same-serial disk sits on another machine
+		// names the agent disk's machine-scoped ID, and still holds once that
+		// disk goes away and the agent's disk returns to the unscoped ID.
+		if shape.agent.Serial == "" {
+			continue
+		}
+		t.Run(shape.name+"/split-while-scoped", func(t *testing.T) {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateFromSnapshot(withClone)
+			merged := linkedDiskRowsOn(t, adapter.GetAll()).joined
+			if merged == "" || merged == agentAlone {
+				t.Fatalf("fixture did not join the disks under a machine-scoped ID: merged %q, agent alone %q", merged, agentAlone)
+			}
+			ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+			addExclusions(t, store, [][2]string{{ids.merged, ids.agentCandidate}, {ids.merged, ids.proxmoxCandidate}})
+			for _, step := range []struct {
+				name     string
+				snapshot models.StateSnapshot
+			}{{"with the other machine's disk", withClone}, {"after it goes away", snapshot}} {
+				for rebuild := 1; rebuild <= 2; rebuild++ {
+					adapter.PopulateFromSnapshot(step.snapshot)
+					restFromSnapshot := NewRegistry(store)
+					restFromSnapshot.IngestSnapshot(step.snapshot)
+					for view, resources := range map[string][]Resource{"monitor": adapter.GetAll(), "rest from snapshot": restFromSnapshot.List()} {
+						if got := linkedDiskRowsOn(t, resources); got.joined != "" || got.agent == "" || got.proxmox == "" {
+							t.Fatalf("%s rebuild %d %s: got %+v, want the disks apart", step.name, rebuild, view, got)
+						}
+					}
+					if !adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent) {
+						t.Fatalf("%s rebuild %d: the poller would pair the disks the rows split", step.name, rebuild)
+					}
+				}
+			}
+		})
+	}
+}
+
+// diskSplitIDs are the IDs a report-merge of a joined agent and Proxmox disk
+// names: the merged disk and its SourceTargets candidates.
+type diskSplitIDs struct {
+	merged, agentCandidate, proxmoxCandidate string
+}
+
+func diskSplitCandidates(t *testing.T, registry *ResourceRegistry, mergedID string) diskSplitIDs {
+	t.Helper()
+	ids := diskSplitIDs{merged: mergedID}
+	for _, target := range registry.SourceTargets(mergedID) {
+		switch target.Source {
+		case SourceAgent:
+			ids.agentCandidate = target.CandidateID
+		case SourceProxmox:
+			ids.proxmoxCandidate = target.CandidateID
+		}
+	}
+	if ids.agentCandidate == "" || ids.proxmoxCandidate == "" || ids.proxmoxCandidate == mergedID {
+		t.Fatalf("merged disk %s lists candidates agent=%q proxmox=%q", mergedID, ids.agentCandidate, ids.proxmoxCandidate)
+	}
+	return ids
+}
+
+// addExclusions records each pair as report-merge does, skipping a pair that
+// names one ID twice (an identity-less agent disk's merged ID is its
+// candidate).
+func addExclusions(t *testing.T, store ResourceStore, pairs [][2]string) {
+	t.Helper()
+	for _, pair := range pairs {
+		if pair[0] == pair[1] {
+			continue
+		}
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+type linkedDiskRows struct {
+	agent   string // a disk only the agent reports
+	proxmox string // a disk only Proxmox reports
+	joined  string // a disk both report
+}
+
+// linkedDiskRowsOn sorts the disks under the joined pve1 host by the sources
+// that report them, ignoring disks on other machines.
+func linkedDiskRowsOn(t *testing.T, resources []Resource) linkedDiskRows {
+	t.Helper()
+	hostID := ""
+	for _, resource := range resources {
+		if resource.Type == ResourceTypeAgent && resource.Agent != nil && resource.Agent.AgentID == "host-pve1" {
+			hostID = resource.ID
+		}
+	}
+	var rows linkedDiskRows
+	set := func(slot *string, id string) {
+		if *slot != "" {
+			t.Fatalf("two disk rows of one kind: %s and %s", *slot, id)
+		}
+		*slot = id
+	}
+	for _, resource := range resources {
+		if resource.Type != ResourceTypePhysicalDisk || resource.ParentID == nil || *resource.ParentID != hostID {
+			continue
+		}
+		agent, proxmox := hasDataSource(resource.Sources, SourceAgent), hasDataSource(resource.Sources, SourceProxmox)
+		switch {
+		case agent && proxmox:
+			set(&rows.joined, resource.ID)
+		case agent:
+			set(&rows.agent, resource.ID)
+		case proxmox:
+			set(&rows.proxmox, resource.ID)
+		}
+	}
+	return rows
+}
+
+// TestMonitorGenerationAppliesManualLinksAcrossSources exercises the single
+// generation boundary with links spanning snapshot and supplemental sources.
+func TestMonitorGenerationAppliesManualLinksAcrossSources(t *testing.T) {
+	now := time.Now().UTC()
+	nas := IngestRecord{
+		SourceID: "system:tn-1:vm:nas-vm",
+		Resource: Resource{Type: ResourceTypeVM, Name: "nas-vm", Status: StatusOnline, LastSeen: now},
+	}
+	guest := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline, LastSeen: now,
+			VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now}},
+	}
+	records := map[DataSource][]IngestRecord{SourceTrueNAS: {nas}, SourceVMware: {guest}}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, records)
+	ids := map[string]string{}
+	for _, resource := range unlinked.GetAll() {
+		ids[resource.Name] = resource.ID
+	}
+	if len(ids) != 4 || ids["web"] == "" || ids["app-agent"] == "" || ids["nas-vm"] == "" || ids["app-guest"] == "" {
+		t.Fatalf("unlinked estate = %v, want four distinct fixture resources", ids)
+	}
+	links := []ResourceLink{
+		{ResourceA: ids["app-agent"], ResourceB: ids["web"], PrimaryID: ids["web"]},
+		{ResourceA: ids["nas-vm"], ResourceB: ids["app-guest"], PrimaryID: ids["app-guest"]},
+	}
+	want := []string{ids["app-guest"], ids["web"]}
+	slices.Sort(want)
+	adapter := NewMonitorAdapter(NewRegistryWithManualLinks(links))
+	for generation := 0; generation < 2; generation++ {
+		adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+		resources := adapter.GetAll()
+		got := resourceIDs(resources)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("generation %d lists %v, want the linked survivors %v", generation, got, want)
+		}
+		for _, resource := range resources {
+			if resource.ID != ids["app-guest"] {
+				continue
+			}
+			for _, source := range []DataSource{SourceTrueNAS, SourceVMware} {
+				if !slices.Contains(resource.Sources, source) {
+					t.Fatalf("folded row sources = %v, want %s among them", resource.Sources, source)
+				}
+			}
+		}
+	}
+}
+
+// TestMonitorGenerationJudgesLinkedReadingsWithConfiguredThresholds checks
+// the caller's freshness policy at the generation boundary: the three-minute
+// vSphere reading is current with five-minute thresholds and stale by default.
+func TestMonitorGenerationJudgesLinkedReadingsWithConfiguredThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	total, used := int64(8<<30), int64(3<<30)
+	guest := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline,
+			LastSeen: now.Add(-3 * time.Minute),
+			VMware:   &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+			Metrics: &ResourceMetrics{
+				Disk: &MetricValue{Value: 20, Percent: 20, Used: &used, Total: &total, Source: SourceVMware},
+			},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		Hosts: []models.Host{{
+			ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now,
+			Disks: []models.Disk{{Total: 100 << 30, Used: 80 << 30, Free: 20 << 30, Usage: 80, Mountpoint: "/"}},
+		}},
+	}
+	thresholds := map[DataSource]time.Duration{SourceVMware: 5 * time.Minute, SourceAgent: 5 * time.Minute}
+	ingest := func(rr *ResourceRegistry) {
+		rr.IngestSnapshotWithStaleThresholds(snapshot, thresholds)
+		rr.IngestRecordsWithStaleThresholds(SourceVMware, []IngestRecord{guest}, thresholds)
+	}
+
+	unlinked := NewRegistry(nil)
+	ingest(unlinked)
+	ids := map[string]string{}
+	for _, resource := range unlinked.List() {
+		ids[resource.Name] = resource.ID
+	}
+	if len(ids) != 2 || ids["app-agent"] == "" || ids["app-guest"] == "" {
+		t.Fatalf("unlinked estate = %v, want the agent and the vSphere VM", ids)
+	}
+	links := []ResourceLink{{ResourceA: ids["app-agent"], ResourceB: ids["app-guest"], PrimaryID: ids["app-guest"]}}
+
+	diskSource := func(configured map[DataSource]time.Duration) DataSource {
+		adapter := NewMonitorAdapterWithStaleThresholds(NewRegistryWithManualLinks(links), configured)
+		adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: {guest}})
+		row, ok := adapter.currentRegistry().Get(ids["app-guest"])
+		if !ok || row.Metrics == nil || row.Metrics.Disk == nil {
+			t.Fatalf("merged guest = %+v, want it listed with a disk reading", row)
+		}
+		return row.Metrics.Disk.Source
+	}
+	if got := diskSource(thresholds); got != SourceVMware {
+		t.Fatalf("generation with configured thresholds took the disk reading from %q, want the current vSphere one", got)
+	}
+	if got := diskSource(nil); got != SourceAgent {
+		t.Fatalf("generation with default thresholds took the disk reading from %q, want the fresh agent's (this scenario no longer separates the thresholds)", got)
 	}
 }

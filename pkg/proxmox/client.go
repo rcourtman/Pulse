@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -255,6 +256,28 @@ type Client struct {
 	httpClient *http.Client
 	auth       auth
 	config     ClientConfig
+
+	// A polling client is shared by concurrent node and guest reads. Publish
+	// each ticket/CSRF/expiry tuple atomically and share only session renewal,
+	// not the subsequent API requests or their caller-owned cancellation.
+	authMu         sync.Mutex
+	authGeneration uint64
+	authInFlight   *authRefresh
+}
+
+type authRefresh struct {
+	done chan struct{}
+	err  error
+}
+
+// defaultClientTimeout is the per-request timeout when ClientConfig.Timeout
+// is unset.
+const defaultClientTimeout = 60 * time.Second
+
+func (c *Client) authSnapshot() (auth, uint64) {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.auth, c.authGeneration
 }
 
 func (c *Client) apiBaseURL() (*url.URL, error) {
@@ -337,7 +360,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	// Use configured timeout or default to 60 seconds
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = 60 * time.Second
+		timeout = defaultClientTimeout
 	}
 	httpClient := tlsutil.CreateHTTPClientWithTimeout(cfg.VerifySSL, cfg.Fingerprint, timeout)
 
@@ -398,16 +421,71 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 // authenticate performs password-based authentication
 func (c *Client) authenticate(ctx context.Context) error {
-	username := c.auth.user + "@" + c.auth.realm
-	password := c.config.Password
+	return c.renewAuthentication(ctx, nil)
+}
 
-	if err := c.authenticateJSON(ctx, username, password); err == nil {
-		return nil
-	} else if shouldFallbackToForm(err) {
-		return c.authenticateForm(ctx, username, password)
-	} else {
+// expected binds expiry or a 401 to the session actually used by that read.
+// A late rejection of an old ticket cannot trigger another renewal after a
+// concurrent request has already replaced it. Explicit authentication (nil)
+// still owns the existing JSON/form fallback and failed-attempt behaviour.
+func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	c.authMu.Lock()
+	if expected != nil && c.authGeneration != *expected {
+		c.authMu.Unlock()
+		return nil
+	}
+	if pending := c.authInFlight; pending != nil {
+		c.authMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-pending.done:
+			return pending.err
+		}
+	}
+	pending := &authRefresh{done: make(chan struct{})}
+	c.authInFlight = pending
+	username := c.auth.user + "@" + c.auth.realm
+	c.authMu.Unlock()
+
+	// The login is shared, so no single caller's cancellation may end it: a
+	// cancelled guest-agent or API read that happened to start the renewal
+	// must not fail every live read waiting on it. The detached attempt keeps
+	// the caller's values, is bounded by the client's request timeout, and
+	// publishes its result for later reads even after its starter has left.
+	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
+	go func() {
+		defer cancelLogin()
+		password := c.config.Password
+		err := c.authenticateJSON(loginCtx, username, password)
+		if shouldFallbackToForm(err) {
+			err = c.authenticateForm(loginCtx, username, password)
+		}
+		c.authMu.Lock()
+		pending.err = err
+		c.authInFlight = nil
+		close(pending.done)
+		c.authMu.Unlock()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-pending.done:
+		return pending.err
+	}
+}
+
+// sessionRenewalTimeout bounds one shared login attempt (JSON plus any form
+// fallback) by the same per-request timeout the client applies to API reads.
+func (c *Client) sessionRenewalTimeout() time.Duration {
+	if c.httpClient != nil && c.httpClient.Timeout > 0 {
+		return c.httpClient.Timeout
+	}
+	return defaultClientTimeout
 }
 
 func (c *Client) authenticateJSON(ctx context.Context, username, password string) error {
@@ -488,9 +566,12 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		return err
 	}
 
+	c.authMu.Lock()
 	c.auth.ticket = result.Data.Ticket
 	c.auth.csrfToken = result.Data.CSRFPreventionToken
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
+	c.authGeneration++
+	c.authMu.Unlock()
 
 	return nil
 }
@@ -528,10 +609,12 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 
 func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool, httpClient *http.Client) (*http.Response, error) {
 	// Re-authenticate if needed
-	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
-		if err := c.authenticate(ctx); err != nil {
+	auth, generation := c.authSnapshot()
+	if c.config.Password != "" && auth.tokenName == "" && time.Now().After(auth.expiresAt) {
+		if err := c.renewAuthentication(ctx, &generation); err != nil {
 			return nil, fmt.Errorf("re-authentication failed: %w", err)
 		}
+		auth, generation = c.authSnapshot()
 	}
 
 	var body io.Reader
@@ -554,23 +637,23 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 	}
 
 	// Set authentication
-	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
+	if auth.tokenName != "" && auth.tokenValue != "" {
 		// API token authentication
 		authHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
-			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
+			auth.user, auth.realm, auth.tokenName, auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
 		// NEVER log the actual token value - only log that we're using token auth
 		maskedHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=***",
-			c.auth.user, c.auth.realm, c.auth.tokenName)
+			auth.user, auth.realm, auth.tokenName)
 		log.Debug().
 			Str("authHeader", maskedHeader).
 			Str("url", req.URL.String()).
 			Msg("Setting API token authentication")
-	} else if c.auth.ticket != "" {
+	} else if auth.ticket != "" {
 		// Ticket authentication
-		req.Header.Set("Cookie", "PVEAuthCookie="+c.auth.ticket)
-		if method != "GET" && c.auth.csrfToken != "" {
-			req.Header.Set("CSRFPreventionToken", c.auth.csrfToken)
+		req.Header.Set("Cookie", "PVEAuthCookie="+auth.ticket)
+		if method != "GET" && auth.csrfToken != "" {
+			req.Header.Set("CSRFPreventionToken", auth.csrfToken)
 		}
 	}
 
@@ -589,8 +672,8 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.
-		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && c.auth.tokenName == "" {
-			if err := c.authenticate(ctx); err != nil {
+		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && auth.tokenName == "" {
+			if err := c.renewAuthentication(ctx, &generation); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
 			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
@@ -600,7 +683,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
 			// Special case for 403 with API token - this is usually a permission issue
-			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
+			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", auth.user, auth.realm)
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
@@ -639,9 +722,11 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 			apiErr = fmt.Errorf("authentication error: %w", apiErr)
 		}
 
+		guestFailureReason := guestAgentTerminalFailureReason(path, body)
 		return nil, &apiResponseError{
 			statusCode:           resp.StatusCode,
-			guestCommandRejected: resp.StatusCode == http.StatusInternalServerError && guestAgentTerminalFailure(path, body),
+			guestCommandRejected: resp.StatusCode == http.StatusInternalServerError && guestFailureReason != "",
+			guestFailureReason:   guestFailureReason,
 			cause:                apiErr,
 		}
 	}
@@ -1700,14 +1785,34 @@ type VMFileSystem struct {
 }
 
 func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
+	fields, valid := guestAgentResponseFields(data)
+	if !valid {
+		return fmt.Errorf("guest filesystem record is ambiguous or malformed")
+	}
+	recognized := false
+	for name := range fields {
+		// encoding/json also matches case-insensitive struct fields. Identity
+		// and filter metadata must not overwrite an earlier canonical field or
+		// turn a rejected volume into a special mount that silently disappears.
+		for _, canonical := range []string{"name", "type", "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk"} {
+			if name == canonical {
+				recognized = true
+			} else if strings.EqualFold(name, canonical) {
+				return fmt.Errorf("guest filesystem record has a noncanonical field name")
+			}
+		}
+	}
+	if !recognized {
+		return fmt.Errorf("guest filesystem record has no recognized fields")
+	}
 	type rawVMFileSystem struct {
-		Name                 string      `json:"name"`
-		Type                 string      `json:"type"`
-		Mountpoint           string      `json:"mountpoint"`
-		TotalBytes           interface{} `json:"total-bytes"`
-		TotalBytesPrivileged interface{} `json:"total-bytes-privileged"`
-		UsedBytes            interface{} `json:"used-bytes"`
-		DiskRaw              interface{} `json:"disk"`
+		Name                 string          `json:"name"`
+		Type                 string          `json:"type"`
+		Mountpoint           string          `json:"mountpoint"`
+		TotalBytes           json.RawMessage `json:"total-bytes"`
+		TotalBytesPrivileged json.RawMessage `json:"total-bytes-privileged"`
+		UsedBytes            json.RawMessage `json:"used-bytes"`
+		DiskRaw              interface{}     `json:"disk"`
 	}
 
 	var raw rawVMFileSystem
@@ -1715,20 +1820,23 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	total, err := parseUint64Flexible(raw.TotalBytes)
+	total, err := parseVMFilesystemBytes(raw.TotalBytes, false)
 	if err != nil {
 		return err
 	}
-	totalPrivileged, err := parseUint64Flexible(raw.TotalBytesPrivileged)
+	totalPrivileged, err := parseVMFilesystemBytes(raw.TotalBytesPrivileged, false)
 	if err != nil {
 		return err
 	}
-	used, err := parseUint64Flexible(raw.UsedBytes)
+	used, err := parseVMFilesystemBytes(raw.UsedBytes, total > 0 || totalPrivileged > 0)
 	if err != nil {
 		return err
 	}
 	if total == 0 && totalPrivileged > 0 {
 		total = totalPrivileged
+	}
+	if used > total {
+		return fmt.Errorf("guest filesystem used bytes exceed total bytes")
 	}
 
 	fs.Name = raw.Name
@@ -2007,7 +2115,9 @@ func coerceString(value interface{}) string {
 	}
 }
 
-// GetVMFSInfo returns filesystem information from QEMU guest agent
+// GetVMFSInfo returns filesystem information from QEMU guest agent. If any
+// record is malformed, valid peers are returned with an error: they cannot
+// establish complete guest capacity or removal of the rejected filesystem.
 func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid))
 	if err != nil {
@@ -2029,8 +2139,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		Str("response", string(bodyBytes)).
 		Msg("Raw response from guest agent get-fsinfo")
 
-	// Decode array payloads entry-by-entry so one malformed filesystem record
-	// does not wipe valid guest-agent disk data for the whole VM.
+	// Decode entry-by-entry to retain valid peers, but never mistake that
+	// remainder for a complete inventory after dropping a malformed record.
 	var arrayResult struct {
 		Data struct {
 			Result []json.RawMessage `json:"result"`
@@ -2038,9 +2148,11 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
 		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
+		invalidEntries := 0
 		for idx, rawFS := range arrayResult.Data.Result {
 			var fs VMFileSystem
 			if err := json.Unmarshal(rawFS, &fs); err != nil {
+				invalidEntries++
 				log.Warn().
 					Err(err).
 					Str("node", node).
@@ -2052,17 +2164,21 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 			filesystems = append(filesystems, fs)
 		}
 		postProcessVMFilesystems(node, vmid, filesystems)
+		if invalidEntries > 0 {
+			return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
+		}
 		return filesystems, nil
 	}
 
 	// If that fails, try as an object (might be an error response or different format)
 	var objectResult struct {
 		Data struct {
-			Result interface{} `json:"result"`
+			Result json.RawMessage `json:"result"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
-		if objectResult.Data.Result == nil {
+		rawFS := bytes.TrimSpace(objectResult.Data.Result)
+		if len(rawFS) == 0 || bytes.Equal(rawFS, []byte("null")) {
 			log.Debug().
 				Str("node", node).
 				Int("vmid", vmid).
@@ -2070,11 +2186,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 			return []VMFileSystem{}, nil
 		}
 
-		if fsMap, ok := objectResult.Data.Result.(map[string]interface{}); ok && looksLikeVMFilesystemResult(fsMap) {
-			rawFS, marshalErr := json.Marshal(fsMap)
-			if marshalErr != nil {
-				return nil, fmt.Errorf("failed to marshal object-style guest filesystem result: %w", marshalErr)
-			}
+		var fsMap map[string]interface{}
+		if json.Unmarshal(rawFS, &fsMap) == nil && looksLikeVMFilesystemResult(fsMap) {
 			var fs VMFileSystem
 			if unmarshalErr := json.Unmarshal(rawFS, &fs); unmarshalErr != nil {
 				return nil, fmt.Errorf("failed to parse object-style guest filesystem result: %w", unmarshalErr)
@@ -2635,6 +2748,47 @@ type VMMemInfo struct {
 	Buffers   uint64 `json:"buffers,omitempty"`
 	Cached    uint64 `json:"cached,omitempty"`
 	Shared    uint64 `json:"shared,omitempty"`
+
+	availablePresent bool // Measured zero must not become missing availability.
+}
+
+// HasAvailable distinguishes a guest's measured zero availability from older
+// status payloads without that field. Nonzero programmatically built samples
+// retain their existing meaning.
+func (m VMMemInfo) HasAvailable() bool {
+	return m.availablePresent || m.Available > 0
+}
+
+func (m *VMMemInfo) UnmarshalJSON(data []byte) error {
+	type plain VMMemInfo
+	var decoded plain
+	wire := struct {
+		*plain
+		Available *uint64 `json:"available"`
+	}{plain: &decoded}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Available != nil {
+		decoded.Available = *wire.Available
+		decoded.availablePresent = true
+	}
+	*m = VMMemInfo(decoded)
+	return nil
+}
+
+// Keep explicit zero through status copies/JSON round trips without inventing
+// an available field for legacy payloads. Internal presence is not a wire field.
+func (m VMMemInfo) MarshalJSON() ([]byte, error) {
+	type plain VMMemInfo
+	var available *uint64
+	if m.HasAvailable() {
+		available = &m.Available
+	}
+	return json.Marshal(struct {
+		plain
+		Available *uint64 `json:"available,omitempty"`
+	}{plain: plain(m), Available: available})
 }
 
 // VMBalloonInfo describes guest memory details returned by status/current when

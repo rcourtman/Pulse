@@ -15,6 +15,11 @@ export interface HistoryChartProps {
   compact?: boolean;
   hideLock?: boolean;
   data?: AggregatedMetricPoint[];
+  /**
+   * False pauses stored reads and polling while keeping the readings already
+   * shown, e.g. for a chart inside a drawer tab that is mounted but hidden.
+   */
+  enabled?: boolean;
 }
 
 export interface HistoryChartHoverPoint {
@@ -44,6 +49,23 @@ export const HISTORY_CHART_RANGES: HistoryTimeRange[] = [
 
 export const HISTORY_CHART_MIN_LEFT_INSET = 40;
 
+// The one label every history range picker shows for an option, so a drawer,
+// a disk and a pool never name the same range three ways.
+const HISTORY_RANGE_OPTION_LABELS: Record<HistoryTimeRange, string> = {
+  '30m': '30 minutes',
+  '1h': '1 hour',
+  '6h': '6 hours',
+  '12h': '12 hours',
+  '24h': '24 hours',
+  '7d': '7 days',
+  '14d': '14 days',
+  '30d': '30 days',
+  '90d': '90 days',
+};
+
+export const formatHistoryRangeOptionLabel = (range: HistoryTimeRange): string =>
+  HISTORY_RANGE_OPTION_LABELS[range] ?? range;
+
 const HISTORY_CHART_RANGE_LABELS: Record<HistoryTimeRange, string> = {
   '30m': '30-minute',
   '1h': '1-hour',
@@ -66,6 +88,7 @@ export interface HistoryChartAccessibleDescriptionInput {
 }
 
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
+  if (unit === '%' && value > 0 && value < 0.1) return '<0.1%';
   if (unit === '%') return `${value.toFixed(1)}%`;
   if (unit === 'B/s') return `${formatBytes(value)}/s`;
   if (unit === 'C') return `${Math.round(value)}°C`;
@@ -158,6 +181,50 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
   return max;
 }
 
+export type HistorySource = 'store' | 'memory' | 'live' | 'mock_synthetic';
+
+/**
+ * Names where a History reply's readings came from. `store` is the history
+ * store; `memory` means the store had nothing for the range, so the readings
+ * are the recent ones Pulse holds in memory; `live` is one current reading
+ * because no history exists yet. Demo data reads like stored history.
+ */
+export function getHistoryReadoutLabel(
+  source: HistorySource | null | undefined,
+  inspected: boolean,
+): string {
+  if (source === 'live') return 'Current';
+  if (source === 'memory') return inspected ? 'Recorded' : 'Latest recorded';
+  return inspected ? 'Stored' : 'Latest stored';
+}
+
+/** A short badge and its explanation for a reply that is not stored history. */
+export function getHistorySourceNotice(
+  source: HistorySource | null | undefined,
+): { badge: string; detail: string } | null {
+  if (source === 'memory') {
+    return {
+      badge: 'Recent only',
+      detail: 'Recent readings only. The history store has none for this range yet.',
+    };
+  }
+  if (source === 'live') {
+    return {
+      badge: 'Current only',
+      detail: 'No history for this range yet. Showing the current reading.',
+    };
+  }
+  return null;
+}
+
+/** True when any stored bucket's lowest and highest readings differ. */
+export function hasHistoryChartSpread(points: readonly AggregatedMetricPoint[]): boolean {
+  return (
+    points.length > 1 &&
+    points.some((point) => (point.max ?? point.value) > (point.min ?? point.value))
+  );
+}
+
 export function getHistoryChartScale(points: AggregatedMetricPoint[], unit?: string) {
   const minValue = 0;
   const isPercentLike = unit === '%';
@@ -190,7 +257,7 @@ export function getHistoryChartYAxisLabels(
   },
   unit?: string,
 ) {
-  return [0, 0.5, 1].map((pct) => {
+  const ticks = [0, 0.5, 1].map((pct) => {
     const scaleValue = minValue + pct * (maxValue - minValue);
     let label: string;
     if (isPercentLike) {
@@ -202,6 +269,55 @@ export function getHistoryChartYAxisLabels(
     }
     return { pct, label };
   });
+  const labels = withoutRepeatedHistoryAxisLabels(ticks.map((tick) => tick.label));
+  return ticks.map((tick, index) => ({ ...tick, label: labels[index] }));
+}
+
+/**
+ * Gridline labels in axis order. A middle label that reads the same as a
+ * neighbour (a small range rounded, or "<1K/s" twice on a quiet link) says
+ * nothing and crowds the axis, so it is left blank; the gridline stays. The
+ * end labels always remain.
+ */
+export function withoutRepeatedHistoryAxisLabels(labels: string[]): string[] {
+  return labels.map((label, index) =>
+    index > 0 &&
+    index < labels.length - 1 &&
+    (label === labels[index - 1] || label === labels[index + 1])
+      ? ''
+      : label,
+  );
+}
+
+/**
+ * Time ticks left to right without one that reads the same as the tick
+ * before it: a short window at a coarse label ("Oct 2" four times, or
+ * "11:00 AM" twice) states its time once.
+ */
+export function withoutRepeatedHistoryTimeTicks<T extends { label: string }>(
+  ticks: readonly T[],
+): T[] {
+  return ticks.filter((tick, index) => index === 0 || tick.label !== ticks[index - 1].label);
+}
+
+const HISTORY_CHART_TIME_LABEL_GAP = 12;
+
+/**
+ * How many evenly spaced time labels fit along a plot of `plotWidth` pixels
+ * when the widest label is `labelWidth` pixels, from `maxCount` down to the
+ * first and last time. Labels are centred on their times, so neighbours need
+ * a label's width plus a gap between their centres.
+ */
+export function getHistoryChartTimeTickCount(
+  plotWidth: number,
+  labelWidth: number,
+  maxCount = 4,
+): number {
+  if (!(plotWidth > 0) || !(labelWidth > 0)) return maxCount;
+  for (let count = maxCount; count > 2; count--) {
+    if (plotWidth / (count - 1) >= labelWidth + HISTORY_CHART_TIME_LABEL_GAP) return count;
+  }
+  return 2;
 }
 
 export function getHistoryChartLeftInset(labelWidths: number[]) {

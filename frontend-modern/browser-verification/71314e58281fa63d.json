@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "55f80f7adab5f6286cef5ad7f3eecd7f67266fb2",
+  "verified_at": "2026-10-08T10:16:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/stores/alertsActivation.ts",
+    "frontend-modern/src/utils/metricThresholds.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "031fcb046ec519e3877323c48051cc1055c0ab684e06710a6510ff37df5b56ac",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "94e4b364c744f204ff52e2d28cde6b80a5a66ac414c7ba702113e960a6a67e17",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "62f064405b0c8e947ef1127874d3d06f6e3330153594de11b3ff3b443d29444c",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "a6def9d4c3e5da5c61b863780ea206acfc663345a914f1c8d901b426ad5597b2",
+    "frontend-modern/src/stores/alertsActivation.ts": "5e080281342faa3753c3d3216d0492d365a10475e498f8a71d2344ec979675bf",
+    "frontend-modern/src/utils/metricThresholds.ts": "6024a0ca020172734c8ce30c8e054714174bd67a0aa66ff1a370c28079c7f8a4"
+  },
+  "routes": [
+    "/browser-tests/truenas-disk-thresholds.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production TrueNAS table, inline ResourceDetailDrawer, alert store, router context and CSS with synthetic HTTP/config/readings; not full-shell, appliance, History, notification or release acceptance. Playwright 1.56.1 equals the committed integration lock; desktop Chromium and phone WebKit.",
+    "By-type NVMe trigger 70C: current 72C disk Attention, 64C disk healthy. Retained 95C reading visible, dotted/muted and unjudged.",
+    "TrueNAS-wide 62C makes the 64C disk Attention. A per-disk canonical-ID override 75C keeps the separate 72C disk healthy and its expanded drawer Temperature tone normal.",
+    "TrueNAS-wide zero leaves the disk with no override unjudged; explicit per-disk 71C still judges its 72C reading. Disabled TrueNAS Disks defaults mute every disk even with that override.",
+    "The shared pulse-relaxed guest control remains warning 80 / critical 92 for memory. No uncaught page errors or error console messages on the complete final pass. Six final screenshots inspected; desktop/phone controls and drawer content legible."
+  ],
+  "interactions": [
+    "Refresh configuration through the production alert store and check status dots, reasons and counts.",
+    "Filter Attention, verify only the 64C disk remains, then restore Status All without changing the disk kind filter.",
+    "Open the production inline drawer by keyboard Enter, expand Platform details and Show TrueNAS, verify the 72C temperature is normal, and collapse by keyboard.",
+    "Expand phone Filters and repeat the same disk/status/disclosure interactions in WebKit at 390x844."
+  ]
+}

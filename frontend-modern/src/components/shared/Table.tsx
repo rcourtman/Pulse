@@ -69,12 +69,68 @@ export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 // Custom row shells reuse this marker without inheriting TableRow's styling.
 export const nativeRowClickTarget = () => undefined;
 
+export type RowTextSelectionGuard = {
+  onMouseDown: (event: MouseEvent) => void;
+  isSelectionClick: (event: MouseEvent) => boolean;
+};
+
+// Further than this between press and release, the pointer was dragging.
+const ROW_CLICK_DRAG_TOLERANCE_PX = 3;
+
+// Dragging across a name to copy it (a pod name for kubectl, a container name
+// for docker) ends with a click on the row the drag stayed inside. That click
+// finishes a text selection; it is not a request to open the row, and running
+// the row action would shift the layout under the selection, so row actions
+// skip it. A press released where it went down is still a plain click, even
+// on text that is already selected: the browser only clears that selection
+// after the click, and the row must open on the first click, not the second.
+// Nested controls such as the disclosure button handle their own clicks, so
+// they and keyboard activation are unaffected. TableRow wires this itself;
+// custom row shells create one per row and wire both handlers.
+export function createRowTextSelectionGuard(): RowTextSelectionGuard {
+  let pressedAt: { x: number; y: number } | undefined;
+  return {
+    onMouseDown: (event) => {
+      pressedAt = { x: event.clientX, y: event.clientY };
+    },
+    isSelectionClick: (event) => {
+      const press = pressedAt;
+      pressedAt = undefined;
+      const row = event.currentTarget;
+      if (!(row instanceof Node)) return false;
+      const selection = row.ownerDocument?.getSelection();
+      if (!selection || selection.isCollapsed) return false;
+      if (!row.contains(selection.anchorNode) && !row.contains(selection.focusNode)) return false;
+      if (!press) return true;
+      return (
+        Math.abs(event.clientX - press.x) > ROW_CLICK_DRAG_TOLERANCE_PX ||
+        Math.abs(event.clientY - press.y) > ROW_CLICK_DRAG_TOLERANCE_PX
+      );
+    },
+  };
+}
+
 export function TableRow(props: TableRowProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const [local, rest] = splitProps(props, ['class', 'children', 'onClick']);
+  const selectionGuard = createRowTextSelectionGuard();
+  const runRowAction: JSX.EventHandler<HTMLTableRowElement, MouseEvent> = (event) => {
+    if (selectionGuard.isSelectionClick(event)) return;
+    const action = local.onClick;
+    if (typeof action === 'function') action(event);
+    else action?.[0](action[1], event);
+  };
+  // A spread, because Solid's lint reads onClick beside on:click as a duplicate.
+  const rowAction = {
+    get onClick() {
+      return local.onClick ? runRowAction : undefined;
+    },
+  };
   return (
     <tr
       class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`}
-      on:click={rest.onClick ? nativeRowClickTarget : undefined}
+      on:click={local.onClick ? nativeRowClickTarget : undefined}
+      on:mousedown={local.onClick ? selectionGuard.onMouseDown : undefined}
+      {...rowAction}
       {...rest}
     >
       {local.children}

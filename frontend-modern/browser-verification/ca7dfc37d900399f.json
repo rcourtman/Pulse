@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "fcaaabe25bbd8766c2eea6f72fbac62b92ea26a0",
+  "result": "passed",
+  "verified_at": "2026-10-10T02:54:43Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfig.tsx",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts",
+    "frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/WebhookConfig.tsx": "bdc26fd7e7ff60c4e5dee07e65a684cd730e1b840c0a4074c40a3d3127f8734f",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "97ca12ed9c7e7c0fe93a6d5c9eb0daed596ce859fd884f2f56316ab2d91512d3",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "3caf78928a5b28947eaba68a335aa7404262d0cafba3a37cefb8095fafc9b545",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "b3f3888bc6a87c2894ccf40dd936a4076a7b910982743037deb57730f294996f",
+    "frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx": "002609ca384cec8e6275392ce1c0617088ad64c9f06e621edf93bfe11818ad5b",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "50e7843784251c2d47cdb20886df9f94b1a066f2dac788234a129bd4ae1a7184"
+  },
+  "routes": [
+    "Existing Notifications webhook section in local /browser-tests/webhook-save-acknowledgement.html",
+    "Existing Notifications editor and real mutation owner/API client; no shipped new route"
+  ],
+  "states": [
+    "Pending create, disabled editor/conflicting list controls, one request",
+    "Failed create/update preserves the same draft and masks/template/routing",
+    "Accepted create/update incorporates canonical response before clearing draft",
+    "Accepted synthetic create followed by lost response: draft retained, another tab confirms stored fixture without duplicate",
+    "Explicit retry and deliberate cancellation; desktop light/dark and phone dark/narrow light"
+  ],
+  "interactions": [
+    "28 assertion groups: keyboard Enter and phone touch saves/cancel, request counts/payloads, failed-save recovery, masked update, another-tab reconciliation",
+    "16 inspected screenshots; fixed inline warning readable, fieldsets/controls remain within 320px viewport; lower phone footer reached by scrolling before each interaction"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "notes": "Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0; browser/server closed. Actual existing components with synthetic local API responses. No notification/native persistence/provider/delivery/release acceptance. Earlier label/CSRF-setup fixture failures retained separately."
+}

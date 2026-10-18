@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "c0f0474423869e5ccc3d59db2d3013669ac37215",
+  "verified_at": "2026-10-05T05:35:15.985Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/memoryObservation.ts": "12a617cbd1af52345fa34a0ef79ba10a31675c07e5c974e28f1158a39f93c9a4",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "b681ee7b391dfa328be61689a2fe10a040b7e06a01985f893d9780204aa89188",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "464c18ed3fefdbf0332e54519be9c8ffa95a5e95e84c8e71eed50f27ddd4c661",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "48eaffc83be59c0e5373ad938d010015eb34b24e2bf65aaa07315e3c465c5a68",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "1d0f2261db7dc56b389f2e7bd43ce822c6b4689324d74ff1877c2c1a1eeb4863"
+  },
+  "routes": [
+    "/browser-tests/resource-history-provenance.html (production canonical ResourceDetailDrawer)",
+    "/browser-tests/resource-history-provenance.html?guest (production dedicated GuestDrawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Eight Chromium desktop / touch WebKit emulated-phone light/dark cases, Playwright 1.56.1 matching integration lock. All 32 full-page captures independently hash-matched and visually inspected.",
+    "Retained memory and filesystem values labelled last known; original source/time, unavailable versus measured zero, unknown state/source/future timestamp and unrelated current readings stay distinct. No invented stored samples.",
+    "Same-ID snapshot refresh cannot renew an observation time, remount History or request another read. Actual stored observations keep their coordinates/keyboard inspection.",
+    "Deliberate 503 retains loaded stored evidence and 403 withdraws History carriers. All negative-response console messages retained and asserted against exact exercised endpoint/status pairs; no unexpected errors, off-origin or write requests."
+  ],
+  "interactions": [
+    "Select History with trusted desktop pointer or touch input; replace retained/unavailable/unknown/current synthetic observations.",
+    "Advance snapshot Last seen; verify unchanged original observation and read count; recovery preserves measured zero without asserting native thaw.",
+    "Refresh stored history, use trusted keyboard Home/End inspection; refresh with synthetic transient failure then Retry into denied access."
+  ],
+  "proof": {
+    "script": "frontend-modern/browser-tests/resource-history-provenance.cjs",
+    "script_sha256": "4b5dc0280bc25941a4f8193ca8db59cddb3b09abd09118f41568f0be05aa6d0b",
+    "checks": 56,
+    "screenshots": 32,
+    "browser_closed": true,
+    "server_closed": true,
+    "limits": "Production ResourceDetailDrawer and GuestDrawer, History, client and CSS; synthetic local observations/APIs. Not native guest safety, provider/appliance, installed, reporter or release acceptance."
+  }
+}

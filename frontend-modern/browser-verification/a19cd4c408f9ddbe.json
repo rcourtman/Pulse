@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "25329b1e71082a237f9299f7ac8fc9b098196e4a",
+  "verified_at": "2026-10-09T08:40:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
+    "frontend-modern/src/utils/systemLogsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "ee4c146cc9c1caefcc1421e79ede8d585cee5ef9690fa51652d6941038e5804f",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts": "4ee722c9a69f8e1ebaf52566907c36d7c6a74b50f555013b33ed488611b1df71",
+    "frontend-modern/src/utils/systemLogsPresentation.ts": "b9103776025c027006ea670b3f1fc05143f7a0e97abb355070d282f0eb24b3c7"
+  },
+  "routes": [
+    "/settings/support?side=parent (isolated support-logs component fixture)",
+    "/settings/support?side=final (isolated support-logs component fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production SystemLogsPanel, state hook, presentation helpers, shared controls and CSS, not the full app shell; EventSource and level/CSRF responses are synthetic and contain no live logs. Playwright 1.56.1, matching the integration lock; desktop Chromium light and phone WebKit dark.",
+    "Eight received lines: parent performs eight scroll-height reads/writes, final one per animation frame, same ordered rows and no horizontal overflow. Final rows have no entrance animation; the shared Support Bundle button has a nontransparent background in both themes.",
+    "After pause/clear/resume, a bounded 1007-line fixture retains lines 7 through 1006: exactly 1000 in arrival order, one measurement/write and scrolled to bottom in both browsers. Paused arrivals are discarded, pending Clear lines never reappear, initial and cleared empty states remain usable.",
+    "Late delivery after unmount schedules no work and the stream closes once. Visible copy explains latest-1000 retention, discarded paused lines and local-only clearing. Six final-content captures inspected after paint settlement, including before/after light desktop and dark phone; text, controls, footer and keyboard focus are readable.",
+    "Bounded component/scheduler acceptance only: no Debug reenabling, live installation, profiling, native load, PBS GUI-cause reproduction, protected publication or release acceptance."
+  ],
+  "interactions": [
+    "Deliver eight synthetic lines together, inspect frame-scoped request and scroll counters and visible row geometry after paint.",
+    "Pause with a pending accepted line, drop paused arrivals, use keyboard Clear and Resume, then verify latest-1000 retention and no overflow.",
+    "Clear another pending line before its render frame; select Warn through mocked API only, verify Support Bundle remains present, unmount and send a late synthetic message."
+  ],
+  "screenshot_sha256": {
+    "chromium-parent-lines.png": "9121799f37c090b219d7188ad3c3c8976e4a72353168a678dcd84d4b69c158ed",
+    "chromium-final-lines.png": "48307b76a234f411698b6a724500f983c49bc567c951aa00cf7f3e693b9fc3f5",
+    "chromium-final-bounded.png": "5ed84f25f02c94f1d8c4ff05c7c1d41f0c643d5dd0761793e08e7e0b0a7d9abb",
+    "webkit-parent-lines.png": "3a4cb28be8ae099e4d85663450a2135b47ca2c11cbaee5cd9f6a542db326ad41",
+    "webkit-final-lines.png": "fa0386c72f403e8675b405dd452d0d20ca63e98e1740e635457d2aba8ca27f68",
+    "webkit-final-bounded.png": "428758f1e47addcacb365c15845200cba1a0cd58e5b19cce968d9bd10784118f"
+  }
+}

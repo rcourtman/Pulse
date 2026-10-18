@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
+const { createPublicationFixtureServer } = require('./publication-fixture-server.cjs');
 
 const root = '/workspace/frontend-modern';
 const output = '/workspace/tmp/guest-disk-provenance';
@@ -35,14 +36,12 @@ const settle = (page) =>
       'node_modules/@playwright/test'
     ].version,
   );
-  process.chdir(root);
-  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({
+  const server = createPublicationFixtureServer(
     root,
-    configFile: path.join(root, 'vite.config.ts'),
-    cacheDir: output + '/cache',
-    server: { host: '127.0.0.1', port: 5315, strictPort: true },
-  });
+    5315,
+    'browser-tests/guest-disk-provenance.html',
+  );
+  result.compiled = server.binding;
   let browser;
   try {
     await server.listen();
@@ -136,7 +135,21 @@ const settle = (page) =>
           '[data-guest-id="fixture-pve:pve-a:101"]',
         );
       });
-      const initialHeight = await freshRow.evaluate((el) => el.getBoundingClientRect().height);
+      // The control guest has no backup lock badge. On a phone that badge adds
+      // a line to the name cell, independently of filesystem provenance.
+      // Hold identity, lock and every other reading fixed; measure this same
+      // guest with only its filesystem cue absent, then restore the cue.
+      await page.evaluate(() => window.__guestDiskProvenance.apply({ reason: '' }));
+      await settle(page);
+      const initialHeight = await row.evaluate((el) => el.getBoundingClientRect().height);
+      record.densityBaseline = {
+        sameGuestWithoutFilesystemCue: initialHeight,
+        unrelatedUnlockedControl: await freshRow.evaluate(
+          (el) => el.getBoundingClientRect().height,
+        ),
+      };
+      await page.evaluate(() => window.__guestDiskProvenance.apply({ reason: 'prev-vm-locked' }));
+      await settle(page);
       const checkValueFit = async () => {
         const value = cell.locator('[data-testid="metric-mini-sparkline"] > span');
         if (!(await value.count())) return undefined;
@@ -163,12 +176,22 @@ const settle = (page) =>
       };
       const check = async (retained, message) => {
         assert.equal(await notice.count(), 1);
-        assert.equal(
-          await notice.locator('[aria-hidden="true"]').innerText(),
-          retained ? (compact ? 'Prior' : 'Last known') : compact ? 'N/A' : 'Unavailable',
-        );
-        assert.equal(await notice.locator('.sr-only').textContent(), message);
-        const geometry = await notice.locator('[aria-hidden="true"]').evaluate((el) => {
+        // A deferral with no retained reading shows the cell's dash; its reason
+        // is assistive text and the cell title, not a visible caption.
+        if (retained) {
+          assert.equal(
+            await notice.locator('[aria-hidden="true"]').innerText(),
+            compact ? 'Prior' : 'Last known',
+          );
+          assert.equal(await notice.locator('.sr-only').textContent(), message);
+        } else {
+          assert.equal(await notice.locator('[aria-hidden="true"]').count(), 0);
+          assert.equal(await notice.textContent(), message);
+        }
+        const measured = retained
+          ? notice.locator('[aria-hidden="true"]')
+          : notice.locator('xpath=ancestor::td');
+        const geometry = await measured.evaluate((el) => {
           const rect = el.getBoundingClientRect();
           const cellRect = el.closest('td').getBoundingClientRect();
           return {

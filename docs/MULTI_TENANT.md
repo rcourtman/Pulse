@@ -19,8 +19,8 @@ The Community, Relay, and Pro tiers do not include the `multi_tenant` capability
 
 1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 2. Activate your Enterprise license in **Settings → Plans & Billing**.
-3. Go to **Settings → Organization** and click **Create Organization**.
-4. Name your organization and assign infrastructure to it.
+3. Create the organization with the session-authenticated `POST /api/orgs` endpoint (see [Creating an Organization](#creating-an-organization)). This build has no Create Organization button in **Settings → Organization**.
+4. Assign infrastructure to the organization.
 5. Use the **Org Switcher** in the header bar to switch between organizations.
 
 ## Concepts
@@ -57,30 +57,43 @@ Organizations can share specific resources with other organizations:
 
 ## Before Using the API
 
-Create organizations and manage members and shares in the signed-in Pulse UI.
+Manage members and shares in the signed-in Pulse UI. Organizations are created through the session-authenticated `POST /api/orgs` endpoint; the UI has no create control.
 These changes require **session-based user authentication** and the relevant
 organization role; API tokens are rejected with `403 session_required`, even
 when they have `settings:write`. The UI handles the session and CSRF protection.
 Do not extract a session cookie or CSRF token into a shell command.
 
-The read-only curl examples use an org-bound token with `settings:read` and
-the private header file from [API authentication](API.md#-authentication).
+The read-only examples use an org-bound token with `settings:read`. Define the
+`pulse_api` helper and prepare its private header file from
+[API authentication](API.md#-authentication) in the same Bash session. This is
+local example code, not an installed Pulse command.
 Keep the token out of command lines, URLs and reports. A token's organization
 binding is an access boundary: changing a URL or `X-Pulse-Org-ID` header does
 not grant it access to another organization.
 
-Use curl 7.76 or later. Keep `--disable` first to ignore local trace/verbose
-defaults; `--fail-with-body` makes HTTP failures return a non-zero exit. The
-loopback URLs apply on the Pulse host; remotely, use your Pulse HTTPS URL and
-keep certificate verification enabled. Replace the example organization ID
-`production-datacenter` with your own. Run requests separately, and share only
-the relevant redacted error, not whole member or infrastructure responses.
+The helper requires curl 7.76 or later, ignores local trace/verbose defaults,
+and applies a five-second connection limit and twenty-second whole-request
+limit. It does not follow redirects or retry. It prints only the HTTP status
+and the path to a new owner-only file containing the response, including on
+HTTP failure. Member identities, resource details and error bodies stay out of
+terminal output; open the file privately and share only a relevant redacted
+excerpt, not whole member, share or infrastructure responses. A partial file
+after a transport failure is not a complete list or proof that no members or
+shares exist. HTTP 401/402/403 and redirects are not successful reads; do not
+widen a token or use a session cookie to bypass them.
+
+The helper's loopback origin applies on the Pulse host; remotely, follow its
+HTTPS instructions and keep certificate verification enabled. Replace the
+example organization ID `production-datacenter` with your own, and run each
+read separately. The helper's support for other HTTP methods does not make
+organization mutations token-authenticated; keep member and share changes in the
+signed-in UI with its session and CSRF protection.
 
 ## Managing Organizations
 
 ### Creating an Organization
 
-**UI:** Settings → Organization → Create Organization
+**UI:** none in this build; Settings → Organization has no create control.
 
 **API contract:** `POST /api/orgs`, session authentication only:
 ```json
@@ -106,8 +119,7 @@ Use the **Org Switcher** dropdown in the header. When you switch:
 
 **Read-only API:**
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/orgs/production-datacenter/members
+pulse_api GET /api/orgs/production-datacenter/members
 ```
 
 **Invite or update a member:** use the Access panel as an owner or admin.
@@ -154,8 +166,7 @@ again, so the target must accept the new grant.
 
 **Read-only incoming shares:**
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/orgs/production-datacenter/shares/incoming
+pulse_api GET /api/orgs/production-datacenter/shares/incoming
 ```
 
 ## Monitoring Multiple Internal Estates
@@ -182,10 +193,10 @@ When multi-tenant is enabled, **Settings → Organization** shows:
 
 | Panel | Description |
 |---|---|
-| **Overview** | Organization name, description, creation date |
+| **Overview** | Organization display name (editable), org ID, creation date, member count |
 | **Access** | Member list, invite/remove members, change roles |
 | **Sharing** | Outgoing and incoming resource shares |
-| **Billing & Plan** | Organization-level plan and license info |
+| **Billing** | Organization plan, usage policies and subscription status (the "Billing & Usage" panel) |
 
 ## API Reference
 
@@ -226,11 +237,11 @@ or a token's organization binding.
 
 ## Troubleshooting
 
-### "Multi-tenant is not enabled on this server" (501)
+### "Multi-tenant functionality is not enabled. Set PULSE_MULTI_TENANT_ENABLED=true to enable." (501)
 
 Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 
-### "Multi-tenant requires an Enterprise license" (402)
+### "Multi-tenant access requires an Enterprise license" (402)
 
 Activate an Enterprise license with the `multi_tenant` capability in **Settings → Plans & Billing**.
 

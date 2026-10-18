@@ -18,6 +18,240 @@
 
 ## Purpose
 
+### Restricted outbound connections keep approved destinations pinned
+
+`pkg/securityutil/outbound_http.go` owns restricted HTTP destination validation,
+redirect policy and DNS pinning. `pkg/securityutil/pinned_dial.go` owns shared
+numeric-address connection scheduling, including notification callers. The
+dialer never resolves a hostname or expands destination permissions. Callers
+must validate every candidate before handing it over.
+
+The primitive validates and normalises numeric IPs, rejects malformed input,
+deduplicates equivalent IPv4 forms, respects the requested TCP address family,
+and races at most two staggered serial workers under one positive connection
+timeout. Remaining time is shared among each worker's remaining candidates.
+Caller cancellation cancels in-flight work. A successful connection cancels
+competitors and closes any late successful loser without writing an HTTP
+payload to it. Transport TLS and destination-policy checks remain in place.
+
+`pkg/securityutil/pinned_dial_test.go` verifies family fallback, later-address
+budget, concurrency, cancellation, late-connection closure, numeric-only input
+and error preservation. Notification loopback controls exercise both clients
+against a real stalled TCP address and a healthy receiver. The registry routes
+both shared runtime files to these controls and the existing outbound policy
+tests, keeping this primitive owned without moving notification allowlisting.
+
+### Reporting usage remains content-free and distinguishable from missing measurements
+
+`internal/config/reporting_activity.go` is the canonical durable count store.
+It retains 30 UTC-day buckets of closed report kinds and outcomes. Local opaque
+schedule/period SHA-256 markers expire after 90 days and use existing config
+storage encryption when configured. No raw report, recipient, schedule, scope,
+organization identifier, range or error content enters the tally. Only schema
+v20 scalar counters, measurement availability and elapsed observation days leave
+the installation through the existing opt-out-controlled heartbeat. Local tally
+errors never fail reporting. Mock mode never records real reporting activity.
+
+Generation counts include separate attempts and complete direct response writes.
+Distinct successful-generation days measure activity, including manual downloads
+and scheduled retries, with same-day attempts counted once. Multiple days alone
+cannot establish a fresh successful period or returning manual use. The adoption
+summary keeps multi-day generation separate from successful repeat periods.
+Saved files, SMTP acceptance, definite failures and uncertain acceptance remain
+separate. Persisted successful saved-schedule windows count once. A successful
+repeat period requires a different window on that schedule within 90 days,
+including monthly reuse, so retries and same-period reruns do not inflate that
+period metric. The aggregate
+query uses only each eligible rotating ID's latest counts and marks old-schema,
+missing-column and unavailable-tally data unmeasured. Elapsed observation days do
+not establish continuous uptime, and SMTP acceptance does not prove inbox receipt.
+No customer/account joins or paying-customer census are permitted.
+
+`internal/config/reporting_activity_test.go`,
+`internal/api/reporting_activity_test.go`, the telemetry payload/disclosure tests,
+the server snapshot tests and the adoption-report tests verify this boundary.
+Both privacy document copies and `docs/releases/TELEMETRY_SCHEMA_V20.md` disclose
+the payload. Client source landing and compatible receiver activation remain
+separate from release and installed fleet measurement.
+
+
+### Investigation evidence retains tenant and runtime-source boundaries
+
+Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
+is required, cancellation and read failures remain errors, and ordinary reads
+use that tenant's cached store. The optional demo source follows the current
+fixture graph and never merges persisted tenant rows into demo evidence. The
+real-to-demo-to-real regression checks both consumers and retained store data;
+the persisted task regression excludes another tenant and another guest with
+the same provider VM ID. Historical storage reads preserve source labels and
+requested time bounds. These read paths add no credential, execution or approval
+authority.
+
+### Reports and metric summaries read only the requesting organization
+
+The server's report engine (`pkg/server/server.go`) resolves the metrics store
+of each request's organization through the multi-tenant monitor
+(`EngineConfig.MetricsStoreForOrg`) and refuses a request that names no
+organization, so no report path falls back to the default organization's
+store. Report handlers also reject a resource that is not in the requesting
+organization's inventory, scheduled runs resolve their scope against their
+owning organization's inventory, and Pulse Assistant's `pulse_summarize`
+reads its executor's organization. A resource ID that exists in two
+organizations yields each organization only its own history.
+`internal/api/reporting_org_scope_test.go`,
+`TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics`,
+`pkg/reporting/engine_org_scope_test.go` and
+`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` hold this boundary.
+
+### Patrol maintenance coverage widens no authority
+
+Patrol inherits only maintenance from an ancestor window scoped
+`resource_and_descendants`. Monitoring mode, lifecycle and the
+`NeverAutoRemediate` lock are never inherited, so descendant scope can quiet
+findings but cannot unlock or grant automated action on any resource.
+
+### Startup provisioning cannot replace retained access
+
+`pkg/server/server.go` admits environment-selected startup import only into an
+absent or empty resolved data directory; a regular deployment `.env` is the
+only allowed pre-start entry. Existing non-Proxmox settings, token/session
+records, encryption keys, tenant directories and unknown contents all block it.
+Admission uses the same `NormalizeStorageDir` path as persistence before any
+filesystem probe: raw symlink/`..` traversal must not inspect an empty peer while
+the importer writes a different existing destination, and a trailing separator
+must not hide a final directory link. Canonical destination credential validation
+and live/dangling link spellings have explicit regression controls.
+Directory inspection errors, non-directories and symlinks are not absence.
+Admission reads no file contents and creates no persistence/key. The importer
+rechecks before creating persistence or writing and audits a classified refusal
+without a path, archive or passphrase. This is not cross-process exclusion:
+provision an isolated destination and keep the source archive outside it.
+
+`TestStartupImportRetainsNonProxmoxAccess` exercises ordinary configuration
+loading, retained agent-token validation and session/key bytes through both
+production startup helpers. It also proves that deliberate `ImportConfig`
+transfer still replaces the included records while keeping excluded local state.
+`auto_import_destination_test.go` covers blank provisioning, `.env`, all
+observed/unknown destination types, uncertain access, pre-write recheck and
+file precedence/refusal. Encrypted export scope and authenticated Recovery
+authorisation are unchanged; source proof is not installed transfer acceptance.
+
+### Explicit agent credential-file failure does not borrow authority
+
+The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an
+explicit `--token` so an environment value cannot shadow `--token-file`. A
+selected unreadable or empty credential file stops startup without disclosing
+the file path or contents and without substituting environment/state authority.
+Non-empty direct tokens retain first priority; implicit token-optional startup
+and enrolled runtime-token restart remain supported. Opaque credential contents
+are not interpreted as shell assignments or unquoted on the operator's behalf.
+
+Actual flag-loading/error controls are `TestLoadConfigTokenSources` and
+`TestResolveTokenSelectedFileReadErrorIsPrivate`. The synthetic trusted-HTTPS
+`TestHostAgentCredentialFileHandoff` also checks no request on selected-file
+failure, no environment credential use, no token in agent logs, preserved
+monitoring-only scopes/commands and ordinary process identity continuity.
+Neither this local journey nor a credential's inventory entry establishes
+authentication or recovery of an unobserved installed agent.
+
+### Infrastructure credentials remain within the configured HTTP origin
+
+The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects
+only within the first request's scheme, hostname and effective port. This
+protects token and ticket headers, CSRF headers and replayable password bodies
+before a redirected request reaches another service, subdomain or plaintext
+endpoint. Redirect userinfo and invalid authorities are refused. Hostname
+case, default ports and equivalent IPv6 literals are canonicalised; IPv6 zone
+case remains significant. The existing ten-redirect limit and same-origin
+proxy path/query redirects remain supported.
+
+System CA checks, configured leaf pins, the TLS floor, explicit verification
+opt-outs, initial HTTP configuration, DNS/proxy routing and independent cluster
+member admission do not change. Guest-agent commands and backup-lock evidence
+retain their stricter no-redirect policy, including same-origin redirects; an
+ordinary read's policy cannot admit a redirected guest command.
+
+`TestInfrastructureRedirectOriginPolicy`,
+`TestInfrastructureRedirectChainAndLimit` and
+`TestCreateHTTPClientRedirectAuthorityValidation` pin the shared boundary.
+`TestInfrastructureRedirectRefusesConnectedOriginChanges` uses actual owned
+TLS/plaintext sockets in CA, pin and explicit opt-out modes. PVE and PBS
+`client_redirect_test.go` exercise actual token, ticket/CSRF and password
+JSON/form flows plus retained same-origin proxy reads with synthetic credentials.
+These are bounded source controls, not an installed connection or an observed
+credential incident.
+
+### Certificate capture uses the connection's socket authority
+
+`tlsutil.FetchFingerprint` selects an explicit HTTP(S) URL's host and port,
+including 443 for a portless HTTPS URL and 80 for a portless HTTP URL. Bare
+hostnames and IP addresses retain the existing Proxmox default, 8006. Explicit
+ports and IPv6 zones are preserved; IPv6 socket addresses are bracketed rather
+than formed by appending a port to a bare literal. Proxy base paths never
+change the socket authority. Invalid authorities, userinfo, query/fragment and
+invalid ports fail before dialing, using the existing base-URL validation.
+
+Capture remains only a bounded, credential-free TLS handshake with a parseable
+peer certificate; it sends no HTTP request, grants no trust and changes no
+saved pin, verification choice, CA policy or authentication. A plaintext HTTP
+service cannot become trusted through this TLS-only capture. Declared-member
+first-use and established-pin recovery rules remain as below.
+
+`TestFetchFingerprintEndpointSelection` discriminates the previous wrong-port
+and bare-IPv6 failures through the public helper. `TestFingerprintTargetAuthority`
+and `TestFetchFingerprintRejectsInvalidAuthorityBeforeDial` check exact parsing;
+`TestFetchFingerprintConnectedAuthority` and
+`TestFetchFingerprintLegacyDefaultConnected` check actual distinct loopback
+leaves over IPv4/IPv6 and unchanged bare-host defaults, without HTTP. Existing
+cluster trust and provisioning controls remain required. This is source proof,
+not installed connection recovery or completion of #2140.
+
+### TLS pin failures remain local typed trust evidence
+
+`tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,
+normalisation, minimum TLS version and mismatch diagnostic, while returning a
+`FingerprintMismatchError` from the local verifier. Error wrapping retains the
+type; provider text repeating that diagnostic does not acquire it. Proxmox
+cluster first-use admission uses this distinction and never automatically
+replaces a known primary or member pin. `TestFingerprintVerifier_MismatchedFingerprint`
+in `pkg/tlsutil/tlsutil_test.go` checks digest identity, wrapping and rejection
+of quoted text; `TestClusterClientFingerprintTrustContract` supplies connected
+startup/recovery/first-use proof. CA verification and the existing explicit
+unverified-discovery modes are unchanged. No live security acceptance is claimed.
+
+### Existing PMG collection choices constrain provider reads
+
+The owning PMG collector honours the saved mail, queue, quarantine and domain
+switches at its read boundary. `PMGInstance.MonitoringConfigured` distinguishes
+new explicit all-off choices from old configurations that stored only zero
+booleans: those old ambiguous entries retain the existing mail-statistics
+default until a collection option is saved. This is not retrospective proof of
+intent or privacy. The discriminator survives encrypted node persistence and
+reload, covered in `TestPMGCollectionPersistenceDefaults` in `config_load_test.go`.
+Scope changes apply to subsequent polls, not requests already in flight;
+pausing remains the boundary for all ordinary reads. Authentication, TLS and
+permissions are unchanged, and no live mail/privacy acceptance is claimed.
+
+### Removing browser-origin trust is a durable explicit patch
+
+The system settings handler accepts an explicit empty string for
+`allowedOrigins` and applies it only after the durable save succeeds. Omitted
+origins do not reapply a different saved value to the runtime. Null and
+non-string values are invalid requests. GET presents the effective runtime
+policy, not a saved value concealed by a deployment override.
+
+Either existing override marker (`ALLOWED_ORIGINS` or `allowedOrigins`) keeps
+the deployment policy authoritative. A requested different value is rejected
+with `409 env_locked` before any part of the patch is persisted. The unchanged
+value sent by a disabled form field leaves underlying disk policy untouched
+and permits other settings to be saved. Clearing origins grants no CORS headers;
+production config reload does not revive removed trust. No change to the
+existing development localhost fallback or deployment environment precedence
+is made. CORS never replaces authentication, `settings:write`, CSRF, TLS or
+iframe policy. The `TestAllowedOrigins*` controls in
+`internal/api/system_settings_telemetry_test.go` cover real middleware responses,
+exact-list matching, protected writes, rejected/failed saves and reload.
+
 Assistant retained-history wiring uses the store belonging to its current
 monitor and read-only metric queries. Canonical identity resolution precedes
 store lookup, and ambiguous names fail with a request for canonical identity.
@@ -291,8 +525,12 @@ invisible to operators reviewing exactly what Pulse sends.
 53. `pkg/auth/rbac_manager.go`
 54. `pkg/auth/sqlite_manager.go`
 55. `pkg/server/server.go`
+56. `pkg/securityutil/outbound_http.go`
+57. `pkg/securityutil/pinned_dial.go`
 
 ## Shared Boundaries
+
+The generated typed helper and effective-unit admission retain `PrivateNetwork=true` on every platform, including native linux-386 and unknown architectures. `RestrictAddressFamilies=AF_UNIX` is additional hardening, not a portable proof of IP socket denial: systemd ignores this filter on native 32-bit x86. `SystemCallArchitectures=native` does not repair that ABI limitation.
 
 - Configured local-admin synchronisation is a runtime identity replacement, not an additive role grant: changing the configured identity removes the previous bypass, and clearing it during first-run reset clears that bypass. Configurable authorizers must synchronise identity updates with concurrent authorization reads; other users still require their own policy grants.
 
@@ -304,7 +542,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes already admit org managers through ensureAdminSession and read only that organisation's state; this never extends to authentication, SSO, users, roles, audit, relay, system, diagnostics or billing surfaces.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes admit org managers through RequireOrgAdmin / ensureOrgAdminSession and read only that organisation's state (reports read only its inventory and metrics store, and reportingRead still requires read:nodes); this never extends to authentication, SSO, API tokens, users, roles, audit, relay, system, updates, logs, diagnostics or billing surfaces, whose routes use ensureAdminSession and admit instance administrators only, and refuse an API token bound to a tenant organization whatever its scopes.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
@@ -437,6 +675,36 @@ resource ids plus alert identifier/type — and injects no operator briefing,
 command, prompt, or remediation payload into the model beyond the existing
 scoped-investigation context, so it adds no new disclosure surface and the
 existing resource-policy redaction still governs any model-bound context.
+
+The Alerts > History Assistant label keys (`alerts.assistant.iconLabel`,
+`alerts.assistant.iconLabelAt`) render the alert type, resource name and start
+time into the operator's own browser as accessible names. They are local UI
+copy: they add nothing to the Assistant handoff, the model-bound context or
+any request, so resource-policy redaction is unaffected.
+
+Renaming the alerts Schedule page title (`alerts.page.schedule.title`) changes
+local presentation copy only; it carries no resource data and changes no
+request, handoff or model-bound context.
+
+First-run setup reports the usage-statistics choice truthfully when the server
+owns it. An opt-out written after the admin account exists is refused with
+409 `env_locked` on a server started with `PULSE_TELEMETRY`; the security step
+then reads `/api/system/settings` and says nothing when statistics are already
+off, tells the operator to set `PULSE_TELEMETRY=false` and restart
+(`setup.security.error.telemetryLockedOn`) when the server keeps them on,
+because removing the variable would restore the default (on), and keeps the
+generic failure only when it cannot tell. It never claims statistics are off without reading that they are.
+
+The Alerts overview control for external notification delivery is labelled
+**Send notifications** in every state, so an off switch is never described
+with a word that reads as "on". Turning it off still pauses only outbound
+delivery (email, webhooks, Apprise); detection and the in-product alert view
+continue, and the paused banner and toast say so. No payload, destination or
+delivery behaviour changes.
+
+The Alerts paused banner describes pending notification delivery as turned off
+rather than never turned on, since switching delivery off stores the same
+state. Delivery, payloads and destinations are unchanged.
 
 Docker and Podman container CPU normalization may expose numeric raw per-core
 CPU percent, normalized capacity percent, and reporting host CPU count in
@@ -598,7 +866,7 @@ the `white_label` branding entitlement.
    match the authenticated principal against stored `OwnerUserID` or member
    `UserID`.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, `frontend-modern/src/utils/auditWebhookPresentation.ts`, and the localized catalog/policy boundary in `frontend-modern/src/i18n/`. Locale-catalog edits owned by another product surface may share this boundary only if they preserve API token names, token preset ids, privacy disclosures, and non-translatable security terms exactly; changing those security/privacy strings requires the security/privacy owner and tests.
-   Pulse Intelligence Provider & Models, Patrol, Assistant, and Service Context
+   Pulse Intelligence Provider & Models, Patrol, and Assistant
    settings labels may use the same localized catalog boundary, but those edits
    must stay product-settings copy only and must not change token scope names,
    preset ids, privacy disclosures, or security control terminology. The
@@ -673,7 +941,7 @@ the `white_label` branding entitlement.
    auth-env reloads, hosted entitlement refresh origins, and
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface. The panel must consume the compact backend-owned policy posture through `frontend-modern/src/hooks/useResourceStats.ts` and `ResourceAPI.getStats()`; it must not hydrate and adapt every unified-resource row merely to display aggregate privacy counts.
-10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-local `pulse-agent` module or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration, and self-test/update preflight that needs the live runtime token must pass it through a short-lived token file rather than argv. The `--enable-docker` help line is part of that operator privacy control, so it must remain "Enable Docker / Podman Agent module" instead of exposing internal collection-module wording. The `--enable-commands` help line and installer disclosure must identify Pulse command execution as disabled by default and required for Patrol actions or the explicit Proxmox LXC Docker inventory path, not as implicit guest access.
+10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-local `pulse-agent` module or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration, and self-test/update preflight that needs the live runtime token must pass it through a short-lived token file rather than argv. A deploy bootstrap token is exchanged before the agent builds any authenticated client, so no module ever holds the enrollment-only credential Pulse revokes on exchange. The `--enable-docker` help line is part of that operator privacy control, so it must remain "Enable Docker / Podman Agent module" instead of exposing internal collection-module wording. The `--enable-commands` help line and installer disclosure must identify Pulse command execution as disabled by default and required for Patrol actions or the explicit Proxmox LXC Docker inventory path, not as implicit guest access.
     Helper-backed update recovery is part of the same local executable trust
     boundary. On startup, a pending update handoff must be compared with the
     SHA-256 identity of `/proc/self/exe`: the candidate identity may proceed
@@ -748,8 +1016,13 @@ the `white_label` branding entitlement.
     action emergency stop are revalidated under one admission coordinator and
     committed with `executing`. Missing or unreadable policy denies dispatch.
     Human approval remains separate, but `NeverAutoRemediate`, plan drift, and
-    emergency stop are universal. Emergency stop after `executing` is only
-    best-effort cancellation and must never be described as rollback.
+    emergency stop are universal for every new admission, and human dispatch
+    revalidates them under the same admission coordinator rather than before
+    it, so an acknowledged lock save is never followed by a new lifecycle
+    admission. An already admitted dispatch, including one resumed by restart
+    recovery, is not revalidated. Emergency stop after
+    `executing` is only best-effort cancellation and must never be described
+    as rollback.
     The typed host-update executor wired here is likewise not generic command
     authority. It may dispatch only the closed `install_os_updates` operation,
     bound to the server-observed package inventory fingerprint and canonical
@@ -827,11 +1100,15 @@ in `docs/PRIVACY.md` and `frontend-modern/public/docs/PRIVACY.md`, which
 
 ## Forbidden Paths
 
+Removing the helper's private network globally or for an unproved platform in order to reach pmxcfs is forbidden. Partial telemetry does not justify root/sudo fallback, caller-selected commands or paths, token exposure, wider socket families, or a healthy empty inventory after a failed list.
+
 1. Changing telemetry payload semantics without updating the canonical privacy disclosure.
 2. Letting security-facing settings copy or privacy guarantees drift between runtime behavior and the governed docs.
 3. Treating API token management, auth posture, or telemetry controls as generic settings-shell polish instead of explicit trust-surface behavior.
 
 ## Completion Obligations
+
+`scripts/installtests/safe_profile_migration_test.go` renders every shipped helper architecture plus an unknown case for PVE/non-PVE and rejects host/unknown effective network values; `scripts/installtests/secure_runtime_platform_matrix_test.go` binds truthful shipped documentation. These are renderer/admission regressions, not kernel enforcement proof. Any future host-IPC exception requires source-bound actual generated-child IPC success and IPv4/IPv6 creation denials with unsandboxed controls, plus owned active migration/rollback and identity evidence before acceptance.
 
 Split-port agent exposure is complete only when its exact allowlist covers
 report/config routes, command WebSocket admission, version/server bootstrap,
@@ -859,6 +1136,10 @@ tokens, and path-normalization variants.
    placeholders on the shared `SettingsLoadingSkeleton` primitive. This
    subsystem owns the security/privacy posture semantics; frontend-primitives
    owns skeleton animation, fill tokens, and placeholder shell consistency.
+   Posture severity is one rule across the Security Overview: the HTTPS tile
+   counts as critical, in its label and in the posture score, only when the
+   instance is publicly reachable, matching the hardening step that calls
+   HTTPS critical for public access and recommended on a private network.
 6a. Keep API token refresh/loading indicators on the shared `LoadingSpinner`
     primitive. Security/privacy owns the token-management trust copy and
     refresh semantics; frontend-primitives owns spinner shell, tone, and
@@ -955,6 +1236,29 @@ tokens, and path-normalization variants.
     `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
+
+### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
+
+With AI Discovery removed, the telemetry snapshot's `discovery_enabled` flag
+comes from network subnet discovery alone; AI settings can no longer set it
+(`applyAIConfigTelemetrySnapshot`, pinned by
+`pkg/server/telemetry_pulse_intelligence_test.go`). `docs/PRIVACY.md` and its
+shipped mirror describe the field that way. No field was added or removed, so
+the telemetry schema version is unchanged; readers must treat the change as a
+definitional break at the release that carries it.
+
+### Native disk History stays inside authenticated reads
+
+Store-backed single/all-metric disk History supplementation occurs only after
+the existing monitoring-read, tenant binding, resource selection and licensed
+window checks. Native reads use the current tenant's monitored provider, not
+a caller-selected host or credential. Failed store queries stay errors; a
+revoked or wrong-scope token cannot initiate native reads. The connected
+TrueNAS History route tests assert those refusals and unchanged native read
+counts before and after revocation. No write or cross-tenant fallback is added.
+
+
+This repair preserves the existing isolation boundary and introduces no host-IPC grant. Successful partial filesystem rows retain explicit completeness and degraded health; sanitized status exposes no raw provider errors. Native PVE recovery remains unproved. No old v6/v7 receipt is reinterpreted and no v8 qualification layer is introduced.
 
 ### Container diagnostics keeps copied material credential-free (1 October 2026)
 
@@ -1325,6 +1629,10 @@ failure. If `runtime-capabilities` blocks `audit_logging` with
 active Pro license needs the private Pulse Pro runtime, but they must not
 expose license keys, billing identity, or plan-upgrade copy as part of that
 security/privacy feature gate.
+The Audit Webhooks panel also states its scope before any gate or endpoint
+list: these webhooks carry security events only, and alert delivery lives in
+alert notifications (`getAuditWebhookNotificationsSignpost`), so an operator
+looking for Discord or Slack alerts is not left configuring an audit sink.
 Audit-log storage availability is also a security/privacy trust boundary.
 The `pkg/audit/` runtime package owns persistent audit-store classification:
 transient SQLite busy/locked conditions must be retried and surfaced as
@@ -1442,6 +1750,92 @@ binding version through the first-use path, an unrelated hostname still fails
 closed, and the registration-bound hostname is never overwritten by an
 equivalent spelling the agent reports, because the install grant compares
 against it.
+Deploy-enrolled runtime tokens follow the same immutable-identity rule.
+`POST /api/agents/agent/enroll` binds the runtime token to the enrolled node's
+hostname and the current binding version only, marks its identity as coming
+from the agent (`deploy_identity_binding=agent`), and returns no agent
+identity, so the agent's first command registration backfills its own
+machine-derived ID. Enrollment used to bind and return an invented
+`agent-<hostname>`, which the agent abandons once Pulse acknowledges its
+reports. A token still carrying that placeholder, its `deploy_job_id`, and no
+identity marker may move exactly once to the registering agent's ID on exactly
+the same hostname (case-insensitive, never the short-name equivalence),
+whatever its binding version, and the move persists
+`deploy_identity_binding=repaired` in the same save. Any other identity or
+hostname presented to such a token is refused outright rather than handed to
+the legacy hostname migration, which would rebind without the marker. A marked
+token never moves again, even after a hostname rebind recreates the
+`agent-<hostname>` shape, and a non-deploy token of that shape, a different or
+merely equivalent hostname, or a deploy token bound to a real ID fails closed;
+the agent config gate consumes the same decision.
+`TestEvaluateRepairsDeployPlaceholderBindingOnce` and
+`TestEvaluateCurrentDeployTokenBackfillsTheAgentIdentity` in
+`internal/api/agentbinding/policy_test.go`, and
+`TestDeployPlaceholderTokenMovesToTheRegisteringAgentOnce`,
+`TestVersionlessDeployPlaceholderCannotBeMovedTwice`, and
+`TestCurrentDeployTokenNeverMovesOnceBound` in
+`internal/api/security_regression_test.go` pin that boundary.
+Authenticated reports also name the agent on a token bound only to its
+hostname, so a token without `agent:exec`, or whose agent never connects the
+command channel, still carries the identity the safe-profile authority
+reduction matches. After `/api/agents/agent/report` applies a report,
+`recordReportedAgentIdentity` in `internal/api/agent_exec_token_binding.go`
+writes the server-resolved host ID as `bound_agent_id`, with `bound_at` and the
+current binding version, only when the token has a `bound_hostname` and no
+`bound_agent_id`, the report presented exactly the ID Pulse resolved for it
+(in the same run, the ID the agent's command registration presents), and
+`agentbinding.EvaluateReportedIdentity` finds that the shared `Evaluate`
+decision would first-bind, legacy-migrate, or backfill that ID for the
+reported hostname. The token must also run command sessions in the request's
+organization, be bound to at most one organization, and carry a collector,
+legacy full-trust, or no runtime role, and the host must be one the monitor
+resolved and holds under that token, so mock mode's discarded, unresolved
+acknowledgements never qualify. The path never changes scopes, runtime role,
+command policy, or `bound_hostname`, and never moves a recorded ID or repairs
+a deploy placeholder. The binding version makes the recorded ID immutable to
+every later registration, and a recorded identity grants no execution
+authority: command admission still requires `agent:exec` and the same ID.
+As with a command registration, the first identity recorded is final: an
+agent later restarted under a different configured `--agent-id`, or replaying
+a report buffered by an earlier run, meets a token already bound to its first
+reported identity and is refused under the new one. When the presented and
+resolved IDs differ (a configured agent ID, a continuity fork), nothing is
+recorded and the command channel's first registration decides as before;
+reconciling that disagreement belongs to command-channel identity
+convergence. A token bound to no hostname is left to command-channel first
+use. The write runs against the live record under the token lock command
+admission holds, and a failed save restores the previous metadata.
+`TestEvaluateReportedIdentityRecordsOnlyWhatCommandRegistrationWouldBind` in
+`internal/api/agentbinding/policy_test.go`, and the `TestReportedIdentity*`
+tests and `TestReportHandlerOffersOnlyQualifyingLiveReportsToTheRecorder` in
+`internal/api/security_regression_test.go`, pin that boundary.
+Command-channel identity converges by naming, never by moving a binding.
+`commandIdentityForToken` in `internal/api/agent_ingest.go` returns the
+server-resolved host ID, which `/api/agents/agent/report` acknowledges as
+`commandAgentId` for a host the monitor resolved and holds under the reporting
+token, judged for the hostname the report presents. It names that ID only for
+a credential command admission would take on its legacy path (`agent:exec`, at
+most one organization, no runner, collector, or unsupported runtime role), and
+only when the shared `evaluateAgentExecBinding` decision admits it: the token
+already holds it, or a registration presenting it would take the first bind,
+backfill, legacy migration, hostname rebind, or one-time deploy repair it would
+get anyway. The name grants nothing that registration would not, and it
+discloses no ID the acknowledgement's `agentId` does not already carry. A token
+whose binding would refuse the resolved ID gets no name and keeps its binding.
+Identity resolution can map a report onto another host's continuity record by
+machine ID without a token check, so a stale-ID report and a forged one are
+indistinguishable, and an established binding therefore moves only through the
+moves registration could already make (legacy migration, hostname rebind, and
+the one-time deploy placeholder repair, each still decided at admission), never
+from report contents alone. Mock mode's
+unresolved acknowledgements name nothing. The agent config gate consumes the
+same predicate, so it never enables commands for an identity the channel would
+refuse. `TestReportAckNeverMovesAnEstablishedCommandBinding`,
+`TestReportAckNamesTheResolvedIdentityForAHostnameBoundDeployToken`,
+`TestReportAckLandsTheDeployPlaceholderRepairOnTheResolvedIdentity`,
+`TestReportAckNamesTheRecordedIdentityToALaterReconfiguredAgent`, and
+`TestReportAckNamesNoCommandIdentityInMockMode` in
+`internal/api/security_regression_test.go` pin that boundary.
 Pulse-minted install tokens now carry a server-authored command-policy intent
 in addition to first-use binding metadata. That intent grants no independent
 authority: first-report convergence requires the same shared binding decision
@@ -1927,7 +2321,7 @@ Assistant handoff context may hydrate those normalized action-audit facts for
 review, but that read is still model-only context: it must remain org-scoped,
 must not expose raw command text or raw execution output, and must not grant
 approval or execution authority.
-Scoped Assistant `handoff_actions` from Patrol assessment handoffs may carry
+Scoped Assistant `handoff_actions` from Patrol finding and attention handoffs may carry
 only safe approval/action metadata for model-only refresh, including approval
 IDs, action IDs, policy, expiry, dry-run posture, and proposed-fix labels; they
 must not expose raw command or execution payloads or become an approval bypass.
@@ -1997,17 +2391,8 @@ legacy `.json` knowledge files and plaintext `.enc` knowledge files may only
 serve as migration input, and the knowledge store must rewrite canonical
 encrypted-at-rest storage immediately on load instead of leaving guest
 knowledge plaintext on disk until a future note update.
-That same trust boundary also applies at store construction time: the AI
-knowledge store and the service discovery store may not fail open into
-plaintext-at-rest mode when crypto initialization fails. If encryption cannot
-be established for those stores, construction must fail closed instead of
-quietly persisting runtime state unencrypted.
-That same rule also applies to persisted service-discovery records after store
-construction: `internal/servicediscovery/store.go` may only accept plaintext
-`.enc` discovery files as migration input. Once a discovery record can be
-read, canonical persistence must rewrite encrypted-at-rest storage immediately
-on load/list/id-scan instead of leaving plaintext discovery metadata or user
-secrets on the steady-state runtime path.
+The AI knowledge store must fail closed at construction when encryption cannot
+be established. It must not persist runtime state in plaintext.
 That same trust boundary also covers audit-signing key persistence:
 `pkg/audit/signer.go` may keep the 32-byte HMAC signing key in runtime memory,
 but `.audit-signing.key` may only accept plaintext key material as migration
@@ -2491,26 +2876,20 @@ capability is not treated as the authorization boundary.
 and image normalization.
 ### Licensed-feature adoption telemetry stays count-only
 
-Schema v6 of the outbound usage payload adds nine licensed-feature adoption
-signals so Pro feature usage is measurable at all: `alert_ai_enabled`,
-`rbac_custom_roles`, `rbac_user_assignments`, `audit_logging_persistent`,
-`audit_events_30d`, `report_schedules`, `report_schedules_enabled`,
-`report_schedules_run_30d`, and `agent_profiles`. Every one is a count or a
-coarse boolean. Role names, permission sets, usernames, schedule names,
-delivery recipients, report scope and contents, profile names, and every audit
-event field (type, actor, target, outcome, detail) stay on the install.
-`audit_logging_persistent` reports only that a persistent store is active
-rather than console logging, and `audit_events_30d` is a retained-row count
-inside the same 30-day window used by the other counters, so it cannot be
-linked to one pseudonymous identifier indefinitely. Config-sourced signals are
-read in `applyLicensedFeatureConfigSnapshot`
-(`pkg/server/telemetry_licensed_features.go`); RBAC and audit are read behind
-the router in `Router.ApplyLicensedFeatureTelemetrySnapshot`
-(`internal/api/telemetry_licensed_features.go`). Both are disclosed in
-`docs/PRIVACY.md` and its `frontend-modern/public/docs/` copy, pinned by
-`TestAllTelemetryFieldsAreDisclosed`, and the counts are pinned by
+Licensed-feature adoption telemetry exports only the coarse counts and booleans
+declared in `internal/telemetry/licensed_feature_fields.go`. Role names,
+permission sets, usernames, schedule names, delivery recipients, report scope
+and contents, profile names, and every audit event field stay on the install.
+Config signals come from `pkg/server/telemetry_licensed_features.go`; RBAC counts
+come from `internal/api/telemetry_licensed_features.go`, and licensed audit-read
+activity follows the gated recorder below.
+
+`docs/PRIVACY.md` and its shipped copy disclose the current fields.
+`TestAllTelemetryFieldsAreDisclosed`,
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`
-and `TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC`.
+and `TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC`
+pin disclosure and count semantics. Audit-store presence and background write
+volume are not adoption signals.
 
 ### Telemetry RBAC reads never provision an RBAC store
 
@@ -2523,17 +2902,11 @@ side effect of a background read. A store reporting a migration failure is
 skipped rather than counted, so a degraded store cannot silently understate
 adoption. `TestTenantRBACProvider_PeekManagerDoesNotProvision` and
 `TestTenantRBACProvider_PeekManagerNilProviderIsSafe` in
-`internal/api/rbac_tenant_provider_test.go` pin both properties, and
-`TestApplyLicensedFeatureTelemetrySnapshot_DoesNotCreateRBACStores` pins it
-through the router boundary.
+`internal/api/rbac_tenant_provider_test.go` pin both properties.
+`ApplyLicensedFeatureTelemetrySnapshot` uses that cached-only read boundary.
 ### Audit adoption telemetry counts gated reads, never store presence
 
-Schema v7 replaced `audit_logging_persistent` and `audit_events_30d` with
-`audit_reads_30d`. The first two did not discriminate: `pkg/server` installs the
-SQLite audit logger on every install for defense in depth and gates only the
-read and export endpoints, so the boolean was true on every install that
-reported it and the event count measured background write volume, saturating
-the receiver clamp on unlicensed community installs. `audit_reads_30d` counts
+`audit_reads_30d` counts
 requests that cleared `RequireLicenseFeature(featureAuditLoggingValue, ...)` on
 an audit read or export surface, which requires a human action and so cannot
 settle into a constant. The recorder in
@@ -2545,9 +2918,40 @@ actor, and every audit row read stay on the install.
 `TestWithAuditReadActivity_RecordIsContentFree` and
 `TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
 
+### Extended history demand remains a content-free successful-read count
+
+Schema v19 adds only `successful_history_reads_over_7d_30d`. Authenticated
+metric-history and chart HTTP handlers observe successfully written GET
+responses only when the requested duration exceeds seven days and an actual
+returned metric point is strictly older than seven days. Empty/denied/failed,
+cancelled and mock responses are excluded. Cache hits count as reads, as do
+automatic refreshes. Background queries and range selection alone do not count.
+
+The router observer receives no request, tenant, actor, resource, range or
+metric value. Root persistence retains bounded UTC-day counts with private
+permissions and atomic replacement. Restart preserves them. The snapshot
+exports only their rolling 30-day sum including the cutoff UTC day, never the
+day buckets. Opt-out, rotating pseudonymous ID, account-join prohibition and
+receiver retention are unchanged. This is observed HTTP delivery, not proof
+that a person saw a chart or would pay for it.
+
+The receiver migrates the integer column, clamps negatives, and discards this
+field from pre-v19 payloads. The report contributes only each reporting ID's
+latest rolling count, splits coarse nonfree/free/unknown posture, excludes
+nonproduction and inactive latest states, and exposes v19 coverage separately
+from unknown old/missing measurements. Neither an initial zero nor an older
+schema establishes 30 days of nonuse. No billing identity join is introduced.
+
+Proof: `history_read_activity_test.go`, `chartapi/history_activity_test.go`,
+`telemetry_history_reads_test.go`, telemetry Preview/schema-disclosure tests,
+server snapshot tests, receiver migration/intake tests, report coverage tests,
+and `tests/integration/tests/19-telemetry-disclosure.spec.ts`. Canonical and
+shipped privacy documents must remain byte-identical. Pending release notes
+carry the schema notice for the first release that includes this field.
+
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v18. Schema v8 added content-free
+The active outbound contract is schema v19. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -2669,17 +3073,9 @@ because it looks like data in the fleet aggregate.
 names.
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack server versions cannot steer agents beyond one validated check
 
 The unified-agent report ack's `serverVersion` echo gives acks a version
@@ -2751,6 +3147,11 @@ the tenant resource store. Runtime reconciliation may visit every live monitor,
 but each alert manager resolves policy through its own tenant-scoped store, so a
 matching provider ID in another organization cannot import the mutation. The
 existing route scopes and authenticated actor attribution remain unchanged.
+Patrol's finding operator-state provider follows the same rule: it resolves a
+finding's reference through the read state of that organization's own monitor
+(`resolveMonitorForOrg`) and then reads that organization's store, so a
+source-native or link-folded reference never resolves through another tenant's
+registry.
 
 ### Secret-bearing configuration transfer fails closed before data access
 
@@ -2931,22 +3332,22 @@ Removing the disconnected recorder does not alter alert, action approval or
 operator authority. An unrelated organization receives no default archive
 fallback.
 
+### Report GETs cannot spend AI budget
+
+`Router.wireReportingAIResolvers` in `internal/api/router.go` wires a second
+reporting resolver, `SetExistingFindingsResolver`, backed by
+`AISettingsHandler.ExistingAIService`.
+A `GET /api/admin/reports/generate` uses only that resolver and the
+deterministic narrator, so it makes no AI provider call, writes no cost-ledger
+entry and never constructs a tenant AI service. GET passes the demo-mode guard
+and the CSRF check, and a SameSite=Lax session cookie rides a cross-site
+top-level navigation, so AI narration of a single-resource report now requires
+a CSRF-checked `POST`. No authentication, scope or session rule changed.
+
 ### Node setup action v7 compatibility
 
-Workflow consumers pin `actions/setup-node` to
-`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
-retains the Node 24 execution runtime, setup/cache-save entry points and existing
-inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
-application toolchain. Consumers do not supply `registry-url` or depend on the
-removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
-jobs and disabled automatic package-manager caching for privileged release jobs
-remain unchanged; no permission, dispatch input or signing backend changes.
-
-`test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
-trust suite verifies every consumer pin, absence of the affected auth assumptions,
-workflow trust controls and the retained native Windows command/lifecycle proof
-steps. Native Windows execution remains a hosted check, not a local Linux claim.
-This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+Workflow consumers and their trust controls follow the [deployment toolchain contract](deployment-installability.md#node-setup-action-v7-compatibility),
+including its source controls and qualification limits.
 
 ### Updates settings copy rename
 
@@ -2963,3 +3364,108 @@ delivers push notifications, and that it does not provide remote access to the
 web UI. The earlier "secure remote web access" wording described a capability
 that never existed. No data flow changed, and the published docs mirror stays
 identical.
+
+### Alert overview locale additions
+
+The shared locale catalogs gain alert overview summary, row-disclosure and
+paused-delivery banner strings in English, German and Spanish. This is alert
+presentation copy only: no API token name, scope preset, privacy disclosure,
+telemetry statement or security term changes, and no request, storage or
+authorization path moves.
+
+### Live temperature fallback uses the shared primary rule
+
+`router.go`'s live metrics fallback now picks node and agent CPU temperature
+through `models.PrimaryCPUTemperatureCelsius` and its sensor-map form instead
+of local copies. It serves the same rows to the same authorized callers; the
+route, authentication, scope checks, tenant resolution and response shape are
+unchanged.
+
+### Retained disk temperatures are not served as live history
+
+`/api/metrics-store/history` now omits a disk's `smart_temp` live point, and
+the mock-mode synthetic series derived from that reading, when the temperature
+was not collected by the current observation. This only withholds a value the
+caller was already authorized to read; the route, its authentication and scope
+checks, tenant resolution and response shape are unchanged.
+
+The same endpoint also withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, and answers a lapsed agent linked to a Proxmox node from
+that node's row in the same monitor. This only withholds or substitutes values
+the caller could already read; the new `NodeView` and `DockerHostView`
+`SourceStatus` accessors expose no field beyond the delivery state the registry
+already records on the resource.
+
+### Patrol operator-state resolution keeps its org scoping
+
+`patrolResourceOperatorStateProvider` (`internal/api/router.go`) resolves a
+finding's resource reference to a canonical ID before it reads the operator
+state, and now reads the monitor's structure read state
+(`Monitor.GetUnifiedStructureReadState`) for that. The org is resolved by
+`resolveMonitorForOrg` as before, the operator-state store is the org's own, and
+the resolver is identity-only. In mock mode the read state can be several metric
+ticks old; the fixture moves no pod between nodes and re-IDs nothing on a tick
+(pod node names are set when the estate is built, and they feed the platform
+aliases a reference can resolve through), so a reference resolves to the same
+canonical ID for as long as the fixture structure holds. Outside mock mode it
+is the read state the resolver used before. No authentication, authorization, token or
+tenant-isolation path is touched.
+
+
+### Reporting rejection guidance preserves credentials and command ceilings
+
+`internal/hostagent/agent.go` no longer treats 401 as proof of lost upgrade or
+restore credentials or prescribes reinstall/replacement. Primary and observer
+reporting direct operators to the existing credential's issuing instance,
+record and endpoint policy without logging token values or response bodies.
+A 403 does not call for disabling host monitoring or adding command authority.
+Request authentication, TLS/HTTP opt-ins, token scopes, identities, buffers and
+command ceilings are unchanged. The host and observer auth-guidance recovery
+controls in `send_report_test.go` and `observer_delivery_test.go` verify observed
+status/endpoint, non-disclosure and resumed ordinary reporting with the same
+credential. They are not a credential inventory probe or native recovery proof.
+
+### Concurrent chart service publication retains tenant boundaries (16 October 2026)
+
+`internal/api/router.go` initializes each router's chart service through the
+same guarded accessor used by concurrent history and chart requests. The
+service remains scoped to its router and resolves the monitor from the current
+request context. This synchronizes publication without changing authentication,
+authorization, tenant selection or disclosure. The concurrent initialization
+regression in `internal/api/contract_test.go` and the existing
+`TestMultiTenant_TenantIsolation` race test verify that boundary.
+
+### Instance administration refuses organization owners (17 October 2026)
+
+`ensureAdminSession`, the session check behind `RequireAdmin` and the settings
+scope helpers, admits only instance administrators: the configured admin or an
+instance RBAC admin grant, whichever organization the request names. It used
+to admit any manager of the request's organization, which on a multi-tenant
+install let an organization owner rotate the instance administrator's API
+token and receive its secret, widen token scopes, change SSO providers and
+system settings, apply updates and restart the service. API tokens follow the
+same boundary: `ensureAdminSession` and `ensureSettingsScope` refuse a token
+bound to any organization other than the default one (`tokenActsForInstance`)
+whatever its scopes. Before that, an org-bound `settings:write` token resolved
+to its own organization without naming it, passed the tenant middleware and
+reached system settings, SSO providers, token management, relay, log level,
+updates and diagnostics. `internal/api/org_bound_token_authority_test.go` holds
+the token matrix. Routes that act only on
+the request organization opt in through `RequireOrgAdmin`,
+`ensureOrgAdminSession` or `ensureOrgSettingsWriteScope`; every other route fails
+closed. `internal/api/org_admin_session_authority_test.go` holds the session
+matrix and `TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession` the
+settings scope split.
+
+### Backup report renderer hook preserves authority
+
+The server supplies `GenerateBackupHealthReportFunc` from BusinessHooks before
+router and scheduler construction, and clears it for runtimes without the hook.
+The callback receives already-scoped recovery evidence and effective branding.
+It adds no route, organization selection, credential, action or licensing
+authority. Existing report administrator/settings scopes and advanced-reporting
+checks remain before generation and delivery. Missing private rendering fails
+explicitly. `pkg/server/server_test.go` retains runtime identity separation.
+Backup reporting tests cover missing renderer and unchanged entitlement refusal.
+The live disposable Pro runtime proof exercises actual registered rendering.

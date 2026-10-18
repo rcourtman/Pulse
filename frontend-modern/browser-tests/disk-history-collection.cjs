@@ -134,17 +134,23 @@ const parent = false;
         );
       await page.goto('http://127.0.0.1:5251/browser-tests/disk-history-collection.html');
       if (phone) await page.evaluate(() => document.documentElement.classList.add('dark'));
-      await page.getByRole('tab', { name: 'History' }).click();
+      // Disk details have no tabs: SMART evidence, then History, in one view.
+      const historySection = page.getByTestId('disk-detail-history');
+      await historySection.waitFor();
+      // A phone folds every chart after the first behind one button; open it,
+      // as a reader inspecting the disk's history would.
+      if (phone) {
+        const fold = page.getByTestId('disk-detail-phone-toggle');
+        if (await fold.isVisible()) await fold.click();
+      }
       await page.waitForTimeout(300);
       await check('Stored ATA history is accessible before any current fields', async () => {
         assert.equal(await page.locator('canvas[role="img"]').count(), 2);
         assert.match(await description(), /42°C/);
       });
-      await check('History selection matches its visible content', async () => {
-        assert.equal(
-          await page.getByRole('tab', { name: 'History' }).getAttribute('aria-selected'),
-          'true',
-        );
+      await check('History shows without a tab to select', async () => {
+        assert.equal(await page.getByRole('tab').count(), 0);
+        assert.equal(await historySection.isVisible(), true);
       });
       await screenshot('missing-current');
       await page.getByRole('button', { name: 'Restore current fields' }).click();
@@ -203,9 +209,8 @@ const parent = false;
       );
       await screenshot('missing-again');
       if (!parent) {
-        await page.getByRole('tab', { name: 'Overview' }).click();
         await check(
-          'Overview reports unavailable collection rather than the old temperature',
+          'Details report unavailable collection rather than the old temperature',
           async () => {
             assert.equal(
               await page
@@ -213,10 +218,21 @@ const parent = false;
                 .isVisible(),
               true,
             );
-            assert.equal(await page.getByText('42°C', { exact: true }).count(), 0);
+            // Stored history may show the old 42°C; the current fields must not.
+            assert.equal(
+              await page.evaluate(
+                () =>
+                  [...document.querySelectorAll('main *')].filter(
+                    (el) =>
+                      el.children.length === 0 &&
+                      el.textContent.trim() === '42°C' &&
+                      !el.closest('[data-testid="disk-detail-history"]'),
+                  ).length,
+              ),
+              0,
+            );
           },
         );
-        await page.getByRole('tab', { name: 'History' }).click();
         await page.getByRole('combobox').selectOption('1h');
         await page.getByText('No history samples in this time range.').waitFor();
         await check(
@@ -258,7 +274,7 @@ const parent = false;
         await check(
           'Unresolvable identity withdraws History and does not guess a target',
           async () => {
-            assert.equal(await page.getByRole('tab', { name: 'History' }).count(), 0);
+            assert.equal(await historySection.count(), 0);
             assert.equal(await page.locator('canvas[role="img"]').count(), 0);
             assert.equal(requests.length, beforeClear);
           },

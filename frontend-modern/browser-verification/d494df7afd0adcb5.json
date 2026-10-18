@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "base_sha": "9aaac4d3e502c01913fb3637d0997b0ce03a8b7b",
+  "verified_at": "2026-10-06T19:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ClusterDeployBanner.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceSourceBadgeCell.tsx",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+    "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+    "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ClusterDeployBanner.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceSourceBadgeCell.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx": "deleted",
+    "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts": "deleted",
+    "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts": "deleted",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts": "deleted",
+    "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts": "deleted",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "3232e48158a03f69e98474731da49ceb5dd050e99fa167972849b7ccb61d8643"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/backups",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production vite build embedded in a private mock-mode backend (50 Proxmox nodes, Docker, Swarm, 3 Kubernetes clusters, TrueNAS, vSphere, agents)",
+    "every platform sub-tab mounts its page root and populated tables at desktop and phone width with zero document horizontal overflow",
+    "no element with data-testid infrastructure-table-surface renders on any route, before or after the change",
+    "no-match search empty state on Machines and Docker images",
+    "Machines and Docker images inline row detail open",
+    "before/after pair: the same row-detail interaction on the origin/main build shows the identical 8 pre-existing style-src-attr CSP violations from ResourceDetailDrawer overflow-anchor styles, so none come from this change"
+  ],
+  "interactions": [
+    "signed in with the hot-dev credentials",
+    "visited every platform sub-tab discovered from each platform nav at 1440x900 and 390x844",
+    "typed a row-name prefix into the shared platform toolbar search on Machines and Docker images and confirmed the row count narrowed",
+    "typed a non-matching query and confirmed the no-match empty state, then cleared it and confirmed every row returned",
+    "clicked the first row to open the inline resource detail"
+  ]
+}

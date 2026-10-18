@@ -1,6 +1,8 @@
 package alerts
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,11 +11,42 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// UpdateConfig updates the alert configuration.
+// UpdateConfig applies an owned copy of the alert configuration. The caller
+// retains its maps, slices and thresholds for encoding or further edits; only
+// another explicit update may change the running alert policy.
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.updateConfigLocked(config.Clone())
+}
 
+// ErrConfigSnapshot reports an update that was applied but could not be copied
+// for the caller.
+var ErrConfigSnapshot = errors.New("snapshot applied alert configuration")
+
+// ApplyConfigUpdate applies a client's JSON update to the stored
+// configuration: keys the update carries replace their settings and the rest
+// keep their stored values (see alertconfig.ApplyAlertConfigUpdate). Reading,
+// merging and applying under one lock keeps two partial updates from
+// reverting each other's settings. It returns a snapshot of the applied
+// config that the caller owns, so persisting it cannot write into the live
+// config's maps.
+func (m *Manager) ApplyConfigUpdate(update []byte) (AlertConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, err := alertconfig.ApplyAlertConfigUpdate(m.config, update)
+	if err != nil {
+		return AlertConfig{}, err
+	}
+	m.updateConfigLocked(config)
+	snapshot, err := alertconfig.CloneAlertConfig(m.config)
+	if err != nil {
+		return AlertConfig{}, fmt.Errorf("%w: %w", ErrConfigSnapshot, err)
+	}
+	return snapshot, nil
+}
+
+func (m *Manager) updateConfigLocked(config AlertConfig) {
 	// Clients and rollback-era config writers may not know about the additive
 	// identity schema marker. Never lower a version already held by this
 	// process; an older binary can still omit it on disk and the migration will
@@ -66,6 +99,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	m.config = config
 	normalizeOverrides(m.config.Overrides)
+	m.reconcileHostAgentNodeLinksNoLock()
 
 	// Update cached quiet hours location
 	if m.config.Schedule.QuietHours.Enabled && m.config.Schedule.QuietHours.Timezone != "" {
@@ -93,8 +127,15 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		Interface("guestDefaults", config.GuestDefaults).
 		Msg("Alert configuration updated")
 
+	// Pending-only temperature runs have no active alert to re-evaluate.
+	// Disabling and re-enabling between reports must not reuse their grace.
+	if m.reevaluateHostDiskTemperaturePendingNoLock() {
+		m.saveActiveAlertsAsync("disk temperature pending policy disabled")
+	}
+
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
+	m.pruneHostSMARTDiskAbsencesNoLock()
 }
 
 // migrateActivationState handles backward compatibility for activation state.
@@ -284,41 +325,39 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	}
 }
 
-// dockerAlertResourcePath returns the portion of the alert's resource ID after
-// the "docker:" scheme, matching the IDs built by DockerResourceID and
-// DockerServiceResourceID. Canonical alerts are stored under
+// dockerAlertResourcePath splits the alert's resource ID after the "docker:"
+// scheme into the host and the child path, matching the IDs built by
+// DockerHostResourceID ("<host>"), DockerContainerResourceID
+// ("<host>/<container ID>" or "<host>/name:<name>") and
+// DockerServiceResourceID ("<host>/service/<service ID>" or
+// "<host>/service/name:<name>"). child is empty for a host's own alert. A
+// name can contain anything, so callers classify by the first segment of
+// child, never by searching the whole path. Canonical alerts are stored under
 // "<resourceID>::<specID>" state IDs, so the legacy "docker-container-" /
 // "docker-service-" alert-ID prefixes never match them.
-func dockerAlertResourcePath(alert *Alert) (string, bool) {
+func dockerAlertResourcePath(alert *Alert) (host, child string, ok bool) {
 	if alert == nil {
-		return "", false
+		return "", "", false
 	}
-	resourceID := strings.TrimSpace(alert.ResourceID)
-	if !strings.HasPrefix(resourceID, "docker:") {
-		return "", false
+	path, found := strings.CutPrefix(strings.TrimSpace(alert.ResourceID), "docker:")
+	if !found {
+		return "", "", false
 	}
-	return strings.TrimPrefix(resourceID, "docker:"), true
+	host, child, _ = strings.Cut(path, "/")
+	return host, child, true
 }
 
 func isDockerContainerAlert(alert *Alert) bool {
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	// "hostID/containerID" has a path separator; host-level IDs ("hostID") do
-	// not, and services use "hostID/service/serviceID".
-	return strings.Contains(path, "/") && !strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && child != "" && !strings.HasPrefix(child, "service/")
 }
 
 func isDockerServiceAlert(alert *Alert) bool {
 	if alert != nil && strings.HasPrefix(strings.TrimSpace(alert.ResourceID), "docker-service:") {
 		return true
 	}
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	return strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && strings.HasPrefix(child, "service/")
 }
 
 func alertPrimaryResourceType(alert *Alert) string {
@@ -411,12 +450,35 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.resolveResourceThresholds(primaryResourceType, resourceID)
+			query := alertPolicyQuery{TypeKey: primaryResourceType, ResourceID: resourceID}
+			if primaryResourceType == "truenas-disk" {
+				// Judge the alert against its disk type's threshold, as the
+				// next evaluation will. An alert raised before it recorded a
+				// disk type is held to the lowest per-type trigger, so a save
+				// never resolves an alert its type would raise again.
+				diskType, known := alert.Metadata["diskType"].(string)
+				query.DiskType = diskType
+				query.DiskTypeUnknown = !known
+			}
+			thresholds := m.effectiveAlertPolicyNoLock(query).Thresholds
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+		}
+
+		// A Proxmox disk temperature alert is judged by the disk temperature
+		// policy for its disk type, as CheckProxmoxDiskTemperature judges it.
+		// The node and guest policies below have no disk temperature, so a
+		// save would otherwise resolve an alert the next poll raises again.
+		if primaryResourceType == proxmoxDiskResourceType && metricType == proxmoxDiskTemperatureMetric {
+			diskType, known := alert.Metadata["diskType"].(string)
+			threshold = m.proxmoxDiskTemperatureThresholdNoLock(diskType, !known)
+			if threshold == nil || threshold.Trigger <= 0 {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 		}
 
 		isAgentResource := alertResourceTypeKeysContain(resourceTypeKeys, "agent")
@@ -430,7 +492,24 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
+			if isHostSMARTRiskAlertType(metricType) {
+				smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
+				if hostSMARTRiskRulesOff(alert, smartThresholds, crcMinimumDelta) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+			// Agent policy is the only policy for agent alerts. Falling
+			// through would let the storage or guest switches resolve a
+			// SMART, RAID or sensor alert that CheckHost re-raises on the
+			// next report.
+			if threshold == nil {
+				if isMetricThresholdAlertType(metricType) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 		}
 
 		if alert.Type == "docker-host-offline" ||
@@ -487,9 +566,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		isNodeResource := primaryResourceType == "" || primaryResourceType == "node"
+		// Node alerts carry resourceType "node" in metadata and keep the PVE
+		// instance name in Instance, so the metadata decides. The Instance
+		// heuristic only classifies legacy alerts without a resource type;
+		// applied to current node alerts it fell through to guest thresholds,
+		// which have no temperature threshold, and a config save resolved
+		// temperature alerts that were still over their trigger.
+		isNodeResource := primaryResourceType == "node" ||
+			(primaryResourceType == "" && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node))
 		isStorageResource := alertResourceTypeKeysContain(resourceTypeKeys, "storage")
-		if threshold == nil && !handledModernPlatformType && isNodeResource && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		if threshold == nil && !handledModernPlatformType && isNodeResource {
 			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("node"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -530,7 +616,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 
-			guestThresholds := m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+			guestThresholds := m.resolveGuestAlertThresholdsNoLock(alert, resourceID)
 			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -572,12 +658,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			continue
 		}
 
+		// buildCanonicalMetricSpec keeps a clear level only below the trigger,
+		// and without one the evaluator keeps firing at the trigger itself.
+		// A clear level at or above the trigger must not resolve a reading
+		// the next evaluation raises again.
 		clearThreshold := threshold.Clear
-		if clearThreshold <= 0 {
-			clearThreshold = threshold.Trigger
-		}
+		hasRecoveryBand := clearThreshold > 0 && clearThreshold < threshold.Trigger
 
-		if alert.Value <= clearThreshold {
+		if hasRecoveryBand && alert.Value <= clearThreshold {
 			alertsToResolve = append(alertsToResolve, alertID)
 			log.Info().
 				Str("alertID", alertID).
@@ -617,11 +705,15 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 	}
 }
 
-// GetConfig returns the current alert configuration.
+// GetConfig returns a copy of the alert configuration that the caller owns.
+// Callers encode, persist and edit it outside m.mu, and UpdateConfig
+// normalizes the maps it is handed in place, so a copy that shared the live
+// config's maps let a save or a re-apply write them while evaluation read
+// them, which Go aborts as a concurrent map write.
 func (m *Manager) GetConfig() AlertConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.config
+	return m.config.Clone()
 }
 
 func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {

@@ -117,10 +117,10 @@ const parent = false;
           screenshot,
         });
       };
-      await detail.getByRole('tab', { name: 'History', exact: true }).click();
+      // History charts sit on Overview; there is no History tab to open.
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('7d');
       await detail.getByText('12.0%', { exact: true }).waitFor();
-      const history = await detail.getByTestId('resource-metrics-history-tab').elementHandle();
+      const history = await detail.getByTestId('resource-metrics-history').elementHandle();
       await page.getByRole('button', { name: 'Update PBS A', exact: true }).click();
       await detail
         .getByRole('heading', { name: parent ? 'PBS A' : 'PBS A current', exact: true })
@@ -133,14 +133,14 @@ const parent = false;
       assert.ok(await history.evaluate((element) => element.isConnected));
       await capture('pbs-replacement', detail);
       await page.getByRole('button', { name: 'Withdraw target', exact: true }).click();
-      if (parent) assert.equal(await detail.getByTestId('resource-metrics-history-tab').count(), 1);
-      else await detail.getByText('Metrics history is unavailable.', { exact: true }).waitFor();
+      if (parent) assert.equal(await detail.getByTestId('resource-metrics-history').count(), 1);
+      else await detail.getByTestId('resource-metrics-history').waitFor({ state: 'detached' });
       await capture('pbs-withdrawn', detail);
       await page.getByRole('button', { name: 'Restore target', exact: true }).click();
-      await detail.getByTestId('resource-metrics-history-tab').waitFor();
+      await detail.getByTestId('resource-metrics-history').waitFor();
       assert.equal(
         await detail
-          .getByRole('tab', { name: 'History', exact: true })
+          .getByRole('tab', { name: 'Overview', exact: true })
           .getAttribute('aria-selected'),
         'true',
       );
@@ -150,11 +150,10 @@ const parent = false;
         .waitFor();
       assert.equal(
         await detail
-          .getByRole('tab', { name: parent ? 'History' : 'Overview', exact: true })
+          .getByRole('tab', { name: 'Overview', exact: true })
           .getAttribute('aria-selected'),
         'true',
       );
-      if (!parent) await detail.getByRole('tab', { name: 'History', exact: true }).click();
       await detail.getByText(parent ? '12.0%' : '25.0%', { exact: true }).waitFor();
       await capture('pbs-selected-b', detail);
       const targets = [...new Set(requests.map((r) => r.resourceId))];

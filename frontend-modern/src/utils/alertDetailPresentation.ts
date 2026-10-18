@@ -1,4 +1,5 @@
 import type { ResourceType } from '@/types/resource';
+import { formatRelativeTime } from '@/utils/format';
 
 export type PlatformAlertProvider = 'docker' | 'kubernetes' | 'truenas' | 'vmware';
 
@@ -95,18 +96,17 @@ export function formatPlatformAlertEntityType(value: string): string {
   return normalized ? titleCaseToken(normalized) : '-';
 }
 
-export function formatPlatformAlertStartedAt(value: string | undefined): string {
+// An open alert's Started cell answers how long it has been going on, so it
+// reads as an age ("2h ago"), as alert cards do. The exact time is the cell's
+// hover text and the drawer's Started row (formatPlatformAlertDetailDateTime).
+// Tables pass the shared relative-time clock as `now` so the age keeps moving.
+export function formatPlatformAlertStartedAt(value: string | undefined, now?: number): string {
   if (!value) return '-';
 
   const parsed = new Date(value);
   if (isUnsetDate(parsed)) return '-';
 
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatRelativeTime(parsed, { compact: true, emptyText: '-', now }) || '-';
 }
 
 export function formatPlatformAlertDetailDateTime(value?: string): string {

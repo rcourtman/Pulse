@@ -214,7 +214,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             <button
               type="button"
               onClick={() => setShowAllSources(true)}
-              class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900/25 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
+              class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
             >
               Show {hiddenCount()} more source{hiddenCount() === 1 ? '' : 's'}
             </button>

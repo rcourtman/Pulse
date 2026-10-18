@@ -694,7 +694,7 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 		for range 5 {
 			monitor.pollPBSInstance(context.Background(), instance.Name, client)
 			adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
-			monitor.syncUnifiedResourceAlertsToState(adapter.GetAll())
+			monitor.syncUnifiedResourceAlertsToState(adapter.GetAll(), monitor.mockModeFence.begin())
 		}
 	}
 	// Exercise the production poll-to-storage conversion, not just the

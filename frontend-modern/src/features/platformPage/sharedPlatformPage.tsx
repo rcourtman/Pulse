@@ -35,10 +35,11 @@ import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   matchesSearchTermSplit,
   splitSearchExclusions,
@@ -89,11 +90,27 @@ export type PlatformTabSpec<TabId extends string> = {
   path: string;
 };
 
-export function PlatformSectionTabs<TabId extends string>(props: {
+type PlatformSectionTabsProps<TabId extends string> = {
   tabs: readonly PlatformTabSpec<TabId>[];
   active: TabId;
   ariaLabel: string;
-}) {
+};
+
+// Kiosk mode is the read-only wall display: the URL picks the section the way
+// it picks the platform, so the section rail is navigation chrome there like
+// the primary navigation AppLayout already hides. The shared rail owns the
+// rule so a page that adds or moves a rail cannot drop it, and the rail
+// mounts fresh when kiosk ends so its scroll listeners bind to the new element.
+export function PlatformSectionTabs<TabId extends string>(props: PlatformSectionTabsProps<TabId>) {
+  const kioskMode = useKioskMode();
+  return (
+    <Show when={!kioskMode()}>
+      <PlatformSectionTabRail {...props} />
+    </Show>
+  );
+}
+
+function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabsProps<TabId>) {
   let tabListRef: HTMLElement | undefined;
   const [hasOverflow, setHasOverflow] = createSignal(false);
   const [canScrollLeft, setCanScrollLeft] = createSignal(false);
@@ -352,15 +369,24 @@ export function createPlatformTablePreview<Row>(options: {
   rows: Accessor<readonly Row[]>;
   limit: Accessor<number>;
 }) {
+  const kioskMode = useKioskMode();
   const [expanded, setExpanded] = createSignal(false);
   const limit = createMemo(() => Math.max(1, Math.trunc(options.limit())));
-  const canExpand = createMemo(() => options.rows().length > limit());
+  const hasHiddenRows = createMemo(() => options.rows().length > limit());
+  // A kiosk wall display has nobody to press Show all, so a capped preview
+  // there would hide every row past the cap for as long as the display runs.
+  // Kiosk shows every row and offers no toggle. The expansion state is left
+  // alone, so leaving kiosk returns the preview to the state it had before,
+  // unless the rows fell under the cap meanwhile, which resets it as usual.
+  const canExpand = createMemo(() => !kioskMode() && hasHiddenRows());
   const visibleRows = createMemo<readonly Row[]>(() =>
-    expanded() && canExpand() ? options.rows() : options.rows().slice(0, limit()),
+    kioskMode() || (expanded() && hasHiddenRows())
+      ? options.rows()
+      : options.rows().slice(0, limit()),
   );
 
   createEffect(() => {
-    if (!canExpand()) setExpanded(false);
+    if (!hasHiddenRows()) setExpanded(false);
   });
 
   return {
@@ -462,11 +488,18 @@ export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind):
 // can expand without weakening the overview-table contract.
 export const getPlatformTableRowClass = (): string => PLATFORM_TABLE_SUMMARY_ROW_CLASS;
 
-export function PlatformResponsiveTableLabel(props: { compact: string; full: string }) {
+// compactInBand keeps the compact label through the tablet band (a 34rem
+// container below a 768px viewport) for a full label longer than its column.
+export function PlatformResponsiveTableLabel(props: {
+  compact: string;
+  full: string;
+  compactInBand?: boolean;
+}) {
+  const band = () => (props.compactInBand ? ' platform-table-label-band-compact' : '');
   return (
     <>
-      <span class="platform-table-label-compact">{props.compact}</span>
-      <span class="platform-table-label-full">{props.full}</span>
+      <span class={`platform-table-label-compact${band()}`}>{props.compact}</span>
+      <span class={`platform-table-label-full${band()}`}>{props.full}</span>
     </>
   );
 }
@@ -590,12 +623,23 @@ export function createPlatformTableSortState<SortKey extends string>(options: {
   return { sortKey, sortDirection, handleSort, getAriaSort, sortRows };
 }
 
+// The tablet band between the phone projection and the md column widths (a
+// 34rem container below a 768px viewport) applies no md:w-[...] width, so a
+// table whose columns need unequal room there declares each header's percent
+// width through this style, which the shared shell reads only in that band.
+export const platformTableBandWidthStyle = (
+  percent: number | undefined,
+): JSX.CSSProperties | undefined =>
+  percent === undefined ? undefined : { '--platform-table-band-width': `${percent}%` };
+
 export function PlatformSortableTableHead<SortKey extends string>(props: {
   kind: PlatformTableColumnKind;
   sort: PlatformTableSortState<SortKey>;
   // Omit to render a non-sortable header with the same canonical alignment.
   sortKey?: SortKey;
   class?: string;
+  // Percent width for the tablet band (see platformTableBandWidthStyle).
+  bandWidth?: number;
   children: JSX.Element;
 }) {
   const isSorted = () => props.sortKey !== undefined && props.sort.sortKey() === props.sortKey;
@@ -611,6 +655,7 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
         .replace(/\s+/g, ' ')
         .trim()}
       aria-sort={props.sortKey !== undefined ? props.sort.getAriaSort(props.sortKey) : undefined}
+      style={platformTableBandWidthStyle(props.bandWidth)}
       onClick={handleClick}
     >
       {props.children}
@@ -757,6 +802,7 @@ export type PlatformTableRelativeTimeValueInput = number | string | Date | null 
 export type PlatformTableRelativeTimeValueOptions = {
   compact?: boolean;
   emptyText?: string;
+  now?: number;
 };
 
 export const formatPlatformTableRelativeTimeValue = (
@@ -769,6 +815,7 @@ export const formatPlatformTableRelativeTimeValue = (
     formatRelativeTime(value, {
       compact: options.compact ?? true,
       emptyText,
+      now: options.now,
     }) || emptyText
   );
 };
@@ -778,8 +825,11 @@ export function PlatformTableRelativeTimeValue(props: {
   compact?: boolean;
   emptyText?: string;
 }) {
+  // Rows stay mounted across refreshes, so the age reads the shared clock to
+  // keep moving while the timestamp itself does not change.
+  const now = useRelativeTimeNow();
   const options = (): PlatformTableRelativeTimeValueOptions => {
-    const resolved: PlatformTableRelativeTimeValueOptions = {};
+    const resolved: PlatformTableRelativeTimeValueOptions = { now: now() };
     if (props.compact !== undefined) resolved.compact = props.compact;
     if (props.emptyText !== undefined) resolved.emptyText = props.emptyText;
     return resolved;
@@ -1077,14 +1127,6 @@ export function PlatformErrorState(props: {
 export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
 const statusDot = filterChipStatusDot;
-
-export const PLATFORM_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
-  [
-    { value: 'all', label: 'All' },
-    { value: 'online', label: 'Online', tone: 'success', leading: statusDot('bg-emerald-500') },
-    { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
-    { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
-  ];
 
 export const PLATFORM_HEALTH_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
   [
@@ -1430,70 +1472,3 @@ export function PlatformTableToolbar<T extends string | number>(props: {
     />
   );
 }
-
-export const PlatformResourceTable: Component<{
-  resources: Resource[];
-  emptyIcon: JSX.Element;
-  emptyTitle: string;
-  emptyDescription: string;
-  groupingMode?: 'grouped' | 'flat';
-  searchPlaceholder?: string;
-}> = (props) => {
-  const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
-  const tableState = createPlatformTableFilterState({
-    resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
-  });
-
-  return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
-    >
-      <div class="space-y-3">
-        <PlatformTableToolbar
-          search={tableState.search}
-          onSearchChange={tableState.setSearch}
-          searchPlaceholder={props.searchPlaceholder ?? 'Search rows'}
-          searchSuggestions={tableState.searchSuggestions}
-          status={tableState.status()}
-          onStatusChange={tableState.setStatus}
-          statusOptions={withPlatformStatusCounts(
-            PLATFORM_STATUS_FILTER_OPTIONS,
-            tableState.countForStatus,
-          )}
-          visible={tableState.visible()}
-          total={tableState.total()}
-          rowNoun="rows"
-          hasActiveFilters={tableState.hasActiveFilters()}
-          onResetFilters={tableState.resetFilters}
-        />
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No rows match current filters"
-              description="Adjust the search or status filter to see more rows."
-              actions={<PlatformTableResetFiltersButton onReset={tableState.resetFilters} />}
-            />
-          }
-        >
-          <UnifiedResourceTable
-            resources={tableState.filtered()}
-            expandedResourceId={expandedResourceId()}
-            onExpandedResourceChange={setExpandedResourceId}
-            groupingMode={props.groupingMode ?? 'grouped'}
-          />
-        </Show>
-      </div>
-    </Show>
-  );
-};

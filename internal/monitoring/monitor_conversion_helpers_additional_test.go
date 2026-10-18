@@ -11,7 +11,7 @@ func ptrF64Coverage(v float64) *float64 { return &v }
 
 func TestMonitorFrontendNamesAdditional(t *testing.T) {
 	t.Run("frontend names use canonical display name", func(t *testing.T) {
-		name, display := monitorFrontendNames(unifiedresources.Resource{
+		name, display := monitorFrontendNames(&unifiedresources.Resource{
 			ID:   "node-1",
 			Name: "Node Friendly",
 			Proxmox: &unifiedresources.ProxmoxData{
@@ -28,7 +28,7 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 	})
 
 	t.Run("frontend names ignore source hostnames when a display name exists", func(t *testing.T) {
-		hostName, hostDisplay := monitorFrontendNames(unifiedresources.Resource{
+		hostName, hostDisplay := monitorFrontendNames(&unifiedresources.Resource{
 			ID:   "host-1",
 			Name: "Friendly Host",
 			Agent: &unifiedresources.AgentData{
@@ -39,7 +39,7 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 			t.Fatalf("agent branch mismatch: name=%q display=%q", hostName, hostDisplay)
 		}
 
-		dockerName, dockerDisplay := monitorFrontendNames(unifiedresources.Resource{
+		dockerName, dockerDisplay := monitorFrontendNames(&unifiedresources.Resource{
 			ID:   "docker-1",
 			Name: "Friendly Docker",
 			Docker: &unifiedresources.DockerData{
@@ -52,7 +52,7 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 	})
 
 	t.Run("falls back to id when display name is empty", func(t *testing.T) {
-		name, display := monitorFrontendNames(unifiedresources.Resource{
+		name, display := monitorFrontendNames(&unifiedresources.Resource{
 			ID:   "fallback-id",
 			Name: "   ",
 		}, "unknown")
@@ -74,31 +74,31 @@ func TestMonitorTemperatureAndUptimeAdditional(t *testing.T) {
 			Kubernetes: &unifiedresources.K8sData{Temperature: ptrF64Coverage(35)},
 		}
 
-		got := monitorTemperature(resource)
+		got := monitorTemperature(&resource)
 		if got == nil || *got != 50 {
 			t.Fatalf("temperature = %v, want 50 from agent", got)
 		}
 
 		resource.Agent = nil
-		got = monitorTemperature(resource)
+		got = monitorTemperature(&resource)
 		if got == nil || *got != 45 {
 			t.Fatalf("temperature = %v, want 45 from proxmox", got)
 		}
 
 		resource.Proxmox = nil
-		got = monitorTemperature(resource)
+		got = monitorTemperature(&resource)
 		if got == nil || *got != 40 {
 			t.Fatalf("temperature = %v, want 40 from docker", got)
 		}
 
 		resource.Docker = nil
-		got = monitorTemperature(resource)
+		got = monitorTemperature(&resource)
 		if got == nil || *got != 35 {
 			t.Fatalf("temperature = %v, want 35 from kubernetes", got)
 		}
 
 		resource.Kubernetes = nil
-		if got := monitorTemperature(resource); got != nil {
+		if got := monitorTemperature(&resource); got != nil {
 			t.Fatalf("temperature = %v, want nil when no source has temp", got)
 		}
 	})
@@ -113,19 +113,19 @@ func TestMonitorTemperatureAndUptimeAdditional(t *testing.T) {
 			PMG:        &unifiedresources.PMGData{UptimeSeconds: 12},
 		}
 
-		got := monitorUptime(resource)
+		got := monitorUptime(&resource)
 		if got == nil || *got != 11 {
 			t.Fatalf("uptime = %v, want 11 from PBS", got)
 		}
 
 		resource.PBS.UptimeSeconds = 0
-		got = monitorUptime(resource)
+		got = monitorUptime(&resource)
 		if got == nil || *got != 12 {
 			t.Fatalf("uptime = %v, want 12 from PMG", got)
 		}
 
 		resource.PMG.UptimeSeconds = 0
-		if got := monitorUptime(resource); got != nil {
+		if got := monitorUptime(&resource); got != nil {
 			t.Fatalf("uptime = %v, want nil when all sources are zero", got)
 		}
 	})
@@ -133,7 +133,7 @@ func TestMonitorTemperatureAndUptimeAdditional(t *testing.T) {
 
 func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 	t.Run("labels are copied and nil is preserved", func(t *testing.T) {
-		if got := monitorLabels(unifiedresources.Resource{}); got != nil {
+		if got := monitorLabels(&unifiedresources.Resource{}); got != nil {
 			t.Fatalf("monitorLabels() = %#v, want nil", got)
 		}
 
@@ -142,7 +142,7 @@ func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 				Labels: map[string]string{"env": "prod"},
 			},
 		}
-		labels := monitorLabels(resource)
+		labels := monitorLabels(&resource)
 		labels["env"] = "dev"
 		if resource.Kubernetes.Labels["env"] != "prod" {
 			t.Fatalf("expected labels to be copied, source mutated to %q", resource.Kubernetes.Labels["env"])
@@ -157,7 +157,7 @@ func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 				IPAddresses: []string{" 10.0.0.1 ", "", "10.0.0.2"},
 			},
 		}
-		identity := monitorIdentity(resource, "fallback-name")
+		identity := monitorIdentity(&resource, "fallback-name")
 		if identity == nil {
 			t.Fatal("expected non-nil identity")
 		}
@@ -171,7 +171,7 @@ func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 			t.Fatalf("ips = %#v, want trimmed non-empty entries", identity.IPs)
 		}
 
-		none := monitorIdentity(unifiedresources.Resource{}, "")
+		none := monitorIdentity(&unifiedresources.Resource{}, "")
 		if none != nil {
 			t.Fatalf("expected nil identity for empty input, got %#v", none)
 		}
@@ -204,7 +204,7 @@ func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 	})
 
 	t.Run("identity prefers direct source hostnames", func(t *testing.T) {
-		identity := monitorIdentity(unifiedresources.Resource{
+		identity := monitorIdentity(&unifiedresources.Resource{
 			Agent:    &unifiedresources.AgentData{Hostname: "agent-host"},
 			Docker:   &unifiedresources.DockerData{Hostname: "docker-host"},
 			Proxmox:  &unifiedresources.ProxmoxData{NodeName: "proxmox-node"},

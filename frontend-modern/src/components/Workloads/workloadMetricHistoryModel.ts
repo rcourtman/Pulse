@@ -1,4 +1,4 @@
-import type { ChartData, MetricPoint, TimeRange } from '@/api/charts';
+import type { ChartData, InfrastructureChartsResponse, MetricPoint, TimeRange } from '@/api/charts';
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
@@ -80,7 +80,35 @@ export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRan
 // when an operator changes range on a large estate.
 export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 36;
 export const MIN_PERCENT_SCALE_CEILING = 5;
+// Rate sparklines scale to their own peak, so without a floor a guest moving
+// between 2 KB/s and 6 KB/s draws the same full-height spike as one hitting
+// 500 MB/s. Background chatter stays near the axis below this ceiling.
+export const MIN_RATE_SCALE_CEILING = 100 * 1024;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
+
+export type WorkloadRateMetric = Extract<WorkloadTableMetric, 'netIo' | 'diskIo'>;
+
+export interface WorkloadRateMetricGlyph {
+  glyph: string;
+  color: string;
+  mono: boolean;
+}
+
+// The glyphs the rate cells already use at rest, coloured like the series they
+// label, so a compact value pair beside a chart also serves as its legend.
+export const WORKLOAD_RATE_METRIC_GLYPHS: Record<
+  WorkloadRateMetric,
+  readonly [WorkloadRateMetricGlyph, WorkloadRateMetricGlyph]
+> = {
+  netIo: [
+    { glyph: '↓', color: NET_IN_COLOR, mono: false },
+    { glyph: '↑', color: NET_OUT_COLOR, mono: false },
+  ],
+  diskIo: [
+    { glyph: 'R', color: DISK_READ_COLOR, mono: true },
+    { glyph: 'W', color: DISK_WRITE_COLOR, mono: true },
+  ],
+};
 
 export const WORKLOAD_TABLE_HISTORY_INFRA_METRICS = [
   'cpu',
@@ -171,6 +199,49 @@ export const getNodeChartKeyCandidates = (node: Node): string[] => {
 };
 
 type ChartDataMap = Record<string, ChartData | undefined> | Map<string, ChartData> | undefined;
+
+const pickLongerSeries = (
+  incoming: MetricPoint[] | undefined,
+  existing: MetricPoint[] | undefined,
+): MetricPoint[] | undefined => {
+  const incomingLength = incoming?.length ?? 0;
+  const existingLength = existing?.length ?? 0;
+  if (incomingLength === 0 && existingLength === 0) return undefined;
+  return incomingLength >= existingLength ? incoming : existing;
+};
+
+const mergeInfrastructureChartData = (
+  existing: ChartData | undefined,
+  incoming: ChartData,
+): ChartData => {
+  if (!existing) return incoming;
+  return {
+    cpu: pickLongerSeries(incoming.cpu, existing.cpu),
+    memory: pickLongerSeries(incoming.memory, existing.memory),
+    disk: pickLongerSeries(incoming.disk, existing.disk),
+    diskread: pickLongerSeries(incoming.diskread, existing.diskread),
+    diskwrite: pickLongerSeries(incoming.diskwrite, existing.diskwrite),
+    netin: pickLongerSeries(incoming.netin, existing.netin),
+    netout: pickLongerSeries(incoming.netout, existing.netout),
+  };
+};
+
+// The infrastructure summary reports node, host-agent and Docker-host series
+// in separate maps. Node rows look them up by one key set, so fold the maps
+// together; where a key appears in more than one, each metric keeps the
+// longer series.
+export const buildInfrastructureHistoryChartMap = (
+  response: Pick<InfrastructureChartsResponse, 'nodeData' | 'agentData' | 'dockerHostData'>,
+): Map<string, ChartData> => {
+  const map = new Map<string, ChartData>();
+  for (const source of [response.nodeData, response.agentData, response.dockerHostData]) {
+    if (!source) continue;
+    for (const [id, data] of Object.entries(source)) {
+      map.set(id, mergeInfrastructureChartData(map.get(id), data));
+    }
+  }
+  return map;
+};
 
 const readChartData = (source: ChartDataMap, key: string): ChartData | undefined => {
   if (!source || !key) return undefined;
@@ -321,6 +392,13 @@ export const getMetricMiniSparklineScale = (
     return {
       minValue: 0,
       maxValue: Math.min(100, Math.max(MIN_PERCENT_SCALE_CEILING, maxValue * 1.15)),
+    };
+  }
+
+  if (unit === 'B/s') {
+    return {
+      minValue: 0,
+      maxValue: Math.max(MIN_RATE_SCALE_CEILING, maxValue * 1.15),
     };
   }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/filesystemprobe"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
@@ -39,12 +40,15 @@ const (
 	proxmoxLXCCollectionTimeout     = 20 * time.Second
 	proxmoxLXCMaxContainers         = 128
 	proxmoxLXCMaxDisks              = 257
-	proxmoxLXCMaxListOutputBytes    = 64 * 1024
-	proxmoxLXCMaxDFOutputBytes      = 64 * 1024
-	proxmoxLXCMaxConfigBytes        = 64 * 1024
-	proxmoxLXCMaxPIDOutputBytes     = 4 * 1024
-	proxmoxLXCMaxNameBytes          = 256
-	proxmoxLXCMaxLabelBytes         = 512
+	// proxmoxLXCMaxObservedMounts is the shared filesystem prober's per-request
+	// mountpoint limit.
+	proxmoxLXCMaxObservedMounts  = 128
+	proxmoxLXCMaxListOutputBytes = 64 * 1024
+	proxmoxLXCMaxDFOutputBytes   = 64 * 1024
+	proxmoxLXCMaxConfigBytes     = 64 * 1024
+	proxmoxLXCMaxPIDOutputBytes  = 4 * 1024
+	proxmoxLXCMaxNameBytes       = 256
+	proxmoxLXCMaxLabelBytes      = 512
 )
 
 // proxmoxLXCConfigDir is a pmxcfs symlink to the local node's container
@@ -54,33 +58,19 @@ const proxmoxLXCConfigDir = "/etc/pve/lxc"
 type proxmoxLXCRunningContainer struct {
 	VMID int
 	Name string
+	// PID is the container's init process when discovery found it without
+	// lxc-info; 0 means unknown.
+	PID int
 }
 
 // ProxmoxLXCFilesystemCollectionResult describes applicability separately from
-// collection health without changing the helper protocol-v1 response shape.
-// A degraded result may retain a partial inventory for local diagnostics, but
-// the privileged helper fails the typed operation so the collector cannot
-// mistake a partial snapshot for a complete one.
+// collection health. Helper operation v1 fails incomplete collections; v2
+// carries successful rows with explicit completeness and omitted identities.
 type ProxmoxLXCFilesystemCollectionResult struct {
 	Applicable       bool
 	Inventory        *agentshost.ProxmoxLXCInventory
 	Degraded         bool
 	FailedContainers int
-}
-
-// hostFilesystemUsage carries statfs-derived usage for one path plus the
-// st_dev identity needed to tell a real mount from its parent filesystem.
-type hostFilesystemUsage struct {
-	TotalBytes int64
-	UsedBytes  int64
-	AvailBytes int64
-	Device     uint64
-}
-
-// filesystemUsageProber is an optional collector capability. It exists on
-// Linux builds of the default collector; mocks opt in for tests.
-type filesystemUsageProber interface {
-	FilesystemUsage(path string) (hostFilesystemUsage, error)
 }
 
 type proxmoxLXCConfigMount struct {
@@ -142,30 +132,38 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 	}
 	result.Applicable = true
 
+	observer, _ := a.collector.(proxmoxLXCObserver)
 	listCtx, cancelList := context.WithTimeout(ctx, proxmoxLXCQueryTimeout)
-	listOutput, err := collectCommandOutputLimited(
-		listCtx,
-		a.collector,
-		proxmoxLXCMaxListOutputBytes,
-		pctPath,
-		"list",
-	)
+	containers, discovered := []proxmoxLXCRunningContainer(nil), false
+	if observer != nil {
+		containers, discovered = a.discoverRunningProxmoxLXCContainers(listCtx)
+	}
+	if !discovered {
+		listOutput, listErr := collectCommandOutputLimited(
+			listCtx,
+			a.collector,
+			proxmoxLXCMaxListOutputBytes,
+			pctPath,
+			"list",
+		)
+		if listErr != nil {
+			cancelList()
+			a.logger.Debug().Err(listErr).Msg("Failed to list local Proxmox LXC containers")
+			result.Degraded = true
+			return result
+		}
+		containers, err = parseProxmoxLXCRunningContainers(listOutput)
+		if err != nil {
+			cancelList()
+			a.logger.Debug().Err(err).Msg("Failed to parse local Proxmox LXC container list")
+			result.Degraded = true
+			return result
+		}
+	}
 	cancelList()
-	if err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to list local Proxmox LXC containers")
-		result.Degraded = true
-		return result
-	}
-	containers, err := parseProxmoxLXCRunningContainers(listOutput)
-	if err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to parse local Proxmox LXC container list")
-		result.Degraded = true
-		return result
-	}
 
-	prober, _ := a.collector.(filesystemUsageProber)
 	lxcInfoPath := ""
-	if prober != nil {
+	if observer != nil && !discovered {
 		if resolved, lookErr := a.collector.LookPath("lxc-info"); lookErr == nil {
 			lxcInfoPath = resolved
 		}
@@ -177,17 +175,20 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 	result.Inventory = &agentshost.ProxmoxLXCInventory{
 		Containers:  []agentshost.ProxmoxLXCContainer{},
 		CollectedAt: a.collector.Now().UTC(),
+		Status:      agentshost.ProxmoxLXCCollectionComplete,
 	}
 	for _, container := range containers {
 		if collectionCtx.Err() != nil {
 			result.FailedContainers++
+			result.Inventory.OmittedVMIDs = append(result.Inventory.OmittedVMIDs, container.VMID)
 			continue
 		}
 		containerCtx, cancelContainer := context.WithTimeout(collectionCtx, proxmoxLXCContainerQueryTimeout)
-		disks, collectionErr := a.collectProxmoxLXCContainerDisks(containerCtx, prober, lxcInfoPath, pctPath, container.VMID)
+		disks, collectionErr := a.collectProxmoxLXCContainerDisks(containerCtx, observer, lxcInfoPath, pctPath, container)
 		cancelContainer()
 		if collectionErr != nil {
 			result.FailedContainers++
+			result.Inventory.OmittedVMIDs = append(result.Inventory.OmittedVMIDs, container.VMID)
 			continue
 		}
 		result.Inventory.Containers = append(result.Inventory.Containers, agentshost.ProxmoxLXCContainer{
@@ -198,6 +199,7 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 	}
 	if result.FailedContainers > 0 {
 		result.Degraded = true
+		result.Inventory.Status = agentshost.ProxmoxLXCCollectionPartial
 		a.logger.Warn().
 			Int("collected", len(result.Inventory.Containers)).
 			Int("failed", result.FailedContainers).
@@ -209,13 +211,14 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 
 func (a *Agent) collectProxmoxLXCContainerDisks(
 	ctx context.Context,
-	prober filesystemUsageProber,
+	observer proxmoxLXCObserver,
 	lxcInfoPath string,
 	pctPath string,
-	vmid int,
+	container proxmoxLXCRunningContainer,
 ) ([]agentshost.Disk, error) {
-	if prober != nil && lxcInfoPath != "" {
-		disks, fastErr := a.collectProxmoxLXCContainerDisksFast(ctx, prober, lxcInfoPath, vmid)
+	vmid := container.VMID
+	if observer != nil && (container.PID > 0 || lxcInfoPath != "") {
+		disks, fastErr := a.collectProxmoxLXCContainerDisksFast(ctx, observer, lxcInfoPath, container)
 		if fastErr == nil {
 			return disks, nil
 		}
@@ -259,10 +262,11 @@ func (a *Agent) collectProxmoxLXCContainerDisks(
 // numbers — so it is dropped rather than invented.
 func (a *Agent) collectProxmoxLXCContainerDisksFast(
 	ctx context.Context,
-	prober filesystemUsageProber,
+	observer proxmoxLXCObserver,
 	lxcInfoPath string,
-	vmid int,
+	container proxmoxLXCRunningContainer,
 ) ([]agentshost.Disk, error) {
+	vmid := container.VMID
 	raw, err := a.collector.ReadFile(proxmoxLXCConfigPath(vmid))
 	if err != nil {
 		return nil, fmt.Errorf("read container config: %w", err)
@@ -275,59 +279,76 @@ func (a *Agent) collectProxmoxLXCContainerDisksFast(
 		return nil, errors.New("no filesystem mounts in container config")
 	}
 
-	pidOutput, err := collectCommandOutputLimited(
-		ctx,
-		a.collector,
-		proxmoxLXCMaxPIDOutputBytes,
-		lxcInfoPath,
-		"-n",
-		strconv.Itoa(vmid),
-		"-p",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("resolve container pid: %w", err)
-	}
-	pid, err := parseLXCInfoPID(pidOutput)
-	if err != nil {
-		return nil, err
+	pid := container.PID
+	if pid <= 0 {
+		pidOutput, pidErr := collectCommandOutputLimited(
+			ctx,
+			a.collector,
+			proxmoxLXCMaxPIDOutputBytes,
+			lxcInfoPath,
+			"-n",
+			strconv.Itoa(vmid),
+			"-p",
+		)
+		if pidErr != nil {
+			return nil, fmt.Errorf("resolve container pid: %w", pidErr)
+		}
+		pid, err = parseLXCInfoPID(pidOutput)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	procRoot := fmt.Sprintf("/proc/%d/root", pid)
-	result := make([]agentshost.Disk, 0, len(mounts))
+	// The shared prober pins /proc/<pid>, requires it to be this guest's init
+	// in lxc/<vmid>, resolves every mount inside the guest's root (an absolute
+	// symlink cannot reach the host), and bounds a read stuck on a hung guest
+	// filesystem without starting another for the same guest.
+	byPath := make(map[string]proxmoxLXCConfigMount, len(mounts))
+	mountpoints := make([]string, 0, len(mounts))
 	for _, mount := range mounts {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if _, seen := byPath[mount.Path]; seen || len(mountpoints) == proxmoxLXCMaxObservedMounts {
+			continue
 		}
-		target := path.Join(procRoot, mount.Path)
-		usage, usageErr := prober.FilesystemUsage(target)
-		if usageErr != nil {
-			return nil, fmt.Errorf("probe %s filesystem usage: %w", mount.Key, usageErr)
+		byPath[mount.Path] = mount
+		mountpoints = append(mountpoints, mount.Path)
+	}
+	observations, err := observer.ObserveProxmoxLXC(ctx, filesystemprobe.ContainerRequest{
+		PID:         pid,
+		ContainerID: strconv.Itoa(vmid),
+		Runtime:     "lxc",
+		Mountpoints: mountpoints,
+		MountsOnly:  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("observe container filesystems: %w", err)
+	}
+
+	result := make([]agentshost.Disk, 0, len(observations))
+	for _, observation := range observations {
+		mount, known := byPath[observation.Mountpoint]
+		if !known {
+			return nil, fmt.Errorf("observation for unrequested mount %q", observation.Mountpoint)
 		}
-		if usage.TotalBytes <= 0 {
+		if filesystemprobe.IsNotMounted(observation) {
+			// Declared in the config but not mounted in the running guest; its
+			// path would report the parent filesystem's numbers.
+			continue
+		}
+		if observation.Error != "" || observation.Usage == nil {
+			return nil, fmt.Errorf("probe %s filesystem usage: %s", mount.Key, observation.Error)
+		}
+		usage := observation.Usage
+		if usage.CapacityBytes == 0 || usage.CapacityBytes > math.MaxInt64 {
 			return nil, fmt.Errorf("probe %s filesystem usage: invalid total bytes", mount.Key)
 		}
-		if mount.Path != "/" {
-			parent, parentErr := prober.FilesystemUsage(path.Dir(target))
-			if parentErr != nil {
-				return nil, fmt.Errorf("probe %s parent filesystem usage: %w", mount.Key, parentErr)
-			}
-			if parent.Device == usage.Device {
-				continue
-			}
-		}
-		used := usage.UsedBytes
+		total := int64(usage.CapacityBytes)
+		used := total - int64(usage.FreeBytes)
 		if used < 0 {
 			used = 0
 		}
-		if used > usage.TotalBytes {
-			used = usage.TotalBytes
-		}
-		avail := usage.AvailBytes
-		if avail < 0 {
-			avail = 0
-		}
-		if avail > usage.TotalBytes {
-			avail = usage.TotalBytes
+		avail := int64(usage.AvailableBytes)
+		if avail > total {
+			avail = total
 		}
 		usagePct := 0.0
 		if denominator := used + avail; denominator > 0 {
@@ -340,14 +361,11 @@ func (a *Agent) collectProxmoxLXCContainerDisksFast(
 			Device:     mount.Volume,
 			Mountpoint: mount.Path,
 			Type:       mount.Key,
-			TotalBytes: usage.TotalBytes,
+			TotalBytes: total,
 			UsedBytes:  used,
 			FreeBytes:  avail,
 			Usage:      usagePct,
 		})
-		if len(result) == proxmoxLXCMaxDisks {
-			break
-		}
 	}
 	if len(result) == 0 {
 		return nil, errors.New("no mounted container filesystems resolved")
@@ -448,22 +466,37 @@ func parseProxmoxLXCRunningContainers(output string) ([]proxmoxLXCRunningContain
 
 	result := make([]proxmoxLXCRunningContainer, 0)
 	seen := make(map[int]struct{})
+	sawHeader := false
 	for _, rawLine := range strings.Split(output, "\n") {
 		line := strings.TrimSuffix(rawLine, "\r")
-		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "VMID") {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 2 || !strings.EqualFold(fields[1], "running") {
+		if fields[0] == "VMID" {
+			if sawHeader || len(fields) != 4 || fields[1] != "Status" || fields[2] != "Lock" || fields[3] != "Name" {
+				return nil, errors.New("pct list has an invalid header")
+			}
+			sawHeader = true
 			continue
+		}
+		if !sawHeader || len(fields) < 3 {
+			return nil, errors.New("pct list has an invalid row")
 		}
 		vmid, err := strconv.Atoi(fields[0])
 		if err != nil || vmid < 100 || vmid > 999999999 {
-			continue
+			return nil, errors.New("pct list has an invalid container identity")
 		}
 		if _, exists := seen[vmid]; exists {
+			return nil, errors.New("pct list has a duplicate container identity")
+		}
+		seen[vmid] = struct{}{}
+		if strings.EqualFold(fields[1], "stopped") {
 			continue
+		}
+		if !strings.EqualFold(fields[1], "running") {
+			return nil, errors.New("pct list has an unknown container state")
 		}
 
 		name := ""
@@ -473,15 +506,20 @@ func parseProxmoxLXCRunningContainers(output string) ([]proxmoxLXCRunningContain
 			name = fields[len(fields)-1]
 		}
 		if !safeProxmoxLXCText(name, proxmoxLXCMaxNameBytes) {
-			continue
+			return nil, errors.New("pct list has an invalid container name")
 		}
 
-		seen[vmid] = struct{}{}
-		result = append(result, proxmoxLXCRunningContainer{VMID: vmid, Name: name})
 		if len(result) == proxmoxLXCMaxContainers {
-			break
+			return nil, errors.New("pct list exceeds the running container limit")
 		}
+		result = append(result, proxmoxLXCRunningContainer{VMID: vmid, Name: name})
 	}
+	// pct list prints nothing at all, not even the header, when the node has
+	// no containers (pve-container src/PVE/CLI/pct.pm returns before the
+	// header printf on an empty vmlist). Reaching here without a header means
+	// every line was blank: any non-blank line before the header is already
+	// rejected above, so this is a complete, empty inventory rather than
+	// truncated output.
 	sort.Slice(result, func(i, j int) bool { return result[i].VMID < result[j].VMID })
 	return result, nil
 }

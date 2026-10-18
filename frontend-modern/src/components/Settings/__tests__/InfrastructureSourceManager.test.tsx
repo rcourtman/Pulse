@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import {
@@ -6,12 +6,27 @@ import {
   agentConnectionIDsForInfrastructureRow,
 } from '../InfrastructureSourceManager';
 import {
+  fleetGovernanceSignalsForConnection,
   primaryRowProblem,
+  visibleFleetGovernanceSignals,
   type FleetGovernanceSignal,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
+
+const clusterDeployApi = vi.hoisted(() => ({
+  getCandidates: vi.fn(),
+  createPreflight: vi.fn(),
+  getPreflight: vi.fn(),
+  createJob: vi.fn(),
+  getJob: vi.fn(),
+}));
+
+vi.mock('@/api/agentDeploy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/agentDeploy')>();
+  return { ...actual, ClusterAgentDeployAPI: clusterDeployApi };
+});
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'agent:host-1',
@@ -385,6 +400,50 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(onOpenAgentDoctor).toHaveBeenCalledWith(['agent:behind-host']);
   });
 
+  it('flags an outdated agent once, as an update rather than as attention', () => {
+    const outdated = connectionFixture({
+      id: 'agent:outdated-host',
+      name: 'outdated-host',
+      agentUpdateAvailable: true,
+      fleet: {
+        enrollmentState: 'enrolled',
+        livenessState: 'active',
+        versionDrift: 'behind',
+        adapterHealth: 'healthy',
+        configRollout: 'reported',
+        credentialStatus: 'verified',
+        updateStatus: 'update-available',
+        remoteControl: 'disabled',
+      },
+    });
+    const fleetSignals = fleetGovernanceSignalsForConnection(outdated);
+    const outdatedRow = row({
+      connection: outdated,
+      agentUpdateCount: 1,
+      fleetSignals,
+      fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
+      problem: primaryRowProblem(visibleFleetGovernanceSignals(fleetSignals, Infinity)),
+    });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [outdatedRow]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onOpenAgentDoctor={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole('button', { name: 'Open Agent Doctor for outdated-host' }),
+    ).toHaveTextContent('Agent update');
+    expect(screen.queryByText('Version behind')).toBeNull();
+    expect(screen.queryByText(/needs? attention/i)).toBeNull();
+    expect(screen.getByText('1 agent update available')).toBeInTheDocument();
+  });
+
   it('still counts actionable member posture when the cluster parent is healthy', () => {
     render(() => (
       <InfrastructureSourceManager
@@ -569,6 +628,182 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(onAddSourceStep).toHaveBeenCalledWith('linux-host');
   });
 
+  it('installs uncovered cluster members in one step when a sibling already runs the agent', async () => {
+    clusterDeployApi.getCandidates.mockResolvedValue({
+      clusterId: 'remote',
+      clusterName: 'remote',
+      sourceAgents: [{ agentId: 'agent-pve-a', nodeId: 'n-a', online: true }],
+      nodes: [
+        { nodeId: 'n-a', name: 'pve-a', ip: '10.15.5.11', hasAgent: true, deployable: false },
+        { nodeId: 'n-b', name: 'pve-b', ip: '10.15.5.12', hasAgent: false, deployable: true },
+      ],
+    });
+    const onAddSourceStep = vi.fn();
+    const attachedAgent = connectionFixture({ id: 'agent:pve-a', name: 'pve-a', address: 'pve-a' });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'remote',
+            clusterName: 'remote',
+            subtitle: 'Cluster · 2 nodes',
+            source: 'both',
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'remote',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            attachedConnections: [attachedAgent],
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'both',
+                agentConnection: attachedAgent,
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={onAddSourceStep}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for remote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install agent on pve-b' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Install Pulse Agent on remote nodes',
+    });
+    expect(await within(dialog).findByRole('checkbox', { name: /pve-b/ })).toBeChecked();
+    expect(clusterDeployApi.getCandidates).toHaveBeenCalledWith('remote');
+    expect(onAddSourceStep).not.toHaveBeenCalled();
+  });
+
+  it('keeps a started cluster install going after the dialog is closed', async () => {
+    clusterDeployApi.getCandidates.mockResolvedValue({
+      clusterId: 'remote',
+      clusterName: 'remote',
+      sourceAgents: [{ agentId: 'agent-pve-a', nodeId: 'n-a', online: true }],
+      nodes: [
+        { nodeId: 'n-a', name: 'pve-a', ip: '10.15.5.11', hasAgent: true, deployable: false },
+        { nodeId: 'n-b', name: 'pve-b', ip: '10.15.5.12', hasAgent: false, deployable: true },
+      ],
+    });
+    clusterDeployApi.createPreflight.mockResolvedValue({ preflightId: 'pf_r', status: 'running' });
+    clusterDeployApi.getPreflight.mockResolvedValue({
+      id: 'pf_r',
+      clusterId: 'remote',
+      status: 'succeeded',
+      targets: [
+        { id: 't1', nodeId: 'n-b', nodeName: 'pve-b', nodeIP: '10.15.5.12', status: 'ready' },
+      ],
+    });
+    clusterDeployApi.createJob.mockResolvedValue({
+      jobId: 'dep_r',
+      acceptedTargets: ['n-b'],
+      skippedTargets: [],
+    });
+    clusterDeployApi.getJob.mockResolvedValue({
+      id: 'dep_r',
+      clusterId: 'remote',
+      status: 'failed',
+      targets: [
+        {
+          id: 't2',
+          nodeId: 'n-b',
+          nodeName: 'pve-b',
+          nodeIP: '10.15.5.12',
+          status: 'failed_permanent',
+        },
+      ],
+    });
+    const attachedAgent = connectionFixture({ id: 'agent:pve-a', name: 'pve-a', address: 'pve-a' });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'remote',
+            clusterName: 'remote',
+            subtitle: 'Cluster · 2 nodes',
+            source: 'both',
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'remote',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            attachedConnections: [attachedAgent],
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'both',
+                agentConnection: attachedAgent,
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for remote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install agent on pve-b' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Install Pulse Agent on remote nodes',
+    });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Install on 1 node' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Close' }));
+
+    // The parent has unmounted the dialog; the run must still start the install
+    // with the cluster it captured, rather than reading a stale accessor.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(
+      () =>
+        expect(clusterDeployApi.createJob).toHaveBeenCalledWith('remote', 'agent-pve-a', 'pf_r', [
+          'n-b',
+        ]),
+      { timeout: 6000 },
+    );
+  });
+
   it('offers the same uncovered-node onboarding in the narrow card layout', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
     const onAddSourceStep = vi.fn();
@@ -674,5 +909,47 @@ describe('InfrastructureSourceManager setup summary', () => {
     // Proxmox cluster members.
     expect(screen.getByTitle('esxi-01.lab.local · vSphere host')).toBeInTheDocument();
     expect(screen.getByTitle('esxi-02.lab.local · vSphere host')).toBeInTheDocument();
+  });
+
+  it('links each connected API system to the page that shows its data', () => {
+    // A PBS read as Active here while its servers sat under Proxmox > Backups,
+    // and its user could not find it (#2905).
+    const apiRow = (type: Connection['type'], id: string, name: string) =>
+      row({
+        id,
+        ownerType: type,
+        name,
+        source: 'api',
+        connection: connectionFixture({
+          id,
+          type,
+          name,
+          address: `https://${name}`,
+          source: 'manual',
+        }),
+      });
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          apiRow('pbs', 'pbs:vault', 'backup-vault'),
+          apiRow('pmg', 'pmg:mail', 'mail-gateway'),
+          apiRow('vmware', 'vmware:vc-1', 'Lab vCenter'),
+          row(),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    const hrefs = (name: string) =>
+      screen.getAllByRole('link', { name }).map((link) => link.getAttribute('href'));
+    expect(new Set(hrefs('backup-vault'))).toEqual(new Set(['/proxmox/backups']));
+    expect(new Set(hrefs('mail-gateway'))).toEqual(new Set(['/proxmox/mail']));
+    expect(new Set(hrefs('Lab vCenter'))).toEqual(new Set(['/vmware/overview']));
+    // An agent host shows on a different page depending on what it runs.
+    expect(screen.queryByRole('link', { name: 'host-1' })).toBeNull();
+    expect(screen.getAllByText('host-1').length).toBeGreaterThan(0);
   });
 });

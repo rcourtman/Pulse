@@ -73,9 +73,10 @@ func TestStabilizeGuestLowTrustMemoryUsesHealthyGuestAgentEvidence(t *testing.T)
 		RetrievedAt:  now.Add(-2 * time.Minute),
 		MemorySource: "previous-snapshot",
 		Memory: models.Memory{
-			Total: 8 * int64(gib),
-			Used:  3 * int64(gib),
-			Usage: safePercentage(float64(3*gib), float64(8*gib)),
+			Total:       8 * int64(gib),
+			Used:        3 * int64(gib),
+			Usage:       safePercentage(float64(3*gib), float64(8*gib)),
+			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: now.Add(-2 * time.Minute)},
 		},
 	}
 
@@ -107,10 +108,11 @@ func TestHandleClusterVMResourcePreservesHealthyGuestMemoryFromPreviousSnapshot(
 		RetrievedAt:  previousSample,
 		MemorySource: "previous-snapshot",
 		Memory: models.Memory{
-			Total: 8 * int64(gib),
-			Used:  3 * int64(gib),
-			Free:  5 * int64(gib),
-			Usage: safePercentage(float64(3*gib), float64(8*gib)),
+			Total:       8 * int64(gib),
+			Used:        3 * int64(gib),
+			Free:        5 * int64(gib),
+			Usage:       safePercentage(float64(3*gib), float64(8*gib)),
+			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: previousSample},
 		},
 	})
 
@@ -179,10 +181,11 @@ func TestPollVMsWithNodesPreservesHealthyGuestMemoryFromPreviousSnapshot(t *test
 		RetrievedAt:  previousSample,
 		MemorySource: "previous-snapshot",
 		Memory: models.Memory{
-			Total: 8 * int64(gib),
-			Used:  3 * int64(gib),
-			Free:  5 * int64(gib),
-			Usage: safePercentage(float64(3*gib), float64(8*gib)),
+			Total:       8 * int64(gib),
+			Used:        3 * int64(gib),
+			Free:        5 * int64(gib),
+			Usage:       safePercentage(float64(3*gib), float64(8*gib)),
+			Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: previousSample},
 		},
 	})
 

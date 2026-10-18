@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { extractChangelog, extractHighlights, isReleaseVersion } from '../whatsNewModel';
+import {
+  extractChangelog,
+  extractHighlights,
+  extractWhatsNew,
+  extractReleaseVisuals,
+  isReleaseVersion,
+} from '../whatsNewModel';
 import whatsNewCardSource from '../WhatsNewCard.tsx?raw';
 
 describe('extractHighlights', () => {
@@ -225,6 +232,150 @@ describe('extractChangelog', () => {
     expect(
       extractChangelog('## Highlights\n- Faster updates.\n\n## Installation\n- Pull the image.'),
     ).toBeNull();
+  });
+});
+
+describe('post-update release content', () => {
+  it('keeps every authorable release change group visible in the dialog', () => {
+    const groups: string[] = JSON.parse(
+      execFileSync(
+        'python3',
+        [
+          '-c',
+          "import json, runpy; print(json.dumps(sorted(runpy.run_path('../scripts/release_control/render_release_body.py')['_CUSTOMER_CHANGE_GROUPS'])))",
+        ],
+        { encoding: 'utf8' },
+      ),
+    );
+    for (const group of groups) {
+      expect(extractChangelog(`## ${group}\n- A visible improvement.`), group).toContain(
+        'A visible improvement.',
+      );
+    }
+  });
+  const base = 'https://github.com/rcourtman/Pulse/releases/download/v6.6.0/';
+  const visual = (
+    before = `${base}release-note-backups-before.png`,
+    after = `${base}release-note-backups-now.png`,
+  ) =>
+    [
+      '## See the difference',
+      '### Clearer backup coverage',
+      'Find gaps across nodes.',
+      '| Before | Now |',
+      '| --- | --- |',
+      `| ![Before](${before}) | ![Now](${after}) |`,
+      '## Install',
+      'Not part of the visual.',
+    ].join('\n');
+
+  it('consumes current grouped release notes and a short Highlights list', () => {
+    const content = extractWhatsNew(
+      [
+        '## Highlights',
+        '- Spot backup gaps.',
+        '- Keep important alerts visible.',
+        '## Proxmox, PBS and backups',
+        '- Open Backups to find guests without protection.',
+        '## Alerts and notifications',
+        '- Acknowledgements persist after reconnecting.',
+        '## Before you upgrade',
+        'Update older agents.',
+        '## Release Qualification',
+        'Internal evidence.',
+      ].join('\n'),
+      '6.6.0',
+    );
+    expect(content?.highlights).toEqual(['Spot backup gaps.', 'Keep important alerts visible.']);
+    expect(content?.changes).toContain('Proxmox, PBS and backups');
+    expect(content?.changes).toContain('Acknowledgements persist');
+    expect(content?.changes).not.toContain('Internal evidence');
+    expect(content?.upgradeNotes).toBe('Update older agents.');
+    expect(content?.important).toBeNull();
+  });
+
+  it('separates authored warnings from collapsible upgrade instructions', () => {
+    const content = extractWhatsNew(
+      [
+        '## Known issues',
+        '- Do not restart monitoring on an affected guest.',
+        '## Before you upgrade',
+        '- Verify the published checksums.',
+        '## Breaking changes',
+        '- Older configuration needs migration.',
+      ].join('\n'),
+      '6.6.0',
+    );
+    expect(content?.important).toContain('Do not restart monitoring');
+    expect(content?.important).toContain('Older configuration needs migration.');
+    expect(content?.important).not.toContain('published checksums');
+    expect(content?.upgradeNotes).toBe('- Verify the published checksums.');
+    expect(content?.changes).toBeNull();
+  });
+
+  it('preserves upgrade-only releases and historical upgrade headings', () => {
+    for (const heading of ['Before you upgrade', 'Upgrade Notes']) {
+      const content = extractWhatsNew(`## ${heading}\nUse the documented rollback.`, '6.6.0');
+      expect(content?.upgradeNotes).toBe('Use the documented rollback.');
+      expect(content?.important).toBeNull();
+      expect(content?.changes).toBeNull();
+    }
+  });
+
+  it('reads the release tooling before/now Markdown without losing table images', () => {
+    expect(extractReleaseVisuals(visual(), 'v6.6.0')).toEqual([
+      {
+        title: 'Clearer backup coverage',
+        description: 'Find gaps across nodes.',
+        before: `${base}release-note-backups-before.png`,
+        after: `${base}release-note-backups-now.png`,
+      },
+    ]);
+  });
+
+  it('accepts current-only screenshots and releases without screenshots', () => {
+    expect(
+      extractReleaseVisuals(
+        `## See the difference\n### New view\n![New view](${base}release-note-new-now.png)`,
+        '6.6.0',
+      )[0],
+    ).toMatchObject({ after: `${base}release-note-new-now.png`, before: undefined });
+    expect(extractWhatsNew('## Highlights\n- Faster updates.', '6.6.0')?.visuals).toEqual([]);
+    expect(extractWhatsNew('## Installation\nInstall Pulse.', '6.6.0')).toBeNull();
+  });
+
+  it('keeps visual titles and fenced examples out of the detailed change groups', () => {
+    const body = [
+      '## Added',
+      '- New backup view.',
+      '```markdown',
+      '## Fixed',
+      '- Example only.',
+      '```',
+      '## See the difference',
+      '### Security',
+      'Screenshot caption.',
+    ].join('\n');
+    const changes = extractChangelog(body);
+    expect(changes).not.toContain('### Security');
+    expect(changes?.match(/### Fixed/g)).toBeNull();
+    expect(changes).toContain('## Fixed'); // Fenced example is preserved as text.
+  });
+
+  it('rejects arbitrary hosts, PR URLs, other versions, query strings and mismatched comparison IDs', () => {
+    for (const unsafe of [
+      'https://example.com/release-note-backups-now.png',
+      'https://github.com/user-attachments/assets/f3e1870e-7f12-4ab6-8961-cab68e1f1725',
+      `${base.replace('v6.6.0', 'v6.5.0')}release-note-backups-now.png`,
+      `${base}release-note-backups-now.png?token=secret`,
+      'javascript:alert(1)',
+    ])
+      expect(extractReleaseVisuals(visual(undefined, unsafe), '6.6.0')).toEqual([]);
+    const content = extractReleaseVisuals(
+      visual(`${base}release-note-unrelated-before.png`),
+      '6.6.0',
+    );
+    expect(content[0].before).toBeUndefined();
   });
 });
 

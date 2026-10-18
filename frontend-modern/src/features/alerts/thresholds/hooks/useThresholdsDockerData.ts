@@ -14,6 +14,7 @@ import {
   getFriendlyAlertNodeName,
   getFriendlyNodeName,
   hasThresholdDiff,
+  matchesThresholdResourceSearch,
   platformData,
 } from '../thresholdsResourceModel';
 
@@ -81,7 +82,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
         });
       });
 
-    return search ? hosts.filter((host) => host.name.toLowerCase().includes(search)) : hosts;
+    return search ? hosts.filter((host) => matchesThresholdResourceSearch(host, search)) : hosts;
   }, []);
 
   const dockerContainersByHostId = createMemo(() => {

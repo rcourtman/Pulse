@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "fdcffc64114bd9d7ff7a92324391a09702c3c26a",
+  "verified_at": "2026-10-05T06:03:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/securityScorePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/securityScorePresentation.ts": "8a49852f591edd3e75bf4a2b1288a6ba71bf54259feffddbc0b3659d06ce6e0c"
+  },
+  "routes": [
+    "/settings/security-overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private-network instance at 1440: the HTTPS tile is neutral with no Critical tag, matching the Plan HTTPS before live use card below it marked Recommended. Before, the tile was red and tagged Critical above that same Recommended card",
+    "Posture score reads 79 percent Moderate (password and export protection on, plain HTTP on a private network), where before plain HTTP pulled it to 55 percent",
+    "Phone at 390: the same neutral HTTPS tile and 79 percent Moderate header"
+  ],
+  "interactions": [
+    "Compared the posture grid with the hardening steps on the same page"
+  ]
+}

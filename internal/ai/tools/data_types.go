@@ -3,6 +3,7 @@ package tools
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 )
@@ -121,7 +122,6 @@ type AgentInfo struct {
 type CapabilitiesResponse struct {
 	ControlLevel    string       `json:"control_level"`
 	Features        FeatureFlags `json:"features"`
-	ProtectedGuests []string     `json:"protected_guests"`
 	ConnectedAgents int          `json:"connected_agents"`
 	Agents          []AgentInfo  `json:"agents"` // List of connected agents with hostnames
 	Version         string       `json:"version"`
@@ -132,9 +132,6 @@ func EmptyCapabilitiesResponse() CapabilitiesResponse {
 }
 
 func (r CapabilitiesResponse) NormalizeCollections() CapabilitiesResponse {
-	if r.ProtectedGuests == nil {
-		r.ProtectedGuests = []string{}
-	}
 	if r.Agents == nil {
 		r.Agents = []AgentInfo{}
 	}
@@ -278,23 +275,25 @@ type NodeSummary struct {
 // VMSummary is a summarized VM for list responses
 type VMSummary struct {
 	GovernedResourceMetadata
-	VMID   int     `json:"vmid"`
-	Name   string  `json:"name"`
-	Status string  `json:"status"`
-	Node   string  `json:"node"`
-	CPU    float64 `json:"cpu_percent,omitempty"`
-	Memory float64 `json:"memory_percent,omitempty"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	Node           string                                `json:"node"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 // ContainerSummary is a summarized LXC container for list responses
 type ContainerSummary struct {
 	GovernedResourceMetadata
-	VMID   int     `json:"vmid"`
-	Name   string  `json:"name"`
-	Status string  `json:"status"`
-	Node   string  `json:"node"`
-	CPU    float64 `json:"cpu_percent,omitempty"`
-	Memory float64 `json:"memory_percent,omitempty"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	Node           string                                `json:"node"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 // DockerHostSummary is a summarized Docker host for list responses
@@ -485,13 +484,14 @@ func (t ProxmoxNodeTopology) NormalizeCollections() ProxmoxNodeTopology {
 // TopologyVM represents a VM in the topology
 type TopologyVM struct {
 	GovernedResourceMetadata
-	VMID   int      `json:"vmid"`
-	Name   string   `json:"name"`
-	Status string   `json:"status"`
-	CPU    float64  `json:"cpu_percent,omitempty"`
-	Memory float64  `json:"memory_percent,omitempty"`
-	OS     string   `json:"os,omitempty"`
-	Tags   []string `json:"tags"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
+	OS             string                                `json:"os,omitempty"`
+	Tags           []string                              `json:"tags"`
 }
 
 func (t TopologyVM) NormalizeCollections() TopologyVM {
@@ -504,14 +504,15 @@ func (t TopologyVM) NormalizeCollections() TopologyVM {
 // TopologyContainer represents a system container in the topology
 type TopologyContainer struct {
 	GovernedResourceMetadata
-	VMID      int      `json:"vmid"`
-	Name      string   `json:"name"`
-	Status    string   `json:"status"`
-	CPU       float64  `json:"cpu_percent,omitempty"`
-	Memory    float64  `json:"memory_percent,omitempty"`
-	OS        string   `json:"os,omitempty"`
-	Tags      []string `json:"tags"`
-	HasDocker bool     `json:"has_docker,omitempty"` // True if Docker is installed inside this container
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
+	OS             string                                `json:"os,omitempty"`
+	Tags           []string                              `json:"tags"`
+	HasDocker      bool                                  `json:"has_docker,omitempty"` // True if Docker is installed inside this container
 }
 
 func (t TopologyContainer) NormalizeCollections() TopologyContainer {
@@ -689,7 +690,7 @@ type ResourceResponse struct {
 }
 
 func EmptyResourceResponse() ResourceResponse {
-	return ResourceResponse{}.NormalizeCollections()
+	return ResourceResponse{Memory: resourceMemoryValues(0, 0, 0)}.NormalizeCollections()
 }
 
 func (r ResourceResponse) NormalizeCollections() ResourceResponse {
@@ -850,9 +851,15 @@ type ResourceCPU struct {
 
 // ResourceMemory describes memory usage
 type ResourceMemory struct {
-	Percent float64 `json:"percent"`
-	UsedGB  float64 `json:"used_gb"`
-	TotalGB float64 `json:"total_gb"`
+	Percent  *float64                              `json:"percent"`
+	UsedGB   *float64                              `json:"used_gb"`
+	TotalGB  float64                               `json:"total_gb"`
+	Evidence *unifiedresources.GuestMemoryEvidence `json:"evidence,omitempty"`
+}
+
+// resourceMemoryValues preserves the numeric contract for non-guest responses.
+func resourceMemoryValues(percent, usedGB, totalGB float64) ResourceMemory {
+	return ResourceMemory{Percent: &percent, UsedGB: &usedGB, TotalGB: totalGB}
 }
 
 // ResourceDisk describes disk usage
@@ -960,13 +967,14 @@ type FindingCounts struct {
 
 // MetricsResponse is returned by pulse_get_metrics
 type MetricsResponse struct {
-	ResourceID    string                            `json:"resource_id,omitempty"`
-	Period        string                            `json:"period"`
-	Points        []MetricPoint                     `json:"points"`
-	Summary       map[string]ResourceMetricsSummary `json:"summary"`
-	Pagination    *PaginationInfo                   `json:"pagination,omitempty"`
-	Downsampled   bool                              `json:"downsampled,omitempty"`
-	OriginalCount int                               `json:"original_count,omitempty"`
+	ResourceID           string                            `json:"resource_id,omitempty"`
+	Period               string                            `json:"period"`
+	Points               []MetricPoint                     `json:"points"`
+	Summary              map[string]ResourceMetricsSummary `json:"summary"`
+	Pagination           *PaginationInfo                   `json:"pagination,omitempty"`
+	Downsampled          bool                              `json:"downsampled,omitempty"`
+	OriginalCount        int                               `json:"original_count,omitempty"`
+	MemoryInterpretation string                            `json:"memory_interpretation,omitempty"`
 }
 
 func EmptyMetricsResponse() MetricsResponse {
@@ -1021,13 +1029,12 @@ func (r PatternsResponse) NormalizeCollections() PatternsResponse {
 	return r
 }
 
-// BackupsResponse is returned by pulse_list_backups
+// BackupsResponse is the canonical artifact inventory returned by pulse_storage backups.
+// RecoveryPoint preserves provider identity, repository references and unknown
+// verification instead of collapsing them into vendor-specific summary lists.
 type BackupsResponse struct {
-	PBS         []PBSBackupSummary  `json:"pbs"`
-	PVE         []PVEBackupSummary  `json:"pve"`
-	PBSServers  []PBSServerSummary  `json:"pbs_servers"`
-	RecentTasks []BackupTaskSummary `json:"recent_tasks"`
-	Pagination  *PaginationInfo     `json:"pagination,omitempty"`
+	Points     []recovery.RecoveryPoint `json:"points"`
+	Pagination *PaginationInfo          `json:"pagination"`
 }
 
 func EmptyBackupsResponse() BackupsResponse {
@@ -1035,72 +1042,10 @@ func EmptyBackupsResponse() BackupsResponse {
 }
 
 func (r BackupsResponse) NormalizeCollections() BackupsResponse {
-	if r.PBS == nil {
-		r.PBS = []PBSBackupSummary{}
-	}
-	if r.PVE == nil {
-		r.PVE = []PVEBackupSummary{}
-	}
-	if r.PBSServers == nil {
-		r.PBSServers = []PBSServerSummary{}
-	}
-	for i := range r.PBSServers {
-		r.PBSServers[i] = r.PBSServers[i].NormalizeCollections()
-	}
-	if r.RecentTasks == nil {
-		r.RecentTasks = []BackupTaskSummary{}
+	if r.Points == nil {
+		r.Points = []recovery.RecoveryPoint{}
 	}
 	return r
-}
-
-// PBSBackupSummary is a summarized PBS backup
-type PBSBackupSummary struct {
-	VMID       string    `json:"vmid"`
-	BackupType string    `json:"backup_type"`
-	BackupTime time.Time `json:"backup_time"`
-	Instance   string    `json:"instance"`
-	Datastore  string    `json:"datastore"`
-	SizeGB     float64   `json:"size_gb"`
-	Verified   bool      `json:"verified"`
-	Protected  bool      `json:"protected"`
-}
-
-// PVEBackupSummary is a summarized PVE backup
-type PVEBackupSummary struct {
-	VMID       int       `json:"vmid"`
-	BackupTime time.Time `json:"backup_time"`
-	SizeGB     float64   `json:"size_gb"`
-	Storage    string    `json:"storage"`
-}
-
-// PBSServerSummary is a summarized PBS server
-type PBSServerSummary struct {
-	Name       string             `json:"name"`
-	Host       string             `json:"host"`
-	Status     string             `json:"status"`
-	Datastores []DatastoreSummary `json:"datastores"`
-}
-
-func (s PBSServerSummary) NormalizeCollections() PBSServerSummary {
-	if s.Datastores == nil {
-		s.Datastores = []DatastoreSummary{}
-	}
-	return s
-}
-
-// DatastoreSummary is a summarized datastore
-type DatastoreSummary struct {
-	Name         string  `json:"name"`
-	UsagePercent float64 `json:"usage_percent"`
-	FreeGB       float64 `json:"free_gb"`
-}
-
-// BackupTaskSummary is a summarized backup task
-type BackupTaskSummary struct {
-	VMID      int       `json:"vmid"`
-	Node      string    `json:"node"`
-	Status    string    `json:"status"`
-	StartTime time.Time `json:"start_time"`
 }
 
 // StorageResponse is returned by pulse_list_storage
@@ -1222,7 +1167,12 @@ type SMARTDiskSummary struct {
 	Device      string `json:"device"`
 	Model       string `json:"model"`
 	Health      string `json:"health"`
-	Temperature int    `json:"temperature,omitempty"`
+	Temperature int    `json:"temperature,omitempty"` // Celsius, only when collected now
+	// LastKnownTemperature is a temperature kept from an earlier observation
+	// when the current one did not collect it (a disk in standby, a host
+	// agent past its reporting lease); LastKnownTemperatureReason says why.
+	LastKnownTemperature       int    `json:"last_known_temperature,omitempty"`
+	LastKnownTemperatureReason string `json:"last_known_temperature_reason,omitempty"`
 }
 
 // RAIDArraySummary is a summarized RAID array
@@ -1342,18 +1292,6 @@ type DockerCheckUpdatesResponse struct {
 	CommandID string              `json:"command_id"`
 	Message   string              `json:"message"`
 	Command   DockerCommandStatus `json:"command"`
-}
-
-// DockerUpdateContainerResponse is returned by pulse_update_docker_container
-type DockerUpdateContainerResponse struct {
-	Success       bool                   `json:"success"`
-	TargetID      string                 `json:"target_id"`
-	ContainerID   string                 `json:"container_id"`
-	ContainerName string                 `json:"container_name"`
-	CommandID     string                 `json:"command_id"`
-	Message       string                 `json:"message"`
-	Command       DockerCommandStatus    `json:"command"`
-	Verification  map[string]interface{} `json:"verification,omitempty"`
 }
 
 // ========== Kubernetes Types ==========
@@ -2045,10 +1983,16 @@ type PhysicalDiskSummary struct {
 	Risk                 *unifiedresources.PhysicalDiskRisk                            `json:"risk,omitempty"`
 	SMART                *unifiedresources.SMARTMeta                                   `json:"smart,omitempty"`
 	LifeRemainingPercent *int                                                          `json:"life_remaining_percent,omitempty"` // SSD life remaining percent (0-100), nil when unavailable
-	Temperature          *int                                                          `json:"temperature,omitempty"`            // Celsius, nil when unavailable
+	Temperature          *int                                                          `json:"temperature,omitempty"`            // Celsius, nil unless collected now
 	RPM                  *int                                                          `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
 	Used                 string                                                        `json:"used,omitempty"`
 	LastChecked          time.Time                                                     `json:"last_checked,omitempty"`
+
+	// LastKnownTemperature is a temperature kept from an earlier observation
+	// when the current one did not collect it (a disk in standby, a host
+	// agent past its reporting lease); LastKnownTemperatureReason says why.
+	LastKnownTemperature       *int   `json:"last_known_temperature,omitempty"`
+	LastKnownTemperatureReason string `json:"last_known_temperature_reason,omitempty"`
 }
 
 // ========== Host RAID Types ==========
@@ -2364,4 +2308,9 @@ type ResolvedAlertSummary struct {
 	Threshold    float64   `json:"threshold,omitempty"`
 	StartTime    time.Time `json:"start_time"`
 	ResolvedTime time.Time `json:"resolved_time"`
+	// Resolution is set only when the alert closed without recovering, such
+	// as a node metric handed to its Pulse agent; the successor resource
+	// owns the condition from then on.
+	Resolution          string `json:"resolution,omitempty"`
+	SuccessorResourceID string `json:"successor_resource_id,omitempty"`
 }

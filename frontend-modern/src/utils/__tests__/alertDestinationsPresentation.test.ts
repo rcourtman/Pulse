@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
   ALERT_DESTINATION_ALL_SEVERITIES_LABEL,
   ALERT_DESTINATION_CRITICAL_ONLY_LABEL,
@@ -18,10 +19,12 @@ import {
   ALERT_DESTINATIONS_APPRISE_MISSING_TARGETS_ERROR,
   ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR,
   ALERT_DESTINATIONS_APPRISE_MODE_HELP,
+  ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE,
   ALERT_DESTINATIONS_APPRISE_PANEL_TITLE,
   ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER,
   ALERT_DESTINATIONS_APPRISE_TEST_FAILURE,
   ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS,
+  ALERT_DESTINATIONS_EMAIL_OFF_MESSAGE,
   ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
   ALERT_DESTINATIONS_EMAIL_TEST_FAILURE,
   ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS,
@@ -91,6 +94,13 @@ describe('alertDestinationsPresentation', () => {
   it('returns canonical destinations panel and apprise vocabulary', () => {
     expect(ALERT_DESTINATIONS_EMAIL_PANEL_TITLE).toBe('Email notifications');
     expect(ALERT_DESTINATIONS_APPRISE_PANEL_TITLE).toBe('Apprise notifications');
+    // A switched-off destination says what turning it on does, in one line.
+    expect(ALERT_DESTINATIONS_EMAIL_OFF_MESSAGE).toBe(
+      'Off. Turn it on to send alerts by email through your SMTP server.',
+    );
+    expect(ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE).toBe(
+      'Off. Turn it on to relay alerts through the Apprise CLI or an Apprise API server.',
+    );
     expect(getAlertDestinationsStatusLabel(true)).toBe('Enabled');
     expect(getAlertDestinationsStatusLabel(false)).toBe('Disabled');
     expect(getAlertDestinationsAppriseTestLabel(false)).toBe('Send test');
@@ -316,9 +326,28 @@ describe('alert destinations delivery paused copy', () => {
     expect(getAlertDestinationsDeliveryPausedDescription('detection_off')).toContain(
       'Alerts are switched off',
     );
+    // With alerts off nothing new is detected, so no surface may claim it is.
+    expect(getAlertDestinationsDeliveryPausedDescription('detection_off')).not.toContain(
+      'still detecting',
+    );
+    expect(getAlertDestinationsDeliveryPausedDescription('detection_off', 'overview')).toBe(
+      'Alerts are switched off in the alert configuration. Pulse is not raising new alerts while they are switched off, so nobody is being notified.',
+    );
+    // Pending delivery covers a fresh install and a deliberate switch-off, so
+    // the cause claims only that delivery is off, never that it was never on.
+    expect(getAlertDestinationsDeliveryPausedDescription('not_activated', 'overview')).toBe(
+      'Notification delivery is turned off. Pulse is still detecting the alerts below, but nobody is being notified about them.',
+    );
     expect(getAlertDestinationsDeliveryPausedDescription('snoozed')).toContain('snoozed');
     expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).toContain(
-      'has not been turned on for this install yet',
+      'Notification delivery is turned off.',
     );
+    for (const locale of ['de', 'es'] as const) {
+      setActiveLocale(locale);
+      expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).not.toMatch(
+        /noch nicht|aún no/,
+      );
+    }
+    setActiveLocale(DEFAULT_LOCALE);
   });
 });

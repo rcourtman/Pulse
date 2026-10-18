@@ -23,7 +23,6 @@ import {
   getDockerContainerStatusIndicator,
   getDockerServiceStatusIndicator,
   getAgentStatusIndicator,
-  getPBSStatusIndicator,
   getReplicationJobStatusIndicator,
 } from '@/utils/status';
 
@@ -318,34 +317,6 @@ describe('getAgentStatusIndicator (branch coverage)', () => {
   it('returns the muted default indicator when agent status is empty', () => {
     // `: defaultIndicator` arm — normalized status is '' (falsy).
     expect(getAgentStatusIndicator({ status: '' })).toEqual({
-      variant: 'muted',
-      label: 'Unknown',
-    });
-  });
-});
-
-describe('getPBSStatusIndicator (branch coverage)', () => {
-  it('flags warning from a degraded connectionHealth with a non-canonical status', () => {
-    // DEGRADED arm driven by connection alone (status 'paused' is not healthy/
-    // online and not in the degraded set, so without connection it would fall
-    // through to defaultIndicator). Label prefers connection.
-    expect(getPBSStatusIndicator({ status: 'paused', connectionHealth: 'maintenance' })).toEqual({
-      variant: 'warning',
-      label: 'Maintenance',
-    });
-  });
-
-  it('prefers connection over status when both are degraded for the warning label', () => {
-    // `formatStatusLabel(connection || status, 'Degraded')` — connection wins.
-    expect(getPBSStatusIndicator({ status: 'degraded', connectionHealth: 'recovering' })).toEqual({
-      variant: 'warning',
-      label: 'Recovering',
-    });
-  });
-
-  it('returns the muted default indicator for a status that is neither offline, healthy/online, nor degraded', () => {
-    // Final `return defaultIndicator` arm.
-    expect(getPBSStatusIndicator({ status: 'paused' })).toEqual({
       variant: 'muted',
       label: 'Unknown',
     });

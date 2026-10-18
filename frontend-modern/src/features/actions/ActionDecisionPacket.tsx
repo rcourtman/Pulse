@@ -333,7 +333,7 @@ export const ActionDecisionPacket: Component<{
               {(presentation) => (
                 <div
                   data-testid="apt-action-next-step"
-                  class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900/25 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                  class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
                 >
                   <div class="font-semibold">What to do next</div>
                   <p class="mt-1">{presentation().nextStep}</p>

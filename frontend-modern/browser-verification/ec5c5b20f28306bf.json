@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "96d307dcbe2042d70d981fe7ebc3dd2b6f35162f",
+  "verified_at": "2026-10-13T23:18:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "11ffac0be9469fc1107e63c4e8c99fcd7df26fd401b76ac29664c29cde8a680a"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final built bytes of this tree (current sidecar head with PRs 2920/2921 and this change) embedded in a darwin binary, mock mode, headless Chromium on pulse-dev through a reverse tunnel, full-resolution element screenshots read by eye",
+    "390px: guest drawer (artifact-cache-310) shows only the Utilization panel, then a full-width \"Show Network I/O, Disk I/O\" button, then the facts strip; drawer height 657px against 1043px with every panel shown",
+    "390px: node drawer (Analytics A) and agent machine drawer each show Utilization and \"Show Network I/O, Disk I/O, Thermals\" (597px and 715px tall)",
+    "1440px: guest, node and agent drawers show every panel (3, 4 and 4) and no toggle; layout matches the previous pass"
+  ],
+  "interactions": [
+    "clicked \"Show Network I/O, Disk I/O\" in the phone guest drawer: Network I/O and Disk I/O panels appeared, the button read \"Show fewer charts\" and the drawer grew to 1043px",
+    "measured visible panel boxes per drawer at both widths"
+  ]
+}

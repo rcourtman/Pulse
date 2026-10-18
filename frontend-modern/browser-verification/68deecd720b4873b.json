@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "08e785eb8d475a6906bc5135d6379c0ced78054b",
+  "verified_at": "2026-10-06T13:24:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/temperature.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/temperature.ts": "91d17ef07ce5cda8128f1b4bf65feecfd9101526c8ff7900ab9edc0431133838"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from this commit; pve2's CPU temperature pinned to 88 then 72 degrees C by a local-only, uncommitted mock overlay (trigger 80, clear 75)",
+    "Recovering at 72C with the alert still open: pve2 TEMP cell stays text-amber-600 with hover 'Temperature 72°C now, recovering. Clears after 5 minutes at 75°C or lower, 20 seconds so far.'",
+    "Nodes without an alert (51, 53, 42C) render text-green-600 with no hover text, unchanged",
+    "Narrow 375px: node table renders without horizontal overflow; TEMP column hidden as before"
+  ],
+  "interactions": [
+    "Loaded /proxmox at 1440x900 and read each TEMP cell's colour class and title through the DOM",
+    "Resized to 375x812 and checked the node rows and page overflow"
+  ]
+}

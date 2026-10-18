@@ -101,9 +101,7 @@ const protectionVariant = (status: TrueNASProtectionStatusBucket): StatusIndicat
 
 const datasetLabel = (point: RecoveryPoint): string =>
   asTrimmedString(point.display?.itemLabel) ||
-  asTrimmedString(point.display?.subjectLabel) ||
   asTrimmedString(point.itemRef?.name) ||
-  asTrimmedString(point.subjectRef?.name) ||
   detailString(point, 'dataset') ||
   detailStringList(point, 'sourceDatasets')[0] ||
   point.id;

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
+  getAlertHistoryFocusNotice,
   ALERT_BUCKET_EMPTY_LABEL,
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
   ALERT_HISTORY_EMPTY_DESCRIPTION,
@@ -40,6 +41,7 @@ import {
   getAlertOverviewBulkAcknowledgeLabel,
   getAlertOverviewBulkAcknowledgedNotification,
   getAlertOverviewCardPresentation,
+  formatAlertOverviewStartedAgo,
   getAlertOverviewEmptyState,
   getAlertOverviewGroupAcknowledgeLabel,
   getAlertOverviewGroupDisclosureLabel,
@@ -64,6 +66,7 @@ import {
   getAlertOverviewTimelineActionLabel,
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
+  getAlertHistoryLoadFailure,
   getAlertHistorySearchPlaceholder,
   getAlertBucketCountLabel,
   getAlertFilteredEmptyState,
@@ -198,7 +201,7 @@ describe('alertOverviewPresentation', () => {
     expect(ALERTS_PAGE_OVERVIEW_TITLE).toBe('Alerts Overview');
     expect(ALERTS_PAGE_THRESHOLDS_TITLE).toBe('Alert Thresholds');
     expect(ALERTS_PAGE_DESTINATIONS_TITLE).toBe('Notifications');
-    expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Maintenance Schedule');
+    expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Delivery Schedule');
     expect(ALERTS_PAGE_HISTORY_TITLE).toBe('Alert History');
     expect(ALERTS_PAGE_DEFAULT_DESCRIPTION).toBe(
       'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
@@ -235,7 +238,7 @@ describe('alertOverviewPresentation', () => {
           'Route alert notifications to email, Apprise, webhook, and mobile push destinations.',
       },
       schedule: {
-        title: 'Maintenance Schedule',
+        title: 'Delivery Schedule',
         description:
           'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
       },
@@ -297,29 +300,30 @@ describe('alertOverviewPresentation', () => {
   });
 
   it('returns canonical active alert card presentation', () => {
+    const resourceClassName = 'text-sm font-semibold truncate text-base-content';
     expect(getAlertOverviewCardPresentation('critical', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/25',
-      iconClassName: 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400',
-      resourceClassName: 'text-sm font-medium truncate text-red-700 dark:text-red-400',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-red-500 dark:border-l-red-500 bg-surface',
+      iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-red-600 dark:text-red-400',
+      resourceClassName,
     });
     expect(getAlertOverviewCardPresentation('warning', true, true)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all opacity-50 border-border bg-surface-alt',
-      iconClassName: 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400',
-      resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all opacity-50 border-border border-l-border bg-surface-alt',
+      iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400',
+      resourceClassName,
     });
     expect(getAlertOverviewCardPresentation('info', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25',
-      iconClassName: 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400',
-      resourceClassName: 'text-sm font-medium truncate text-blue-700 dark:text-blue-400',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-blue-500 dark:border-l-blue-400 bg-surface',
+      iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-blue-600 dark:text-blue-400',
+      resourceClassName,
     });
     expect(getAlertOverviewCardPresentation('notice', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25',
-      iconClassName: 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400',
-      resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-yellow-500 dark:border-l-yellow-400 bg-surface',
+      iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-yellow-600 dark:text-yellow-400',
+      resourceClassName,
     });
     expect(getAlertOverviewAcknowledgedBadgeClass()).toBe(
       'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-sm',
@@ -400,5 +404,49 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewActiveSectionTitle()).toBe('Aktive Warnmeldungen');
     expect(getAlertTimelineHeading()).toBe('Vorfall');
     expect(getAlertTimelineEventTypeLabel('alert_resolved')).toBe('Behoben');
+  });
+
+  it('describes a failed History read as incomplete evidence with a read-only retry', () => {
+    expect(getAlertHistoryLoadFailure()).toEqual({
+      title: 'Could not load alert history',
+      description:
+        'Any entries shown may be incomplete or out of date. Retry to refresh saved history.',
+      retryLabel: 'Retry history',
+      retryingLabel: 'Retrying…',
+    });
+    expect(getAlertHistoryLoadFailure().title).not.toBe(getAlertHistoryEmptyState().title);
+  });
+
+  it('says how long ago an alert started in the active locale and moves with the clock', () => {
+    const start = '2026-10-04T12:00:00Z';
+    const at = (minutes: number) => Date.parse(start) + minutes * 60_000;
+    expect(formatAlertOverviewStartedAgo(start, at(0))).toBe('this minute');
+    expect(formatAlertOverviewStartedAgo(start, at(10))).toBe('10 min. ago');
+    expect(formatAlertOverviewStartedAgo(start, at(11))).toBe('11 min. ago');
+    expect(formatAlertOverviewStartedAgo(start, at(180))).toBe('3 hr. ago');
+    expect(formatAlertOverviewStartedAgo(start, at(3 * 24 * 60))).toBe('3 days ago');
+    expect(formatAlertOverviewStartedAgo('not-a-date', at(5))).toBe('');
+    setActiveLocale('de');
+    expect(formatAlertOverviewStartedAgo(start, at(10))).toBe('vor 10 Min.');
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+});
+
+describe('getAlertHistoryFocusNotice', () => {
+  it('names the linked alert and says plainly when history no longer holds it', () => {
+    expect(getAlertHistoryFocusNotice({ missing: false }).text).toBe(
+      'Showing one alert, opened from a link.',
+    );
+    expect(
+      getAlertHistoryFocusNotice({ alertTitle: 'CPU usage', resourceName: 'db-01', missing: false })
+        .text,
+    ).toBe('Showing CPU usage on db-01, opened from a link.');
+    expect(getAlertHistoryFocusNotice({ missing: false, liveAlertsUnavailable: true }).text).toBe(
+      'Pulse could not load the alerts firing now, so this alert may still be active.',
+    );
+    expect(getAlertHistoryFocusNotice({ alertTitle: 'CPU usage', missing: true })).toEqual({
+      text: "That alert is no longer in Pulse's alert history.",
+      clearLabel: 'Show all alerts',
+    });
   });
 });

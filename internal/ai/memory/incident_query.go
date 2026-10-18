@@ -98,6 +98,40 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			}
 		}
 	}
+	// A lifecycle row that hardware ownership wrote under a physical disk
+	// stands for its alert's own reference in occurrence matching, as it did
+	// when journaled under it, so alert-centric reads keep their occurrences.
+	// Its evidence keeps the disk. A read by the disk admits the saved shells
+	// of the occurrences its rows belong to.
+	alertResource := func(change unifiedresources.ResourceChange) string {
+		if ref := unifiedresources.OwnedAlertReference(change); ref != "" {
+			return ref
+		}
+		return change.ResourceID
+	}
+	projected := func(change unifiedresources.ResourceChange) unifiedresources.ResourceChange {
+		change.ResourceID = alertResource(change)
+		return change
+	}
+	ownedStarts := make(map[string][]time.Time)
+	for _, change := range changes {
+		ref := unifiedresources.OwnedAlertReference(change)
+		if ref == "" {
+			continue
+		}
+		if started := incidentChangeStartedAt(change); !started.IsZero() {
+			key := ref + "\x00" + projectedAlertIdentifier(change)
+			ownedStarts[key] = append(ownedStarts[key], started)
+		}
+	}
+	ownedShell := func(shell *incidentShell) bool {
+		for _, started := range ownedStarts[shell.ResourceID+"\x00"+shell.AlertIdentifier] {
+			if incidentStartsMatch(shell.OpenedAt, started) {
+				return true
+			}
+		}
+		return false
+	}
 	// Resource aliases are read identities. A shell for another resource must
 	// not become an occurrence boundary merely because its alert ID matches.
 	resourceKeys := make(map[string]string)
@@ -106,7 +140,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 		identityIDs = append(identityIDs, shell.ResourceID)
 	}
 	for _, change := range changes {
-		identityIDs = append(identityIDs, change.ResourceID)
+		identityIDs = append(identityIDs, alertResource(change))
 	}
 	for _, id := range identityIDs {
 		if _, known := resourceKeys[id]; known {
@@ -133,7 +167,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 	// Keep a stable existing ID and all local notes, not competing lifecycles.
 	sort.Slice(shells, func(i, j int) bool { return shells[i].ID < shells[j].ID })
 	for _, shell := range shells {
-		if query.ResourceID != "" && !resourceIDs[shell.ResourceID] {
+		if query.ResourceID != "" && !resourceIDs[shell.ResourceID] && !ownedShell(shell) {
 			continue
 		}
 		if query.AlertIdentifier != "" && shell.AlertIdentifier != query.AlertIdentifier {
@@ -211,7 +245,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 		var occurrence *Incident
 		for _, candidate := range byAlert[identifier] {
 			if canonicalBoundary[candidate] {
-				if sameResource(candidate.ResourceID, change.ResourceID) && boundaries[candidate].Equal(started) {
+				if sameResource(candidate.ResourceID, alertResource(change)) && boundaries[candidate].Equal(started) {
 					occurrence = candidate
 					break
 				}
@@ -225,10 +259,44 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			occurrence = &Incident{ID: canonicalIncidentID(identifier, started), AlertIdentifier: identifier, OpenedAt: started, Status: IncidentStatusUnknown}
 			byAlert[identifier] = append(byAlert[identifier], occurrence)
 		}
-		hydrateIncidentFromCanonicalChange(occurrence, change)
+		hydrateIncidentFromCanonicalChange(occurrence, projected(change))
 		boundaries[occurrence] = started
 		firedOwners[change.ID] = occurrence
 		canonicalBoundary[occurrence] = true
+	}
+	// An owned row can belong to an occurrence whose firing this read does
+	// not hold: another disk owns the firing, or retention removed it. Its
+	// recorded start names the occurrence, so take the occurrence that
+	// starts there, else the closest saved shell within the start tolerance,
+	// else open it under the ID the alert-centric read gives it, before any
+	// event is assigned. The boundary is not canonical: a truncated read must
+	// not attach events without a start to it.
+	for _, change := range changes {
+		ref := unifiedresources.OwnedAlertReference(change)
+		identifier := projectedAlertIdentifier(change)
+		started := incidentChangeStartedAt(change)
+		if ref == "" || identifier == "" || started.IsZero() || change.Kind == unifiedresources.ChangeAlertFired {
+			continue
+		}
+		var occurrence *Incident
+		for _, candidate := range byAlert[identifier] {
+			if !sameResource(candidate.ResourceID, ref) {
+				continue
+			}
+			if boundaries[candidate].Equal(started) {
+				occurrence = candidate
+				break
+			}
+			if !canonicalBoundary[candidate] && incidentStartsMatch(candidate.OpenedAt, started) &&
+				(occurrence == nil || incidentStartDelta(candidate.OpenedAt, started) < incidentStartDelta(occurrence.OpenedAt, started)) {
+				occurrence = candidate
+			}
+		}
+		if occurrence == nil {
+			occurrence = &Incident{ID: canonicalIncidentID(identifier, started), AlertIdentifier: identifier, ResourceID: ref, OpenedAt: started, Status: IncidentStatusUnknown}
+			byAlert[identifier] = append(byAlert[identifier], occurrence)
+		}
+		boundaries[occurrence] = started
 	}
 	for _, occurrences := range byAlert {
 		sort.Slice(occurrences, func(i, j int) bool { return boundaries[occurrences[i]].Before(boundaries[occurrences[j]]) })
@@ -247,7 +315,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 		explicitStart := incidentChangeStartedAt(change)
 		if occurrence == nil && !explicitStart.IsZero() {
 			for _, candidate := range byAlert[identifier] {
-				if sameResource(candidate.ResourceID, change.ResourceID) && boundaries[candidate].Equal(explicitStart) {
+				if sameResource(candidate.ResourceID, alertResource(change)) && boundaries[candidate].Equal(explicitStart) {
 					occurrence = candidate
 					break
 				}
@@ -255,7 +323,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 		}
 		if occurrence == nil && explicitStart.IsZero() {
 			for _, candidate := range byAlert[identifier] {
-				if change.Kind != unifiedresources.ChangeCommandExecuted && change.Kind != unifiedresources.ChangeRunbookExecuted && !sameResource(candidate.ResourceID, change.ResourceID) {
+				if change.Kind != unifiedresources.ChangeCommandExecuted && change.Kind != unifiedresources.ChangeRunbookExecuted && !sameResource(candidate.ResourceID, alertResource(change)) {
 					continue
 				}
 				// A capped read may have omitted a later firing after a saved shell.
@@ -273,7 +341,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			// An event without a retained start cannot establish when the alert
 			// opened. Preserve it as incomplete evidence with an unknown lifecycle.
 			for _, candidate := range byAlert[identifier] {
-				if candidate.OpenedAt.IsZero() && sameResource(candidate.ResourceID, change.ResourceID) {
+				if candidate.OpenedAt.IsZero() && sameResource(candidate.ResourceID, alertResource(change)) {
 					occurrence = candidate
 					break
 				}
@@ -284,7 +352,7 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			}
 		}
 		openedAt := occurrence.OpenedAt
-		hydrateIncidentFromCanonicalChange(occurrence, change)
+		hydrateIncidentFromCanonicalChange(occurrence, projected(change))
 		occurrence.OpenedAt = openedAt
 		canonicalEvents[occurrence] = append(canonicalEvents[occurrence], event)
 	}

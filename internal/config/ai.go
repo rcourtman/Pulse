@@ -31,12 +31,11 @@ type PatrolEventTriggerSettings struct {
 // AIConfig holds AI feature configuration
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
-	Enabled        bool   `json:"enabled"`
-	Model          string `json:"model"`                     // Currently selected default model (format: "provider:model-name")
-	ChatModel      string `json:"chat_model,omitempty"`      // Model for interactive chat (defaults to Model)
-	PatrolModel    string `json:"patrol_model,omitempty"`    // Model for background patrol (defaults to Model, can be cheaper)
-	DiscoveryModel string `json:"discovery_model,omitempty"` // Model for infrastructure discovery (defaults to cheapest available, e.g., haiku)
-	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
+	Enabled       bool   `json:"enabled"`
+	Model         string `json:"model"`                  // Currently selected default model (format: "provider:model-name")
+	ChatModel     string `json:"chat_model,omitempty"`   // Model for interactive chat (defaults to Model)
+	PatrolModel   string `json:"patrol_model,omitempty"` // Model for background patrol (defaults to Model, can be cheaper)
+	CustomContext string `json:"custom_context"`         // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
 	AnthropicAPIKey           string `json:"anthropic_api_key,omitempty"`           // Anthropic API key
@@ -116,8 +115,7 @@ type AIConfig struct {
 
 	// AI Infrastructure Control settings
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
-	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
+	ControlLevel string `json:"control_level,omitempty"` // "read_only", "controlled", "autonomous"
 
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
 	PatrolAutonomyLevel             string                                            `json:"patrol_autonomy_level,omitempty"` // "monitor", "approval", "assisted", "full"
@@ -128,10 +126,6 @@ type AIConfig struct {
 	PatrolActionEmergencyStop       bool                                              `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
 	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 10)
 	PatrolInvestigationTimeoutSec   int                                               `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
-
-	// Discovery settings - controls automatic infrastructure discovery
-	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable infrastructure discovery
-	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between automatic re-scans (0 = manual only, default: 0)
 
 }
 
@@ -552,7 +546,6 @@ func (c *AIConfig) RemoveProvider(provider string) error {
 	clearModel(&c.Model)
 	clearModel(&c.ChatModel)
 	clearModel(&c.PatrolModel)
-	clearModel(&c.DiscoveryModel)
 	clearModel(&c.AutoFixModel)
 
 	if len(c.GetConfiguredProviders()) == 0 {
@@ -752,7 +745,6 @@ func (c *AIConfig) NormalizeQuickstartModelAliases() bool {
 	normalizeField(&c.Model)
 	normalizeField(&c.ChatModel)
 	normalizeField(&c.PatrolModel)
-	normalizeField(&c.DiscoveryModel)
 	normalizeField(&c.AutoFixModel)
 
 	return changed
@@ -762,7 +754,7 @@ func (c *AIConfig) NormalizeQuickstartModelAliases() bool {
 // It prefers explicitly selected models for that provider and does not invent a model
 // for retired providers.
 func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
-	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel, c.DiscoveryModel} {
+	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel} {
 		candidate = NormalizeQuickstartModelString(candidate)
 		if candidate == "" {
 			continue
@@ -792,17 +784,6 @@ func (c *AIConfig) GetPatrolModel() string {
 		return NormalizeQuickstartModelString(c.PatrolModel)
 	}
 	return c.GetModel()
-}
-
-// GetDiscoveryModel returns the model for infrastructure discovery
-// Falls back to PatrolModel, then to the main Model if DiscoveryModel is not set
-// Discovery is high-fan-out background work (one call per container/service),
-// so it belongs on the operator's background-work model, not the shared default
-func (c *AIConfig) GetDiscoveryModel() string {
-	if c.DiscoveryModel != "" {
-		return NormalizeQuickstartModelString(c.DiscoveryModel)
-	}
-	return c.GetPatrolModel()
 }
 
 // GetAutoFixModel returns the model for automatic remediation actions
@@ -964,17 +945,6 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 	return 300 * time.Second // 5 minutes default
 }
 
-// GetDiscoveryAIAnalysisTimeout returns the deadline for a single discovery AI
-// analysis call. It is the configured AI request timeout, including its 300s
-// default: the settings UI advertises that value as applying to discovery and
-// omits the field when it already matches, so a lower discovery-only default
-// would time out scans on installations that display 300s and cannot correct
-// it by saving. The discovery services keep their own 45s fallback for
-// construction without an AI configuration.
-func (c *AIConfig) GetDiscoveryAIAnalysisTimeout() time.Duration {
-	return c.GetRequestTimeout()
-}
-
 // GetControlLevel returns the AI control level, defaulting to read_only if not set.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
@@ -1005,6 +975,26 @@ func (c *AIConfig) GetEffectiveControlLevel(autonomousAllowed bool) string {
 	return EffectiveControlLevelForEntitlement(c.GetControlLevel(), autonomousAllowed)
 }
 
+// AssistantControlLevel projects an interactive Assistant setting to the two
+// supported behaviours: read/query or canonical action planning. A legacy
+// autonomous preference never grants approval or execution authority here.
+// Keep the shared vocabulary and stored value intact: legacy command admission
+// uses IsAutonomous to REQUIRE approval, and Patrol has its own policy.
+func AssistantControlLevel(level string) string {
+	switch agentcapabilities.NormalizeControlLevel(level) {
+	case agentcapabilities.ControlLevelControlled, agentcapabilities.ControlLevelAutonomous:
+		return ControlLevelControlled
+	default:
+		return ControlLevelReadOnly
+	}
+}
+
+// GetAssistantControlLevel returns the truthful interactive level after the
+// existing entitlement check, without migrating or persisting any preference.
+func (c *AIConfig) GetAssistantControlLevel(autonomousAllowed bool) string {
+	return AssistantControlLevel(c.GetEffectiveControlLevel(autonomousAllowed))
+}
+
 // IsControlEnabled returns true if AI has any control capability beyond read-only
 func (c *AIConfig) IsControlEnabled() bool {
 	return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))
@@ -1018,14 +1008,6 @@ func (c *AIConfig) IsAutonomous() bool {
 // IsValidControlLevel checks if a control level string is valid
 func IsValidControlLevel(level string) bool {
 	return agentcapabilities.IsValidControlLevel(level)
-}
-
-// GetProtectedGuests returns the list of protected guests (VMIDs or names)
-func (c *AIConfig) GetProtectedGuests() []string {
-	if c.ProtectedGuests == nil {
-		return []string{}
-	}
-	return c.ProtectedGuests
 }
 
 // GetPatrolAutonomyLevel returns the patrol autonomy level, defaulting to "monitor" if not set
@@ -1042,6 +1024,23 @@ func (c *AIConfig) GetPatrolAutonomyLevel() string {
 	default:
 		return PatrolAutonomyMonitor
 	}
+}
+
+// PatrolAutonomyLevelChosen reports whether the operator has ever saved a
+// Patrol mode. Only explicit saves write the stored level.
+func (c *AIConfig) PatrolAutonomyLevelChosen() bool {
+	return strings.TrimSpace(c.PatrolAutonomyLevel) != ""
+}
+
+// ResolvedPatrolAutonomyLevel returns the operator's chosen Patrol mode, or
+// the default for an install that never chose one: Ask first when its licence
+// includes Patrol investigation, so Pro investigates by default, and Watch
+// only otherwise. It does not apply the licence clamp; callers still do.
+func (c *AIConfig) ResolvedPatrolAutonomyLevel(investigationEntitled bool) string {
+	if !c.PatrolAutonomyLevelChosen() && investigationEntitled {
+		return PatrolAutonomyApproval
+	}
+	return c.GetPatrolAutonomyLevel()
 }
 
 // GetEffectivePatrolAutonomy evaluates the requested Patrol mode against the
@@ -1123,18 +1122,4 @@ func IsValidPatrolAutonomyLevel(level string) bool {
 func (c *AIConfig) IsPatrolAutonomyEnabled() bool {
 	level := c.GetPatrolAutonomyLevel()
 	return level != PatrolAutonomyMonitor
-}
-
-// IsDiscoveryEnabled returns whether AI-powered infrastructure discovery is enabled
-func (c *AIConfig) IsDiscoveryEnabled() bool {
-	return c.DiscoveryEnabled
-}
-
-// GetDiscoveryInterval returns the interval between automatic discovery scans
-// Returns 0 if discovery is manual-only
-func (c *AIConfig) GetDiscoveryInterval() time.Duration {
-	if c.DiscoveryIntervalHours <= 0 {
-		return 0 // Manual only
-	}
-	return time.Duration(c.DiscoveryIntervalHours) * time.Hour
 }

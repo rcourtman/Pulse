@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "9aaac4d3e502c01913fb3637d0997b0ce03a8b7b",
+  "verified_at": "2026-10-06T19:14:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+    "frontend-modern/src/utils/relativeTimeClock.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "306a0f3a95585efd4d980549f33a41538a00975f62aff39873a75145e4d9bf5f",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "e56e51e972457dbfe34f5695b69423f1ac916df3213a61d028e05cbcecfd12bd",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "33fd51603010d13040faa6fe6b3690d3e4bbe1c941c32ceb1aa0c972ec47370c",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "6780323e7d9055b0839da57b6204fd68bfce9696e622362ea34a02d0907554bd",
+    "frontend-modern/src/utils/relativeTimeClock.ts": "0ff094e2dc98bf07b3792af478bfa90d3156143ddc5aef0e233de80868ec4dba"
+  },
+  "routes": [
+    "/proxmox/replication",
+    "/proxmox/backups",
+    "/docker/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree on origin/main 9aaac4d3e5; Playwright drove it with /api/replication/jobs answers shaped per scenario through page.route",
+    "Direct /proxmox/replication link whose first read returns 500, at 1600px and 390px: stays on the route with \"Could not load replication jobs\" and Refresh (main's code fell back to Overview with no error); Refresh loads all 8 jobs",
+    "Jobs loaded, then a poll read answers 403: the Replication tab is withdrawn and the link shows the server's \"Insufficient permissions to read replication jobs\" with Refresh (main kept the tab advertised and a generic message)",
+    "Empty first answer, then a failed poll, then an empty answer: the link stays on Overview throughout and the route never reopens",
+    "page.clock installed, a polled replication read held open: the next two 30s poll ticks start no new request and abort none; releasing it lets it finish and the following tick starts the next read (main started reads 3 and 4 over the held read and never cancelled it)",
+    "Leaving the Proxmox page for Docker while a replication read is held aborts it (net::ERR_ABORTED); main let it run",
+    "Regression: with /ws frames held and keep-alive pongs, Machines Seen cells move from \"just now\" to \"10m ago\" over ten one-minute clock steps on one socket",
+    "Proxmox Backups at 1600px and 390px after the clock change retired the band's Math.max: 36 age cells each, none Unknown, every band colour matching its Current/Aging/Stale title, no page errors",
+    "Same-session control: the five runtime files swapped back to main under the running Vite reproduced every failure above, then restored and compared byte for byte"
+  ],
+  "interactions": [
+    "Clicked Refresh on the replication error state at both widths",
+    "Clicked the Docker nav link while a replication read was in flight",
+    "page.clock.runFor poll steps with data-free pong frames sent before each step"
+  ]
+}

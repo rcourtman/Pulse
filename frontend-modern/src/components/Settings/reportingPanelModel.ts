@@ -96,6 +96,7 @@ export function buildReportingRequest(
     | 'singleFilenamePrefix'
     | 'singleFilenameSubject'
     | 'singleResourceEndpoint'
+    | 'singleResourceMethod'
     | 'supportsCustomTitle'
     | 'supportsMetricFilter'
   >,
@@ -105,23 +106,41 @@ export function buildReportingRequest(
 
   if (context.resources.length === 1) {
     const resource = context.resources[0];
-    const params = new URLSearchParams({
+    const fields = {
       resourceType: toReportingResourceType(resource.type),
       resourceId: resource.id,
       format: context.format,
       start: context.start,
       end: context.end,
-    });
+      title: customTitle || undefined,
+      metricType: metricType || undefined,
+    };
+    const filename = buildReportingFilename(context.format, resource.id, context.now, definition);
 
-    if (metricType) {
-      params.append('metricType', metricType);
-    }
-    if (customTitle) {
-      params.append('title', customTitle);
+    // Only POST may narrate a PDF with Pulse Assistant; the catalog names
+    // GET only for backends that accept nothing else.
+    if (definition.singleResourceMethod === 'POST') {
+      return {
+        filename,
+        request: {
+          url: definition.singleResourceEndpoint,
+          init: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields),
+          },
+        },
+      };
     }
 
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(fields)) {
+      if (value) {
+        params.append(key, value);
+      }
+    }
     return {
-      filename: buildReportingFilename(context.format, resource.id, context.now, definition),
+      filename,
       request: {
         url: `${definition.singleResourceEndpoint}?${params.toString()}`,
       },

@@ -1,4 +1,5 @@
-import { createEffect, createSignal, onMount } from 'solid-js';
+import { createEffect, createSignal, onMount, onCleanup, untrack } from 'solid-js';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { aiChatStore } from '@/stores/aiChat';
@@ -37,6 +38,8 @@ import {
   parseReportSchedulesResponse,
   scheduleToForm,
   scheduleToSelectedResources,
+  reportScheduleLastRunLabel,
+  reportScheduleNeedsRetry,
   type ReportSchedule,
   type ReportScheduleFormState,
   type ReportScheduleKind,
@@ -54,7 +57,19 @@ export const useReportingPanelState = () => {
   const [reportingCatalogError, setReportingCatalogError] = createSignal('');
   const [reportingCatalogAttempted, setReportingCatalogAttempted] = createSignal(false);
   const [title, setTitle] = createSignal('');
-  const [reportSchedules, setReportSchedules] = createSignal<ReportSchedule[]>([]);
+  const [scheduleState, setScheduleState] = createStore<{ schedules: ReportSchedule[] }>({
+    schedules: [],
+  });
+  const reportSchedules = () => scheduleState.schedules;
+  const setReportSchedules = (
+    update: ReportSchedule[] | ((current: ReportSchedule[]) => ReportSchedule[]),
+  ) => {
+    const next =
+      typeof update === 'function'
+        ? untrack(() => update(unwrap(scheduleState.schedules)))
+        : update;
+    setScheduleState('schedules', reconcile(next, { key: 'id' }));
+  };
   const [reportSchedulesLoading, setReportSchedulesLoading] = createSignal(false);
   const [reportSchedulesAttempted, setReportSchedulesAttempted] = createSignal(false);
   const [reportSchedulesError, setReportSchedulesError] = createSignal('');
@@ -146,6 +161,23 @@ export const useReportingPanelState = () => {
       return;
     }
     void loadReportSchedules();
+  });
+
+  createEffect(() => {
+    if (!isReportingEnabled()) return;
+    const active = reportSchedules().some((schedule) =>
+      ['running', 'retrying'].includes(schedule.last_run_status || ''),
+    );
+    if (!active && !reportSchedules().some((schedule) => schedule.enabled)) return;
+    const refreshVisibleSchedules = () => {
+      if (!document.hidden) void loadReportSchedules();
+    };
+    const timer = window.setInterval(refreshVisibleSchedules, active ? 5000 : 30000);
+    document.addEventListener('visibilitychange', refreshVisibleSchedules);
+    onCleanup(() => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisibleSchedules);
+    });
   });
 
   createEffect(() => {
@@ -266,7 +298,13 @@ export const useReportingPanelState = () => {
 
   const setScheduleKind = (kind: ReportScheduleKind) => {
     setScheduleForm((current) => applyReportScheduleKind(current, kind));
-    if (kind === 'patrol_digest') {
+    if (kind === 'backup_health') {
+      setScheduleResources((current) =>
+        current.filter(
+          (resource) => resource.type === 'vm' || resource.type === 'system-container',
+        ),
+      );
+    } else if (kind !== 'resources') {
       setScheduleResources([]);
     }
   };
@@ -299,7 +337,7 @@ export const useReportingPanelState = () => {
       return;
     }
     if (
-      payload.kind !== 'patrol_digest' &&
+      payload.kind === 'resources' &&
       (payload.scope.resources?.length ?? 0) === 0 &&
       (payload.scope.tags?.length ?? 0) === 0
     ) {
@@ -332,6 +370,7 @@ export const useReportingPanelState = () => {
         return next;
       });
       closeScheduleForm();
+      await loadReportSchedules();
       showSuccess('Report schedule saved');
     } catch (error) {
       console.error('Save report schedule error:', error);
@@ -343,12 +382,14 @@ export const useReportingPanelState = () => {
 
   const updateReportSchedule = async (schedule: ReportSchedule) => {
     const normalized = normalizeReportSchedule(schedule);
+    const payload = { ...normalized };
+    delete payload.delivery_check;
     const response = await apiFetch(
       `/api/admin/reports/schedules/${encodeURIComponent(normalized.id)}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalized),
+        body: JSON.stringify(payload),
       },
     );
     if (!response.ok) {
@@ -358,12 +399,14 @@ export const useReportingPanelState = () => {
     setReportSchedules((current) =>
       current.map((candidate) => (candidate.id === saved.id ? saved : candidate)),
     );
+    await loadReportSchedules();
   };
 
   const toggleReportSchedule = async (schedule: ReportSchedule) => {
+    const enabled = !schedule.enabled;
     try {
-      await updateReportSchedule({ ...schedule, enabled: !schedule.enabled });
-      showSuccess(schedule.enabled ? 'Report schedule disabled' : 'Report schedule enabled');
+      await updateReportSchedule({ ...schedule, enabled });
+      showSuccess(enabled ? 'Report schedule enabled' : 'Report schedule disabled');
     } catch (error) {
       console.error('Toggle report schedule error:', error);
       showWarning(error instanceof Error ? error.message : 'Failed to update report schedule');
@@ -372,25 +415,47 @@ export const useReportingPanelState = () => {
 
   const runReportScheduleNow = async (schedule: ReportSchedule) => {
     if (runningScheduleID()) return;
+    if (
+      schedule.last_run_status === 'unconfirmed' &&
+      !window.confirm(
+        'The previous email may have been accepted. Check the recipient first. Retry anyway, with a risk of a duplicate?',
+      )
+    )
+      return;
+    const retry = reportScheduleNeedsRetry(schedule);
     setRunningScheduleID(schedule.id);
     try {
       const response = await apiFetch(
-        `/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}/run`,
+        `/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}/run${retry ? '?retry=true' : ''}`,
         { method: 'POST' },
       );
-      if (!response.ok) {
-        throw await apiErrorFromResponse(response, 'Failed to run report schedule');
-      }
-      const body = await response.json();
+      const body = await response
+        .clone()
+        .json()
+        .catch(() => null);
       if (body?.schedule) {
         const updated = normalizeReportSchedule(body.schedule);
         setReportSchedules((current) =>
           current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
         );
-      } else {
-        await loadReportSchedules();
       }
-      showSuccess('Report schedule ran');
+      await loadReportSchedules();
+      if (!response.ok) {
+        if (body?.schedule) {
+          showWarning(body.schedule.last_error || reportScheduleLastRunLabel(body.schedule));
+          return;
+        }
+        throw await apiErrorFromResponse(response, 'Failed to run report schedule');
+      }
+      if (
+        body?.schedule?.last_run_status === 'retrying' ||
+        body?.schedule?.last_run_status === 'unconfirmed'
+      )
+        showWarning(body.schedule.last_error || reportScheduleLastRunLabel(body.schedule));
+      else
+        showSuccess(
+          body?.schedule ? reportScheduleLastRunLabel(body.schedule) : 'Report schedule ran',
+        );
     } catch (error) {
       console.error('Run report schedule error:', error);
       showWarning(error instanceof Error ? error.message : 'Failed to run report schedule');

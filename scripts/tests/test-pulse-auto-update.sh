@@ -16,6 +16,10 @@ fi
 # shellcheck disable=SC1090
 source "${AUTO_UPDATE_SCRIPT}"
 
+# Command doubles run in this shell, not through the host manager. Actual
+# timeout/manager boundaries are exercised by test_auto_update_service_state.py.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
+
 failures=0
 
 assert_success() {
@@ -32,33 +36,28 @@ assert_success() {
 }
 
 test_wait_for_service_active_succeeds_after_retry() {
-  local calls=0
-
+  local counter; counter=$(mktemp)
+  printf '0\n' > "$counter"
   systemctl() {
-    if [[ "$1" == "is-active" ]]; then
-      ((calls += 1))
-      if (( calls >= 3 )); then
-        return 0
-      fi
-      return 1
-    fi
-    return 1
+    [[ "$1" == show ]] || return 1
+    local count; count=$(cat "$counter"); ((count += 1))
+    printf '%s\n' "$count" > "$counter"
+    printf 'LoadState=loaded\n'
+    if (( count >= 3 )); then echo ActiveState=active; else echo ActiveState=activating; fi
   }
-
   sleep() { :; }
-
-  wait_for_service_active pulse 5
+  local result=0
+  wait_for_service_active pulse 5 || result=$?
+  command rm "$counter"
+  return "$result"
 }
 
 test_wait_for_service_active_times_out_when_never_active() {
-  systemctl() { return 1; }
+  systemctl() { [[ "$1" == show ]] || return 1; printf 'LoadState=loaded\nActiveState=inactive\n'; }
   sleep() { :; }
-
-  if wait_for_service_active pulse 3; then
-    echo "expected wait_for_service_active to fail when service never becomes active" >&2
-    return 1
-  fi
-  return 0
+  local result=0
+  wait_for_service_active pulse 3 || result=$?
+  [[ "$result" == 1 ]] || { echo "expected settled inactive timeout, got $result" >&2; return 1; }
 }
 
 test_pick_highest_stable_tag_ignores_list_order_and_prereleases() {
@@ -88,11 +87,12 @@ test_get_latest_stable_version_prefers_highest_over_created_order() {
     if [[ "$url" == *"/releases?per_page="* ]]; then
       cat <<'EOF'
 [
-  { "tag_name": "v5.1.37", "prerelease": false },
-  { "tag_name": "helm-chart-6.0.5", "prerelease": true },
-  { "tag_name": "v6.0.5", "prerelease": false },
-  { "tag_name": "v6.0.5-rc.4", "prerelease": true },
-  { "tag_name": "v6.0.4", "prerelease": false }
+  { "tag_name": "v5.1.37", "draft": false, "prerelease": false },
+  { "tag_name": "helm-chart-6.0.5", "draft": false, "prerelease": false },
+  { "tag_name": "v99.0.0", "draft": true, "prerelease": false },
+  { "tag_name": "v6.0.5", "draft": false, "prerelease": false },
+  { "tag_name": "v6.0.5-rc.4", "draft": false, "prerelease": true },
+  { "tag_name": "v6.0.4", "draft": false, "prerelease": false }
 ]
 EOF
       return 0
@@ -110,6 +110,30 @@ EOF
     return 1
   fi
   return 0
+}
+
+test_get_latest_stable_version_rejects_incomplete_maturity() {
+  # Missing fields must remain unknown, not default to published stable.
+  # Both transport paths are confined; this test makes no provider request.
+  curl() {
+    local url="${*: -1}"
+    case "$url" in
+      */releases\?per_page=*)
+        printf '%s\n' '[{"tag_name":"v99.0.0","prerelease":false},{"tag_name":"v99.0.1","draft":false}]'
+        ;;
+      */releases/latest)
+        printf '%s\n' '{"tag_name":"v99.0.0","prerelease":false}'
+        ;;
+      *) echo "unexpected curl call in test: $*" >&2; return 1 ;;
+    esac
+  }
+  local got
+  got=$(get_latest_stable_version)
+  unset -f curl
+  if [[ -n "$got" ]]; then
+    echo "incomplete maturity must not select an unattended update, got $got" >&2
+    return 1
+  fi
 }
 
 test_perform_update_restores_backup_when_service_stays_down() {
@@ -131,6 +155,7 @@ echo "v5.1.24"
 EOF
   chmod +x "${INSTALL_DIR}/bin/pulse"
 
+  printf 'active\n' > "$INSTALL_DIR/service-state"
   export INSTALL_DIR
   export FAKE_NEW_VERSION="v5.1.25"
 
@@ -158,6 +183,7 @@ EOF
           cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
 printf '%s\n' "${FAKE_NEW_VERSION}" > "${PULSE_INSTALL_DIR}/VERSION"
+echo inactive > "${PULSE_INSTALL_DIR}/service-state"
 exit 0
 INSTALLER
           ;;
@@ -166,18 +192,13 @@ INSTALLER
     return 0
   }
 
-  # Service was running before the update (first is-active call true), then
-  # never comes back up; start also fails -> perform_update must restore + fail.
-  local is_active_calls=0
+  # The installer records its stop; explicit starts fail for this scenario.
   systemctl() {
-    if [[ "$1" == "is-active" ]]; then
-      ((is_active_calls += 1))
-      if (( is_active_calls == 1 )); then
-        return 0
-      fi
-      return 1
-    fi
-    return 1
+    case "$1" in
+      show) printf 'LoadState=loaded\nActiveState=%s\n' "$(cat "$INSTALL_DIR/service-state")"; return 0 ;;
+      stop) echo inactive > "$INSTALL_DIR/service-state" ;;
+      *) return 1 ;;
+    esac
   }
 
   sleep() { :; }
@@ -222,6 +243,11 @@ test_ensure_service_restarted_starts_stopped_service() {
   ENSURE_TEST_UP="no"
   systemctl() {
     case "$1" in
+      show)
+        printf 'LoadState=loaded\n'
+        if [[ "$ENSURE_TEST_UP" == yes ]]; then echo ActiveState=active; else echo ActiveState=inactive; fi
+        return 0
+        ;;
       is-active)
         [[ "$ENSURE_TEST_UP" == "yes" ]] && return 0 || return 1
         ;;
@@ -272,6 +298,7 @@ echo "v5.1.24"
 EOF
   chmod +x "${INSTALL_DIR}/bin/pulse"
 
+  printf 'active\n' > "$INSTALL_DIR/service-state"
   export INSTALL_DIR
 
   is_prerelease_tag() { return 1; }
@@ -296,6 +323,7 @@ EOF
         *)
           cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
+echo inactive > "${PULSE_INSTALL_DIR}/service-state"
 exit 1
 INSTALLER
           ;;
@@ -311,6 +339,7 @@ INSTALLER
   AUTOUPDATE_TEST_STARTS=0
   systemctl() {
     case "$1" in
+      show) printf 'LoadState=loaded\nActiveState=%s\n' "$(cat "$INSTALL_DIR/service-state")"; return 0 ;;
       is-active)
         ((AUTOUPDATE_TEST_IS_ACTIVE_CALLS += 1))
         if (( AUTOUPDATE_TEST_IS_ACTIVE_CALLS == 1 )); then
@@ -321,8 +350,10 @@ INSTALLER
       start|restart)
         ((AUTOUPDATE_TEST_STARTS += 1))
         AUTOUPDATE_TEST_UP="yes"
+        echo active > "$INSTALL_DIR/service-state"
         return 0
         ;;
+      stop) AUTOUPDATE_TEST_UP="no"; echo inactive > "$INSTALL_DIR/service-state"; return 0 ;;
     esac
     return 1
   }
@@ -407,13 +438,29 @@ INSTALLER
 
   # Pulse was running and stays running, so perform_update succeeds.
   systemctl() {
-    if [[ "$1" == "is-active" ]]; then return 0; fi
+    if [[ "$1" == show ]]; then printf 'LoadState=loaded\nActiveState=active\n'; fi
     return 0
   }
   sleep() { :; }
 
+  # This is a RETURN-trap control with a simulated manager and script binary,
+  # not a Linux process-identity test. Supply its verification handoff explicitly
+  # and require it to be reached for the exact service/new version. Real /proc
+  # refusals remain in test_auto_update_service_state.py and native CI.
+  AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS=0
+  verify_update_running_executable() {
+    [[ $# -eq 1 && "$1" == pulse ]] || return 1
+    ((AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS += 1))
+    [[ "$(get_current_version)" == v5.1.25 ]]
+  }
+
   trap - RETURN 2>/dev/null || true
   perform_update "v5.1.25" || status=1
+
+  if (( AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS != 1 )); then
+    echo "successful trap control did not reach its running-executable handoff exactly once" >&2
+    status=1
+  fi
 
   local leaked
   leaked="$(trap -p RETURN)"
@@ -431,6 +478,10 @@ INSTALLER
     echo "perform_update leaked a RETURN trap on the prerelease refusal path: ${leaked}" >&2
     status=1
   fi
+  if (( AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS != 1 )); then
+    echo "prerelease refusal unexpectedly reached running-executable verification" >&2
+    status=1
+  fi
 
   trap - RETURN 2>/dev/null || true
   rm -rf "${tmpdir}"
@@ -442,6 +493,7 @@ main() {
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
   assert_success "pick_highest_stable_tag ignores list order and prereleases" test_pick_highest_stable_tag_ignores_list_order_and_prereleases
   assert_success "get_latest_stable_version prefers highest version over created order" test_get_latest_stable_version_prefers_highest_over_created_order
+  assert_success "get_latest_stable_version refuses incomplete maturity" test_get_latest_stable_version_rejects_incomplete_maturity
   assert_success "perform_update restores backup when service stays down" test_perform_update_restores_backup_when_service_stays_down
   assert_success "ensure_service_restarted no-ops when service was inactive" test_ensure_service_restarted_noops_when_service_was_inactive
   assert_success "ensure_service_restarted starts a stopped service" test_ensure_service_restarted_starts_stopped_service

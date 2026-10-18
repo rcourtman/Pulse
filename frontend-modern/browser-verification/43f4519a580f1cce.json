@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "197f9bac5e5e782457729a3b33690bccee0d7447",
+  "verified_at": "2026-10-08T10:53:05.973Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "0d11efe55c62b5dae8b169e6322473fa5b40d9df200c1ae8c7e88a7050e79559"
+  },
+  "routes": [
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Four single-line amber unavailable-update badges with lock indicators; current byparr and sonarr; PBS failed check",
+    "Passive update badge in light and dark themes",
+    "Refusal removed on reload restores enabled Update for one host"
+  ],
+  "interactions": [
+    "Hover, keyboard focus, Escape, status click without planning or row expansion, Tab blur at all three widths",
+    "Reload with changed canonical readiness; enabled Update opens review and Escape closes without approval or execution"
+  ]
+}

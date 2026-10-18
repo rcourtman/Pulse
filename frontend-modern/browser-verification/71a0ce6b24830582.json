@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "48c2d6cdce8d019151e3567873de88e21b76bb22",
+  "verified_at": "2026-10-07T19:05:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/aiIntelligence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/aiIntelligence.ts": "d9287de8171cee10d72c5df0a898c28e47e649be3f9dee8fa791a7406c0adc51"
+  },
+  "routes": [
+    "/patrol",
+    "/kubernetes"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Type-only deletion: TypeScript erases CorrelationsResponse, and npm run build before and after the change emitted the same 187 dist files with identical SHA-256 sums, so the shipped bundle is byte-identical",
+    "Embedded production build in a private demo-mode mock stack (port 7763, fresh data dir)",
+    "Patrol inbox: Patrol heading and 5 attention rows render at 1280x800 and 390x844",
+    "Kubernetes deployment account-portal drawer opens with header, technical summary, runtime context and identity sections at both widths",
+    "No console errors and no page errors on either route at either width; no /api/ai/intelligence/correlations request",
+    "Relationship map (ResourceCorrelationSummary, the surviving ResourceCorrelation consumer) not rendered in this pass: table-row drawers do not fetch per-resource facets or resource intelligence (enableRemoteHistory is off for table-row presentation); its code ships unchanged in the byte-identical bundle"
+  ],
+  "interactions": [
+    "Demo sign-in, then navigate to /patrol and wait for the Patrol heading",
+    "Navigate to /kubernetes and click the account-portal deployment row to open its inline resource drawer",
+    "Repeat the same pass at 1280x800 and 390x844"
+  ]
+}

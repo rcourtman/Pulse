@@ -274,6 +274,60 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
   });
 
+  it('keeps the desired replica count on screen in the Deployments table', () => {
+    // Desired returns with the 72rem tier, so Ready's own /desired total hides
+    // only there, after its base rule so the container rule wins.
+    const base = appStylesSource.indexOf('.k8s-deployment-ready-total {\n    display: inline;');
+    const hide = appStylesSource.indexOf(
+      '@container (min-width: 72rem) {\n    .k8s-deployment-ready-total {\n      display: none;',
+    );
+    expect(base).toBeGreaterThan(-1);
+    expect(hide).toBeGreaterThan(base);
+    expect(appStylesSource.match(/\.k8s-deployment-ready-total \{\s*display: none;/g)).toHaveLength(
+      1,
+    );
+  });
+
+  it('keeps the identity anchor between the phone projection and the md column widths', () => {
+    // Column visibility is container-led but md:w-[...] widths are viewport
+    // media queries, so a 544-767px band showed every column with no widths and
+    // split them equally (a Kubernetes node name got 83px). The shared shell
+    // keeps the 30% name anchor there.
+    const band = appStylesSource.slice(appStylesSource.indexOf('@media (width < 768px)'));
+    expect(band).toMatch(
+      /^@media \(width < 768px\) \{\s*@container \(min-width: 34rem\) \{\s*\.table-scroll-shell > \.table-fixed\.platform-table th\.platform-table-name-column \{\s*width: 30%;/,
+    );
+    // A table that needs unequal room in the band declares each header's
+    // width, and the shell applies it only there (after the name anchor).
+    expect(band).toMatch(
+      /width: 30%;\s*\}[\s\S]*?th\[style\*='--platform-table-band-width'\] \{\s*width: var\(--platform-table-band-width\);/,
+    );
+    // A header whose full label outgrows its band column keeps its compact
+    // label there; these rules sit after the 34rem label switch so they win.
+    expect(band).toMatch(
+      /--platform-table-band-width\);\s*\}[\s\S]*?\.platform-table-label-compact\.platform-table-label-band-compact \{\s*display: inline;\s*\}\s*\.platform-table-label-full\.platform-table-label-band-compact \{\s*display: none;/,
+    );
+    const labelSwitch = appStylesSource.indexOf(
+      '@container (min-width: 34rem) {\n    .platform-table-label-compact',
+    );
+    expect(labelSwitch).toBeGreaterThan(0);
+    expect(appStylesSource.indexOf('.platform-table-label-band-compact')).toBeGreaterThan(
+      labelSwitch,
+    );
+  });
+
+  it('draws the shared select arrow that appearance-none removes', () => {
+    // FormSelect's default chrome sets appearance-none to match text inputs;
+    // without this utility every default select read as a text field.
+    expect(appStylesSource).toMatch(
+      /@utility form-select-arrow \{\s*background-image:\s*linear-gradient\(45deg, transparent 50%, var\(--color-text-muted\) 50%\)/,
+    );
+    // Forced-colors mode drops background images, so the native arrow returns.
+    expect(appStylesSource).toMatch(
+      /@media \(forced-colors: active\) \{\s*appearance: auto !important;\s*background-image: none;/,
+    );
+  });
+
   it('keeps compact phone settings spacing scoped to the settings content shell', () => {
     expect(appStylesSource).toContain('@media (max-width: 39.999rem)');
     expect(appStylesSource).toContain(
@@ -298,6 +352,13 @@ describe('App architecture', () => {
       '-webkit-box-shadow: 0 0 0 1000px var(--color-bg-surface) inset;',
     );
     expect(appStylesSource).toContain('-webkit-text-fill-color: var(--color-text-base);');
+  });
+
+  it('keeps summary row emphasis to the shared active-row rules', () => {
+    expect(appStylesSource).toContain("tr[data-summary-row-active='true'] > td");
+    // Group-member emphasis went with the Storage group pin; no table sets it.
+    expect(appStylesSource).not.toContain('data-summary-group-member-active');
+    expect(appStylesSource).not.toContain('--color-summary-group-member-');
   });
 
   it('keeps infrastructure platforms marked as dense data surfaces', () => {
@@ -363,8 +424,8 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
-    expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
-    expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
+    expect(appRuntimeStateSource).not.toContain('getInfrastructureSummaryCharts');
+    expect(appRuntimeStateSource).not.toContain('getWorkloadCharts');
     expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
     expect(appRuntimeStateSource).toContain('ssoSessionDisplayName?: string;');
     expect(appRuntimeStateSource).toContain(
@@ -977,29 +1038,29 @@ describe('App architecture', () => {
   });
 });
 
+function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return collectFrontendSources(entryPath);
+    }
+    // Only runtime sources matter; a test may quote an old shape in order to
+    // assert against it, as the guards below do.
+    if (!/\.(css|ts|tsx)$/.test(entry.name)) {
+      return [];
+    }
+    if (entryPath.includes('__tests__') || /\.(test|spec)\./.test(entry.name)) {
+      return [];
+    }
+    return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
+  });
+}
+
 describe('mobile bottom navigation clearance', () => {
   const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
   // Matches the shape every drifted copy used, spaced or not. The lookbehind
   // keeps the declared 2.5rem fallback from matching its own guard.
   const HARDCODED_BAR_HEIGHT = /(?<![\d.])5rem\s*\+\s*env\(\s*safe-area-inset-bottom/;
-
-  function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const entryPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return collectFrontendSources(entryPath);
-      }
-      // Only runtime sources matter; a test may quote the old shape in order
-      // to assert against it, as this one does.
-      if (!/\.(css|ts|tsx)$/.test(entry.name)) {
-        return [];
-      }
-      if (entryPath.includes('__tests__') || /\.(test|spec)\./.test(entry.name)) {
-        return [];
-      }
-      return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
-    });
-  }
 
   it('declares the bar height as a single custom property', () => {
     expect(appStylesSource).toContain(NAV_HEIGHT_VARIABLE);
@@ -1020,6 +1081,33 @@ describe('mobile bottom navigation clearance', () => {
   });
 });
 
+describe('page background utility', () => {
+  // Tailwind 4 emits nothing for a colour it does not know, so `bg-base`
+  // rendered transparent without any error: command blocks, the alert
+  // selection bar and segmented-control tracks all lost their backgrounds.
+  // A theme colour named `base` is not the fix either, because it also gives
+  // the `text-base` font-size utility a colour and paints text in the page
+  // colour. The page backdrop is the bg-page utility.
+  const DEAD_BASE_BACKGROUND = /(?<![\w-])bg-base(?![\w-])/;
+  // A comment may name the old class to explain a fix, as toggleModel does.
+  const COMMENTS = /\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm;
+
+  it('declares the page backdrop as a utility, never as a colour named base', () => {
+    expect(appStylesSource).toMatch(
+      /@utility bg-page \{\s*background-color: var\(--color-bg-base\);\s*\}/,
+    );
+    expect(appStylesSource).not.toMatch(/--color-base\s*:/);
+  });
+
+  it('keeps every runtime class off the bg-base utility that renders nothing', () => {
+    const offenders = collectFrontendSources(join(process.cwd(), 'src'))
+      .filter(({ source }) => DEAD_BASE_BACKGROUND.test(source.replace(COMMENTS, '$1')))
+      .map(({ path }) => path.slice(process.cwd().length + 1));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('Docker phone update reflow boundary', () => {
   it('scopes label wrapping to narrow Docker cells without restoring a nested scrollport', () => {
     const phoneStyles = appStylesSource.slice(appStylesSource.indexOf('/* Phone update states'));
@@ -1033,5 +1121,228 @@ describe('Docker phone update reflow boundary', () => {
     expect(appStylesSource).toMatch(
       /\.table-scroll-shell\.table-scroll-shell-phone-page\s*\{\s*overflow: clip;/,
     );
+  });
+});
+
+describe('Alert History column widths', () => {
+  // Hidden tracks are collapsed and zero-width so the table is always the
+  // card's width: WebKit keeps a collapsed column's width in a fixed layout,
+  // so widening the table to compensate made Safari scroll sideways. The base
+  // density (an unmeasured card under 800px) gives every visible track a
+  // percentage summing to 100%. From an 800px card the fixed-content columns
+  // take exact pixels, resource and node a plain share of the card, and
+  // message has no width so it takes the rest.
+  const columns = [
+    'timestamp',
+    'resource',
+    'type',
+    'severity',
+    'message',
+    'duration',
+    'status',
+    'node',
+    'actions',
+  ] as const;
+  type Column = (typeof columns)[number];
+  const densities: Array<{ name: string; visible: readonly Column[] }> = [
+    {
+      name: 'base',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'status', 'actions'],
+    },
+    {
+      name: '50rem',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'duration', 'status', 'actions'],
+    },
+    { name: '64rem', visible: columns },
+    { name: '80rem', visible: columns },
+  ];
+  const blocks = [
+    ...appStylesSource.matchAll(
+      /table\.alert-history-responsive-table \{\s*((?:--alert-history-[a-z]+-width: [^;]+;\s*)+)width: ([^;]+);/g,
+    ),
+  ];
+  const parse = (block: RegExpMatchArray) =>
+    Object.fromEntries(
+      [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([^;]+);/g)].map((match) => [
+        match[1],
+        match[2].trim(),
+      ]),
+    ) as Record<Column, string>;
+  const percent = (value: string) => {
+    const match = /^(\d+(?:\.\d+)?)%$/.exec(value);
+    if (!match) throw new Error(`expected a percentage, got ${value}`);
+    return Number(match[1]);
+  };
+  const pixels = (value: string) => {
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(value);
+    if (!match) throw new Error(`expected pixels, got ${value}`);
+    return Number(match[1]);
+  };
+
+  // Each density is sized for the narrowest card it serves, from the natural
+  // widths measured in a real browser (padding included): "08:27 AM" in a 14px
+  // monospace, the Severity/Duration/Resource headers, a 119px "acknowledged"
+  // badge, and the three row actions on one line (177px). Below 800px the
+  // actions stack, so the base density only needs the widest single button.
+  // Message, the column that says what happened, may never fall under 18% of
+  // the card. Type and Node, which appear from 1024px, get a floor too: the
+  // longest type label, "Container Health", needs 119px with its padding.
+  const wideNeeds = {
+    timestamp: 84,
+    resource: 93,
+    severity: 86,
+    duration: 91,
+    status: 119,
+    actions: 177,
+  } as const;
+  const pixelNeeds: Array<{
+    name: string;
+    cardWidth: number;
+    needs: Partial<Record<Column, number>>;
+  }> = [
+    {
+      name: 'base',
+      cardWidth: 600,
+      needs: { timestamp: 84, resource: 93, severity: 86, status: 119, actions: 80 },
+    },
+    { name: '50rem', cardWidth: 800, needs: wideNeeds },
+    { name: '64rem', cardWidth: 1024, needs: { ...wideNeeds, type: 120, node: 68 } },
+    { name: '80rem', cardWidth: 1280, needs: { ...wideNeeds, type: 120, node: 68 } },
+  ];
+
+  // The rendered width of each visible track at a given card width.
+  const trackWidths = (index: number, cardWidth: number): Record<string, number> => {
+    const widths = parse(blocks[index]);
+    const visible = densities[index].visible;
+    if (index === 0) {
+      return Object.fromEntries(
+        visible.map((column) => [column, (percent(widths[column]) / 100) * cardWidth]),
+      );
+    }
+    const tableWidth = cardWidth;
+    const resolved: Record<string, number> = {};
+    for (const column of visible) {
+      if (column === 'message') continue;
+      resolved[column] = widths[column].endsWith('%')
+        ? (percent(widths[column]) / 100) * tableWidth
+        : pixels(widths[column]);
+    }
+    resolved.message = cardWidth - Object.values(resolved).reduce((sum, width) => sum + width, 0);
+    return resolved;
+  };
+
+  it('declares every track width at each density', () => {
+    expect(blocks).toHaveLength(densities.length);
+    for (const column of columns) {
+      expect(appStylesSource).toContain(
+        `col.alert-history-${column}-track {\n    width: var(--alert-history-${column}-width);`,
+      );
+    }
+  });
+
+  it('keeps the table at the card width with zero-width hidden tracks', () => {
+    blocks.forEach((block, index) => {
+      const widths = parse(block);
+      const { name, visible } = densities[index];
+      expect(block[2].trim(), `${name}: table width`).toBe('100%');
+      for (const column of columns.filter((candidate) => !visible.includes(candidate))) {
+        expect(widths[column], `${name}: hidden ${column}`).toMatch(/^0(?:px|%)$/);
+      }
+    });
+  });
+
+  it('fills the narrow card exactly with the base density percentages', () => {
+    const widths = parse(blocks[0]);
+    const visibleSum = densities[0].visible.reduce(
+      (sum, column) => sum + percent(widths[column]),
+      0,
+    );
+    expect(visibleSum).toBeCloseTo(100, 6);
+  });
+
+  it('lets message take what the fixed tracks leave from an 800px card', () => {
+    blocks.slice(1).forEach((block, offset) => {
+      const index = offset + 1;
+      const widths = parse(block);
+      expect(widths.message, `${densities[index].name}: message`).toBe('auto');
+      // Content with a fixed size takes pixels. Resource and node, which hold
+      // truncating names, may take a plain share of the card; never a
+      // max() or calc() on a column, which Chromium lays out as auto.
+      for (const column of columns) {
+        if (column === 'message') continue;
+        const shared = column === 'resource' || column === 'node';
+        const read = () =>
+          shared && widths[column].endsWith('%') ? percent(widths[column]) : pixels(widths[column]);
+        expect(read, `${densities[index].name}: ${column}`).not.toThrow();
+      }
+    });
+  });
+
+  it('declares each density block inside its 50rem, 64rem and 80rem container query', () => {
+    const enclosing = blocks.slice(1).map((block) => {
+      const start = block.index as number;
+      const queries = [
+        ...appStylesSource.slice(0, start).matchAll(/@container \(min-width: ([\d.]+)rem\) \{/g),
+      ];
+      const query = queries[queries.length - 1];
+      // Walk the braces from the query to the end of its body: the density
+      // block only counts if it sits before that closing brace.
+      let depth = 0;
+      let close = -1;
+      for (
+        let index = (query.index as number) + query[0].length - 1;
+        index < appStylesSource.length;
+        index += 1
+      ) {
+        const char = appStylesSource[index];
+        if (char === '{') depth += 1;
+        if (char === '}') depth -= 1;
+        if (depth === 0) {
+          close = index;
+          break;
+        }
+      }
+      return { rem: Number(query[1]), enclosed: start + block[0].length <= close };
+    });
+    expect(enclosing).toEqual([
+      { rem: 50, enclosed: true },
+      { rem: 64, enclosed: true },
+      { rem: 80, enclosed: true },
+    ]);
+  });
+
+  it('gives every column the pixels its content needs at the narrowest card of each density', () => {
+    pixelNeeds.forEach(({ name, cardWidth, needs }, index) => {
+      const widths = trackWidths(index, cardWidth);
+      for (const [column, need] of Object.entries(needs)) {
+        expect(widths[column], `${name}: ${column} track at ${cardWidth}px`).toBeGreaterThanOrEqual(
+          need - 0.5,
+        );
+      }
+    });
+  });
+
+  it('keeps Message at least 18% of the card at the narrowest card of every density', () => {
+    pixelNeeds.forEach(({ name, cardWidth }, index) => {
+      expect(
+        trackWidths(index, cardWidth).message / cardWidth,
+        `${name}: message share`,
+      ).toBeGreaterThanOrEqual(0.18);
+    });
+  });
+
+  // Percentages handed most of every extra pixel to a badge and three buttons
+  // that already fit: at a 982px card message held 182px. Pixel tracks give
+  // the extra width to message.
+  it('gives message most of the extra width of a wider card', () => {
+    for (const [index, narrow, wide] of [
+      [1, 800, 1023],
+      [2, 1024, 1279],
+      [3, 1280, 1600],
+    ] as const) {
+      const growth = trackWidths(index, wide).message - trackWidths(index, narrow).message;
+      expect(growth, densities[index].name).toBeGreaterThanOrEqual(0.75 * (wide - narrow));
+    }
+    expect(trackWidths(1, 982).message).toBeGreaterThan(300);
   });
 });

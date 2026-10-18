@@ -617,8 +617,7 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 
 	service.UpdateControlSettings(nil)
 	service.UpdateControlSettings(&config.AIConfig{
-		ControlLevel:    config.ControlLevelControlled,
-		ProtectedGuests: []string{"101"},
+		ControlLevel: config.ControlLevelControlled,
 	})
 
 	// After updating to controlled mode, pulse_control should be available

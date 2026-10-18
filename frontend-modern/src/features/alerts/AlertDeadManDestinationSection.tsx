@@ -1,10 +1,12 @@
-import { createSignal, createUniqueId, onMount, Show, type Accessor } from 'solid-js';
+import { createSignal, createUniqueId, onCleanup, onMount, Show, type Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
+import { Button } from '@/components/shared/Button';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import type { DeadManStatus } from '@/types/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface AlertDeadManDestinationSectionProps {
   pingUrl: Accessor<string>;
@@ -13,9 +15,19 @@ interface AlertDeadManDestinationSectionProps {
 }
 
 const REDACTED_PING_URL = '***REDACTED***';
+// Pulse pings the watchdog every minute, so a status read once at mount goes
+// stale while the panel stays open.
+export const DEAD_MAN_STATUS_POLL_MS = 30_000;
+// A read pending this long at a poll tick counts as a full interval old. The
+// slack absorbs timer jitter: the next tick can land a few milliseconds short
+// of a full interval after the read the previous tick started.
+const DEAD_MAN_STATUS_STALE_MS = DEAD_MAN_STATUS_POLL_MS - 1_000;
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
-  disabled: { label: 'Not configured', class: 'bg-base text-muted' },
+  disabled: {
+    label: 'Not configured',
+    class: 'bg-surface text-muted ring-1 ring-inset ring-border',
+  },
   starting: {
     label: 'Starting',
     class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-100',
@@ -26,19 +38,19 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   },
   delivery_failed: {
     label: 'Delivery failing',
-    class: 'bg-amber-100 text-amber-900/25 dark:bg-amber-900/25 dark:text-amber-100',
+    class: 'bg-amber-100 text-amber-900 dark:bg-amber-900/25 dark:text-amber-100',
   },
   monitor_stalled: {
     label: 'Monitoring stalled',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
   misconfigured: {
     label: 'Configuration invalid',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
   configuration_unavailable: {
     label: 'Configuration unavailable',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
 };
 
@@ -50,21 +62,72 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
-  const loadStatus = async () => {
-    if (loading()) return;
-    setLoading(true);
+  // The status read has no timeout. Every read gets a sequence number, and a
+  // read's outcome applies only when it is newer than the last read that
+  // settled: a success shows its status and clears the unavailable mark, a
+  // failure sets it. A slow or hung read therefore cannot overwrite a newer
+  // outcome or block later reads, and reads slower than the poll interval
+  // still land in order. A background read waits while the newest read is
+  // younger than one poll interval (less a second of timer slack); a Refresh
+  // still pending at such a poll counts as stalled and frees the button.
+  // Nothing applies after the panel unmounts.
+  let latestStarted = 0;
+  let latestSettled = 0;
+  let pendingSince: number | undefined;
+  let foregroundRequest = 0;
+  let foregroundSince = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const loadStatus = async (options: { background?: boolean } = {}) => {
+    const startedAt = Date.now();
+    if (options.background) {
+      if (loading() && startedAt - foregroundSince >= DEAD_MAN_STATUS_STALE_MS) {
+        setLoading(false);
+      }
+      if (pendingSince !== undefined && startedAt - pendingSince < DEAD_MAN_STATUS_STALE_MS) {
+        return;
+      }
+    } else if (loading()) {
+      return;
+    }
+    const request = ++latestStarted;
+    pendingSince = startedAt;
+    if (!options.background) {
+      foregroundRequest = request;
+      foregroundSince = startedAt;
+      setLoading(true);
+    }
     try {
-      setStatus(await AlertsAPI.getDeadManStatus());
+      const next = await AlertsAPI.getDeadManStatus();
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
+      setStatus(next);
       setUnavailable(false);
     } catch (error) {
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
       logger.error('Failed to load external watchdog status', error);
       setUnavailable(true);
     } finally {
-      setLoading(false);
+      if (!disposed) {
+        if (request === latestStarted) pendingSince = undefined;
+        // A Refresh is answered by its own read or by any newer one.
+        if (request >= foregroundRequest) setLoading(false);
+      }
     }
   };
 
-  onMount(() => void loadStatus());
+  // Last success and Monitor progress keep aging on the shared clock, and the
+  // status is re-read in the background so a moving age never describes a
+  // heartbeat that has since been sent.
+  const now = useRelativeTimeNow();
+  onMount(() => {
+    void loadStatus();
+    const timer = setInterval(() => void loadStatus({ background: true }), DEAD_MAN_STATUS_POLL_MS);
+    onCleanup(() => clearInterval(timer));
+  });
 
   const presentation = () => {
     const current = status();
@@ -83,14 +146,14 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
           <span class={`rounded-full px-2.5 py-1 text-xs font-semibold ${presentation().class}`}>
             {unavailable() ? 'Status unavailable' : presentation().label}
           </span>
-          <button
-            type="button"
-            class="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50"
+          <Button
+            variant="outline"
+            size="xs"
             disabled={loading()}
             onClick={() => void loadStatus()}
           >
             {loading() ? 'Refreshing…' : 'Refresh'}
-          </button>
+          </Button>
         </div>
       }
       class="min-w-0"
@@ -133,14 +196,14 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 </button>
               }
             >
-              <button
-                type="button"
-                class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
+              <Button
+                variant="outline"
+                size="settingsAction"
                 aria-pressed={showUrl()}
                 onClick={() => setShowUrl((value) => !value)}
               >
                 {showUrl() ? 'Hide' : 'Show'}
-              </button>
+              </Button>
             </Show>
           </div>
           <p id={`${inputId}-help`} class="mt-2 text-xs leading-5 text-muted">
@@ -153,12 +216,15 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
 
         <Show when={status()}>
           {(current) => (
-            <div class="grid gap-3 rounded-md border border-border bg-base p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid gap-3 rounded-md border border-border bg-page p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <div class="font-medium text-muted">Last success</div>
                 <div class="mt-1 text-base-content">
                   {current().lastSuccessAt
-                    ? formatRelativeTime(current().lastSuccessAt, { emptyText: 'Never' })
+                    ? formatRelativeTime(current().lastSuccessAt, {
+                        emptyText: 'Never',
+                        now: now(),
+                      })
                     : 'Never'}
                 </div>
               </div>
@@ -166,7 +232,10 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 <div class="font-medium text-muted">Monitor progress</div>
                 <div class="mt-1 text-base-content">
                   {current().lastMonitoringProgress
-                    ? formatRelativeTime(current().lastMonitoringProgress, { emptyText: 'Waiting' })
+                    ? formatRelativeTime(current().lastMonitoringProgress, {
+                        emptyText: 'Waiting',
+                        now: now(),
+                      })
                     : 'Waiting'}
                 </div>
               </div>
@@ -187,7 +256,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
         </Show>
 
         <Show when={status()?.lastError}>
-          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
+          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
             {status()!.lastError}
           </p>
         </Show>

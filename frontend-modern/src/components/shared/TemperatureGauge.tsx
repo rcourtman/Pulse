@@ -14,6 +14,9 @@ interface TemperatureGaugeProps {
   warning?: number;
   thresholds?: MetricDisplayThresholds | null;
   metric?: TemperatureDisplayMetric;
+  /** Severity of an open alert on this reading; keeps its tone while the alert holds. */
+  alertSeverity?: 'warning' | 'critical' | null;
+  title?: string;
   class?: string;
 }
 
@@ -30,11 +33,14 @@ export const TemperatureGauge: Component<TemperatureGaugeProps> = (props) => {
   });
 
   const textColorClass = createMemo(() =>
-    getTemperatureTextClass(props.value, explicitThresholds(), props.metric),
+    getTemperatureTextClass(props.value, explicitThresholds(), props.metric, props.alertSeverity),
   );
 
   return (
-    <span class={`text-xs whitespace-nowrap ${textColorClass()} ${props.class || ''}`}>
+    <span
+      class={`text-xs whitespace-nowrap ${textColorClass()} ${props.class || ''}`}
+      title={props.title}
+    >
       {formatTemperature(props.value)}
     </span>
   );

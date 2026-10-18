@@ -117,20 +117,13 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 		p.mu.Unlock()
 	}
 
-	// Run initial patrol shortly after startup, but only if one hasn't run recently
-	initialDelay := initialPatrolStartDelay
-	initialTimer := time.NewTimer(initialDelay)
+	// Let configuration and collection initialize before resuming a due check.
+	// This grace period must not become a new full scheduling interval.
+	initialTimer := time.NewTimer(initialPatrolStartDelay)
 	defer initialTimer.Stop()
 
 	select {
 	case <-initialTimer.C:
-		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
-		runHistory := p.GetRunHistory(10)
-		skipInitial := shouldSkipInitialFullPatrol(runHistory, time.Now())
-
-		if !skipInitial {
-			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
-		}
 	case <-p.stopCh:
 		if !initialTimer.Stop() {
 			select {
@@ -154,23 +147,30 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	configCh := p.configChanged
 	p.mu.RUnlock()
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	p.mu.Lock()
-	p.nextScheduledAt = time.Now().Add(interval)
-	p.mu.Unlock()
+	next, trigger := p.initialPatrolSchedule(time.Now(), interval)
+	if trigger != TriggerReasonStartup {
+		p.setNextPatrolSchedule(next, interval)
+	}
+	timer := time.NewTimer(time.Until(next))
+	defer timer.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
-			// Update next scheduled time before the run starts — time.Now() closely
-			// matches the tick time here, and the ticker will fire again at roughly
-			// this moment + interval regardless of how long the run takes.
-			p.mu.Lock()
-			p.nextScheduledAt = time.Now().Add(interval)
-			p.mu.Unlock()
-			p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
+		case <-timer.C:
+			if trigger == TriggerReasonStartup {
+				p.runPatrolWithTrigger(ctx, trigger, nil)
+				// Keep the first-install cadence anchored after its startup check.
+				next = time.Now().Add(interval)
+			} else {
+				// Persist the next deadline before starting work. Collapse missed
+				// intervals into one due check rather than replaying a backlog.
+				next = nextPatrolDeadline(next, time.Now(), interval)
+				p.setNextPatrolSchedule(next, interval)
+				p.runPatrolWithTrigger(ctx, trigger, nil)
+			}
+			trigger = TriggerReasonScheduled
+			p.setNextPatrolSchedule(next, interval)
+			timer.Reset(time.Until(next))
 
 		case alert := <-p.adHocTrigger:
 			// Run immediate targeted patrol for this alert
@@ -178,20 +178,22 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			p.runTargetedPatrol(ctx, alert)
 
 		case <-configCh:
-			// Config changed - reset ticker with new interval
+			// An operator interval change deliberately resets the timer. Persist
+			// that exact reset too, even if no new full run has completed yet.
 			p.mu.RLock()
 			newInterval := p.config.GetInterval()
 			p.mu.RUnlock()
 
 			if newInterval != interval {
 				interval = newInterval
-				ticker.Reset(interval)
-				p.mu.Lock()
-				p.nextScheduledAt = time.Now().Add(interval)
-				p.mu.Unlock()
+				if trigger != TriggerReasonStartup {
+					next = time.Now().Add(interval)
+					p.setNextPatrolSchedule(next, interval)
+					timer.Reset(time.Until(next))
+				}
 				log.Info().
 					Dur("interval", interval).
-					Msg("Patrol ticker reset to new interval")
+					Msg("Patrol schedule reset to new interval")
 			}
 
 		case <-p.stopCh:
@@ -244,25 +246,40 @@ func (p *PatrolService) remindSweepLoop(ctx context.Context) {
 	}
 }
 
-func shouldSkipInitialFullPatrol(runHistory []PatrolRunRecord, now time.Time) bool {
-	for _, run := range runHistory {
-		if run.CompletedAt.IsZero() {
-			continue
-		}
-		timeSinceLastRun := now.Sub(run.CompletedAt)
-		if timeSinceLastRun >= 1*time.Hour {
-			continue
-		}
-		if isSuccessfulFullPatrolRun(run) {
-			log.Info().
-				Dur("time_since_last", timeSinceLastRun).
-				Str("run_type", run.Type).
-				Str("trigger_reason", run.TriggerReason).
-				Msg("AI Patrol: Skipping initial patrol - recent successful full run exists")
-			return true
+func (p *PatrolService) initialPatrolSchedule(now time.Time, interval time.Duration) (time.Time, TriggerReason) {
+	if p.runHistoryStore != nil {
+		if next, savedInterval := p.runHistoryStore.Schedule(); !next.IsZero() && savedInterval == interval {
+			return next, TriggerReasonScheduled
 		}
 	}
-	return false
+	// Upgrade old history without a timer cursor. Use all retained full runs:
+	// recent scoped/verification activity must not hide or move the cadence.
+	if last := p.LastSuccessfulFullPatrolAt(); !last.IsZero() {
+		return last.Add(interval), TriggerReasonScheduled
+	}
+	return now, TriggerReasonStartup
+}
+
+func nextPatrolDeadline(due, now time.Time, interval time.Duration) time.Time {
+	next := due.Add(interval)
+	if !next.After(now) {
+		return now.Add(interval)
+	}
+	return next
+}
+
+func (p *PatrolService) setNextPatrolSchedule(next time.Time, interval time.Duration) {
+	p.mu.Lock()
+	p.nextScheduledAt = next
+	enabled, store := p.config.Enabled, p.runHistoryStore
+	p.mu.Unlock()
+	// Disabled timer ticks are not checks. In particular, first-time provider
+	// setup must not leave a durable cursor that suppresses the startup check.
+	if enabled && store != nil {
+		if err := store.SetSchedule(next, interval); err != nil {
+			log.Error().Err(err).Time("next_scheduled_at", next).Msg("Failed to persist Patrol schedule")
+		}
+	}
 }
 
 // LastSuccessfulFullPatrolAt returns the completion time of the most recent
@@ -1464,6 +1481,7 @@ func newPatrolScopedFilterState(snap patrolRuntimeState) patrolScopedFilterState
 		filtered: patrolRuntimeState{
 			readState:               snap.readState,
 			unifiedResourceProvider: snap.unifiedResourceProvider,
+			thresholdProvider:       snap.thresholdProvider,
 		},
 		includedResourceIDs: make(map[string]bool),
 		includedGuestVMIDs:  make(map[int]bool),
@@ -1856,20 +1874,20 @@ func patrolKubernetesScopeName(k models.KubernetesCluster) string {
 	return clusterName
 }
 
-func collectPatrolScopedActiveAlerts(alerts []models.Alert, includedResourceIDs map[string]bool) []models.Alert {
+func collectPatrolScopedActiveAlerts(state patrolRuntimeState, alerts []models.Alert, includedResourceIDs map[string]bool) []models.Alert {
 	filtered := make([]models.Alert, 0, len(alerts))
 	for _, alert := range alerts {
-		if includedResourceIDs[alert.ResourceID] {
+		if patrolAlertBelongsToScope(state, alert.ResourceID, includedResourceIDs) {
 			filtered = append(filtered, alert)
 		}
 	}
 	return filtered
 }
 
-func collectPatrolScopedResolvedAlerts(alerts []models.ResolvedAlert, includedResourceIDs map[string]bool) []models.ResolvedAlert {
+func collectPatrolScopedResolvedAlerts(state patrolRuntimeState, alerts []models.ResolvedAlert, includedResourceIDs map[string]bool) []models.ResolvedAlert {
 	filtered := make([]models.ResolvedAlert, 0, len(alerts))
 	for _, resolved := range alerts {
-		if includedResourceIDs[resolved.ResourceID] {
+		if patrolAlertBelongsToScope(state, resolved.ResourceID, includedResourceIDs) {
 			filtered = append(filtered, resolved)
 		}
 	}
@@ -1929,10 +1947,10 @@ func collectPatrolScopedPBSBackups(backups []models.PBSBackup, includedGuestVMID
 
 func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, includedResourceIDs map[string]bool, includedGuestVMIDs map[int]bool) {
 	if len(snap.ActiveAlerts) > 0 {
-		dst.ActiveAlerts = collectPatrolScopedActiveAlerts(snap.ActiveAlerts, includedResourceIDs)
+		dst.ActiveAlerts = collectPatrolScopedActiveAlerts(snap, snap.ActiveAlerts, includedResourceIDs)
 	}
 	if len(snap.RecentlyResolved) > 0 {
-		dst.RecentlyResolved = collectPatrolScopedResolvedAlerts(snap.RecentlyResolved, includedResourceIDs)
+		dst.RecentlyResolved = collectPatrolScopedResolvedAlerts(snap, snap.RecentlyResolved, includedResourceIDs)
 	}
 	if len(snap.ConnectionHealth) > 0 {
 		dst.ConnectionHealth = collectPatrolScopedConnectionHealth(snap.ConnectionHealth, includedResourceIDs)
@@ -1948,6 +1966,9 @@ func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, 
 }
 
 func filterPatrolStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
+	if len(snap.ActiveAlerts)+len(snap.RecentlyResolved) > 0 {
+		snap.alertResourceResolver = patrolAlertReferenceResolver(snap)
+	}
 	matcher := newPatrolScopeMatcher(scope)
 	filterState := newPatrolScopedFilterState(snap)
 
@@ -2005,6 +2026,9 @@ func filterPatrolStateByScopeState(snap patrolRuntimeState, scope PatrolScope) p
 	// context.
 	filteredUnified, unifiedIDs := collectPatrolScopedUnifiedResources(snap.unifiedResourceProvider, matcher)
 	filterState.includeResourceID(unifiedIDs...)
+	if len(filteredUnified) > 0 {
+		filterState.filtered.alertResourceResolver = patrolAlertReferenceResolver(snap)
+	}
 
 	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
 
@@ -2529,6 +2553,7 @@ type patrolAlertResourceState struct {
 	status       string
 	cpu          float64
 	memory       float64
+	guestMemory  *patrolGuestMemoryReading
 	disk         float64
 	found        bool
 }
@@ -2646,6 +2671,7 @@ func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 			status:       guest.status,
 			cpu:          guest.cpu,
 			memory:       guest.mem,
+			guestMemory:  &guest.memory,
 			found:        true,
 		}, true
 	}
@@ -2725,6 +2751,9 @@ func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolR
 	case "cpu":
 		return resource.cpu
 	case "memory":
+		if resource.guestMemory != nil && !resource.guestMemory.pressureKnown {
+			return -1
+		}
 		return resource.memory
 	default:
 		if resource.resourceType == "storage" {
@@ -2806,6 +2835,19 @@ func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []Alert
 		if strings.HasPrefix(strings.ToUpper(trimmed), "RESOLVE:") {
 			verdicts[0].resolve = true
 			verdicts[0].reason = patrolAlertResolveReason(strings.TrimPrefix(trimmed[len("RESOLVE:"):], " "))
+		}
+	}
+	// This quick review has only the supplied snapshot, not an independent
+	// guest measurement. Missing/stale/cache-inclusive memory cannot prove a
+	// memory alert recovered, even if the model asks to resolve it.
+	for i, alert := range batch {
+		if alert.Type != "memory" {
+			continue
+		}
+		resource := lookupPatrolAlertResourceState(alert, snap)
+		if resource.guestMemory != nil && !resource.guestMemory.pressureKnown {
+			verdicts[i].resolve = false
+			verdicts[i].reason = ""
 		}
 	}
 
@@ -2910,11 +2952,11 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 		return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)
 	case "vm":
-		return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
+		return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %s, Status: %s",
+			resource.name, resource.cpu, resource.guestMemory.display(), resource.status)
 	case "system-container":
-		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
+		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %s, Status: %s",
+			resource.name, resource.cpu, resource.guestMemory.display(), resource.status)
 	case "app-container":
 		return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)

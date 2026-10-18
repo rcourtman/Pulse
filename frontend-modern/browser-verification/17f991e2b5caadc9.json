@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a28b1056459b2ae0fe01bbbe7aebd4c6ca7d3738",
+  "verified_at": "2026-10-05T06:23:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "416aa81cc2a011b937f9ad1d85174db72020c61e2d0f3a6bcc0d2eee99419457",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts": "f94b530c79dddedec64ecf4a9f5c80fe017580ea73ebcc479418c2bafaed3fba"
+  },
+  "routes": [
+    "/settings/security-webhooks",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Audit Webhooks at 1440 with audit delivery not enabled on this instance: the panel opens with These carry security events only. To send alerts to Discord, Slack, ntfy or email, set up alert notifications, above the existing gate card. Before, the page gave no hint that alert webhooks live elsewhere",
+    "Phone at 390: the signpost wraps over two lines above the gate card",
+    "The enabled state (endpoint list) is not reachable on this mock instance, so its placement is covered by the settings architecture test"
+  ],
+  "interactions": [
+    "Clicked alert notifications and landed on /alerts/notifications without a full page reload"
+  ]
+}

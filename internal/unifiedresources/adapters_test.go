@@ -652,18 +652,58 @@ func TestResourceFromProxmoxNodeInheritsLinkedHostIdentity(t *testing.T) {
 	}
 }
 
-func TestMaxNodeTempHandlesUnavailableData(t *testing.T) {
-	if temp := maxNodeTemp(nil); temp != nil {
-		t.Fatalf("expected nil temperature for nil input, got %v", *temp)
+func TestResourceTemperatureUsesPrimaryCPURuleForNodeAndAgent(t *testing.T) {
+	// The shape a linked agent produces: its package reads hotter than every
+	// core, so the node's CPUMax (built from cores) sits below the package.
+	// Node and agent resources must both carry the hottest reading, the value
+	// their history records and the drawer headlines.
+	sensors := models.HostSensorSummary{TemperatureCelsius: map[string]float64{
+		"cpu_package": 61,
+		"cpu_core_0":  55,
+		"cpu_core_1":  57,
+		"nvme0":       70,
+	}}
+	node := models.Node{
+		ID:   "pve1-node",
+		Name: "pve1",
+		Temperature: &models.Temperature{
+			CPUPackage: 61,
+			CPUMax:     57,
+			Cores:      []models.CoreTemp{{Core: 0, Temp: 55}, {Core: 1, Temp: 57}},
+			NVMe:       []models.NVMeTemp{{Device: "nvme0", Temp: 70}},
+			Available:  true,
+			HasCPU:     true,
+		},
+	}
+	nodeResource, _ := resourceFromProxmoxNode(node, nil)
+	if got := nodeResource.Proxmox.Temperature; got == nil || *got != 61 {
+		t.Fatalf("proxmox temperature = %v, want 61", derefTemperature(got))
+	}
+	hostResource, _ := resourceFromHost(models.Host{ID: "host-1", Hostname: "pve1", Sensors: sensors})
+	if got := hostResource.Agent.Temperature; got == nil || *got != 61 {
+		t.Fatalf("agent temperature = %v, want 61", derefTemperature(got))
 	}
 
-	input := &models.Temperature{
-		Available: false,
-		HasCPU:    false,
+	// A core above the package wins, and an unavailable or empty reading
+	// carries no temperature at all.
+	node.Temperature = &models.Temperature{CPUPackage: 60, Cores: []models.CoreTemp{{Core: 0, Temp: 66}}, Available: true}
+	if nodeResource, _ = resourceFromProxmoxNode(node, nil); nodeResource.Proxmox.Temperature == nil || *nodeResource.Proxmox.Temperature != 66 {
+		t.Fatalf("hot-core proxmox temperature = %v, want 66", derefTemperature(nodeResource.Proxmox.Temperature))
 	}
-	if temp := maxNodeTemp(input); temp != nil {
-		t.Fatalf("expected nil temperature for unavailable snapshot, got %v", *temp)
+	node.Temperature = &models.Temperature{Available: false, CPUPackage: 90}
+	if nodeResource, _ = resourceFromProxmoxNode(node, nil); nodeResource.Proxmox.Temperature != nil {
+		t.Fatalf("unavailable proxmox temperature = %v, want nil", *nodeResource.Proxmox.Temperature)
 	}
+	if hostResource, _ = resourceFromHost(models.Host{ID: "host-2", Hostname: "h2"}); hostResource.Agent.Temperature != nil {
+		t.Fatalf("sensorless agent temperature = %v, want nil", *hostResource.Agent.Temperature)
+	}
+}
+
+func derefTemperature(value *float64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func TestResourceFromDockerHostIncludesTemperature(t *testing.T) {
@@ -1940,6 +1980,51 @@ func TestCollectInterfaceIDsAllVirtualStillCollects(t *testing.T) {
 	ips, _ := collectInterfaceIDs(interfaces)
 	if len(ips) != 1 || ips[0] != "172.17.0.1" {
 		t.Fatalf("expected virtual-only host to keep its address, got %v", ips)
+	}
+}
+
+func TestIssue2757AgentDisplayPrefersNonContainerInterfaces(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"eth0", "wlp2s0", "br0", "vmbr0", "bond0", "vlan100", "eth0.100", "tun0", "wg0"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			host := models.Host{ID: "agent-a", Hostname: "agent", MachineID: "machine-a", NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "podman0", MAC: "02:00:00:00:00:01", Addresses: []string{"10.88.0.1/16"}},
+				{Name: name, MAC: "02:00:00:00:00:02", Addresses: []string{"192.0.2.80/24"}},
+			}}
+			before, err := json.Marshal(host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resource, identity := resourceFromHost(host)
+			if !reflect.DeepEqual(identity.IPAddresses, []string{"192.0.2.80", "10.88.0.1"}) || identity.MachineID != "machine-a" || resource.Agent.AgentID != "agent-a" {
+				t.Fatalf("agent display IPs or supplied identity changed: %+v", identity)
+			}
+			if !reflect.DeepEqual(identity.MACAddresses, []string{"02:00:00:00:00:01", "02:00:00:00:00:02"}) {
+				t.Fatalf("display preference changed the legacy MAC sequence: %v", identity.MACAddresses)
+			}
+			host.ReportIP = "10.88.0.1"
+			_, override := resourceFromHost(host)
+			if !reflect.DeepEqual(override.IPAddresses, []string{"10.88.0.1", "192.0.2.80"}) {
+				t.Fatalf("explicit report IP did not lead: %v", override.IPAddresses)
+			}
+			host.ReportIP = ""
+			after, err := json.Marshal(host)
+			if err != nil || string(before) != string(after) {
+				t.Fatal("host input mutated")
+			}
+		})
+	}
+}
+
+func TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses(t *testing.T) {
+	t.Parallel()
+	_, identity := resourceFromHost(models.Host{ID: "agent-a", NetworkInterfaces: []models.HostNetworkInterface{
+		{Name: "podman0", Addresses: []string{"10.88.0.1/16"}},
+		{Name: "veth0", Addresses: []string{"10.89.0.1/16"}},
+	}})
+	if !reflect.DeepEqual(identity.IPAddresses, []string{"10.88.0.1", "10.89.0.1"}) {
+		t.Fatalf("secondary-only host lost addresses: %v", identity.IPAddresses)
 	}
 }
 

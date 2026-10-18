@@ -1,9 +1,8 @@
 import { render, screen } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import type { Node } from '@/types/api';
-import { temperatureStore } from '@/utils/temperature';
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: 'cluster-a-pve1',
@@ -34,18 +33,11 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
 });
 
 describe('NodeGroupHeader', () => {
-  beforeEach(() => {
-    temperatureStore.setUnit('celsius');
-  });
-
-  it('renders compact infrastructure facts in the grouped workload header', () => {
+  it('renders node identity in the grouped workload header', () => {
     render(() => <NodeGroupHeader node={makeNode()} />);
 
     expect(screen.getByText('pve1')).toBeInTheDocument();
     expect(screen.getByText('homelab')).toBeInTheDocument();
-    expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
-    expect(screen.getByText('62°C')).toBeInTheDocument();
-    expect(screen.getByText('2h')).toBeInTheDocument();
 
     const link = screen.getByRole('link', { name: 'Open web interface for pve1' });
     expect(link).toHaveAttribute('href', 'https://pve1:8006');
@@ -53,20 +45,21 @@ describe('NodeGroupHeader', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('colors grouped header temperatures from configured thresholds', () => {
-    render(() => (
-      <NodeGroupHeader
-        node={makeNode({
-          temperature: {
-            available: true,
-            cpuPackage: 76,
-            lastUpdate: '2026-01-01T00:00:00Z',
-          },
-        })}
-        temperatureThresholds={{ warning: 80, critical: 85 }}
-      />
+  it('spans the table in one cell and leaves host stats to the platform host table', () => {
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <NodeGroupHeader node={makeNode()} renderAs="tr" colspan={9} />
+        </tbody>
+      </table>
     ));
 
-    expect(screen.getByText('76°C')).toHaveClass('text-green-600');
+    const cells = container.querySelectorAll('tr > td');
+    expect(cells).toHaveLength(1);
+    expect(cells[0]).toHaveAttribute('colspan', '9');
+    expect(cells[0]).toHaveTextContent('pve1');
+    expect(screen.queryByText('PVE 9.1.9')).not.toBeInTheDocument();
+    expect(screen.queryByText(/°[CF]/)).not.toBeInTheDocument();
+    expect(screen.queryByText('2h')).not.toBeInTheDocument();
   });
 });

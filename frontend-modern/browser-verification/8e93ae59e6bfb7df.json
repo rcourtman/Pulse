@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "e4da1b037000e4eb4b6ea7089704993c74708db8",
+  "verified_at": "2026-10-10T10:26:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "e68ee6d94e38e710200c479e383ac0f01a66f6b892b8833b0fb84deb97044e28",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "4e250e2cc01e8a735299862fd1eb253bec064bf57fa3cbf52cc811f1a9205d76"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private dev stack at 127.0.0.1 (PR 2741's server on main plus a loopback fake Proxmox API and a test host agent for the same machine): headless Chromium (Playwright on pulse-dev) at 1280x800 and 390x844, plus the built-in browser pane on 2026-10-08 on earlier code. Joined node+agent = one Proxmox node row and no Machines row.",
+    "Operator split (POST /api/resources/{id}/report-merge, the drawer's Split merged resource) delivered live by websocket delta with no reload: the Proxmox page keeps one node row (node uptime) and the Machines page lists the agent as its own row; its drawer reads Agent, Debian 12, own primary and machine ID, no node alias or Proxmox context. The last browser pass (2 of 2 completed transitions at 390 and 2 of 2 at 1280; two more runs died at the login field while Vite cold-compiled, before any split) ran on the revision before this commit's final edits to which REST-only fields a rebuilt row keeps (scope evidence for non-host facets, discovery readiness matching); the browser pass does not observe those fields and unit tests with negative controls cover them. Earlier revisions: 2 of 2 at 390 and 3 of 3 at 1280, and 3 of 3 and 3 of 3 before that. Before the fixes in this change the same transition left the agent missing from Machines in 4 of 4 and then 2 of 4 phone-width runs. On main's frontend the split agent was drawn as a second Proxmox node and Machines showed 'No Pulse Agent machines'.",
+    "Relink (POST /api/resources/{id}/link) returns the pair to one joined row before every run. Screenshots of the joined, split Proxmox and split Machines states inspected at both widths (earlier code; later runs were checked by row text).",
+    "Not covered: a physical phone, other platforms' host rows (Docker, Kubernetes, vSphere, TrueNAS pairs) and an operator unlink through the drawer on the final code."
+  ],
+  "interactions": [
+    "Split merged resource dialog opened and confirmed in the built-in browser pane (2026-10-08, earlier code); report-merge and link requests posted for the repeated runs. Proxmox page to Machines page by in-app navigation (no reload) after the split; Machines row expanded to its drawer.",
+    "Websocket updates arrive while the page is open; no uncaught page error in the final-code runs (console output was not otherwise captured). All traffic is local to the private stack."
+  ]
+}

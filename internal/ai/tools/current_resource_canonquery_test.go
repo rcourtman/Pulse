@@ -66,12 +66,12 @@ func TestCanonicalQueryIDForResolvedResource(t *testing.T) {
 		// nil guard.
 		{"nil resource returns empty", nil, ""},
 
-		// provider-uid wins.
-		{"provider uid wins over resource id", &mockResource{
+		// Registry identity wins over native provider coordinates.
+		{"resource id wins over provider uid", &mockResource{
 			providerUID: "pve1/lxc/141",
 			resourceID:  "res-141",
 			aliases:     []string{"homepage"},
-		}, "pve1/lxc/141"},
+		}, "res-141"},
 
 		// falls through to resource-id.
 		{"falls through to resource id when provider uid blank", &mockResource{
@@ -110,7 +110,7 @@ func TestCanonicalQueryIDForResolvedResource(t *testing.T) {
 		// trim applied to returned provider uid.
 		{"trims whitespace from provider uid", &mockResource{
 			providerUID: "  uid-with-space  ",
-			resourceID:  "ignored",
+			resourceID:  "",
 		}, "uid-with-space"},
 
 		// trim applied to returned resource id.

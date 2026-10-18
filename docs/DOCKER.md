@@ -52,6 +52,12 @@ volumes:
 
 Run with: `docker compose up -d`
 
+**Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
+Agent requests. For an affected installation, follow the
+[planned server pause and checked restoration](VM_DISK_MONITORING.md#pause-a-docker-or-compose-server-for-a-planned-backup),
+not container recreation or guest-agent probes. Monitoring and alerts are
+unavailable while Pulse is stopped; an OK backup alone does not prove recovery.
+
 Leave authentication overrides unset for a new install and complete
 [bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
 shared example password to the Compose file. If automation must skip setup,
@@ -120,6 +126,57 @@ services:
       retries: 3
 ```
 </details>
+
+---
+
+## Container CPU readings
+
+Pulse shows container CPU as a share of the **Docker/Podman host's total CPU
+capacity**: 100% means all its logical CPUs. `docker stats` and `podman stats`
+normally use **100% for one logical CPU**, so their readings can exceed 100%.
+For that scale, divide the stats percentage by the CPU count reported for the
+runtime host to compare it with Pulse.
+
+If the engine runs inside a VM, use that VM's logical CPUs, not the physical
+Proxmox host's CPUs. Pulse's percentage is not utilisation of the container's
+own CPU quota or cpuset. If the reported CPU count differs from your configured
+VM size, retain both in the comparison rather than guessing a divisor.
+
+| Example host logical CPUs | Stats CPU | Pulse CPU before display rounding |
+| --- | --- | --- |
+| 4 | 240% | 60% |
+| 6 | 16.52% | About 2.75% |
+| 6 | 1.04% | About 0.17% |
+
+These are examples, not an assumption about your host. A smaller Pulse value
+alone does not establish a collection fault. Whole-percent table labels,
+including those in **v6.5.0-rc.1**, can display a fractional reading below 0.5%
+as 0%. Use **CPU History** rather than the rounded label; display rounding does
+not change stored readings or the values used by CPU alert evaluation. A dash
+or missing History is unavailable data, not a measured zero.
+
+For a useful comparison:
+
+1. Match the same container on the same runtime host. Compare a similar time
+   interval in CPU History with `docker stats` or `podman stats`; separate
+   sampling intervals can legitimately differ.
+2. Apply the reported host CPU count only to a stats reading on the per-CPU
+   scale. Do not divide Pulse History again, or compare with an average since
+   container start as though it were a recent interval.
+3. Check that observation times and History points advance during ordinary
+   monitoring. A connection marked Active does not prove fresh CPU samples.
+4. If the normalised readings still disagree, or History stops advancing,
+   report the server and agent versions, reported CPU count, sample times and
+   bounded readings. Do not restart workloads, create CPU load, lower alert
+   thresholds or export diagnostics just to make this comparison.
+
+CPU alerts use the same host-capacity scale, with the configured thresholds,
+duration and suppression rules. Non-zero History proves a collected reading,
+not that an alert should fire or that its notification was delivered. If a
+normal workload already demonstrates an alert problem, retain the reading,
+threshold, duration and observed result; no forced alert test is needed. See
+[safe performance measurements](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth)
+when measuring the Pulse server itself rather than a monitored container.
 
 ---
 
@@ -242,6 +299,114 @@ or volumes to clear a warning. Recover through the application's and deployment
 manager's procedures using a verified matching data backup where required;
 returning to the old image alone does not undo a data migration.
 
+### Check a failed or pending workload update
+
+Start with the **existing error and action stage**, not another click on Update:
+
+- **Planning refused:** “Docker / Podman command agent is not connected” on the
+  planning request means Pulse could not find a matching admitted live command
+  channel and refused that plan before dispatch. The planning response can be
+  HTTP 409, but 409 alone has other causes. This does **not** establish what an
+  earlier action did; use the command-channel checks below for this refusal.
+- **Action sent, receipt pending:** “The action was sent once” or a pending
+  durable receipt means the outcome is uncertain, even beside a failed banner.
+  Use the existing receipt and workload-state checks below, without dispatching
+  another update.
+- **Stage unknown:** a failed banner alone does not tell you whether the update
+  ran. Retain that uncertainty; do not assume nothing changed or repeat the
+  action to find out. Use existing observations where safe.
+
+#### Command agent is not connected
+
+Open **Settings → Infrastructure → Agent Doctor**, expand the **affected Docker
+host**, and inspect the existing **Privilege** wording. This is the agent for
+the workload, not necessarily the host running Pulse. `commands monitoring-only`
+describes a local command ceiling; `commands command-capable` and `credential
+grants exec` describe local authority and credential scope, **not a connected
+session**. A missing Privilege line is unknown, not proof that commands are off.
+Fresh monitoring or an available image update does not prove command transport.
+
+`root` identifies the collector's OS user, not its server-side permission.
+`commands legacy` identifies an older, unmarked compatibility profile; it does
+not establish that commands are enabled. `monitoring credential` means the
+known collector credential has no execution scope and cannot authenticate the
+legacy command channel. Do not add execution rights to that token as a repair.
+
+Inspect **Action runner** separately. `Credential not issued` and `Runner not
+connected` describe the separate typed runner, not monitoring health. An absent
+runner alone does not rule out an authorised legacy command connection. If
+**Safe collector not confirmed** is shown, that is not proof of a broken
+collector or permission to convert it merely to clear the update error.
+
+For a command-enabled, execution-scoped legacy connection, follow the existing
+[command-channel connection and admission checks](UNIFIED_AGENT.md#commands-enabled-but-remote-control-blocked).
+A monitoring-only setup is intentional when you only need readings and update
+detection; do not enable commands, broaden a token, change Proxmox permissions
+or loosen TLS merely to diagnose the refusal. Keep saved identity and credentials
+intact; do not reinstall or retry the workload update as a connection test.
+
+You can keep working monitoring and manage any needed update through your usual
+Docker or Podman administration tool, after checking the workload's existing
+image/state and recovery path. Deliberately opting into Pulse-managed changes
+is a separate trust decision: the
+[agent privilege model](AGENT_SECURITY.md#agent-privilege-model) explains the
+legacy combined command profile, and the
+[least-privilege profile](AGENT_SECURITY.md#least-privilege-agent-profile)
+describes the supported separate runner. Neither is a diagnostic prerequisite;
+do not change a working profile just to obtain evidence.
+
+For help, retain the original error, time and stage plus the existing command
+authority/scope and Action runner wording, or say it is unavailable. If relevant,
+say whether command execution was deliberately selected at installation;
+unknown is valid. Share only those distinctions, not a full Agent Doctor report,
+token hint, agent ID or service configuration.
+The connection refusal does not settle an earlier missing receipt.
+
+#### Action was sent or its outcome is unknown
+
+Use your normal Docker administration shell **on the host running the affected
+container**, not a shell inside Pulse or on an unrelated Proxmox host. Use the
+same Docker context as that workload; do not change socket permissions or enable
+agent commands just to inspect it.
+
+List container names, including stopped containers, without dumping their
+configuration:
+
+```bash
+docker ps -a --format '{{.Names}}'
+```
+
+Replace `affected-container` with the original workload name (not `pulse` unless
+Pulse itself was the target), then read only its state and image identity:
+
+```bash
+container='affected-container'
+docker inspect --type container --format 'State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}' "$container"
+```
+
+`State` says whether the container is running, stopped or restarting. `ImageRef`
+is its configured image reference; a tag such as `latest` can stay unchanged
+after an update. `ImageID` identifies the actual local image used by this
+container: compare it with your privately recorded pre-update image or the
+intended image in your deployment manager. It is not a registry manifest digest,
+so do not compare it directly with Pulse's latest-registry digest. `Started` is
+only a start time, not proof of an image update or application readiness. If the
+old identity was not recorded, these readings alone cannot establish whether
+the image changed.
+
+If inspection fails or the original name is missing, retain that error and the
+name listing locally; the workload may have been renamed during the attempt.
+Do not start, rename, delete or update anything to make the check succeed.
+Check the application's ordinary UI or health endpoint separately; a running
+container is not proof that its application or data is healthy.
+
+In Pulse, reopen that container's **Review action** and use **Check for receipt**
+when available. This re-reads the existing action; it does not send another
+container update. If the receipt is still missing, leave the update alone until
+the actual workload state and recovery path are reconciled. For help, share only
+the relevant state, receipt status and a redacted error, not the full inspection,
+other container names, environments or registry credentials.
+
 ### Requirements
 
 - **Unified agent** running on the Docker host with Docker monitoring enabled
@@ -293,7 +458,7 @@ not grant command execution permission to monitoring tokens. See
 
 To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
-You can also toggle "Hide Docker Update Buttons" from the UI in **Settings → System → General** under **Docker / Podman updates**.
+You can also toggle **Hide update buttons** from the UI in **Settings → System → General** under **Docker / Podman updates**.
 
 ---
 
@@ -306,7 +471,7 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 - **Pulse Agent** installed on the container host (see [Unified Agent](UNIFIED_AGENT.md)) and currently connected
 - **Command execution enabled** on the agent — it is disabled by default. Either:
   - start the agent with `--enable-commands` (or `PULSE_ENABLE_COMMANDS=true`), or
-  - tick **Enable Pulse command execution** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission
+  - tick **Enable legacy combined command profile** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission (this is the transitional combined profile, not a least-privilege setting)
 - **Admin approval**: every lifecycle action requires confirmation by an admin in the UI before it runs. The agent then verifies the container's state before the change and confirms it actually reached the requested state afterwards.
 
 ### Limitations
@@ -326,9 +491,12 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
   not just a restart. SSO accounts and temporary lockouts have separate paths.
 
 - **Logs**
-  ```bash
-  docker logs -f pulse
-  ```
+  Use the [bounded Docker log reader](TROUBLESHOOTING.md#inspect-notification-logs)
+  on the host running the Pulse server, with its actual container name. It reads
+  both output streams with a deadline, time window and record limit; a failed
+  read is not an empty log. Review the excerpt privately and share only the
+  relevant redacted error, not credentials, private host details or the full log.
+  Do not follow logs indefinitely or repeat a failed update to collect evidence.
 
 - **Shell Access**
   ```bash

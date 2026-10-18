@@ -56,7 +56,8 @@ describe('readAlertsConfigurationSnapshot — absent optional sections', () => {
     expect(snapshot.trueNASDefaults.cpu).toBe(80);
     expect(snapshot.trueNASDefaults.usage).toBe(85);
     expect(snapshot.trueNASDefaults.diskRead).toBe(-1);
-    expect(snapshot.trueNASDiskDefaults.temperature).toBe(55);
+    // Unset: each TrueNAS disk follows Disk temperature by type.
+    expect(snapshot.trueNASDiskDefaults.temperature).toBeUndefined();
     expect(snapshot.vmwareDefaults.cpu).toBe(80);
     expect(snapshot.vmwareDefaults.usage).toBe(85);
   });
@@ -232,7 +233,8 @@ describe('readAlertsConfigurationSnapshot — factory fallback (undefined-trigge
     expect(snapshot.trueNASDefaults.diskWrite).toBe(-1);
     expect(snapshot.trueNASDefaults.networkIn).toBe(-1);
     expect(snapshot.trueNASDefaults.networkOut).toBe(-1);
-    expect(snapshot.trueNASDiskDefaults.temperature).toBe(55);
+    // No usable trigger leaves TrueNAS disks on Disk temperature by type.
+    expect(snapshot.trueNASDiskDefaults.temperature).toBeUndefined();
   });
 
   it('falls back to factory defaults for vmwareDefaults and agentDefaults', () => {
@@ -1524,5 +1526,50 @@ describe('dockerDefaults.updateAlertDelayHours', () => {
     });
 
     expect(alertConfig?.dockerDefaults?.updateAlertDelayHours).toBe(24);
+  });
+});
+
+describe('TrueNAS disk temperature round trip', () => {
+  const buildTrueNASDiskPayload = (temperature: number | undefined) => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.trueNASDiskDefaults = { temperature };
+    return buildAlertsConfigurationPayload({
+      snapshot,
+      rawOverridesConfig: {},
+      alertsActivationState: null,
+      alertsActivationConfig: null,
+    }).alertConfig;
+  };
+
+  it('omits an unset TrueNAS disk temperature so disks follow Disk temperature by type', () => {
+    const alertConfig = buildTrueNASDiskPayload(undefined);
+    expect(alertConfig?.truenasDiskDefaults).toEqual({});
+    expect(alertConfig?.truenasDiskTemperatureByType).toBe(true);
+  });
+
+  it('writes Off as a zero trigger, which the backend keeps as off', () => {
+    expect(buildTrueNASDiskPayload(-1)?.truenasDiskDefaults).toEqual({
+      temperature: { trigger: 0, clear: 0 },
+    });
+  });
+
+  it('writes a TrueNAS-wide value, 55 included, as a trigger', () => {
+    expect(buildTrueNASDiskPayload(55)?.truenasDiskDefaults).toEqual({
+      temperature: { trigger: 55, clear: 50 },
+    });
+  });
+
+  it('reads an absent temperature as unset and a zero trigger as off', () => {
+    const base = { overrides: {} } as unknown as AlertConfig;
+    expect(
+      readAlertsConfigurationSnapshot({ ...base, truenasDiskDefaults: {} }).trueNASDiskDefaults
+        .temperature,
+    ).toBeUndefined();
+    expect(
+      readAlertsConfigurationSnapshot({
+        ...base,
+        truenasDiskDefaults: { temperature: { trigger: 0, clear: 0 } },
+      }).trueNASDiskDefaults.temperature,
+    ).toBe(0);
   });
 });

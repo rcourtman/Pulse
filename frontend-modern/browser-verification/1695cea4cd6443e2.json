@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b01dad904c3436e70bc01588ea1546fffaa05dc6",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/responsive/ResponsiveMetricCell.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerCpuPresentation.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "53c9e59281392d26cbdbba2d1153d321bebe8b3a49ed06c7ba3b7a48504f3977",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "3229e5c4d3aa1e8645a70a1a29c018e1b90361c2453b66336fc0d9321ceb7bd2",
+    "frontend-modern/src/components/shared/responsive/ResponsiveMetricCell.tsx": "4c3eea14a621354fa5ece0c05451db2426b37af272c984f829ba8833dfbabe96",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "2a9793922a95864e96950a76754bfb6acf8a7f152b4085d39d567f358d5bf26c",
+    "frontend-modern/src/features/docker/dockerCpuPresentation.ts": "d3eee94c693339e3318c1b70c6324a221d1c6d1162c4cda47ae10495eeef8393",
+    "frontend-modern/src/utils/format.ts": "0e012dae598fdc14f22bfed07af0e7e43d41568fe4ce7e1025f2a42e3c44d175"
+  },
+  "routes": [
+    "/docker: existing production container table and inline ResourceDetailDrawer; isolated offline fixture, synthetic API readings"
+  ],
+  "states": [
+    "Docker/Podman mixed runtime; true zero, tiny positive, other fractional CPU, unavailable and stopped readings",
+    "Overview and stored History; actual zero versus tiny positive and 9.4%; light/dark"
+  ],
+  "interactions": [
+    "Numeric CPU sorting, keyboard drawer open/collapse, History tab selection",
+    "Native Home/ArrowRight and pointer/touch stored-point inspection without extra requests",
+    "Positive-to-zero live replacement; raw progress widths, visible capacity units and narrow label fit",
+    "All 18 desktop and phone screenshots visually inspected"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "verified_at": "2026-10-04T23:56:44.161Z"
+}

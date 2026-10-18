@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "7989a9b970fcb09952d613c45a1c39a9dd13e233",
+  "verified_at": "2026-10-12T22:45:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "ec5db5a7333c9de7ca1f448d183f7df09b4da9422978c73d7069c8bff73779a4",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a2c695e69af93268f6d07a3c8c48847b5ccf52c9d1b88b4f8c471ac945f7b78a"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Saved Ollama URL with nothing listening, patrol model ollama:qwen3:8b (readiness cause provider_connection): setup card subtitle 'Pulse cannot reach your AI provider. Check its address and status on Provider & Models.', reason 'Provider connection issue', single action 'Open Provider & Models' to /settings/pulse-intelligence/provider, no 'run the model check' hint, no setup panel",
+    "Phone width: no horizontal overflow, action 44px"
+  ],
+  "interactions": [
+    "Reload after the import fix: no console ReferenceError or TypeError"
+  ],
+  "browser": {
+    "client": "Claude desktop browser pane",
+    "engine": "Chromium"
+  },
+  "scope": "Dev server on this branch proxied to a private non-mock pulse-enterprise stack on :7681 with a dev Pro licence; the unreachable provider state was set through PUT /api/settings/ai/update."
+}

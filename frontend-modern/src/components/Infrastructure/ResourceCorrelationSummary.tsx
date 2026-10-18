@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import type { ResourceRelationship } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   formatResourceCorrelationEndpoint,
   formatResourceCorrelationHeadline,
@@ -30,6 +31,7 @@ interface ResourceCorrelationSummaryProps {
 }
 
 export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryProps> = (props) => {
+  const now = useRelativeTimeNow();
   const className = () => props.class?.trim() ?? '';
   const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
   const relationships = createMemo(() => sortResourceRelationships(props.relationships ?? []));
@@ -56,7 +58,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
     <Show when={hasContent()}>
       <div
         data-testid={props.dataTestId}
-        class={`rounded-md border border-border-subtle bg-base p-4 ${className()}`.trim()}
+        class={`rounded-md border border-border-subtle bg-surface p-4 ${className()}`.trim()}
       >
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -83,11 +85,12 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                   const targetHref = buildResourceHref(relationship.targetId);
                   const typeLabel = formatResourceRelationshipType(relationship);
                   const summary = formatResourceRelationshipSummary(relationship);
-                  const lastSeenLabel =
+                  const lastSeenLabel = () =>
                     props.showLastSeen && relationship.lastSeenAt
                       ? formatRelativeTime(relationship.lastSeenAt, {
                           compact: true,
                           emptyText: 'just now',
+                          now: now(),
                         })
                       : '';
 
@@ -125,12 +128,12 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                           {typeLabel}
                         </span>
                       </div>
-                      <Show when={summary || lastSeenLabel}>
+                      <Show when={summary || lastSeenLabel()}>
                         <div class="mt-0.5 text-[10px] text-muted">
                           {summary}
-                          <Show when={lastSeenLabel}>
+                          <Show when={lastSeenLabel()}>
                             <>
-                              {summary ? ' · ' : ''}last seen {lastSeenLabel}
+                              {summary ? ' · ' : ''}last seen {lastSeenLabel()}
                             </>
                           </Show>
                         </div>
@@ -210,11 +213,12 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                   const sourceLabel = formatResourceCorrelationEndpoint(correlation, 'source');
                   const targetLabel = formatResourceCorrelationEndpoint(correlation, 'target');
                   const patternLabel = formatResourceCorrelationPattern(correlation);
-                  const lastSeenLabel =
+                  const lastSeenLabel = () =>
                     props.showLastSeen && correlation.last_seen
                       ? formatRelativeTime(correlation.last_seen, {
                           compact: true,
                           emptyText: 'just now',
+                          now: now(),
                         })
                       : '';
                   return (
@@ -253,8 +257,8 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                       </div>
                       <div class="mt-0.5 text-[10px] text-muted">
                         {summary}
-                        <Show when={lastSeenLabel}>
-                          <> · last seen {lastSeenLabel}</>
+                        <Show when={lastSeenLabel()}>
+                          <> · last seen {lastSeenLabel()}</>
                         </Show>
                       </div>
                       <Show when={correlation.description}>

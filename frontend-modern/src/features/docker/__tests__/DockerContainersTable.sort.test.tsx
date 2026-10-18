@@ -131,6 +131,164 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('DockerContainersTable host groups', () => {
+  it('names the engine and a silent host once on the group header, not per row', () => {
+    const resources = FIXTURE.map((resource) => ({
+      ...resource,
+      docker: { ...resource.docker, runtime: 'docker', runtimeVersion: '27.5.1' },
+    })) as Resource[];
+    const staleHost = {
+      id: 'agent:host-a',
+      name: 'host-a',
+      displayName: 'host-a',
+      type: 'docker-host',
+      platformType: 'docker',
+      status: 'degraded',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '1h' }] },
+      docker: { hostname: 'host-a' },
+    } as unknown as Resource;
+    const { container } = render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={
+            (() => (
+              <DockerContainersTable
+                resources={resources}
+                hosts={[staleHost]}
+                emptyIcon={<span />}
+                emptyTitle="No containers"
+                emptyDescription="No containers"
+                showToolbar={false}
+              />
+            )) as () => JSX.Element
+          }
+        />
+      </Router>
+    ));
+
+    const hostA = container.querySelector('tr[data-docker-host-group="host-a"]')!;
+    const hostB = container.querySelector('tr[data-docker-host-group="host-b"]')!;
+    expect(hostA).toHaveTextContent('docker 27.5.1');
+    expect(hostA.querySelector('[data-docker-host-group-stale]')).toHaveTextContent(
+      'No report for 1h',
+    );
+    expect(hostB.querySelector('[data-docker-host-group-stale]')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /^Host/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /^Engine/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('DockerContainersTable grouped sorting', () => {
+  it('ignores a saved engine sort while grouped, where the engine column is hidden', () => {
+    const rows = [
+      makeContainer({
+        id: 'alpha',
+        host: 'host-a',
+        docker: { agentId: 'agent-host-a', hostname: 'host-a', runtime: 'podman' },
+      }),
+      makeContainer({
+        id: 'zulu',
+        host: 'host-a',
+        status: 'stopped',
+        docker: {
+          agentId: 'agent-host-a',
+          hostname: 'host-a',
+          runtime: 'docker',
+          containerState: 'exited',
+          exitCode: 1,
+        },
+      }),
+      makeContainer({
+        id: 'mike',
+        host: 'host-a',
+        docker: { agentId: 'agent-host-a', hostname: 'host-a', runtime: 'docker' },
+      }),
+      makeContainer({ id: 'bravo', host: 'host-b' }),
+    ];
+    const renderRows = () =>
+      render(() => (
+        <Router>
+          <Route
+            path="/"
+            component={
+              (() => (
+                <DockerContainersTable
+                  resources={rows}
+                  emptyIcon={<span />}
+                  emptyTitle="No containers"
+                  emptyDescription="No containers"
+                  showToolbar={false}
+                />
+              )) as () => JSX.Element
+            }
+          />
+        </Router>
+      ));
+
+    // A sort saved in flat mode on a column grouped mode hides must not
+    // silently reorder the grouped rows (podman would otherwise lead).
+    window.localStorage.setItem('dockerContainersSortKey', 'runtime');
+    window.localStorage.setItem('dockerContainersSortDirection', 'desc');
+    const { container } = renderRows();
+    expect(visibleRowOrder(container)).toEqual([
+      'group:host-a',
+      'zulu',
+      'alpha',
+      'mike',
+      'group:host-b',
+      'bravo',
+    ]);
+  });
+
+  it('names every engine a host group reports when the host has no engine metadata', () => {
+    const mixed = [
+      makeContainer({
+        id: 'one',
+        host: 'host-a',
+        docker: {
+          agentId: 'agent-host-a',
+          hostname: 'host-a',
+          runtime: 'docker',
+          runtimeVersion: '27.5.1',
+        },
+      }),
+      makeContainer({
+        id: 'two',
+        host: 'host-a',
+        docker: {
+          agentId: 'agent-host-a',
+          hostname: 'host-a',
+          runtime: 'podman',
+          runtimeVersion: '5.2.1',
+        },
+      }),
+      makeContainer({ id: 'three', host: 'host-b' }),
+    ];
+    const { container } = render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={
+            (() => (
+              <DockerContainersTable
+                resources={mixed}
+                emptyIcon={<span />}
+                emptyTitle="No containers"
+                emptyDescription="No containers"
+                showToolbar={false}
+              />
+            )) as () => JSX.Element
+          }
+        />
+      </Router>
+    ));
+    expect(container.querySelector('tr[data-docker-host-group="host-a"]')).toHaveTextContent(
+      'docker 27.5.1, podman 5.2.1',
+    );
+  });
+});
+
 describe('DockerContainersTable user sorting', () => {
   it('sorts within host groups without changing the group order', () => {
     const { container } = renderTable();

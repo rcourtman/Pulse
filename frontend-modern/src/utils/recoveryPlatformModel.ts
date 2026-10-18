@@ -1,15 +1,10 @@
 import type {
-  ProtectionRollup,
-  ProtectionRollupTransport,
   RecoveryPointDisplay,
   RecoveryPointDisplayTransport,
   RecoveryPoint,
   RecoveryPointsResponse,
   RecoveryPointsTransportResponse,
   RecoveryPointTransport,
-  RecoveryResponseMeta,
-  RecoveryRollupsResponse,
-  RecoveryRollupsTransportResponse,
 } from '@/types/recovery';
 
 const toTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -19,11 +14,6 @@ interface RecoveryPointPlatformLike {
   provider?: string | null;
 }
 
-interface RecoveryRollupPlatformsLike {
-  platforms?: string[] | null;
-  providers?: string[] | null;
-}
-
 interface RecoveryItemResourceLike {
   itemResourceId?: string | null;
   subjectResourceId?: string | null;
@@ -31,7 +21,7 @@ interface RecoveryItemResourceLike {
 
 interface RecoveryItemRefLike {
   itemRef?: RecoveryPoint['itemRef'];
-  subjectRef?: RecoveryPoint['subjectRef'];
+  subjectRef?: RecoveryPointTransport['subjectRef'];
 }
 
 const normalizeRecoveryDisplay = (
@@ -68,33 +58,6 @@ export const getRecoveryPointPlatform = (
   point: RecoveryPointPlatformLike | null | undefined,
 ): string => toTrimmedString(point?.platform) || toTrimmedString(point?.provider);
 
-export const getRecoveryRollupPlatforms = (
-  rollup: RecoveryRollupPlatformsLike | null | undefined,
-): string[] => {
-  const values =
-    Array.isArray(rollup?.platforms) && rollup.platforms.length > 0
-      ? rollup.platforms
-      : rollup?.providers || [];
-
-  return values.map((value) => toTrimmedString(value)).filter(Boolean);
-};
-
-const normalizeRecoveryMeta = (
-  meta: RecoveryResponseMeta | null | undefined,
-): RecoveryResponseMeta => {
-  const page = typeof meta?.page === 'number' && Number.isFinite(meta.page) ? meta.page : 1;
-  const limit = typeof meta?.limit === 'number' && Number.isFinite(meta.limit) ? meta.limit : 0;
-  const total = typeof meta?.total === 'number' && Number.isFinite(meta.total) ? meta.total : 0;
-  const totalPages =
-    typeof meta?.totalPages === 'number' && Number.isFinite(meta.totalPages) ? meta.totalPages : 1;
-  return {
-    page,
-    limit,
-    total,
-    totalPages,
-  };
-};
-
 export const normalizeRecoveryPoint = (
   point: RecoveryPointTransport | RecoveryPoint,
 ): RecoveryPoint => {
@@ -118,39 +81,8 @@ export const normalizeRecoveryPoint = (
   };
 };
 
-export const normalizeRecoveryRollup = (
-  rollup: ProtectionRollupTransport | ProtectionRollup,
-): ProtectionRollup => {
-  const {
-    providers: _providers,
-    subjectResourceId: _subjectResourceId,
-    subjectRef: _subjectRef,
-    display,
-    ...rest
-  } = rollup as ProtectionRollupTransport;
-  const platforms = getRecoveryRollupPlatforms(rollup);
-  const itemResourceId = getRecoveryItemResourceId(rollup);
-  const itemRef = getRecoveryItemRef(rollup);
-  const normalizedDisplay = normalizeRecoveryDisplay(display);
-  return {
-    ...(rest as ProtectionRollup),
-    ...(platforms.length > 0 ? { platforms } : {}),
-    ...(itemResourceId ? { itemResourceId } : {}),
-    ...(itemRef ? { itemRef } : {}),
-    ...(display !== undefined ? { display: normalizedDisplay } : {}),
-  };
-};
-
 export const normalizeRecoveryPointsResponse = (
   response: RecoveryPointsTransportResponse,
 ): RecoveryPointsResponse => ({
   data: Array.isArray(response?.data) ? response.data.map(normalizeRecoveryPoint) : [],
-  meta: normalizeRecoveryMeta(response?.meta),
-});
-
-export const normalizeRecoveryRollupsResponse = (
-  response: RecoveryRollupsTransportResponse,
-): RecoveryRollupsResponse => ({
-  data: Array.isArray(response?.data) ? response.data.map(normalizeRecoveryRollup) : [],
-  meta: normalizeRecoveryMeta(response?.meta),
 });

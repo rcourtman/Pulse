@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "9a32396fe2c806c6ed1856b74a8fa7a03f050984",
+  "verified_at": "2026-10-10T11:53:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "e30d3fb2517361aae2d3e4f071a6d0b6319caea856351fdfd99c5c071c7f74cb",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "9689d48b35b220c814eaeac7b1d51b2873b25a11372505904873ea966811c516",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "358b94a95910dff33fbf444117f69fd52f7b680f2ac20713e1e6b31dac6685e0",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "299336a8b019690f735557cbde005d63382dc177074f2e4c235d0b34e363eb26"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox overview Guests table populated on the mock estate (929 guests, 8 host groups and 140 rendered rows at 1440, 2 groups and 36 rows at 390) with the Guests title and count",
+    "vSphere overview VMs table populated (7 host groups, 18 rendered rows, no table title) at both widths",
+    "Filtered-empty table after a no-match search on both overviews: same copy, Guests 0 title on Proxmox, no inventory-issue list, no action links",
+    "Back to top control after scrolling the vSphere overviews at both widths",
+    "Guest inline drawer open on both overviews at both widths",
+    "Exactly one search toolbar per page and none inside the workloads surface"
+  ],
+  "interactions": [
+    "Typed a no-match term into each overview search box, read the empty state, cleared it and saw the rows return",
+    "Expanded the first guest row (click at 1440, programmatic click at 390 because a backup-status button overlaps the chevron in both builds) and pressed Escape",
+    "Scrolled each overview and used Back to top",
+    "Ran the same probe twice against a build of origin/main 9a32396fe2 and twice against this change on pulse-dev: 90 of 90 readings identical in both pairs; an unminified build of each differs only by the renamed shared chunk, three lines inside it and the removed mount props in Proxmox.js and Vmware.js"
+  ]
+}

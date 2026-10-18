@@ -1,3 +1,4 @@
+import type { AlertResolution } from '@/types/api';
 import { getAlertSeverityBadgeClass } from '@/utils/alertSeverityPresentation';
 
 export type AlertIncidentLevel = 'warning' | 'critical' | string | null | undefined;
@@ -76,6 +77,24 @@ export function getAlertIncidentLevelBadgeClass(level: AlertIncidentLevel): stri
   return getAlertSeverityBadgeClass(String(level ?? 'warning'));
 }
 
+// History status for an alert that closed because its Pulse agent took the
+// metric over. The condition did not clear; the agent's own alert owns it.
+export const ALERT_HISTORY_MOVED_STATUS = 'moved';
+
+/**
+ * The account of a close that was not a recovery, for history rows and their
+ * tooltips. Returns undefined for an ordinary recovery so callers keep their
+ * "resolved" wording.
+ */
+export function getAlertResolutionDetail(resolution?: AlertResolution | null): string | undefined {
+  if (!resolution) return undefined;
+  if (resolution.reason === 'moved_to_agent') {
+    const successor = resolution.successorName?.trim() || 'its Pulse agent';
+    return `Moved to ${successor}. This is not a recovery: check the agent for the current reading.`;
+  }
+  return resolution.summary?.trim() || undefined;
+}
+
 export function getAlertHistoryStatusPresentation(
   status?: string | null,
 ): AlertHistoryStatusPresentation {
@@ -95,6 +114,17 @@ export function getAlertHistoryStatusPresentation(
       label: 'acknowledged',
       className:
         'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
+      rowClassName: '',
+    };
+  }
+
+  // Closed without recovering: neither a live problem on this row nor a
+  // healthy outcome, so it gets its own neutral-blue badge.
+  if (normalized === ALERT_HISTORY_MOVED_STATUS) {
+    return {
+      label: 'moved to agent',
+      className:
+        'text-xs px-2 py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300',
       rowClassName: '',
     };
   }
@@ -188,6 +218,29 @@ export function getAlertResourceIncidentNoteSaveFailure() {
 
 export function getAlertResourceIncidentViewTitle() {
   return ALERT_RESOURCE_INCIDENT_VIEW_TITLE;
+}
+
+/**
+ * Accessible names for the controls every alert history row repeats. A
+ * shared "Timeline" or "Resource" tells a screen-reader user nothing about
+ * which row it belongs to, and history repeats one alert over time, so the
+ * timeline control also names when it started. Each name begins with the
+ * visible label so speech input still finds it.
+ */
+export function getAlertHistoryTimelineActionLabel(options: {
+  open: boolean;
+  alertTitle: string;
+  resourceName?: string;
+  startedAt: string;
+}): string {
+  const subject = [options.alertTitle, options.resourceName && `on ${options.resourceName}`]
+    .filter(Boolean)
+    .join(' ');
+  return `${options.open ? 'Hide timeline' : 'Timeline'} for ${subject}, ${options.startedAt}`;
+}
+
+export function getAlertHistoryResourceActionLabel(resourceName?: string): string {
+  return `Resource incidents for ${resourceName?.trim() || 'this resource'}`;
 }
 
 export function getAlertIncidentEventFilterContainerClass(

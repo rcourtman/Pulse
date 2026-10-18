@@ -105,7 +105,11 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 	// before the ordered writer starts, so a (re)connecting client always
 	// sees where the update is right now instead of waiting for the next
 	// stage change. The cache is read after registration so a broadcast
-	// racing this connect is either in the snapshot or queued behind it.
+	// racing this connect is never lost: it is in the snapshot, queued
+	// behind it, or both. In the last case the client receives that status
+	// again after the snapshot, possibly preceded by an older stage that was
+	// still in flight. Stage progress only rises, and the update modal
+	// ignores stages that move it backwards, so the repeat is harmless.
 	b.statusMu.RLock()
 	cachedStatus := b.cachedStatus
 	b.statusMu.RUnlock()

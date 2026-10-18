@@ -96,7 +96,8 @@ describe('alertThresholdDefaults', () => {
 
   describe('FACTORY_TRUENAS_DISK_DEFAULTS', () => {
     it('only carries a disk temperature trigger', () => {
-      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: 55 });
+      // Unset: each TrueNAS disk follows Disk temperature by type.
+      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: undefined });
       expect(Object.keys(FACTORY_TRUENAS_DISK_DEFAULTS)).toEqual(['temperature']);
     });
   });

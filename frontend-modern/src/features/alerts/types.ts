@@ -137,25 +137,11 @@ export interface Override {
   };
 }
 
-// Local email config with UI-specific fields
-export interface UIEmailConfig {
-  enabled: boolean;
-  provider: string;
-  server: string; // Fixed: use 'server' not 'smtpHost'
-  port: number; // Fixed: use 'port' not 'smtpPort'
-  username: string;
+// The editor offers only settings backed by the public email configuration.
+// Normalization supplies concrete password/rate-limit values for form controls.
+export interface UIEmailConfig extends EmailConfig {
   password: string;
-  from: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
   rateLimit: number;
-  tagFilter?: string[];
-  tagFilterMode?: 'all' | 'any';
-  minimumSeverity?: 'all' | 'warning' | 'critical';
 }
 
 export interface UIAppriseConfig {

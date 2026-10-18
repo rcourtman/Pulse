@@ -1,4 +1,5 @@
 import type { Disk } from '@/types/api';
+import type { WorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import {
   ANOMALY_SEVERITY_CLASS,
@@ -19,6 +20,8 @@ export interface StackedDiskBarProps {
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
   statusMessage?: string;
+  /** Source-owned classification; advisory text and capacity never establish freshness. */
+  reading?: Pick<WorkloadGuestDiskRead, 'state' | 'message'> | null;
 }
 
 export interface StackedDiskSegment {
@@ -86,6 +89,8 @@ export interface StackedDiskBarPresentation {
   showSublabel: boolean;
   tooltipContent: StackedDiskTooltipItem[];
   tooltipTitle: string;
+  tooltipMessage?: string;
+  unavailable: boolean;
   useStackedSegments: boolean;
   verticalBars: StackedDiskVerticalBar[];
   // The fullest disk's usage, shown beside the micro-bars so a multi-disk
@@ -197,6 +202,8 @@ function buildTooltipContent(
   options: {
     aggregateDisk: Disk | undefined;
     aggregateMode: boolean;
+    current: boolean;
+    unavailable: boolean;
     inlineDiskMode: boolean;
     miniMode: boolean;
     thresholds?: MetricDisplayThresholds | null;
@@ -207,7 +214,7 @@ function buildTooltipContent(
     options.aggregateMode || options.inlineDiskMode || options.miniMode || options.verticalBarsMode;
   if (disks.length > 0) {
     return disks.map((disk, index) => {
-      if (isStackedDiskUsageUnknown(disk)) {
+      if (options.unavailable || isStackedDiskUsageUnknown(disk)) {
         return {
           color: UNKNOWN_DISK_COLOR,
           label: getDiskLabel(disk, index),
@@ -218,9 +225,11 @@ function buildTooltipContent(
       }
       const percentValue = getDiskUsagePercent(disk);
       return {
-        color: useUsageColors
-          ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
-          : getStackedDiskColor(percentValue, index, options.thresholds),
+        color: !options.current
+          ? UNKNOWN_DISK_COLOR
+          : useUsageColors
+            ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
+            : getStackedDiskColor(percentValue, index, options.thresholds),
         label: getDiskLabel(disk, index),
         percent: formatPercent(percentValue),
         total: formatBytes(disk.total ?? 0),
@@ -233,11 +242,13 @@ function buildTooltipContent(
     const percentValue = getDiskUsagePercent(options.aggregateDisk);
     return [
       {
-        color: getMetricColorRgba(percentValue, 'disk', options.thresholds),
+        color: options.current
+          ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
+          : UNKNOWN_DISK_COLOR,
         label: 'Total',
-        percent: formatPercent(percentValue),
+        percent: options.unavailable ? '—' : formatPercent(percentValue),
         total: formatBytes(options.aggregateDisk.total ?? 0),
-        used: formatBytes(options.aggregateDisk.used ?? 0),
+        used: options.unavailable ? '?' : formatBytes(options.aggregateDisk.used ?? 0),
       },
     ];
   }
@@ -269,10 +280,17 @@ export function buildStackedDiskBarPresentation(
   props: StackedDiskBarProps,
   containerWidth: number,
 ): StackedDiskBarPresentation {
+  // Retained numbers explain the last report, not live pressure. Unannotated
+  // host/platform callers preserve their existing behaviour.
+  const unavailable = props.reading?.state === 'unavailable';
+  const current = !props.reading || props.reading.state === 'current';
+  const valuePrefix = props.reading?.state === 'last-known' ? 'Last known ' : '';
+  const anomaly = current ? props.anomaly : null;
+  const aggregateDisk = unavailable ? undefined : props.aggregateDisk;
   const allDisks = props.disks ?? [];
   // Usage visualisations only draw disks with measured usage; config-only
   // mounts (usage -1) stay listed in the tooltip.
-  const disks = allDisks.filter((disk) => !isStackedDiskUsageUnknown(disk));
+  const disks = unavailable ? [] : allDisks.filter((disk) => !isStackedDiskUsageUnknown(disk));
   const hasDisks = disks.length > 0;
   const hasMultipleDisks = disks.length > 1;
   const aggregateMode = props.mode === 'aggregate';
@@ -289,17 +307,17 @@ export function buildStackedDiskBarPresentation(
       : 0;
   const totalCapacity = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.total || 0), 0)
-    : (props.aggregateDisk?.total ?? 0);
+    : (aggregateDisk?.total ?? 0);
   const totalUsed = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.used || 0), 0)
-    : (props.aggregateDisk?.used ?? 0);
+    : (aggregateDisk?.used ?? 0);
   const overallPercent =
     totalCapacity > 0
       ? (totalUsed / totalCapacity) * 100
-      : props.aggregateDisk
-        ? getDiskUsagePercent(props.aggregateDisk)
+      : aggregateDisk
+        ? getDiskUsagePercent(aggregateDisk)
         : 0;
-  const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
+  const anomalyRatio = formatAnomalyRatio(anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
   const useMaxSummary =
     aggregateMode && hasMultipleDisks && summaryStrategy === 'max' && maxInfo !== null;
@@ -311,13 +329,17 @@ export function buildStackedDiskBarPresentation(
       : `max ${formatPercent(maxInfo.percent)}`
     : '';
   const maxLabelFull = maxInfo
-    ? `Highest usage: ${maxInfo.label} ${formatPercent(maxInfo.percent)}`
+    ? `${valuePrefix ? 'Last known highest' : 'Highest'} usage: ${maxInfo.label} ${formatPercent(maxInfo.percent)}`
     : '';
-  const displayLabel = formatPercent(displayPercentValue);
+  const displayLabel = unavailable ? 'N/A' : formatPercent(displayPercentValue);
   const displaySublabel =
-    useMaxSummary && maxInfo ? '' : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+    unavailable || (useMaxSummary && maxInfo)
+      ? ''
+      : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
   const diskCountLabel = hasMultipleDisks ? `${disks.length} disks` : '';
-  const diskCountTitle = hasMultipleDisks ? `${disks.length} operational disks in breakdown` : '';
+  const diskCountTitle = hasMultipleDisks
+    ? `${disks.length} ${current ? 'operational' : 'last known'} disks in breakdown`
+    : '';
   const showDiskCount = Boolean(props.showDiskCount && hasMultipleDisks);
   const showMaxLabel =
     useMaxSummary ||
@@ -327,7 +349,7 @@ export function buildStackedDiskBarPresentation(
       containerWidth >=
         estimateTextWidth(displayLabel, { detail: ` ${maxLabelShort}` }) + LABEL_PADDING_PX);
   // The anomaly marker shares the label's line whenever it renders.
-  const anomalyMarker = props.anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
+  const anomalyMarker = anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
   const showSublabel =
     displaySublabel.length > 0 &&
     containerWidth >=
@@ -337,8 +359,9 @@ export function buildStackedDiskBarPresentation(
         }`,
       }) +
         LABEL_PADDING_PX;
-  const barColor =
-    aggregateMode && hasMultipleDisks && maxInfo
+  const barColor = !current
+    ? UNKNOWN_DISK_COLOR
+    : aggregateMode && hasMultipleDisks && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
       : getMetricColorRgba(overallPercent, 'disk', props.thresholds);
   const segments =
@@ -346,7 +369,9 @@ export function buildStackedDiskBarPresentation(
       ? disks.map((disk, index) => {
           const diskUsagePercent = getDiskUsagePercent(disk);
           return {
-            color: getStackedDiskColor(diskUsagePercent, index, props.thresholds),
+            color: current
+              ? getStackedDiskColor(diskUsagePercent, index, props.thresholds)
+              : UNKNOWN_DISK_COLOR,
             disk,
             diskUsagePercent,
             index,
@@ -360,13 +385,13 @@ export function buildStackedDiskBarPresentation(
     const percentLabel = formatPercent(percent);
     const shortLabel = getShortDiskLabel(label);
     return {
-      color: getMetricColorRgba(percent, 'disk', props.thresholds),
+      color: current ? getMetricColorRgba(percent, 'disk', props.thresholds) : UNKNOWN_DISK_COLOR,
       inlineText: getInlineDiskText(shortLabel, percentLabel, inlineDiskSlotWidth),
       label,
       percent,
       percentLabel,
       shortLabel,
-      title: `${label}: ${percentLabel} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
+      title: `${valuePrefix}${label}: ${percentLabel} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
     };
   });
   const verticalBars: StackedDiskVerticalBar[] = verticalBarsMode
@@ -374,9 +399,11 @@ export function buildStackedDiskBarPresentation(
         const percent = getDiskUsagePercent(disk);
         const label = getDiskLabel(disk, index);
         return {
-          color: getMetricColorRgba(percent, 'disk', props.thresholds),
+          color: current
+            ? getMetricColorRgba(percent, 'disk', props.thresholds)
+            : UNKNOWN_DISK_COLOR,
           fillPercent: Math.max(0, Math.min(percent, 100)),
-          title: `${label}: ${formatPercent(percent)} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
+          title: `${valuePrefix}${label}: ${formatPercent(percent)} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
         };
       })
     : [];
@@ -385,6 +412,8 @@ export function buildStackedDiskBarPresentation(
   const tooltipContent = buildTooltipContent(allDisks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
+    current,
+    unavailable,
     inlineDiskMode,
     miniMode,
     thresholds: props.thresholds,
@@ -393,10 +422,10 @@ export function buildStackedDiskBarPresentation(
 
   return {
     aggregateMode,
-    anomalyClass: props.anomaly
-      ? (ANOMALY_SEVERITY_CLASS[props.anomaly.severity] ?? 'text-yellow-400')
+    anomalyClass: anomaly
+      ? (ANOMALY_SEVERITY_CLASS[anomaly.severity] ?? 'text-yellow-400')
       : 'text-yellow-400',
-    anomalyDescription: props.anomaly?.description,
+    anomalyDescription: anomaly?.description,
     anomalyRatio,
     barColor,
     barPercent,
@@ -422,7 +451,13 @@ export function buildStackedDiskBarPresentation(
     showMaxLabel,
     showSublabel,
     tooltipContent,
-    tooltipTitle: allDisks.length > 1 ? 'Disk Breakdown' : 'Disk Usage',
+    tooltipTitle: valuePrefix
+      ? `${valuePrefix}${allDisks.length > 1 ? 'disk breakdown' : 'disk usage'}`
+      : allDisks.length > 1
+        ? 'Disk Breakdown'
+        : 'Disk Usage',
+    tooltipMessage: props.reading?.message ?? props.statusMessage,
+    unavailable,
     useStackedSegments,
     verticalBars,
     verticalBarsLabel,

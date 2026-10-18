@@ -147,13 +147,17 @@ export const buildUnixAgentInstallCommand = ({
     throw new Error('Pulse install endpoint URL is required.');
   }
   const normalizedCaCertPath = (caCertPath || '').trim();
-  const needsToken = Boolean((token || '').trim() || tokenFilePath?.trim());
-  const normalizedTokenFilePath = (tokenFilePath || '').trim();
+  const normalizedExtraArgs = extraArgs.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
+  const uninstall = normalizedExtraArgs.includes('--uninstall');
+  // Removal authenticates with the installed host's saved credential, never
+  // with a newly generated installation token (or its private-input prompt).
+  const needsToken = !uninstall && Boolean((token || '').trim() || tokenFilePath?.trim());
+  const normalizedTokenFilePath = uninstall ? '' : (tokenFilePath || '').trim();
   if (normalizedTokenFilePath && !normalizedTokenFilePath.startsWith('/')) {
     throw new Error('Pulse token file path must be absolute.');
   }
-  const normalizedExtraArgs = extraArgs.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
-  const installRequiresInsecure = insecure || normalizedBaseUrl.startsWith('http://');
+  const installRequiresInsecure =
+    insecure || (!uninstall && normalizedBaseUrl.startsWith('http://'));
   const curlFlags = insecure ? '-kfsSL' : '-fsSL';
   // Build shell grammar explicitly: command fields such as pfSense's remove
   // pasted newlines. Never flatten a multiline script (or quoted user data).
@@ -173,7 +177,7 @@ export const buildUnixAgentInstallCommand = ({
     '--non-interactive',
   ].join(' ');
   const installArgs = [
-    `--url ${shellQuoteArg(normalizedBaseUrl)}`,
+    ...(!uninstall ? [`--url ${shellQuoteArg(normalizedBaseUrl)}`] : []),
     ...(needsToken ? ['--token-file "$token_file"'] : []),
     ...normalizedExtraArgs,
     '--non-interactive',
@@ -183,6 +187,13 @@ export const buildUnixAgentInstallCommand = ({
   // the silent bounded read in the privileged child, not the caller's shell or
   // sudo argv. A canonical line read silently truncates long pasted tokens.
   const privileged = ['set +xv;', 'set -eu;', 'umask 077;'];
+  if (uninstall) {
+    // A previous pasted install must not shadow saved state. This runs only
+    // in the privileged child; the caller's environment is left unchanged.
+    privileged.push(
+      'unset PULSE_TOKEN PULSE_TOKEN_FILE PULSE_URL PULSE_AGENT_ID PULSE_HOSTNAME PULSE_INSECURE_SKIP_VERIFY PULSE_CACERT PULSE_SERVER_FINGERPRINT;',
+    );
+  }
   if (normalizedTokenFilePath) {
     privileged.push(
       `token_file=${shellQuoteArg(normalizedTokenFilePath)};`,
@@ -221,15 +232,17 @@ export const buildUnixAgentInstallCommand = ({
     "trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;",
     `curl ${curlFlags}${caCertArg} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script";`,
     // Detachment must not require a downloadable new agent binary.
-    ...(!normalizedExtraArgs.includes('--uninstall')
-      ? [`bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`]
-      : []),
+    ...(!uninstall ? [`bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`] : []),
     `if [ "$(id -u)" -eq 0 ]; then ${child} else sudo ${child} fi;`,
     ')',
   ].join(' ');
 };
 
-export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) => {
+const buildPowerShellInstallerDownload = (
+  baseUrl: string,
+  insecure = '$env:PULSE_INSECURE_SKIP_VERIFY -eq "true"',
+  caCertPath = '$env:PULSE_CACERT',
+) => {
   const normalizedBaseUrl = normalizeInstallerBaseUrl(baseUrl);
   if (!normalizedBaseUrl.trim()) {
     throw new Error('Pulse install endpoint URL is required.');
@@ -237,23 +250,55 @@ export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) => {
   const scriptUrl = powerShellQuote(`${normalizedBaseUrl}/install.ps1`);
   return (
     `& { $pulseScriptUrl="${scriptUrl}"; ` +
-    `if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true" -or -not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT)) { ` +
+    `if (${insecure} -or -not [string]::IsNullOrWhiteSpace(${caCertPath})) { ` +
     `${powerShellTlsValidatorBootstrap}` +
     `$pulseCustomCa = $null; ` +
-    `if (-not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT)) { ` +
-    `${powerShellLoadCustomCa('$env:PULSE_CACERT')}` +
+    `if (-not [string]::IsNullOrWhiteSpace(${caCertPath})) { ` +
+    `${powerShellLoadCustomCa(caCertPath)}` +
     `}; ` +
     `$pulsePrev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback; ` +
     `try { ` +
-    `if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { ` +
+    `if (${insecure}) { ` +
     `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::AcceptAnyCallback ` +
     `} else { ` +
     `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::ValidateCustomCaCallback ` +
     `}; ` +
     `irm $pulseScriptUrl ` +
     `} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev; [PulseInstallerCertificateValidator]::CustomCa = $null } ` +
-    `} else { irm $pulseScriptUrl } } | iex`
+    `} else { irm $pulseScriptUrl } }`
   );
+};
+
+export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) =>
+  `${buildPowerShellInstallerDownload(baseUrl)} | iex`;
+
+export const buildWindowsAgentUninstallCommand = ({
+  baseUrl,
+  insecure = false,
+  caCertPath,
+  agentId = '',
+  hostname = '',
+}: {
+  baseUrl: string;
+  insecure?: boolean;
+  caCertPath?: string | null;
+  agentId?: string;
+  hostname?: string;
+}) => {
+  const ca = powerShellSingleQuotedLiteral((caCertPath || '').trim());
+  const allowInsecure = insecure ? '$true' : '$false';
+  // Explicit empty parameters bypass ambient install credentials/identity and
+  // let install.ps1 recover its saved connection, token and trust. Download
+  // trust is separately bound to the selected endpoint, without changing env.
+  const args = [
+    '-Uninstall $true',
+    "-Url '' -Token '' -TokenFile ''",
+    `-AgentId ${powerShellSingleQuotedLiteral(agentId)}`,
+    `-Hostname ${powerShellSingleQuotedLiteral(hostname)}`,
+    `-Insecure ${allowInsecure} -CACertPath ${ca} -ServerFingerprint ''`,
+    "-PreflightOnly $false -Output '' -NonInteractive $true",
+  ];
+  return `${buildPowerShellInstallerDownload(baseUrl, allowInsecure, ca)} | ForEach-Object { & ([scriptblock]::Create($_)) ${args.join(' ')} }`;
 };
 
 export const buildWindowsAgentInstallCommand = ({

@@ -31,6 +31,7 @@ import {
   formatPlatformAlertResourceType,
   formatPlatformAlertStartedAt,
 } from '@/utils/alertDetailPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -112,6 +113,7 @@ export const DockerAlertsTable: Component<{
   emptyDescription: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.incidents,
     initialStatus: 'all' as DockerIncidentSeverityFilter,
@@ -186,7 +188,7 @@ export const DockerAlertsTable: Component<{
                   Host
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-10 w-[15%] md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 w-[15%] md:w-[10%]`}
                 >
                   Started
                 </TableHead>
@@ -276,9 +278,11 @@ export const DockerAlertsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatPlatformAlertStartedAt(incident.startedAt)}
+                            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
+                              {formatPlatformAlertStartedAt(incident.startedAt, now())}
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content xl:table-cell`}

@@ -9,32 +9,37 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// dockerAlertScopeAlias mirrors the alert subsystem's docker resource IDs
-// ("docker:<host>" and "docker:<host>/<container>") so an alert's resource ID
-// resolves to the patrol runtime record for that host or container (#1699).
-// Returns "" without a host part rather than the shared "docker:unknown"
-// fallback, which would alias unrelated records together.
-func dockerAlertScopeAlias(hostID, containerID string) string {
+// dockerAlertScopeAlias mirrors the alert subsystem's Docker container
+// resource IDs ("docker:<host>/<container ID>", or "docker:<host>/name:<name>"
+// for a container without an ID) so an alert's resource ID resolves to the
+// patrol runtime record for that container (#1699). A host's own records use
+// alerts.DockerHostResourceID. Returns "" without a host part rather than a
+// hostless form, which would alias unrelated records together.
+func dockerAlertScopeAlias(hostID, containerID, containerName string) string {
 	if strings.TrimSpace(hostID) == "" {
 		return ""
 	}
-	return alerts.DockerResourceID(hostID, containerID)
+	return alerts.DockerContainerResourceID(hostID, containerID, containerName)
 }
 
 // dockerServiceAlertScopeAliases mirrors the alert subsystem's Swarm service
-// resource IDs ("docker:<host>/service/<serviceID>") onto the owning Docker
+// resource IDs ("docker:<host>/service/<serviceID>", or
+// "docker:<host>/service/name:<name>" without an ID) onto the owning Docker
 // host record. Patrol has no service-level analysis, and a service's tasks run
 // as containers on the host, so the host is the smallest unit Patrol can
 // investigate for a service alert (#1699). Hosts without an ID are skipped for
 // the same anti-aliasing reason as dockerAlertScopeAlias: the host-less
-// "docker-service:<name>" fallback could collide across hosts.
+// "docker-service:<name>" fallback could collide across hosts. A service with
+// neither an ID nor a name raises no alert, so it has no alias.
 func dockerServiceAlertScopeAliases(hostID string, services []models.DockerService) []string {
 	if strings.TrimSpace(hostID) == "" || len(services) == 0 {
 		return nil
 	}
 	aliases := make([]string, 0, len(services))
 	for _, service := range services {
-		aliases = append(aliases, alerts.DockerServiceResourceID(hostID, service.ID, service.Name))
+		if alias := alerts.DockerServiceResourceID(hostID, service.ID, service.Name); alias != "" {
+			aliases = append(aliases, alias)
+		}
 	}
 	return aliases
 }
@@ -72,6 +77,7 @@ type patrolRuntimeResourceRecord struct {
 // It intentionally includes only the fields patrol currently consumes, so the
 // subsystem can stop mirroring the full global StateSnapshot shape.
 type patrolRuntimeState struct {
+	alertResourceResolver   unifiedresources.AlertResourceReferenceResolver
 	readState               unifiedresources.ReadState
 	unifiedResourceProvider UnifiedResourceProvider
 	Nodes                   []models.Node
@@ -89,6 +95,15 @@ type patrolRuntimeState struct {
 	ConnectionHealth        map[string]bool
 	ActiveAlerts            []models.Alert
 	RecentlyResolved        []models.ResolvedAlert
+	// thresholdProvider carries the user's alert thresholds into the run. Nil
+	// means the factory alert configuration.
+	thresholdProvider ThresholdProvider
+}
+
+// diskTemperatureLimits resolves the alert disk temperature policy for one
+// disk of the given type that the given host agent reports.
+func (s patrolRuntimeState) diskTemperatureLimits(host alerts.DiskTemperatureHost, diskType string) diskTemperatureLimits {
+	return diskTemperatureLimitsFor(s.thresholdProvider, host, diskType)
 }
 
 func newPatrolRuntimeState(snapshot models.StateSnapshot) patrolRuntimeState {
@@ -156,7 +171,39 @@ func (s patrolRuntimeState) withDerivedProvidersAndResources(resources []unified
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(s.resourceSnapshot())
 	if len(resources) > 0 {
-		registry.IngestResources(resources)
+		// Already-unified rows own their source observations. Re-ingesting a
+		// linked agent snapshot without its operator link would invent a second
+		// host beside the canonical guest/node. Keep only supplemental snapshot
+		// rows whose source observations are not already fully represented.
+		resolver := patrolAlertReferenceResolver(s)
+		type sourceKey struct {
+			source unifiedresources.DataSource
+			id     string
+		}
+		covered := make(map[sourceKey]bool)
+		for _, resource := range resources {
+			binding, _ := resolver.ResolveAlertResourceReference(resource.ID)
+			for _, target := range binding.SourceTargets {
+				covered[sourceKey{target.Source, target.SourceID}] = true
+			}
+		}
+		retained := make([]unifiedresources.Resource, 0)
+		bindings := registry.AlertResourceReferences()
+		for _, resource := range registry.List() {
+			targets := bindings[resource.ID].SourceTargets
+			fullyCovered := len(targets) > 0
+			for _, target := range targets {
+				if !covered[sourceKey{target.Source, target.SourceID}] {
+					fullyCovered = false
+					break
+				}
+			}
+			if !fullyCovered {
+				retained = append(retained, resource)
+			}
+		}
+		registry = unifiedresources.NewRegistry(nil)
+		registry.IngestResources(append(retained, resources...))
 	}
 	s.readState = registry
 	s.unifiedResourceProvider = unifiedresources.NewUnifiedAIAdapter(registry)
@@ -171,11 +218,16 @@ func (p *PatrolService) currentPatrolRuntimeState() patrolRuntimeState {
 	stateProvider := p.stateProvider
 	readState := p.readState
 	unifiedResourceProvider := p.unifiedResourceProvider
+	thresholdProvider := p.thresholdProvider
 	p.mu.RUnlock()
+	var state patrolRuntimeState
 	if stateProvider == nil {
-		return emptyPatrolRuntimeState(readState, unifiedResourceProvider)
+		state = emptyPatrolRuntimeState(readState, unifiedResourceProvider)
+	} else {
+		state = newPatrolRuntimeStateWithProviders(stateProvider.ReadSnapshot(), readState, unifiedResourceProvider)
 	}
-	return newPatrolRuntimeStateWithProviders(stateProvider.ReadSnapshot(), readState, unifiedResourceProvider)
+	state.thresholdProvider = thresholdProvider
+	return state
 }
 
 func (p *PatrolService) hasPatrolRuntimeInputs() bool {
@@ -194,8 +246,11 @@ func (p *PatrolService) patrolRuntimeStateForSnapshot(snapshot models.StateSnaps
 	p.mu.RLock()
 	readState := p.readState
 	unifiedResourceProvider := p.unifiedResourceProvider
+	thresholdProvider := p.thresholdProvider
 	p.mu.RUnlock()
-	return newPatrolRuntimeStateWithProviders(snapshot, readState, unifiedResourceProvider)
+	state := newPatrolRuntimeStateWithProviders(snapshot, readState, unifiedResourceProvider)
+	state.thresholdProvider = thresholdProvider
+	return state
 }
 
 func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeResourceRecord) bool) {
@@ -246,14 +301,14 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range rs.DockerHosts() {
-			aliases := append([]string{dh.Name(), dh.Hostname(), dockerAlertScopeAlias(dh.HostSourceID(), "")},
+			aliases := append([]string{dh.Name(), dh.Hostname(), alerts.DockerHostResourceID(dh.HostSourceID())},
 				dockerServiceAlertScopeAliases(dh.HostSourceID(), dh.Services())...)
 			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID(), dh.HostSourceID()}, aliases...) {
 				return
 			}
 		}
 		for _, dc := range rs.DockerContainers() {
-			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID())) {
+			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID(), dc.Name())) {
 				return
 			}
 		}
@@ -299,13 +354,13 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range s.DockerHosts {
-			aliases := append([]string{dh.DisplayName, dh.CustomDisplayName, dh.Hostname, dockerAlertScopeAlias(dh.ID, "")},
+			aliases := append([]string{dh.DisplayName, dh.CustomDisplayName, dh.Hostname, alerts.DockerHostResourceID(dh.ID)},
 				dockerServiceAlertScopeAliases(dh.ID, dh.Services)...)
 			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID}, aliases...) {
 				return
 			}
 			for _, dc := range dh.Containers {
-				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID)) {
+				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID, dc.Name)) {
 					return
 				}
 			}
@@ -518,10 +573,23 @@ func canonicalPatrolRuntimeResourceType(kind patrolRuntimeResourceKind) string {
 // unique known aliases onto the complete identity set for the matching Patrol
 // runtime record. It never fuzzy-matches and refuses ambiguous aliases.
 func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (PatrolScope, PatrolScopeResolution) {
+	if scope.AlertIdentifier != "" {
+		scope.AlertContext = nil
+		state.alertResourceResolver = patrolAlertReferenceResolver(state)
+	}
 	// Recompute private type evidence from the current runtime snapshot on every
 	// resolution pass; callers may synchronously pre-resolve and the accepted run
 	// resolves again to close collection races.
 	scope.resolvedResourceTypes = nil
+	alert := patrolScopeAlert(state, scope)
+	var alertOwner unifiedresources.AlertResourceReference
+	var alertOwnerIDs []string
+	if alert != nil {
+		alertOwner, _ = patrolAlertReferenceResolver(state).ResolveAlertResourceReference(alert.ResourceID)
+		if alertOwner.ResourceID != "" {
+			alertOwnerIDs = patrolAlertOwnerIDs(patrolAlertReferenceResolver(state), alertOwner)
+		}
+	}
 	resolution := PatrolScopeResolution{}
 	for _, requested := range scope.ResourceIDs {
 		if requested = strings.TrimSpace(requested); requested != "" {
@@ -606,21 +674,72 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 				}
 			}
 		}
-		switch len(matches) {
-		case 0:
-			resolution.UnmatchedResourceIDs = append(resolution.UnmatchedResourceIDs, requested)
-		case 1:
-			for _, id := range matches[0].ids {
-				addExpanded(id)
-				addResolved(id)
+		if len(matches) == 0 && alert != nil && alertOwner.ResourceID != "" {
+			requestedAlertIdentity := requested == alert.ResourceID
+			for _, ownerID := range alertOwnerIDs {
+				requestedAlertIdentity = requestedAlertIdentity || requested == ownerID
 			}
-			addResolvedType(matches[0].resourceType)
+			if requestedAlertIdentity {
+				for _, ownerID := range alertOwnerIDs {
+					for _, record := range records {
+						if record.idTokens[canonicalPatrolScopeToken(ownerID)] {
+							matches = append(matches, record)
+						}
+					}
+					if len(matches) > 0 {
+						break
+					}
+				}
+			}
+		}
+		// A linked node may expose both node and host views of one canonical
+		// resource. Only collected-alert ownership can prove those facets are
+		// the same identity; unrelated ID/alias collisions remain ambiguous.
+		sameAlertOwner := alertOwner.ResourceID != "" && len(matches) > 0
+		if sameAlertOwner {
+			for _, record := range matches {
+				owner, _ := patrolAlertReferenceResolver(state).ResolveAlertResourceReference(record.ids[0])
+				if owner.ResourceID != alertOwner.ResourceID {
+					sameAlertOwner = false
+					break
+				}
+			}
+		}
+		switch {
+		case len(matches) == 0:
+			resolution.UnmatchedResourceIDs = append(resolution.UnmatchedResourceIDs, requested)
+		case len(matches) == 1 || sameAlertOwner:
+			for _, record := range matches {
+				for _, id := range record.ids {
+					addExpanded(id)
+					addResolved(id)
+				}
+				addResolvedType(record.resourceType)
+			}
+			if sameAlertOwner {
+				for _, id := range alertOwnerIDs {
+					addExpanded(id)
+					addResolved(id)
+				}
+			}
 		default:
 			resolution.AmbiguousResourceIDs = append(resolution.AmbiguousResourceIDs, requested)
 		}
 	}
 	scope.ResourceIDs = expanded
 	scope.resolvedIdentityOnly = len(expanded) > 0
+	if alert != nil {
+		included := make(map[string]bool, len(expanded))
+		for _, id := range expanded {
+			included[id] = true
+		}
+		if patrolAlertBelongsToScope(state, alert.ResourceID, included) {
+			scope.AlertContext = patrolAlertContext(alert)
+			if scope.alertResourceTypeHint {
+				scope.ResourceTypes = append([]string(nil), scope.resolvedResourceTypes...)
+			}
+		}
+	}
 	if len(expanded) > 0 {
 		filtered := filterPatrolStateByScopeState(state, scope)
 		resolution.EffectiveResourceIDs = patrolRuntimeSortedResourceIDs(filtered)

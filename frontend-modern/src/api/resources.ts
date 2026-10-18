@@ -1,5 +1,6 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
+  Resource,
   ResourceCapability,
   ResourceChange,
   ResourceChangeKind,
@@ -74,6 +75,17 @@ const fetchFacet = async <T>(url: string): Promise<T> =>
   });
 
 export class ResourceAPI {
+  // The backend owns alias, succession and ambiguity resolution.
+  static async getResource(
+    reference: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<Resource> {
+    return apiFetchJSON<Resource>(
+      `/api/resources/${encodeURIComponent(normalizeResourceId(reference))}`,
+      { cache: 'no-store', signal: options?.signal },
+    );
+  }
+
   static async getStats(): Promise<ResourceStatsResponse> {
     return fetchFacet<ResourceStatsResponse>('/api/resources/stats');
   }

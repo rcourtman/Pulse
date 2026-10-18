@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { waitFor, cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
+import alertResourceMetricEditorSource from '@/components/Alerts/AlertResourceMetricEditor.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import {
@@ -37,6 +39,12 @@ vi.mock('@/components/shared/StatusBadge', () => ({
   StatusBadge: (props: any) => (
     <button
       data-testid="status-badge"
+      aria-label={
+        props.ariaLabel
+          ? `${props.ariaLabel}: ${props.isEnabled ? (props.labelEnabled ?? 'On') : (props.labelDisabled ?? 'Off')}`
+          : undefined
+      }
+      aria-pressed={props.isEnabled}
       onClick={() => props.onToggle?.()}
       title={props.isEnabled ? props.titleEnabled : props.titleDisabled}
     >
@@ -77,7 +85,11 @@ vi.mock('@/components/shared/Table', () => ({
   ),
   TableHeader: (props: any) => <thead>{props.children}</thead>,
   TableBody: (props: any) => <tbody class={props.class}>{props.children}</tbody>,
-  TableRow: (props: any) => <tr class={props.class}>{props.children}</tr>,
+  TableRow: (props: any) => (
+    <tr class={props.class} onFocusOut={props.onFocusOut} onFocusIn={props.onFocusIn}>
+      {props.children}
+    </tr>
+  ),
   TableHead: (props: any) => (
     <th class={props.class} title={props.title}>
       {props.children}
@@ -217,6 +229,39 @@ describe('ResourceTable', () => {
   });
 
   describe('rendering basics', () => {
+    it.each([false, true])(
+      'keeps filesystem reading explanations visible and reactive (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [resources, setResources] = createSignal([
+          makeResource({
+            id: 'disk-1',
+            name: '/data',
+            type: 'guestDisk',
+            subtitle: 'Last known 9.0 / 10.0 GB · 90.0%',
+            readingMessage: 'Guest reads paused while the backup lock is reported.',
+          }),
+        ]);
+        const props = makeProps({ columns: ['Disk %'] });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        expect(
+          screen.getByText('Guest reads paused while the backup lock is reported.'),
+        ).not.toHaveClass('truncate');
+        if (mobile)
+          expect(screen.getByText('Last known 9.0 / 10.0 GB · 90.0%')).not.toHaveClass('truncate');
+        setResources([
+          makeResource({
+            id: 'disk-1',
+            name: '/data',
+            type: 'guestDisk',
+            subtitle: '3.0 / 10.0 GB · 30.0%',
+          }),
+        ]);
+        expect(screen.queryByText(/Guest reads paused/)).not.toBeInTheDocument();
+        expect(screen.getByText('3.0 / 10.0 GB · 30.0%')).toBeInTheDocument();
+      },
+    );
+
     it('renders the section header with the provided title', () => {
       const props = makeProps({ title: 'Nodes' });
       render(() => <ResourceTable {...props} />);
@@ -340,7 +385,7 @@ describe('ResourceTable', () => {
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('FormTextarea');
       expect(alertResourceTableMobileSource).toContain('ActionIconButton');
-      expect(alertResourceTableMobileSource).toContain(
+      expect(alertResourceMetricEditorSource).toContain(
         'min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0',
       );
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
@@ -585,6 +630,82 @@ describe('ResourceTable', () => {
     });
   });
 
+  describe('pulse-relaxed guests', () => {
+    const relaxedGuest = (overrides: Partial<Resource> = {}) =>
+      makeResource({
+        id: 'vm-1',
+        name: 'batch-vm',
+        type: 'guest',
+        pulseRelaxed: true,
+        thresholds: {},
+        defaults: { cpu: 80, memory: 85, disk: 90 },
+        ...overrides,
+      });
+    const renderGrouped = (resource: Resource, overrides: Record<string, any> = {}) =>
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: undefined,
+            groupedResources: { node1: [resource] },
+            columns: ['CPU %', 'Memory %', 'Disk %'],
+            ...overrides,
+          })}
+        />
+      ));
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('states the thresholds the tag raises on the %s row', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      renderGrouped(relaxedGuest());
+
+      const line = screen.getByTestId('alert-resource-relaxed-triggers');
+      expect(line).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at CPU 95% · Memory 92% · Disk 95%',
+      );
+      expect(line.getAttribute('title')).toContain('Remove the tag in Proxmox');
+      // The row keeps showing the configured values the editor changes.
+      expect(screen.getByText('80')).toBeInTheDocument();
+    });
+
+    it('omits metrics the tag leaves alone', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: -1, memory: 96 } }));
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('follows unsaved edits', () => {
+      renderGrouped(relaxedGuest(), {
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: 97, memory: 93, disk: 70 }),
+      });
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('stays hidden when the tag raises nothing or alerts are off', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: 99, memory: 99, disk: 99 } }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ disabled: true }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest(), { globalDisableFlag: () => true });
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ pulseRelaxed: false }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+    });
+  });
+
   describe('metric display values', () => {
     it('shows formatted metric values using formatMetricValue', () => {
       const formatMetricValue = vi.fn((metric: string, value: number | undefined) => {
@@ -652,8 +773,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts enabled for this resource' });
-      expect(toggle).toBeInTheDocument();
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
+      expect(toggle).toHaveAttribute('aria-checked', 'true');
     });
 
     it('calls onToggleDisabled with resource id when toggle is clicked', () => {
@@ -664,7 +785,7 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts enabled for this resource' });
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
       fireEvent.click(toggle);
       expect(onToggleDisabled).toHaveBeenCalledWith('vm-1');
     });
@@ -678,7 +799,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const toggle = screen.getByRole('switch', { name: 'Alerts disabled for this resource' });
+      const toggle = screen.getByRole('switch', { name: 'Alerts for Test VM' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
       expect(toggle).toBeDisabled();
     });
 
@@ -806,6 +928,231 @@ describe('ResourceTable', () => {
     });
   });
 
+  it.each([false, true])(
+    'preserves host cluster context in threshold layouts (mobile=%s)',
+    (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: [makeResource({ type: 'agent', name: 'A', clusterName: 'Analytics' })],
+          })}
+        />
+      ));
+      expect(screen.getByText('Analytics')).toBeInTheDocument();
+    },
+  );
+
+  it.each([false, true])(
+    'keeps backup and snapshot configs out of numeric defaults (mobile=%s)',
+    (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: [],
+            columns: ['CPU %', 'Backup', 'Snapshot'],
+            globalDefaults: { cpu: 80 },
+            setGlobalDefaults: vi.fn(),
+            setHasUnsavedChanges: vi.fn(),
+          })}
+        />
+      ));
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+      expect(screen.getAllByTestId('status-badge')).toHaveLength(1);
+    },
+  );
+
+  // Moving between form controls, assistive tech reads a control's own name,
+  // not its column header: every threshold input and On/Off toggle on the
+  // page used to sound alike ("Click to enable this metric", "On").
+  describe('threshold control names', () => {
+    it.each([false, true])(
+      'names each global default input and toggle by its metric (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %', 'Memory %'],
+          resources: [],
+          globalDefaults: { cpu: 80, memory: 85 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('spinbutton', { name: 'CPU % default' })).toHaveValue(80);
+        expect(screen.getByRole('spinbutton', { name: 'Memory % default' })).toHaveValue(85);
+        expect(screen.getByRole('button', { name: 'CPU % default alerts: On' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      },
+    );
+
+    it.each([false, true])(
+      'names an override input and toggle by metric and resource (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          editingId: () => 'vm-1',
+          editingThresholds: () => ({ cpu: 90 }),
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              thresholds: { cpu: 90 },
+              defaults: { cpu: 80 },
+            }),
+          ],
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('spinbutton', { name: 'CPU % for web-01' })).toHaveValue(90);
+        expect(
+          screen.getByRole('button', { name: 'CPU % for web-01 alerts: On' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names the offline alert toggles for the default and each resource (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: [makeResource({ id: 'node-a', name: 'pve-a', type: 'node' })],
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onToggleGlobalDisableOffline: vi.fn(),
+          globalDisableOfflineFlag: () => false,
+          onToggleNodeConnectivity: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: /^Offline alerts default: On$/ }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: /^Offline alerts for pve-a: / }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names each resource backup and snapshot toggle (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['Backup', 'Snapshot'],
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              backup: { enabled: true },
+              snapshot: { enabled: false },
+            }),
+          ],
+          onToggleBackup: vi.fn(),
+          onToggleSnapshot: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('button', { name: /^Backup alerts for web-01: / })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+        expect(
+          screen.getByRole('button', { name: /^Snapshot alerts for web-01: / }),
+        ).toHaveAttribute('aria-pressed', 'false');
+      },
+    );
+
+    // Proxmox guests and Docker containers cycle Warn / Crit / Off instead
+    // of a binary badge; their names carry the context and the visible word.
+    it.each([false, true])(
+      'names the three-state offline controls for the default and each guest (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: undefined,
+          groupedResources: {
+            node1: [makeResource({ id: 'vm-1', name: 'VM1', type: 'guest' })],
+          },
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onSetGlobalOfflineState: vi.fn(),
+          onSetOfflineState: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts default: Warn' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts for VM1: Warn' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    // A metric cell outside edit mode is a button showing the current value;
+    // its name says which threshold it edits and repeats that value.
+    it.each([false, true])(
+      'names each metric value button with its resource and shown value (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %', 'Memory %'],
+          resources: [
+            makeResource({
+              id: 'vm-1',
+              name: 'web-01',
+              thresholds: { cpu: 90, memory: -1 },
+              defaults: { cpu: 80, memory: 85 },
+            }),
+          ],
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(
+          screen.getByRole('button', { name: 'Edit CPU % threshold for web-01: 90' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Edit Memory % threshold for web-01: Off' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'names the global and per-resource alert switches (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = makeProps({
+          columns: ['CPU %'],
+          resources: [makeResource({ id: 'vm-1', name: 'web-01' })],
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          onToggleGlobalDisable: vi.fn(),
+          globalDisableFlag: () => false,
+          onToggleDisabled: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getByRole('switch', { name: 'Global alerts toggle' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toBeInTheDocument();
+      },
+    );
+  });
+
   describe('metric off toggles', () => {
     // The alert engine disables a metric whenever its trigger is <= 0, so every
     // editor here has to agree on that reading and has to write a value the
@@ -818,73 +1165,138 @@ describe('ResourceTable', () => {
       });
     }
 
-    it('reads a stored 0 override as Off in the row editor', () => {
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 0 }),
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'reads a stored 0 override as Off in the row editor (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 0 }),
+        });
+        render(() => <ResourceTable {...props} />);
 
-      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
-    });
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      },
+    );
 
-    it('does not stage 0 through the row numeric input', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 80 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'does not stage 0 through the row numeric input (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 80 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
 
-      expect(setEditingThresholds).not.toHaveBeenCalled();
-    });
+        expect(setEditingThresholds).not.toHaveBeenCalled();
+      },
+    );
 
-    it('stages an explicit threshold when the inherited default is itself off', () => {
-      // Clearing the override would only re-inherit the disabled default, so
-      // the save path would drop the change and the metric would stay off.
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
-        editingThresholds: () => ({ cpu: -1 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'stages an explicit threshold when the inherited default is itself off (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        // Clearing the override would only re-inherit the disabled default, so
+        // the save path would drop the change and the metric would stay off.
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
+          editingThresholds: () => ({ cpu: -1 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
+      },
+    );
 
-    it('clears the override when the inherited default is already enabled', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: -1 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: -1 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'clears the override when the inherited default is already enabled (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: -1 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: -1 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
+      },
+    );
 
-    it('turns a metric off with the canonical -1 sentinel', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 80 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'turns a metric off with the canonical -1 sentinel (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 80 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: -1 });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: -1 });
+      },
+    );
+
+    it.each([false, true])(
+      'clears an override to inherit without disabling (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 90 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 90 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '' } });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
+      },
+    );
+
+    it.each([false, true])(
+      'clearing an override inherits Off and enables in one toggle (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [editingThresholds, setEditingThresholds] = createSignal<
+          Record<string, number | undefined>
+        >({ cpu: 81 });
+        render(() => (
+          <ResourceTable
+            {...editorProps({
+              editingThresholds,
+              setEditingThresholds,
+              resources: [
+                makeResource({ id: 'vm-1', thresholds: { cpu: 81 }, defaults: { cpu: 0 } }),
+              ],
+            })}
+          />
+        ));
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '' } });
+        expect(editingThresholds().cpu).toBeUndefined();
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+        if (!mobile) expect(screen.getByRole('slider')).toBeDisabled();
+        fireEvent.click(screen.getByTestId('status-badge'));
+        expect(editingThresholds().cpu).toBe(80);
+        expect(screen.getByRole('spinbutton')).toHaveValue(80);
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('On');
+      },
+    );
 
     it('keeps the editor open when focus moves from the input to the off toggle', () => {
       // Tabbing to the toggle must not save and close the row before the toggle
@@ -898,8 +1310,142 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       const input = screen.getByRole('spinbutton');
-      fireEvent.blur(input, { relatedTarget: screen.getByTestId('status-badge') });
+      fireEvent.focusOut(input, { relatedTarget: screen.getByTestId('status-badge') });
 
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+      'opens from the focused edit button and focuses the first input (mobile=%s)',
+      async (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [editingId, setEditingId] = createSignal<string | null>(null);
+        const onSaveEdit = vi.fn();
+        render(() => (
+          <>
+            <button data-testid="outside-entry">Other action</button>
+            <ResourceTable
+              {...editorProps({
+                editingId,
+                onSaveEdit,
+                onEdit: () => setEditingId('vm-1'),
+                resources: [makeResource({ id: 'vm-1' })],
+              })}
+            />
+          </>
+        ));
+        const edit = screen.getByLabelText('Edit thresholds for Test VM');
+        edit.focus();
+        fireEvent.click(edit);
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('spinbutton')));
+        expect(onSaveEdit).not.toHaveBeenCalled();
+        screen.getByTestId('outside-entry').focus();
+        if (mobile) {
+          expect(onSaveEdit).not.toHaveBeenCalled();
+          fireEvent.click(screen.getByLabelText('Save threshold edits for Test VM'));
+        }
+        expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+      },
+    );
+
+    it.each([false, true])(
+      'transfers the current metric focus and draft between layouts (mobile=%s)',
+      async (initialMobile) => {
+        const [mobile, setMobile] = createSignal(initialMobile);
+        mockIsMobile.mockImplementation(mobile);
+        const onSaveEdit = vi.fn();
+        const [editingThresholds, setEditingThresholds] = createSignal({ cpu: 80, memory: 85 });
+        render(() => (
+          <ResourceTable
+            {...editorProps({
+              columns: ['CPU %', 'Memory %'],
+              editingThresholds,
+              setEditingThresholds,
+              onSaveEdit,
+              resources: [makeResource({ id: 'vm-1', defaults: { cpu: 80, memory: 85 } })],
+            })}
+          />
+        ));
+        const memory = screen.getAllByRole('spinbutton')[1];
+        memory.focus();
+        fireEvent.input(memory, { target: { value: '93' } });
+        setMobile(!initialMobile);
+        await waitFor(() =>
+          expect(document.activeElement).toBe(screen.getAllByRole('spinbutton')[1]),
+        );
+        expect(screen.getAllByRole('spinbutton')[1]).toHaveValue(93);
+        expect(onSaveEdit).not.toHaveBeenCalled();
+        setMobile(initialMobile);
+        await waitFor(() =>
+          expect(document.activeElement).toBe(screen.getAllByRole('spinbutton')[1]),
+        );
+        expect(screen.getAllByRole('spinbutton')[1]).toHaveValue(93);
+        expect(onSaveEdit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps the editor open when focus moves from the number to its slider', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({ onSaveEdit, resources: [makeResource({ id: 'vm-1' })] })}
+        />
+      ));
+      screen.getByRole('spinbutton').focus();
+      screen.getByRole('slider').focus();
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it('saves when focus leaves the edited row after the Off toggle', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <>
+          <button data-testid="outside-row">Other action</button>
+          <ResourceTable
+            {...editorProps({ onSaveEdit, resources: [makeResource({ id: 'vm-1' })] })}
+          />
+        </>
+      ));
+      screen.getByRole('spinbutton').focus();
+      screen.getByTestId('status-badge').focus();
+      screen.getByTestId('outside-row').focus();
+      expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+    });
+
+    it('lets Cancel discard a focused threshold without saving', () => {
+      const onSaveEdit = vi.fn();
+      const onCancelEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({
+            onSaveEdit,
+            onCancelEdit,
+            resources: [makeResource({ id: 'vm-1' })],
+          })}
+        />
+      ));
+      screen.getByRole('spinbutton').focus();
+      const cancel = screen.getByLabelText('Cancel editing');
+      cancel.focus();
+      fireEvent.click(cancel);
+      expect(onCancelEdit).toHaveBeenCalledOnce();
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it('keeps editing when keyboard focus moves to another metric in the row', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({
+            onSaveEdit,
+            columns: ['CPU %', 'Memory %'],
+            resources: [makeResource({ id: 'vm-1' })],
+          })}
+        />
+      ));
+      const inputs = screen.getAllByRole('spinbutton');
+      inputs[0].focus();
+      inputs[1].focus();
       expect(onSaveEdit).not.toHaveBeenCalled();
     });
 
@@ -912,7 +1458,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      fireEvent.blur(screen.getByRole('spinbutton'), { relatedTarget: null });
+      screen.getByRole('spinbutton').focus();
+      fireEvent.focusOut(screen.getByRole('spinbutton'), { relatedTarget: null });
 
       expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
     });
@@ -1005,6 +1552,144 @@ describe('ResourceTable', () => {
         prev: Record<string, number | undefined>,
       ) => Record<string, number | undefined>;
       expect(updater({ cpu: 0 })).toEqual({ cpu: 80 });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('lets an unset %s global default follow its fallback', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: undefined },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      // Unset reads On and names where the value comes from.
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('On');
+      const input = screen.getByPlaceholderText('By type') as HTMLInputElement;
+      expect(input.value).toBe('');
+      expect(input.disabled).toBe(false);
+      expect(input.title).toBe('Follows Disk temperature by type');
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: undefined })).toEqual({ temperature: -1 });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('switches an Off %s fallback default back to following', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: -1 },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: -1 })).toEqual({ temperature: undefined });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('reads an unset %s default Off when its fallback is off', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: undefined },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Off by type', off: true, enableValue: 55 },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      expect(screen.queryByPlaceholderText('By type')).toBeNull();
+
+      // Unset would still be off, so switching on stages an explicit value.
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: undefined })).toEqual({ temperature: 55 });
+    });
+
+    it('shows a set fallback global default as its number', () => {
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: 62 },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults: vi.fn(),
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByDisplayValue('62')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('By type')).toBeNull();
+    });
+
+    it('follows global defaults that arrive after the table mounts', () => {
+      const [globalDefaults, setGlobalDefaults] = createSignal<Record<string, number | undefined>>({
+        temperature: undefined,
+      });
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        factoryDefaults: { temperature: undefined },
+        onResetDefaults: vi.fn(),
+        setGlobalDefaults: vi.fn(),
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} globalDefaults={globalDefaults()} />);
+
+      expect(screen.queryByText('Custom')).toBeNull();
+      // The saved config loads after mount.
+      setGlobalDefaults({ temperature: 62 });
+      expect(screen.getByText('Custom')).toBeInTheDocument();
+    });
+
+    it('uses a table column tooltip over the generic one', () => {
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        columnTooltips: { 'Temp °C': 'Disk temperature that raises an alert.' },
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByText('Temp °C', { selector: 'th' })).toHaveAttribute(
+        'title',
+        'Disk temperature that raises an alert.',
+      );
     });
 
     it('stages an explicit threshold from the mobile row editor', () => {
@@ -1485,7 +2170,7 @@ describe('ResourceTable', () => {
         'min-h-11',
         'min-w-11',
       );
-      expect(screen.getByLabelText('Edit CPU % threshold for Mobile VM')).toHaveClass(
+      expect(screen.getByLabelText(/^Edit CPU % threshold for Mobile VM: /)).toHaveClass(
         'min-h-11',
         'min-w-11',
       );
@@ -1687,7 +2372,7 @@ describe('ResourceTable', () => {
       expect(setEditingThresholds).toHaveBeenCalledWith(expect.objectContaining({ cpu: 95 }));
     });
 
-    it('calls onSaveEdit on input blur', () => {
+    it('calls onSaveEdit when focus leaves the edited row', () => {
       const onSaveEdit = vi.fn();
       const props = makeProps({
         resources: undefined,
@@ -1705,7 +2390,8 @@ describe('ResourceTable', () => {
         'input[type="number"][title="Use the Off control to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
-      fireEvent.blur(editInputs[0]);
+      (editInputs[0] as HTMLInputElement).focus();
+      fireEvent.focusOut(editInputs[0]);
 
       expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
     });

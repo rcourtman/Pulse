@@ -31,7 +31,6 @@ export type SettingsTab =
   | 'system-ai'
   | 'system-ai-patrol'
   | 'system-ai-assistant'
-  | 'system-ai-discovery'
   | 'system-relay'
   | 'system-billing'
   | 'support-diagnostics'
@@ -207,6 +206,8 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   ) {
     return settingsTabPath('system-ai');
   }
+  // The AI Service Context page was retired with AI Discovery; old links land
+  // on Assistant settings.
   if (normalizedPath === PULSE_INTELLIGENCE_DISCOVERY_PREFIX) {
     return settingsTabPath('system-ai-assistant');
   }
@@ -244,9 +245,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
   }
   if (canonicalPath.startsWith(PULSE_INTELLIGENCE_ASSISTANT_PREFIX)) {
     return 'system-ai-assistant';
-  }
-  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_DISCOVERY_PREFIX)) {
-    return 'system-ai-discovery';
   }
   if (canonicalPath.startsWith(PULSE_INTELLIGENCE_PROVIDER_PREFIX)) {
     return 'system-ai';
@@ -424,8 +422,6 @@ export function settingsTabPath(tab: SettingsTab): string {
       return PULSE_INTELLIGENCE_PATROL_PREFIX;
     case 'system-ai-assistant':
       return PULSE_INTELLIGENCE_ASSISTANT_PREFIX;
-    case 'system-ai-discovery':
-      return PULSE_INTELLIGENCE_DISCOVERY_PREFIX;
     case 'system-relay':
       return '/settings/system-relay';
     case 'system-billing':
@@ -452,7 +448,6 @@ const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
   settingsTabPath('system-ai'),
   settingsTabPath('system-ai-patrol'),
   settingsTabPath('system-ai-assistant'),
-  settingsTabPath('system-ai-discovery'),
   settingsTabPath('system-relay'),
   settingsTabPath('system-billing'),
   SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,

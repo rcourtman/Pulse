@@ -149,12 +149,18 @@ func TestResolvePatrolScopeCanonicalIDOutranksAliasCollision(t *testing.T) {
 }
 
 func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
+	// A container reported without an ID alerts under its own name reference,
+	// so the host's reference stays unambiguous.
 	snapshot := models.StateSnapshot{DockerHosts: []models.DockerHost{{
 		ID: "nas", Hostname: "nas",
-		Containers: []models.DockerContainer{{ID: "abc123def456", Name: "dockhand-hawser-updater-nas", State: "exited"}},
+		Containers: []models.DockerContainer{
+			{ID: "abc123def456", Name: "dockhand-hawser-updater-nas", State: "exited"},
+			{Name: "legacy-sidecar", State: "exited"},
+		},
 	}}}
-	containerAlertID := alerts.DockerResourceID("nas", "abc123def456")
-	hostAlertID := alerts.DockerResourceID("nas", "")
+	containerAlertID := alerts.DockerContainerResourceID("nas", "abc123def456", "dockhand-hawser-updater-nas")
+	namedContainerAlertID := alerts.DockerContainerResourceID("nas", "", "legacy-sidecar")
+	hostAlertID := alerts.DockerHostResourceID("nas")
 
 	snapshotState := newPatrolRuntimeState(snapshot)
 	registry := unifiedresources.NewRegistry(nil)
@@ -165,7 +171,12 @@ func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
 		for _, tc := range []struct {
 			requested    string
 			resourceType string
-		}{{containerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
+		}{{containerAlertID, "app-container"}, {namedContainerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
+			if tc.requested == namedContainerAlertID && state.readState == nil {
+				// The legacy snapshot record of a container without an ID has
+				// no ID to scope by; only the unified read state can.
+				continue
+			}
 			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{tc.requested}})
 			if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
 				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", tc.requested, resolution)
@@ -1735,37 +1746,29 @@ func TestGetStatus_BlockedReason(t *testing.T) {
 	}
 }
 
-func TestShouldSkipInitialFullPatrol_IgnoresRecentScopedErrorRun(t *testing.T) {
+func TestInitialPatrolSchedule_IgnoresRecentScopedErrorRun(t *testing.T) {
 	now := time.Now()
-	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
-		{
-			ID:            "scoped-error",
-			Type:          "scoped",
-			TriggerReason: "alert_fired",
-			CompletedAt:   now.Add(-5 * time.Minute),
-			ErrorCount:    1,
-			Status:        "error",
-		},
-	}, now)
-	if skip {
-		t.Fatal("expected recent scoped error run not to suppress initial full patrol")
+	p := NewPatrolService(nil, nil)
+	p.runHistoryStore.Add(PatrolRunRecord{
+		ID: "scoped-error", Type: "scoped", TriggerReason: "alert_fired",
+		CompletedAt: now.Add(-5 * time.Minute), ErrorCount: 1, Status: "error",
+	})
+	next, trigger := p.initialPatrolSchedule(now, 15*time.Minute)
+	if trigger != TriggerReasonStartup || !next.Equal(now) {
+		t.Fatalf("scoped error postponed initial full patrol: next=%v trigger=%s", next, trigger)
 	}
 }
 
-func TestShouldSkipInitialFullPatrol_SkipsAfterRecentSuccessfulFullRun(t *testing.T) {
+func TestInitialPatrolSchedule_ResumesAfterRecentSuccessfulFullRun(t *testing.T) {
 	now := time.Now()
-	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
-		{
-			ID:            "full-success",
-			Type:          "patrol",
-			TriggerReason: "scheduled",
-			CompletedAt:   now.Add(-10 * time.Minute),
-			ErrorCount:    0,
-			Status:        "healthy",
-		},
-	}, now)
-	if !skip {
-		t.Fatal("expected recent successful full patrol to suppress initial full patrol")
+	p := NewPatrolService(nil, nil)
+	p.runHistoryStore.Add(PatrolRunRecord{
+		ID: "full-success", Type: "patrol", TriggerReason: "scheduled",
+		CompletedAt: now.Add(-10 * time.Minute), Status: "healthy",
+	})
+	next, trigger := p.initialPatrolSchedule(now, 15*time.Minute)
+	if trigger != TriggerReasonScheduled || !next.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("full patrol cadence was not resumed: next=%v trigger=%s", next, trigger)
 	}
 }
 

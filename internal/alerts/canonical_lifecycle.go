@@ -823,8 +823,14 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			return result, true
 		}
 
-		if primary == reducer.EventSeverityChanged && params.NotifyOnSeverityChange {
-			if params.AddToHistoryOnSeverityChange {
+		// Restored backup incidents do not dispatch on a startup timer. Their
+		// first valid overdue evaluation must resume delivery even when the
+		// reducer keeps the same occurrence and severity.
+		backupRevalidated := m.revalidateBackupNotificationNoLock(alert)
+		severityChanged := primary == reducer.EventSeverityChanged && params.NotifyOnSeverityChange
+		if severityChanged ||
+			(backupRevalidated && m.shouldNotifyAfterCooldown(alert)) {
+			if severityChanged && params.AddToHistoryOnSeverityChange {
 				m.historyManager.AddAlertTransition(*alert)
 			}
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {

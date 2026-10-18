@@ -1,6 +1,5 @@
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
-import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import { canonicalizeWorkloadFilterType } from '@/utils/workloads';
 
 export const WORKLOADS_QUERY_PARAMS = {
@@ -13,7 +12,6 @@ export const WORKLOADS_QUERY_PARAMS = {
   // Canonical v6 agent filter query param.
   agent: 'agent',
   resource: 'resource',
-  summaryGroup: 'summaryGroup',
 } as const;
 
 export const STANDALONE_PATH = '/standalone';
@@ -50,6 +48,40 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
+// The Recovery section, whose fresh and stale hours colour every backup shield.
+export const ALERT_BACKUP_THRESHOLDS_PATH = `${ALERT_THRESHOLDS_PATH}/proxmox#backups`;
+export const ALERT_THRESHOLDS_QUERY_PARAMS = {
+  query: 'q',
+} as const;
+export type AlertThresholdsTab =
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'systems';
+
+/** A thresholds tab, optionally already searched to one resource's rows. */
+export const buildAlertThresholdsPath = (
+  tab?: AlertThresholdsTab,
+  options: { query?: string | null } = {},
+): string => {
+  const path = tab ? `${ALERT_THRESHOLDS_PATH}/${tab}` : ALERT_THRESHOLDS_PATH;
+  const query = options.query?.trim();
+  return query
+    ? `${path}?${new URLSearchParams({ [ALERT_THRESHOLDS_QUERY_PARAMS.query]: query }).toString()}`
+    : path;
+};
+export const ALERT_HISTORY_PATH = '/alerts/history';
+export const ALERT_HISTORY_QUERY_PARAMS = {
+  query: 'q',
+  period: 'period',
+  severity: 'severity',
+  alert: 'alert',
+} as const;
+
+/**
+ * Alert History narrowed to one alert's occurrences, with its latest timeline
+ * open. Notifications link here (`internal/notifications` builds the same
+ * address), so the parameter name is a public contract.
+ */
+export const buildAlertHistoryAlertPath = (alertId: string): string =>
+  `${ALERT_HISTORY_PATH}?${new URLSearchParams({ [ALERT_HISTORY_QUERY_PARAMS.alert]: alertId }).toString()}`;
 export const PATROL_PATH = '/patrol';
 export const PATROL_ATTENTION_QUERY_PARAM = 'attention';
 export const ACTIONS_PATH = '/actions';
@@ -105,35 +137,9 @@ export const STORAGE_QUERY_PARAMS = {
   resource: 'resource',
   sort: 'sort',
   order: 'order',
-  summaryGroup: 'summaryGroup',
-} as const;
-
-export const RECOVERY_QUERY_PARAMS = {
-  rollupId: 'rollupId',
-  view: 'view',
-  platform: 'platform',
-  state: 'state',
-  stale: 'stale',
-  range: 'range',
-  cluster: 'cluster',
-  day: 'day',
-  namespace: 'namespace',
-  mode: 'mode',
-  itemType: 'itemType',
-  scope: 'scope',
-  status: 'status',
-  verification: 'verification',
-  node: 'node',
-  query: 'q',
 } as const;
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
-const normalizeQueryBooleanFlag = (value: string | null | undefined): string => {
-  const normalized = normalizeQueryValue(value).toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-    ? '1'
-    : '';
-};
 
 const normalizeWorkloadsType = (value: string | null | undefined): string =>
   canonicalizeWorkloadFilterType(normalizeQueryValue(value));
@@ -156,7 +162,6 @@ type WorkloadsLinkOptions = {
   cluster?: string | null;
   agent?: string | null;
   resource?: string | null;
-  summaryGroup?: string | null;
 };
 
 type DockerLinkOptions = {
@@ -175,29 +180,7 @@ type StorageLinkOptions = {
   resource?: string | null;
   sort?: string | null;
   order?: string | null;
-  summaryGroup?: string | null;
 };
-
-type RecoveryLinkOptions = {
-  rollupId?: string | null;
-  view?: string | null;
-  platform?: string | null;
-  state?: string | null;
-  stale?: string | null;
-  range?: string | null;
-  cluster?: string | null;
-  day?: string | null;
-  namespace?: string | null;
-  mode?: string | null;
-  itemType?: string | null;
-  scope?: string | null;
-  status?: string | null;
-  verification?: string | null;
-  node?: string | null;
-  query?: string | null;
-};
-
-const RECOVERY_LEGACY_PLATFORM_QUERY_PARAM = 'provider';
 
 export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
@@ -210,7 +193,6 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     cluster: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.cluster)),
     agent: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.agent)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
-    summaryGroup: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -298,7 +280,6 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   const cluster = normalizeQueryValue(options.cluster);
   const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
-  const summaryGroup = normalizeQueryValue(options.summaryGroup);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
   if (platform) params.set(WORKLOADS_QUERY_PARAMS.platform, platform);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
@@ -307,7 +288,6 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   if (cluster) params.set(WORKLOADS_QUERY_PARAMS.cluster, cluster);
   if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
-  if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);
   return serializedRouteSearch(params);
 };
 
@@ -366,7 +346,6 @@ export const parseStorageLinkSearch = (search: string) => {
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
     sort: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.sort)),
     order: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.order)),
-    summaryGroup: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -383,7 +362,6 @@ export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): strin
   const resource = normalizeQueryValue(options.resource);
   const sort = normalizeQueryValue(options.sort);
   const order = normalizeQueryValue(options.order);
-  const summaryGroup = normalizeQueryValue(options.summaryGroup);
 
   if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
@@ -396,74 +374,6 @@ export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): strin
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
   if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
   if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
-  if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
-
-  return serializedRouteSearch(params);
-};
-
-export const parseRecoveryLinkSearch = (search: string) => {
-  const params = new URLSearchParams(search);
-
-  return {
-    rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
-    view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
-    platform: normalizeSourcePlatformQueryValue(
-      firstNonEmpty([
-        params.get(RECOVERY_QUERY_PARAMS.platform),
-        params.get(RECOVERY_LEGACY_PLATFORM_QUERY_PARAM),
-      ]),
-    ),
-    state: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.state)),
-    stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
-    range: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.range)),
-    cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
-    day: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.day)),
-    namespace: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.namespace)),
-    mode: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.mode)),
-    itemType: normalizeRecoveryItemTypeQueryValue(params.get(RECOVERY_QUERY_PARAMS.itemType)),
-    scope: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.scope)),
-    status: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.status)),
-    verification: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.verification)),
-    node: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.node)),
-    query: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.query)),
-  };
-};
-
-export const buildRecoveryRouteSearch = (options: RecoveryLinkOptions = {}): string => {
-  const params = new URLSearchParams();
-  const rollupId = normalizeQueryValue(options.rollupId);
-  const view = normalizeQueryValue(options.view);
-  const platform = normalizeSourcePlatformQueryValue(options.platform);
-  const state = normalizeQueryValue(options.state);
-  const stale = normalizeQueryBooleanFlag(options.stale);
-  const range = normalizeQueryValue(options.range);
-  const cluster = normalizeQueryValue(options.cluster);
-  const day = normalizeQueryValue(options.day);
-  const namespace = normalizeQueryValue(options.namespace);
-  const mode = normalizeQueryValue(options.mode);
-  const itemType = normalizeRecoveryItemTypeQueryValue(options.itemType);
-  const scope = normalizeQueryValue(options.scope);
-  const status = normalizeQueryValue(options.status);
-  const verification = normalizeQueryValue(options.verification);
-  const node = normalizeQueryValue(options.node);
-  const query = normalizeQueryValue(options.query);
-
-  if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
-  if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
-  if (platform) params.set(RECOVERY_QUERY_PARAMS.platform, platform);
-  if (state) params.set(RECOVERY_QUERY_PARAMS.state, state);
-  if (stale) params.set(RECOVERY_QUERY_PARAMS.stale, stale);
-  if (range) params.set(RECOVERY_QUERY_PARAMS.range, range);
-  if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);
-  if (day) params.set(RECOVERY_QUERY_PARAMS.day, day);
-  if (namespace) params.set(RECOVERY_QUERY_PARAMS.namespace, namespace);
-  if (mode) params.set(RECOVERY_QUERY_PARAMS.mode, mode);
-  if (itemType) params.set(RECOVERY_QUERY_PARAMS.itemType, itemType);
-  if (scope) params.set(RECOVERY_QUERY_PARAMS.scope, scope);
-  if (status) params.set(RECOVERY_QUERY_PARAMS.status, status);
-  if (verification) params.set(RECOVERY_QUERY_PARAMS.verification, verification);
-  if (node) params.set(RECOVERY_QUERY_PARAMS.node, node);
-  if (query) params.set(RECOVERY_QUERY_PARAMS.query, query);
 
   return serializedRouteSearch(params);
 };

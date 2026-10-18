@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"time"
 )
@@ -292,6 +293,67 @@ type PMGThresholdConfig struct {
 	QuarantineGrowthCritMin int `json:"quarantineGrowthCritMin"` // Minimum message growth for critical (default: 500)
 }
 
+// ThresholdCountUnset marks a Docker or PMG count threshold that the decoded
+// JSON did not carry. These thresholds are plain ints where 0 is Off, so
+// without a marker a value an older alerts.json predates would read as Off.
+// NormalizeDockerDefaults and NormalizePMGDefaults replace it with the factory
+// value before the config is used or saved.
+const ThresholdCountUnset = math.MinInt32
+
+func unsetDockerThresholdCounts() DockerThresholdConfig {
+	return DockerThresholdConfig{
+		RestartCount:      ThresholdCountUnset,
+		RestartWindow:     ThresholdCountUnset,
+		MemoryWarnPct:     ThresholdCountUnset,
+		MemoryCriticalPct: ThresholdCountUnset,
+	}
+}
+
+// UnmarshalJSON leaves count thresholds the JSON omits unset, so they take
+// their factory value instead of Off.
+func (c *DockerThresholdConfig) UnmarshalJSON(data []byte) error {
+	type plain DockerThresholdConfig
+	decoded := plain(unsetDockerThresholdCounts())
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = DockerThresholdConfig(decoded)
+	return nil
+}
+
+func unsetPMGThresholdCounts() PMGThresholdConfig {
+	return PMGThresholdConfig{
+		QueueTotalWarning:       ThresholdCountUnset,
+		QueueTotalCritical:      ThresholdCountUnset,
+		OldestMessageWarnMins:   ThresholdCountUnset,
+		OldestMessageCritMins:   ThresholdCountUnset,
+		DeferredQueueWarn:       ThresholdCountUnset,
+		DeferredQueueCritical:   ThresholdCountUnset,
+		HoldQueueWarn:           ThresholdCountUnset,
+		HoldQueueCritical:       ThresholdCountUnset,
+		QuarantineSpamWarn:      ThresholdCountUnset,
+		QuarantineSpamCritical:  ThresholdCountUnset,
+		QuarantineVirusWarn:     ThresholdCountUnset,
+		QuarantineVirusCritical: ThresholdCountUnset,
+		QuarantineGrowthWarnPct: ThresholdCountUnset,
+		QuarantineGrowthWarnMin: ThresholdCountUnset,
+		QuarantineGrowthCritPct: ThresholdCountUnset,
+		QuarantineGrowthCritMin: ThresholdCountUnset,
+	}
+}
+
+// UnmarshalJSON leaves thresholds the JSON omits unset, so they take their
+// factory value instead of Off.
+func (c *PMGThresholdConfig) UnmarshalJSON(data []byte) error {
+	type plain PMGThresholdConfig
+	decoded := plain(unsetPMGThresholdCounts())
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = PMGThresholdConfig(decoded)
+	return nil
+}
+
 // SnapshotAlertConfig represents snapshot age alert configuration
 type SnapshotAlertConfig struct {
 	Enabled         bool    `json:"enabled"`
@@ -388,12 +450,25 @@ type AlertConfig struct {
 	FlappingWindowSeconds          int                            `json:"flappingWindowSeconds"`        // Time window for counting state changes
 	FlappingThreshold              int                            `json:"flappingThreshold"`            // Number of state changes to trigger flapping
 	FlappingCooldownMinutes        int                            `json:"flappingCooldownMinutes"`      // Cooldown period after flapping detected
+
+	// TrueNASDiskTemperatureByType marks a config written since an unset
+	// TrueNASDiskDefaults.Temperature means each TrueNAS disk follows the
+	// disk temperature policy for its type. An older config carries the
+	// former flat factory value, which nobody chose, and normalization drops
+	// it once.
+	TrueNASDiskTemperatureByType bool `json:"truenasDiskTemperatureByType,omitempty"`
 }
 
 // UnmarshalJSON accepts canonical v6 alert config keys.
 func (c *AlertConfig) UnmarshalJSON(data []byte) error {
 	type alias AlertConfig
-	var decoded alias
+	// A config written before the Docker or PMG sections existed carries
+	// neither key, so their count thresholds start unset rather than at the
+	// zero that means Off.
+	decoded := alias{
+		DockerDefaults: unsetDockerThresholdCounts(),
+		PMGDefaults:    unsetPMGThresholdCounts(),
+	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "c3adf0c7b9fa7f4283f7fd832a806659b009b51b",
+  "verified_at": "2026-10-06T21:45:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "67c2c51ffceb96893f968dc141dbce54f0affe66fb389ffeeba8c8c94988968c",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "e49032445f566b4e6a4329314f4ada41ed6f7652ba52e9e3fc413047a49f7878",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "a340532f9e3e0e28d83e9a0fb369c8be973acb0dea7b321fd646345ff924db38",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "a29034c5149b7323e86bc2fe795d9b18db805b1ad32e32013fb71547256d61f5",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx": "e435c1e6ab04b85a022459cf19a67645bc8339f15ef986ffcb5b42ba27ce667f",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "80c860be3bee37251c16d21044074267e48991b9cb39b87d335cb2155066ec96",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "6c74063a298a259ce5f60485174529e9bffbe7293ae0710f53dc95d6f3c11265"
+  },
+  "routes": ["/proxmox/overview", "/vmware"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree (rebased on c3adf0c7b9) embedded in a private DEMO_MODE mock backend (50 PVE nodes, 929 guests, 7 ESXi hosts), headless Chromium via Playwright; desktop 1440x900 and phone 390x844.",
+    "Proxmox Overview guest table, Grouped layout: every grouped node row (8 desktop, 2 phone in the rendered window) is one td whose colspan equals the guest table's visible header count (8 desktop, 5 phone), with status dot, linked node name, cluster badge and Agent badge only; no data-workload-col cells, no PVE version, temperature or uptime text.",
+    "vSphere Overview VM table: the 7 host group rows render as one spanning cell (colspan 6 desktop, 5 phone) with host name and cluster badge, unchanged shape.",
+    "Bars and Trends metric modes both inspected: Trends adds four sparklines per guest row (Proxmox 140 to 560 images, vSphere 18 to 72) while each grouped host row keeps exactly its one status-dot image.",
+    "Screenshots of grouped rows in both modes and of open guest drawers inspected at both viewports; no page errors.",
+    "This is the shape both pages already rendered on main, where compactGroupHeaders was always set; it is not a check of host drawers, which both pages disable."
+  ],
+  "interactions": [
+    "Opened the View popover (desktop) and the Filters popover (phone) and toggled Bars to Trends and back.",
+    "Clicked a grouped host row on each page: no inline node drawer row appears and nothing else changes.",
+    "Clicked the first guest row under a group on each page: its inline guest drawer opens.",
+    "Scrolled the first grouped host row to the viewport centre before each capture."
+  ]
+}

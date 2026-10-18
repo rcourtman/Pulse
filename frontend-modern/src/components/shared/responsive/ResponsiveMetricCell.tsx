@@ -2,7 +2,7 @@ import { Component, Show, createMemo, JSX } from 'solid-js';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { formatPercent } from '@/utils/format';
+import { formatCpuPercent, formatPercent } from '@/utils/format';
 import { getMetricSeverity } from '@/utils/metricThresholds';
 import type { MetricDisplayThresholds, MetricSeverity } from '@/utils/metricThresholds';
 
@@ -98,7 +98,9 @@ function compactCapacityLabel(sublabel?: string): string | undefined {
  */
 export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props) => {
   const { isAtLeast, isBelow } = useBreakpoint();
-  const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
+  const formatValue = (value: number) =>
+    props.type === 'cpu' ? formatCpuPercent(value) : formatPercent(value);
+  const displayLabel = createMemo(() => props.label ?? formatValue(props.value));
   const colorClass = createMemo(() => metricTextClass(props.value, props.type, props.thresholds));
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
 
@@ -133,7 +135,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
             class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}
           >
             <Show when={!props.label} fallback={displayLabel()}>
-              <AnimatedNumber value={props.value} format={formatPercent} />
+              <AnimatedNumber value={props.value} format={formatValue} />
             </Show>
           </div>
         </Show>
@@ -144,6 +146,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
             value={props.value}
             label={displayLabel()}
             animatedLabelValue={props.label ? undefined : props.value}
+            animatedLabelFormat={formatValue}
             sublabel={resolvedSublabel()}
             showLabel={showLabel()}
             type={props.type}

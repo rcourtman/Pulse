@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "c4db7a3fba35a14ee41675483726213644b31edc",
+  "verified_at": "2026-10-06T14:33:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "d8bfb5052c0c150ebf1c11e1672f8776e1caa159805a66774ebaaf57bd66a6a2"
+  },
+  "routes": [
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 1024,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private mock stack on main b19c6aaf70 plus this change (rebased onto c4db7a3fba, whose backup-alert revalidation touches no frontend file); seven availability checks, one of them (Frontend Swarm service) observed from two locations and failing",
+    "Before: that row's Result cell read 'failed\u2026' with a '2 locations \u00b7 2/2 reporting' chip spilling past the column (the chip's flex and the badge's inline-flex left it inline); the result clipped at every width up to 1440. On phones the check names were cut to 'Workshop do\u2026', 'Frontend Sw\u2026' (7 rows clipped by up to 77px) while Method and Target took the room",
+    "After: one line per row, 32-33px at 390, 768 and 1440; the result ('failed') is whole at the cell's right edge and the source chip ('2/2 locations reporting', Settings' wording) truncates to its left with the full text on hover. On phones Method and Target hide (still in the drawer) and check names read in full except one by 3px; the Method cell now truncates with an ellipsis where it clipped"
+  ],
+  "interactions": [
+    "Measured every visible header and cell for clipping at six widths",
+    "Measured row heights at three widths",
+    "Hovered the source chip for its full text"
+  ]
+}

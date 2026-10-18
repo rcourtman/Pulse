@@ -566,7 +566,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
           <div
             class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-xs ${
               isQueuedUserMessage()
-                ? 'border border-blue-200 bg-blue-50 text-blue-950/25 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+                ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
                 : 'bg-blue-600 text-white'
             }`}
           >
@@ -691,14 +691,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 <div class="flex items-center gap-2 py-1 text-sm text-muted">
                   <span class="flex gap-1" aria-hidden="true">
                     <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
-                    <span
-                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
-                      style="animation-delay: 120ms"
-                    />
-                    <span
-                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
-                      style="animation-delay: 240ms"
-                    />
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:120ms]" />
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:240ms]" />
                   </span>
                   <Show when={workflowStatusText()} fallback={<span>Thinking...</span>}>
                     <span>{workflowStatusText()}</span>

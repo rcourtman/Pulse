@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "base_sha": "1dcf9418aae87f9427dbfc6bcae67dbde114bf8a",
+  "verified_at": "2026-10-05T20:48:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx": "13521f02ee132d188c1b5f57639f5b73faba81bab3e9f9abd9f77926236352b8",
+    "frontend-modern/src/index.css": "e4bd257dd742fa95c9ab360b98348b63249ff63f8db4d85e4c5d4ee158f4bcf9"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 820,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 960,
+      "height": 900
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1180,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1490,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "width": 1760,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, random metrics off) serving this tree on main 1dcf9418aa; before = main, after = main plus this change, 106 alert rows measured in the same session; the table shows from 768 (below it the mobile list renders and is unchanged)",
+    "Main gave every visible column an equal share (16.7%, 14.3%, 11.1%), so Message got the same 100-160px as Timestamp: messages fully readable (each character checked against its clipping box) were 0-21 of 106 at every width; patched they rise at every width except the 600px card (1024 viewport), where neither shows any in full, for example 768 0 to 4, 1280 8 to 39, 1440 15 to 66, 1760 17 to 83, 1920 21 to 87",
+    "Status acknowledged (98px) overflowed its content box at 768, 1024 and 1100 on main (cut 6px at 1024); patched every status, type and severity pill fits at every width",
+    "No column is worse: Resource and Node clip counts are identical to main at every width, no header clips at 768, 1024, 1280, 1490, 1600 or 1760, and median row height is unchanged except 75 to 39px from 1760, where the two row actions fit on one line",
+    "Card width per density on this layout: 645 at 768, 600 at 1024 (navigation rail), 835 at 1280, 982 at 1440, 1134 at 1600, 1285 at 1760, 1436 at 1920; the visible tracks fill the card exactly at every width (table width equals the card)",
+    "Before and after screenshots of the table at 1024, 1440 and 1920"
+  ],
+  "interactions": [
+    "Loaded /alerts/history fresh, waited for the rows, resized through every viewport before measuring",
+    "Opened and closed the Timeline and the Resource incident panels from the first row at 1024, 1280 and 1760; both open inline and close; no console errors"
+  ]
+}

@@ -21,9 +21,6 @@ function makeConfig(overrides: Partial<UIEmailConfig> = {}): UIEmailConfig {
     to: [],
     tls: false,
     startTLS: true,
-    replyTo: '',
-    maxRetries: 3,
-    retryDelay: 60,
     rateLimit: 10,
     ...overrides,
   };

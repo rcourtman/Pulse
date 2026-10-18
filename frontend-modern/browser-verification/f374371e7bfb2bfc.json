@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "d4315cef519bb5729a2b9117cae5d28724c17d84",
+  "verified_at": "2026-10-06T12:59:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "27f6c907846d17ef0742386e766719d6e529b17223b1dcc3b586e0caa48cbb96"
+  },
+  "routes": [
+    "/standalone",
+    "/proxmox",
+    "/vmware/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (backend + Vite on 7747/5267) built from main 92d946d057 plus this change, compared with the same stack on unchanged main",
+    "Before, /standalone machines table at 1440: hiding Uptime from View > Columns with a machine drawer open left the drawer at colspan 9 against 8 visible headers, so the header and rows shrank to 939px and a blank 436px phantom column filled the table's right side",
+    "Before, /standalone at 1440: showing System with the drawer open left the drawer at colspan 7 against 8 headers, stopping 79px short of the table edge under the actions column",
+    "Before, /proxmox guest table at 1440, 1024 and 768: hiding Type, Uptime or Backup with a guest drawer open left colspan one above the visible header count (the fixed layout collapses the phantom column to about 1px there)",
+    "After, both tables at 1440 and 768: drawer colSpan equals the visible header and summary cell count after every hide and show, and the drawer, last header cell and last summary cell all end at the table's right edge",
+    "After, growing span case: the colspan update alone left Chromium laying the widened cell out at its old 7-column width (1241px of 1320px); with the one-off width nudge the cell measures the full table width while keeping the same row node",
+    "/vmware/activity with the mock's single vCenter: the Activity drawer still spans 6 of 6 header columns at 1440 and 5 of 5 at 768 (the vCenter-count flip itself is covered by the unit test that removes and restores a summary cell)"
+  ],
+  "interactions": [
+    "Opened a machine drawer on /standalone, then hid and showed Uptime, System, Agent and Last seen through View > Columns while the drawer stayed open, measuring drawer colSpan, header and summary visible cell counts and right edges after each toggle",
+    "Opened a guest drawer on /proxmox, hid a column first, then showed and hid Type again through View > Columns with the drawer open, measuring the same values",
+    "Confirmed with a node tag that the drawer row stayed mounted across toggles (no remount, so drawer tab state is kept)",
+    "Opened a /vmware/activity row drawer at both widths and compared its span with the visible headers",
+    "Captured clipped screenshots of the /standalone drawer before and after each toggle"
+  ]
+}

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -205,4 +206,28 @@ func TestMetricsResponseFields(t *testing.T) {
 
 	assert.True(t, resp.Downsampled)
 	assert.Equal(t, 10080, resp.OriginalCount)
+}
+
+// A dense retained series must not silently lose the most recent evidence.
+func TestDownsampleMetrics_IncludesNewestRemainder(t *testing.T) {
+	for _, count := range []int{121, 239, 500, 1000} {
+		t.Run(strconv.Itoa(count), func(t *testing.T) {
+			points := make([]MetricPoint, count)
+			start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			for i := range points {
+				points[i].Timestamp = start.Add(time.Duration(i) * time.Minute)
+			}
+			points[count-1].CPU = 120
+			points[count-1].Memory = 240
+			points[count-1].Disk = 60
+
+			result := downsampleMetrics(points, maxMetricPoints)
+			require.Len(t, result, maxMetricPoints)
+			last := result[len(result)-1]
+			assert.Positive(t, last.CPU, "newest CPU evidence must contribute")
+			assert.Positive(t, last.Memory, "newest memory evidence must contribute")
+			assert.Positive(t, last.Disk, "newest storage evidence must contribute")
+			assert.True(t, last.Timestamp.After(points[count-maxMetricPoints].Timestamp))
+		})
+	}
 }

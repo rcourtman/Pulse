@@ -4,8 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"math"
+	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -232,13 +239,42 @@ func TestUnifiedResourceSnapshotParentsDemoProxmoxWorkloads(t *testing.T) {
 }
 
 func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
 	records := SupplementalRecords(unifiedresources.DataSource("vmware-vsphere"))
 	if len(records) == 0 {
 		t.Fatal("expected records for vmware-vsphere alias")
 	}
 }
 
+// The router's mock adapters outlive mock mode briefly while it swaps the real
+// pollers back in; a live refresh that reaches them must find no fixtures.
+func TestSupplementalFixturesServeNothingOutsideMockMode(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, false)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
+	for _, source := range []unifiedresources.DataSource{
+		unifiedresources.SourceTrueNAS,
+		unifiedresources.SourceVMware,
+		unifiedresources.SourceAvailability,
+	} {
+		if records := SupplementalRecords(source); len(records) != 0 {
+			t.Errorf("SupplementalRecords(%s) served %d fixture records outside mock mode", source, len(records))
+		}
+		if changes := SupplementalChanges(source); len(changes) != 0 {
+			t.Errorf("SupplementalChanges(%s) served %d fixture changes outside mock mode", source, len(changes))
+		}
+	}
+}
+
 func TestSupplementalChangesNormalizesVMwareAlias(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
 	changes := SupplementalChanges(unifiedresources.DataSource("vmware-vsphere"))
 	if len(changes) == 0 {
 		t.Fatal("expected activity changes for vmware-vsphere alias")
@@ -427,6 +463,201 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	}
 	if !hasChecksEdgeTo(kubernetesEndpoint, kubernetesService.ID) {
 		t.Fatalf("Kubernetes check relationships = %+v, want outgoing checks edge to %s", kubernetesEndpoint.Relationships, kubernetesService.ID)
+	}
+}
+
+// TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary pins the linked
+// build behind the mock-mode unified view to the live rebuild's link boundary
+// (MonitorAdapter.replaceRegistryLocked): the links apply once the snapshot
+// and every supplemental source but availability are in, and before
+// availability. Two things hang on it. Availability goes in after the pass, so
+// folding the curated Docker service into a VM moves its availability check
+// onto the VM, as the live rebuild's availability ingest resolves the check's
+// source reference through the fold; folding the finished list dropped the
+// facet with the folded row. And a chain of links is judged over the assembled
+// estate, so mock mode keeps the row the live rebuild keeps instead of the one
+// a pass per source happens to leave.
+func TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary(t *testing.T) {
+	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(DefaultConfig, now)
+	unlinked, _ := graph.UnifiedResourceSnapshot()
+
+	t.Run("an availability check follows the fold onto the primary", func(t *testing.T) {
+		const checkID = "mock-availability-docker-frontend-service"
+		var serviceID, vmID string
+		for _, resource := range unlinked {
+			switch {
+			case resource.Type == unifiedresources.ResourceTypeDockerService && resource.Availability != nil &&
+				resource.Availability.TargetID == checkID:
+				serviceID = resource.ID
+			case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Proxmox != nil:
+				vmID = resource.ID
+			}
+		}
+		if serviceID == "" || vmID == "" {
+			t.Fatalf("fixture graph needs the checked Docker service and a Proxmox VM, got service=%q vm=%q", serviceID, vmID)
+		}
+
+		links := []unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: serviceID, PrimaryID: vmID}}
+		linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+		var vm, endpoint *unifiedresources.Resource
+		for i := range linked {
+			switch {
+			case linked[i].ID == serviceID:
+				t.Fatalf("linked build still lists the folded Docker service %s", serviceID)
+			case linked[i].ID == vmID:
+				vm = &linked[i]
+			case linked[i].Type == unifiedresources.ResourceTypeNetworkEndpoint && linked[i].Availability != nil &&
+				linked[i].Availability.TargetID == checkID:
+				endpoint = &linked[i]
+			}
+		}
+		if vm == nil || vm.Docker == nil {
+			t.Fatalf("linked VM %s = %+v, want it to carry the folded service's Docker facet", vmID, vm)
+		}
+		if vm.Availability == nil || vm.Availability.TargetID != checkID {
+			t.Fatalf("linked VM availability = %+v, want the folded service's check projected onto it", vm.Availability)
+		}
+		if !hasChecksEdgeTo(endpoint, vmID) {
+			t.Fatalf("check relationships = %+v, want the checks edge to follow the fold to %s", endpoint, vmID)
+		}
+	})
+
+	// A Proxmox storage, a TrueNAS VM and a vSphere VM linked in a cycle keep
+	// the TrueNAS VM, whose link is the oldest. A pass after the TrueNAS
+	// records has already folded that VM into the storage when the vSphere
+	// records bring a guest that outranks the storage, so folding as the
+	// sources arrive keeps the vSphere VM instead.
+	t.Run("a chain of links is judged over the assembled estate", func(t *testing.T) {
+		soleSource := func(resource unifiedresources.Resource, source unifiedresources.DataSource) bool {
+			return len(resource.Sources) == 1 && resource.Sources[0] == source
+		}
+		var storageID, nasVMID, guestID string
+		for _, resource := range unlinked {
+			switch {
+			case storageID == "" && resource.Type == unifiedresources.ResourceTypeStorage &&
+				soleSource(resource, unifiedresources.SourceProxmox):
+				storageID = resource.ID
+			case nasVMID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+				soleSource(resource, unifiedresources.SourceTrueNAS):
+				nasVMID = resource.ID
+			case guestID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+				soleSource(resource, unifiedresources.SourceVMware):
+				guestID = resource.ID
+			}
+		}
+		if storageID == "" || nasVMID == "" || guestID == "" {
+			t.Fatalf("fixture graph needs a Proxmox storage, a TrueNAS VM and a vSphere VM, got storage=%q nas=%q guest=%q",
+				storageID, nasVMID, guestID)
+		}
+		created := time.Date(2026, time.October, 1, 9, 0, 0, 0, time.UTC)
+		links := []unifiedresources.ResourceLink{
+			{ResourceA: nasVMID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created.Add(time.Minute)},
+			{ResourceA: storageID, ResourceB: guestID, PrimaryID: guestID, CreatedAt: created.Add(2 * time.Minute)},
+			{ResourceA: guestID, ResourceB: nasVMID, PrimaryID: nasVMID, CreatedAt: created},
+		}
+		// cycleRows is what is left of the three members: type, ID and sources.
+		cycleRows := func(resources []unifiedresources.Resource) []string {
+			var rows []string
+			for _, resource := range resources {
+				if resource.ID != storageID && resource.ID != nasVMID && resource.ID != guestID {
+					continue
+				}
+				sources := make([]string, 0, len(resource.Sources))
+				for _, source := range resource.Sources {
+					sources = append(sources, string(source))
+				}
+				slices.Sort(sources)
+				rows = append(rows, fmt.Sprintf("%s %s %v", resource.Type, resource.ID, sources))
+			}
+			return rows
+		}
+		owned := SupplementalOwnedSources()
+		snapshot := unifiedresources.SnapshotWithoutSources(graph.State, owned)
+		records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+		for _, source := range owned {
+			records[source] = graph.SupplementalRecords(source)
+		}
+
+		// The monitor's rebuild is the reference the mock build must match.
+		store := unifiedresources.NewMemoryStore()
+		for _, link := range links {
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+		}
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+		adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+		live := cycleRows(adapter.GetAll())
+		if len(live) != 1 || !strings.HasPrefix(live[0], "vm "+nasVMID+" ") {
+			t.Fatalf("live rebuild kept %v, want the TrueNAS VM %s alone", live, nasVMID)
+		}
+
+		// A registry that ingests the same sources one call at a time judges
+		// the chain at each call. It must settle elsewhere, or this fixture no
+		// longer separates the boundary from per-call passes.
+		perCall := unifiedresources.NewRegistryWithManualLinks(links)
+		perCall.IngestSnapshot(snapshot)
+		for _, source := range owned {
+			if len(records[source]) > 0 {
+				perCall.IngestRecords(source, records[source])
+			}
+		}
+		if got := cycleRows(perCall.List()); slices.Equal(got, live) {
+			t.Fatalf("a pass per source also kept %v, so this fixture no longer separates the rebuild's boundary from per-call passes", got)
+		}
+
+		linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+		if got := cycleRows(linked); !slices.Equal(got, live) {
+			t.Fatalf("mock build kept %v, want what the live rebuild keeps: %v", got, live)
+		}
+	})
+}
+
+// TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked pins the
+// memo boundary: a linked build belongs to its caller (one tenant's links),
+// and the memoized snapshot every other reader shares stays unlinked.
+func TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked(t *testing.T) {
+	previous := IsMockEnabled()
+	previousConfig := GetConfig()
+	if previous {
+		mustSetEnabled(t, false)
+	}
+	testConfig := previousConfig
+	testConfig.UpdateInterval = 5 * time.Minute
+	SetMockConfig(testConfig)
+	mustSetEnabled(t, true)
+	t.Cleanup(func() {
+		mustSetEnabled(t, false)
+		SetMockConfig(previousConfig)
+		mustSetEnabled(t, previous)
+	})
+
+	shared, _ := UnifiedResourceSnapshot()
+	if same, _ := UnifiedResourceSnapshotWithLinks(nil); len(same) == 0 || &same[0] != &shared[0] {
+		t.Fatal("UnifiedResourceSnapshotWithLinks without links must serve the memoized snapshot")
+	}
+	var vmID, agentID string
+	for _, resource := range shared {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+
+	linked, _ := UnifiedResourceSnapshotWithLinks([]unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}})
+	if slices.ContainsFunc(linked, func(r unifiedresources.Resource) bool { return r.ID == agentID }) {
+		t.Fatalf("linked build still lists the folded agent %s", agentID)
+	}
+	again, _ := UnifiedResourceSnapshot()
+	if !slices.ContainsFunc(again, func(r unifiedresources.Resource) bool { return r.ID == agentID }) {
+		t.Fatalf("the shared snapshot lost the agent %s after a linked build", agentID)
 	}
 }
 
@@ -889,5 +1120,324 @@ func TestFixtureGraphMetricCohortProducesSparseUnifiedResourceChanges(t *testing
 
 	if changed == 0 || changed >= len(after)/2 {
 		t.Fatalf("expected sparse unified resource churn, changed=%d total=%d", changed, len(after))
+	}
+}
+
+func fixtureMetricsTargets(t *testing.T) map[string]unifiedresources.MetricsTarget {
+	t.Helper()
+	resources, _ := UnifiedResourceSnapshot()
+	if len(resources) == 0 {
+		t.Fatal("expected mock resources")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	_, targets := registry.ListWithMetricsTargets()
+	if len(targets) == 0 {
+		t.Fatal("expected the mock estate to resolve metrics targets")
+	}
+	return targets
+}
+
+func fixtureResourceIDs(t *testing.T) []string {
+	t.Helper()
+	resources, _ := UnifiedResourceSnapshot()
+	ids := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		ids = append(ids, resource.ID)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// smallMockEstateForTest replaces the ambient estate with a fixed small one,
+// so a test neither depends on the process's PULSE_MOCK_* settings (a node
+// count at the supported maximum clamps back when raised) nor pays for a
+// 929-guest snapshot per assertion. The ambient configuration returns when
+// the test ends.
+func smallMockEstateForTest(t *testing.T, nodes int) MockConfig {
+	t.Helper()
+	previous := GetConfig()
+	t.Cleanup(func() { SetMockConfig(previous) })
+	small := previous
+	small.NodeCount = nodes
+	SetMockConfig(small)
+	return small
+}
+
+// Callers cache a resource's metrics target for as long as the structure
+// revision holds (see Monitor.MetricsTargetForResource), so a metric tick must
+// leave the revision, the resource set and every target exactly as they were.
+// Checked after every tick of two full cohort rotations, not only at the end,
+// so a change that a later tick reverts is still caught.
+func TestMetricTicksNeverChangeTheFixtureStructure(t *testing.T) {
+	withMockEnabledForTest(t)
+	stopUpdateLoop()
+	t.Cleanup(func() {
+		if IsMockEnabled() {
+			startUpdateLoop()
+		}
+	})
+	smallMockEstateForTest(t, 6)
+	stopUpdateLoop()
+
+	revision := FixtureStructureRevision()
+	ids := fixtureResourceIDs(t)
+	targets := fixtureMetricsTargets(t)
+	version := FixtureDataVersion()
+
+	for tick := 1; tick <= mockMetricCohortCount*2+1; tick++ {
+		updateMetrics(GetConfig())
+
+		if got := FixtureDataVersion(); got <= version {
+			t.Fatalf("tick %d did not advance the data version (%d)", tick, got)
+		} else {
+			version = got
+		}
+		if got := FixtureStructureRevision(); got != revision {
+			t.Fatalf("tick %d moved the fixture structure revision from %d to %d", tick, revision, got)
+		}
+		if got := fixtureResourceIDs(t); !slices.Equal(got, ids) {
+			t.Fatalf("tick %d changed the resource set: %d resources before, %d after", tick, len(ids), len(got))
+		}
+		if got := fixtureMetricsTargets(t); !reflect.DeepEqual(got, targets) {
+			t.Fatalf("tick %d changed the resolved metrics targets", tick)
+		}
+	}
+}
+
+func TestFixtureStructureRevisionAdvancesOnStructuralChange(t *testing.T) {
+	withMockEnabledForTest(t)
+	stopUpdateLoop()
+	t.Cleanup(func() {
+		if IsMockEnabled() {
+			startUpdateLoop()
+		}
+	})
+	small := smallMockEstateForTest(t, 3)
+	stopUpdateLoop()
+
+	revision := FixtureStructureRevision()
+	grown := small
+	grown.NodeCount = 4
+	SetMockConfig(grown)
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("reconfiguring the estate left the structure revision at %d (was %d)", got, revision)
+	}
+
+	revision = FixtureStructureRevision()
+	if err := SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("disabling mock mode left the structure revision at %d (was %d)", got, revision)
+	}
+	revision = FixtureStructureRevision()
+	if err := SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("enabling mock mode left the structure revision at %d (was %d)", got, revision)
+	}
+}
+
+// A cache fill reads the structure revision before the data version, and the
+// fixture advances its data version before its revision, so a reader that
+// sees a new revision is guaranteed the new data version after it and is
+// never handed the previous estate's memoized snapshot under the new
+// revision. The interleaving cannot be forced from outside, so the order of
+// the two writes and of the two reads is pinned on the syntax tree: inside
+// the named functions only, so comments, local names and the position of the
+// functions in their package do not matter.
+func TestFixtureStructureRevisionOrderingContract(t *testing.T) {
+	mockDecls := parsePackageFuncs(t, ".")
+	advance := packageFunc(mockDecls["advanceFixtureStructure"])
+	if advance == nil {
+		t.Fatal("the mock package lost advanceFixtureStructure")
+	}
+	version := synchronousCallOffsets(advance, "fixtureDataVersion", "Add")
+	revision := synchronousCallOffsets(advance, "fixtureRevision", "Add")
+	if len(version) != 1 || len(revision) != 1 || version[0] > revision[0] {
+		t.Fatal("advanceFixtureStructure must advance the data version once, before the structure revision once, as plain statements")
+	}
+	if got := countCalls(advance, "fixtureRevision", "Add") + countCalls(advance, "fixtureDataVersion", "Add"); got != 2 {
+		t.Fatalf("advanceFixtureStructure must not defer or spawn its counter writes; found %d writes in all", got)
+	}
+
+	// Every declaration counts for the bypass scan, including methods and the
+	// build-tagged duplicates of a function.
+	for name, decls := range mockDecls {
+		if name == "advanceFixtureStructure" {
+			continue
+		}
+		for _, decl := range decls {
+			if got := countCalls(decl, "fixtureRevision", "Add"); got != 0 {
+				t.Fatalf("%s advances the structure revision directly; it must go through advanceFixtureStructure", name)
+			}
+		}
+	}
+	for _, name := range []string{"enableMockMode", "disableMockMode", "SetMockConfig"} {
+		decl := packageFunc(mockDecls[name])
+		if decl == nil {
+			t.Fatalf("the mock package lost %s", name)
+		}
+		if got := len(synchronousIdentCallOffsets(decl, "advanceFixtureStructure")); got != 1 {
+			t.Fatalf("%s must advance the fixture structure through advanceFixtureStructure exactly once, as a plain statement; found %d", name, got)
+		}
+	}
+
+	view := packageFunc(parsePackageFuncs(t, "../monitoring")["currentUnifiedStateView"])
+	if view == nil {
+		t.Fatal("the monitoring package lost currentUnifiedStateView")
+	}
+	structureRead := synchronousCallOffsets(view, "mock", "FixtureStructureRevision")
+	versionRead := synchronousCallOffsets(view, "mock", "FixtureDataVersion")
+	if len(structureRead) != 1 || len(versionRead) != 1 || structureRead[0] > versionRead[0] {
+		t.Fatal("currentUnifiedStateView must read the structure revision once, before it reads the data version")
+	}
+}
+
+// parsePackageFuncs returns every non-test function and method declaration of
+// the package in dir, keyed by name. Names repeat across build-tagged files
+// and between functions and methods, so each key holds all of them.
+func parsePackageFuncs(t *testing.T, dir string) map[string][]*ast.FuncDecl {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	funcs := make(map[string][]*ast.FuncDecl)
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				funcs[fn.Name.Name] = append(funcs[fn.Name.Name], fn)
+			}
+		}
+	}
+	return funcs
+}
+
+// packageFunc returns the declaration when it is the only one of its name in
+// the package (function or method), and nil otherwise.
+func packageFunc(decls []*ast.FuncDecl) *ast.FuncDecl {
+	if len(decls) != 1 {
+		return nil
+	}
+	return decls[0]
+}
+
+// walkSynchronous visits the nodes of fn that run in the function's own
+// control flow: it does not descend into function literals, deferred calls or
+// goroutine starts, whose source position says nothing about when they run.
+func walkSynchronous(fn *ast.FuncDecl, visit func(ast.Node)) {
+	ast.Inspect(fn, func(node ast.Node) bool {
+		switch node.(type) {
+		case *ast.FuncLit, *ast.DeferStmt, *ast.GoStmt:
+			return false
+		}
+		visit(node)
+		return true
+	})
+}
+
+func isSelectorCall(node ast.Node, receiver, method string) bool {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != method {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && ident.Name == receiver
+}
+
+// synchronousCallOffsets lists the positions of receiver.method calls that run
+// in fn's own control flow, in source order.
+func synchronousCallOffsets(fn *ast.FuncDecl, receiver, method string) []token.Pos {
+	var offsets []token.Pos
+	walkSynchronous(fn, func(node ast.Node) {
+		if isSelectorCall(node, receiver, method) {
+			offsets = append(offsets, node.Pos())
+		}
+	})
+	return offsets
+}
+
+// synchronousIdentCallOffsets lists the positions of calls to the package-level
+// function name that run in fn's own control flow.
+func synchronousIdentCallOffsets(fn *ast.FuncDecl, name string) []token.Pos {
+	var offsets []token.Pos
+	walkSynchronous(fn, func(node ast.Node) {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == name {
+				offsets = append(offsets, call.Pos())
+			}
+		}
+	})
+	return offsets
+}
+
+// countCalls counts every receiver.method call anywhere in fn, including
+// deferred calls, goroutines and function literals.
+func countCalls(fn *ast.FuncDecl, receiver, method string) int {
+	count := 0
+	ast.Inspect(fn, func(node ast.Node) bool {
+		if isSelectorCall(node, receiver, method) {
+			count++
+		}
+		return true
+	})
+	return count
+}
+
+func TestFixtureGraphMatchesMonitorSupplementalFreshness(t *testing.T) {
+	now := time.Now().UTC()
+	for _, age := range []time.Duration{0, 2 * time.Hour} {
+		t.Run(age.String(), func(t *testing.T) {
+			graph := buildFixtureGraph(DefaultConfig, now.Add(-age))
+			owned := SupplementalOwnedSources()
+			records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+			for _, source := range owned {
+				records[source] = graph.SupplementalRecords(source)
+			}
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			adapter.PopulateSnapshotAndSupplemental(unifiedresources.SnapshotWithoutSources(graph.State, owned), records)
+			demo, _ := graph.UnifiedResourceSnapshot()
+			byID := make(map[string]unifiedresources.Resource, len(demo))
+			for _, resource := range demo {
+				byID[resource.ID] = resource
+			}
+			checked := 0
+			for _, live := range adapter.GetAll() {
+				if live.Type != unifiedresources.ResourceTypeVM || len(live.Sources) != 1 || live.Sources[0] != unifiedresources.SourceTrueNAS {
+					continue
+				}
+				checked++
+				wantStatus := "online"
+				if age > 0 {
+					wantStatus = "stale"
+				}
+				if live.SourceStatus[unifiedresources.SourceTrueNAS].Status != wantStatus {
+					t.Fatalf("live reference has no %s TrueNAS sighting: %+v", wantStatus, live)
+				}
+				got, ok := byID[live.ID]
+				if !ok || got.Status != live.Status || got.SourceStatus[unifiedresources.SourceTrueNAS].Status != wantStatus {
+					t.Fatalf("demo freshness differs from live for %s: demo=%+v live=%+v", live.ID, got, live)
+				}
+			}
+			if checked == 0 {
+				t.Fatal("fixture has no TrueNAS-only VM to compare")
+			}
+		})
 	}
 }

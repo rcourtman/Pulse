@@ -43,7 +43,7 @@ function normalizeSessionPresentationPolicy(
 export function syncSessionPresentationPolicy(
   status?: Pick<
     SecurityStatus,
-    'sessionCapabilities' | 'presentationPolicy' | 'settingsCapabilities'
+    'sessionCapabilities' | 'presentationPolicy' | 'settingsCapabilities' | 'tokenScopes'
   > | null,
 ): SecurityStatusPresentationPolicy {
   syncSessionCapabilities(status);

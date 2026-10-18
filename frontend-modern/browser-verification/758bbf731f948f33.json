@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "0fb5ccb62b2c8b07637c09547cc7e397e82925a7",
+  "verified_at": "2026-10-06T21:51:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "382e16198535227445f6cf823a1390502bcb24409ed2f12e19e028fa325793bf"
+  },
+  "routes": [
+    "/proxmox",
+    "/vmware"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend + Vite on 7797/5307) built from main 0fb5ccb62b (including the Net and Disk I/O row history lens) plus this change, re-run after rebasing from 3ac5664d95, compared with the same stack on unchanged main; large mock estate (50 nodes, 10 VMs + 8 LXCs each) so the guest list matches the reported repro",
+    "Fresh browser context so the first-use 'Hover a guest to preview history' hint is unseen; bars display mode with history row hover (the defaults)",
+    "Before, /proxmox at 1440 and 1280 with the page unscrolled: the hint wraps the filter action row onto its own line (filter bar 138px); after hovering artifact-cache-310 (675) the hint unmounted, the bar shrank to 102px, the row moved up 36px, pointer events went enter 675, leave 675, enter 679, and the history lens ended on auth-service-314 (679)",
+    "Before, /proxmox at 1600: hint inline on one row, bar 102px both ways, no shift",
+    "After, /proxmox at 1024, 1280, 1366, 1440, 1600 and 1920, both unscrolled and with a mid-list row scrolled to the centre: row y shift 0, filter bar height unchanged (138 or 102), a single pointerenter on the hovered row, and data-history-lens-active only on the hovered guest; the hint is still mounted with visibility hidden",
+    "After, /vmware at 1024 (wrapped, 138px) and 1440 (inline): row shift 0 and the lens stays on the hovered VM",
+    "After, 768: the hint span is display none so it has no box either way; bar 174px unchanged and the lens stays on the hovered row. 390: the mobile toolbar never renders the hint (54px before and after reload)",
+    "After the first preview, a reload shows no hint and the compact one-line toolbar (102px at 1440)",
+    "After the first preview, switching View > Metrics to Trends removes the hidden span instead of leaving a gap, and switching back to Bars does not bring it back"
+  ],
+  "interactions": [
+    "Moved the real mouse onto a guest row's name cell (clear of the expand chevron) and waited for the populated history preview, recording the row bounding box, filter bar height, scroll position, pointerenter/pointerleave events and [data-history-lens-active] rows before and after",
+    "Repeated the hover with the page unscrolled and with the target row scrolled to the viewport centre",
+    "Reloaded the page after the first preview to check the next-visit toolbar",
+    "Opened View and switched Metrics between Trends and Bars after the hint had cleared",
+    "Captured screenshots of the toolbar and first rows before and after hover on main and on this change"
+  ]
+}

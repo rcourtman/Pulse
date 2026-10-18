@@ -33,7 +33,11 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     return detail;
   };
 
-  const syncGuestWindowToViewport = (measureRows = false, projectedScrollDelta = 0) => {
+  const syncGuestWindowToViewport = (
+    measureRows = false,
+    projectedScrollDelta = 0,
+    alignWindowToViewport = true,
+  ) => {
     if (typeof window === 'undefined') return;
     const body = options.tableBodyRef();
     if (!body || isWindowedSurfaceHidden(body)) return;
@@ -58,7 +62,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     const scrollContainer = findWindowedPageScrollContainer(body);
     if (scrollContainer) {
       setIsScrollToTopVisible(scrollContainer.scrollTop > SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX);
-      if (!options.groupedWindowing.isWindowed()) return;
+      if (!alignWindowToViewport || !options.groupedWindowing.isWindowed()) return;
       const containerRect = scrollContainer.getBoundingClientRect();
       const scrollTop = Math.max(0, containerRect.top - rect.top);
       options.groupedWindowing.onScroll(
@@ -70,7 +74,7 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     }
 
     setIsScrollToTopVisible(window.scrollY > SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX);
-    if (!options.groupedWindowing.isWindowed()) return;
+    if (!alignWindowToViewport || !options.groupedWindowing.isWindowed()) return;
     options.groupedWindowing.onScroll(
       Math.max(0, -rect.top + projectedScrollDelta),
       window.innerHeight,
@@ -134,7 +138,10 @@ export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOp
     // groupedWindowing.onScroll) that the pass itself moves. Tracking them
     // would re-run this effect — remeasuring rows with forced reflows and
     // rebinding listeners — on every runway top-up during scrolling.
-    untrack(() => handleViewportResize());
+    // Selection owns initial positioning. Measure its geometry without
+    // replacing the reveal window before the shared focus bridge scrolls.
+    // Actual scroll and resize events continue to follow the viewport.
+    untrack(() => syncGuestWindowToViewport(true, 0, !options.expandedDetailActive?.()));
     const scrollContainer = findWindowedPageScrollContainer(options.tableBodyRef()!);
     const scrollTarget = scrollContainer ?? window;
     onCleanup(

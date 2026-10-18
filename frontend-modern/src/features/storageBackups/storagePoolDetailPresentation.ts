@@ -1,4 +1,8 @@
 import type { HistoryTimeRange, ResourceType as HistoryChartResourceType } from '@/api/charts';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  type PhysicalDiskAlertResourceIdResolver,
+} from '@/features/storageBackups/diskPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   getStorageRecordContent,
@@ -12,6 +16,7 @@ import {
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatPercent } from '@/utils/format';
+import { formatHistoryRangeOptionLabel } from '@/components/shared/historyChartModel';
 
 export type StoragePoolDetailConfigRow = {
   label: string;
@@ -26,7 +31,11 @@ export type StoragePoolDetailLinkedDisk = {
   state: string;
   sizeLabel: string;
   diskType: string;
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: string[];
   temperature: number;
+  /** Set only when the temperature is a retained, not current, reading. */
+  temperatureLastKnownTitle?: string;
   hasIssue: boolean;
   spunDown: boolean;
   errorCount: number;
@@ -69,13 +78,10 @@ export type StoragePoolDetailZfsSummary = {
 export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS: readonly {
   value: HistoryTimeRange;
   label: string;
-}[] = [
-  { value: '24h', label: '24h' },
-  { value: '7d', label: '7d' },
-  { value: '14d', label: '14d' },
-  { value: '30d', label: '30d' },
-  { value: '90d', label: '90d' },
-] as const;
+}[] = (['24h', '7d', '14d', '30d', '90d'] as const).map((value) => ({
+  value,
+  label: formatHistoryRangeOptionLabel(value),
+}));
 
 export function getZfsScanTextClass(): string {
   return 'text-yellow-600 dark:text-yellow-400 italic';
@@ -305,6 +311,12 @@ const readDiskTemperature = (disk: Resource): number => {
   return typeof physicalDisk.temperature === 'number' ? physicalDisk.temperature : 0;
 };
 
+const readDiskTemperatureLastKnownTitle = (disk: Resource): string | undefined =>
+  getPhysicalDiskTemperaturePresentation({
+    temperature: readDiskTemperature(disk),
+    collection: readPhysicalDisk(disk).collection,
+  })?.title;
+
 const readDiskType = (disk: Resource): string => {
   const physicalDisk = readPhysicalDisk(disk);
   return typeof physicalDisk.diskType === 'string' ? physicalDisk.diskType.trim() : '';
@@ -393,6 +405,7 @@ const normalizeDevicePath = (value: string): string => value.trim().replace(/^\/
 export function getStoragePoolLinkedDisks(
   record: StorageRecord,
   physicalDisks: Resource[],
+  getAlertResourceIds?: PhysicalDiskAlertResourceIdResolver,
 ): StoragePoolDetailLinkedDisk[] {
   const pool = getStorageRecordZfsPool(record);
   const unraidStorageGroup = getUnraidStorageGroup(record).toLowerCase();
@@ -423,7 +436,9 @@ export function getStoragePoolLinkedDisks(
       state: readDiskState(disk),
       sizeLabel: readDiskSizeLabel(disk),
       diskType: readDiskType(disk),
+      alertResourceIds: getAlertResourceIds?.(disk) ?? [],
       temperature: readDiskTemperature(disk),
+      temperatureLastKnownTitle: readDiskTemperatureLastKnownTitle(disk),
       hasIssue: readDiskHasIssue(disk),
       spunDown: readDiskSpunDown(disk),
       errorCount: readDiskErrorCount(disk),

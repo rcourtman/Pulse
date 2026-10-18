@@ -49,6 +49,9 @@ func (m *Manager) checkEscalations() {
 		if alert == nil || alert.Acknowledged || isMonitorOnlyAlert(alert) || isSupportedInfrastructureSymptom(alert) {
 			continue
 		}
+		if m.awaitsBackupRevalidationNoLock(alert) {
+			continue
+		}
 		if _, snoozed := alertSnoozeUntil(alert, now); snoozed {
 			continue
 		}
@@ -131,6 +134,9 @@ func (m *Manager) PrepareEscalationNotification(snapshot *Alert, level int) (*Al
 	}
 	active, ok := m.getActiveAlertNoLock(snapshot.ID)
 	if !ok || active == nil || !active.StartTime.Equal(snapshot.StartTime) || active.Acknowledged || isMonitorOnlyAlert(active) || isSupportedInfrastructureSymptom(active) {
+		return nil, EscalationLevel{}, false
+	}
+	if m.awaitsBackupRevalidationNoLock(active) {
 		return nil, EscalationLevel{}, false
 	}
 	if _, snoozed := alertSnoozeUntil(active, m.policyNow()); snoozed {

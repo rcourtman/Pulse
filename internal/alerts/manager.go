@@ -78,6 +78,9 @@ type Manager struct {
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
+	hostDiskTempPendingContexts  map[string]hostDiskTempContext  // Only live pending temperature runs; config saves need link/type identity
+	hostSMARTRiskAbsences        map[string]int                  // Consecutive non-empty reports omitting a SMART risk resource
+	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
@@ -101,10 +104,13 @@ type Manager struct {
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
-	// Host agent deduplication: track hostnames of active host agents
-	// When a host agent is running on a Proxmox node, we prefer the host agent
-	// alerts and suppress the node alerts to avoid duplicate monitoring.
-	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
+	// Host agent deduplication: the Proxmox node each reporting host agent is
+	// linked to and the usage metrics the agent evaluates for it. The node
+	// releases only those metrics and keeps evaluating the rest itself.
+	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
+	// Ordering survives link removal so an older in-flight report cannot restore it.
+	hostAgentReportSeq   map[string]uint64
+	hostAgentLinkApplied map[string]uint64
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -133,6 +139,9 @@ type Manager struct {
 	activeRecoveryReadable   atomic.Bool
 	activeRecoveryWriteBlock atomic.Bool
 	restoredAlertEpoch       atomic.Uint64
+	// Restored backup occurrences stay visible, but cannot notify until a
+	// successful backup evaluation confirms they are still overdue. Under mu.
+	restoredBackupNotifications map[string]time.Time
 
 	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
 	// EnableShadowFeed; all access is under m.mu.
@@ -230,6 +239,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),
+		hostDiskTempAbsences:            make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
@@ -242,11 +252,13 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
-		hostAgentHostnames:              make(map[string]struct{}),
+		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
+		hostAgentReportSeq:              make(map[string]uint64),
+		hostAgentLinkApplied:            make(map[string]uint64),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,
-		config:                          defaultAlertConfig(),
+		config:                          DefaultAlertConfig(),
 		skipPersistedRestore:            opts.skipPersistedAlertRestore,
 	}
 	intentClockEpoch := time.Now()

@@ -413,6 +413,9 @@ func cloneHost(src Host) Host {
 	dest.DiskExclude = append([]string(nil), src.DiskExclude...)
 	dest.IdentityConflict = cloneHostIdentityConflict(src.IdentityConflict)
 	dest.AgentPrivilege = cloneAgentPrivilegeStatus(src.AgentPrivilege)
+	dest.AgentModules = cloneAgentModuleStatuses(src.AgentModules)
+	dest.AgentUpdate = cloneAgentUpdateStatus(src.AgentUpdate)
+	dest.AppliedConfig = cloneAgentConfigFingerprint(src.AppliedConfig)
 	return dest.NormalizeCollections()
 }
 
@@ -1333,6 +1336,10 @@ func cloneAlert(src Alert) Alert {
 		for k, v := range src.Metadata {
 			dest.Metadata[k] = v
 		}
+	}
+	if src.Resolution != nil {
+		resolution := *src.Resolution
+		dest.Resolution = &resolution
 	}
 	return dest
 }

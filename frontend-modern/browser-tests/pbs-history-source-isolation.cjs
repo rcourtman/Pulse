@@ -114,10 +114,12 @@ const { chromium } = require('playwright');
         await page.keyboard.press('Enter');
       } else await page.locator('td[title="backup-connection-three · tank"]').click();
       const detail = page.locator('[data-inline-platform-resource-detail-for="pbs-three"]');
-      const plots = detail.locator('[data-testid="guest-history-plot"] path');
-      await detail.getByRole('tab', { name: 'History', exact: true }).click();
+      // History charts sit on Overview, so the read starts when it opens.
+      const plots = detail.locator('[data-testid="guest-history-plot"] path[data-history-series]');
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-testid="guest-history-plot"] path').length === 7,
+        () =>
+          document.querySelectorAll('[data-testid="guest-history-plot"] path[data-history-series]')
+            .length === 7,
       );
       const originalPaths = await plots.evaluateAll((paths) =>
         paths.map((p) => p.getAttribute('d')),
@@ -130,7 +132,7 @@ const { chromium } = require('playwright');
         assert.ok(dimensions.scroll <= dimensions.inner + 1, JSON.stringify(dimensions));
         assert.equal(
           await detail
-            .getByRole('tab', { name: 'History', exact: true })
+            .getByRole('tab', { name: 'Overview', exact: true })
             .getAttribute('aria-selected'),
           'true',
         );
@@ -153,7 +155,9 @@ const { chromium } = require('playwright');
       await checkLayout();
       await detail.getByTestId('guest-history-range-control').selectOption('1h');
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-testid="guest-history-plot"] path').length === 7,
+        () =>
+          document.querySelectorAll('[data-testid="guest-history-plot"] path[data-history-series]')
+            .length === 7,
       );
       const currentPaths = await plots.evaluateAll((paths) =>
         paths.map((p) => p.getAttribute('d')),
@@ -188,7 +192,9 @@ const { chromium } = require('playwright');
       await screenshot('target-failed');
       await detail.getByTestId('guest-history-range-control').selectOption('6h');
       await page.waitForFunction(
-        () => document.querySelectorAll('[data-testid="guest-history-plot"] path').length === 2,
+        () =>
+          document.querySelectorAll('[data-testid="guest-history-plot"] path[data-history-series]')
+            .length === 2,
       );
       assert.equal(await detail.locator('[data-history-group="network"] path').count(), 0);
       assert.equal(await detail.locator('[data-history-group="disk-io"] path').count(), 0);

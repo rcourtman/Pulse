@@ -97,6 +97,7 @@ export type TransitionCause =
   | 'suppression'
   | 'suppression_expired'
   | 'recovery_evidence'
+  | 'ownership_transferred'
   | 'collection_stale'
   | 'collection_unknown';
 

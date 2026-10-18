@@ -41,8 +41,7 @@ describe('deriveTabFromQuery — uncovered switch cases', () => {
     ['?tab=provider', 'system-ai'],
     ['?tab=system-ai-patrol', 'system-ai-patrol'],
     ['?tab=system-ai-assistant', 'system-ai-assistant'],
-    // NOTE: `system-ai-discovery` and `discovery` intentionally map to
-    // `system-ai-assistant` here (see GLM_REPORT.md suspected bug).
+    // The retired Service Context tab keeps old links landing on Assistant.
     ['?tab=system-ai-discovery', 'system-ai-assistant'],
     ['?tab=support-diagnostics', 'support-diagnostics'],
     ['?tab=support-reporting', 'support-reporting'],
@@ -119,10 +118,8 @@ describe('deriveTabFromPath — uncovered path arms', () => {
     ['/settings/monitoring/availability', 'monitoring-availability'],
     ['/settings/pulse-intelligence/patrol', 'system-ai-patrol'],
     ['/settings/pulse-intelligence/assistant', 'system-ai-assistant'],
-    // NOTE: the discovery route canonicalizes to the *assistant* path today
-    // (resolveCanonicalSettingsPath maps PULSE_INTELLIGENCE_DISCOVERY_PREFIX to
-    // settingsTabPath('system-ai-assistant')), so deriveTabFromPath observes
-    // 'system-ai-assistant'. See GLM_REPORT.md suspected bug #1.
+    // The retired Service Context route canonicalizes to the Assistant path,
+    // so old bookmarks still land on a live page.
     ['/settings/pulse-intelligence/discovery', 'system-ai-assistant'],
     ['/settings/pulse-intelligence/provider', 'system-ai'],
     // Legacy /settings/system-ai canonicalizes to the provider prefix.

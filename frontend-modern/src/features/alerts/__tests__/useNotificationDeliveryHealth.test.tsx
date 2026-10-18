@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createEffect, createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI } from '@/api/notifications';
@@ -61,6 +61,24 @@ describe('useNotificationDeliveryHealth', () => {
       expect(state.deliveryHealthUnavailable()).toBe(true);
       expect(state.deliveryNeedsAttention()).toBe(true);
       expect(state.deliveryHealth()).toBeNull();
+      dispose();
+    }));
+
+  it('never drops attention while a degraded queue becomes unreadable', () =>
+    createRoot(async (dispose) => {
+      vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthWith('degraded'));
+      const state = useNotificationDeliveryHealth();
+      await state.loadDeliveryHealth();
+
+      const seen: boolean[] = [];
+      createEffect(() => seen.push(state.deliveryNeedsAttention()));
+      vi.mocked(NotificationsAPI.getHealth).mockRejectedValueOnce(new Error('network down'));
+      await state.loadDeliveryHealth();
+
+      // The snapshot and its availability flip together, so the warning (and
+      // the delivery evidence mounted beside it) is never torn down mid-refresh.
+      expect(seen).toEqual([true]);
+      expect(state.deliveryHealthUnavailable()).toBe(true);
       dispose();
     }));
 

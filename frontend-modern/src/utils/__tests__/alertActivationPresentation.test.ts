@@ -23,8 +23,7 @@ describe('getAlertActivationPresentation', () => {
 
   it('returns the enabled notification presentation', () => {
     expect(getAlertActivationPresentation({ isActive: true })).toEqual({
-      label: 'Notifications enabled',
-      labelClass: 'text-green-600 dark:text-green-400',
+      label: 'Send notifications',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-blue-600',
       thumbClass:
         'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-sm transition-all translate-x-5',
@@ -33,8 +32,7 @@ describe('getAlertActivationPresentation', () => {
 
   it('returns the paused busy notification presentation', () => {
     expect(getAlertActivationPresentation({ isActive: false, isBusy: true })).toEqual({
-      label: 'Notifications paused',
-      labelClass: 'text-muted',
+      label: 'Send notifications',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-surface-hover opacity-50',
       thumbClass:
         'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-sm transition-all translate-x-0',
@@ -59,12 +57,8 @@ describe('getAlertActivationPresentation', () => {
   it('localizes activation labels and feedback through the active locale', () => {
     setActiveLocale('es');
 
-    expect(getAlertActivationPresentation({ isActive: true }).label).toBe(
-      'Notificaciones activadas',
-    );
-    expect(getAlertActivationPresentation({ isActive: false }).label).toBe(
-      'Notificaciones pausadas',
-    );
+    expect(getAlertActivationPresentation({ isActive: true }).label).toBe('Enviar notificaciones');
+    expect(getAlertActivationPresentation({ isActive: false }).label).toBe('Enviar notificaciones');
     expect(getAlertActivationSuccess()).toBe(
       'Notificaciones activadas. Ahora recibiras avisos cuando se detecten problemas.',
     );

@@ -26,6 +26,7 @@ const migratedAlertsSurfaceSources = [
 const migratedAlertsOverviewCopy = [
   'Notifications enabled',
   'Notifications paused',
+  'Send notifications',
   'Alerts navigation',
   'Toggle external notifications',
   'Active Alerts',
@@ -71,7 +72,7 @@ describe('alerts overview localization guardrails', () => {
       }
     }
 
-    expect(alertsPageSource).toContain('alerts.nav.toggleAlerts');
+    expect(alertsPageSource).toContain('alertActivationPresentation().label');
     expect(activeAlertsSectionSource).toContain('getAlertOverviewActiveSectionTitle');
     expect(activeAlertsSectionSource).toContain('getAlertOverviewGroupDisclosureLabel');
     expect(alertCardSource).toContain('getAlertOverviewPrimaryActionLabel');

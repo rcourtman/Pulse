@@ -26,6 +26,15 @@ interface QueryRunOptions {
  */
 const RETAINED_QUERY_CACHE_MAX_ENTRIES = 64;
 const RETAINED_QUERY_CACHE_MAX_AGE_MS = 5 * 60_000;
+// A poll does not replace a read an earlier poll started while it is still in
+// flight: a read slower than the poll interval (the API answers 429 with
+// Retry-After: 60, and apiFetch honours up to two minutes) would otherwise be
+// discarded on every tick and never settle. Other reads stay replaceable at
+// the next tick, so a slow refresh is replaced at most once. Past this age a
+// polled read is presumed stalled: the next poll replaces it and reports it as
+// a failed read, so a consumer that never loaded shows its error and Retry
+// rather than spinning while every read hangs.
+export const STALLED_QUERY_READ_MS = 150_000;
 
 type RetainedQueryCacheEntry = {
   cachedAt: number;
@@ -179,6 +188,8 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
 
   let latestRequestId = 0;
   let activeAbortController: AbortController | null = null;
+  let activeRequestStartedAt = 0;
+  let activeRequestIsPoll = false;
 
   const cancelActiveRequest = () => {
     activeAbortController?.abort();
@@ -209,10 +220,12 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
   });
   onCleanup(unsubscribeLiveQueryOrgSwitch);
 
-  const run = async (key: K, runOptions: QueryRunOptions = {}): Promise<T> => {
+  const run = async (key: K, runOptions: QueryRunOptions = {}, poll = false): Promise<T> => {
     cancelActiveRequest();
     const abortController = new AbortController();
     activeAbortController = abortController;
+    activeRequestStartedAt = Date.now();
+    activeRequestIsPoll = poll;
     const requestId = ++latestRequestId;
     const retainedCacheKey = getRetainedCacheKey(key);
     const cacheGeneration = retainedQueryCacheGeneration;
@@ -296,7 +309,23 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
 
   if (typeof options.pollMs === 'number' && options.pollMs > 0) {
     const interval = setInterval(() => {
-      void refetch({ background: true });
+      if (activeAbortController !== null && activeRequestIsPoll) {
+        if (Date.now() - activeRequestStartedAt < STALLED_QUERY_READ_MS) return;
+        // The stalled read is abandoned and settles as a failure: its
+        // replacement runs in the background and may hang too, so nothing
+        // else would clear a spinner or a never-loaded state.
+        batch(() => {
+          setLoading(false);
+          setError(new Error('The request timed out.'));
+          setResolvedOnce(true);
+        });
+      }
+      const key = options.source();
+      if (key === null) {
+        reset();
+        return;
+      }
+      void run(key, { background: true }, true);
     }, options.pollMs);
     onCleanup(() => clearInterval(interval));
   }

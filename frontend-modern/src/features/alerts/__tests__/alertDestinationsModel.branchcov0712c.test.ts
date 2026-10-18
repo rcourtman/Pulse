@@ -22,9 +22,6 @@ function makeUIEmailConfig(overrides: Partial<UIEmailConfig> = {}): UIEmailConfi
     to: ['alerts@example.com'],
     tls: true,
     startTLS: true,
-    replyTo: '',
-    maxRetries: 3,
-    retryDelay: 60,
     rateLimit: 0,
     ...overrides,
   };
@@ -144,15 +141,14 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
   // the value-level toStrictEqual checks in the sibling suite.
   // -----------------------------------------------------------------------
   describe('payload contract — exact key set', () => {
-    it('emits exactly the EmailConfig keys in declaration order and omits replyTo/maxRetries/retryDelay/rateLimit', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({
-          replyTo: 'reply@example.com',
-          maxRetries: 9,
-          retryDelay: 300,
-          rateLimit: 50,
-        }),
-      );
+    it('emits only supported EmailConfig keys even when a stale draft contains extra fields', () => {
+      const staleDraft = {
+        ...makeUIEmailConfig({ rateLimit: 50 }),
+        replyTo: 'reply@example.com',
+        maxRetries: 9,
+        retryDelay: 300,
+      };
+      const result = buildEmailConfigPayload(staleDraft);
       expect(Object.keys(result)).toStrictEqual([
         'enabled',
         'provider',
@@ -164,14 +160,13 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
         'to',
         'tls',
         'startTLS',
+        'rateLimit',
         'minimumSeverity',
       ]);
       expect(result).not.toHaveProperty('replyTo');
       expect(result).not.toHaveProperty('maxRetries');
       expect(result).not.toHaveProperty('retryDelay');
-      // rateLimit exists on EmailConfig (optional) yet is never
-      // forwarded — see GLM_REPORT.md (suspected source bug).
-      expect(result).not.toHaveProperty('rateLimit');
+      expect(result).toHaveProperty('rateLimit', 50);
     });
   });
 

@@ -186,8 +186,8 @@ func TestSendAppriseViaHTTPBlocksRedirectToLinkLocal(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected redirect validation error")
 	}
-	if !strings.Contains(err.Error(), "link-local addresses are not allowed") {
-		t.Fatalf("expected link-local redirect to be blocked, got %v", err)
+	if !strings.Contains(err.Error(), "configured origin") {
+		t.Fatalf("expected link-local redirect to be blocked before resolution, got %v", err)
 	}
 }
 

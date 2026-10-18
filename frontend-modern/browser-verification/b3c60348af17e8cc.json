@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "03767f1e956c68c7b826635990638ea45fd9ddbd",
+  "verified_at": "2026-10-08T00:45:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
+    "frontend-modern/src/utils/appShellScrollRestoration.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts": "4b125b316052a801d9db7568cd584e7165b73995795c1943770bd9133c363f3c",
+    "frontend-modern/src/utils/appShellScrollRestoration.ts": "b20770a6edd2196ba436de1aadf1bb8dcdf84baf0da492afa6e5255ebfd91fd5"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/overview?type=vm",
+    "/proxmox/overview?resource=Analytics%3Apve34%3A740",
+    "/proxmox/storage",
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded build of this exact tree (both runtime files checked by sha256 on the test host) on a mock DEMO_MODE stack on pulse-dev; baseline is an embedded build of origin/main 7f45148d15 run with the same probe script, which instruments every scripted scrollTop write on .app-scroll-shell",
+    "Baseline repro at 1440x900 and 390x844: guest drawer opened at shell scrollTop 3000 (URL unchanged), shell scrolled to 0, Type filter set to VMs; URL became ?type=vm and 74 ms (desktop) / 126 ms (phone) later a scripted write moved the shell to 3000",
+    "This tree, same steps at both widths: shell stays at 0 after ?type=vm, no scripted shell write",
+    "Controls unchanged on both builds: same scroll path without a drawer stays at 0; filter clicked at scrollTop 500 after a drawer toggle keeps 500 (phone: 41 after the Filters sheet opens); Proxmox Storage sub-tab (both widths) and Docker tab (desktop; on phones the tab is not in the visible nav) after a drawer toggle land at 0",
+    "Opening a guest drawer keeps the shell at 3000 with the URL unchanged (local selection, contextual-focus offset preservation)",
+    "?resource= deep link opens the matching guest drawer and reveals it (shell 2960 desktop, 3143 phone); closing it keeps that position",
+    "No page errors at either width"
+  ],
+  "interactions": [
+    "Row disclosure button click (desktop) and row tap (phone) to open and close a guest drawer",
+    "Type filter VMs button (desktop inline group; phone via the toolbar Filters sheet)",
+    "Proxmox Storage sub-tab link and Docker platform tab link",
+    "Drawer close button on a deep-linked drawer",
+    "rAF sampling of .app-scroll-shell scrollTop and URL for 2.5 s after each action"
+  ]
+}

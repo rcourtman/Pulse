@@ -1,7 +1,6 @@
-import { Show, For, Suspense } from 'solid-js';
+import { Show, For } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -10,17 +9,12 @@ import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayD
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
-import {
-  GuestDrawerHistory,
-  GuestDrawerHistoryRangeSelect,
-} from '@/components/Workloads/GuestDrawerHistory';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import {
   ResourceAccessDisclosure,
   ResourceDetailDrawerOverviewTab,
 } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
-import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import {
   DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
   type ResourceDetailDrawerPresentation,
@@ -30,6 +24,10 @@ import { isDockerContainerLifecycleResource } from '@/features/docker/dockerCont
 import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { ResourceActionHistory } from './ResourceActionHistory';
+import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '@/features/docker/dockerCpuPresentation';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { GUEST_DRAWER_BACKUP_PRECAUTION } from '@/components/Workloads/guestDrawerModel';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -150,6 +148,29 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         )}
       </Show>
 
+      <Show
+        when={props.resource.type === 'app-container' && props.resource.platformType === 'docker'}
+      >
+        <p class="text-xs leading-relaxed text-muted" data-testid="container-drawer-cpu-scale">
+          {CONTAINER_CPU_CAPACITY_DESCRIPTION}
+        </p>
+      </Show>
+
+      <Show when={drawer.guestReadPrecaution()}>
+        {(message) => (
+          <InlineNotice
+            tone="warning"
+            role="status"
+            data-testid="resource-guest-read-precaution"
+            actionHref={getShippedDocUrl('VM_DISK_MONITORING.md')}
+            actionLabel="Backup safety guidance"
+          >
+            <p>{message()}</p>
+            <p>{GUEST_DRAWER_BACKUP_PRECAUTION}</p>
+          </InlineNotice>
+        )}
+      </Show>
+
       <Subtabs
         class="mb-1"
         ariaLabel="Resource detail sections"
@@ -160,10 +181,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         tabs={drawer.tabs().map((tab) => ({ value: tab.id, label: tab.label }))}
       />
 
-      <div
-        class={drawer.activeTab() === 'overview' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'overview' ? '' : 'hidden'}`}>
         <ResourceDetailDrawerOverviewTab
           resource={props.resource}
           drawer={drawer}
@@ -171,40 +189,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         />
       </div>
 
-      {/* Agent Machine Metrics History Tab */}
-      <div
-        class={drawer.activeTab() === 'history' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <Show when={drawer.activeTab() === 'history'}>
-          <Show
-            when={drawer.metricsHistoryTarget()}
-            fallback={<TabAvailabilityNotice message="Metrics history is unavailable." />}
-          >
-            {(target) => (
-              <div class="space-y-3" data-testid="resource-metrics-history-tab">
-                <div class="flex items-center justify-end">
-                  <GuestDrawerHistoryRangeSelect
-                    range={drawer.metricsHistoryRange()}
-                    onRangeChange={drawer.setMetricsHistoryRange}
-                  />
-                </div>
-                <GuestDrawerHistory
-                  target={target()}
-                  range={drawer.metricsHistoryRange()}
-                  currentMetrics={drawer.metricsHistoryCurrentMetrics()}
-                  groups={drawer.metricsHistoryGroups()}
-                />
-              </div>
-            )}
-          </Show>
-        </Show>
-      </div>
-
-      <div
-        class={drawer.activeTab() === 'manage' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={drawer.activeTab() === 'manage'}>
           <div class="space-y-3" data-testid="resource-manage-tab">
             <ResourceOperatorStateSection
@@ -232,38 +217,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </Show>
       </div>
 
-      {/* Discovery Tab */}
-      <div
-        class={drawer.activeTab() === 'discovery' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <Show when={drawer.activeTab() === 'discovery'}>
-          <Show
-            when={drawer.discoveryConfig()}
-            fallback={<TabAvailabilityNotice message="Discovery is unavailable." />}
-          >
-            {(config) => (
-              <Suspense fallback={<DiscoveryLoadingFallback />}>
-                <DiscoveryTab
-                  resourceType={config().resourceType}
-                  agentId={config().agentId}
-                  resourceId={config().resourceId}
-                  hostname={config().hostname}
-                  canonicalResourceId={props.resource.id}
-                  commandsEnabled={drawer.agentMeta()?.commandsEnabled}
-                  showManualRunAction
-                />
-              </Suspense>
-            )}
-          </Show>
-        </Show>
-      </div>
-
       {/* PMG Mail Tab */}
-      <div
-        class={drawer.activeTab() === 'mail' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'mail' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'mail'}>
           <Show
@@ -278,10 +233,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Namespaces Tab */}
-      <div
-        class={drawer.activeTab() === 'namespaces' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'namespaces' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'namespaces'}>
           <Show
@@ -302,10 +254,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Deployments Tab */}
-      <div
-        class={drawer.activeTab() === 'deployments' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'deployments' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'deployments'}>
           <Show
@@ -325,10 +274,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Docker Swarm Tab */}
-      <div
-        class={drawer.activeTab() === 'swarm' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'swarm' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'swarm'}>
           <Show
@@ -347,10 +293,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Debug Tab */}
       <Show when={drawer.debugEnabled()}>
-        <div
-          class={drawer.activeTab() === 'debug' ? '' : 'hidden'}
-          style={{ 'overflow-anchor': 'none' }}
-        >
+        <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'debug' ? '' : 'hidden'}`}>
           <ResourceDetailDrawerDebugTab resource={props.resource} drawer={drawer} />
         </div>
       </Show>

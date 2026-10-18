@@ -29,8 +29,6 @@ func ExtractFacts(toolName string, toolInput map[string]interface{}, resultText 
 		return extractQueryFacts(toolInput, resultText)
 	case "pulse_storage":
 		return extractStorageFacts(toolInput, resultText)
-	case "pulse_discovery":
-		return extractDiscoveryFacts(toolInput, resultText)
 	case "pulse_read", "pulse_run_command":
 		return extractExecFacts(toolInput, resultText)
 	case "pulse_metrics":
@@ -98,7 +96,8 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 			Percent float64 `json:"percent"`
 		} `json:"cpu"`
 		Memory struct {
-			Percent float64 `json:"percent"`
+			Percent  float64                               `json:"percent"`
+			Evidence *unifiedresources.GuestMemoryEvidence `json:"evidence"`
 		} `json:"memory"`
 		// Error field for not-found responses
 		Error string `json:"error"`
@@ -156,7 +155,9 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if resource.CPU.Percent > 0 {
 		parts = append(parts, fmt.Sprintf("CPU=%.1f%%", resource.CPU.Percent))
 	}
-	if resource.Memory.Percent > 0 {
+	if resource.Memory.Evidence != nil {
+		parts = append(parts, "Mem="+resource.Memory.Evidence.Format(resource.Memory.Percent))
+	} else if resource.Memory.Percent > 0 {
 		parts = append(parts, fmt.Sprintf("Mem=%.1f%%", resource.Memory.Percent))
 	}
 
@@ -561,8 +562,6 @@ func categoryForPredictedKey(key string) FactCategory {
 		return FactCategoryMetrics
 	case strings.HasPrefix(key, "exec:"):
 		return FactCategoryExec
-	case strings.HasPrefix(key, "discovery:"):
-		return FactCategoryDiscovery
 	case strings.HasPrefix(key, "topology:") || strings.HasPrefix(key, "health:") ||
 		strings.HasPrefix(key, "search:") || strings.HasPrefix(key, "query:") ||
 		strings.HasPrefix(key, "inventory:") || strings.HasPrefix(key, "config:") ||
@@ -735,61 +734,6 @@ func extractBackupTaskFacts(resultText string) []FactEntry {
 		})
 	}
 	return facts
-}
-
-// --- pulse_discovery ---
-
-func extractDiscoveryFacts(input map[string]interface{}, resultText string) []FactEntry {
-	// ResourceDiscoveryInfo — direct JSON, no wrapper
-	var disc struct {
-		ServiceType string `json:"service_type"`
-		Hostname    string `json:"hostname"`
-		TargetID    string `json:"target_id"`
-		ResourceID  string `json:"resource_id"`
-		Ports       []struct {
-			Port int `json:"port"`
-		} `json:"ports"`
-	}
-	if err := json.Unmarshal([]byte(resultText), &disc); err != nil {
-		return nil
-	}
-
-	target := disc.TargetID
-	if target == "" {
-		target = strFromMap(input, "target_id")
-	}
-	id := disc.ResourceID
-	if id == "" {
-		id = strFromMap(input, "resource_id")
-	}
-	if target == "" || id == "" {
-		return nil
-	}
-
-	var parts []string
-	if disc.ServiceType != "" {
-		parts = append(parts, "service="+disc.ServiceType)
-	}
-	if disc.Hostname != "" {
-		parts = append(parts, "hostname="+disc.Hostname)
-	}
-	if len(disc.Ports) > 0 {
-		var portStrs []string
-		for _, p := range disc.Ports {
-			portStrs = append(portStrs, fmt.Sprintf("%d", p.Port))
-		}
-		parts = append(parts, "ports=["+strings.Join(portStrs, ",")+"]")
-	}
-
-	if len(parts) == 0 {
-		return nil
-	}
-
-	return []FactEntry{{
-		Category: FactCategoryDiscovery,
-		Key:      fmt.Sprintf("discovery:%s:%s", target, id),
-		Value:    truncateValue(strings.Join(parts, ", ")),
-	}}
 }
 
 // --- pulse_read / pulse_run_command ---
@@ -2272,12 +2216,6 @@ func PredictFactKeys(toolName string, toolInput map[string]interface{}) []string
 				}
 				return keys
 			}
-		}
-	case "pulse_discovery":
-		target := strFromMap(toolInput, "target_id")
-		id := strFromMap(toolInput, "resource_id")
-		if target != "" && id != "" {
-			return []string{fmt.Sprintf("discovery:%s:%s", target, id)}
 		}
 	case "pulse_read", "pulse_run_command":
 		host := strFromMap(toolInput, "target_host")

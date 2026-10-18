@@ -203,7 +203,7 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 				MaxCPU: 8,
 			}
 
-			modelNode, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
+			modelNode, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil)
 			if err != nil {
 				t.Fatalf("pollPVENode() error = %v", err)
 			}
@@ -258,7 +258,7 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 		MaxCPU: 8,
 	}
 
-	first, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
+	first, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil)
 	if err != nil {
 		t.Fatalf("first pollPVENode() error = %v", err)
 	}
@@ -274,7 +274,6 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 		client,
 		node,
 		"healthy",
-		map[string]models.Memory{first.ID: first.Memory},
 		nil,
 	)
 	if err != nil {
@@ -302,7 +301,6 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 		client,
 		node,
 		"healthy",
-		map[string]models.Memory{second.ID: second.Memory},
 		nil,
 	)
 	if err != nil {
@@ -1184,7 +1182,7 @@ func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T)
 			if native {
 				status.MemInfo = &proxmox.VMMemInfo{Total: 8 * gib, Available: 5 * gib}
 			}
-			_, used, source := m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			_, used, source, _ := m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
 			if client.vmAgentMemCalls != 0 || strings.HasPrefix(source, "guest-agent-meminfo") {
 				t.Fatalf("backup used fresh/cached guest-agent evidence: calls=%d source=%s", client.vmAgentMemCalls, source)
 			}
@@ -1193,10 +1191,15 @@ func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T)
 			}
 			status.Lock = ""
 			status.MemInfo = nil
-			_, _, source = m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			_, _, source, _ = m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
 			if client.vmAgentMemCalls != 1 || source != "guest-agent-meminfo" {
 				t.Fatalf("unlocked memory did not resume: %d %s", client.vmAgentMemCalls, source)
 			}
 		})
 	}
+}
+
+func TestGuestStatusMemoryAvailabilityContract(t *testing.T) {
+	testGuestStatusMemoryAvailabilitySelection(t)
+	testGuestStatusMemoryAvailabilityPolling(t)
 }

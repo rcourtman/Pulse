@@ -2,7 +2,6 @@ package agentcapabilities
 
 const (
 	PulseQueryToolName      = "pulse_query"
-	PulseDiscoveryToolName  = "pulse_discovery"
 	PulseMetricsToolName    = "pulse_metrics"
 	PulseStorageToolName    = "pulse_storage"
 	PulseDockerToolName     = "pulse_docker"

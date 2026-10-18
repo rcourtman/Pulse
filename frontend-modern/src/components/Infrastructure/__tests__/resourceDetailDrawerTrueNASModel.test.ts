@@ -86,6 +86,52 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     ]);
   });
 
+  it('says a stopped VM set to autostart should be running', () => {
+    const stoppedOnPurpose = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'ubuntu-build', state: 'STOPPED', vcpus: 2, autostart: false } },
+    });
+    const shouldRun = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', state: 'STOPPED', vcpus: 2, autostart: true } },
+    });
+
+    expect(buildTrueNASDetailsSummary(stoppedOnPurpose)).toBe('Stopped, 2 vCPU');
+    expect(buildTrueNASDetailsSummary(shouldRun)).toBe('Stopped, should be running, 2 vCPU');
+    const compute = buildTrueNASDetailSections(shouldRun).find(
+      (section) => section.label === 'Compute',
+    );
+    expect(compute?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Condition', value: 'Should be running' }),
+      ]),
+    );
+    const onPurposeCompute = buildTrueNASDetailSections(stoppedOnPurpose).find(
+      (section) => section.label === 'Compute',
+    );
+    expect(onPurposeCompute?.rows.map((row) => row.label)).not.toContain('Condition');
+
+    // The same rule as the VMs table: libvirt aliases, the resource status
+    // when TrueNAS sent no state, and no claim while TrueNAS data is stale.
+    const shutOff = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', domainState: 'SHUTOFF', autostart: true } },
+    });
+    const statusOnly = baseResource({
+      type: 'vm',
+      status: 'offline',
+      truenas: { vm: { name: 'router', autostart: true } },
+    });
+    const stale = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', state: 'STOPPED', autostart: true } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+    expect(buildTrueNASDetailsSummary(shutOff)).toContain('should be running');
+    expect(buildTrueNASDetailsSummary(statusOnly)).toContain('should be running');
+    expect(buildTrueNASDetailsSummary(stale)).not.toContain('should be running');
+  });
+
   it('summarizes native app.query metadata for the detail drawer', () => {
     const resource = baseResource({
       type: 'app-container',
@@ -313,6 +359,44 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       'Health',
       'SMART',
     ]);
+  });
+
+  it('shows a retained disk temperature as last known, with its reason and no heat tone', () => {
+    // A TrueNAS disk merged with a host agent's row keeps the agent's last
+    // reading after the agent stops reporting. It is not current, so it must
+    // not read as a disk running hot now, nor sit in the summary as a reading.
+    const disk = (state: 'available' | 'unavailable') =>
+      baseResource({
+        type: 'physical_disk',
+        displayName: 'sdc',
+        platformScopes: ['truenas'],
+        physicalDisk: {
+          devPath: '/dev/sdc',
+          diskType: 'sata',
+          sizeBytes: 24 * 1024 ** 4,
+          health: 'PASSED',
+          temperature: 61,
+          collection: {
+            temperature: { state, source: 'agent', reason: 'host agent stopped reporting' },
+          },
+        },
+      });
+    const sataTrigger = () => ({ warning: 50, critical: 55 });
+    const temperatureRow = (resource: Resource) =>
+      buildTrueNASDetailSections(resource, sataTrigger)
+        .find((section) => section.label === 'Health')
+        ?.rows.find((row) => row.label === 'Temperature');
+
+    expect(temperatureRow(disk('unavailable'))).toMatchObject({
+      value: '61°C (last known)',
+      tone: 'muted',
+      title: 'Last known reading, not current: host agent stopped reporting',
+    });
+    expect(buildTrueNASDetailsSummary(disk('unavailable'))).toBe('SATA, Passed, 24.0 TB');
+
+    expect(temperatureRow(disk('available'))).toMatchObject({ value: '61°C', tone: 'warning' });
+    expect(temperatureRow(disk('available'))?.title).toBeUndefined();
+    expect(buildTrueNASDetailsSummary(disk('available'))).toBe('SATA, Passed, 24.0 TB, 61°C');
   });
 
   it('shows the vdev layout as the storage kind while topology stays the pool discriminator', () => {

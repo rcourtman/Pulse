@@ -1,6 +1,8 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { notificationStore } from '@/stores/notifications';
+import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   listMaintenanceVerificationsForResource,
   rerunMaintenanceVerification,
@@ -9,6 +11,8 @@ import {
   type MaintenanceVerificationStatus,
 } from '@/api/maintenanceVerification';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 
 /**
  * MaintenanceVerificationSection surfaces Maintenance Verification
@@ -50,22 +54,23 @@ const STATUS_CLASSES: Record<MaintenanceVerificationStatus, string> = {
 export const MaintenanceVerificationSection: Component<MaintenanceVerificationSectionProps> = (
   props,
 ) => {
-  const [refreshTick, setRefreshTick] = createSignal(0);
-
+  const now = useRelativeTimeNow();
+  // Age only the recorded events. Ticks neither refresh the report nor change
+  // its verdict, and a rerun's completion time is not the window's end time.
+  const reportAge = (timestamp?: string) => {
+    if (!timestamp || timestamp.startsWith('0001-01-01')) return 'unknown';
+    return formatRelativeTime(timestamp, { now: now() }) || 'unknown';
+  };
   const query = createNonSuspendingQuery<MaintenanceVerificationReport[], string>({
-    source: () => (props.resourceId ? `${props.resourceId}:${refreshTick()}` : null),
-    fetcher: async () => {
-      try {
-        const res = await listMaintenanceVerificationsForResource(props.resourceId);
-        return res.data ?? [];
-      } catch (err) {
-        notificationStore.error(
-          err instanceof Error ? err.message : 'Failed to load Maintenance Verification Reports',
-        );
-        return [];
-      }
+    source: () => props.resourceId || null,
+    fetcher: async (resourceId) => {
+      const res = await listMaintenanceVerificationsForResource(resourceId);
+      return res.data ?? [];
     },
     initialValue: [] as MaintenanceVerificationReport[],
+    // A held report belongs only to its resource. The query withdraws denied
+    // reads, but retains last-loaded records on a same-resource transient error.
+    retainPreviousValueOnSourceChange: false,
     cacheKey: (key: string) => `maintenance-verifications:${key}`,
   });
 
@@ -75,7 +80,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
   const [rerunning, setRerunning] = createSignal(false);
   const [reviewingId, setReviewingId] = createSignal<string | null>(null);
 
-  const refresh = () => setRefreshTick((n) => n + 1);
+  const refresh = () => void query.refetch();
 
   const handleRerun = async () => {
     if (rerunning() || !props.resourceId) return;
@@ -121,8 +126,8 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
             Maintenance verification
           </h3>
           <p class="text-xs text-muted">
-            Pulse runs deterministic checks each time a maintenance window ends and writes a
-            Maintenance Verification Report. The result sticks here for review.
+            Pulse records the result when a maintenance window ends. Reports record past checks, not
+            current health.
           </p>
         </div>
         <button
@@ -136,13 +141,47 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
         </button>
       </header>
 
+      <Show when={query.error()}>
+        <InlineNotice
+          tone="warning"
+          role="alert"
+          class="mt-3"
+          data-testid="maintenance-verification-load-error"
+        >
+          <p class="font-medium">Verification reports unavailable</p>
+          <p>
+            {getAPIReadAccessErrorMessage(query.error()) ?? 'Could not load verification reports.'}
+          </p>
+          <Show when={hasReports()}>
+            <p>Last loaded reports remain below.</p>
+          </Show>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={query.loading()}
+            onClick={() => {
+              if (!query.loading()) refresh();
+            }}
+          >
+            Retry reports
+          </Button>
+        </InlineNotice>
+      </Show>
+
       <Show
         when={hasReports()}
         fallback={
-          <div class="mt-3 rounded-sm border border-dashed border-border bg-surface-hover p-3 text-xs text-muted">
-            No verification reports yet. A report is written automatically the next time this
-            resource exits a maintenance window.
-          </div>
+          <Show when={!query.error()}>
+            <div
+              class="mt-3 rounded-sm border border-dashed border-border bg-surface-hover p-3 text-xs text-muted"
+              role={query.loading() ? 'status' : undefined}
+            >
+              {query.loading()
+                ? 'Loading verification reports…'
+                : 'No verification reports yet. A report is written automatically the next time this resource exits a maintenance window.'}
+            </div>
+          </Show>
         }
       >
         <ul class="mt-3 space-y-2">
@@ -160,9 +199,9 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                     >
                       {STATUS_LABELS[report.status]}
                     </span>
+                    <span class="text-xs text-muted">Checked {reportAge(report.completedAt)}</span>
                     <span class="text-xs text-muted">
-                      Window ended{' '}
-                      {report.windowEndedAt ? formatRelativeTime(report.windowEndedAt) : 'unknown'}
+                      Window ended {reportAge(report.windowEndedAt)}
                     </span>
                   </div>
                   <Show when={!report.userOutcome}>
@@ -178,7 +217,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                   </Show>
                   <Show when={report.userOutcome === 'reviewed'}>
                     <span class="text-[11px] text-muted">
-                      Reviewed {report.reviewedAt ? formatRelativeTime(report.reviewedAt) : ''}
+                      Reviewed {reportAge(report.reviewedAt)}
                       {report.reviewedBy ? ` by ${report.reviewedBy}` : ''}
                     </span>
                   </Show>

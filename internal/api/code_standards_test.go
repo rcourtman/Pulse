@@ -223,6 +223,15 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 		// defaults (the enterprise fork silently drifted and was removed),
 		// internal/api is the canonical home for the report pipeline.
 		"reporting_availability.go": true,
+		// Subject identity/alert enrichment for that same default pipeline.
+		// This exact helper adds no endpoint, entitlement or private import.
+		"reporting_subject_alerts.go": true,
+		// Shared tenant/history adapter only. New paid PDF/CSV rendering lives
+		// in pulse-enterprise behind GenerateBackupHealthReportFunc.
+		"reporting_backup_health.go": true,
+		// Shared content-free usage observation for manual and scheduled reports.
+		// No renderer, endpoint, entitlement decision or private import.
+		"reporting_activity.go": true,
 	}
 
 	for name := range goFiles {

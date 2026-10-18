@@ -2947,3 +2947,111 @@ func TestTrueNASPollerStorageDiscoveryDoesNotReuseUnreadableConnectionConfig(t *
 		t.Fatal("unreadable authoritative config reused old credentials or records")
 	}
 }
+
+func TestTrueNASPollerCOREUnknownRotationRate(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+	var diskFailure atomic.Bool
+	var diskRequests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"core-poll","version":"TrueNAS-13.0-U6.8"}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset":
+			_, _ = w.Write([]byte(`[{"id":"tank/data","name":"tank/data","pool":"tank","used":{"parsed":123},"available":{"parsed":456},"mountpoint":"/mnt/tank/data"}]`))
+		case "/api/v2.0/disk":
+			diskRequests.Add(1)
+			if diskFailure.Load() {
+				_, _ = w.Write([]byte(`[{"rotationrate":`))
+			} else {
+				_, _ = w.Write([]byte(`[{"identifier":"{uuid}synthetic-da0","name":"da0","serial":"","size":34359738368,"model":"QEMU QEMU HARDDISK","rotationrate":"unknown","type":"UNKNOWN","bus":"VTSCSI"},{"identifier":"{uuid}synthetic-da1","name":"da1","serial":"","size":34359738368,"model":"QEMU QEMU HARDDISK","rotationrate":null,"type":"UNKNOWN","bus":"VTSCSI"}]`))
+			}
+		case "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[{"id":"string","level":"WARNING","formatted":"Pool warning","args":"boot-pool","datetime":{"$date":1707400000000}},{"id":"object","level":"INFO","formatted":"Notice","args":{},"datetime":{"$date":1707400000000}}]`))
+		case "/api/v2.0/vm":
+			_, _ = w.Write([]byte(`[{"id":42,"name":"core-vm","memory":1024,"vcpus":2,"status":{"state":"RUNNING"}}]`))
+		case "/api/v2.0/zfs/snapshot":
+			_, _ = w.Write([]byte(`[{"id":"tank/data@daily","dataset":"tank/data","snapshot_name":"daily","created_at":1707400000}]`))
+		case "/api/v2.0/replication", "/api/v2.0/service", "/api/v2.0/app", "/api/v2.0/sharing/smb", "/api/v2.0/sharing/nfs":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "core-rotation", server.URL, true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		for _, byConnection := range poller.providersByOrg {
+			for _, provider := range byConnection {
+				provider.Close()
+			}
+		}
+	})
+	poller.syncConnections()
+	// Explicit cycles avoid wall-clock sleeps while exercising the ordinary
+	// saved-config provider, client, projection and runtime summary boundaries.
+	for cycle := 0; cycle < 4; cycle++ {
+		diskFailure.Store(cycle == 2)
+		if cycle > 0 {
+			poller.mu.Lock()
+			// Zero re-derives the normal interval from lastAttemptAt. Use a
+			// nonzero past deadline to exercise the next explicit due cycle.
+			poller.statusByOrg["default"][connection.ID].nextPollAt = time.Unix(1, 0)
+			poller.mu.Unlock()
+		}
+		prior := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+		priorRequests := diskRequests.Load()
+		poller.pollAll(context.Background())
+		if diskRequests.Load() <= priorRequests {
+			t.Fatalf("cycle %d never reached the disk endpoint", cycle)
+		}
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+		if summary.Poll == nil || summary.Poll.LastAttemptAt == nil {
+			t.Fatalf("no ordinary poll attempt in cycle %d: %+v", cycle, summary)
+		}
+		if cycle == 2 {
+			if summary.Poll.LastError == nil || summary.Poll.ConsecutiveFailures != 1 || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.Equal(*prior.Poll.LastSuccessAt) || summary.Observed == nil || !summary.Observed.CollectedAt.Equal(*prior.Observed.CollectedAt) {
+				t.Fatalf("malformed transport must fail without renewing last-known evidence: %+v", summary)
+			}
+		} else if summary.Poll.LastError != nil || summary.Poll.ConsecutiveFailures != 0 || summary.Poll.LastSuccessAt == nil || summary.Observed == nil || summary.Observed.Systems != 1 || summary.Observed.StoragePools != 1 || summary.Observed.Datasets != 1 || summary.Observed.Disks != 2 || summary.Observed.VMs != 1 || summary.Observed.RecoveryArtifacts != 1 || summary.Transport == nil || !summary.Transport.Connected {
+			t.Fatalf("CORE unknown rate prevented complete ordinary poll, cycle %d: %+v", cycle, summary)
+		}
+		if !hasTrueNASHostForOrg(poller, "default", "core-poll") {
+			t.Fatal("ordinary CORE poll lost the appliance")
+		}
+		disks := 0
+		for _, record := range poller.GetCurrentRecordsForOrg("default") {
+			if meta := record.Resource.PhysicalDisk; meta != nil {
+				disks++
+				if meta.Health != "UNKNOWN" || meta.DiskType != "vtscsi" || meta.RPM != 0 || meta.Temperature != 0 || meta.Serial != "" {
+					t.Fatalf("poll projection invented virtual-disk observations: %+v", meta)
+				}
+			}
+		}
+		if disks != 2 {
+			t.Fatalf("ordinary poll contributed %d disks, want both virtual disks", disks)
+		}
+		if s := poller.providersByOrg["default"][connection.ID].Snapshot(); s == nil || len(s.Alerts) != 2 || len(s.ZFSSnapshots) != 1 || len(s.VMs) != 1 {
+			t.Fatalf("mixed alert args or recovery inventory still aborted snapshot: %+v", s)
+		}
+	}
+	before := diskRequests.Load()
+	connection.Enabled = false
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if diskRequests.Load() != before || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+		t.Fatal("disabled CORE connection kept polling or retained current inventory")
+	}
+}

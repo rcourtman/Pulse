@@ -23,6 +23,7 @@ import sys
 from typing import Iterable, Sequence
 
 import format_staged_frontend
+from repo_file_io import blob_ids, merge_parents, merged_in_paths, run_git
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,17 +39,6 @@ GUARD_COMMAND = "python3 scripts/release_control/browser_verification_guard.py"
 FRONTEND_SOURCE_PREFIX = "frontend-modern/src/"
 FRONTEND_ENTRY_FILES = {"frontend-modern/index.html"}
 FRONTEND_SOURCE_SUFFIXES = {".css", ".scss", ".ts", ".tsx"}
-
-
-def run_git(args: Sequence[str], *, repo_root: Path = REPO_ROOT) -> str:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
 
 
 def blocked(headline: str, details: Iterable[str] = (), advice: Iterable[str] = ()) -> int:
@@ -321,72 +311,6 @@ def validate_receipt(
     return errors
 
 
-def blob_ids(
-    revision: str | None,
-    paths: Sequence[str],
-    *,
-    repo_root: Path = REPO_ROOT,
-) -> dict[str, str]:
-    """Object ids under the given paths in a commit, or in the index when revision is None.
-
-    A path that does not exist there is simply absent from the result.
-    """
-    ids: dict[str, str] = {}
-    for start in range(0, len(paths), 200):
-        chunk = list(paths[start : start + 200])
-        if revision is None:
-            command = ["ls-files", "--stage", "-z", "--", *chunk]
-        else:
-            command = ["ls-tree", "-r", "-z", revision, "--", *chunk]
-        output = run_git(["--literal-pathspecs", *command], repo_root=repo_root)
-        for entry in output.split("\0"):
-            meta, separator, path = entry.partition("\t")
-            if not separator:
-                continue
-            fields = meta.split()
-            ids[path] = fields[1] if revision is None else fields[2]
-    return ids
-
-
-def merge_parents(*, commit: str | None, repo_root: Path = REPO_ROOT) -> list[str]:
-    """Parents beyond the first: the merge being concluded, or a merge commit's own."""
-    if commit:
-        return run_git(
-            ["rev-list", "--parents", "-n", "1", commit], repo_root=repo_root
-        ).split()[2:]
-    merge_head = Path(run_git(["rev-parse", "--git-path", "MERGE_HEAD"], repo_root=repo_root))
-    if not merge_head.is_absolute():
-        merge_head = repo_root / merge_head
-    if not merge_head.exists():
-        return []
-    return merge_head.read_text(encoding="utf-8").split()
-
-
-def merged_in_paths(
-    paths: Sequence[str],
-    *,
-    commit: str | None,
-    repo_root: Path = REPO_ROOT,
-) -> set[str]:
-    """Paths whose new state is exactly what a merged parent already carries.
-
-    Concluding a merge stages everything the other parent brought, so a plain
-    staged-file reading mistakes the other side's frontend work and receipts
-    for this commit's own. Demanding a receipt for them asked the author to
-    vouch for files they never ran, which made a merge unable to repair a
-    branch that fell behind main. Content a parent already holds was verified
-    in that parent's history and is not this commit's change.
-    """
-    parents = merge_parents(commit=commit, repo_root=repo_root)
-    if not parents or not paths:
-        return set()
-    new = blob_ids(commit, paths, repo_root=repo_root)
-    inherited: set[str] = set()
-    for parent in parents:
-        theirs = blob_ids(parent, paths, repo_root=repo_root)
-        inherited.update(path for path in paths if new.get(path) == theirs.get(path))
-    return inherited
-
 
 def parse_receipt_changes(name_status: str) -> dict[str, str]:
     changes: dict[str, str] = {}
@@ -462,7 +386,7 @@ def range_receipt_coverage(
     head: str,
     *,
     repo_root: Path = REPO_ROOT,
-) -> tuple[dict[str, set[str]], list[str], list[str]]:
+) -> tuple[dict[str, dict[str, list[str]]], list[str], list[str]]:
     """Content digests verified by valid receipts authored inside base..head.
 
     Each receipt is validated exactly as the per-commit guard validates it at
@@ -475,7 +399,9 @@ def range_receipt_coverage(
     (recreated, or kept while resolving a merge with the main that deleted
     it), or a commit that both records and deletes receipts.
     """
-    covered: dict[str, set[str]] = {}
+    # Keep provenance beside each admitted digest so a failed composition
+    # names what actually passed, without rereading or trusting invalid proof.
+    covered: dict[str, dict[str, list[str]]] = {}
     diagnostics: list[str] = []
     violations: list[str] = []
     if LEGACY_RECEIPT_PATH in blob_ids(head, [LEGACY_RECEIPT_PATH], repo_root=repo_root):
@@ -535,7 +461,8 @@ def range_receipt_coverage(
                 diagnostics.append(f"{label}: receipt is invalid: " + "; ".join(errors))
                 continue
             for path, digest in payload["content_sha256"].items():
-                covered.setdefault(path, set()).add(digest)
+                origins = covered.setdefault(path, {}).setdefault(digest, [])
+                origins.append(f"{commit}:{receipt_path} (parent {commit_base})")
     return covered, diagnostics, violations
 
 
@@ -561,13 +488,28 @@ def range_coverage_errors(
     """
     covered, diagnostics, violations = range_receipt_coverage(base, head, repo_root=repo_root)
     final = content_sha256(changed_paths, commit=head, repo_root=repo_root)
-    uncovered = [path for path in changed_paths if final[path] not in covered.get(path, set())]
+    uncovered = [path for path in changed_paths if final[path] not in covered.get(path, {})]
     if not uncovered:
         return [], violations
-    errors = [
-        f"{path} final content {final[path][:12]} is not verified by any valid receipt in the range"
-        for path in uncovered
-    ]
+    errors: list[str] = []
+    for path in uncovered:
+        errors.append(
+            f"{path} final content {final[path]} is not verified by any valid receipt in the range"
+        )
+        prior = sorted(
+            (digest, origin)
+            for digest, origins in covered.get(path, {}).items()
+            for origin in origins
+        )
+        if not prior:
+            errors.append(f"{path}: no valid in-range receipt names this path")
+            continue
+        # A long-lived branch can contain many earlier browser passes. Bound
+        # hints, not admission: every valid digest still contributes coverage.
+        for digest, origin in prior[:3]:
+            errors.append(f"{path}: different verified content {digest} at {origin}")
+        if len(prior) > 3:
+            errors.append(f"{path}: {len(prior) - 3} further valid receipt(s) omitted from hints")
     errors.extend(diagnostics)
     return errors, violations
 
@@ -881,7 +823,9 @@ def check_range(paths: Sequence[str], *, base: str, head: str, repo_root: Path =
             advice=[
                 "Content changed after its browser pass (a correction, a conflict resolution, "
                 "or two changes to one file) needs a fresh receipt for the final content, "
-                "committed in its own non-merge commit and bound to that commit's parent."
+                "committed in its own non-merge commit and bound to that commit's parent.",
+                "Keep earlier receipts and reviewed history unchanged. Changing a receipt's "
+                "hash or parent is not a browser pass for the final content.",
             ],
         )
     if violations:

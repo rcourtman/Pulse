@@ -2,6 +2,8 @@ import { Show, createMemo } from 'solid-js';
 
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 import {
@@ -19,6 +21,13 @@ interface AlertHistoryTableSectionProps {
   state: AlertHistoryState;
 }
 
+/**
+ * The narrowest card the history table is sized for. Below it the three row
+ * actions stack, rows lose the single height the windowed rows need, and
+ * names and messages break mid-word, so the history shows as cards instead.
+ */
+export const ALERT_HISTORY_TABLE_MIN_WIDTH = 800;
+
 type AlertHistoryGroup = ReturnType<AlertHistoryState['groupedAlerts']>[number];
 type AlertHistoryAlert = AlertHistoryGroup['alerts'][number];
 type AlertHistoryRenderItem =
@@ -26,6 +35,16 @@ type AlertHistoryRenderItem =
   | { kind: 'alert'; key: string; alert: AlertHistoryAlert };
 
 export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
+  // The card's own width decides, not the viewport: a laptop window with the
+  // Alerts rail open leaves the table far less room than the screen suggests.
+  // Until the card is measured, the phone breakpoint decides as before.
+  const cardWidth = useObservedElementWidth();
+  const { isMobile } = useBreakpoint();
+  // A memo, so readers hear about a change of layout, not every resized pixel.
+  const showCards = createMemo(() => {
+    const width = cardWidth.width();
+    return width === null ? isMobile() : width < ALERT_HISTORY_TABLE_MIN_WIDTH;
+  });
   const renderItems = createMemo<AlertHistoryRenderItem[]>(() => {
     const items: AlertHistoryRenderItem[] = [];
     for (const [groupIndex, group] of props.state.groupedAlerts().entries()) {
@@ -44,33 +63,39 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
         <Show
           when={props.state.alertData().length > 0}
           fallback={
-            <div class="py-12 text-center text-muted">
-              <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
-              <p class="mt-1 text-xs">{getAlertHistoryEmptyState().description}</p>
-            </div>
+            <Show when={!props.state.historyLoadError()}>
+              <div class="py-12 text-center text-muted">
+                <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
+                <p class="mt-1 text-xs">{getAlertHistoryEmptyState().description}</p>
+              </div>
+            </Show>
           }
         >
-          <>
-            <AlertHistoryMobileList state={props.state} />
-            <TableCard class="mb-2 hidden md:block">
+          <div
+            ref={cardWidth.setElement}
+            data-alert-history-layout={showCards() ? 'cards' : 'table'}
+          >
+            <AlertHistoryMobileList state={props.state} active={showCards} />
+            <TableCard class={showCards() ? 'mb-2 hidden' : 'mb-2'}>
               <Table class="alert-history-responsive-table table-fixed min-w-0 text-[11px] sm:text-sm">
+                {/* Each track pairs its density visibility with its own width (index.css). */}
                 <colgroup>
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-full-detail-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-context-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-full-detail-track" />
-                  <col class="alert-history-core-track" />
+                  <col class="alert-history-core-track alert-history-timestamp-track" />
+                  <col class="alert-history-core-track alert-history-resource-track" />
+                  <col class="alert-history-full-detail-track alert-history-type-track" />
+                  <col class="alert-history-core-track alert-history-severity-track" />
+                  <col class="alert-history-core-track alert-history-message-track" />
+                  <col class="alert-history-context-track alert-history-duration-track" />
+                  <col class="alert-history-core-track alert-history-status-track" />
+                  <col class="alert-history-full-detail-track alert-history-node-track" />
+                  <col class="alert-history-core-track alert-history-actions-track" />
                 </colgroup>
                 <TableHeader>
                   <TableRow class="border-b border-border bg-surface-hover text-muted">
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('text')} alert-history-timestamp-column text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                     >
-                      Timestamp
+                      Time
                     </TableHead>
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
@@ -127,11 +152,11 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                 </TableBody>
               </Table>
             </TableCard>
-          </>
+          </div>
         </Show>
       }
     >
-      <div class="py-12 text-center text-muted">
+      <div class="py-12 text-center text-muted" role="status">
         <p class="text-sm">{getAlertHistoryLoadingState().text}</p>
       </div>
     </Show>

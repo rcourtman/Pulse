@@ -390,7 +390,7 @@ func DeriveProtectionPostureAt(
 		ProviderStates:        []ProtectionProviderState{},
 		RepositoryResourceIDs: []string{},
 		EvidenceIDs:           []string{},
-		Explanation:           "Pulse has no complete provider history linked to this resource, so protection is unknown.",
+		Explanation:           "Pulse has no readable backup history for this resource, so it cannot say whether it is protected.",
 		EvaluatedAt:           now,
 	}
 
@@ -561,37 +561,41 @@ func DeriveProtectionPostureAt(
 		(!stateVerificationExpected || posture.Verification == ProtectionVerificationVerified):
 		posture.State = ProtectionStateProtected
 		if posture.Verification == ProtectionVerificationVerified {
-			posture.Explanation = "A current subject-linked backup is available and has recent verification evidence."
+			posture.Explanation = "A recent backup is available and it was verified recently."
 		} else {
-			posture.Explanation = "A current subject-linked backup is available from complete provider history."
+			posture.Explanation = "A recent backup is available, and Pulse can see the full backup history."
 		}
 		if hasUnknownBlock {
-			posture.Explanation += " Another linked provider has unavailable history, but it does not invalidate the confirmed recovery point."
+			posture.Explanation += " Another backup source could not be read, but that does not change this backup."
 		}
 	case hasSupportedQualifyingSuccess:
 		posture.State = ProtectionStateAttention
 		switch {
 		case hasInvalidatingFailure:
-			posture.Explanation = "A backup exists, but a newer provider failure needs attention before Pulse can call this resource protected."
+			posture.Explanation = "A backup exists, but one of its backup sources has reported a failure."
 		case posture.Freshness == ProtectionFreshnessStale:
-			posture.Explanation = "The strongest subject-linked backup is older than the configured freshness window."
+			posture.Explanation = fmt.Sprintf("The newest confirmed backup is older than %s.", formatPostureWindow(policy.FreshnessWindow))
 		case stateVerificationExpected && posture.Verification != ProtectionVerificationVerified:
-			posture.Explanation = "A current backup exists, but its verification evidence is missing or stale."
+			posture.Explanation = "A recent backup exists, but its verification is missing or overdue."
 		default:
-			posture.Explanation = "Recovery evidence exists, but provider history or permissions are incomplete."
+			posture.Explanation = "A backup exists, but Pulse can see only part of the backup history or cannot read all of it."
 		}
 	case hasUnknownBlock:
 		posture.State = ProtectionStateUnknown
-		posture.Explanation = "Provider history or permissions are unavailable, so Pulse cannot make a stronger protection claim."
+		posture.Explanation = "Pulse cannot read the backup history (it is unavailable or Pulse lacks permission), so it cannot say whether this is protected."
 	case hasQualifyingSuccess || hasPartial:
 		posture.State = ProtectionStateAttention
-		posture.Explanation = "Recovery evidence exists, but provider history or permissions are incomplete."
+		if hasQualifyingSuccess {
+			posture.Explanation = "A backup exists, but Pulse can see only part of the backup history or cannot read all of it."
+		} else {
+			posture.Explanation = "Pulse can see only part of the backup history, so it cannot confirm a backup."
+		}
 	case hasCompleteHistory:
 		posture.State = ProtectionStateUnprotected
 		if hasSnapshotsOnly {
-			posture.Explanation = "Provider history is complete, but only snapshots are present; snapshots alone do not prove independent recovery."
+			posture.Explanation = "Only snapshots were found. A snapshot is not a separate backup, so it does not count."
 		} else {
-			posture.Explanation = "Provider history is complete, but no qualifying subject-linked backup exists."
+			posture.Explanation = "Pulse can see the full backup history and found no backup for this resource."
 		}
 	default:
 		posture.State = ProtectionStateUnknown
@@ -682,5 +686,28 @@ func validProtectionPermissions(value operationaltrust.EvidencePermissions) bool
 		return true
 	default:
 		return false
+	}
+}
+
+// formatPostureWindow renders the freshness window the way the explanation
+// reads it: whole days, then whole hours, otherwise minutes, so a sub-hour or
+// fractional window is never rounded into a claim it did not make.
+func formatPostureWindow(window time.Duration) string {
+	plural := func(n int, unit string) string {
+		if n == 1 {
+			return fmt.Sprintf("1 %s", unit)
+		}
+		return fmt.Sprintf("%d %ss", n, unit)
+	}
+	switch {
+	case window >= 24*time.Hour && window%(24*time.Hour) == 0:
+		return plural(int(window/(24*time.Hour)), "day")
+	case window >= time.Hour && window%time.Hour == 0:
+		return plural(int(window/time.Hour), "hour")
+	case window > 0:
+		minutes := int((window + time.Minute - 1) / time.Minute)
+		return plural(minutes, "minute")
+	default:
+		return "0 minutes"
 	}
 }

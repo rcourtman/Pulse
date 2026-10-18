@@ -31,6 +31,9 @@ func TestGuestAgentHTTPFailureDefersEveryRead(t *testing.T) {
 		{"gateway-quoting-refusal", 502, "upstream API error 403: permission denied"},
 		{"gateway-quoting-unsupported", 502, "unsupported command: guest-get-osinfo"},
 		{"server-quoting-refusal", 500, "upstream API error 403: permission denied"},
+		{"unknown-client-error", 499, "upstream unavailable"},
+		{"client-error-quoting-refusal", 409, "upstream API error 403: permission denied"},
+		{"client-error-quoting-unsupported", 425, "unsupported command: guest-get-osinfo"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,6 +76,130 @@ func TestGuestAgentHTTPFailureDefersEveryRead(t *testing.T) {
 						t.Errorf("wire guest commands = %d, want one", calls.Load())
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead(t *testing.T) {
+	for _, status := range []int{402, 407, 409, 410, 412, 418, 421, 423, 425, 426, 428, 431, 451, 499} {
+		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
+			for name, first := range backupAgentReads() {
+				t.Run(name, func(t *testing.T) {
+					var commands, configs atomic.Int32
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						switch {
+						case strings.HasSuffix(r.URL.Path, "/config"):
+							configs.Add(1)
+							fmt.Fprint(w, `{"data":{}}`)
+						case strings.HasSuffix(r.URL.Path, "/status/current"):
+							fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":4096}}`)
+						default:
+							if commands.Add(1) == 1 {
+								w.WriteHeader(status)
+								fmt.Fprint(w, "upstream unavailable")
+								return
+							}
+							backupAgentPayload(w, r)
+						}
+					}))
+					defer server.Close()
+					c := backupTestClient(t, server.URL)
+					err := first(context.Background(), c, 105)
+					var response *apiResponseError
+					if GuestAgentDeferredReason(err) != "agent-completion-unverified" || !errors.As(err, &response) || response.statusCode != status {
+						t.Errorf("unrecognised status lost its wire evidence or cleared admission: %v", err)
+					}
+					before := configs.Load()
+					for later, read := range backupAgentReads() {
+						if err := read(context.Background(), backupTestClient(t, server.URL), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+							t.Errorf("next %s bypassed uncertainty: %v", later, err)
+						}
+					}
+					if commands.Load() != 1 || configs.Load() != before {
+						t.Errorf("uncertainty dispatched follow-up work: commands=%d configs=%d, want 1/%d", commands.Load(), configs.Load(), before)
+					}
+					status, err := c.GetVMStatus(context.Background(), "node", 105)
+					if err != nil || status.CPU != .25 || status.DiskRead != 4096 {
+						t.Errorf("ordinary non-QGA reads changed: %+v %v", status, err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestGuestAgentUnrecognisedHTTPStatusSharesAliasesAndResumes(t *testing.T) {
+	for _, status := range []int{409, 425, 499} {
+		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
+			var commands atomic.Int32
+			var healthy atomic.Bool
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/nodes"):
+					fmt.Fprint(w, `{"data":[]}`)
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				default:
+					commands.Add(1)
+					if strings.Contains(r.URL.Path, "/qemu/105/") && !healthy.Load() {
+						w.WriteHeader(status)
+						fmt.Fprint(w, "upstream unavailable")
+						return
+					}
+					backupAgentPayload(w, r)
+				}
+			})
+			a, b, independent := httptest.NewServer(handler), httptest.NewServer(handler), httptest.NewServer(handler)
+			defer a.Close()
+			defer b.Close()
+			defer independent.Close()
+			cc := NewClusterClient("unrecognised-http", ClientConfig{Host: a.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"}, []string{a.URL, b.URL}, nil)
+			if _, err := cc.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+				t.Errorf("cluster cleared unverified completion: %v", err)
+			}
+			if commands.Load() != 1 {
+				t.Errorf("cluster failed over the guest command: %d", commands.Load())
+			}
+			for _, endpoint := range []string{a.URL, b.URL} {
+				for name, read := range backupAgentReads() {
+					if err := read(context.Background(), backupTestClient(t, endpoint), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+						t.Errorf("alias %s bypassed uncertainty: %v", name, err)
+					}
+				}
+			}
+			if commands.Load() != 1 {
+				t.Errorf("aliases sent extra commands: %d", commands.Load())
+			}
+			if _, err := backupTestClient(t, b.URL).GetVMAgentInfo(context.Background(), "node", 106); err != nil {
+				t.Errorf("independent VM was blocked: %v", err)
+			}
+			if _, err := backupTestClient(t, independent.URL).GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+				t.Errorf("independent endpoint inherited another endpoint's cooldown: %v", err)
+			}
+			// Expire only this fixture's existing cooldown. This is not a
+			// native recovery or a replay of an uncertain provider command.
+			guestAgentGuards.Lock()
+			for _, endpoint := range []string{a.URL, b.URL} {
+				key := guestAgentGuardKey{endpoint: endpoint + "/api2/json", vmid: 105}
+				entry := guestAgentGuards.entries[key]
+				entry.until = time.Now().Add(-time.Second)
+				guestAgentGuards.entries[key] = entry
+			}
+			guestAgentGuards.Unlock()
+			healthy.Store(true)
+			for name, read := range backupAgentReads() {
+				if err := read(context.Background(), backupTestClient(t, b.URL), 105); err != nil {
+					t.Errorf("known healthy admission did not resume %s: %v", name, err)
+				}
+			}
+			if commands.Load() != 9 {
+				t.Errorf("uncertain/independent/resumed commands=%d, want 9", commands.Load())
+			}
+			for endpoint, healthy := range cc.GetHealthStatus() {
+				if !healthy {
+					t.Errorf("guest error poisoned endpoint health: %s", endpoint)
+				}
 			}
 		})
 	}
@@ -124,6 +251,8 @@ func TestGuestAgentHTTPExplicitRefusalsRemainErrors(t *testing.T) {
 		{"unauthorized", 401, "unauthorized"},
 		{"forbidden", 403, "permission denied"},
 		{"missing-command", 404, "command not found"},
+		{"method-not-allowed", 405, "method not allowed"},
+		{"invalid-parameters", 422, "invalid parameters"},
 		{"rate-limited", 429, "too many requests"},
 		{"unsupported-plain", 500, "unsupported command: guest-get-osinfo"},
 		{"unsupported-message", 500, `{"data":null,"message":"unsupported command: guest-get-osinfo"}`},

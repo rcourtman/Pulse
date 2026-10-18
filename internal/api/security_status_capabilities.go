@@ -79,7 +79,7 @@ type securityStatusAuthSnapshot struct {
 	proxyIsAdmin   bool
 	sessionIsAdmin bool
 	// sessionManagesOrg is set for an org-scoped session that
-	// ensureAdminSession admits: an owner or admin of the request's
+	// ensureOrgAdminSession admits: an owner or admin of the request's
 	// organization, or the configured admin. It widens only the org-bound
 	// settings surfaces, never sessionIsAdmin, so instance administration and
 	// the privileged status fields stay closed to org-scoped sessions.
@@ -286,12 +286,14 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceNodes, config.ScopeSettingsRead)
 
 	// Infrastructure, availability, and reporting are org-bound: their routes
-	// pass ensureAdminSession, which admits an org manager inside their own
-	// organization, and their handlers read that organization's config and
-	// monitor state. A provider opening a client workspace lands there as the
-	// org owner, and without these the settings navigation hides the only
-	// pages that connect the client's systems and build its reports. Every
-	// other capability stays instance administration.
+	// use RequireOrgAdmin / ensureOrgAdminSession, which admit an org manager
+	// inside their own organization, and their handlers read that
+	// organization's config, monitor state and metrics store. A provider
+	// opening a client workspace lands there as the org owner, and without
+	// these the settings navigation hides the pages that connect the client's
+	// systems and build its reports. Reporting also needs read:nodes, which
+	// RequirePermission checks before the session rule. Every other capability
+	// stays instance administration.
 	canReadOrgSettings := canReadSettings || snapshot.sessionManagesOrg
 	if snapshot.sessionManagesOrg && !canReadReporting {
 		allowed, err := r.authorizer.Authorize(snapshot.request.Context(), internalauth.ActionRead, internalauth.ResourceNodes)

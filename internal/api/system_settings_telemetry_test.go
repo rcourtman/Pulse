@@ -748,3 +748,224 @@ func TestIssue1638SettingsSaveResetsSSHFailureBackoff(t *testing.T) {
 		t.Fatalf("settings save called ResetSSHFailureBackoff %d times, want 1", monitor.resetSSHFailureBackoffCalls)
 	}
 }
+
+// Clearing browser trust must be an explicit patch, not a falsy-value no-op.
+func TestAllowedOriginsPatchBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name, saved, effective, body, wantSaved, wantEffective string
+		override                                               string
+		wantStatus                                             int
+	}{
+		{"clear wildcard", "*", "*", `{"allowedOrigins":""}`, "", "", "", http.StatusOK},
+		{"clear exact origins", "https://old.example", "https://old.example", `{"allowedOrigins":""}`, "", "", "", http.StatusOK},
+		{"omission keeps effective policy", "https://saved.example", "https://effective.example", `{"theme":"dark"}`, "https://saved.example", "https://effective.example", "", http.StatusOK},
+		{"null is not a clear", "*", "*", `{"allowedOrigins":null}`, "*", "*", "", http.StatusBadRequest},
+		{"deployment lock uppercase", "https://saved.example", "https://deploy.example", `{"allowedOrigins":""}`, "https://saved.example", "https://deploy.example", "ALLOWED_ORIGINS", http.StatusConflict},
+		{"deployment lock field name", "https://saved.example", "https://deploy.example", `{"allowedOrigins":"*"}`, "https://saved.example", "https://deploy.example", "allowedOrigins", http.StatusConflict},
+		{"unchanged locked form saves other fields", "https://saved.example", "https://deploy.example", `{"allowedOrigins":"https://deploy.example","theme":"dark"}`, "https://saved.example", "https://deploy.example", "allowedOrigins", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := &config.Config{DataPath: dir, ConfigPath: dir, AllowedOrigins: tc.effective, EnvOverrides: map[string]bool{}}
+			if tc.override != "" {
+				cfg.EnvOverrides[tc.override] = true
+			}
+			h, persistence, token := setupTelemetryTest(t, cfg)
+			initial := config.DefaultSystemSettings()
+			initial.AllowedOrigins = tc.saved
+			if err := persistence.SaveSystemSettings(*initial); err != nil {
+				t.Fatal(err)
+			}
+			reloads := 0
+			h.reloadSystemSettingsFunc = func() { reloads++ }
+			req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(tc.body))
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			h.HandleUpdateSystemSettings(rec, req)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			saved, err := persistence.LoadSystemSettings()
+			if err != nil || saved == nil {
+				t.Fatalf("read saved policy: %v", err)
+			}
+			if saved.AllowedOrigins != tc.wantSaved || cfg.AllowedOrigins != tc.wantEffective {
+				t.Fatal("saved/effective policy did not honour field presence and deployment precedence")
+			}
+			if tc.wantStatus != http.StatusOK && reloads != 0 {
+				t.Fatal("rejected patch reloaded runtime state")
+			}
+			if tc.wantStatus == http.StatusOK && reloads != 1 {
+				t.Fatal("successful patch did not reload settings")
+			}
+			if tc.name == "unchanged locked form saves other fields" && saved.Theme != "dark" {
+				t.Fatal("locked value prevented an unrelated settings save")
+			}
+		})
+	}
+}
+
+// Exercise the production middleware and handlers, disk, settings-cache reload
+// and the production config loader; no simulated setter stands in for policy.
+func TestAllowedOriginsSavedEffectiveLifecycle(t *testing.T) {
+	for _, original := range []string{"*", "https://old.example"} {
+		t.Run(original, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", dir)
+			t.Setenv("ALLOWED_ORIGINS", "")
+			t.Setenv("PULSE_DEV", "false")
+			t.Setenv("NODE_ENV", "production")
+			InitPersistentAuthStores(dir)
+			t.Cleanup(resetSessionStoreForTests)
+			t.Cleanup(resetCSRFStoreForTests)
+			cfg := &config.Config{DataPath: dir, ConfigPath: dir, AllowedOrigins: original, PublicURL: "https://pulse.example", AuthUser: "admin", AuthPass: "synthetic-unused-hash", EnvOverrides: map[string]bool{}, TLSCertFile: "synthetic-cert", TLSKeyFile: "synthetic-key"}
+			h, persistence, token := setupTelemetryTest(t, cfg)
+			initial := config.DefaultSystemSettings()
+			initial.AllowedOrigins = original
+			initial.AllowedEmbedOrigins = "https://frame.example"
+			if err := persistence.SaveSystemSettings(*initial); err != nil {
+				t.Fatal(err)
+			}
+			router := &Router{config: cfg, persistence: persistence, mux: http.NewServeMux()}
+			h.reloadSystemSettingsFunc = router.reloadSystemSettings
+			router.mux.HandleFunc("/api/system/settings", RequireAdmin(cfg, RequireScope(config.ScopeSettingsRead, h.HandleGetSystemSettings)))
+			router.mux.HandleFunc("/api/system/settings/update", RequireAdmin(cfg, RequireScope(config.ScopeSettingsWrite, h.HandleUpdateSystemSettings)))
+			router.reloadSystemSettings()
+			request := func(method, path, origin, body, credential string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(method, path, strings.NewReader(body))
+				if origin != "" {
+					req.Header.Set("Origin", origin)
+				}
+				if credential != "" {
+					req.Header.Set("X-API-Token", credential)
+				}
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+				return rec
+			}
+			assertOrigin := func(origin, want string) {
+				t.Helper()
+				rec := request(http.MethodGet, "/api/system/settings", origin, "", token)
+				if rec.Code != http.StatusOK || rec.Header().Get("Access-Control-Allow-Origin") != want {
+					t.Fatal("effective CORS response does not match saved policy")
+				}
+				if rec.Header().Get("Access-Control-Allow-Credentials") != "" && want == "" {
+					t.Fatal("removed trust still enables credentialed CORS")
+				}
+				if want != "" && want != "*" && (rec.Header().Get("Access-Control-Allow-Credentials") != "true" || !strings.Contains(rec.Header().Get("Vary"), "Origin")) {
+					t.Fatal("exact-origin credential/Vary contract changed")
+				}
+				if want == "*" && rec.Header().Get("Access-Control-Allow-Credentials") != "" {
+					t.Fatal("wildcard gained credentialed browser access")
+				}
+			}
+			origin := "https://old.example"
+			assertOrigin(origin, original)
+			rec := request(http.MethodPost, "/api/system/settings/update", "", `{"allowedOrigins":""}`, token)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("clear: status %d", rec.Code)
+			}
+			for _, candidate := range []string{origin, "https://untrusted.example", ""} {
+				assertOrigin(candidate, "")
+			}
+			preflight := request(http.MethodOptions, "/api/system/settings", origin, "", "")
+			if preflight.Code != http.StatusOK || preflight.Header().Get("Access-Control-Allow-Origin") != "" {
+				t.Fatal("cleared policy still grants preflight access")
+			}
+			get := request(http.MethodGet, "/api/system/settings", "", "", token)
+			var visible SystemSettingsResponse
+			if err := json.Unmarshal(get.Body.Bytes(), &visible); err != nil || visible.AllowedOrigins != "" {
+				t.Fatal("GET does not expose the effective clear")
+			}
+			saved, err := persistence.LoadSystemSettings()
+			if err != nil || saved == nil || saved.AllowedOrigins != "" || saved.AllowedEmbedOrigins != initial.AllowedEmbedOrigins || saved.AllowEmbedding {
+				t.Fatal("clear lost saved policy or widened embedding")
+			}
+			if cfg.TLSCertFile != "synthetic-cert" || cfg.TLSKeyFile != "synthetic-key" {
+				t.Fatal("CORS edit altered TLS configuration")
+			}
+			restarted, err := config.LoadWithoutLoggingInit()
+			if err != nil || restarted.AllowedOrigins != "" {
+				t.Fatal("production config reload revived removed trust")
+			}
+			if rec := request(http.MethodGet, "/api/system/settings", origin, "", ""); rec.Code != http.StatusUnauthorized {
+				t.Fatal("same-origin policy bypassed authentication")
+			}
+			// CORS grants never replace the session mutation's CSRF requirement.
+			session := generateSessionToken()
+			GetSessionStore().CreateSession(session, time.Hour, "cors-fixture", "192.0.2.1", "admin")
+			t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
+			req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"allowedOrigins":"*"}`))
+			req.Header.Set("User-Agent", "cors-fixture")
+			req.AddCookie(&http.Cookie{Name: sessionCookieName(false), Value: session})
+			csrf := httptest.NewRecorder()
+			router.ServeHTTP(csrf, req)
+			if csrf.Code != http.StatusForbidden || cfg.AllowedOrigins != "" {
+				t.Fatal("CORS clear weakened CSRF")
+			}
+			const readToken = "cors-read-synthetic.12345678"
+			cfg.APITokens = append(cfg.APITokens, config.APITokenRecord{ID: "read-only", Hash: internalauth.HashAPIToken(readToken), Scopes: []string{config.ScopeSettingsRead}})
+			if rec := request(http.MethodPost, "/api/system/settings/update", "", `{"allowedOrigins":"*"}`, readToken); rec.Code != http.StatusForbidden || cfg.AllowedOrigins != "" {
+				t.Fatal("settings:read token widened trust")
+			}
+			// An explicit new exact list works; prefixes and paths do not match.
+			rec = request(http.MethodPost, "/api/system/settings/update", "", `{"allowedOrigins":"https://trusted.example, https://other.example"}`, token)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("set exact list: %d", rec.Code)
+			}
+			assertOrigin("https://trusted.example", "https://trusted.example")
+			assertOrigin("https://other.example", "https://other.example")
+			assertOrigin("https://trusted.example.evil", "")
+			assertOrigin("https://trusted.example/", "")
+			assertOrigin("", "")
+		})
+	}
+}
+
+func TestAllowedOriginsSaveFailurePreservesPolicy(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AllowedOrigins: "https://trusted.example"}
+	h, persistence, token := setupTelemetryTest(t, cfg)
+	initial := config.DefaultSystemSettings()
+	initial.AllowedOrigins = cfg.AllowedOrigins
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "system.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistence.SetFileSystem(failingWriteFileSystem{})
+	reloads := 0
+	h.reloadSystemSettingsFunc = func() { reloads++ }
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"allowedOrigins":""}`))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	h.HandleUpdateSystemSettings(rec, req)
+	after, err := os.ReadFile(filepath.Join(dir, "system.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusInternalServerError || cfg.AllowedOrigins != initial.AllowedOrigins || reloads != 0 || !bytes.Equal(before, after) {
+		t.Fatal("failed save changed durable/effective browser trust")
+	}
+}
+
+func TestAllowedOriginsGetUsesDeploymentPolicy(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AllowedOrigins: "https://deploy.example", EnvOverrides: map[string]bool{"allowedOrigins": true}}
+	h, persistence, token := setupTelemetryTest(t, cfg)
+	initial := config.DefaultSystemSettings()
+	initial.AllowedOrigins = "https://saved.example"
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	h.HandleGetSystemSettings(rec, req)
+	var response SystemSettingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || rec.Code != http.StatusOK || response.AllowedOrigins != cfg.AllowedOrigins || !response.EnvOverrides["allowedOrigins"] {
+		t.Fatal("GET misrepresented deployment-owned browser trust")
+	}
+}

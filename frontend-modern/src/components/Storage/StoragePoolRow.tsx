@@ -24,6 +24,7 @@ import {
   STORAGE_POOL_ROW_USAGE_WRAP_CLASS,
 } from '@/features/storageBackups/storagePoolRowPresentation';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import {
   getStoragePoolCellPaddingClass,
@@ -31,7 +32,6 @@ import {
   type StoragePoolTableColumnId,
   type StoragePoolTableLayoutMode,
 } from '@/features/storageBackups/storagePagePresentation';
-import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
@@ -40,6 +40,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { createRowTextSelectionGuard } from '@/components/shared/Table';
 
 interface StoragePoolRowProps {
   layoutMode: StoragePoolTableLayoutMode;
@@ -48,11 +49,14 @@ interface StoragePoolRowProps {
   summarySeriesId: string;
   expanded: boolean;
   summaryHighlighted?: boolean;
-  summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   onToggleExpand: () => void;
   onHoverChange?: (recordId: string | null) => void;
   rowClass: string;
+  alertHeadline?: string | null;
+  alertHeadlineCompact?: string | null;
+  alertHeadlineClass?: string;
   physicalDisks: Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   alertDataAttrs: {
     'data-row-id': string;
     'data-alert-state': string;
@@ -72,6 +76,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
   );
+  const selectionGuard = createRowTextSelectionGuard();
   const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => props.onHoverChange?.(props.summarySeriesId),
     onPreviewClear: () => props.onHoverChange?.(null),
@@ -81,14 +86,12 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     <>
       <tr
         class={`${STORAGE_POOL_ROW_CLASS} ${STORAGE_POOL_ROW_HEIGHT_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`.trim()}
-        onClick={props.onToggleExpand}
+        on:mousedown={selectionGuard.onMouseDown}
+        onClick={(event) => {
+          if (!selectionGuard.isSelectionClick(event)) props.onToggleExpand();
+        }}
         {...interactiveRowHandlers}
         data-summary-series-id={props.summarySeriesId}
-        data-summary-group-member-active={
-          props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
-            ? props.summaryGroupMemberState
-            : undefined
-        }
         data-summary-row-active={props.summaryHighlighted && !props.expanded ? 'true' : 'false'}
         {...props.alertDataAttrs}
       >
@@ -123,15 +126,32 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           data-storage-column="state"
         >
           <Show
-            when={row().stateLabel !== '—'}
-            fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
+            when={props.alertHeadline}
+            fallback={
+              <Show
+                when={row().stateLabel !== '—'}
+                fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
+              >
+                <span
+                  class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
+                  title={row().stateTitle || row().stateLabel}
+                >
+                  {row().stateLabel}
+                </span>
+              </Show>
+            }
           >
-            <span
-              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
-              title={row().stateTitle || row().stateLabel}
-            >
-              {row().stateLabel}
-            </span>
+            {(headline) => (
+              <span
+                class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${props.alertHeadlineClass ?? ''}`}
+                title={`${headline()} · ${row().stateTitle || row().stateLabel}`}
+                data-storage-alert-headline
+              >
+                {props.layoutMode === 'narrow' || props.layoutMode === 'compact'
+                  ? (props.alertHeadlineCompact ?? headline())
+                  : headline()}
+              </span>
+            )}
           </Show>
         </td>
 
@@ -222,6 +242,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         <StoragePoolDetail
           record={props.record}
           physicalDisks={props.physicalDisks}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           summarySeriesId={props.summarySeriesId}
           controlsId={detailControlsId()}
         />

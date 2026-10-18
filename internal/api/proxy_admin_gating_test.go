@@ -38,6 +38,8 @@ func TestProxyAuthAdminGatesAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/uninstall", body: `{"agentId":"agent-1"}`},
+		{method: http.MethodPost, path: "/api/agents/host/uninstall", body: `{"agentId":"agent-1"}`},
 		{method: http.MethodGet, path: "/api/admin/profiles/", body: ""},
 	}
 

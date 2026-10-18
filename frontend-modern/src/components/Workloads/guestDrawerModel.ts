@@ -1,3 +1,4 @@
+import type { Accessor, Setter } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, VM } from '@/types/api';
 import type {
@@ -7,8 +8,13 @@ import type {
 } from '@/api/charts';
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
+import {
+  getAlertAttentionCopy,
+  type AlertAttentionCopy,
+} from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
 import {
+  getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestBackupStatusPresentation,
 } from '@/utils/workloadGuestPresentation';
@@ -17,10 +23,16 @@ import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTar
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
+import {
+  getWorkloadMemoryObservationPresentation,
+  type MemoryObservationPresentation,
+} from '@/utils/memoryObservation';
+
 type Guest = WorkloadGuest;
 
 export interface GuestDrawerProps {
   guest: Guest;
+  viewState?: GuestDrawerViewState;
   onClose: () => void;
   metadataId?: string;
   customUrl?: string;
@@ -32,7 +44,15 @@ export interface GuestDrawerProps {
   alerts?: Alert[];
 }
 
-export type GuestDrawerTab = 'overview' | 'history' | 'discovery' | 'manage';
+export type GuestDrawerTab = 'overview' | 'manage';
+
+export interface GuestDrawerViewState {
+  activeTab: Accessor<GuestDrawerTab>;
+  setActiveTab: Setter<GuestDrawerTab>;
+  historyRange: Accessor<HistoryTimeRange>;
+  setHistoryRange: Setter<HistoryTimeRange>;
+  reset: () => void;
+}
 
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;
@@ -65,6 +85,7 @@ export interface GuestDrawerHistoryTimeBounds {
 
 export interface GuestDrawerHistoryDeferredMetric {
   lastKnownValue?: number;
+  valueLabel?: 'freshness unknown';
   message: string;
 }
 
@@ -72,33 +93,27 @@ export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
   dateLabel: string;
+  completedAt?: string;
 }
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
 
-export const getGuestDrawerAlertMessage = (
+export const getGuestDrawerAlertAttention = (
   alert: Alert,
   context: Pick<GuestDrawerProps, 'guest' | 'memoryDisplayBasis' | 'parentMemoryTotal'>,
-): string => {
+  now: () => number,
+): AlertAttentionCopy => {
+  const copy = getAlertAttentionCopy(alert, now);
   if (context.memoryDisplayBasis !== 'host' || alert.type.trim().toLowerCase() !== 'memory') {
-    return alert.message;
+    return copy;
   }
 
-  const used = context.guest.memory?.used;
-  const hostTotal = context.parentMemoryTotal;
-  const hostShare =
-    typeof used === 'number' &&
-    Number.isFinite(used) &&
-    used >= 0 &&
-    typeof hostTotal === 'number' &&
-    Number.isFinite(hostTotal) &&
-    hostTotal > 0
-      ? formatPercent((used / hostTotal) * 100)
-      : null;
-  const comparison = hostShare
-    ? `guest allocation · ${hostShare} of host capacity`
-    : 'guest allocation · row uses host capacity';
-  return `${alert.message} (${comparison})`;
+  // The alert owns its evaluated reading and time. Today's guest bytes and
+  // parent capacity cannot translate that observation, even when current;
+  // retained or unavailable bytes are still less suitable. Explain the two
+  // bases without inserting an unrelated number into the alert's evidence.
+  const comparison = 'Alert percentages use guest allocation. The table row uses host capacity.';
+  return { ...copy, detail: [copy.detail, comparison].filter(Boolean).join(' ') };
 };
 
 const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
@@ -106,18 +121,44 @@ const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
   return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
 };
 
+export type GuestDrawerMemoryReading = MemoryObservationPresentation;
+
+const getGuestDrawerMemoryUsage = (guest: Guest): number | undefined => {
+  const usage = guest.memory?.usage;
+  return guest.telemetryAvailability?.memory !== false &&
+    !guest.memory?.usageUnavailable &&
+    typeof usage === 'number' &&
+    Number.isFinite(usage) &&
+    usage >= 0 &&
+    usage <= 100
+    ? usage
+    : undefined;
+};
+
+export const getGuestDrawerMemoryReading = getWorkloadMemoryObservationPresentation;
+
 export const getGuestDrawerDeferredMetrics = (
   guest: Guest,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
-  if (!isGuestDrawerVM(guest) || !guest.diskStatusReason) return {};
-  return {
-    disk: {
-      lastKnownValue: guest.diskStatusReason.startsWith('prev-')
-        ? getGuestDrawerDiskUsage(guest)
-        : undefined,
-      message: getWorkloadGuestDiskStatusMessage(guest.diskStatusReason),
-    },
-  };
+  const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
+  // History judges the aggregate disk metric by the same rule as the
+  // filesystem rows, so a linked agent's reading follows that agent.
+  const disk = getWorkloadGuestDiskRead(guest, isGuestDrawerVM(guest));
+  if (disk.state !== 'current') {
+    metrics.disk = {
+      lastKnownValue: disk.state === 'last-known' ? getGuestDrawerDiskUsage(guest) : undefined,
+      message: disk.message,
+    };
+  }
+  const memory = getGuestDrawerMemoryReading(guest);
+  if (memory && memory.state !== 'current') {
+    metrics.memory = {
+      lastKnownValue: memory.state === 'unavailable' ? undefined : getGuestDrawerMemoryUsage(guest),
+      ...(memory.state === 'unknown' ? { valueLabel: 'freshness unknown' as const } : {}),
+      message: memory.message,
+    };
+  }
+  return metrics;
 };
 
 // Current-value metrics displayed beside history legends while the metrics
@@ -128,12 +169,17 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const available = (metric: keyof NonNullable<Guest['telemetryAvailability']>): boolean =>
     availability?.[metric] ?? true;
   const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
+  const memoryReading = getGuestDrawerMemoryReading(guest);
   const memUsage =
-    available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
+    available('memory') && (!memoryReading || memoryReading.state === 'current')
+      ? getGuestDrawerMemoryUsage(guest)
+      : undefined;
   // A paused filesystem read is not current, even if the snapshot still
   // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
-    isGuestDrawerVM(guest) && guest.diskStatusReason ? undefined : getGuestDrawerDiskUsage(guest);
+    getWorkloadGuestDiskRead(guest, isGuestDrawerVM(guest)).state === 'current'
+      ? getGuestDrawerDiskUsage(guest)
+      : undefined;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {
@@ -263,6 +309,29 @@ export const getGuestDrawerHistoryScale = (
   return { minValue: 0, maxValue: Math.max(1, maxValue * 1.15) };
 };
 
+// Both inputs are normalized stored observations, ordered by timestamp. A
+// series cannot span a time where another series in its panel has a reading
+// and this one does not. Do not infer failed polls or cadence from elapsed
+// time: the API supplies neither. Keep singleton segments as real evidence.
+export const getGuestDrawerHistorySegments = (
+  points: readonly AggregatedMetricPoint[],
+  observationTimes: readonly number[],
+): AggregatedMetricPoint[][] => {
+  const timeIndices = new Map(observationTimes.map((timestamp, index) => [timestamp, index]));
+  const segments: AggregatedMetricPoint[][] = [];
+  let previousIndex: number | undefined;
+  for (const point of points) {
+    const index = timeIndices.get(point.timestamp);
+    if (index === undefined) continue;
+    if (previousIndex === undefined || (index !== previousIndex && index !== previousIndex + 1)) {
+      segments.push([]);
+    }
+    segments[segments.length - 1].push(point);
+    previousIndex = index;
+  }
+  return segments;
+};
+
 export const buildGuestDrawerHistoryPath = (
   points: readonly AggregatedMetricPoint[],
   scale: GuestDrawerHistoryScale,
@@ -290,6 +359,49 @@ export const buildGuestDrawerHistoryPath = (
       return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(' ');
+};
+
+// Each stored point is a bucket average carrying its own lowest and highest
+// reading. The band spans those extremes behind the average line, so a short
+// spike stays visible after downsampling instead of averaging away. A segment
+// whose buckets never spread draws nothing.
+export const buildGuestDrawerHistoryBandPath = (
+  points: readonly AggregatedMetricPoint[],
+  scale: GuestDrawerHistoryScale,
+  startTime: number,
+  endTime: number,
+  width = 360,
+  height = 92,
+): string => {
+  if (points.length < 2) return '';
+  const spreads = points.some((point) => (point.max ?? point.value) > (point.min ?? point.value));
+  if (!spreads) return '';
+
+  const left = 34;
+  const right = 8;
+  const top = 8;
+  const bottom = 18;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const timeSpan = Math.max(1, endTime - startTime);
+  const valueSpan = Math.max(1, scale.maxValue - scale.minValue);
+  const coordinate = (timestamp: number, value: number) => {
+    const x = left + ((timestamp - startTime) / timeSpan) * plotWidth;
+    const bounded = Math.min(Math.max(value, scale.minValue), scale.maxValue);
+    const y = top + (1 - (bounded - scale.minValue) / valueSpan) * plotHeight;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  };
+
+  const upper = points.map(
+    (point, index) =>
+      `${index === 0 ? 'M' : 'L'}${coordinate(point.timestamp, Math.max(point.max ?? point.value, point.value))}`,
+  );
+  const lower = [...points]
+    .reverse()
+    .map(
+      (point) => `L${coordinate(point.timestamp, Math.min(point.min ?? point.value, point.value))}`,
+    );
+  return `${[...upper, ...lower].join(' ')} Z`;
 };
 
 export const getGuestDrawerHistoryValueLabel = (
@@ -366,6 +478,18 @@ export interface GuestDrawerGuestReadPresentation {
   precaution: boolean;
 }
 
+// Both drawer shapes use the same provider-owned signals. A canonical resource
+// need not fabricate a complete workload (or infer liveness from metrics).
+export interface GuestDrawerGuestReadEvidence extends Pick<
+  Guest,
+  'type' | 'workloadType' | 'agentKind' | 'platformType' | 'platformScopes'
+> {
+  diskStatusReason?: VM['diskStatusReason'];
+  guestAgentStatus?: VM['guestAgentStatus'];
+  lock?: VM['lock'];
+  backupInProgress?: VM['backupInProgress'];
+}
+
 export const GUEST_DRAWER_BACKUP_PRECAUTION =
   'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident. An OK backup or a running VM does not prove thaw. Confirm thaw and writes to the filesystems covered by the backup independently.';
 
@@ -384,9 +508,9 @@ const guestReadDeferrals = new Set([
 // parent-agent action target establishes QGA liveness. Use only the current
 // provider state and fixed read reasons; never print an unknown raw value.
 export const getGuestDrawerGuestReadPresentation = (
-  guest: Guest,
+  guest: GuestDrawerGuestReadEvidence,
 ): GuestDrawerGuestReadPresentation | null => {
-  if (!isGuestDrawerVM(guest)) return null;
+  if (resolveWorkloadType(guest) !== 'vm') return null;
   const hasProxmoxEvidence =
     guest.type === 'qemu' ||
     guest.agentKind === 'qemu-guest' ||
@@ -472,8 +596,9 @@ export const getGuestDrawerGuestReadPresentation = (
 
 // A read-specific precaution is independent of the reported availability flag.
 // For example Proxmox can report QGA enabled while its last request timed out.
-export const getGuestDrawerGuestReadPrecaution = (guest: Guest): string | null => {
-  if (!isGuestDrawerVM(guest)) return null;
+export const getGuestDrawerGuestReadPrecaution = (
+  guest: GuestDrawerGuestReadEvidence,
+): string | null => {
   const presentation = getGuestDrawerGuestReadPresentation(guest);
   if (!presentation?.precaution) return null;
   const reason = (guest.diskStatusReason || '').replace(/^prev-/, '');
@@ -497,11 +622,12 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
   if (!memory) return [];
 
   const rows: GuestDrawerMemoryRow[] = [];
+  const reading = getGuestDrawerMemoryReading(guest);
   const total = memory.total ?? 0;
   const used = memory.used ?? 0;
   const cache = memory.cache ?? 0;
 
-  if (memory.usageUnavailable) {
+  if (memory.usageUnavailable || reading?.state === 'unavailable') {
     rows.push({ label: 'Usage', value: 'Unavailable' });
     if (total > 0) {
       rows.push({ label: 'Total', value: formatBytes(total) });
@@ -524,7 +650,12 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
     rows.push({ label: 'Balloon', value: formatBytes(memory.balloon) });
   }
 
-  if (memory.swapTotal && memory.swapTotal > 0) {
+  if (
+    !memory.usageUnavailable &&
+    reading?.state !== 'unavailable' &&
+    memory.swapTotal &&
+    memory.swapTotal > 0
+  ) {
     rows.push({
       label: 'Swap',
       value: `${formatBytes(memory.swapUsed ?? 0)} / ${formatBytes(memory.swapTotal)}`,
@@ -555,7 +686,7 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 export const getGuestDrawerBackupPresentation = (
   lastBackup: string | number | Date | null | undefined,
   thresholds?: BackupThresholds,
-  now: Date = new Date(),
+  now: number | Date = Date.now(),
 ): GuestDrawerBackupPresentation => {
   const timestamp = lastBackup instanceof Date ? lastBackup.getTime() : lastBackup;
   const info = getBackupInfo(timestamp, thresholds, now);
@@ -567,12 +698,15 @@ export const getGuestDrawerBackupPresentation = (
       dateLabel: 'Unknown',
     };
   }
-  const backupDate = new Date(timestamp!);
+  const completedAt = new Date(timestamp!).toISOString();
   const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
     ageClass: statusPresentation.color,
-    ageLabel: daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
-    dateLabel: backupDate.toLocaleDateString(),
+    // Elapsed age, not a rolling-day calendar claim: a 23-hour-old backup
+    // need not have completed today. Keep older ages in days, like the table.
+    ageLabel: daysSince === 0 ? info.ageFormatted : `${daysSince}d ago`,
+    dateLabel: completedAt.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+    completedAt,
   };
 };

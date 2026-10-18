@@ -28,7 +28,7 @@ export function useHelpIconState(props: HelpIconProps) {
   createEffect(() => {
     if (!isOpen() || !buttonRef()) return;
 
-    requestAnimationFrame(() => {
+    const updatePosition = () => {
       const button = buttonRef();
       const popover = popoverRef();
       if (!button || !popover) return;
@@ -36,13 +36,33 @@ export function useHelpIconState(props: HelpIconProps) {
       setPopoverPosition(
         calculateHelpPopoverPosition({
           buttonRect: button.getBoundingClientRect(),
-          popoverRect: popover.getBoundingClientRect(),
+          // Opening animations transform the visual box. Place the full layout
+          // box so the dialog remains contained when the animation finishes.
+          popoverRect: new DOMRect(0, 0, popover.offsetWidth, popover.offsetHeight),
           preferredPosition: preferredPosition(),
           viewportWidth: window.innerWidth,
           viewportHeight: window.innerHeight,
         }),
       );
+    };
+
+    const frame = requestAnimationFrame(() => {
+      updatePosition();
       closeButtonRef()?.focus({ preventScroll: true });
+    });
+
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    const observer =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updatePosition);
+    const popover = popoverRef();
+    if (popover) observer?.observe(popover);
+
+    onCleanup(() => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      observer?.disconnect();
     });
   });
 

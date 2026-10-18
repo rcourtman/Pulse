@@ -52,6 +52,37 @@ const createServiceResource = (
   }) as Resource;
 
 describe('resourceStateAdapters nodeFromResource', () => {
+  it('keeps selected memory provenance independent of a different raw platform reading', () => {
+    const observation = {
+      state: 'last-known',
+      source: 'guest-agent-meminfo',
+      observedAt: '2026-10-04T14:00:00Z',
+    };
+    const raw = { state: 'current', source: 'status-mem', observedAt: '2026-10-04T17:00:00Z' };
+    const resource = {
+      ...createNodeResource({}),
+      memory: { current: 25, total: 1024, used: 256, observation },
+      proxmox: { memory: { total: 1024, used: 768, usage: 75, observation: raw } },
+    } as Resource;
+    expect(nodeFromResource(resource)?.memory).toMatchObject({ usage: 25, observation });
+    expect(
+      nodeFromResource({ ...resource, memory: { current: 25, total: 1024, used: 256 } })?.memory,
+    ).not.toHaveProperty('observation');
+    expect(nodeFromResource({ ...resource, memory: undefined })?.memory).toMatchObject({
+      usage: 75,
+      observation: raw,
+    });
+    expect(
+      nodeFromResource({
+        ...resource,
+        memory: {
+          ...resource.memory!,
+          observation: { state: 'current', source: 'agent', observedAt: '2026-10-04T16:00:00Z' },
+        },
+      })?.memory.observation?.source,
+    ).toBe('agent');
+  });
+
   it('keeps Proxmox metric coordinates without inventing an agent from discovery routing', () => {
     const resource = {
       ...createNodeResource({ proxmox: { nodeName: 'pve-node-1' } }),
@@ -221,6 +252,129 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(linkedAgent?.networkInterfaces).toEqual([
       { name: 'eth0', addresses: ['192.168.10.22'] },
     ]);
+  });
+
+  it("reads a Proxmox node's CPU low and record from the poller's temperature details", () => {
+    // The unified resource API publishes the scalar maximum as
+    // proxmox.temperature and the full reading as proxmox.temperatureDetails.
+    const proxmox = {
+      nodeName: 'pve-node-2',
+      temperature: 58,
+      temperatureDetails: {
+        available: true,
+        hasCPU: true,
+        cpuPackage: 52,
+        cpuMax: 58,
+        cpuMin: 41,
+        cpuMaxRecord: 76,
+        minRecorded: '2026-10-06T08:00:00Z',
+        maxRecorded: '2026-10-06T12:00:00Z',
+        cores: [{ core: 0, temp: 58 }],
+        lastUpdate: '2026-10-06T15:00:00Z',
+      },
+    };
+    const node = nodeFromResource({
+      ...createNodeResource({ proxmox }),
+      temperature: 58,
+      proxmox,
+    } as unknown as Resource);
+
+    expect(node?.temperature).toMatchObject({
+      available: true,
+      cpuPackage: 52,
+      cpuMax: 58,
+      cpuMin: 41,
+      cpuMaxRecord: 76,
+      lastUpdate: '2026-10-06T15:00:00Z',
+    });
+    expect(node?.temperature?.cores).toEqual([{ core: 0, temp: 58 }]);
+
+    // Without details there is no history: the current reading must not be
+    // reported as the node's low or record.
+    const bare = nodeFromResource({
+      ...createNodeResource({ proxmox: { nodeName: 'pve-node-2', temperature: 58 } }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(bare?.temperature?.cpuPackage).toBe(58);
+    expect(bare?.temperature?.cpuMin).toBeUndefined();
+    expect(bare?.temperature?.cpuMaxRecord).toBeUndefined();
+
+    // Details without a CPU reading do not displace a valid scalar CPU reading.
+    const sensorsOnly = nodeFromResource({
+      ...createNodeResource({
+        proxmox: {
+          nodeName: 'pve-node-2',
+          temperatureDetails: {
+            available: true,
+            hasCPU: false,
+            nvme: [{ device: 'nvme0', temp: 44 }],
+          },
+        },
+      }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(sensorsOnly?.temperature?.cpuPackage).toBe(58);
+    expect(sensorsOnly?.temperature?.available).toBe(true);
+
+    // An unusable earlier record still falls back to the scalar reading.
+    const legacyUnavailable = nodeFromResource({
+      ...createNodeResource({
+        temperature: { available: false },
+        proxmox: { nodeName: 'pve-node-2', temperature: { available: false, cpuPackage: 58 } },
+      }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(legacyUnavailable?.temperature?.cpuPackage).toBe(58);
+    expect(legacyUnavailable?.temperature?.available).toBe(true);
+
+    // A node with a host agent keeps reading the agent facet first.
+    const agentLinked = nodeFromResource({
+      ...createNodeResource({ proxmox, agent: { agentId: 'pve-agent', temperature: 61 } }),
+      temperature: 61,
+      proxmox,
+    } as unknown as Resource);
+    expect(agentLinked?.temperature?.cpuPackage).toBe(61);
+    expect(agentLinked?.temperature?.cpuMin).toBeUndefined();
+  });
+
+  it("carries the backend's primary CPU temperature, not one rebuilt from details", () => {
+    // The details hold a core hotter than the resource temperature. The node
+    // keeps the resource value, the reading its history line records.
+    const proxmox = {
+      nodeName: 'pve-node-2',
+      temperature: 52,
+      temperatureDetails: {
+        available: true,
+        hasCPU: true,
+        cpuPackage: 52,
+        cpuMax: 57,
+        cores: [{ core: 0, temp: 57 }],
+        lastUpdate: '2026-10-06T15:00:00Z',
+      },
+    };
+    const node = nodeFromResource({
+      ...createNodeResource({ proxmox }),
+      temperature: 52,
+      proxmox,
+    } as unknown as Resource);
+    expect(node?.cpuTemperature).toBe(52);
+
+    // A linked agent's reading wins, the same source as the agent history line.
+    const agentLinked = nodeFromResource({
+      ...createNodeResource({ proxmox, agent: { agentId: 'pve-agent', temperature: 61 } }),
+      temperature: 61,
+      proxmox,
+    } as unknown as Resource);
+    expect(agentLinked?.cpuTemperature).toBe(61);
+
+    // No usable reading means no headline value at all.
+    for (const temperature of [undefined, 0, Number.NaN]) {
+      const unread = nodeFromResource({
+        ...createNodeResource({ proxmox: { nodeName: 'pve-node-2' } }),
+        temperature,
+      } as unknown as Resource);
+      expect(unread?.cpuTemperature).toBeUndefined();
+    }
   });
 
   it('preserves linked-agent GPU telemetry for the Proxmox node drawer', () => {
@@ -642,90 +796,452 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 
-  it('coalesces split realtime Proxmox and agent host records before rendering', () => {
-    const proxmoxOnly = {
-      id: 'agent-proxmox-delly',
-      type: 'agent',
-      name: 'delly',
-      displayName: 'delly',
-      platformId: 'delly',
-      platformType: 'proxmox-pve',
-      sourceType: 'api',
-      sources: ['proxmox'],
+  // The server presents host rows already coalesced (presentation coalesce
+  // with the operator's exclusions), so the browser renders each realtime row
+  // as delivered: a joined node and agent arrive as one hybrid row, and a pair
+  // the operator split arrives as two rows that must stay two. Fixtures follow
+  // the broadcast shape (monitorPlatformData flattens a Proxmox host's facts
+  // into platformData; the broadcast adds platformData.sources itself).
+  const lastSeen = Date.now();
+  const proxmoxFacet = {
+    nodeName: 'pve1',
+    instance: 'pve1',
+    clusterName: 'homelab',
+    linkedAgentId: 'agent-pve1',
+  };
+  const proxmoxPlatformData = {
+    instance: 'pve1',
+    host: '',
+    pveVersion: '9.1.9',
+    kernelVersion: '6.14.8-2-pve',
+    cpuInfo: { model: 'Xeon', cores: 8 },
+    isClusterMember: true,
+    clusterName: 'homelab',
+    connectionHealth: 'online',
+  };
+  const agentFacet = { agentId: 'agent-pve1', hostname: 'pve1', machineId: 'machine-pve1' };
+  const splitNode = {
+    id: 'agent-node-pve1',
+    type: 'agent',
+    name: 'pve1',
+    displayName: 'pve1',
+    platformId: 'pve1',
+    platformType: 'proxmox-pve',
+    sourceType: 'api',
+    sources: ['proxmox'],
+    clusterId: 'cluster:homelab',
+    status: 'online',
+    lastSeen,
+    canonicalIdentity: {
+      displayName: 'pve1',
+      hostname: 'pve1',
+      platformId: 'pve1',
+      primaryId: 'node:pve1:pve1',
+      aliases: ['node:pve1:pve1'],
+    },
+    identity: { hostnames: ['pve1'], clusterName: 'homelab' },
+    // The monitor's node record keeps its link to the agent after a split.
+    proxmox: proxmoxFacet,
+    platformData: proxmoxPlatformData,
+  } as unknown as Resource;
+  const splitAgent = {
+    id: 'agent-machine-pve1',
+    type: 'agent',
+    name: 'pve1',
+    displayName: 'pve1',
+    platformId: 'pve1',
+    platformType: 'agent',
+    sourceType: 'agent',
+    sources: ['agent'],
+    status: 'online',
+    lastSeen,
+    canonicalIdentity: {
+      displayName: 'pve1',
+      hostname: 'pve1',
+      platformId: 'pve1',
+      primaryId: 'agent:machine-pve1',
+      aliases: ['agent:machine-pve1'],
+    },
+    identity: { hostnames: ['pve1'], machineId: 'machine-pve1' },
+    agent: agentFacet,
+    platformData: {
+      platform: 'linux',
+      osName: 'Debian GNU/Linux',
+      osVersion: '13',
+      agentVersion: '6.0.0',
+    },
+  } as unknown as Resource;
+  // What the server presented while the pair was joined.
+  const joinedHost = {
+    ...splitAgent,
+    platformType: 'proxmox-pve',
+    sourceType: 'hybrid',
+    sources: ['agent', 'proxmox'],
+    clusterId: 'cluster:homelab',
+    canonicalIdentity: {
+      ...splitAgent.canonicalIdentity,
+      aliases: ['agent:machine-pve1', 'node:pve1:pve1'],
+    },
+    identity: { hostnames: ['pve1'], machineId: 'machine-pve1', clusterName: 'homelab' },
+    proxmox: proxmoxFacet,
+    platformData: proxmoxPlatformData,
+  } as unknown as Resource;
+
+  it('keeps a server-joined node and agent as one hybrid row', () => {
+    const rows = mergeCanonicalResourceSnapshot([structuredClone(joinedHost)], []);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe('agent-machine-pve1');
+    expect(rows[0]?.platformType).toBe('proxmox-pve');
+    expect(rows[0]?.sourceType).toBe('hybrid');
+    expect(rows[0]?.proxmox).toMatchObject({ nodeName: 'pve1' });
+    expect(rows[0]?.agent).toMatchObject({ agentId: 'agent-pve1' });
+  });
+
+  it('keeps an operator-split node and agent as two rows through snapshots and deltas', () => {
+    const expectSplitRows = (rows: Resource[]) => {
+      expect(rows.map((row) => row.id).sort()).toEqual(['agent-machine-pve1', 'agent-node-pve1']);
+      const node = rows.find((row) => row.id === 'agent-node-pve1');
+      const agent = rows.find((row) => row.id === 'agent-machine-pve1');
+      expect(node?.sources).toEqual(['proxmox']);
+      expect(node?.agent?.agentId).toBeUndefined();
+      expect((node?.agent as Record<string, unknown> | undefined)?.machineId).toBeUndefined();
+      expect(agent?.sources).toEqual(['agent']);
+      expect(agent?.sourceType).toBe('agent');
+      expect(agent?.platformType).toBe('agent');
+      // Nothing the joined row carried for the node stays on the agent: no
+      // Proxmox facet (nor the flattened facts it is synthesized from), scope,
+      // cluster, cluster identity, or node alias.
+      expect(agent?.proxmox).toBeUndefined();
+      const agentPlatformData = agent?.platformData as Record<string, unknown>;
+      expect(agentPlatformData.proxmox).toBeUndefined();
+      expect(agentPlatformData.pveVersion).toBeUndefined();
+      expect(agentPlatformData.clusterName).toBeUndefined();
+      expect(agent?.platformScopes ?? []).not.toContain('proxmox-pve');
+      expect(agent?.clusterId).toBeUndefined();
+      expect((agent?.identity as Record<string, unknown>).clusterName).toBeUndefined();
+      expect(agent?.canonicalIdentity?.aliases).toEqual(['agent:machine-pve1']);
+    };
+
+    for (const incoming of [
+      [splitNode, splitAgent],
+      [splitAgent, splitNode],
+    ]) {
+      expectSplitRows(mergeCanonicalResourceSnapshot(structuredClone(incoming), []));
+    }
+
+    // The split lands on a browser still holding the joined row: the agent
+    // keeps the joined row's ID and must shed the node's Proxmox facet.
+    const full = mergeCanonicalResourceSnapshot(
+      [structuredClone(splitNode), structuredClone(splitAgent)],
+      [mergeCanonicalResourceSnapshot([structuredClone(joinedHost)], [])[0]!],
+    );
+    expectSplitRows(full);
+
+    const agentTick = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(splitNode), { ...structuredClone(splitAgent), cpu: { current: 42 } }],
+      full,
+      new Set(['agent-machine-pve1']),
+    );
+    expectSplitRows(agentTick);
+    expect(agentTick[0]).toBe(full[0]);
+    expect(agentTick[1]?.cpu?.current).toBe(42);
+
+    const bothTick = mergeCanonicalResourceDeltaSnapshot(
+      [
+        { ...structuredClone(splitNode), cpu: { current: 7 } },
+        { ...structuredClone(splitAgent), cpu: { current: 43 } },
+      ],
+      agentTick,
+      new Set(['agent-node-pve1', 'agent-machine-pve1']),
+    );
+    expectSplitRows(bothTick);
+    expect(bothTick.map((row) => row.cpu?.current)).toEqual([7, 43]);
+
+    // A delta that adds the node beside the joined row (the split's first
+    // tick) leaves two rows as well.
+    const firstSplitTick = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(splitAgent), structuredClone(splitNode)],
+      mergeCanonicalResourceSnapshot([structuredClone(joinedHost)], []),
+      new Set(['agent-machine-pve1', 'agent-node-pve1']),
+    );
+    expectSplitRows(firstSplitTick);
+  });
+
+  it('keeps REST-only scopes a departed source did not own', () => {
+    // A Docker container in a Proxmox LXC whose availability check was
+    // removed: REST promoted its platform scopes and source status,
+    // which the realtime payload never carries. Docker stays listed, so its
+    // status entry, its recorded action refusal and its Proxmox scope (the LXC
+    // host) stay; only the availability entry goes.
+    const restRow = {
+      id: 'app-container-frigate',
+      type: 'app-container',
+      name: 'frigate',
+      displayName: 'frigate',
+      platformType: 'docker',
+      platformScopes: ['proxmox-pve', 'docker', 'availability'],
+      sourceType: 'hybrid',
       status: 'online',
-      lastSeen: Date.now() - 1_000,
-      canonicalIdentity: {
-        displayName: 'delly',
-        hostname: 'delly',
-        platformId: 'delly',
-        primaryId: 'node:homelab-delly',
-      },
-      proxmox: {
-        nodeName: 'delly',
-        clusterName: 'homelab',
-        pveVersion: '9.1.9',
-      },
+      lastSeen,
+      actionReadiness: [{ name: 'restart', available: false, reason: 'lifecycle disabled' }],
+      availability: { status: 'up' },
+      sourceStatus: { docker: { status: 'impaired' }, availability: { status: 'online' } },
       platformData: {
-        sources: ['proxmox'],
-        proxmox: {
-          nodeName: 'delly',
-          clusterName: 'homelab',
-          pveVersion: '9.1.9',
-        },
+        sources: ['docker', 'availability'],
+        sourceStatus: { docker: { status: 'impaired' }, availability: { status: 'online' } },
+        docker: { hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141', runtime: 'docker' },
       },
-    } as Resource;
-    const agentOnly = {
-      id: 'agent-runtime-delly',
+    } as unknown as Resource;
+    const [row] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'app-container-frigate',
+          type: 'app-container',
+          name: 'frigate',
+          displayName: 'frigate',
+          platformType: 'docker',
+          sourceType: 'api',
+          sources: ['docker'],
+          status: 'online',
+          lastSeen,
+          docker: { hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141', runtime: 'docker' },
+        } as unknown as Resource,
+      ],
+      [restRow],
+    );
+
+    expect(row?.platformScopes).toEqual(['proxmox-pve', 'docker']);
+    expect(row?.actionReadiness).toEqual([
+      { name: 'restart', available: false, reason: 'lifecycle disabled' },
+    ]);
+    expect(row?.availability).toBeUndefined();
+    expect(row?.sourceStatus).toEqual({ docker: { status: 'impaired' } });
+    expect((row?.platformData as Record<string, unknown>).sourceStatus).toEqual({
+      docker: { status: 'impaired' },
+    });
+  });
+
+  it('keeps the Proxmox scope of a Docker LXC host when a Proxmox source departs', () => {
+    // The row's two lists disagree (an enrichment of another generation named a
+    // Proxmox source). The Docker host still runs inside a Proxmox container, so
+    // the server keeps placing it on the Proxmox page whatever sources it lists;
+    // an agent scope no surviving source or facet supports goes.
+    const hostSourceId = 'proxmox-lxc-docker:pve-a:node-a:141';
+    const skewed = {
+      id: 'docker-host-141',
       type: 'agent',
-      name: 'delly',
-      displayName: 'delly',
-      platformId: 'delly',
+      name: 'frigate-host',
+      displayName: 'frigate-host',
+      platformType: 'docker',
+      platformScopes: ['proxmox-pve', 'docker', 'agent'],
+      sourceType: 'api',
+      sources: ['docker'],
+      status: 'online',
+      lastSeen,
+      docker: { hostSourceId, runtime: 'docker' },
+      platformData: {
+        sources: ['docker', 'proxmox', 'agent'],
+        docker: { hostSourceId, runtime: 'docker' },
+      },
+    } as unknown as Resource;
+    const realtime = {
+      id: 'docker-host-141',
+      type: 'agent',
+      name: 'frigate-host',
+      displayName: 'frigate-host',
+      platformType: 'docker',
+      sourceType: 'api',
+      sources: ['docker'],
+      status: 'online',
+      lastSeen,
+      docker: { hostSourceId, runtime: 'docker' },
+    } as unknown as Resource;
+
+    const [row] = mergeCanonicalResourceSnapshot([realtime], [skewed]);
+
+    expect(row?.platformScopes).toEqual(['proxmox-pve', 'docker']);
+  });
+
+  it('drops the agent scope of a split node that keeps the joined id', () => {
+    // The node's flattened kernel version reads as an agent facet once the row
+    // is canonicalized; that is compatibility synthesis, not evidence that the
+    // agent still reports for this row.
+    const joined = {
+      ...structuredClone(joinedHost),
+      platformScopes: ['agent', 'proxmox-pve'],
+    } as unknown as Resource;
+    const node = {
+      ...structuredClone(splitNode),
+      id: joinedHost.id,
+      platformData: { ...proxmoxPlatformData, kernelVersion: '6.14.8-2-pve' },
+    } as unknown as Resource;
+
+    const [row] = mergeCanonicalResourceSnapshot([node], [joined]);
+
+    expect(row?.sources).toEqual(['proxmox']);
+    expect(row?.platformScopes).toEqual(['proxmox-pve']);
+  });
+
+  it('keeps the Proxmox scope of an agent-reported disk that carries a Proxmox facet', () => {
+    // The server gives an agent-reported SMART disk under a merged Proxmox node
+    // a Proxmox ownership facet while it lists only the agent (registry.go).
+    const previous = {
+      id: 'disk-1',
+      type: 'physical_disk',
+      name: 'sda',
+      displayName: 'sda',
+      platformType: 'agent',
+      platformScopes: ['agent', 'proxmox-pve'],
+      sourceType: 'agent',
+      sources: ['agent'],
+      status: 'online',
+      lastSeen,
+      platformData: { sources: ['agent', 'proxmox'] },
+    } as unknown as Resource;
+    const incoming = {
+      id: 'disk-1',
+      type: 'physical_disk',
+      name: 'sda',
+      displayName: 'sda',
       platformType: 'agent',
       sourceType: 'agent',
       sources: ['agent'],
       status: 'online',
-      lastSeen: Date.now(),
+      lastSeen,
+      proxmox: { nodeName: 'pve1', instance: 'pve1' },
+    } as unknown as Resource;
+
+    const [row] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+
+    expect(row?.platformScopes).toEqual(['agent', 'proxmox-pve']);
+  });
+
+  it('deletes inherited source status when pruning leaves nothing', () => {
+    const status = { proxmox: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } };
+    const previous = {
+      ...structuredClone(joinedHost),
+      sourceStatus: status,
+      platformData: { sources: ['agent', 'proxmox'], sourceStatus: status },
+    } as unknown as Resource;
+    // The incoming row's own enrichment names only the departed source.
+    const incoming = {
+      ...structuredClone(splitAgent),
+      sourceStatus: status,
+      platformData: { sources: ['agent'], sourceStatus: status },
+    } as unknown as Resource;
+
+    const [row] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+
+    expect(row?.sourceStatus).toBeUndefined();
+    expect((row?.platformData as Record<string, unknown>).sourceStatus).toBeUndefined();
+  });
+
+  it('rebuilds a row whose own source lists disagree once the realtime row drops the extra source', () => {
+    // What a late REST response, or a shared array that changed under the row,
+    // leaves behind: top-level sources already say agent, the joined era's
+    // enrichment still says Proxmox too.
+    const status = {
+      agent: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+      proxmox: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+    };
+    const halfUpdated = {
+      ...structuredClone(splitAgent),
+      platformType: 'proxmox-pve',
+      platformScopes: ['agent', 'proxmox-pve'],
+      sourceStatus: status,
       canonicalIdentity: {
-        displayName: 'delly',
-        hostname: 'delly',
-        platformId: 'delly',
-        primaryId: 'agent:delly-runtime',
-      },
-      agent: {
-        hostname: 'delly',
-        osName: 'Debian GNU/Linux',
-        osVersion: '13',
+        ...splitAgent.canonicalIdentity,
+        aliases: ['agent:machine-pve1', 'node:pve1:pve1'],
       },
       platformData: {
-        sources: ['agent'],
-        agent: {
-          hostname: 'delly',
-          osName: 'Debian GNU/Linux',
-          osVersion: '13',
-        },
+        sources: ['agent', 'proxmox'],
+        platformScopes: ['agent', 'proxmox-pve'],
+        sourceStatus: status,
+        ...proxmoxPlatformData,
       },
-    } as Resource;
+    } as unknown as Resource;
 
-    for (const incoming of [
-      [proxmoxOnly, agentOnly],
-      [agentOnly, proxmoxOnly],
-    ]) {
-      const [resource] = mergeCanonicalResourceSnapshot(incoming, []);
+    const [row] = mergeCanonicalResourceSnapshot([structuredClone(splitAgent)], [halfUpdated]);
 
-      expect(mergeCanonicalResourceSnapshot(incoming, [])).toHaveLength(1);
-      expect(resource.id).toBe('agent-runtime-delly');
-      expect(resource.platformType).toBe('proxmox-pve');
-      expect(resource.sourceType).toBe('hybrid');
-      expect(new Set(resource.sources ?? [])).toEqual(new Set(['agent', 'proxmox']));
-      expect(resource.proxmox).toMatchObject({ nodeName: 'delly', clusterName: 'homelab' });
-      expect(resource.agent).toMatchObject({ hostname: 'delly', osName: 'Debian GNU/Linux' });
-      expect((resource.platformData as Record<string, unknown>).proxmox).toMatchObject({
-        nodeName: 'delly',
-      });
-      expect((resource.platformData as Record<string, unknown>).agent).toMatchObject({
-        hostname: 'delly',
-      });
-    }
+    expect(row?.platformType).toBe('agent');
+    expect(row?.platformScopes ?? []).not.toContain('proxmox-pve');
+    expect(Object.keys(row?.sourceStatus ?? {})).not.toContain('proxmox');
+    const platformData = row?.platformData as Record<string, unknown>;
+    expect(platformData.sources).toEqual(['agent']);
+    expect(platformData.platformScopes).toBeUndefined();
+    expect(Object.keys(platformData.sourceStatus as object)).toEqual(['agent']);
+    expect(Object.keys(row?.sourceStatus ?? {})).toEqual(['agent']);
+    expect(platformData.pveVersion).toBeUndefined();
+    expect(row?.canonicalIdentity?.aliases).toEqual(['agent:machine-pve1']);
+  });
+
+  it('prunes source status entries of sources the merged row no longer lists', () => {
+    const status = {
+      agent: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+      proxmox: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+    };
+    // The previous display row already lists only the agent but still carries
+    // the enrichment of the joined era (what a late REST response leaves).
+    const existing = {
+      id: 'agent-machine-pve1',
+      type: 'agent',
+      name: 'pve1',
+      displayName: 'pve1',
+      platformId: 'pve1',
+      platformType: 'agent',
+      sourceType: 'agent',
+      sources: ['agent'],
+      status: 'online',
+      lastSeen,
+      sourceStatus: status,
+      platformData: { sources: ['agent'], sourceStatus: status },
+    } as unknown as Resource;
+    // A realtime row omits the key; it never sets it to undefined.
+    const withoutStatus = (row: Resource, sources: string[]): Resource => {
+      const copy = structuredClone(row) as unknown as Record<string, unknown>;
+      delete copy.sourceStatus;
+      copy.platformData = { sources };
+      return copy as unknown as Resource;
+    };
+    const incoming = withoutStatus(existing, ['agent']);
+
+    const [row] = mergeCanonicalResourceSnapshot([incoming], [existing]);
+
+    expect(Object.keys(row?.sourceStatus ?? {})).toEqual(['agent']);
+    expect(
+      Object.keys((row?.platformData as Record<string, unknown>).sourceStatus as object),
+    ).toEqual(['agent']);
+
+    // Entries of listed sources stay, as REST enrichment the realtime row lacks.
+    const joined = {
+      ...structuredClone(existing),
+      sources: ['agent', 'proxmox'],
+      platformData: { sources: ['agent', 'proxmox'], sourceStatus: status },
+    } as unknown as Resource;
+    const [kept] = mergeCanonicalResourceSnapshot(
+      [withoutStatus(joined, ['agent', 'proxmox'])],
+      [joined],
+    );
+    expect(Object.keys(kept?.sourceStatus ?? {}).sort()).toEqual(['agent', 'proxmox']);
+  });
+
+  it('merges a thin row without a source list of its own instead of rebuilding it', () => {
+    // Only a source list the incoming row carries proves a source left; one
+    // inferred from a thin row's facets does not.
+    const previous = mergeCanonicalResourceSnapshot([structuredClone(joinedHost)], [])[0]!;
+    const thin = {
+      ...structuredClone(joinedHost),
+      sources: undefined,
+      agent: undefined,
+      platformData: undefined,
+    } as unknown as Resource;
+
+    const [row] = mergeCanonicalResourceSnapshot([thin], [previous]);
+
+    expect(row?.clusterId).toBe('cluster:homelab');
+    expect(row?.canonicalIdentity?.aliases).toEqual(['agent:machine-pve1', 'node:pve1:pve1']);
+    expect((row?.identity as Record<string, unknown>).machineId).toBe('machine-pve1');
   });
 
   it('keeps same-hostname standalone Proxmox provider rows separate across realtime merges', () => {
@@ -778,7 +1294,8 @@ describe('resourceStateAdapters nodeFromResource', () => {
     // Mirrors #1753 after one same-name site's agent has authenticated while
     // the other is still represented by its independent provider poll. The
     // browser must not undo the server's provider-scoped split on a later
-    // realtime reconciliation.
+    // realtime reconciliation. Whether two rows of one endpoint join is the
+    // server's presentation decision (presentation_coalesce.go).
     const staging = providerRow(
       'staging-pve',
       'Tripper Staging',
@@ -810,14 +1327,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
       'hema-production',
       'hema-staging',
     ]);
-
-    const duplicateEndpoint = providerRow(
-      'duplicate-pve',
-      'Duplicate connection',
-      'duplicate-instance',
-      'pve.hemastaging.hot:8006',
-    );
-    expect(mergeCanonicalResourceSnapshot([staging, duplicateEndpoint], [])).toHaveLength(1);
   });
 
   it('does not coalesce same-name agent-only records without a platform source bridge', () => {
@@ -855,6 +1364,46 @@ describe('resourceStateAdapters nodeFromResource', () => {
       'agent-runtime-1',
       'agent-runtime-2',
     ]);
+  });
+
+  it.each(['vmware', 'truenas', 'agent'])(
+    'keeps flat storage coordinates within their %s source',
+    (source) => {
+      const platformType = source === 'vmware' ? 'vmware-vsphere' : source;
+      const incoming = {
+        ...createNodeResource({ instance: 'storage-canonical', node: '', cpus: 4 }),
+        id: 'storage-canonical',
+        type: 'storage',
+        platformType,
+        sources: [source],
+        vmware:
+          source === 'vmware' ? { connectionId: 'vc-1', connectionName: 'Lab vCenter' } : undefined,
+      } as Resource;
+      const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+      expect(resource.proxmox).toBeUndefined();
+      expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+      expect(resource.platformType).toBe(platformType);
+      expect(resource.vmware).toEqual(incoming.vmware);
+      const [refreshed] = mergeCanonicalResourceDeltaSnapshot(
+        [incoming],
+        [resource],
+        new Set([incoming.id]),
+      );
+      expect(refreshed.proxmox).toBeUndefined();
+      expect(refreshed.vmware).toEqual(incoming.vmware);
+    },
+  );
+
+  it('keeps explicit Proxmox ownership on an agent-reported disk', () => {
+    const incoming = {
+      ...createNodeResource({ instance: 'legacy-storage-coordinate' }),
+      type: 'physical_disk',
+      platformType: 'agent',
+      sources: ['agent'],
+      proxmox: { instance: 'owned-pve', nodeName: 'owned-node' },
+    } as Resource;
+    const [resource] = mergeCanonicalResourceSnapshot([incoming], []);
+    expect(resource.proxmox).toEqual(incoming.proxmox);
   });
 
   it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {
@@ -1134,39 +1683,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
     );
     expect(agent.agent?.unraid?.risk?.reasons?.[0]?.code).toBe('unraid_no_parity');
   });
-
-  it('preserves discovery readiness when merging realtime resource snapshots', () => {
-    const [resource] = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'system-container-homeassistant',
-          type: 'system-container',
-          name: 'homeassistant',
-          displayName: 'homeassistant',
-          platformId: '101',
-          platformType: 'proxmox-pve',
-          sourceType: 'api',
-          status: 'online',
-          lastSeen: Date.now(),
-          discoveryReadiness: {
-            state: 'missing',
-            reason: 'Discovery has not run for this resource.',
-            resourceType: 'system-container',
-            targetId: 'agent-delly',
-            resourceId: '101',
-            generatedAt: '2026-06-04T15:00:00Z',
-          },
-        } as Resource,
-      ],
-      [],
-    );
-
-    expect(resource.discoveryReadiness).toMatchObject({
-      state: 'missing',
-      targetId: 'agent-delly',
-      resourceId: '101',
-    });
-  });
 });
 
 describe('resourceStateAdapters unavailable memory contract', () => {
@@ -1265,6 +1781,29 @@ describe('resourceStateAdapters unavailable memory contract', () => {
 });
 
 describe('incremental canonical resource snapshots', () => {
+  it('clears a node sensor setup verdict when the next snapshot sends false', () => {
+    // Facets merge field by field and an omitted field is read as a partial
+    // snapshot, so the registry sends every Proxmox node an explicit verdict.
+    const node = (sensorSetupOutdated?: boolean) =>
+      ({
+        id: 'agent-pve3',
+        type: 'agent',
+        name: 'pve3',
+        status: 'online',
+        sources: ['proxmox'],
+        proxmox: { nodeName: 'pve3', sensorSetupOutdated },
+      }) as unknown as Resource;
+
+    const [cleared] = mergeCanonicalResourceSnapshot([node(false)], [node(true)]);
+    expect(cleared?.proxmox?.sensorSetupOutdated).toBe(false);
+
+    const [omitted] = mergeCanonicalResourceSnapshot(
+      [{ ...node(), proxmox: { nodeName: 'pve3' } } as unknown as Resource],
+      [node(true)],
+    );
+    expect(omitted?.proxmox?.sensorSetupOutdated).toBe(true);
+  });
+
   it('preserves untouched row identity while refreshing changed resources', () => {
     const unchanged = {
       id: 'vm-unchanged',
@@ -1296,7 +1835,7 @@ describe('incremental canonical resource snapshots', () => {
     expect(result[1]?.cpu?.current).toBe(75);
   });
 
-  it('preserves agent identity when no member of its host-merge group changed', () => {
+  it('preserves an unchanged agent row by identity', () => {
     const agent = {
       id: 'agent-a',
       type: 'agent',
@@ -1336,10 +1875,9 @@ describe('incremental canonical resource snapshots', () => {
     expect(result[0]?.cpu?.current).toBe(90);
   });
 
-  it('refreshes agent groups when a changed id is absent from the incoming snapshot', () => {
-    // A flagged id that no longer appears can be a removal or a partner id an
-    // earlier coalesce folded away; either can alter a group without flagging
-    // its surviving member, so such ticks refresh every agent group.
+  it('drops a removed row and keeps its same-host neighbour by identity', () => {
+    // A flagged id missing from the incoming snapshot is a removal; the
+    // neighbour sharing its hostname is a separate server row and stays as is.
     const agent = {
       id: 'agent-a',
       type: 'agent',
@@ -1347,15 +1885,25 @@ describe('incremental canonical resource snapshots', () => {
       status: 'online',
       sources: ['agent'],
     } as unknown as Resource;
-    const incoming = [structuredClone(agent)];
+    const platformSide = {
+      id: 'pve-a',
+      type: 'agent',
+      name: 'host-a',
+      status: 'online',
+      sources: ['proxmox-pve'],
+    } as unknown as Resource;
 
-    const result = mergeCanonicalResourceDeltaSnapshot(incoming, [agent], new Set(['gone-id']));
+    const result = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(agent)],
+      [agent, platformSide],
+      new Set(['pve-a']),
+    );
 
-    expect(result[0]).not.toBe(agent);
-    expect(result[0]?.id).toBe('agent-a');
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(agent);
   });
 
-  it('still coalesces a dirty host-merge group into one merged agent', () => {
+  it('keeps two server rows that share a hostname as two rows', () => {
     const agentSide = {
       id: 'agent-a',
       type: 'agent',
@@ -1374,8 +1922,9 @@ describe('incremental canonical resource snapshots', () => {
 
     const result = mergeCanonicalResourceDeltaSnapshot(incoming, [], new Set(['pve-a']));
 
-    expect(result).toHaveLength(1);
-    expect(result[0]?.sources).toEqual(expect.arrayContaining(['agent', 'proxmox-pve']));
+    expect(result.map((row) => row.id)).toEqual(['agent-a', 'pve-a']);
+    expect(result[0]?.sources).toEqual(['agent']);
+    expect(result[1]?.sources).toEqual(['proxmox-pve']);
   });
 });
 
@@ -1569,6 +2118,82 @@ describe('fast merge path for metrics-only delta patches', () => {
     }
   });
 
+  it("lets a linked agent's filesystems and freshness replace withdrawn ones", () => {
+    const raw = createPveGuestRaw();
+    raw.sources = ['proxmox-pve', 'agent'] as Resource['sources'];
+    raw.platformData = { ...raw.platformData, sources: ['proxmox-pve', 'agent'] };
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'available',
+      disks: [{ mountpoint: '/', total: 2048, used: 512 }],
+    };
+    raw.agent = {
+      agentId: 'agent-in-vm',
+      stale: true,
+      disks: [{ mountpoint: '/', total: 4096, used: 1024 }],
+    } as Resource['agent'];
+    raw.platformData = { ...raw.platformData, agent: raw.agent };
+    const previous = seedDisplayRows([raw]);
+    // The guest agent stopped, so Proxmox withdraws its filesystems, and the
+    // linked Pulse agent reports again with an explicit stale=false.
+    const incoming = structuredClone(raw);
+    incoming.proxmox = {
+      vmid: 100,
+      nodeName: 'pve-node-1',
+      runtimeStatus: 'running',
+      guestAgentStatus: 'expected-unreachable',
+      diskStatusReason: 'agent-not-running',
+    };
+    incoming.agent = { ...raw.agent, stale: false } as Resource['agent'];
+    incoming.platformData = { ...incoming.platformData, agent: incoming.agent };
+    const changed = new Set([raw.id]);
+    const full = mergeCanonicalResourceSnapshot([incoming], previous);
+    const delta = mergeCanonicalResourceDeltaSnapshot([incoming], previous, changed);
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [incoming],
+      previous,
+      changed,
+      new Map([[raw.id, ['proxmox', 'agent']]]),
+    );
+    for (const [merged] of [full, delta, fast]) {
+      expect(merged.proxmox?.disks).toBeUndefined();
+      expect(merged.proxmox?.diskStatusReason).toBe('agent-not-running');
+      expect(merged.agent?.stale).toBe(false);
+      expect(merged.agent?.disks).toEqual(raw.agent?.disks);
+    }
+
+    // A partial facet without a native outcome keeps the prior filesystems.
+    const partial = { ...raw, proxmox: { vmid: 100, uptime: 1001 } } as Resource;
+    const [kept] = mergeCanonicalResourceSnapshot([partial], previous);
+    expect(kept.proxmox?.disks).toEqual(raw.proxmox?.disks);
+
+    // A native agent report (it always carries stale) without disks has
+    // withdrawn them; a legacy facet without stale keeps the prior list.
+    const withdrawn = structuredClone(raw);
+    withdrawn.agent = { agentId: 'agent-in-vm', stale: false } as Resource['agent'];
+    withdrawn.platformData = { ...withdrawn.platformData, agent: withdrawn.agent };
+    for (const [merged] of [
+      mergeCanonicalResourceSnapshot([withdrawn], previous),
+      mergeCanonicalResourceDeltaSnapshot([withdrawn], previous, changed),
+      mergeCanonicalResourceDeltaSnapshot(
+        [withdrawn],
+        previous,
+        changed,
+        new Map([[raw.id, ['agent']]]),
+      ),
+    ]) {
+      expect(merged.agent?.disks).toBeUndefined();
+      expect(merged.agent?.stale).toBe(false);
+      // The compatibility mirror that host threshold rows read drops them too.
+      const mirror = (merged.platformData as { agent?: { disks?: unknown } } | undefined)?.agent;
+      expect(mirror?.disks).toBeUndefined();
+    }
+    const legacy = { ...raw, agent: { agentId: 'agent-in-vm' } } as Resource;
+    const [legacyKept] = mergeCanonicalResourceSnapshot([legacy], previous);
+    expect(legacyKept.agent?.disks).toEqual(raw.agent?.disks);
+  });
+
   it('keeps explicit lock and deferral evidence on a new outcome, including false expected', () => {
     const raw = createPveGuestRaw();
     raw.proxmox = {
@@ -1751,4 +2376,32 @@ describe('fast merge path for metrics-only delta patches', () => {
     // so unpatched platformData subtrees never get touched in the store.
     expect(ops.every((op) => op.key !== 'platformData' || op.leaf !== undefined)).toBe(true);
   });
+});
+
+it('replaces recovered availability without replacing independent metrics', () => {
+  const old = createNodeResource({
+    sources: ['proxmox-pve', 'availability'],
+    availability: {
+      targetId: 'check',
+      enabled: true,
+      available: false,
+      lastError: 'HTTP 503',
+      consecutiveFailures: 3,
+    },
+  });
+  const [previous] = mergeCanonicalResourceSnapshot([old], []);
+  const incoming = {
+    ...old,
+    cpu: { current: 44 },
+    availability: { targetId: 'check', enabled: true, available: true, latencyMillis: 4 },
+    platformData: {
+      sources: ['proxmox-pve', 'availability'],
+      availability: { targetId: 'check', enabled: true, available: true, latencyMillis: 4 },
+    },
+  } as Resource;
+  const [merged] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+  expect(merged.availability).toEqual(incoming.availability);
+  expect(merged.cpu).toEqual({ current: 44 });
+  expect(merged.memory).toEqual(previous.memory);
+  expect(merged.disk).toEqual(previous.disk);
 });

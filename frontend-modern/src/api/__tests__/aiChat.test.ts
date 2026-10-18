@@ -1250,7 +1250,6 @@ describe('AIChatAPI', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       { onStreamOpen },
     );
 
@@ -1608,7 +1607,7 @@ describe('AIChatAPI', () => {
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
-  it('includes a per-request autonomous override when supplied', async () => {
+  it('sends no execution-mode field because the server sets approval-required mode', async () => {
     const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();
 
@@ -1620,27 +1619,25 @@ describe('AIChatAPI', () => {
     } as unknown as Response);
 
     await AIChatAPI.chat(
-      'summarize dashboard',
+      'explain this issue',
       'session-1',
       undefined,
       vi.fn(),
       undefined,
       undefined,
-      undefined,
-      false,
+      'finding-123',
+      'Current evidence',
+      [{ id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' }],
     );
 
-    expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/ai/chat',
-      expect.objectContaining({
-        body: JSON.stringify({
-          prompt: 'summarize dashboard',
-          session_id: 'session-1',
-          model: undefined,
-          autonomous_mode: false,
-        }),
-      }),
-    );
+    const init = apiFetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      prompt: 'explain this issue',
+      finding_id: 'finding-123',
+      handoff_context: 'Current evidence',
+    });
+    expect(body).not.toHaveProperty('autonomous_mode');
   });
 
   it('includes browser-safe Patrol run handoff metadata when supplied', async () => {
@@ -1662,7 +1659,6 @@ describe('AIChatAPI', () => {
       undefined,
       undefined,
       undefined,
-      false,
       undefined,
       undefined,
       undefined,
@@ -1682,7 +1678,6 @@ describe('AIChatAPI', () => {
           prompt: 'discuss run',
           session_id: 'session-run',
           model: undefined,
-          autonomous_mode: false,
           handoff_metadata: {
             kind: 'patrol_run',
             run_id: 'run-runtime-error',
@@ -1714,7 +1709,6 @@ describe('AIChatAPI', () => {
       undefined,
       undefined,
       'finding-provider-settings',
-      false,
       undefined,
       undefined,
       undefined,
@@ -1731,7 +1725,6 @@ describe('AIChatAPI', () => {
           session_id: 'session-finding',
           model: undefined,
           finding_id: 'finding-provider-settings',
-          autonomous_mode: false,
           handoff_metadata: {
             kind: 'patrol_finding',
           },
@@ -1793,7 +1786,6 @@ describe('AIChatAPI', () => {
       undefined,
       undefined,
       undefined,
-      false,
       '[Alert Incident Context]\nIncident ID: incident-1',
       [
         {
@@ -1830,7 +1822,6 @@ describe('AIChatAPI', () => {
           prompt: 'discuss incident',
           session_id: 'session-3',
           model: undefined,
-          autonomous_mode: false,
           handoff_context: '[Alert Incident Context]\nIncident ID: incident-1',
           handoff_resources: [
             {

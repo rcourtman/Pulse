@@ -9,28 +9,18 @@ import {
 
 describe('workloadSelectionModel', () => {
   it('resolves workloads resource deep links into focused guest ids without inventing filters', () => {
-    expect(resolveWorkloadResourceSelection('?resource=cluster-a:node-1:101')).toEqual({
-      resourceId: 'cluster-a:node-1:101',
-      summaryGroupId: null,
-    });
+    expect(resolveWorkloadResourceSelection('?resource=cluster-a:node-1:101')).toBe(
+      'cluster-a:node-1:101',
+    );
     expect(
       resolveWorkloadResourceSelection(
         '?type=app-container&resource=app-container:truenas-main:nextcloud',
       ),
-    ).toEqual({
-      resourceId: 'app-container:truenas-main:nextcloud',
-      summaryGroupId: null,
-    });
+    ).toBe('app-container:truenas-main:nextcloud');
     expect(
       resolveWorkloadResourceSelection('?resource=app-container:docker-main:container-123'),
-    ).toEqual({
-      resourceId: 'app-container:docker-main:container-123',
-      summaryGroupId: null,
-    });
-    expect(resolveWorkloadResourceSelection('?resource=guest-1')).toEqual({
-      resourceId: 'guest-1',
-      summaryGroupId: null,
-    });
+    ).toBe('app-container:docker-main:container-123');
+    expect(resolveWorkloadResourceSelection('?resource=guest-1')).toBe('guest-1');
     expect(resolveWorkloadResourceSelection('')).toBeNull();
   });
 
@@ -50,10 +40,7 @@ describe('workloadSelectionModel', () => {
     expect(workloadsHasHoveredWorkload(guests, 'cluster-a:node-1:102')).toBe(false);
   });
 
-  it('resolves summary group deep links separately from local row expansion', () => {
-    expect(resolveWorkloadResourceSelection('?summaryGroup=docker-host%3Atruenas-main')).toEqual({
-      resourceId: null,
-      summaryGroupId: 'docker-host:truenas-main',
-    });
+  it('ignores summary group params, which no longer pin a workload group', () => {
+    expect(resolveWorkloadResourceSelection('?summaryGroup=docker-host%3Atruenas-main')).toBeNull();
   });
 });

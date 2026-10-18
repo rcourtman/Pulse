@@ -511,21 +511,20 @@ func TestAISettingsHandler_UpdateSettingsRefreshesAssistantToolVisibilityForCont
 	require.Equal(t, http.StatusOK, controlRec.Code, controlRec.Body.String())
 	require.Equal(t, 1, controlRefreshes, "control level changes must refresh Assistant tool visibility")
 
-	protectedBody, err := json.Marshal(AISettingsUpdateRequest{
-		ProtectedGuests: []string{"vm-101"},
-	})
-	require.NoError(t, err)
-	protectedReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(protectedBody))
-	protectedRec := httptest.NewRecorder()
-	handler.HandleUpdateAISettings(protectedRec, protectedReq)
+	// The retired Protected guests field is tolerated from older clients and
+	// scripts, but it is not a setting any more: it changes nothing and does not
+	// refresh Assistant tool visibility.
+	staleReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{"protected_guests":["vm-101"]}`))
+	staleRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(staleRec, staleReq)
 
-	require.Equal(t, http.StatusOK, protectedRec.Code, protectedRec.Body.String())
-	require.Equal(t, 2, controlRefreshes, "protected guest changes must refresh Assistant tool visibility")
+	require.Equal(t, http.StatusOK, staleRec.Code, staleRec.Body.String())
+	require.Equal(t, 1, controlRefreshes, "the retired protected_guests field must not refresh Assistant tool visibility")
+	require.NotContains(t, staleRec.Body.String(), "protected_guests")
 
 	persisted, err := persistence.LoadAIConfig()
 	require.NoError(t, err)
 	require.Equal(t, config.ControlLevelControlled, persisted.GetControlLevel())
-	require.Equal(t, []string{"vm-101"}, persisted.GetProtectedGuests())
 }
 
 func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
@@ -758,8 +757,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[]`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[]`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -804,8 +802,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -835,8 +832,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -1116,8 +1112,8 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 	if !strings.Contains(string(payload), `"configured_providers":[]`) {
 		t.Fatalf("expected empty AI settings response to retain configured_providers, got %s", payload)
 	}
-	if !strings.Contains(string(payload), `"protected_guests":[]`) {
-		t.Fatalf("expected empty AI settings response to retain protected_guests, got %s", payload)
+	if strings.Contains(string(payload), "protected_guests") {
+		t.Fatalf("AI settings response must not carry the retired protected_guests field, got %s", payload)
 	}
 }
 
@@ -3819,5 +3815,131 @@ func TestOrchestratorAndChatAdaptersMapTheirMessageContracts(t *testing.T) {
 	}
 	if !strings.Contains(string(chatAdapter), "result[i] = adaptChatMessage(m)") {
 		t.Error("chatServiceAdapter.GetMessages must route through adaptChatMessage")
+	}
+}
+
+func TestAssistantSettingsProjectionAndUnrelatedSave(t *testing.T) {
+	for _, level := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous, "suggest", "unknown"} {
+		for _, licensed := range []bool{false, true} {
+			name := level + map[bool]string{true: "/entitled", false: "/unentitled"}[licensed]
+			t.Run(name, func(t *testing.T) {
+				tmp := t.TempDir()
+				persistence := config.NewConfigPersistence(tmp)
+				cfg := config.NewDefaultAIConfig()
+				cfg.ControlLevel = level
+				cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
+				cfg.PatrolActionEmergencyStop = true
+				cfg.PatrolAutoFix = true
+				require.NoError(t, persistence.SaveAIConfig(*cfg))
+				handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+				handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: licensed})
+				refreshes := 0
+				handler.SetOnControlSettingsChange(func() { refreshes++ })
+				want := config.ControlLevelReadOnly
+				if level == config.ControlLevelControlled || level == config.ControlLevelAutonomous || level == "suggest" {
+					want = config.ControlLevelControlled
+				}
+				for _, method := range []string{http.MethodGet, http.MethodPut} {
+					rec := httptest.NewRecorder()
+					if method == http.MethodGet {
+						handler.HandleGetAISettings(rec, newLoopbackRequest(method, "/api/settings/ai", nil))
+					} else {
+						handler.HandleUpdateAISettings(rec, newLoopbackRequest(method, "/api/settings/ai/update", bytes.NewBufferString(`{"request_timeout_seconds":120}`)))
+					}
+					require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+					var response AISettingsResponse
+					require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+					require.Equal(t, want, response.ControlLevel, "interactive response must not advertise execution authority")
+					persisted, err := persistence.LoadAIConfig()
+					require.NoError(t, err)
+					wantStored := level
+					if level == "suggest" {
+						wantStored = config.ControlLevelControlled
+					}
+					require.Equal(t, wantStored, persisted.ControlLevel, "unrelated save must preserve preference")
+					require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
+					require.True(t, persisted.PatrolActionEmergencyStop)
+					require.True(t, persisted.PatrolAutoFix)
+					require.Zero(t, refreshes)
+				}
+			})
+		}
+	}
+}
+
+func TestAssistantLegacyClientUpdateKeepsEntitlementAndPreference(t *testing.T) {
+	for _, licensed := range []bool{false, true} {
+		t.Run(map[bool]string{true: "entitled", false: "unentitled"}[licensed], func(t *testing.T) {
+			tmp := t.TempDir()
+			persistence := config.NewConfigPersistence(tmp)
+			cfg := config.NewDefaultAIConfig()
+			cfg.ControlLevel = config.ControlLevelReadOnly
+			cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+			require.NoError(t, persistence.SaveAIConfig(*cfg))
+			handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+			handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: licensed})
+			rec := httptest.NewRecorder()
+			handler.HandleUpdateAISettings(rec, newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewBufferString(`{"control_level":"autonomous"}`)))
+			if licensed {
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				var response AISettingsResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+				require.Equal(t, config.ControlLevelControlled, response.ControlLevel)
+			} else {
+				require.Equal(t, http.StatusPaymentRequired, rec.Code, rec.Body.String())
+			}
+			persisted, err := persistence.LoadAIConfig()
+			require.NoError(t, err)
+			want := config.ControlLevelReadOnly
+			if licensed {
+				want = config.ControlLevelAutonomous
+			}
+			require.Equal(t, want, persisted.ControlLevel)
+			require.Equal(t, config.PatrolAutonomyMonitor, persisted.PatrolAutonomyLevel)
+		})
+	}
+}
+
+func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
+	for _, licensed := range []bool{false, true} {
+		t.Run(map[bool]string{true: "entitled", false: "unentitled"}[licensed], func(t *testing.T) {
+			tmp := t.TempDir()
+			persistence := config.NewConfigPersistence(tmp)
+			cfg := config.NewDefaultAIConfig()
+			cfg.ControlLevel = config.ControlLevelAutonomous
+			cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
+			cfg.PatrolActionEmergencyStop = true
+			require.NoError(t, persistence.SaveAIConfig(*cfg))
+			handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+			handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: licensed})
+			get := httptest.NewRecorder()
+			handler.HandleGetAISettings(get, newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil))
+			require.Equal(t, http.StatusOK, get.Code)
+			var response AISettingsResponse
+			require.NoError(t, json.Unmarshal(get.Body.Bytes(), &response))
+			require.Equal(t, config.ControlLevelControlled, response.ControlLevel)
+			body, err := json.Marshal(AISettingsUpdateRequest{ControlLevel: &response.ControlLevel, RequestTimeoutSeconds: ptr(120)})
+			require.NoError(t, err)
+			rec := httptest.NewRecorder()
+			handler.HandleUpdateAISettings(rec, newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body)))
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			persisted, err := persistence.LoadAIConfig()
+			require.NoError(t, err)
+			require.Equal(t, config.ControlLevelAutonomous, persisted.ControlLevel, "a mode echo must not change legacy command admission")
+			require.Equal(t, licensed, handler.defaultAIService.IsAutonomous(), "legacy entitlement/approval selection is unchanged")
+			require.Equal(t, 120, persisted.RequestTimeoutSeconds)
+			require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
+			require.True(t, persisted.PatrolActionEmergencyStop)
+			// Explicit opt-out and a later opt-in remain real mode changes.
+			for _, level := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled} {
+				rec = httptest.NewRecorder()
+				handler.HandleUpdateAISettings(rec, newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewBufferString(`{"control_level":"`+level+`"}`)))
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				persisted, err = persistence.LoadAIConfig()
+				require.NoError(t, err)
+				require.Equal(t, level, persisted.ControlLevel)
+				require.False(t, handler.defaultAIService.IsAutonomous())
+			}
+		})
 	}
 }

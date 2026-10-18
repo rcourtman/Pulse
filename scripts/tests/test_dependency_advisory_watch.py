@@ -24,17 +24,6 @@ watch = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(watch)
 
-HEADS = "\n".join((
-    "29069d4139ef908862a179e1b0dd05364d895776\trefs/heads/release/5.1",
-    "e261cd3eb8c2abed21357721df6506d30e2a0ec8\trefs/heads/release/v6.3.2",
-    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\trefs/heads/release/v6.3",
-    "b50aeb6a8d9e38ab362b23f4ed15a010f675a90f\trefs/heads/release/v6.4",
-    "26476f317a68746fd353967470cd8be3bc6b7670\trefs/heads/release/v6.4.2",
-    "5f88b2002d1e1085053bf7bf3969aa61cdb0f637\trefs/heads/release/v6.5",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/heads/release/v6.10",
-    "cccccccccccccccccccccccccccccccccccccccc\trefs/heads/release/v6.5-hotfix",
-))
-
 FINDING = {
     "name": "dompurify", "severity": "moderate", "isDirect": True, "range": "<3.2.8",
     "via": [{"source": 1, "name": "dompurify", "title": "DOMPurify `bypass` | <x>",
@@ -56,34 +45,6 @@ def audit_log(*findings: dict) -> str:
     return "\n".join(rows) + "\n"
 
 
-class ReleaseLinesTest(unittest.TestCase):
-    def test_newest_stable_line_and_newer_plus_main(self) -> None:
-        self.assertEqual(watch.release_lines(HEADS, "v6.4.5"),
-                         ["main", "release/v6.4", "release/v6.5", "release/v6.10"])
-
-    def test_patch_and_legacy_branches_are_never_lines(self) -> None:
-        lines = watch.release_lines(HEADS, "")
-        for branch in ("release/5.1", "release/v6.3.2", "release/v6.4.2", "release/v6.5-hotfix"):
-            self.assertNotIn(branch, lines)
-
-    def test_unknown_or_prerelease_stable_keeps_every_line(self) -> None:
-        for latest in ("", "v6.5.0-rc.1", "garbage"):
-            with self.subTest(latest=latest):
-                self.assertEqual(watch.release_lines(HEADS, latest),
-                                 ["main", "release/v6.3", "release/v6.4", "release/v6.5", "release/v6.10"])
-
-    def test_main_is_audited_even_without_release_lines(self) -> None:
-        self.assertEqual(watch.release_lines("", "v6.4.5"), ["main"])
-
-    def test_cli_emits_json_list(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            heads = Path(directory) / "heads"
-            heads.write_text(HEADS, encoding="utf-8")
-            result = subprocess.run([sys.executable, str(SCRIPT), "lines", "--heads", str(heads),
-                                     "--latest-stable", "v6.5.0"], capture_output=True, text=True, check=True)
-        self.assertEqual(json.loads(result.stdout), ["main", "release/v6.5", "release/v6.10"])
-
-
 class SummaryTest(unittest.TestCase):
     def run_summary(self, branch: str, outcome: str, log: str) -> tuple[subprocess.CompletedProcess, str]:
         with tempfile.TemporaryDirectory() as directory:
@@ -96,18 +57,24 @@ class SummaryTest(unittest.TestCase):
             return result, summary.read_text(encoding="utf-8") if summary.exists() else ""
 
     def test_advisory_names_branch_advisories_and_fix(self) -> None:
-        result, summary = self.run_summary("release/v6.4", "failure", audit_log(FINDING, TRANSITIVE))
+        result, summary = self.run_summary("main", "failure", audit_log(FINDING, TRANSITIVE))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("`release/v6.4`", summary)
+        self.assertIn("`main`", summary)
         self.assertIn("GHSA-p98j-92pf-mc4p", summary)
         self.assertIn("GHSA-q2hr-2g5m-vwhr", summary)
         self.assertIn("npm audit fix --package-lock-only", summary)
         self.assertIn("dependencySecurity.test.ts", summary)
         annotations = [line for line in result.stdout.splitlines() if line.startswith("::error")]
         self.assertEqual(len(annotations), 1)
-        self.assertIn("release/v6.4", annotations[0])
+        self.assertIn("main", annotations[0])
         self.assertIn("GHSA-p98j-92pf-mc4p, GHSA-q2hr-2g5m-vwhr", annotations[0])
         self.assertIn("lockfile advisory floor bump", annotations[0])
+        self.assertIn("qualify the resulting graph", summary)
+        self.assertIn("land both on main", summary)
+        self.assertIn("containing release", summary)
+        self.assertIn("unchanged graphs only warn", summary)
+        self.assertNotIn("block every pull request", summary)
+        self.assertNotIn("blocks every PR and release", annotations[0])
 
     def test_registry_text_is_escaped_and_kept_out_of_annotation(self) -> None:
         hostile = dict(FINDING, name="evil\n::warning::x", via=[{"title": "x | <script>", "url": "javascript:"}])
@@ -119,7 +86,8 @@ class SummaryTest(unittest.TestCase):
         self.assertNotIn("script", result.stdout)
 
     def test_clean_run_has_no_annotation(self) -> None:
-        result, summary = self.run_summary("release/v6.5", "success", "npm audit (all): no vulnerabilities\n")
+        result, summary = self.run_summary("main", "success", "npm audit (all): no vulnerabilities\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("::error", result.stdout)
         self.assertIn("No advisories reported.", summary)
 
@@ -131,13 +99,21 @@ class SummaryTest(unittest.TestCase):
         self.assertIn("No advisory was observed", summary)
 
     def test_install_failure_without_audit_is_reported(self) -> None:
-        result, _ = self.run_summary("release/v6.5", "skipped", "")
+        result, _ = self.run_summary("main", "skipped", "")
         self.assertIn("failed without an advisory finding", result.stdout)
 
     def test_unexpected_branch_name_is_refused(self) -> None:
         result, summary = self.run_summary("feature/x;rm", "failure", audit_log(FINDING))
         self.assertEqual(result.returncode, 2)
         self.assertEqual(summary, "")
+
+    def test_retired_release_branches_cannot_request_backport_guidance(self) -> None:
+        for branch in ("release/v6.5", "release/v6.6"):
+            with self.subTest(branch=branch):
+                result, summary = self.run_summary(branch, "failure", audit_log(FINDING))
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(summary, "")
+                self.assertEqual(result.stdout, "")
 
 
 class WorkflowContractTest(unittest.TestCase):
@@ -160,14 +136,51 @@ class WorkflowContractTest(unittest.TestCase):
                 if str(step.get("uses", "")).startswith("actions/checkout@"):
                     self.assertIs(step["with"]["persist-credentials"], False)
 
-    def test_matrix_covers_every_listed_branch_without_fail_fast(self) -> None:
+    def test_only_main_is_audited_without_release_discovery(self) -> None:
+        self.assertEqual(set(self.workflow["jobs"]), {"audit"})
         audit = self.workflow["jobs"]["audit"]
-        self.assertFalse(audit["strategy"]["fail-fast"])
-        self.assertEqual(audit["strategy"]["matrix"]["branch"], "${{ fromJSON(needs.lines.outputs.branches) }}")
-        read = next(step for step in audit["steps"] if step.get("name") == "Read the audited branch's lockfile inputs")
-        self.assertEqual(read["env"]["BRANCH"], "${{ matrix.branch }}")
-        self.assertIn('git fetch --no-tags --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/audited/head"', read["run"])
+        self.assertNotIn("strategy", audit)
+        self.assertNotIn("needs", audit)
+        self.assertNotIn("git ls-remote", self.text)
+        self.assertNotIn("gh api", self.text)
+        self.assertNotIn("GH_TOKEN", self.text)
+        read = next(step for step in audit["steps"] if step.get("name") == "Read main's lockfile inputs")
+        self.assertNotIn("BRANCH", read["env"])
+        self.assertIn("git fetch --no-tags --depth=1 origin '+refs/heads/main:refs/remotes/audited/head'", read["run"])
+        self.assertIn("AUDITED_MAIN_SHA=", read["run"])
         self.assertIn("for file in package.json package-lock.json", read["run"])
+        summary = next(step for step in audit["steps"] if step.get("name") == "Report advisories and fix")
+        self.assertEqual(summary["env"]["BRANCH"], "main")
+
+    def test_real_input_recipe_is_fixed_main_and_never_executes_fetched_code(self) -> None:
+        read = next(step for step in self.workflow["jobs"]["audit"]["steps"]
+                    if step.get("name") == "Read main's lockfile inputs")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_git = root / "git"
+            calls = root / "calls.jsonl"
+            fake_git.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "args = sys.argv[1:]\n"
+                "with open(os.environ['CALLS'], 'a') as stream: stream.write(json.dumps(args)+'\\n')\n"
+                "if args == ['fetch', '--no-tags', '--depth=1', 'origin', '+refs/heads/main:refs/remotes/audited/head']: pass\n"
+                "elif args == ['rev-parse', 'refs/remotes/audited/head']: print('a'*40)\n"
+                "elif args == ['show', 'refs/remotes/audited/head:frontend-modern/package.json']: print('{}')\n"
+                "elif args == ['show', 'refs/remotes/audited/head:frontend-modern/package-lock.json']: print('{\"lockfileVersion\":3}')\n"
+                "else: sys.exit(19)\n", encoding="utf-8")
+            fake_git.chmod(0o755)
+            result = subprocess.run(["bash", "-c", read["run"]], capture_output=True, text=True,
+                                    env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}",
+                                         "AUDITED": str(root / "audited"), "CALLS": str(calls),
+                                         "BRANCH": "release/v6.6"}, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "AUDITED_MAIN_SHA=" + "a" * 40 + "\n")
+            self.assertEqual(json.loads((root / "audited/package.json").read_text()), {})
+            self.assertEqual(json.loads((root / "audited/package-lock.json").read_text()), {"lockfileVersion": 3})
+            commands = [json.loads(row) for row in calls.read_text().splitlines()]
+            self.assertEqual(len(commands), 4)
+            self.assertEqual(commands[0][-1], "+refs/heads/main:refs/remotes/audited/head")
 
     def test_never_checks_out_installs_or_runs_another_branchs_code(self) -> None:
         # A scheduled job runs in the default branch's cache and token scope,

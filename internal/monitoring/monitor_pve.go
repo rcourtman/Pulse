@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -340,12 +341,8 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		})
 	}
 
-	if len(addressOrder) > 1 {
-		sort.Strings(addressOrder)
-	}
-
 	if len(addressOrder) > 0 {
-		container.IPAddresses = addressOrder
+		container.IPAddresses = guestIPAddressesByInterface(addressOrder, networkIfaces)
 	}
 
 	if len(networkIfaces) > 0 {
@@ -444,8 +441,10 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	var pbsInstances []config.PBSInstance
 	var pmgInstances []config.PMGInstance
 
+	m.pveGuestPublicationMu.Lock()
 	m.mu.Lock()
 	instanceCfg.Host = persistHost
+	m.cancelPVEGuestPollLocked(instanceName)
 	m.pveClients[instanceName] = fallbackClient
 
 	// Update in-memory config so subsequent polls build clients against the working port.
@@ -463,6 +462,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	}
 	persistence = m.persistence
 	m.mu.Unlock()
+	m.pveGuestPublicationMu.Unlock()
 
 	// Persist to disk so restarts keep the working endpoint.
 	if persistence != nil {
@@ -587,7 +587,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 	return connectionHealthStr
 }
 
-func (m *Monitor) snapshotPrevNodes(instanceName string) (map[string]models.Memory, []models.Node) {
+func (m *Monitor) snapshotPrevNodes(instanceName string) []models.Node {
 	return m.previousNodesForInstance(instanceName)
 }
 
@@ -598,7 +598,6 @@ func (m *Monitor) pollPVENodesParallel(
 	client PVEClientInterface,
 	nodes []proxmox.Node,
 	connectionHealthStr string,
-	prevNodeMemory map[string]models.Memory,
 	prevInstanceNodes []models.Node,
 	debugEnabled bool,
 ) ([]models.Node, map[string]string, map[string]string) {
@@ -627,7 +626,7 @@ func (m *Monitor) pollPVENodesParallel(
 		go func(node proxmox.Node) {
 			defer wg.Done()
 
-			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevNodeMemory, prevInstanceNodes)
+			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevInstanceNodes)
 
 			resultChan <- nodePollResult{
 				node:            modelNode,
@@ -655,7 +654,7 @@ func (m *Monitor) pollPVENodesParallel(
 // leaves the last successful snapshot in state forever, so a shut-down host
 // keeps showing its final online status (#1441).
 func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
-	_, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
+	prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 	if len(prevInstanceNodes) == 0 {
 		// Never polled successfully this process lifetime (e.g. Pulse
 		// started while the host was already down). Synthesize offline
@@ -762,6 +761,7 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 			if nodeCopy.ConnectionHealth == "" || strings.EqualFold(nodeCopy.ConnectionHealth, "error") {
 				nodeCopy.ConnectionHealth = "degraded"
 			}
+			m.boundCarriedNodeTemperature(&nodeCopy, now)
 			preserved = append(preserved, nodeCopy)
 			continue
 		}
@@ -770,9 +770,26 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 		nodeCopy.ConnectionHealth = "error"
 		nodeCopy.Uptime = 0
 		nodeCopy.CPU = 0
+		nodeCopy.Temperature = nil
 		preserved = append(preserved, nodeCopy)
 	}
 	return preserved
+}
+
+// boundCarriedNodeTemperature applies the rules a failed live collection's
+// carry follows to a temperature a node keeps from an earlier poll: the carry
+// window, a lapsed host agent's lease for a reading that agent supplied, and
+// no disk temperatures (carriedNodeTemperature).
+func (m *Monitor) boundCarriedNodeTemperature(node *models.Node, now time.Time) {
+	if node.Temperature == nil {
+		return
+	}
+	if now.Sub(node.Temperature.LastUpdate) > m.nodeTemperatureCarryWindow() ||
+		m.carriedTemperatureOutlivesAgentLease(*node, node.Temperature, now) {
+		node.Temperature = nil
+		return
+	}
+	node.Temperature = carriedNodeTemperature(node.Temperature)
 }
 
 func (m *Monitor) seedNodeDisplayNames(modelNodes []models.Node) {
@@ -803,6 +820,11 @@ func (m *Monitor) pollGuestsWithFallback(
 		return ctx.Err()
 	default:
 	}
+	ctx, owner := m.beginPVEGuestPoll(ctx, instanceName, client)
+	if owner == nil {
+		return nil // Another cycle or a replaced/ended binding owns guest work.
+	}
+	defer m.finishPVEGuestPoll(instanceName, owner)
 
 	// Always try the efficient cluster/resources endpoint first
 	// This endpoint works on both clustered and standalone nodes
@@ -810,6 +832,9 @@ func (m *Monitor) pollGuestsWithFallback(
 	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
 
 	if !useClusterEndpoint {
+		if ctx.Err() != nil {
+			return ctx.Err() // An interrupted inventory is not a fallback grant.
+		}
 		// Fall back to traditional polling only if cluster/resources not available
 		// This should be rare - only for very old Proxmox versions
 		log.Debug().
@@ -837,7 +862,7 @@ func (m *Monitor) pollGuestsWithFallback(
 		if instanceCfg.MonitorContainers {
 			containers = m.collectContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 		}
-		m.state.UpdateGuestsForInstance(instanceName, vms, containers)
+		m.publishPVEGuests(ctx, instanceName, vms, containers)
 	}
 
 	return nil
@@ -897,7 +922,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			nodes := nodesForInstanceFromReadState(readState, instanceName)
 			hosts := hostsFromReadState(readState)
 			updated := mergeNVMeTempsIntoDisks(existing, nodes)
-			updated = mergeHostAgentSMARTIntoDisks(updated, nodes, hosts)
+			updated = mergeHostAgentSMARTIntoDisks(updated, nodes, hosts, m.proxmoxDiskAgentSplits())
 			m.state.UpdatePhysicalDisks(instanceName, updated)
 		}
 		return
@@ -936,6 +961,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		nodesFromState := nodesForInstanceFromReadState(readState, inst)
 		hosts := hostsFromReadState(readState)
 		existingDisks := physicalDisksForInstanceFromReadState(readState, inst)
+		splits := m.proxmoxDiskAgentSplits()
 		existingDisksMap := make(map[string]models.PhysicalDisk, len(existingDisks))
 		for _, disk := range existingDisks {
 			if disk.Instance == inst {
@@ -962,12 +988,14 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		// Proxmox disk query fails can still populate its physical disks from
 		// the agent's smartctl view (#1516).
 		smartByNode := make(map[string][]models.HostDiskSMART)
+		linkedHostByNode := make(map[string]models.Host)
 		for _, n := range nodesFromState {
 			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
 			linkedNodes[n.Name] = true
 			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok {
+				linkedHostByNode[n.Name] = linkedHost
 				if len(linkedHost.DiskExclude) > 0 {
 					diskExcludeByNode[n.Name] = linkedHost.DiskExclude
 				}
@@ -1030,7 +1058,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				// exceed the API window PVE itself allows for disks/list, so
 				// without this fallback their Physical Disks view empties
 				// permanently (#1516).
-				if fallback := physicalDisksFromHostAgentSMART(inst, node.Node, smartByNode[node.Node]); len(fallback) > 0 {
+				if fallback := unsplitPhysicalDisksFromHostAgentSMART(inst, node.Node, linkedHostByNode[node.Node], smartByNode[node.Node], splits); len(fallback) > 0 {
 					polledNodes[node.Node] = true
 					allDisks = append(allDisks, fallback...)
 					log.Info().
@@ -1088,8 +1116,8 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					DevPath:  disk.DevPath,
 					Model:    disk.Model,
 					Vendor:   disk.Vendor,
-					Serial:   disk.Serial,
-					WWN:      disk.WWN,
+					Serial:   proxmoxReportedDiskIdentity(disk.Serial),
+					WWN:      proxmoxReportedDiskIdentity(disk.WWN),
 					Type:     disk.Type,
 					Size:     disk.Size,
 					Health:   normalizeProxmoxDiskHealth(disk.Health),
@@ -1104,7 +1132,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					},
 					LastChecked: time.Now(),
 				}
-				if strings.TrimSpace(disk.Serial) != "" {
+				if strings.TrimSpace(physicalDisk.Serial) != "" {
 					physicalDisk.Collection.Serial = diskinventory.Available("proxmox_disks")
 				} else {
 					physicalDisk.Collection.Serial = diskinventory.Missing("proxmox_disks", "disk serial was not reported")
@@ -1131,8 +1159,14 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		}
 
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
-		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
+		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts, splits)
 		for index := range allDisks {
+			// A split disk's earlier record held the agent's readings and
+			// identity until the split; retained, they would never leave it,
+			// and nothing records which retained value Proxmox collected.
+			if allDisks[index].AgentSMARTSplit {
+				continue
+			}
 			if previous, ok := previousPhysicalDiskEvidence(allDisks[index], existingDisks); ok {
 				allDisks[index] = preserveUnavailablePhysicalDiskEvidence(allDisks[index], previous)
 			}
@@ -1158,15 +1192,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				Int("wearout", disk.Wearout).
 				Msg("Checking disk health")
 
-			if excludePatterns, ok := diskExcludeByNode[disk.Node]; ok && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
-				healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
-				healthyDisk.Health = "PASSED"
-				healthyDisk.Wearout = 100
-				m.alertManager.CheckDiskHealth(inst, disk.Node, healthyDisk)
-				continue
-			}
-
-			m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
+			m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])
 		}
 
 		// Write SMART metrics to persistent store
@@ -1209,6 +1235,22 @@ func normalizeProxmoxDiskHealth(health string) string {
 	default:
 		return trimmed
 	}
+}
+
+// proxmoxUnreportedDiskIdentity is what PVE's disk inventory
+// (PVE::Diskmanage) writes into a disk's serial and wwn when udev has none.
+const proxmoxUnreportedDiskIdentity = "unknown"
+
+// proxmoxReportedDiskIdentity records PVE's placeholder for an unreported
+// serial or WWN as empty. Kept verbatim, the placeholder read as a collected
+// serial, so the disk's collection state hid the gap and the linked host
+// agent's serial or WWN never filled it. Identity keys are unaffected:
+// diskinventory.IsUsableHardwareID already rejected the placeholder.
+func proxmoxReportedDiskIdentity(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), proxmoxUnreportedDiskIdentity) {
+		return ""
+	}
+	return value
 }
 
 // physicalDisksFromHostAgentSMART builds PhysicalDisk entries for a node from
@@ -1267,6 +1309,28 @@ func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []model
 	return disks
 }
 
+// unsplitPhysicalDisksFromHostAgentSMART is physicalDisksFromHostAgentSMART
+// without the rows the operator split from the Proxmox disk in their slot.
+// Such a row describes the agent's disk, not the slot's, and standing in for
+// it would copy the agent's disk, readings and temperature alert included,
+// into a second row that the PVE disk check alerts on as well. The stand-in
+// is judged under its own ID, the key the registry holds it by once it is
+// recorded.
+func unsplitPhysicalDisksFromHostAgentSMART(inst, nodeName string, host models.Host, smartEntries []models.HostDiskSMART, splits diskAgentSplitStore) []models.PhysicalDisk {
+	if splits == nil {
+		return physicalDisksFromHostAgentSMART(inst, nodeName, smartEntries)
+	}
+	var disks []models.PhysicalDisk
+	for _, smart := range smartEntries {
+		for _, disk := range physicalDisksFromHostAgentSMART(inst, nodeName, []models.HostDiskSMART{smart}) {
+			if !splits.ProxmoxDiskAgentSMARTSplit(disk, host, smart) {
+				disks = append(disks, disk)
+			}
+		}
+	}
+	return disks
+}
+
 func cloneDiskIO(in *models.DiskIO) *models.DiskIO {
 	if in == nil {
 		return nil
@@ -1275,6 +1339,15 @@ func cloneDiskIO(in *models.DiskIO) *models.DiskIO {
 	return &out
 }
 
+// previousPhysicalDiskEvidence finds the previous poll's record of the disk
+// now observed, so evidence the current poll could not collect can be
+// retained. Stable hardware identity is tried first. The source ID and device
+// token name a slot, not a disk: a replacement in the same slot keeps both, so
+// a slot match is rejected when the two records carry hardware identities that
+// disagree. Without that guard, a replacement inherits the previous
+// occupant's retained readings, and one whose record arrives without a serial
+// inherits the old serial too, which keys it to the old disk's canonical
+// resource, and every later poll carries that serial forward.
 func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models.PhysicalDisk) (models.PhysicalDisk, bool) {
 	sameScope := func(candidate models.PhysicalDisk) bool {
 		return strings.EqualFold(strings.TrimSpace(candidate.Instance), strings.TrimSpace(current.Instance)) &&
@@ -1296,25 +1369,27 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 		return matched, found
 	}
 
-	if serial := strings.TrimSpace(current.Serial); diskinventory.IsUsableHardwareID(serial) {
+	// Serial before WWN, as before; each may match either field of the
+	// earlier record because reporters disagree on which one holds the
+	// durable identifier.
+	for _, identity := range [][2]string{{current.Serial, ""}, {"", current.WWN}} {
 		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
-			return candidate.Serial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), serial)
+			return diskinventory.HardwareIdentityMatch(identity[0], identity[1], candidate.Serial, candidate.WWN)
 		}); ok {
 			return matched, true
 		}
 	}
-	if wwn := strings.TrimSpace(current.WWN); diskinventory.IsUsableHardwareID(wwn) {
-		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
-			return candidate.WWN != "" && strings.EqualFold(strings.TrimSpace(candidate.WWN), wwn)
-		}); ok {
-			return matched, true
+	sameSlotOccupant := func(matched models.PhysicalDisk, ok bool) (models.PhysicalDisk, bool) {
+		if !ok || physicalDiskHardwareIdentitiesConflict(current, matched) {
+			return models.PhysicalDisk{}, false
 		}
+		return matched, true
 	}
 	if id := strings.TrimSpace(current.ID); id != "" {
 		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
 			return strings.TrimSpace(candidate.ID) == id
 		}); ok {
-			return matched, true
+			return sameSlotOccupant(matched, ok)
 		}
 	}
 
@@ -1322,7 +1397,7 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 	if device == "" {
 		return models.PhysicalDisk{}, false
 	}
-	return uniqueMatch(func(candidate models.PhysicalDisk) bool {
+	return sameSlotOccupant(uniqueMatch(func(candidate models.PhysicalDisk) bool {
 		return normalizeSMARTDeviceIdentifier(candidate.DevPath) == device &&
 			diskTopologyCompatible(
 				current.Controller,
@@ -1330,15 +1405,32 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 				candidate.Controller,
 				candidate.Target,
 			)
-	})
+	}))
+}
+
+// physicalDiskHardwareIdentitiesConflict reports whether both records carry a
+// serial or WWN and none of them names the same disk. Missing identity is not
+// conflicting identity, so a disk whose identity went unreported this poll
+// still matches its slot. Matching a record against itself applies the same
+// normalization as the comparison, so a placeholder such as a 0x-prefixed
+// all-zero WWN counts as unreported rather than as a different disk.
+func physicalDiskHardwareIdentitiesConflict(left, right models.PhysicalDisk) bool {
+	hasID := func(disk models.PhysicalDisk) bool {
+		return diskinventory.HardwareIdentityMatch(disk.Serial, disk.WWN, disk.Serial, disk.WWN)
+	}
+	return hasID(left) && hasID(right) &&
+		!diskinventory.HardwareIdentityMatch(left.Serial, left.WWN, right.Serial, right.WWN)
 }
 
 func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDisk) models.PhysicalDisk {
 	if current.Collection == nil {
 		return current
 	}
+	// Only an identity is worth keeping: a record from before Proxmox's
+	// "unknown" was recorded as unreported would otherwise restore it.
 	if current.Collection.Serial.State != diskinventory.FieldAvailable &&
-		strings.TrimSpace(current.Serial) == "" {
+		strings.TrimSpace(current.Serial) == "" &&
+		diskinventory.IsUsableHardwareID(previous.Serial) {
 		current.Serial = previous.Serial
 	}
 	if current.Collection.Temperature.State != diskinventory.FieldAvailable &&
@@ -1361,6 +1453,37 @@ func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDi
 		current.IO = cloneDiskIO(previous.IO)
 	}
 	return current
+}
+
+// checkPhysicalDiskAlerts evaluates one Proxmox physical disk's health,
+// wearout and temperature alerts. A device matched by the linked host agent's
+// --disk-exclude patterns is evaluated as healthy and without a temperature
+// alert, so excluding a disk also resolves the alerts it already raised.
+func (m *Monitor) checkPhysicalDiskAlerts(instance string, disk models.PhysicalDisk, excludePatterns []string) {
+	excluded := len(excludePatterns) > 0 && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns)
+	if excluded {
+		healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
+		healthyDisk.Health = "PASSED"
+		healthyDisk.Wearout = 100
+		m.alertManager.CheckDiskHealth(instance, disk.Node, healthyDisk)
+	} else {
+		m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
+	}
+	m.alertManager.CheckProxmoxDiskTemperature(instance, disk.Node, alerts.ProxmoxDiskTemperatureReading{
+		Disk:       proxmoxDiskFromPhysicalDisk(disk),
+		Celsius:    collectedPhysicalDiskTemperature(disk),
+		AgentOwned: disk.AgentSMARTReported,
+		Excluded:   excluded,
+	})
+}
+
+// collectedPhysicalDiskTemperature is the disk's temperature when this poll
+// collected it, or 0 for a last-known value normalization kept.
+func collectedPhysicalDiskTemperature(disk models.PhysicalDisk) int {
+	if !diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
+		return 0
+	}
+	return disk.Temperature
 }
 
 func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {
@@ -1466,8 +1589,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Check if client is a ClusterClient to determine health status
 	connectionHealthStr := m.updatePVEConnectionHealth(ctx, instanceName, client)
 
-	// Capture previous memory metrics so we can preserve them if detailed status fails
-	prevNodeMemory, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
+	// Capture the previous poll's nodes for network, temperature and
+	// inventory continuity when this poll cannot read them.
+	prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 
 	// Convert to models
 	modelNodes, nodeEffectiveStatus, nodeDiskSources := m.pollPVENodesParallel(
@@ -1477,7 +1601,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		client,
 		nodes,
 		connectionHealthStr,
-		prevNodeMemory,
 		prevInstanceNodes,
 		debugEnabled,
 	)
@@ -1515,8 +1638,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Poll VMs and containers FIRST - this is the most critical data.
 	// This happens immediately after starting the storage fallback goroutine,
 	// so VM/container polling runs in parallel with (and is not blocked by) storage operations.
-	if err := m.pollGuestsWithFallback(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus); err != nil {
-		pollErr = err
+	guestErr := m.pollGuestsWithFallback(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus)
+	// Replication is independent of guest-detail availability and the short
+	// scheduled cycle. Include fallback/disabled guest monitoring too; a failed
+	// guest read must not leave replication frozen until a manual restart.
+	m.pollReplicationStatusAsync(instanceName, client, nil)
+	if guestErr != nil {
+		pollErr = guestErr
 		return
 	}
 

@@ -1,4 +1,4 @@
-export type AIControlLevel = 'read_only' | 'controlled' | 'autonomous';
+export type AIControlLevel = 'read_only' | 'controlled';
 
 export interface AIChatControlLevelPresentation {
   label: string;
@@ -8,26 +8,21 @@ export interface AIChatControlLevelPresentation {
   selectedClassName: string;
 }
 
+// Legacy saved values still mean action planning, never permission to execute.
+// Mirror the server's interactive projection without rewriting the preference.
 export function normalizeAIControlLevel(value?: string): AIControlLevel {
-  if (value === 'controlled' || value === 'autonomous' || value === 'read_only') {
-    return value;
-  }
-  if (value === 'suggest') {
+  if (value === 'controlled' || value === 'suggest' || value === 'autonomous') {
     return 'controlled';
   }
   return 'read_only';
 }
 
-export function getAIControlLevelPanelClass(level: AIControlLevel): string {
-  return level === 'autonomous'
-    ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25'
-    : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25';
+export function getAIControlLevelPanelClass(_level: AIControlLevel): string {
+  return 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25';
 }
 
 export function getAIControlLevelBadgeClass(level: AIControlLevel): string {
   switch (level) {
-    case 'autonomous':
-      return 'bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300';
     case 'controlled':
       return 'bg-amber-100 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300';
     default:
@@ -38,11 +33,9 @@ export function getAIControlLevelBadgeClass(level: AIControlLevel): string {
 export function getAIControlLevelDescription(level: AIControlLevel): string {
   switch (level) {
     case 'controlled':
-      return 'Assistant asks before chat-only actions. Infrastructure work stays with Patrol mode.';
-    case 'autonomous':
-      return 'Assistant may take eligible chat-only actions allowed by policy. Infrastructure work stays with Patrol mode.';
+      return 'Assistant can plan infrastructure actions and saves each plan to Actions for you to review and run. Chat does not execute the plan.';
     default:
-      return 'Assistant can query and explain only. Infrastructure work stays with Patrol mode.';
+      return 'Assistant can query and explain only. It cannot plan infrastructure actions.';
   }
 }
 
@@ -50,19 +43,10 @@ export function getAIChatControlLevelPresentation(
   level: AIControlLevel,
 ): AIChatControlLevelPresentation {
   switch (level) {
-    case 'autonomous':
-      return {
-        label: 'Chat actions',
-        description: 'Eligible chat-only actions',
-        pillClassName:
-          'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900/25',
-        dotClassName: 'bg-red-500',
-        selectedClassName: 'bg-red-50 dark:bg-red-900/25',
-      };
     case 'controlled':
       return {
         label: 'Ask first',
-        description: 'Asks before chat-only actions',
+        description: 'Plans actions for your review',
         pillClassName:
           'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900/25',
         dotClassName: 'bg-amber-500',

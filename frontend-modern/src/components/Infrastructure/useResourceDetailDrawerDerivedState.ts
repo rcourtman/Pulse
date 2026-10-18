@@ -1,13 +1,12 @@
 import { createMemo, type Accessor } from 'solid-js';
-import { getDiscovery } from '@/api/discovery';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceRelationship } from '@/types/resource';
 import type { HostNetworkInterface } from '@/types/api';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAgentStatusIndicator } from '@/utils/status';
+import { mapDockerContainerStatus } from '@/features/docker/dockerPageModel';
 import {
   dedupeResourceBadges,
   getInfrastructureSystemIdentityBadges,
@@ -20,8 +19,8 @@ import {
   getPreferredResourceClusterName,
   getPreferredInfrastructureDisplayName,
 } from '@/utils/resourceIdentity';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   getResourcePolicyBadges,
   getResourcePolicyGovernedSummary,
@@ -34,6 +33,7 @@ import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
   buildCustomSensorRows,
   buildTemperatureRows,
+  HOST_AGENT_STOPPED_REPORTING_REASON,
   toAgentFromResource,
   toNodeFromProxmox,
   type AgentPlatformData,
@@ -41,8 +41,10 @@ import {
   type KubernetesPlatformData,
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
-import { getDiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
+import {
+  getResourceGuestReadPrecaution,
+  toDiscoveryConfig,
+} from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import {
   buildPbsActiveTasks,
   buildPbsVisibleJobBreakdown,
@@ -63,12 +65,12 @@ import {
 } from './resourceDetailDrawerOperationalModel';
 import {
   getResourceMetricsHistoryCurrentMetrics,
+  getResourceMetricsHistoryDeferredMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
   resourceSupportsMetricsHistory,
 } from './resourceDetailDrawerMetricsHistoryModel';
 import {
-  buildDiscoveryContextSummary,
   buildIdentityMatchInfo,
   buildResourceDebugBundle,
   buildResourceIdentityView,
@@ -88,28 +90,12 @@ import {
 } from './resourceDetailDrawerKubernetesModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
-type DrawerTab =
-  | 'overview'
-  | 'history'
-  | 'manage'
-  | 'discovery'
-  | 'mail'
-  | 'namespaces'
-  | 'deployments'
-  | 'swarm'
-  | 'debug';
-
-interface ResourceDrawerDiscoverySourceKey {
-  type: DiscoveryResourceType;
-  agent: string;
-  resource: string;
-}
+type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   debugEnabled: Accessor<boolean>;
-  discoveryFeatureEnabled: Accessor<boolean>;
   resourceIntelligence: Accessor<ResourceIntelligence | null>;
   resourceRelationships?: Accessor<readonly ResourceRelationship[] | null | undefined>;
 }
@@ -121,7 +107,6 @@ export const useResourceDetailDrawerDerivedState = (
   const {
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
-    discoveryFeatureEnabled,
     resourceIntelligence,
   } = options;
 
@@ -129,9 +114,20 @@ export const useResourceDetailDrawerDerivedState = (
   const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource()) ?? '');
   const resolveResourceLabel = (resourceId: string): string =>
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;
-  const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource().status }));
+  // A container's dot reads its run state and health check, the same mapper
+  // its table row uses, so a running but unhealthy container is not green here
+  // while red in the row above.
+  const statusIndicator = createMemo(() =>
+    resource().type === 'app-container'
+      ? mapDockerContainerStatus(resource())
+      : getAgentStatusIndicator({ status: resource().status }),
+  );
   const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource()));
-  const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen));
+  // An open drawer keeps its rows while a resource's timestamps stay the same,
+  // which is exactly when a silent resource's Last seen must keep aging, so
+  // the drawer's ages read the shared clock.
+  const now = useRelativeTimeNow();
+  const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen, { now: now() }));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource().lastSeen));
 
   const platformBadge = createMemo(() => getPlatformBadge(resource().platformType));
@@ -192,7 +188,16 @@ export const useResourceDetailDrawerDerivedState = (
       [],
   );
   const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
-  const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
+  // A silent agent's sensors and disk usage are its last report, even on a
+  // row another source keeps online.
+  const agentReadingsLastKnownReason = createMemo(() =>
+    resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
+  );
+  const temperatureRows = createMemo(() =>
+    buildTemperatureRows(agentInfo()?.sensors, {
+      lastKnownReason: agentReadingsLastKnownReason(),
+    }),
+  );
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
@@ -206,7 +211,7 @@ export const useResourceDetailDrawerDerivedState = (
     if (!raw) return '';
     const parsed = Date.parse(raw);
     if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
+    return formatRelativeTime(parsed, { now: now() });
   });
   const dockerHostCommand = createMemo(() => dockerHostData()?.command);
   const dockerHostCommandActive = createMemo(() => {
@@ -274,7 +279,7 @@ export const useResourceDetailDrawerDerivedState = (
     if (!raw) return '';
     const parsed = Date.parse(raw);
     if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
+    return formatRelativeTime(parsed, { now: now() });
   });
   const pbsVisibleJobBreakdown = createMemo(() => buildPbsVisibleJobBreakdown(pbsData()));
   const pbsActiveTasks = createMemo(() => buildPbsActiveTasks(pbsData()));
@@ -297,36 +302,7 @@ export const useResourceDetailDrawerDerivedState = (
   const hasAliasOverflow = createMemo(() => identityView().hasAliasOverflow);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource()));
-  const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
-  const discoverySourceKey = createMemo(() => {
-    if (!discoveryFeatureEnabled()) return null;
-    const config = discoveryConfig();
-    if (!config?.resourceType || !config.agentId || !config.resourceId) return null;
-    return {
-      type: config.resourceType,
-      agent: config.agentId,
-      resource: config.resourceId,
-    } as ResourceDrawerDiscoverySourceKey;
-  });
-  const discoveryRecord = createNonSuspendingQuery<
-    ResourceDiscovery | null,
-    ResourceDrawerDiscoverySourceKey
-  >({
-    source: discoverySourceKey,
-    initialValue: null,
-    cacheKey: (key) => `resource-detail-discovery:${key.type}:${key.agent}:${key.resource}`,
-    retainPreviousValueOnSourceChange: false,
-    fetcher: async (key) => {
-      try {
-        return await getDiscovery(key.type, key.agent, key.resource);
-      } catch {
-        return null;
-      }
-    },
-  });
-  const discoveryIdentifiedSummary = createMemo(() =>
-    discoveryFeatureEnabled() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
-  );
+  const guestReadPrecaution = createMemo(() => getResourceGuestReadPrecaution(resource()));
 
   const hostDetailCards = createMemo(() =>
     buildHostDetailCards({
@@ -361,7 +337,10 @@ export const useResourceDetailDrawerDerivedState = (
   const vmwareDetailsSummary = createMemo(() =>
     buildVMwareDetailsSummary(resource().type, vmwareData()),
   );
-  const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource()));
+  const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
+  const trueNASDetailSections = createMemo(() =>
+    buildTrueNASDetailSections(resource(), getTrueNASDiskTemperatureThresholds),
+  );
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
   const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource()));
   const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource()));
@@ -371,15 +350,11 @@ export const useResourceDetailDrawerDerivedState = (
   const metricsHistoryCurrentMetrics = createMemo(() =>
     getResourceMetricsHistoryCurrentMetrics(resource()),
   );
+  const metricsHistoryDeferredMetrics = createMemo(() =>
+    getResourceMetricsHistoryDeferredMetrics(resource()),
+  );
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource()));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource()));
-  const hasDiscoveryTab = createMemo(
-    () =>
-      discoveryFeatureEnabled() &&
-      isPulseAgentPlatformResource(resource()) &&
-      Boolean(discoveryConfig()),
-  );
-
   const relatedLinks = createMemo(() => buildRelatedLinks(resource(), displayName()));
   const accessSummary = createMemo(() =>
     buildAccessSummary({
@@ -408,10 +383,10 @@ export const useResourceDetailDrawerDerivedState = (
 
   const tabs = createMemo(() => {
     const base = [
+      // A resource with stored history charts it on Overview; there is no
+      // separate History tab repeating those charts at another range.
       { id: 'overview' as DrawerTab, label: 'Overview' },
-      ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
       { id: 'manage' as DrawerTab, label: 'Manage' },
-      ...(hasDiscoveryTab() ? [{ id: 'discovery' as DrawerTab, label: 'Discovery' }] : []),
       ...(resource().type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource().type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
@@ -455,6 +430,7 @@ export const useResourceDetailDrawerDerivedState = (
     proxmoxNode,
     proxmoxNetworkInterfaces,
     agentInfo,
+    agentReadingsLastKnownReason,
     temperatureRows,
     customSensorRows,
     dockerHostData,
@@ -497,10 +473,6 @@ export const useResourceDetailDrawerDerivedState = (
     hasAliasOverflow,
     hasMergedSources,
     discoveryConfig,
-    discoveryFeatureEnabled,
-    discoveryContextSummary,
-    discoveryIdentifiedSummary,
-    discoveryLoading: discoveryRecord.loading,
     accessSummary,
     hasAccessContext,
     hasHostDetails,
@@ -509,9 +481,10 @@ export const useResourceDetailDrawerDerivedState = (
     serviceDetailsSummary,
     metricsHistoryTarget,
     metricsHistoryCurrentMetrics,
+    metricsHistoryDeferredMetrics,
     metricsHistoryGroups,
     hasMetricsHistory,
-    hasDiscoveryTab,
+    guestReadPrecaution,
     hasVMwareDetails,
     vmwareDetailsSummary,
     vmwareDetailSections,

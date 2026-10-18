@@ -78,10 +78,6 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/format', () => ({
-  formatRelativeTime: () => 'moments ago',
-}));
-
 vi.mock('@/utils/url', () => ({
   getPulseBaseUrl: () => 'https://pulse.example.com',
 }));
@@ -147,6 +143,15 @@ const getTokenTableRow = (name: string): HTMLTableRowElement => {
   return row;
 };
 
+const tokenCell = (row: HTMLTableRowElement, label: string) => {
+  const headers = [...row.closest('table')!.querySelectorAll('thead th')];
+  const index = headers.findIndex((header) => header.textContent?.trim() === label);
+  if (index < 0) throw new Error(`Token table has no ${label} header`);
+  return row.cells[index];
+};
+
+const createdTokenCell = (row: HTMLTableRowElement) => tokenCell(row, 'Created');
+
 const findTokenTableRow = async (name: string): Promise<HTMLTableRowElement> => {
   await screen.findAllByText(name);
   return getTokenTableRow(name);
@@ -176,6 +181,62 @@ describe('APITokenManager security surface', () => {
 });
 
 describe('APITokenManager', () => {
+  it('ages Created in both layouts without another list read, token write or losing a draft name', async () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const token = makeToken({
+      createdAt: new Date(start - 60_000).toISOString(),
+      lastUsedAt: undefined,
+    });
+    listTokensMock.mockResolvedValue([token]);
+    const view = render(() => <APITokenManager canManage />);
+    await vi.advanceTimersByTimeAsync(0);
+    const row = getTokenTableRow(token.name!);
+    const card = screen.getByRole('article', { name: `API token ${token.name}` });
+    expect(createdTokenCell(row)).toHaveTextContent('1 min ago');
+    expect(within(card).getByText('Created').nextElementSibling).toHaveTextContent('1 min ago');
+    const input = screen.getByLabelText('Token name');
+    fireEvent.input(input, { target: { value: 'Unsaved token name' } });
+    input.focus();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(createdTokenCell(row)).toHaveTextContent('2 hours ago');
+    expect(within(card).getByText('Created').nextElementSibling).toHaveTextContent('2 hours ago');
+    expect(input).toHaveValue('Unsaved token name');
+    expect(input).toHaveFocus();
+    expect(getTokenTableRow(token.name!)).toBe(row);
+    expect(within(card).getByText('Never')).toBeInTheDocument();
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+    expect(token.createdAt).toBe(new Date(start - 60_000).toISOString());
+    view.unmount();
+  });
+
+  it('ages Last used in both layouts without another list read', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const token = makeToken({
+      createdAt: new Date(start - 86_400_000).toISOString(),
+      lastUsedAt: new Date(start - 60_000).toISOString(),
+    });
+    listTokensMock.mockResolvedValue([token]);
+    const view = render(() => <APITokenManager canManage />);
+    await vi.advanceTimersByTimeAsync(0);
+    const row = getTokenTableRow(token.name!);
+    const card = screen.getByRole('article', { name: `API token ${token.name}` });
+    const cardLastUsed = () => within(card).getByText('Last used').nextElementSibling;
+    expect(tokenCell(row, 'Last used')).toHaveTextContent('1 min ago');
+    expect(cardLastUsed()).toHaveTextContent('1 min ago');
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(tokenCell(row, 'Last used')).toHaveTextContent('2 hours ago');
+    expect(cardLastUsed()).toHaveTextContent('2 hours ago');
+    expect(getTokenTableRow(token.name!)).toBe(row);
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
   beforeEach(() => {
     listTokensMock.mockReset();
     createTokenMock.mockReset();
@@ -236,8 +297,25 @@ describe('APITokenManager', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     window.history.pushState({}, '', '/');
   });
+
+  it.each(['', 'not-a-date'])(
+    'does not invent Created for an unusable timestamp (%s)',
+    async (createdAt) => {
+      vi.useFakeTimers({ now: Date.parse('2026-10-11T11:00:00Z') });
+      const token = makeToken({ createdAt });
+      listTokensMock.mockResolvedValue([token]);
+      render(() => <APITokenManager canManage />);
+      await vi.advanceTimersByTimeAsync(0);
+      const row = getTokenTableRow(token.name!);
+      expect(createdTokenCell(row).textContent).toBe('');
+      await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+      expect(createdTokenCell(row).textContent).toBe('');
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('keeps API Access focused on token management', async () => {
     window.history.pushState({}, '', '/settings/security/api');

@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `18` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `20` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -89,7 +89,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Availability probe agents | `1` | Understand how many distinct probe agents installs deploy; counts only |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
 | Patrol enabled | `true`/`false` | See whether proactive AI health patrol is used |
-| Discovery enabled | `true`/`false` | See whether network or model-backed discovery is used |
+| Discovery enabled | `true`/`false` | See whether network subnet discovery is used |
 | Notifications enabled | `true`/`false` | See whether alert notification delivery is configured |
 | AI actions enabled | `true`/`false` | See whether AI control tools are enabled without sending action history or command content |
 | Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |
@@ -133,7 +133,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures TLS 7d (schema v5) | `0` | Count terminal failures classified locally as certificate or TLS failures without sending certificates, hostnames, or raw errors |
 | Notification failures configuration 7d (schema v5) | `0` | Count terminal failures classified locally as missing or invalid destination configuration without sending configuration values |
 | Notification failures rejected 7d (schema v5; new schema v15 classifications are HTTP 4xx) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content; schema v5-v14 included destination HTTP 5xx responses, and those locally retained rows can remain in this rolling count for up to seven days after upgrade |
-| Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination HTTP 5xx server errors without sending response content, destination identity, or provider identity |
+| Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination server-side or temporary failures (HTTP 5xx responses, the temporary HTTP 423 Locked and 425 Too Early responses, and transient SMTP 4xx replies) without sending response content, destination identity, or provider identity |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
 | AI provider class | `local` | See one closed bucket for how the Patrol (or default) model is reached: `none`, `local` (Ollama or a private-network OpenAI-compatible endpoint), `cloud_byok` (a hosted provider with your own key), `cloud_subscription` (the Codex or Claude CLI subscription route), or `hosted_legacy` (the retired Pulse-hosted route), without sending the provider, model name, endpoint, or account |
@@ -147,7 +147,32 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Audit reads 30d | `41` | Count how many times an entitled operator opened or exported the audit log in the current 30-day telemetry window, without sending query filters, actors, ranges, or any audit event |
 | Report schedules | `5` | Count configured scheduled reports without sending schedule names, report scope, formats, or delivery recipients |
 | Report schedules enabled | `4` | Count scheduled reports that are switched on, without sending schedule names, scope, or recipients |
-| Report schedules run 30d | `2` | Count scheduled reports that last ran inside the current 30-day telemetry window, without sending run times, report contents, or delivery results |
+| Report schedules run 30d | `2` | Count scheduled reports that last ran inside the current 30-day telemetry window, without sending run times or report contents; this legacy field counts recent attempts, not confirmed success |
+| Reporting generated resources 30d (`reporting_generated_resources_30d`) | `1` | Successful generation attempts for this report kind, including retry generations and fully written direct downloads |
+| Reporting generated vm inventory 30d (`reporting_generated_vm_inventory_30d`) | `1` | Successful generation attempts for this report kind, including retry generations and fully written direct downloads |
+| Reporting generated backup health 30d (`reporting_generated_backup_health_30d`) | `1` | Successful generation attempts for this report kind, including retry generations and fully written direct downloads |
+| Reporting generated patrol digest 30d (`reporting_generated_patrol_digest_30d`) | `1` | Successful generation attempts for this report kind, including retry generations and fully written direct downloads |
+| Reporting successful resources periods 30d (`reporting_successful_resources_periods_30d`) | `1` | Distinct reporting windows of saved schedules whose successful final state was persisted, for this report kind |
+| Reporting successful vm inventory periods 30d (`reporting_successful_vm_inventory_periods_30d`) | `1` | Distinct reporting windows of saved schedules whose successful final state was persisted, for this report kind |
+| Reporting successful backup health periods 30d (`reporting_successful_backup_health_periods_30d`) | `1` | Distinct reporting windows of saved schedules whose successful final state was persisted, for this report kind |
+| Reporting successful patrol digest periods 30d (`reporting_successful_patrol_digest_periods_30d`) | `1` | Distinct reporting windows of saved schedules whose successful final state was persisted, for this report kind |
+| Reporting repeat resources periods 30d (`reporting_repeat_resources_periods_30d`) | `1` | Those successful windows with another distinct successful window on the same schedule observed within 90 days; retries and same-period reruns are excluded |
+| Reporting repeat vm inventory periods 30d (`reporting_repeat_vm_inventory_periods_30d`) | `1` | Those successful windows with another distinct successful window on the same schedule observed within 90 days; retries and same-period reruns are excluded |
+| Reporting repeat backup health periods 30d (`reporting_repeat_backup_health_periods_30d`) | `1` | Those successful windows with another distinct successful window on the same schedule observed within 90 days; retries and same-period reruns are excluded |
+| Reporting repeat patrol digest periods 30d (`reporting_repeat_patrol_digest_periods_30d`) | `1` | Those successful windows with another distinct successful window on the same schedule observed within 90 days; retries and same-period reruns are excluded |
+| Reporting saved 30d (`reporting_saved_30d`) | `1` | Successfully saved scheduled report files, including separate retry attempts |
+| Reporting email accepted 30d (`reporting_email_accepted_30d`) | `1` | Scheduled email attempts accepted by SMTP; this does not establish inbox receipt |
+| Reporting delivery failed 30d (`reporting_delivery_failed_30d`) | `1` | Scheduled delivery attempts with a definite failure, including preflight failures and attempts later retried |
+| Reporting delivery unconfirmed 30d (`reporting_delivery_unconfirmed_30d`) | `1` | Scheduled delivery attempts with uncertain acceptance, including interrupted sending recovered after restart |
+| Reporting data complete 30d (`reporting_data_complete_30d`) | `1` | Generated backup-health reports with complete source data |
+| Reporting data incomplete 30d (`reporting_data_incomplete_30d`) | `1` | Generated backup-health reports with partial or incomplete source data |
+| Reporting data unavailable 30d (`reporting_data_unavailable_30d`) | `1` | Generated backup-health reports with unavailable source data |
+| Reporting telemetry available (`reporting_telemetry_available`) | `true`/`false` | Whether the local aggregate tally could be read and retained; false means unmeasured, not zero usage |
+| Reporting observation days (`reporting_observation_days`) | `1` | Elapsed UTC days since the local tally began, capped at 30; this does not imply continuous uptime |
+| Reporting resources active days 30d (`reporting_resources_active_days_30d`) | `2` | Distinct UTC days with successful generation for this kind, including direct downloads; multiple same-day attempts count once, with a maximum of 30 days |
+| Reporting vm inventory active days 30d (`reporting_vm_inventory_active_days_30d`) | `2` | Distinct UTC days with successful generation for this kind, including direct downloads; multiple same-day attempts count once, with a maximum of 30 days |
+| Reporting backup health active days 30d (`reporting_backup_health_active_days_30d`) | `2` | Distinct UTC days with successful generation for this kind, including direct downloads; multiple same-day attempts count once, with a maximum of 30 days |
+| Reporting patrol digest active days 30d (`reporting_patrol_digest_active_days_30d`) | `2` | Distinct UTC days with successful generation for this kind, including direct downloads; multiple same-day attempts count once, with a maximum of 30 days |
 | Agent profiles | `9` | Count configured agent profiles without sending profile names, targets, or profile contents |
 | Update attempts 30d | `2` | Count update attempts recorded in the current 30-day telemetry window without sending download URLs, logs, or command output |
 | Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
@@ -259,6 +284,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action refusals: other 30d | `1` | Count pre-dispatch refusals not covered by the fixed categories without sending raw error or action content |
 | Pulse Intelligence verified finding resolutions 30d | `1` | Count approved Patrol-origin actions whose execution succeeded and whose linked finding postcondition was independently confirmed, without sending finding IDs, action IDs, evidence, resources, or fix details |
 | Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
+| Successful history reads over 7d 30d (`successful_history_reads_over_7d_30d`) | `5` | Count successful GET responses for a history range longer than seven days that actually return a numeric metric point older than seven days. Includes successful cache hits, but excludes empty/recent-only results, denied requests, failed writes, cancelled requests, HEAD requests and synthetic data. Only a rolling count leaves the install, with no selected range, timestamp, metric value, resource, tenant, user or request identity |
 | Workload history preview sessions 30d | `18` | Count browser sessions that successfully displayed a populated workload history preview, deduplicated locally once per session without sending a guest, user, route, timing, or browser identifier |
 | Workload history scrub sessions 30d | `9` | Count browser sessions that inspected a point on a workload history graph, deduplicated locally once per session without sending coordinates, values, guests, or browser identity |
 | Workload history range change sessions 30d | `6` | Count browser sessions that changed the workload history range, deduplicated locally once per session without sending the selected range or browser identity |
@@ -283,8 +309,9 @@ performed locally; raw error text and destination/provider identity are never
 included in the payload.
 
 Schema v15 adds an eighth
-fixed notification terminal-failure counter for destination HTTP 5xx server
-errors. From v15 onward,
+fixed notification terminal-failure counter for destination server-side or
+temporary failures: HTTP 5xx responses, the temporary HTTP 423 Locked and 425
+Too Early responses, and transient SMTP 4xx replies. From v15 onward,
 new terminal failures enter `notification_failures_rejected_7d` only for HTTP
 4xx destination or payload rejections. Locally retained v5-v14 rows may still
 include HTTP 5xx responses for up to seven days after upgrade; first-heartbeat
@@ -310,13 +337,38 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 18. Schema v16 adds four
+The current telemetry contract is schema version 20. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
 locally and includes only their rolling 30-day totals in the existing heartbeat;
 there is no browser identifier, raw event stream, guest identity, selected
 range, cursor coordinate, value, route, or interaction timing.
+
+Schema v20 adds the reporting fields listed above. Counters cover the current
+UTC day and previous 29 UTC days and travel only in the existing startup/daily
+heartbeat when usage statistics are enabled. There is no extra remote event
+stream. Generated reports and delivery outcomes count separate attempts. A
+successful period requires a saved schedule's final successful state to be
+persisted. Repeat use requires another distinct reporting window for that same
+saved schedule within 90 days. Retries and reruns of the same window do not
+qualify, and monthly schedules can qualify after more than 30 days.
+The per-kind active-day counters also cover repeat manual use: successful
+downloads or scheduled generations on different UTC days, with each day counted
+once regardless of same-day attempts.
+
+Pulse retains daily aggregate counts and opaque SHA-256 schedule/period markers
+locally, using the existing configuration encryption boundary when configured.
+Markers expire after 90 days and never leave the installation. Only the listed
+scalar counters, availability flag and elapsed observation days are sent. No
+report contents, names, recipients, resource identifiers, organization identifiers,
+schedule identifiers, period markers, reporting ranges, raw errors or run times
+are transmitted. Local tally errors never stop report delivery. A missing or
+unreadable tally is unmeasured, rather than evidence of no use. SMTP acceptance
+is not proof that an email reached an inbox. These aggregate installation-level
+signals cannot establish how many paying customers use reporting or what they
+would pay for it. Pricing, license checks, customer entitlements, existing
+opt-out controls and receiver retention are unchanged.
 
 Schema v17 adds four closed Patrol posture fields and thirteen outcome counts.
 The provider class says only how the Patrol model is reached (local,
@@ -335,6 +387,22 @@ fixed category for the most recent update check on that channel, with a single
 flag for whether it offered a newer release. They exist because a failed check
 never shows up in the update counters, which only see updates that were
 applied. No version, release URL, response, or error text is sent.
+
+Schema v19 adds `successful_history_reads_over_7d_30d`. The server counts
+successfully written metric-history and chart responses containing a metric
+point older than seven days. Selecting a long range alone does not count.
+Empty results, denied requests, failed writes and mock data do not count.
+Pulse retains bounded UTC-day totals locally and sends only their rolling
+30-day sum, including the UTC day containing the cutoff. The day buckets
+are not exported. Requests and auto-refreshes count as reads, not people
+or proof of a human viewing a chart.
+
+No customer identity, request URL, selected range, metric timestamp, metric
+value or infrastructure identifier is retained in this tally or sent. Older
+schemas cannot report this signal. Measurement starts after upgrading, so
+historical use cannot be reconstructed and an initial zero does not represent
+a full 30-day observation. Telemetry opt-out, installation-ID rotation,
+account-linking restrictions and 90-day receiver retention are unchanged.
 
 #### Server-side handling and retention
 
@@ -388,6 +456,8 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 20 | 2026-10-17 | Content-free aggregate report generation, delivery outcomes, source-data states and distinct-period repeat use, with measurement availability and elapsed observation days |
+| 19 | 2026-10-16 | Content-free rolling count of successful metric-history responses that return data older than seven days |
 | 18 | 2026-09-27 | Effective update channel, closed outcome of the last update check on that channel, and whether it offered a newer release |
 | 17 | 2026-09-02 | Closed Patrol provider class, effective Patrol autonomy level, coarse 30-day Patrol token buckets, and per-outcome investigation counts |
 | 16 | 2026-08-30 | Four content-free workload-history adoption counters, each counted at most once per browser session |

@@ -24,14 +24,19 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
       <button
         ref={state.setButtonRef}
         type="button"
-        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 dark:hover:text-blue-400 ${props.class ?? ''}`}
+        class={`inline-flex min-h-11 min-w-11 max-w-full items-center justify-center gap-1.5 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 ${props.triggerLabel ? 'rounded-sm px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300' : 'rounded-full p-1 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400'} ${props.class ?? ''}`}
         onClick={state.toggleOpen}
-        aria-label={`Help: ${helpContent.title}`}
+        aria-label={props.triggerLabel ?? `Help: ${helpContent.title}`}
         aria-expanded={state.isOpen()}
         aria-haspopup="dialog"
         aria-controls={state.isOpen() ? popoverId : undefined}
       >
-        <CircleHelp class={helpIconSizeClasses[state.size()]} strokeWidth={2} />
+        <CircleHelp class={`${helpIconSizeClasses[state.size()]} shrink-0`} strokeWidth={2} />
+        <Show when={props.triggerLabel}>
+          <span class="min-w-0 text-left whitespace-normal wrap-anywhere">
+            {props.triggerLabel}
+          </span>
+        </Show>
       </button>
 
       <Show when={state.isOpen()}>
@@ -41,16 +46,15 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             id={popoverId}
             role="dialog"
             aria-labelledby={titleId}
-            class="fixed z-9999 bg-surface rounded-md shadow-xs border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            class="fixed z-9999 flex max-h-[calc(100dvh-16px)] flex-col bg-surface rounded-md shadow-xs border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150 min-w-[200px]"
             style={{
               top: `${state.popoverPosition().top}px`,
               left: `${state.popoverPosition().left}px`,
-              'max-width': `${state.maxWidth()}px`,
-              'min-width': '200px',
+              'max-width': `min(${state.maxWidth()}px, calc(100vw - 16px))`,
             }}
           >
             {/* Header */}
-            <div class="px-3 py-2 bg-surface-alt border-b border-border flex items-center justify-between gap-2">
+            <div class="shrink-0 px-3 py-2 bg-surface-alt border-b border-border flex items-center justify-between gap-2">
               <span id={titleId} class="text-sm font-medium text-base-content">
                 {helpContent.title}
               </span>
@@ -66,7 +70,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             </div>
 
             {/* Content */}
-            <div class="px-3 py-2.5 text-xs text-muted space-y-2">
+            <div class="min-h-0 overflow-y-auto px-3 py-2.5 text-xs text-muted space-y-2">
               <p class="whitespace-pre-line leading-relaxed">{helpContent.description}</p>
 
               <Show when={helpContent.examples && helpContent.examples.length > 0}>

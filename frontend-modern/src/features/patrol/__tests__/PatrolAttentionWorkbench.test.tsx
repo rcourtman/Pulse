@@ -7,6 +7,7 @@ import type {
   AttentionListResponse,
   AttentionSummary,
 } from '@/api/patrolAttention';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const apiMocks = vi.hoisted(() => ({
   getList: vi.fn(),
@@ -23,6 +24,11 @@ const apiMocks = vi.hoisted(() => ({
   loadPatrolFindings: vi.fn(),
   createRule: vi.fn(),
 }));
+
+// The registry resolves the subject to the platform page that shows it; by
+// default it cannot, so the item's own type decides.
+const getResource = vi.hoisted(() => vi.fn());
+vi.mock('@/api/resources', () => ({ ResourceAPI: { getResource } }));
 
 vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {
@@ -71,10 +77,15 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
       detail: { audit?: { id?: string } } | null;
       onClose: () => void;
       onChanged: (next: { audit?: { id?: string } }) => Promise<void> | void;
+      showResourceLink?: boolean;
     }) => (
       <Show when={props.detail}>
         {(value) => (
-          <div role="dialog" aria-label="Governed action review">
+          <div
+            role="dialog"
+            aria-label="Governed action review"
+            data-resource-link={props.showResourceLink ? 'shown' : 'hidden'}
+          >
             <span>{value().audit?.id}</span>
             <button type="button" onClick={() => void props.onChanged(value())}>
               Complete action
@@ -90,6 +101,7 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
 });
 
 import {
+  getAttentionSuppressionExpiryLabel,
   getDistinctPatrolImpact,
   getPatrolDecisionDisplayTitle,
   PatrolAttentionWorkbench,
@@ -220,6 +232,8 @@ const detail = (value: AttentionItem): AttentionItemDetail => ({
 
 describe('PatrolAttentionWorkbench', () => {
   beforeEach(() => {
+    getResource.mockReset();
+    getResource.mockRejectedValue(new Error('Resource not found'));
     window.history.replaceState({}, '', '/patrol');
     patrolAttentionStore.clear();
     apiMocks.getList.mockReset();
@@ -248,6 +262,74 @@ describe('PatrolAttentionWorkbench', () => {
         <Route path="/patrol" component={() => <PatrolAttentionWorkbench />} />
       </Router>
     ));
+
+  it('ages the retained empty-view evaluation without another list read', async () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const calm = summary({ evaluatedAt: new Date(start - 60_000).toISOString() });
+    apiMocks.getList.mockResolvedValue(listResponse([], calm));
+    try {
+      renderWorkbench();
+      expect(await screen.findByText(/Checked 1m ago/)).toBeInTheDocument();
+      // Hold the existing input at the loader boundary, independently of
+      // the workbench's ordinary 30-second polling timer.
+      const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
+      vi.advanceTimersByTime(60_000);
+      expect(screen.getByText(/Checked 2m ago/)).toBeInTheDocument();
+      expect(apiMocks.getList).toHaveBeenCalledOnce();
+      expect(calm.evaluatedAt).toBe(new Date(start - 60_000).toISOString());
+      held.mockRestore();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it('ages list, detail and flapping-window observations without repeating an operation', async () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const active = item({
+      lastObservedAt: new Date(start - 60_000).toISOString(),
+      flapping: {
+        transitionCount: 11,
+        windowHours: 24,
+        firstTransitionAt: new Date(start - 10 * 60_000).toISOString(),
+        lastTransitionAt: new Date(start - 2 * 60_000).toISOString(),
+      },
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    try {
+      renderWorkbench();
+      const row = await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' });
+      expect(row).toHaveTextContent('Last seen 1m ago');
+      fireEvent.click(row);
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      await waitFor(() => expect(detailRegion).toHaveTextContent('Last seen 1m ago'));
+      fireEvent.click(screen.getByText('Evidence and history'));
+      expect(detailRegion).toHaveTextContent(/first 10m ago.*latest 2m ago/);
+      const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
+      vi.advanceTimersByTime(60_000);
+      expect(row).toHaveTextContent('Last seen 2m ago');
+      expect(detailRegion).toHaveTextContent('Last seen 2m ago');
+      expect(detailRegion).toHaveTextContent(/first 11m ago.*latest 3m ago/);
+      expect(apiMocks.getList).toHaveBeenCalledOnce();
+      expect(apiMocks.getDetail).toHaveBeenCalledOnce();
+      expect(apiMocks.planAction).not.toHaveBeenCalled();
+      expect(apiMocks.acknowledge).not.toHaveBeenCalled();
+      expect(active.evidenceFreshness).toBe('fresh');
+      held.mockRestore();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
 
   it('renders a plain trustworthy calm state without a proof strip', async () => {
     const calm = summary({ evaluatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() });
@@ -476,7 +558,145 @@ describe('PatrolAttentionWorkbench', () => {
       'min-h-11',
       'sm:min-h-0',
     );
+    // An unresolved Proxmox VM opens the Proxmox workloads with it selected,
+    // not the standalone Machines page that lists only agent hosts.
+    expect(within(detailRegion).getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=pve%3Avm%3A101',
+    );
     expect(window.location.search).toBe('?attention=record-1');
+  });
+
+  it('opens the subject on the page of the platform the registry says reports it', async () => {
+    // An ESXi host's alert names an agent-type subject; Machines never shows it.
+    const active = item({
+      subjectResourceId: 'agent-b602',
+      subjectResourceName: 'esxi-07.lab.local',
+      subjectResourceType: 'agent',
+    });
+    getResource.mockResolvedValue({
+      id: 'agent-b602',
+      type: 'agent',
+      name: 'esxi-07.lab.local',
+      sources: ['vmware'],
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Open .*Database VM/ }));
+    const link = await screen.findByRole('link', { name: 'Open resource' });
+    await waitFor(() => expect(link).toHaveAttribute('href', '/vmware/overview'));
+    expect(getResource).toHaveBeenCalledWith('agent-b602', expect.anything());
+  });
+
+  it('keeps the open detail transition, evidence and acknowledgement ages moving', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-19T08:10:00Z'),
+    });
+    const active = item({ state: 'acknowledged' });
+    const opened = detail(active);
+    opened.timeline[0].at = '2026-07-19T08:03:00Z';
+    opened.evidence[0].observedAt = '2026-07-19T08:05:00Z';
+    opened.operationalRecord.acknowledgement = { by: 'admin', at: '2026-07-19T08:07:00Z' };
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, acknowledgedCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(opened);
+
+    try {
+      renderWorkbench();
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+      );
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      await waitFor(() => expect(detailRegion).toHaveTextContent('7m ago'));
+      expect(detailRegion).toHaveTextContent('5m ago');
+      expect(detailRegion).toHaveTextContent('3m ago');
+
+      // The detail is not re-read: its records never change and only the
+      // clock moves.
+      vi.advanceTimersByTime(2 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+      expect(detailRegion).not.toHaveTextContent(/[357]m ago/);
+      expect(detailRegion.textContent?.match(/2h ago/g)?.length).toBeGreaterThanOrEqual(3);
+      expect(apiMocks.getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts down to when a suppressed issue returns to active attention', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-19T08:10:00Z'),
+    });
+    const suppressed = item({ state: 'suppressed' });
+    const suppressedDetail = detail(suppressed);
+    // A 24-hour suppression set just now.
+    suppressedDetail.operationalRecord.suppression = {
+      at: '2026-07-19T08:10:00Z',
+      by: 'operator',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:10:00Z',
+    };
+    const handled = summary({ suppressedCount: 1 });
+    apiMocks.getList.mockImplementation((scope: string) =>
+      Promise.resolve(listResponse(scope === 'all' ? [suppressed] : [], handled)),
+    );
+    apiMocks.getDetail.mockResolvedValue(suppressedDetail);
+
+    try {
+      renderWorkbench();
+      fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+      );
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      const expiry = await within(detailRegion).findByText(/Returns to active attention/);
+      expect(expiry).toHaveTextContent('Returns to active attention in 1d.');
+      expect(expiry).toHaveAttribute('title', expect.stringMatching(/^Suppressed until /));
+
+      // The detail is not re-read: its suppression never changes and only the
+      // clock moves.
+      vi.advanceTimersByTime(4 * 60 * 60 * 1000);
+      expect(expiry).toHaveTextContent('Returns to active attention in 20h.');
+
+      vi.setSystemTime(Date.parse('2026-07-20T07:30:00Z'));
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(expiry).toHaveTextContent('Returns to active attention in 40m.');
+
+      vi.setSystemTime(Date.parse('2026-07-20T08:11:00Z'));
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(expiry).toHaveTextContent('Suppression has ended.');
+      expect(detailRegion).not.toHaveTextContent('just now');
+      expect(apiMocks.getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says a reviewed issue stays reviewed when its suppression ends', () => {
+    const now = Date.parse('2026-07-19T08:10:00Z');
+    // Expiry restores Acknowledged for a reviewed alert, which is not active
+    // attention, so only an unreviewed issue "returns to active attention".
+    expect(getAttentionSuppressionExpiryLabel('2026-07-20T08:10:00Z', true, now)).toBe(
+      'Suppression ends in 1d. It stays reviewed.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('2026-07-19T11:10:00Z', false, now)).toBe(
+      'Returns to active attention in 3h.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('2026-07-19T08:00:00Z', true, now)).toBe(
+      'Suppression has ended.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('not a date', false, now)).toBe('');
   });
 
   it('keeps the detail header and queue controls pinned while a long decision scrolls', async () => {
@@ -759,6 +979,189 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps a reviewed issue reviewed when its suppression ends early', async () => {
+    // Ending the suppression restores Acknowledged, not active attention, so
+    // nothing on the way in or out may promise the decision inbox.
+    const reviewed = item({ state: 'acknowledged' });
+    const suppressed = item({ state: 'suppressed' });
+    const acknowledgement = { at: evaluatedAt, by: 'admin' };
+    const reviewedDetail = detail(reviewed);
+    reviewedDetail.operationalRecord.acknowledgement = acknowledgement;
+    const suppressedDetail = detail(suppressed);
+    suppressedDetail.operationalRecord.acknowledgement = acknowledgement;
+    suppressedDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = false;
+    apiMocks.getList.mockImplementation((filter: string) => {
+      const responseSummary = summary(
+        isSuppressed ? { suppressedCount: 1 } : { acknowledgedCount: 1 },
+      );
+      return Promise.resolve(
+        listResponse(
+          filter === 'all' ? [isSuppressed ? suppressed : reviewed] : [],
+          responseSummary,
+        ),
+      );
+    });
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? suppressedDetail : reviewedDetail),
+    );
+    apiMocks.suppress.mockImplementation(() => {
+      isSuppressed = true;
+      return Promise.resolve({ success: true });
+    });
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
+    expect(
+      screen.queryByRole('combobox', { name: 'Return it to active attention after' }),
+    ).not.toBeInTheDocument();
+    fireEvent.input(
+      screen.getByRole('textbox', {
+        name: 'Why is this safe to hide from active attention?',
+      }),
+      { target: { value: 'Planned storage maintenance' } },
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'End suppression after' }), {
+      target: { value: String(60 * 60 * 1000) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Suppress temporarily' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Suppressed temporarily. 1 handled issue remains.',
+      ),
+    );
+
+    const endSuppression = await screen.findByRole('button', { name: 'End suppression' });
+    expect(
+      screen.queryByRole('button', { name: 'Return to active attention' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(endSuppression);
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Suppression ended. It stays reviewed. 1 handled issue remains.',
+      ),
+    );
+    expect(screen.getByRole('status')).not.toHaveTextContent('decision inbox');
+    expect(
+      screen.getByRole('heading', { name: '1 reviewed or suppressed issue' }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Return to decision inbox' }),
+    ).toBeInTheDocument();
+  });
+
+  it('returns an unreviewed issue to the decision inbox when its suppression ends early', async () => {
+    const active = item();
+    const suppressed = item({ state: 'suppressed' });
+    const suppressedDetail = detail(suppressed);
+    suppressedDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = true;
+    apiMocks.getList.mockImplementation((filter: string) => {
+      if (isSuppressed) {
+        return Promise.resolve(
+          listResponse(filter === 'all' ? [suppressed] : [], summary({ suppressedCount: 1 })),
+        );
+      }
+      return Promise.resolve(
+        listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      );
+    });
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? suppressedDetail : detail(active)),
+    );
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    const returnToAttention = await screen.findByRole('button', {
+      name: 'Return to active attention',
+    });
+    expect(screen.queryByRole('button', { name: 'End suppression' })).not.toBeInTheDocument();
+    fireEvent.click(returnToAttention);
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Returned to decision inbox. No other handled issues remain.',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'No reviewed or suppressed issues' }),
+    ).toBeInTheDocument();
+  });
+
+  it('announces the state the reload reports when the review changed after the detail loaded', async () => {
+    // The detail still carries the acknowledgement, but the review was removed
+    // elsewhere, so ending the suppression reopens the issue.
+    const active = item();
+    const suppressed = item({ state: 'suppressed' });
+    const staleDetail = detail(suppressed);
+    staleDetail.operationalRecord.acknowledgement = { at: evaluatedAt, by: 'admin' };
+    staleDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = true;
+    apiMocks.getList.mockImplementation((filter: string) =>
+      Promise.resolve(
+        isSuppressed
+          ? listResponse(filter === 'all' ? [suppressed] : [], summary({ suppressedCount: 1 }))
+          : listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      ),
+    );
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? staleDetail : detail(active)),
+    );
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'End suppression' }));
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Returned to decision inbox. No other handled issues remain.',
+    );
+  });
+
   it('offers every lasting Patrol decision on the finding that mirrors the alert', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
@@ -865,6 +1268,10 @@ describe('PatrolAttentionWorkbench', () => {
     );
     expect(apiMocks.loadPatrolFindings).toHaveBeenCalled();
     expect(await screen.findByRole('status')).toHaveTextContent(/Rule created/i);
+    expect(screen.getByRole('link', { name: 'Manage suppression rules' })).toHaveAttribute(
+      'href',
+      '/patrol/activity#patrol-suppression-rules',
+    );
   });
 
   it('shows the remembered decision and a reopen path instead of re-offering it', async () => {
@@ -932,9 +1339,11 @@ describe('PatrolAttentionWorkbench', () => {
       /turn it off for Database VM under alert thresholds/i,
     );
     expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+    // The thresholds open on the subject's platform tab, searched to it,
+    // instead of the top of every threshold section.
     expect(screen.getByRole('link', { name: 'Adjust alert thresholds' })).toHaveAttribute(
       'href',
-      '/alerts/thresholds',
+      '/alerts/thresholds/proxmox?q=Database+VM',
     );
     fireEvent.click(
       screen.getByRole('button', { name: 'Browse Patrol findings for this resource' }),
@@ -986,6 +1395,56 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(screen.getByText('Evidence and history'));
     expect(screen.getByText(/11 open\/resolved changes in the last 24 hours/i)).toBeInTheDocument();
     expect(screen.getByText('Show all 11 transitions')).toBeInTheDocument();
+  });
+
+  it('shows an alert handed to its Pulse agent as moved, not recovered', async () => {
+    const reason =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    const moved = item({
+      id: 'record-moved',
+      operationalRecordId: 'record-moved',
+      subjectResourceId: 'pve1',
+      subjectResourceName: 'pve1',
+      subjectResourceType: 'node',
+      kind: 'memory',
+      title: 'Memory on pve1',
+      plainLanguageSummary: 'Memory usage at 95%',
+      severity: 'warning',
+      state: 'resolved',
+      protectionPosture: undefined,
+    });
+    const movedDetail = detail(moved);
+    movedDetail.timeline = [
+      ...movedDetail.timeline,
+      {
+        id: 'transition-moved',
+        operationalRecordId: 'record-moved',
+        from: 'open',
+        to: 'resolved',
+        at: '2026-07-19T07:45:00Z',
+        cause: 'ownership_transferred',
+        causeKey: 'memory:pve1',
+        evidenceIds: ['evidence-handover'],
+        reason,
+      },
+    ];
+    window.history.replaceState({}, '', '/patrol?attention=record-moved');
+    apiMocks.getList.mockResolvedValue(listResponse([], summary()));
+    apiMocks.getDetail.mockResolvedValue(movedDetail);
+    renderWorkbench();
+
+    const panel = await screen.findByRole('complementary', { name: 'pve1 · Memory' });
+    expect(await within(panel).findByText('Moved')).toBeInTheDocument();
+    expect(within(panel).queryByText('Resolved')).not.toBeInTheDocument();
+    // The account sits under the summary, outside the collapsed history.
+    const summaryLine = within(panel).getByText('Memory usage at 95%');
+    expect(summaryLine.nextElementSibling).toHaveTextContent(reason);
+    expect(summaryLine.nextElementSibling?.closest('details')).toBeNull();
+
+    fireEvent.click(within(panel).getByText('Evidence and history'));
+    expect(within(panel).getByText('Open to Resolved')).toBeInTheDocument();
+    expect(within(panel).getByText(/Ownership transferred/)).toBeInTheDocument();
+    expect(within(panel).queryByText(/Recovery evidence/)).not.toBeInTheDocument();
   });
 
   it('opens the canonical governed action review from an eligible attention item', async () => {
@@ -1042,9 +1501,12 @@ describe('PatrolAttentionWorkbench', () => {
       expect(apiMocks.planAction).toHaveBeenCalledWith('record-1', 'restart');
       expect(apiMocks.getAction).toHaveBeenCalledWith('act-attention-restart');
     });
-    expect(
-      await screen.findByRole('dialog', { name: 'Governed action review' }),
-    ).toBeInTheDocument();
+    // Patrol holds this review in memory and already links its subject, so
+    // the review must not offer a resource link that Back could not return from.
+    expect(await screen.findByRole('dialog', { name: 'Governed action review' })).toHaveAttribute(
+      'data-resource-link',
+      'hidden',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Complete action' }));
     const currentTrigger = await screen.findByRole('button', { name: 'Review action' });

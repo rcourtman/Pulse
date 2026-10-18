@@ -1,10 +1,10 @@
-import { Component, Show, Suspense, createMemo } from 'solid-js';
-import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
+import { Component, Show, createMemo } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
-import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { Subtabs } from '@/components/shared/Subtabs';
+import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   GUEST_DRAWER_BACKUP_PRECAUTION,
@@ -17,7 +17,6 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 import { useGuestDrawerState } from './useGuestDrawerState';
-import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 import { GuestDrawerManage } from './GuestDrawerManage';
 
@@ -28,20 +27,9 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
     agentLabel,
     agentTitle,
     backupPresentation,
-    discoveryAgentId,
-    discoveryIdentifiedSummary,
-    discoveryPanelKey,
-    discoveryReadError,
-    discoveryReadLoading,
-    retryDiscoveryRead,
-    discoveryLoadingState,
-    discoveryReadinessPresentation,
-    discoveryResourceId,
-    discoveryResourceType,
     diskThresholds,
     guestId,
     hasAgentInfo,
-    hasDiscoverySupport,
     hasFilesystemDetails,
     hasHistorySupport,
     hasNetworkInterfaces,
@@ -70,9 +58,23 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
+      {/* Phone rows hide the adjacent web link so names stay distinguishable;
+          the header keeps the saved service one tap from the expanded row. */}
       <ObjectDrawerHeader
         collapseLabel={`Collapse ${props.guest.name} details`}
         onCollapse={props.onClose}
+        actions={
+          <Show when={props.customUrl?.trim()}>
+            <WebInterfaceLink
+              url={props.customUrl}
+              ariaLabel={`Open web interface for ${props.guest.name}`}
+              class={getDrawerHeaderActionButtonClass()}
+            >
+              <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Open</span>
+            </WebInterfaceLink>
+          </Show>
+        }
       >
         <DrawerSubjectHeading
           headingId={headingId()}
@@ -81,30 +83,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           statusLabel={headerIndicator().label}
         />
       </ObjectDrawerHeader>
-      <Show when={discoveryReadinessPresentation()}>
-        {(presentation) => (
-          <div class="flex items-center gap-2 text-xs text-muted">
-            <DiscoveryReadinessBadge presentation={presentation()} />
-            <span class="truncate" title={presentation().detail || presentation().title}>
-              {presentation().detail || presentation().statusLabel}
-            </span>
-          </div>
-        )}
-      </Show>
-      <Show when={discoveryReadError()}>
-        {(message) => (
-          <InlineNotice
-            tone="warning"
-            role="status"
-            actionLabel={
-              discoveryReadLoading() ? 'Retrying service details...' : 'Retry service details'
-            }
-            actionOnClick={retryDiscoveryRead}
-          >
-            {message()}
-          </InlineNotice>
-        )}
-      </Show>
       <Show when={guestReadPrecaution()}>
         {(message) => (
           <InlineNotice
@@ -126,24 +104,13 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
         onChange={(value) => switchTab(value as Parameters<typeof switchTab>[0])}
         tabs={[
           { value: 'overview', label: 'Overview' },
-          ...(hasHistorySupport()
-            ? [{ value: 'history', label: 'History' } satisfies SubtabOption]
-            : []),
           { value: 'manage', label: 'Manage' },
-          ...(hasDiscoverySupport()
-            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
-            : []),
         ]}
-        trailing={
-          <Show when={hasHistorySupport() && activeTab() === 'history'}>
-            <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </Show>
-        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
                  overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'overview' ? '' : 'hidden'}`}>
         <GuestDrawerOverview
           guest={props.guest}
           guestOsSummary={guestOsSummary()}
@@ -160,51 +127,22 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           normalizedTags={normalizedTags()}
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
-          discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           workloadActionAgentTitle={workloadActionAgentTitle()}
           parentMemoryTotal={props.parentMemoryTotal}
           memoryDisplayBasis={props.memoryDisplayBasis}
           alerts={props.alerts}
+          historyTarget={hasHistorySupport() ? historyTarget() : null}
+          historyRange={historyRange()}
+          onHistoryRangeChange={setHistoryRange}
+          historyEnabled={activeTab() === 'overview'}
+          currentMetrics={historyCurrentMetrics()}
+          deferredMetrics={historyDeferredMetrics()}
         />
       </div>
 
-      {hasHistorySupport() && activeTab() === 'history' && (
-        <div style={{ 'overflow-anchor': 'none' }}>
-          <GuestDrawerHistory
-            target={historyTarget()}
-            range={historyRange()}
-            currentMetrics={historyCurrentMetrics()}
-            deferredMetrics={historyDeferredMetrics()}
-          />
-        </div>
-      )}
-
-      {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
-                     so DiscoveryTab's createResource loading state doesn't bubble
-                     up to the app-level Suspense and replace the entire page. */}
-      <Show when={discoveryPanelKey()} keyed>
-        {(_targetKey) => (
-          <div
-            class={activeTab() === 'discovery' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
-            <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
-              <DiscoveryTab
-                resourceType={discoveryResourceType()!}
-                agentId={discoveryAgentId()}
-                resourceId={discoveryResourceId()}
-                hostname={props.guest.name}
-                canonicalResourceId={props.guest.id}
-                showManualRunAction
-              />
-            </Suspense>
-          </div>
-        )}
-      </Show>
-
-      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <GuestDrawerManage
             guest={props.guest}
@@ -213,7 +151,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
             targetLabel={webInterfaceTargetLabel()}
             customUrl={props.customUrl}
             onCustomUrlChange={props.onCustomUrlChange}
-            suggestion={discoveryIdentifiedSummary() ?? undefined}
           />
         </Show>
       </div>

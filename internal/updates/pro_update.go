@@ -88,6 +88,24 @@ type proBrokerResponse struct {
 	Docker    *proBrokerDocker    `json:"docker"`
 }
 
+// isPrerelease reports whether the broker's pinned release is a prerelease,
+// by the broker's flag or by its version string.
+func (r *proBrokerResponse) isPrerelease() bool {
+	if r.Release.Prerelease {
+		return true
+	}
+	version, err := ParseVersion(r.Release.Version)
+	return err == nil && version.IsPrerelease()
+}
+
+// stableChannelRefusesProPin reports whether a stable-channel install must not
+// install the broker's pinned release. The broker pins a single release, which
+// can be a prerelease; the update check, the runtime switch check and apply
+// all judge it by this one rule so a check never offers what apply refuses.
+func stableChannelRefusesProPin(channel string, manifest *proBrokerResponse) bool {
+	return channel == "stable" && manifest.isPrerelease()
+}
+
 // proBrokerDocker mirrors the broker's docker block: the digest-pinned private
 // Pro image plus ready-to-run login/compose commands. The broker deliberately
 // never emits mutable-tag commands (a customer compose file pins the previous
@@ -164,6 +182,18 @@ type proBrokerErrorResponse struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// proBrokerStatusError is a non-200 broker reply. It keeps the broker's error
+// code so callers can tell a licence the broker refuses (403) from an outage.
+type proBrokerStatusError struct {
+	StatusCode int
+	Code       string
+	detail     string
+}
+
+func (e *proBrokerStatusError) Error() string {
+	return fmt.Sprintf("Pulse Pro download broker returned status %d: %s", e.StatusCode, e.detail)
 }
 
 // proUpdateTarget maps the running architecture to the broker's artifact
@@ -274,7 +304,8 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 	if resp.StatusCode != http.StatusOK {
 		detail := ""
 		var brokerErr proBrokerErrorResponse
-		if json.Unmarshal(body, &brokerErr) == nil && brokerErr.Error.Message != "" {
+		decoded := json.Unmarshal(body, &brokerErr) == nil
+		if decoded && brokerErr.Error.Message != "" {
 			detail = brokerErr.Error.Message
 			if brokerErr.Error.Code != "" {
 				detail = brokerErr.Error.Code + ": " + detail
@@ -286,7 +317,11 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 		if detail == "" {
 			detail = resp.Status
 		}
-		return nil, fmt.Errorf("Pulse Pro download broker returned status %d: %s", resp.StatusCode, detail)
+		statusErr := &proBrokerStatusError{StatusCode: resp.StatusCode, detail: detail}
+		if decoded {
+			statusErr.Code = brokerErr.Error.Code
+		}
+		return nil, statusErr
 	}
 
 	var manifest proBrokerResponse
@@ -323,12 +358,12 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 	if err != nil {
 		return nil, fmt.Errorf("parse Pulse Pro release version %q: %w", manifest.Release.Version, err)
 	}
-	isPrerelease := manifest.Release.Prerelease || latestVer.IsPrerelease()
+	isPrerelease := manifest.isPrerelease()
 
 	// The broker pins a single release. A stable-channel install must not be
 	// offered a prerelease pin; report "no update" with an explanatory warning
 	// instead of dangling an apply that the channel guard would refuse.
-	if channel == "stable" && isPrerelease && latestVer.IsNewerThan(currentVer) {
+	if stableChannelRefusesProPin(channel, manifest) && latestVer.IsNewerThan(currentVer) {
 		return &UpdateInfo{
 			Available:      false,
 			CurrentVersion: currentInfo.Version,
@@ -389,11 +424,10 @@ func (m *Manager) resolveProUpdateArtifact(ctx context.Context, channel string) 
 		return resolvedUpdateArtifact{}, err
 	}
 
-	latestVer, err := ParseVersion(manifest.Release.Version)
-	if err != nil {
+	if _, err := ParseVersion(manifest.Release.Version); err != nil {
 		return resolvedUpdateArtifact{}, fmt.Errorf("parse Pulse Pro release version %q: %w", manifest.Release.Version, err)
 	}
-	if channel == "stable" && (manifest.Release.Prerelease || latestVer.IsPrerelease()) {
+	if stableChannelRefusesProPin(channel, manifest) {
 		return resolvedUpdateArtifact{}, fmt.Errorf("stable channel cannot install prerelease builds (the private Pulse Pro channel currently serves %s)", manifest.Release.Version)
 	}
 

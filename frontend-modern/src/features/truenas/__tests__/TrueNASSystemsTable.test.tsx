@@ -9,8 +9,10 @@ vi.mock('@/components/shared/responsive', () => ({
   ResponsiveMetricCell: () => <div data-testid="responsive-metric-cell" />,
 }));
 
+const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+
 vi.mock('@/contexts/appRuntime', () => ({
-  useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
+  useWebSocket: () => ({ activeAlerts: activeAlertsRef.current }),
 }));
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
@@ -43,6 +45,7 @@ const makeSystem = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resour
 
 afterEach(() => {
   cleanup();
+  activeAlertsRef.current = {};
 });
 
 describe('TrueNASSystemsTable', () => {
@@ -106,5 +109,43 @@ describe('TrueNASSystemsTable', () => {
     expect(container.querySelector('[data-truenas-system-row="truenas-impaired"]')).not.toBeNull();
     expect(container.querySelector('[data-truenas-system-row="truenas-healthy"]')).toBeNull();
     expect(screen.getByText('1 of 2 systems')).toBeInTheDocument();
+  });
+  it("tints a system row for its pools' alerts, which carry the system hostname", () => {
+    // TrueNAS pool, dataset, disk and app alerts are keyed on the child
+    // resource and name the system in "node". The system's drawer states the
+    // same pool problem through its health issue, so the row matches by
+    // hostname as well as id; no producer keys a TrueNAS system's alerts on
+    // its "agent:" alias.
+    activeAlertsRef.current = {
+      pool: {
+        id: 'pool',
+        type: 'truenas-pool-health',
+        level: 'warning',
+        resourceId: 'storage-archive',
+        resourceName: 'archive',
+        node: 'truenas-main',
+        instance: 'TrueNAS',
+        message: 'Pool archive is DEGRADED',
+        value: 0,
+        threshold: 0,
+        startTime: '2026-10-06T10:00:00Z',
+        acknowledged: false,
+      },
+    };
+
+    const { container } = render(() => (
+      <TrueNASSystemsTable
+        systems={[makeSystem({ id: 'truenas-main' }), makeSystem({ id: 'truenas-backup' })]}
+        scope={[makeSystem({ id: 'truenas-main' }), makeSystem({ id: 'truenas-backup' })]}
+        emptyIcon={<span />}
+        emptyTitle="No systems"
+        emptyDescription="No systems"
+        showToolbar={false}
+      />
+    ));
+
+    const row = (id: string) => container.querySelector(`[data-truenas-system-row="${id}"]`);
+    expect(row('truenas-main')).toHaveClass('bg-yellow-50');
+    expect(row('truenas-backup')).not.toHaveClass('bg-yellow-50');
   });
 });

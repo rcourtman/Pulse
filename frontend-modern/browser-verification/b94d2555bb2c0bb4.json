@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "3f511a5270a813ad48bbe7a74f2411fb276180be",
+  "verified_at": "2026-10-17T13:14:54.818Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportScheduleEditor.tsx": "e3b6eaa12d3545afda642eca4fdd527c299d0f84e2dec68da6dffca184c471ac",
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "5af4982de629b41375934efe399fa46ed103c32276ee306ae4743e24c460855c",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "1e034dcac867b7a3e1210ba25e1e3a60048ae544ada0bd7b55c96e011a2118d4",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "29ec982d667d5329609c21b5cd946df5fc89fd8b90d629c8017d3bd7baa87751"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    { "width": 1440, "height": 1000 },
+    { "width": 820, "height": 844 },
+    { "width": 390, "height": 844 }
+  ],
+  "states": [
+    "CSV is the first inventory read after normal infrastructure configuration and runtime reload, without dashboard or resources API priming; all 61 polled VMs appear",
+    "Empty list, focused inventory editor, fixed CSV and organization-wide scope, weekly/monthly cadence, email/disk delivery and disabled recipients",
+    "Missing email configuration refuses enabled schedules; a disabled draft saves and links to Notifications",
+    "Actual accepted MIME attachment matches the existing on-demand exporter byte for byte, including every VM beyond the performance-report cap",
+    "Temporary 451 failure persists across a real process restart and succeeds once on attempt 2; permanent rejection stays failed without automatic retry",
+    "Lost final acknowledgement remains unconfirmed; deliberate retry warns about duplication and recovers",
+    "A newly discovered 62nd VM enters the next disk export without changing scope; disk delivery sends no mail"
+  ],
+  "interactions": [
+    "Create, edit, save, cancel, and reload; inspect name focus and switch performance/inventory kinds, weekly/monthly cadence and email/disk delivery at all three widths",
+    "Inspect top and delivery-controls views of the editor, including retention, disabled recipients, attachment state, enabled toggle and reachable Save/Cancel controls",
+    "Follow Email settings to Notifications, configure local SMTP and enable the persisted draft",
+    "Run actual CSV delivery, parse its MIME attachment, restart during a pending retry, and inspect accepted/retrying/rejected/unconfirmed results",
+    "Cancel uncertain-delivery retry without sending, then accept the duplicate warning and recover",
+    "Edit to disk delivery, disable, expand report details, retain expansion through polling, cancel deletion and confirm deletion"
+  ],
+  "environment": "Current private runtime built over base_sha, ordinary disposable signed Pro grant, dev/mock modes disabled. Synthetic Proxmox infrastructure and local SMTP only. Pricing and existing grants are unchanged.",
+  "backend_content_sha256": {
+    "internal/api/metrics_reporting_handlers.go": "e261d0bbb847e7512c1f8e26015da49b3f3f3f10bd61ba67bea6e5b5815ac300",
+    "internal/api/report_schedules.go": "6aa8315b9f5f23e885ebc8ade8ffa8caef33c83c963be57848d0dbf615ca8698",
+    "internal/api/reporting_availability.go": "2e23049bf046eab01bfdfccd4f6ce1babf8e7252c35525eac8a08d8e1a4102ee",
+    "internal/api/reporting_inventory_handlers.go": "81e3a460929bf36a02e0af770e2490acc5132131a6b9cc8b52ece771869ebdba",
+    "internal/api/router_helpers.go": "68b2e32beec9753b63c159f76f0ccd2fe4e5958cab80782b2238cf3d9e3ec75d",
+    "internal/config/report_schedules.go": "c7230c33c825a621c892958fbaecf1a530559473afeef96ddf32caa01ea2e225",
+    "internal/monitoring/resource_stale_thresholds.go": "2a9a5f3248a43af7f27eb4dbd75a822241ad3a7decf12bb8193864e5f749c36a"
+  },
+  "evidence": "/opt/pulse-release-worker/task-proofs/vm-inventory-schedules-20261017/browser-evidence",
+  "pixel_review": "Reviewed current desktop, intermediate and mobile screenshots of editor/cadence controls, delivery controls and Save/Cancel, accepted and pending retry states, unconfirmed delivery and expanded disk details. Controls remain readable, scrollable and usable without horizontal overflow."
+}

@@ -6,11 +6,14 @@ import {
   getAgentMachineDiskIODetails,
   getAgentMachineGPUTitle,
   getAgentMachineGPUUtilizationPercent,
+  getAgentMachineHottestSmartDiskType,
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
+  getAgentMachineTemperatureDetailSections,
   getAgentMachineTemperatureMetric,
   getAgentMachineTemperatureTitle,
+  isAgentMachineTemperatureLastKnown,
   matchesAgentMachineSearch,
   sortAgentMachines,
 } from '../agentMachineTableModel';
@@ -225,6 +228,167 @@ describe('agentMachineTableModel', () => {
 
     expect(getAgentMachineTemperatureCelsius(machine)).toBe(44);
     expect(getAgentMachineTemperatureMetric(machine)).toBe('diskTemperature');
+  });
+
+  it('shows a retained SMART temperature only as last known', () => {
+    // A host agent past its reporting lease keeps its last SMART temperature
+    // with a non-available collection state.
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'host_agent',
+        reason: 'host agent stopped reporting',
+      },
+    };
+    const mixed = resource({
+      agent: {
+        sensors: {
+          smart: [
+            {
+              device: '/dev/sda',
+              model: 'Retained HDD',
+              type: 'sas',
+              temperature: 71,
+              collection: stoppedReporting,
+            },
+            {
+              device: '/dev/nvme0',
+              model: 'Fast SSD',
+              type: 'nvme',
+              temperature: 44,
+              collection: { temperature: { state: 'available' as const, source: 'smartctl' } },
+            },
+            // Agents that predate collection state report no provenance.
+            { device: '/dev/sdb', temperature: 39 },
+            { device: '/dev/sdc', model: 'Cold Standby', temperature: 0, standby: true },
+          ],
+        },
+      },
+    });
+
+    // A disk collected now outranks a hotter retained one.
+    expect(getAgentMachineTemperatureCelsius(mixed)).toBe(44);
+    expect(isAgentMachineTemperatureLastKnown(mixed)).toBe(false);
+    expect(getAgentMachineTemperatureMetric(mixed)).toBe('diskTemperature');
+    expect(getAgentMachineHottestSmartDiskType(mixed)).toBe('nvme');
+    expect(getAgentMachineTemperatureTitle(mixed).split('\n')).toEqual([
+      'Disk Temperatures',
+      'Disk /dev/nvme0 Fast SSD: 44°C',
+      'Disk /dev/sdb: 39°C',
+      'Disk /dev/sda Retained HDD: 71°C (last known)',
+      'Disk /dev/sdc Cold Standby: standby',
+    ]);
+    expect(getAgentMachineTemperatureDetailSections(mixed)[0].rows[2]).toEqual({
+      label: 'Disk /dev/sda Retained HDD',
+      value: '71°C (last known)',
+      muted: true,
+    });
+
+    // With nothing collected now, the cell keeps the hottest retained value
+    // and marks it last known.
+    const onlyRetained = resource({
+      agent: {
+        sensors: {
+          smart: [
+            { device: '/dev/sda', type: 'sata', temperature: 71, collection: stoppedReporting },
+            { device: '/dev/nvme0', type: 'nvme', temperature: 58, collection: stoppedReporting },
+          ],
+        },
+      },
+    });
+    expect(getAgentMachineTemperatureCelsius(onlyRetained)).toBe(71);
+    expect(isAgentMachineTemperatureLastKnown(onlyRetained)).toBe(true);
+    expect(getAgentMachineTemperatureMetric(onlyRetained)).toBe('diskTemperature');
+    expect(getAgentMachineHottestSmartDiskType(onlyRetained)).toBe('sata');
+    expect(getAgentMachineTemperatureTitle(onlyRetained)).toBe(
+      'Disk Temperatures\nDisk /dev/sda: 71°C (last known)\nDisk /dev/nvme0: 58°C (last known)',
+    );
+
+    // CPU sensors carry no collection state, so they still lead the cell.
+    const withSensors = resource({
+      agent: {
+        sensors: {
+          temperatureCelsius: { 'cpu.package': 49 },
+          smart: [{ device: '/dev/sda', temperature: 71, collection: stoppedReporting }],
+        },
+      },
+    });
+    expect(getAgentMachineTemperatureCelsius(withSensors)).toBe(49);
+    expect(isAgentMachineTemperatureLastKnown(withSensors)).toBe(false);
+    expect(getAgentMachineTemperatureMetric(withSensors)).toBe('temperature');
+  });
+
+  it('offers only positive, non-standby SMART readings to the cell, behind direct and CPU sensors', () => {
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    };
+    const retainedDisk = (temperature: number) => ({
+      device: '/dev/sda',
+      temperature,
+      collection: stoppedReporting,
+    });
+
+    // A disk in standby is never a temperature candidate, retained or not.
+    const standbyOnly = resource({
+      agent: { sensors: { smart: [{ ...retainedDisk(52), standby: true }] } },
+    });
+    expect(getAgentMachineTemperatureCelsius(standbyOnly)).toBeUndefined();
+    expect(isAgentMachineTemperatureLastKnown(standbyOnly)).toBe(false);
+    expect(getAgentMachineTemperatureTitle(standbyOnly)).toBe(
+      'Disk Temperatures\nDisk /dev/sda: standby',
+    );
+
+    // A direct machine temperature leads a retained disk.
+    const direct = resource({
+      temperature: 47,
+      agent: { sensors: { smart: [retainedDisk(71)] } },
+    });
+    expect(getAgentMachineTemperatureCelsius(direct)).toBe(47);
+    expect(isAgentMachineTemperatureLastKnown(direct)).toBe(false);
+    expect(getAgentMachineTemperatureMetric(direct)).toBe('temperature');
+
+    // Additional sensors never lead the cell, so the retained disk is shown.
+    const additionalOnly = resource({
+      agent: { sensors: { additional: { vrm: 49 }, smart: [retainedDisk(71)] } },
+    });
+    expect(getAgentMachineTemperatureCelsius(additionalOnly)).toBe(71);
+    expect(isAgentMachineTemperatureLastKnown(additionalOnly)).toBe(true);
+
+    // Sorting follows the value the cell shows: a hotter retained disk does not
+    // lift a machine whose shown reading is a cooler current one.
+    const machines = [
+      resource({
+        id: 'retained',
+        name: 'Retained',
+        agent: { sensors: { smart: [retainedDisk(71)] } },
+      }),
+      resource({
+        id: 'mixed',
+        name: 'Mixed',
+        agent: {
+          sensors: { smart: [retainedDisk(80), { device: '/dev/sdb', temperature: 35 }] },
+        },
+      }),
+      resource({
+        id: 'current',
+        name: 'Current',
+        agent: { sensors: { smart: [{ device: '/dev/sda', temperature: 50 }] } },
+      }),
+    ];
+    const sortedIds = (direction: 'asc' | 'desc') =>
+      sortAgentMachines(
+        machines,
+        'temp',
+        direction,
+        () => '',
+        () => '',
+      ).map((machine) => machine.id);
+    expect(sortedIds('desc')).toEqual(['retained', 'current', 'mixed']);
+    expect(sortedIds('asc')).toEqual(['mixed', 'current', 'retained']);
   });
 
   it('prefers direct and sensor temperatures over SMART fallback temperatures', () => {

@@ -4,6 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', async () => {
@@ -14,10 +19,6 @@ vi.mock('@solidjs/router', async () => {
     useNavigate: () => navigateSpy,
   };
 });
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
-}));
 
 vi.mock('@/components/Kubernetes/K8sNamespacesDrawer', () => ({
   K8sNamespacesDrawer: (props: { cluster: string }) => (
@@ -90,7 +91,8 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
       <ResourceDetailDrawer resource={buildKubernetesResource()} />
     ));
 
-    const details = (await screen.findByTestId('resource-platform-details')) as HTMLDetailsElement;
+    // Platform context sits inside the Overview's one Details disclosure.
+    const details = (await screen.findByTestId('resource-technical-details')) as HTMLDetailsElement;
     details.open = true;
     fireEvent(details, new Event('toggle'));
     expect(queryByText('Platform signals')).toBeNull();

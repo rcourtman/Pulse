@@ -203,7 +203,7 @@ func TestBranchcov0722PM(t *testing.T) {
 		}
 		// Register the exclusion between the two IDs and re-run; the
 		// closure's lookup must now return true and block the merge.
-		rr.exclusions[exclusionKey("agent-proxmox-pve1", "agent-runtime-pve1")] = struct{}{}
+		rr.exclusions[exclusionKey("agent-proxmox-pve1", "agent-runtime-pve1")] = time.Now()
 		got := rr.ListForPresentation()
 		if len(got) != 2 {
 			t.Fatalf("expected exclusion to keep both host views split, got %d: %+v", len(got), got)

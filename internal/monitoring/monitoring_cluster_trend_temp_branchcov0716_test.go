@@ -3,7 +3,6 @@ package monitoring
 import (
 	"math"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -15,7 +14,6 @@ import (
 //
 //   - monitorExistingClusterIPOverride          (monitor_pve_cluster.go)
 //   - monitorExistingClusterFingerprint         (monitor_pve_cluster.go)
-//   - buildStorageSummaryCapacityTrend          (monitor_metrics.go)
 //   - parseNouveauGPUTemps                      (temperature.go)
 //
 // Conventions match sibling in-package tests in this directory (see
@@ -25,9 +23,8 @@ import (
 // The receiver of parseNouveauGPUTemps (*TemperatureCollector) is never
 // dereferenced inside the function, so a zero-value collector is safe.
 
-// floatEq compares two floats with an absolute tolerance. The percentages
-// produced by buildStorageSummaryCapacityTrend carry rounding error on the
-// order of 1e-15, so 1e-6 is comfortably strict.
+// floatEq compares two floats with an absolute tolerance. 1e-6 is comfortably
+// strict for the parsed temperatures compared below.
 func floatEq(a, b float64) bool {
 	return math.Abs(a-b) <= 1e-6
 }
@@ -142,250 +139,6 @@ func TestBranchCovMonitorExistingClusterFingerprint(t *testing.T) {
 			if got != tc.want {
 				t.Fatalf("monitorExistingClusterFingerprint(%q, ...) = %q, want %q",
 					tc.nodeName, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestBranchCovBuildStorageSummaryCapacityTrend(t *testing.T) {
-	// Fixed millisecond timestamps so assertions are deterministic and the
-	// "older point seen after newer" branch can be exercised deterministically.
-	const (
-		t1ms int64 = 1_000_000
-		t2ms int64 = 2_000_000
-		t3ms int64 = 3_000_000
-	)
-	t1 := time.UnixMilli(t1ms)
-	t2 := time.UnixMilli(t2ms)
-	t3 := time.UnixMilli(t3ms)
-
-	pt := func(ts time.Time, v float64) MetricPoint {
-		return MetricPoint{Timestamp: ts, Value: v}
-	}
-
-	cases := []struct {
-		name        string
-		poolMetrics map[string]map[string][]MetricPoint
-		// wantNil marks cases that must return a nil slice (early-return path).
-		wantNil bool
-		// wantPoints is the expected output slice. For non-nil-empty results
-		// pass a non-nil zero-length slice; for nil results set wantNil=true.
-		wantPoints []MetricPoint
-		wantOldest int64
-	}{
-		// Branch: nil input -> len(buckets)==0 early return path AND
-		// oldestTimestamp never set (stays 0).
-		{"nil input returns nil slice and zero oldest",
-			nil, true, nil, 0},
-
-		// Branch: empty pool map -> same early-return path.
-		{"empty pool map returns nil slice and zero oldest",
-			map[string]map[string][]MetricPoint{}, true, nil, 0},
-
-		// Branch: pool present but inner metric map nil -> reading
-		// nil["used"] / nil["avail"] yields empty slices, so no buckets.
-		{"pool with nil inner metric map returns nil slice",
-			map[string]map[string][]MetricPoint{"p1": nil}, true, nil, 0},
-
-		// Branch: pool with neither "used" nor "avail" key -> buckets empty.
-		{"pool with unrelated metric keys returns nil slice",
-			map[string]map[string][]MetricPoint{
-				"p1": {"total": []MetricPoint{pt(t1, 100)}},
-			}, true, nil, 0},
-
-		// Happy path: single pool, used + avail at same timestamp ->
-		// bucket hasUsed && hasAvail -> emitted at used/(used+avail)*100.
-		{"single pool used and avail at same ts emits percentage",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 25)},
-					"avail": []MetricPoint{pt(t1, 75)},
-				},
-			},
-			false, []MetricPoint{{Timestamp: t1, Value: 25.0}}, t1ms},
-
-		// Branch: aggregation across pools at the SAME timestamp. The
-		// second pool's used and avail both find an existing bucket
-		// (exercises bucket != nil arm in BOTH inner loops); values sum.
-		{"two pools at same ts aggregate by summing",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 50)},
-					"avail": []MetricPoint{pt(t1, 50)},
-				},
-				"p2": {
-					"used":  []MetricPoint{pt(t1, 100)},
-					"avail": []MetricPoint{pt(t1, 100)},
-				},
-			},
-			// total used=150, total=300 -> 150/300*100 = 50
-			false, []MetricPoint{{Timestamp: t1, Value: 50.0}}, t1ms},
-
-		// Branch: multiple timestamps returned sorted ascending; oldest is
-		// the minimum. Within one pool, used points create the buckets and
-		// the subsequent avail loop finds them existing.
-		{"multiple timestamps returned sorted ascending",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t3, 30), pt(t1, 10), pt(t2, 20)},
-					"avail": []MetricPoint{pt(t3, 70), pt(t1, 90), pt(t2, 80)},
-				},
-			},
-			false,
-			[]MetricPoint{
-				{Timestamp: t1, Value: 10.0},
-				{Timestamp: t2, Value: 20.0},
-				{Timestamp: t3, Value: 30.0},
-			},
-			t1ms},
-
-		// Branch: oldestTimestamp update arm `timestamp < oldestTimestamp`
-		// -- iteration sees the newer timestamp first, then the older one.
-		{"older point seen after newer still sets oldest to min",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t2, 20), pt(t1, 10)},
-					"avail": []MetricPoint{pt(t2, 80), pt(t1, 90)},
-				},
-			},
-			false,
-			[]MetricPoint{
-				{Timestamp: t1, Value: 10.0},
-				{Timestamp: t2, Value: 20.0},
-			},
-			t1ms},
-
-		// Branch: used-only bucket -> hasAvail=false -> skipped in output
-		// loop. Buckets non-empty so we go past the early return; result is
-		// a NON-nil empty slice and oldestTimestamp is still set.
-		{"used only bucket skipped but oldest timestamp set",
-			map[string]map[string][]MetricPoint{
-				"p1": {"used": []MetricPoint{pt(t1, 50)}},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: avail-only bucket -> hasUsed=false -> skipped.
-		{"avail only bucket skipped but oldest timestamp set",
-			map[string]map[string][]MetricPoint{
-				"p1": {"avail": []MetricPoint{pt(t1, 50)}},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: used and avail land at DIFFERENT timestamps -> each
-		// bucket is half-complete -> all skipped; oldest is min(t1,t2)=t1.
-		{"used and avail at different timestamps both skipped",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 50)},
-					"avail": []MetricPoint{pt(t2, 50)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: total == 0 (used=0, avail=0) -> `total <= 0` skip arm.
-		{"zero total skipped via total le zero",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 0)},
-					"avail": []MetricPoint{pt(t1, 0)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: total negative (avail negative) -> `total <= 0` skip arm.
-		{"negative total skipped via total le zero",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 5)},
-					"avail": []MetricPoint{pt(t1, -10)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: NaN used propagates to NaN total -> math.IsNaN skip arm.
-		{"nan used makes total nan and is skipped",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, math.NaN())},
-					"avail": []MetricPoint{pt(t1, 50)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: +Inf used -> +Inf total -> math.IsInf(total, 0) skip arm.
-		{"positive inf used makes total inf and is skipped",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, math.Inf(1))},
-					"avail": []MetricPoint{pt(t1, 50)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: -Inf used -> -Inf total -> IsInf skip arm.
-		{"negative inf used makes total neg inf and is skipped",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, math.Inf(-1))},
-					"avail": []MetricPoint{pt(t1, 50)},
-				},
-			},
-			false, []MetricPoint{}, t1ms},
-
-		// Branch: negative used with positive total -> NOT skipped; emits a
-		// NEGATIVE percentage. This documents real (suspect) behavior; see
-		// GLM_REPORT.md "suspected source bugs".
-		{"negative used yields negative percentage when total positive",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, -5)},
-					"avail": []MetricPoint{pt(t1, 10)},
-				},
-			},
-			// (-5 / 5) * 100 = -100
-			false, []MetricPoint{{Timestamp: t1, Value: -100.0}}, t1ms},
-
-		// Mixed: one full bucket (t1) emits, one half bucket (t2, used-only)
-		// is skipped but still contributes to oldestTimestamp when older.
-		{"mixed full and half bucket only emits full bucket",
-			map[string]map[string][]MetricPoint{
-				"p1": {
-					"used":  []MetricPoint{pt(t1, 30), pt(t2, 99)},
-					"avail": []MetricPoint{pt(t1, 70)},
-				},
-			},
-			false, []MetricPoint{{Timestamp: t1, Value: 30.0}}, t1ms},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			gotPoints, gotOldest := buildStorageSummaryCapacityTrend(tc.poolMetrics)
-
-			if gotOldest != tc.wantOldest {
-				t.Errorf("oldest timestamp = %d, want %d", gotOldest, tc.wantOldest)
-			}
-
-			if tc.wantNil {
-				if gotPoints != nil {
-					t.Fatalf("expected nil points slice, got %v", gotPoints)
-				}
-				return
-			}
-			if gotPoints == nil {
-				t.Fatalf("expected non-nil points slice, got nil")
-			}
-			if len(gotPoints) != len(tc.wantPoints) {
-				t.Fatalf("points length = %d, want %d (got=%v)",
-					len(gotPoints), len(tc.wantPoints), gotPoints)
-			}
-			for i, want := range tc.wantPoints {
-				got := gotPoints[i]
-				if !got.Timestamp.Equal(want.Timestamp) {
-					t.Errorf("point[%d].Timestamp = %v, want %v", i, got.Timestamp, want.Timestamp)
-				}
-				if !floatEq(got.Value, want.Value) {
-					t.Errorf("point[%d].Value = %v, want %v", i, got.Value, want.Value)
-				}
 			}
 		})
 	}

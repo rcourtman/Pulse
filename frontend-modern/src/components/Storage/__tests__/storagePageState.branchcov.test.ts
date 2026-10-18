@@ -83,7 +83,6 @@ const makeParsed = (overrides: Partial<ParsedStorageSearch> = {}): ParsedStorage
   resource: '',
   sort: '',
   order: '',
-  summaryGroup: '',
   ...overrides,
 });
 

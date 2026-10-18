@@ -677,6 +677,39 @@ func TestClientClusterStatusListSingle(t *testing.T) {
 	}
 }
 
+// PMG 9 returns the cluster id as a string (#2960). Pulse does not use it, so
+// no cid format may fail the cluster read.
+func TestClientClusterStatusIgnoresClusterIDFormat(t *testing.T) {
+	t.Parallel()
+
+	for _, cid := range []string{`1`, `"1"`, `"node-a"`, `null`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"data":[{"cid":%s,"name":"pmg-01","type":"master","ip":"10.0.0.5"}]}`, cid)
+		}))
+
+		client, err := NewClient(ClientConfig{
+			Host:       server.URL,
+			TokenName:  "apitoken",
+			TokenValue: "secret",
+			VerifySSL:  false,
+		})
+		if err != nil {
+			server.Close()
+			t.Fatalf("unexpected error creating client: %v", err)
+		}
+
+		entries, err := client.GetClusterStatus(context.Background(), true)
+		server.Close()
+		if err != nil {
+			t.Fatalf("cid %s: GetClusterStatus failed: %v", cid, err)
+		}
+		if len(entries) != 1 || entries[0].Name != "pmg-01" || entries[0].Type != "master" {
+			t.Fatalf("cid %s: unexpected entries %+v", cid, entries)
+		}
+	}
+}
+
 func TestClientListBackupsEscapesNode(t *testing.T) {
 	t.Parallel()
 
@@ -795,5 +828,45 @@ func TestClientClusterStatusNoParam(t *testing.T) {
 
 	if _, err := client.GetClusterStatus(context.Background(), false); err != nil {
 		t.Fatalf("GetClusterStatus failed: %v", err)
+	}
+}
+
+type pmgCollectionTransport func(*http.Request) (*http.Response, error)
+
+func (f pmgCollectionTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestPMGCollectionMissingObjectData(t *testing.T) {
+	for _, body := range []string{`{}`, `{"data":null}`, `{"data":0}`, `{"data":[]}`, `invalid`} {
+		t.Run(body, func(t *testing.T) {
+			client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}}
+			if v, err := client.GetVersion(context.Background()); err == nil || v != nil {
+				t.Fatalf("version=%+v err=%v", v, err)
+			}
+			if v, err := client.GetMailStatistics(context.Background(), ""); err == nil || v != nil {
+				t.Fatalf("mail=%+v err=%v", v, err)
+			}
+			if v, err := client.GetQueueStatus(context.Background(), "one"); err == nil || v != nil {
+				t.Fatalf("queue=%+v err=%v", v, err)
+			}
+			if v, err := client.GetQuarantineStatus(context.Background(), "spam"); err == nil || v != nil {
+				t.Fatalf("quarantine=%+v err=%v", v, err)
+			}
+		})
+	}
+}
+func TestPMGCollectionObservedZeroData(t *testing.T) {
+	client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":{"count":0,"active":0,"deferred":0,"hold":0,"incoming":0}}`)), Request: r}, nil
+	})}}
+	if v, err := client.GetMailStatistics(context.Background(), ""); err != nil || v == nil || v.Count.Float64() != 0 {
+		t.Fatalf("mail=%+v err=%v", v, err)
+	}
+	if v, err := client.GetQueueStatus(context.Background(), "one"); err != nil || v == nil || v.Active.Int64() != 0 {
+		t.Fatalf("queue=%+v err=%v", v, err)
+	}
+	if v, err := client.GetQuarantineStatus(context.Background(), "spam"); err != nil || v == nil || v.Count.Int64() != 0 {
+		t.Fatalf("quarantine=%+v err=%v", v, err)
 	}
 }

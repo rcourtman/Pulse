@@ -9,11 +9,189 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/notifications.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": [
+    "security-privacy"
+  ]
 }
 ```
 
 ## Purpose
+
+### Approved addresses share a bounded connection budget
+
+Webhook and HTTP Apprise transports pass their validated numeric destinations
+to `pkg/securityutil/pinned_dial.go`. A stalled first address must leave time
+for a healthy later address, including another address of the same family.
+The shared primitive staggers at most two connect workers, prefers the other
+address family for fallback, and shares one ten-second connection budget among
+all candidates. A winner cancels other attempts and closes late successful
+connections. Only the winning connection carries the HTTP request.
+
+Webhook admission and dialing use the same context-aware DNS lookup with a
+five-second ceiling. Redirect validation retains the request context. Empty
+DNS results fail closed. Private-address admission, DNS pinning, TLS identity,
+same-origin redirects and queue retry policy retain their existing owners.
+
+`pinned_connectivity_linux_test.go` saturates a real owned loopback TCP accept
+queue while a second address on the same port accepts HTTP. Both secure clients
+must reach that receiver exactly once. The queued control reopens the persisted
+sent status, audit and telemetry with one attempt, one delivery and no failure.
+`webhook_dns_context_test.go` exercises cancellation through the production
+resolver path and verifies bounded admission and private-address refusal.
+These are source controls, not attribution of fleet connectivity counters or
+proof of installed-destination recovery.
+
+### Destination saves use one submitted snapshot without replacing newer input
+
+The existing email, Apprise, watchdog and entitled push writes preserve their
+payload fields, endpoint order and server-side policy. The editor captures
+them before the preceding alert-policy request yields, rather than reading
+later edits between writes. Apprise response normalisation and masking apply
+only to its untouched submitted draft in the same loaded context. Newer input
+and unsaved status survive old acknowledgements; context invalidation stops
+remaining unsent calls, without cancelling or undoing an issued request.
+Failed multi-endpoint saves can have earlier persisted writes and are not
+represented as atomic rollback or provider delivery.
+
+The aggregate editor refuses all policy/destination writes until it has loaded
+the saved policy for its current context. A rejected policy GET is not permission
+to save empty or disabled destination defaults. Explicit reload restores normal
+admission only after saved policy and destination loading finish; existing
+destination-load errors still block saves. The acknowledgement controls require
+no downstream writes after initial or replacement policy-read failures, without
+changing provider, queue or retry semantics.
+
+`useAlertDestinationsState.test.tsx` and
+`alertSettingsSave.acknowledgement.test.tsx` use deferred and rejected replies
+to prove the snapshot, draft, retry and context boundaries. The genuine browser
+fixture runs the existing surface, state owners and API adapters against local
+synthetic endpoints, not SMTP/Apprise providers. Credentials, TLS verification,
+entitlement, activation, ordinary delivery, queue and retry policy are unchanged.
+
+
+### Notification redirects keep the configured receiver's origin
+
+Webhook and HTTP Apprise firing, recovery, Test and admitted queued delivery
+follow redirects only within the initial HTTP origin: scheme, normalised host
+and effective port. An SSRF-permitted host, subdomain, DNS alias or another port
+is not permission to receive private alert bodies, custom authentication headers
+or signed requests. HTTP/HTTPS changes are also refused. Same-origin paths and
+queries remain supported, including default-port and equivalent IPv6 spellings;
+the existing redirect limit, DNS pinning, URL validation and TLS checks remain.
+Foreign redirects stop before target DNS resolution, validation logging or any
+request to that receiver. Origin refusal precedes the redirect-count error, so
+an exhausted same-origin chain cannot expose its final foreign Location or
+change that refusal into an unknown/retryable error. A fixed configuration failure advises the operator to configure
+the final destination URL, without copying the receiver-controlled Location.
+
+That typed failure stops both enhanced transport retries and the queue's retry
+budget. It remains an undelivered dead letter and audit, never a successful
+firing/recovery receipt; admitted private configuration is not rewritten.
+Apprise retains the same safe guidance and existing opaque diagnostic policy.
+
+`notification_redirect_test.go` supplies real loopback controls for all five
+redirect statuses, foreign ports/hostname aliases, authenticated HTTPS downgrade
+with and without the existing TLS override, every sender path and the real
+queue's firing/recovery dead-letter, audit and receipt lifecycle. Same-origin
+controls verify unchanged methods, payloads, credentials and signatures. Capped
+chains exercise direct, enhanced-retry and HTTP Apprise paths; the unchanged
+same-origin redirect-count controls remain.
+`notification_redirect_origin_test.go` covers origin equivalence and separation.
+Existing redirect-chain controls now exercise paths on one receiver, not three
+different receivers. This is source privacy/compatibility proof, not installed
+destination acceptance, evidence of prior exposure or resolution of a report.
+
+### Webhook diagnostics withhold receiver-controlled text
+
+Ordinary and enhanced firing/recovery senders, including ntfy's plain-text
+recovery path, drain at most the existing 1 MiB response cap without retaining
+body bytes. Logs, delivery errors/history and the existing Test response carry
+structured status, bounded byte counts and incomplete/limit-reached facts, not
+arbitrary receiver text. Test keeps its status/string/error shape; a nonempty
+response string now explains that the body was withheld. ResponseLogging
+enables metadata only. Invalid Retry-After hints retain the fixed fallback
+diagnostic without copying the receiver's arbitrary header value. Valid hints
+still report their parsed bounded duration. Reaching the read cap does not
+claim the body exceeded it.
+
+HTTP status still owns rejection classification and retry decisions, Retry-After
+and actual attempt/final-status accounting survive, and incomplete 2xx replies
+remain failures. Body-read errors retain their original cause for errors.Is/As
+and classification, without formatting its possibly private prose. Requests,
+credentials, payload/occurrence identity, TLS/SSRF, destination scope, queue
+policy/persistence and existing operator retry authority are unchanged. Existing
+historical diagnostics are not rewritten or claimed to be scrubbed.
+
+`webhook_response_confidentiality_test.go` exercises the real ordinary/enhanced/
+ntfy/retry senders with in-memory HTTP responses: echoed credentials/alert text,
+successful/rejected responses, error-prose disclosure, final delivery history,
+unchanged requests and response closure. `webhook_response_metadata_test.go`
+checks empty/incomplete/at-cap/over-cap bodies and the Test summary.
+`webhook_response_retry_hint_test.go` preserves actual retry/fallback behaviour
+without disclosing invalid hint text. Existing
+Test/Gotify and ntfy HTTP-error controls retain status and request expectations
+with the new withheld response. These are synthetic source controls, not native
+provider acceptance or a cause/fix claim for reported notification failures.
+
+### Saved webhook identity is consistent for editing and Test
+
+Create, Update and Test share one resolver for masked header/custom-field and
+signing-secret values. Reject missing or ambiguous saved placeholders before
+persisting, changing live destinations or sending a test request. HTTP header
+identity is case-insensitive across the complete saved map, even where an exact
+spelling is present; conflicting submitted aliases cannot depend on map order.
+Custom fields retain exact, case-sensitive identity. A saved signing secret
+must be non-empty and not itself a placeholder to satisfy a signing mask.
+
+The replacement map still honours explicit add/change/delete and omitted keys;
+cleared headers are normalized away so the sender's JSON default survives.
+List/create/update responses remain masked. Create and unsaved Test reject masks
+instead of silently dropping credentials; a valid literal create still returns
+masked values. Saved-form Test uses the same resolved edit as Update but does
+not change live configuration or encrypted persistence. Persist-before-publish,
+SSRF/TLS policy, routing/scopes, notification pause honesty and already-admitted
+queue snapshots remain unchanged. Source controls
+`TestWebhookPlaceholderBoundaryAgreement` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` complement the existing real
+ordinary-delivery/restart/grouping controls; none proves native #2540 relief.
+
+### Delivery health reconciliation follows the complete send transition
+
+The queue's automatic send worker records the retry/dead-letter outcome and
+its per-attempt audit before releasing the firing alert's delivery gate and
+announcing the health change. The monitoring callback can therefore inspect
+the complete attempt or take the same alert's cancellation gate without
+blocking delivery on its own held gate. Configuration failures remain immediate
+dead letters; transient failures keep their existing budget and backoff.
+Skipped policy delivery remains a cancellation with no invented provider audit.
+Explicit operator status/retry/dismiss actions still reconcile immediately
+following their own committed transitions.
+
+`queue_delivery_callback_test.go` checks configuration, transient and exhausted
+failures through the real delivery processor, exact committed status, attempt
+counts/classes, operational links, one callback and re-entrant writer-gate
+acquisition. Existing disabled-delivery, restart/resolution/retry and queue
+health tests retain policy cancellation and operator action coverage; the
+monitor startup test retains saved-destination restoration and its audit check.
+This changes callback sequencing only: no SQLite driver, schema/SQL, provider
+policy, credential, SSRF boundary or notification payload is changed.
+
+### SMTP authentication and envelopes belong to each delivery
+
+SMTP managers resolve the provider identity and any supported default username
+before deciding whether credentials require authentication. Explicit usernames
+take precedence. Validation, connection tests and real sends use the same
+resolved credentials without replacing the saved username. Invalid credentials
+retain the existing authentication failure and immediate dead-letter policy.
+The actual SMTP attempt reports `hasAuth` from that resolved manager. Queue
+admission does not infer authentication from the unexpanded saved username.
+
+Each email delivery owns its configuration snapshot, including its sender and
+recipients. Preparing a concurrent alert or report cannot change an in-flight
+delivery's envelope or retry policy. Deliveries using the cached SMTP transport
+share its rate-limit state without mutating its configuration. Saved settings
+and already-admitted queue snapshots remain independent. This does not refresh
+retained destinations or credentials after an edit, or add automatic replay.
 
 ### Delivery verdicts survive session cleanup and interrupted diagnostics
 
@@ -153,6 +331,7 @@ or displayed a notification.
 12. `internal/notifications/failure_class.go`
 13. `internal/notifications/quiet_hours_queue.go`
 14. `internal/notifications/apprise_diagnostics.go`
+15. `pkg/securityutil/pinned_dial.go`
 
 ## Shared Boundaries
 
@@ -182,6 +361,9 @@ or displayed a notification.
    raise or clear alerts directly. Retry and dismissal reconcile even when no
    row changed, because an already-repaired queue may still have a persisted
    stale warning from an earlier process.
+5. Change approved-address connection scheduling through
+   `pkg/securityutil/pinned_dial.go`, owned by `security-privacy`. Keep webhook
+   allowlisting and provider-specific destination policy in this subsystem.
 
 ## Forbidden Paths
 
@@ -220,6 +402,31 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+### Masked destination edits preserve each submitted value independently
+
+Webhook editing restores each submitted `***REDACTED***` header/custom-field
+value from that destination, rather than replacing the entire submitted map.
+Explicit changes, additions, empty values and removals beside another masked
+credential survive live publication and encrypted reload. Header names match
+case-insensitively; custom fields retain exact, canonical service-specific names.
+An unknown, already-masked or ambiguous saved value fails with HTTP 400 before
+any save or live mutation. Omitted maps retain their existing replacement
+semantics. A response must not disclose a stored custom-field value restored
+from a mask; it echoes the canonical submitted value instead.
+
+`TestWebhookEditPreservesOnlyMaskedValues` and
+`TestWebhookEditRejectsUnrecoverableMasks` pin editing, deletion, blank values,
+case matching, no-mutation rejection and confidentiality.
+`TestWebhookMaskedEditPersistsAndDelivers` connects masked form reads/edits,
+encrypted save/reopen, ordinary grouped firing/recovery and disabling an active
+group to individual deliveries through the persistent sender. Built-in Telegram
+and custom Generic bodies retain all members, exact headers/fields and ordinary
+per-occurrence recovery receipts. This is loopback source proof, not native
+Telegram acceptance or a reproduction of the reporter's actual stored settings.
+Already admitted queue jobs keep their configuration snapshots and current
+pause/disable/removal checks; editing does not rewrite or replay them. The
+built-in template-header correction remains separate and unchanged.
 
 ### Apprise diagnostic confidentiality
 
@@ -319,7 +526,14 @@ firing grouping are unchanged.
 
 Verification: `resolved_grouping_contract_test.go` establishes ordinary firing
 receipts then resolves fifteen alerts in one process, after manager restart,
-and across restart with pending recoveries. It checks unseen-destination and
+and across restart with pending recoveries. Receiver timestamps must respect
+one second from the first admitted occurrence in each group. An emission burst
+completed within that window must stay one group; emission/restart work spanning
+the window is not itself evidence of early delivery. A deliberate late-arrival
+case checks that an expired first group is not extended. Across groups every
+occurrence must appear once, in order within its group, with its start time and
+resolution timestamp intact. The fixture does not change production deadlines,
+rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
 rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
@@ -517,11 +731,12 @@ targets such as `0.0.0.0` and `::` before delivery and must not allow webhook
 private-CIDR allowlists to include networks that contain those unspecified
 addresses.
 The DNS-rebinding pin in the secure webhook dialer is part of that same guard:
-hostname dials may connect only to resolver-validated IPs, and the dialer must
-try every permitted resolved address in resolution order rather than pinning
-the first, so an IPv6-first resolution (`::1` ahead of `127.0.0.1`) or a dead
-leading A record cannot fail delivery to a host that is reachable on a later
-permitted address.
+hostname dials may connect only to resolver-validated IPs. The shared pinned
+dialer uses bounded staggered fallback rather than letting a stalled first
+connect consume the request deadline. Resolver family preference and order
+within each family survive, while alternate families and later same-family
+addresses get connection budget. DNS lookups retain cancellation and their
+five-second ceiling for admission, redirects and the transport itself.
 That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides
@@ -568,9 +783,19 @@ resolved batches are not guaranteed to contain the same alert set and a
 group-level reference would attach messages to the wrong thread.
 Scheduled report delivery uses that same enhanced email boundary. Report
 attachments must be emitted as MIME attachment parts by
-`internal/notifications/email_enhanced.go`, and oversized-report fallback copy
-belongs to the reporting scheduler. SMTP transport, recipient parsing,
+`internal/notifications/email_enhanced.go`. The scheduler owns report-size
+validation and the operator's attachment choice. SMTP transport, recipient parsing,
 headers, body encoding, and attachment encoding remain notification-owned.
+`EnhancedEmailManager.ValidateConfiguration` checks the same sender/recipient
+and provider credential inputs without sending mail. A connection failure while
+awaiting the completed-message reply is a typed `EmailAcceptanceUnconfirmedError`.
+The sender stops its inner retry loop because the server may already have the
+message. Explicit SMTP replies still use the canonical failure classifier.
+`internal/notifications/email_delivery_test.go` checks configuration and a dropped
+completed-message response with an attachment. Report scheduling consumes that
+typed uncertainty rather than inferring rejection from a generic connection
+error. This does not assert inbox receipt or change the persistent alert queue's
+state vocabulary.
 That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path
@@ -708,6 +933,34 @@ real alert is suppressed. Successful responses from
 must therefore report `deliveryPaused: true` whenever the notification
 manager is disabled, and the destinations UI must surface that as a warning
 instead of a plain success toast.
+
+A webhook test must also send the headers a real delivery sends. When a
+built-in service has no custom template, Pulse renders that service's body,
+so the service template's static headers are part of the wire format and
+override stored copies under any spelling of the same name.
+`prepareWebhookDeliveryContext` applies them to every firing delivery and to
+every recovery except ntfy's, and `BuildEnhancedWebhookTestConfig` uses the same
+`withWebhookTemplateHeaders` rule; other stored headers stay. The stored
+headers are only a copy the UI seeded at creation, and an edit can blank or
+replace them. Before this rule, a Telegram webhook with a blank stored
+Content-Type passed Test while Telegram ignored every real alert's JSON body
+and answered "message text is empty" (#2540). A custom template means the
+user owns the body, so stored headers stand. Generic webhooks have no
+built-in body and keep their stored headers. ntfy recoveries build their own
+plain-text request and are outside this rule.
+`internal/notifications/webhook_template_headers_test.go` drives a real
+queued Telegram alert with damaged stored Content-Type values, and compares
+Test, grouped and resolved requests for every built-in service.
+
+`NormalizeWebhookConfig` drops header entries with a blank name or value at
+every ingress and on load, so a header cleared in the editor is removed
+rather than sent empty. An empty Content-Type would otherwise replace the
+default `application/json` on generic webhooks, which have no template
+headers to restore it. The webhook API resolves the editor's masked values
+per key before normalization, so the `***REDACTED***` mask is never stored or
+sent (see the api-contracts webhook clause).
+`TestGenericWebhookBlankStoredHeaderKeepsDefaultContentType` pins the
+delivery side.
 
 ### Occurrence-bound delivery receipts
 
@@ -1140,10 +1393,6 @@ normalization. Existing backend severity admission and delivery queues remain
 unchanged. The notification API adapter round trips and WebhookConfig edit/save
 regression establish frontend control preservation, not provider delivery.
 
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
-
 ### Resolution cancellation is occurrence-qualified
 
 The monitor's delayed recovery path calls `CancelResolvedAlert` with the
@@ -1167,3 +1416,106 @@ The live monitor does not interpret pending-only cancellation counts as
 recipient acceptance. Per-occurrence/per-destination receipts remain the sole
 recovery admission proof, including partial delivery and lost RAM markers after
 restart; an unannounced destination receives no recovery.
+
+### A close that was not a recovery says what happened
+
+A resolved alert can carry an `alerts.AlertResolution` when it closed without
+recovering. The one reason so far, `moved_to_agent`, means the metric now
+belongs to the resource's linked Pulse agent. Delivery is unchanged: the close
+is still queued, gated on the firing receipt and sent, and PagerDuty still
+receives `resolve` for the alert's dedup key. Only the wording changes.
+`resolvedAlertMessage` gives the resolution's summary with the alert named
+("Memory alert moved to pve1 (Host Agent). This is not a recovery: check the
+agent for the current reading.") in place of "<resource> on <node> is now
+healthy" for every templated webhook `.Message`. Grouped lists append the
+short outcome ("moved to pve1 (Host Agent)") to the moved entry. ntfy titles a
+single moved alert `MOVED: <resource>`. Email and Apprise title it `Pulse alert
+moved: <resource>` and add the summary after the breach message. Recovery
+visuals follow the same rule: when any close in a resolved delivery was not a
+recovery, `WebhookPayloadData.NotRecovered` is set and the built-in templates
+drop them (Discord's green embed becomes the neutral blue, both Teams cards
+lose recovery green, Mattermost's check emoji becomes `:arrow_right:`), and
+ntfy swaps its green check tag for `arrow_right`, for a single alert or a batch.
+Built-in titles still say Resolved, which is accurate for the closed alert;
+custom templates can read `.NotRecovered`, and one that hard-codes recovery
+text keeps it. The resolution rides the Alert JSON, so it survives the delivery
+queue round trip and appears in the default JSON payload's `alerts` array.
+Issue #1682 is the precedent: a recipient called "is now healthy" a false
+factual claim when an alert closed without recovering.
+The resolve transition such a close links to has cause `ownership_transferred`
+in `internal/operationaltrust/contracts.go`, not `recovery_evidence`. A
+notification link records the transition ID and lifecycle state, never the
+cause, so delivery, receipts and recovery admission treat it exactly like a
+recovery's resolve transition. `TestOwnershipTransferOnlyClosesWithEvidence`
+pins that the cause may only enter `resolved` and only with evidence.
+
+Verification: `resolved_handover_test.go` drives the firing, its receipt and
+the queued close through the normal entry points for ntfy, and renders Discord,
+both Teams cards, Mattermost, PagerDuty, a grouped Slack list, a grouped ntfy
+batch and email/Apprise content, plus the unchanged ordinary recovery wording
+and visuals.
+
+### Default email subjects retain bounded resource and host identity
+
+Single firing subjects retain severity/type and name the resource and its host.
+Digest subjects retain every severity count and include up to three distinct
+resource/host labels, sorted and deduplicated before shortening, with `+N more`
+for omitted labels (not omitted alerts). A host display name retains its raw
+host alongside it when they differ; absent node identity is `unknown host`,
+never an inferred connection/instance. An empty resource name falls back to its
+resource ID, then `Unknown resource`. Each supplied label/type is bounded to
+48 UTF-8 bytes, with visible truncation; controls/whitespace become spaces.
+Full body identities remain unchanged. Subjects are hints, not globally unique
+resource keys or proof of current host identity.
+
+Email-only recovery subjects carry the same bounded identity while preserving
+single resolved/moved and batch resolved wording. Occurrence threading,
+recovery receipt admission, routing, queue policy and other destination titles
+are unchanged. Both ordinary and attachment MIME construction encode Unicode
+subjects with RFC 2047 and fold at spaces/encoded-word boundaries; they still
+sanitize header line breaks. `email_subject_identity_test.go` checks the
+three-host collision, display/raw/missing identities, severity, deterministic
+bounds/overflow, full bodies, MIME decode/injection safety and normal
+single/grouped/recovery construction through an in-memory transport. This is
+source acceptance, not SMTP/Gmail delivery or an installed reporter retest.
+Literal ASCII encoded-word syntax in supplied names is itself MIME-encoded,
+so decoding the subject once preserves the name rather than interpreting it as
+another identity. The literal-encoded-word control covers both MIME builders.
+
+### Notifications link to the alert they report
+
+With a public URL configured, a notification links to the alert itself rather
+than to Pulse's front page: `alertHistoryURL` builds
+`/alerts/history?alert=<id>`, the address the frontend opens one alert at
+(`buildAlertHistoryAlertPath`); a Patrol finding, which reaches notifications
+as a synthetic alert History never stores, links to the Patrol page
+(`alertLinkURL`), as does a batch made only of findings; and `alertsPageURL`
+links any other grouped
+notification to the Alerts overview while its alerts fire and to Alert
+History once they resolve. Single emails end with "View this alert in
+Pulse"; grouped emails link each alert's name and point their footer at the
+overview. Apprise and resolved text add a "View in Pulse" line per alert next
+to the existing Dashboard line. Webhook templates get `{{.AlertURL}}` (the
+alert link, the grouped page link, or the existing `{{.Instance}}` fallback
+without a public URL); the built-in Telegram, Slack, Teams, PagerDuty, Teams
+Adaptive Card, Gotify, ntfy and Mattermost templates link it and say "View in
+Pulse" where they said "View in Proxmox", and the default JSON payloads add
+`alertUrl`. `{{.Instance}}` keeps its meaning, so custom templates are
+unchanged. The link carries only the alert id already present in every
+payload (`alert_links_test.go`).
+
+### SMTP editor settings follow the public configuration
+
+The existing Email notification form offers only settings accepted by its
+save/read path. Reply-to, max retries and retry delay were UI-only values:
+`buildEmailConfigPayload` and `NotificationsAPI.updateEmailConfig` omitted them,
+and the notification manager supplies its own retry policy. They are no longer
+editable or fabricated by the form defaults. `UIEmailConfig` extends the public
+`EmailConfig` rather than declaring unsupported settings separately.
+
+`EmailProviderSelect.supported-settings.test.tsx` checks their absence both
+before and after expanding the form, default/payload parity, and supported
+SMTP, rate-limit and routing preservation through edits and reloads with email
+on or off. Backend configuration, transport, retry policy, TLS, queue recovery
+and notification delivery are unchanged. Browser controls are synthetic, not
+native SMTP acceptance or a containing release.

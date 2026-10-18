@@ -442,7 +442,6 @@ export class AIChatAPI {
     signal?: AbortSignal,
     mentions?: ChatMention[],
     findingId?: string,
-    autonomousMode?: boolean,
     handoffContext?: string,
     handoffResources?: ChatHandoffResource[],
     handoffActions?: ChatHandoffAction[],
@@ -465,9 +464,6 @@ export class AIChatAPI {
     }
     if (findingId) {
       body.finding_id = findingId;
-    }
-    if (typeof autonomousMode === 'boolean') {
-      body.autonomous_mode = autonomousMode;
     }
     if (handoffContext && handoffContext.trim()) {
       body.handoff_context = handoffContext;

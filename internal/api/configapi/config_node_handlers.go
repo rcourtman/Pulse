@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -263,6 +264,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
+	var pendingPMG []config.PMGInstance
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode add node request")
@@ -736,21 +738,32 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TokenValue:                   pmgTokenValue,
 			Fingerprint:                  req.Fingerprint,
 			VerifySSL:                    verifySSL,
+			MonitoringConfigured:         true,
 			MonitorMailStats:             monitorMailStats,
 			MonitorQueues:                monitorQueues,
 			MonitorQuarantine:            monitorQuarantine,
 			MonitorDomainStats:           monitorDomainStats,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)
+		pendingPMG = append(append([]config.PMGInstance(nil), h.getConfig(r.Context()).PMGInstances...), pmgInstance)
 	}
 
 	// Save configuration to disk using our persistence instance
 	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	pmgToSave := h.getConfig(r.Context()).PMGInstances
+	if pendingPMG != nil {
+		pmgToSave = pendingPMG
+	}
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+
+	if pendingPMG != nil {
+		config.Mu.Lock()
+		h.getConfig(r.Context()).PMGInstances = pendingPMG
+		config.Mu.Unlock()
 	}
 
 	// Reload monitor with new configuration
@@ -1418,6 +1431,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
+	var pendingPMG []config.PMGInstance
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -1618,6 +1632,14 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 		}
+		if req.MonitorMailStats != nil || req.MonitorQueues != nil ||
+			req.MonitorQuarantine != nil || req.MonitorDomainStats != nil {
+			// Materialise the effective legacy default before applying a partial
+			// patch. An unrelated false flag must not silently turn mail stats off.
+			updated.MonitorMailStats = current.MailStatsEnabled()
+			updated.MonitoringConfigured = true
+		}
+
 		if req.MonitorMailStats != nil {
 			updated.MonitorMailStats = *req.MonitorMailStats
 		}
@@ -1637,7 +1659,8 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		*pmgInst = updated
+		pendingPMG = append([]config.PMGInstance(nil), h.getConfig(r.Context()).PMGInstances...)
+		pendingPMG[index] = updated
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
@@ -1645,10 +1668,19 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 
 	// Save configuration to disk using our persistence instance
 	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	pmgToSave := h.getConfig(r.Context()).PMGInstances
+	if pendingPMG != nil {
+		pmgToSave = pendingPMG
+	}
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+	if pendingPMG != nil {
+		config.Mu.Lock()
+		h.getConfig(r.Context()).PMGInstances = pendingPMG
+		config.Mu.Unlock()
 	}
 
 	// IMPORTANT: Preserve alert overrides when updating nodes
@@ -1708,7 +1740,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				time.Sleep(2 * time.Second)
 				result, _ := h.getMonitor(r.Context()).GetDiscoveryService().GetCachedResult()
 				if result != nil {
-					h.wsHub.BroadcastMessage(websocket.Message{
+					h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 						Type: "discovery_update",
 						Data: map[string]interface{}{
 							"servers":           result.Servers,
@@ -1841,7 +1873,9 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
 		deletedNodeHost = h.getConfig(r.Context()).PMGInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PMG node")
+		config.Mu.Lock()
 		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances[:index], h.getConfig(r.Context()).PMGInstances[index+1:]...)
+		config.Mu.Unlock()
 	} else {
 		log.Warn().
 			Str("nodeID", nodeID).
@@ -1880,7 +1914,7 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	// Broadcast node deletion to refresh the frontend
 	if h.wsHub != nil {
 		// Send a node_deleted message to trigger a refresh of the nodes list
-		h.wsHub.BroadcastMessage(websocket.Message{
+		h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 			Type: "node_deleted",
 			Data: map[string]interface{}{
 				"nodeType": nodeType,
@@ -2007,7 +2041,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 
 	// Broadcast update to refresh frontend
 	if h.wsHub != nil {
-		h.wsHub.BroadcastMessage(websocket.Message{
+		h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 			Type: "nodes_updated",
 			Data: map[string]interface{}{
 				"nodeType": "pve",
@@ -2106,7 +2140,25 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(testResult)
 }
 
-// HandleTestNode tests a node connection
+// nodeConnectionTestTLSOptions overrides only the temporary probe's TLS policy.
+// Pointers distinguish omitted settings from explicitly disabling verification
+// or clearing a saved fingerprint. Credentials remain server-side.
+type nodeConnectionTestTLSOptions struct {
+	VerifySSL   *bool   `json:"verifySSL"`
+	Fingerprint *string `json:"fingerprint"`
+}
+
+func (o nodeConnectionTestTLSOptions) apply(verifySSL bool, fingerprint string) (bool, string) {
+	if o.VerifySSL != nil {
+		verifySSL = *o.VerifySSL
+	}
+	if o.Fingerprint != nil {
+		fingerprint = *o.Fingerprint
+	}
+	return verifySSL, fingerprint
+}
+
+// HandleTestNode tests saved credentials with optional, non-persistent TLS edits.
 
 func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
@@ -2128,11 +2180,27 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var tlsOptions nodeConnectionTestTLSOptions
+	if r.Body != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32*1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&tlsOptions); err != nil {
+			if !errors.Is(err, io.EOF) {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+		} else if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Find the node to test
 	var testResult map[string]interface{}
 
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
 		pve := h.getConfig(r.Context()).PVEInstances[index]
+		verifySSL, fingerprint := tlsOptions.apply(pve.VerifySSL, pve.Fingerprint)
 
 		// Create a temporary client to test connection
 		authUser := pve.User
@@ -2145,8 +2213,8 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			Password:    pve.Password,
 			TokenName:   pve.TokenName,
 			TokenValue:  pve.TokenValue,
-			VerifySSL:   pve.VerifySSL,
-			Fingerprint: pve.Fingerprint,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
 		}
 		client, err := proxmox.NewClient(clientConfig)
 		if err != nil {
@@ -2176,6 +2244,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbsInstance := h.getConfig(r.Context()).PBSInstances[index]
+		verifySSL, fingerprint := tlsOptions.apply(pbsInstance.VerifySSL, pbsInstance.Fingerprint)
 
 		// Create a temporary client to test connection
 		clientConfig := pbs.ClientConfig{
@@ -2184,8 +2253,8 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			Password:    pbsInstance.Password,
 			TokenName:   pbsInstance.TokenName,
 			TokenValue:  pbsInstance.TokenValue,
-			VerifySSL:   pbsInstance.VerifySSL,
-			Fingerprint: pbsInstance.Fingerprint,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
 		}
 		client, err := pbs.NewClient(clientConfig)
 		if err != nil {
@@ -2217,6 +2286,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		pmgInstance := h.getConfig(r.Context()).PMGInstances[index]
 
 		clientConfig := config.CreatePMGConfig(&pmgInstance)
+		clientConfig.VerifySSL, clientConfig.Fingerprint = tlsOptions.apply(clientConfig.VerifySSL, clientConfig.Fingerprint)
 		if pmgInstance.Password != "" && pmgInstance.TokenName == "" && pmgInstance.TokenValue == "" {
 			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
 				clientConfig.User = clientConfig.User + "@pmg"

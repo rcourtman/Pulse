@@ -7,7 +7,6 @@ export interface AlertActivationPresentationOptions {
 
 export interface AlertActivationPresentation {
   label: string;
-  labelClass: string;
   trackClass: string;
   thumbClass: string;
 }
@@ -24,8 +23,10 @@ export function getAlertActivationPresentation({
   isBusy = false,
 }: AlertActivationPresentationOptions): AlertActivationPresentation {
   return {
-    label: isActive ? t('alerts.activation.label.enabled') : t('alerts.activation.label.disabled'),
-    labelClass: isActive ? 'text-green-600 dark:text-green-400' : 'text-muted',
+    // One fixed name for the setting; the switch position alone says whether
+    // delivery is on. A label that flipped to "paused" beside an off switch
+    // read as "pausing is off".
+    label: t('alerts.activation.switchLabel'),
     trackClass: `relative h-6 w-11 rounded-full transition ${
       isActive ? 'bg-blue-600' : 'bg-surface-hover'
     }${isBusy ? ' opacity-50' : ''}`,

@@ -9,8 +9,10 @@ import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { buildKubernetesPath, KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { updateStore } from '@/stores/updates';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -40,6 +42,7 @@ import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
   buildKubernetesOverviewPosture,
+  getKubernetesNodesNeedingAttention,
   filterKubernetesResources,
   getKubernetesPageTabSpecs,
   resolveKubernetesPageTabId,
@@ -709,8 +712,47 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
     return posture.podAttention + posture.deploymentAttention;
   });
 
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const nodesNeedingAttention = createMemo(() =>
+    getKubernetesNodesNeedingAttention(
+      props.model(),
+      activeAlerts,
+      alertsActivation.detectionEnabled(),
+    ),
+  );
+
   return (
     <div class="space-y-4">
+      {/*
+        Problems lead, inventory follows: active health signals, then the
+        nodes that are not Ready or have an open alert, before the cluster
+        summary and workloads. Filtering stays on the Nodes and Events tabs.
+      */}
+      <Show when={props.model().incidents.length > 0}>
+        <div id="kubernetes-health-signals">
+          <KubernetesAlertsTable
+            incidents={props.model().incidents}
+            emptyIcon={k8sIcon()}
+            emptyTitle="No active Kubernetes alerts"
+            emptyDescription="Kubernetes health alerts appear here when the Pulse alert engine reports active workload, node, or cluster incidents."
+            showToolbar={false}
+          />
+        </div>
+      </Show>
+      <Show when={nodesNeedingAttention().length > 0}>
+        <div data-kubernetes-nodes-needing-attention>
+          <KubernetesNodesTable
+            resources={nodesNeedingAttention()}
+            title="Nodes needing attention"
+            sortStorageKey="kubernetesNodesNeedingAttention"
+            emptyIcon={k8sIcon()}
+            emptyTitle="All nodes are Ready"
+            emptyDescription="Nodes appear here when they are not Ready, cordoned, degraded or alerting."
+            showToolbar={false}
+          />
+        </div>
+      </Show>
       <KubernetesClustersTable
         clusters={props.model().clusters}
         scope={props.model().resources}
@@ -738,16 +780,6 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         controllers={getKubernetesControllerResources(props.model())}
         attentionCount={workloadAttention()}
       />
-      <Show when={props.model().incidents.length > 0}>
-        <div id="kubernetes-health-signals">
-          <KubernetesAlertsTable
-            incidents={props.model().incidents}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No active Kubernetes alerts"
-            emptyDescription="Kubernetes health alerts appear here when the Pulse alert engine reports active workload, node, or cluster incidents."
-          />
-        </div>
-      </Show>
     </div>
   );
 }

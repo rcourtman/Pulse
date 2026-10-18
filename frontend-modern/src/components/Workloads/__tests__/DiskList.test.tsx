@@ -28,6 +28,38 @@ afterEach(() => {
   cleanup();
 });
 
+describe('filesystem presentation read admission', () => {
+  it.each(['last-known', 'unavailable'] as const)(
+    'keeps %s readings out of threshold-coloured utilization',
+    (state) => {
+      const disk = makeDisk();
+      const reading = buildWorkloadsDiskPresentation(disk, 0, undefined, state);
+      expect(reading.progressValue).toBeNull();
+      expect(reading.progressWidth).toBe('0%');
+      expect(reading.progressClass).toBe('bg-surface-hover');
+      expect(reading.label).toBe('/');
+      expect(reading.typeLabel).toBe('EXT4');
+      expect(reading.usagePercentLabel).toBe(
+        state === 'last-known' ? 'Last known 50%' : 'Usage unavailable',
+      );
+      expect(reading.usageText).toBe(state === 'last-known' ? '50.0 GB/100 GB' : '?/100 GB');
+      expect(disk.used).toBe(53687091200);
+    },
+  );
+
+  it('does not infer a retained value from capacity or free bytes', () => {
+    const reading = buildWorkloadsDiskPresentation(
+      makeDisk({ used: undefined }),
+      0,
+      undefined,
+      'last-known',
+    );
+    expect(reading.usagePercentLabel).toBe('Usage unavailable');
+    expect(reading.usageText).toBe('?/100 GB');
+    expect(reading.progressValue).toBeNull();
+  });
+});
+
 describe('DiskList', () => {
   describe('fallback when no disks', () => {
     it('renders fallback "-" when disks array is empty', () => {
@@ -39,14 +71,14 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Disk stats unavailable. Guest agent may not be installed.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
 
     it.each([
       [
         'agent-not-running',
-        'Guest agent not running. Install and start qemu-guest-agent in the VM.',
+        'Proxmox could not query the guest agent. This does not prove it is absent or stopped. Defer setup and live probes during backups or a guest incident.',
       ],
       [
         'agent-timeout',
@@ -54,9 +86,12 @@ describe('DiskList', () => {
       ],
       [
         'permission-denied',
-        'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).',
+        "Permission denied. If this VM is an intended monitoring target, review the configured account and token's effective read permissions: VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+). Do not widen intentionally scoped access just to clear this error. A denied read does not establish guest or filesystem health. Defer access changes and live probes during backups or a guest incident.",
       ],
-      ['agent-disabled', 'Guest agent is disabled in VM configuration. Enable it in VM Options.'],
+      [
+        'agent-disabled',
+        'Proxmox reports the guest agent disabled in VM configuration. Review guest-OS-specific setup outside backups or guest incidents.',
+      ],
       ['no-filesystems', 'No filesystems found. VM may be booting or using a Live ISO.'],
       [
         'special-filesystems-only',
@@ -82,7 +117,7 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} diskStatusReason="some-unknown-reason" />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Disk stats unavailable. Guest agent may not be installed.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
   });

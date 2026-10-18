@@ -1,9 +1,6 @@
 import { AlertQueueActionFeedback } from '../AlertQueueActionFeedback';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { hasFeature } from '@/stores/license';
-import { useAlertsActivation } from '@/stores/alertsActivation';
-import { logger } from '@/utils/logger';
-import type { AlertDestinationsDeliveryPausedReason } from '@/utils/alertDestinationsPresentation';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
 import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
@@ -14,6 +11,7 @@ import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState'
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
 import { AlertPushDestinationsSection } from '../AlertPushDestinationsSection';
 import { AlertWebhookDestinationsSection } from '../AlertWebhookDestinationsSection';
+import { useAlertDeliveryPausedReason } from '../useAlertDeliveryPausedReason';
 
 import {
   useAlertDestinationsTabState,
@@ -31,49 +29,31 @@ export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
 
 export function DestinationsTab(props: DestinationsTabProps) {
   const state = useAlertDestinationsTabState(props);
-  const alertsActivation = useAlertsActivation();
-  const [activating, setActivating] = createSignal(false);
-
   // Destinations configured here are inert while delivery is gated off, so the
   // pause has to be visible on this surface rather than only on the overview.
-  const pausedReason = createMemo<AlertDestinationsDeliveryPausedReason | null>(() => {
-    // Until the alert config resolves, activation state is null and would read
-    // as paused; staying quiet avoids a false warning on every tab open.
-    if (!alertsActivation.config() || alertsActivation.activationState() === null) {
-      return null;
-    }
-    if (alertsActivation.notificationDeliveryEnabled()) {
-      return null;
-    }
-    if (!alertsActivation.detectionEnabled()) {
-      return 'detection_off';
-    }
-    return alertsActivation.activationState() === 'snoozed' ? 'snoozed' : 'not_activated';
-  });
-
-  const handleActivate = async () => {
-    if (activating()) {
-      return;
-    }
-    setActivating(true);
-    try {
-      await alertsActivation.activate();
-    } catch (error) {
-      logger.error('Failed to activate notification delivery from destinations tab', error);
-    } finally {
-      setActivating(false);
-    }
-  };
+  const deliveryPaused = useAlertDeliveryPausedReason();
+  const deliveryLog = () => (
+    <AlertDeliveryLogCard
+      log={state.deliveryLog()}
+      unavailable={state.deliveryLogUnavailable()}
+      refreshing={state.refreshingDeliveryLog()}
+      onRefresh={() => void state.loadDeliveryLog()}
+      webhooks={state.webhooks()}
+      heldEvents={state.heldEvents()}
+      heldEventsUnavailable={state.heldEventsUnavailable()}
+      refreshingHeldEvents={state.refreshingHeldEvents()}
+    />
+  );
 
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <Show when={!state.isLoading()} fallback={<AlertDestinationsLoadingState />}>
-        <Show when={pausedReason()}>
+        <Show when={deliveryPaused.pausedReason()}>
           {(reason) => (
             <AlertDeliveryPausedCard
               reason={reason()}
-              activating={activating()}
-              onActivate={() => void handleActivate()}
+              activating={deliveryPaused.activating()}
+              onActivate={() => void deliveryPaused.activate()}
             />
           )}
         </Show>
@@ -93,18 +73,9 @@ export function DestinationsTab(props: DestinationsTabProps) {
             onRetryFailures={() => void state.retryTerminalFailures()}
             onDismissFailures={() => void state.dismissTerminalFailures()}
           />
+          {/* Degraded delivery keeps its evidence beside the recovery controls. */}
+          {deliveryLog()}
         </Show>
-
-        <AlertDeliveryLogCard
-          log={state.deliveryLog()}
-          unavailable={state.deliveryLogUnavailable()}
-          refreshing={state.refreshingDeliveryLog()}
-          onRefresh={() => void state.loadDeliveryLog()}
-          webhooks={state.webhooks()}
-          heldEvents={state.heldEvents()}
-          heldEventsUnavailable={state.heldEventsUnavailable()}
-          refreshingHeldEvents={state.refreshingHeldEvents()}
-        />
 
         <Show when={state.hasLoadError()}>
           <AlertDestinationsLoadErrorCard
@@ -113,6 +84,21 @@ export function DestinationsTab(props: DestinationsTabProps) {
             onRetry={state.handleRetry}
           />
         </Show>
+
+        {/*
+          Unless delivery is degraded, destinations lead: "where do my alerts
+          go" is the page's job. Webhooks (Discord, Telegram, ntfy, Gotify,
+          Teams, Slack) come first because they are what most installs use, and
+          delivery activity follows the destinations.
+        */}
+        <AlertWebhookDestinationsSection
+          webhooks={state.webhooks()}
+          addWebhook={state.addWebhook}
+          updateWebhook={state.updateWebhook}
+          deleteWebhook={state.deleteWebhook}
+          testWebhook={state.testWebhook}
+          testingWebhook={state.testingWebhook()}
+        />
 
         <AlertEmailDestinationsSection
           config={props.emailConfig()}
@@ -130,14 +116,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
           testing={state.testingApprise()}
         />
 
-        <AlertWebhookDestinationsSection
-          webhooks={state.webhooks()}
-          addWebhook={state.addWebhook}
-          updateWebhook={state.updateWebhook}
-          deleteWebhook={state.deleteWebhook}
-          testWebhook={state.testWebhook}
-          testingWebhook={state.testingWebhook()}
-        />
+        <Show when={!state.deliveryNeedsAttention()}>{deliveryLog()}</Show>
 
         <AlertDeadManDestinationSection
           pingUrl={props.deadManPingUrl}

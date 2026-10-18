@@ -1,9 +1,11 @@
 package unifiedresources
 
 import (
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
@@ -403,6 +405,133 @@ func TestAvailabilityKeepsEveryConfiguredCheckWithMultipleServicesOnOneHost(t *t
 	}
 }
 
+func TestAvailabilitySummaryPrefersConfirmedOutageOverEarlierUnconfirmedFailure(t *testing.T) {
+	rr := NewRegistry(nil)
+	hostID := ingestAgentFixture(t, rr, "host-1", "machine-1")
+	now := time.Now().UTC()
+	check := func(targetID, address string, facet AvailabilityData) IngestRecord {
+		checkedAt := now
+		facet.LinkedResourceID = hostID
+		facet.Address = address
+		facet.Protocol = "https"
+		facet.Enabled = true
+		facet.LastChecked = &checkedAt
+		facet.FailureThreshold = 3
+		return availabilityProbeRecord(targetID, address, &facet)
+	}
+
+	// probe-a sorts first by target id and has failed once, below its
+	// threshold. probe-b is past its threshold and owns the outage incident.
+	unconfirmed := check("probe-a", "203.0.113.10", AvailabilityData{
+		AggregateState:         "unavailable",
+		ConsecutiveFailures:    1,
+		ApplicationFailureCode: "status_mismatch",
+	})
+	unconfirmed.Resource.Status = StatusWarning
+	confirmed := check("probe-b", "203.0.113.11", AvailabilityData{
+		AggregateState:      "unavailable",
+		ConsecutiveFailures: 3,
+	})
+	confirmed.Resource.Status = StatusOffline
+	confirmed.Resource.Incidents = []ResourceIncident{{
+		Provider: string(SourceAvailability),
+		NativeID: "probe-b",
+		Code:     "availability_unreachable",
+	}}
+	rr.IngestRecords(SourceAvailability, []IngestRecord{unconfirmed, confirmed})
+
+	host, ok := rr.Get(hostID)
+	if !ok || host == nil {
+		t.Fatalf("host %q missing after ingest", hostID)
+	}
+	if len(AvailabilityChecksForResource(*host)) != 2 {
+		t.Fatalf("availability checks = %+v, want both attached checks", host.AvailabilityChecks)
+	}
+	if host.Availability == nil || host.Availability.TargetID != "probe-b" {
+		t.Fatalf("availability summary = %+v, want the confirmed outage on probe-b", host.Availability)
+	}
+	health := EvaluateResourceHealth(*host, nil, now)
+	if health.Verdict != HealthCritical || len(health.Reasons) == 0 ||
+		health.Reasons[0].Code != "availability_failed" || health.Reasons[0].Detail != "" {
+		t.Fatalf("host health = %+v, want availability_failed from probe-b", health)
+	}
+
+	// Once probe-b recovers, the unconfirmed failure is the worst check left:
+	// it is the summary again, and it does not make the host an outage.
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		check("probe-b", "203.0.113.11", AvailabilityData{
+			AggregateState: "healthy",
+			Available:      true,
+		}),
+	})
+	host, _ = rr.Get(hostID)
+	if host.Availability == nil || host.Availability.TargetID != "probe-a" {
+		t.Fatalf("availability summary = %+v, want the remaining failure on probe-a", host.Availability)
+	}
+	health = EvaluateResourceHealth(*host, nil, now)
+	for _, reason := range health.Reasons {
+		if reason.Code == "availability_failed" {
+			t.Fatalf("host health = %+v, want no outage below the failure threshold", health)
+		}
+	}
+}
+
+func TestAvailabilitySummaryDoesNotConfirmOutageFromSilentProbeAgent(t *testing.T) {
+	rr := NewRegistry(nil)
+	hostID := ingestAgentFixture(t, rr, "host-1", "machine-1")
+	now := time.Now().UTC()
+	checkedAt := now
+	unconfirmed := availabilityProbeRecord("probe-a", "203.0.113.10", &AvailabilityData{
+		LinkedResourceID:    hostID,
+		Address:             "203.0.113.10",
+		Protocol:            "https",
+		Enabled:             true,
+		AggregateState:      "unavailable",
+		ProbeOutcome:        "unreachable",
+		LastChecked:         &checkedAt,
+		ConsecutiveFailures: 1,
+		FailureThreshold:    3,
+	})
+	unconfirmed.Resource.Status = StatusWarning
+
+	// The poller's read of a single-location probe whose agent stopped
+	// reporting: the old failure count survives, but the outcome is
+	// indeterminate, the aggregate unknown, and no incident is raised.
+	lastReport := now.Add(-time.Hour)
+	silent := availabilityProbeRecord("probe-b", "203.0.113.11", &AvailabilityData{
+		LinkedResourceID:    hostID,
+		Address:             "203.0.113.11",
+		Protocol:            "https",
+		ProbeAgentID:        "agent-probe-1",
+		Enabled:             true,
+		AggregateState:      "unknown",
+		ProbeOutcome:        "indeterminate",
+		ExpectedLocations:   1,
+		LastChecked:         &lastReport,
+		ConsecutiveFailures: 5,
+		FailureThreshold:    3,
+		LastError:           "no recent report from probe agent",
+	})
+	silent.Resource.Status = StatusWarning
+	rr.IngestRecords(SourceAvailability, []IngestRecord{unconfirmed, silent})
+
+	host, ok := rr.Get(hostID)
+	if !ok || host == nil {
+		t.Fatalf("host %q missing after ingest", hostID)
+	}
+	if host.Availability == nil || host.Availability.TargetID != "probe-a" {
+		t.Fatalf("availability summary = %+v, want probe-a: a silent probe confirms no outage", host.Availability)
+	}
+	for _, resource := range []Resource{*host, availabilityEndpointByTarget(t, rr, "probe-b")} {
+		health := EvaluateResourceHealth(resource, nil, now)
+		for _, reason := range health.Reasons {
+			if reason.Code == "availability_failed" {
+				t.Fatalf("%s health = %+v, want no outage from a silent probe agent", resource.ID, health)
+			}
+		}
+	}
+}
+
 func TestAvailabilityEditReplacesEndpointAndMovesProjection(t *testing.T) {
 	rr := NewRegistry(nil)
 	hostA := ingestAgentFixture(t, rr, "host-a", "machine-a")
@@ -664,4 +793,295 @@ func TestProxmoxGuestAvailabilityLinkFollowsRetiredIDs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// assertAvailabilityCheckAttachedTo checks that the configured check targetID
+// is projected onto resourceID by its explicit link and that the check's own
+// endpoint row points there.
+func assertAvailabilityCheckAttachedTo(t *testing.T, stage string, rr *ResourceRegistry, targetID, resourceID string) {
+	t.Helper()
+	target, ok := rr.Get(resourceID)
+	if !ok {
+		t.Fatalf("%s: check target %s missing from %v", stage, resourceID, resourceIDs(rr.List()))
+	}
+	attached := false
+	for _, check := range AvailabilityChecksForResource(*target) {
+		if check.TargetID == targetID {
+			attached = check.CorrelationState == AvailabilityCorrelationAttached && check.CorrelationRule == "explicit_resource_link"
+		}
+	}
+	if !attached {
+		t.Fatalf("%s: %s checks = %+v, want %s attached by its explicit link", stage, resourceID, AvailabilityChecksForResource(*target), targetID)
+	}
+	endpoint := availabilityEndpointByTarget(t, rr, targetID)
+	for _, relationship := range endpoint.Relationships {
+		if relationship.Type == RelChecks && relationship.TargetID == resourceID {
+			return
+		}
+	}
+	t.Fatalf("%s: endpoint relationships = %+v, want a checks edge to %s", stage, endpoint.Relationships, resourceID)
+}
+
+func linkedGuestVMRecord(now time.Time) IngestRecord {
+	return IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type:       ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     StatusOnline,
+			LastSeen:   now,
+			VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+}
+
+func linkedGuestCheck(t *testing.T, targetID, address, linkedResourceID string, now time.Time) IngestRecord {
+	t.Helper()
+	return availabilityProbeRecord(targetID, address, &AvailabilityData{
+		LinkedResourceID: linkedResourceID,
+		Address:          address,
+		Protocol:         "icmp",
+		Enabled:          true,
+		Available:        true,
+		LastChecked:      &now,
+		Evidence:         availabilityProbeEvidence(t, targetID, now),
+	})
+}
+
+// An operator link folds the agent inside a vSphere VM into the VM, so the
+// agent's own canonical ID no longer names a row. A check configured against
+// that ID watches the same machine and follows the agent to the merged row in
+// every registry that lists it: the monitor's rebuild, a registry seeded from
+// the monitor's listing that replays the checks (the resources API) and a
+// read-state overlay. Reference reads (alert intent, operator state, API
+// lookups) resolve the folded ID the same way. History does not, and the
+// folded ID never becomes a superseded ID, which alert and availability
+// migrations would turn into a permanent rewrite of the operator's config.
+func TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts:      []models.Host{{ID: "host-app-guest", Hostname: "app-guest", MachineID: "machine-app-guest", Status: "online", LastSeen: now}},
+		LastUpdate: now,
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-app-guest")
+	checks := []IngestRecord{linkedGuestCheck(t, "probe-guest", "192.0.2.60", agentID, now)}
+	records := map[DataSource][]IngestRecord{
+		SourceVMware:       {linkedGuestVMRecord(now)},
+		SourceAvailability: checks,
+	}
+
+	for _, agentPrimary := range []bool{false, true} {
+		name := "vm-primary"
+		if agentPrimary {
+			name = "agent-primary"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := NewMemoryStore()
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+			assertAvailabilityCheckAttachedTo(t, "unlinked", adapter.currentRegistry(), "probe-guest", agentID)
+
+			var vmID string
+			for _, resource := range adapter.GetAll() {
+				if resource.VMware != nil {
+					vmID = resource.ID
+				}
+			}
+			if vmID == "" {
+				t.Fatalf("unlinked estate = %v, want the vSphere VM", resourceIDs(adapter.GetAll()))
+			}
+			primaryID := vmID
+			if agentPrimary {
+				primaryID = agentID
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: primaryID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+
+			// Pins persist on the first rebuild; damage from them shows on the second.
+			for i, stage := range []string{"rebuild", "second rebuild"} {
+				next := snapshot
+				next.LastUpdate = now.Add(time.Duration(i+1) * time.Second)
+				adapter.PopulateSnapshotAndSupplemental(next, records)
+				if _, listed := adapter.currentRegistry().Get(agentID); listed {
+					t.Fatalf("%s: agent %s still listed beside the VM it is linked into", stage, agentID)
+				}
+
+				rest := NewRegistry(store)
+				rest.IngestResources(adapter.GetAll())
+				rest.IngestRecords(SourceAvailability, checks)
+				overlay, ok := ReadStateWithRecords(adapter, SourceAvailability, checks).(*MonitorAdapter)
+				if !ok {
+					t.Fatalf("%s: overlay is not a monitor adapter", stage)
+				}
+
+				for _, view := range []struct {
+					name string
+					rr   *ResourceRegistry
+				}{
+					{"monitor", adapter.currentRegistry()},
+					{"resources API", rest},
+					{"overlay", overlay.currentRegistry()},
+				} {
+					label := stage + ", " + view.name
+					assertAvailabilityCheckAttachedTo(t, label, view.rr, "probe-guest", vmID)
+					// The agent's alert reference already reached the merged
+					// row; its canonical ID must agree.
+					for _, ref := range []string{agentID, "agent:host-app-guest"} {
+						if got, ok := view.rr.ResolveReferenceID(ref); !ok || got != vmID {
+							t.Fatalf("%s: ResolveReferenceID(%s) = %q, %t, want the VM %s", label, ref, got, ok, vmID)
+						}
+					}
+					// History bindings persist and join both journals in either
+					// direction, so they would outlive the link.
+					if got, claimed := view.rr.resolveHistoryReference(agentID); got != "" || claimed {
+						t.Fatalf("%s: history reference %s resolved to %q (claimed %t), want it left to its own journal", label, agentID, got, claimed)
+					}
+					vm, _ := view.rr.Get(vmID)
+					if slices.Contains(vm.SupersededCanonicalIDs, agentID) ||
+						(vm.Canonical != nil && slices.Contains(vm.Canonical.SupersededIDs, agentID)) {
+						t.Fatalf("%s: folded agent %s is listed as superseded by the VM", label, agentID)
+					}
+				}
+			}
+		})
+	}
+}
+
+// An old enrollment of a guest linked into its current agent, and that agent
+// linked into its VM: every ID folded along the chain resolves to the final
+// primary, in the monitor and in a registry seeded from it.
+func TestAvailabilityLinkFollowsChainedLinkFolds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "host-app-guest", Hostname: "app-guest", MachineID: "machine-app-guest", Status: "online", LastSeen: now},
+			{ID: "host-app-guest-old", Hostname: "app-guest-old", MachineID: "machine-app-guest-old", Status: "online", LastSeen: now},
+		},
+		LastUpdate: now,
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-app-guest")
+	oldAgentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-app-guest-old")
+	checks := []IngestRecord{linkedGuestCheck(t, "probe-old", "192.0.2.61", oldAgentID, now)}
+	records := map[DataSource][]IngestRecord{
+		SourceVMware:       {linkedGuestVMRecord(now)},
+		SourceAvailability: checks,
+	}
+
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, records)
+	var vmID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.VMware != nil {
+			vmID = resource.ID
+		}
+	}
+	listed := resourceIDs(unlinked.GetAll())
+	if vmID == "" || !slices.Contains(listed, agentID) || !slices.Contains(listed, oldAgentID) {
+		t.Fatalf("unlinked estate = %v, want the VM and both agents", listed)
+	}
+
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: agentID, ResourceB: oldAgentID, PrimaryID: agentID},
+		{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+	listed = resourceIDs(adapter.GetAll())
+	if slices.Contains(listed, agentID) || slices.Contains(listed, oldAgentID) {
+		t.Fatalf("linked estate = %v, want both agents folded into the VM %s", listed, vmID)
+	}
+
+	rest := NewRegistry(store)
+	rest.IngestResources(adapter.GetAll())
+	rest.IngestRecords(SourceAvailability, checks)
+	for _, view := range []struct {
+		name string
+		rr   *ResourceRegistry
+	}{{"monitor", adapter.currentRegistry()}, {"resources API", rest}} {
+		assertAvailabilityCheckAttachedTo(t, view.name, view.rr, "probe-old", vmID)
+		for _, folded := range []string{agentID, oldAgentID} {
+			if got, ok := view.rr.ResolveReferenceID(folded); !ok || got != vmID {
+				t.Fatalf("%s: ResolveReferenceID(%s) = %q, %t, want the VM %s", view.name, folded, got, ok, vmID)
+			}
+		}
+	}
+}
+
+// The fold index follows the rows holding each folded ID. A seeded listing can
+// carry one folded ID on two rows, or on a row while a live row has that ID. A
+// live row answers for itself; two holders resolve to nothing, without falling
+// through to weaker matches such as a hostname alias, so an explicit check link
+// stays fail-closed. Holders a link later merges, and a holder re-keyed in
+// place, keep resolving.
+func TestLinkFoldIndexFollowsItsHolders(t *testing.T) {
+	now := time.Now().UTC()
+	vm := func(id string, folded ...string) Resource {
+		folds := make([]ManualLinkFold, 0, len(folded))
+		for _, foldedID := range folded {
+			folds = append(folds, ManualLinkFold{HolderID: id, FoldedID: foldedID, Sources: []DataSource{SourceAgent}})
+		}
+		return Resource{
+			ID: id, Type: ResourceTypeVM, Name: id, Status: StatusOnline, LastSeen: now,
+			Sources: []DataSource{SourceVMware}, linkFolds: folds,
+		}
+	}
+
+	t.Run("ambiguous holders fail closed", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		rr.IngestResources([]Resource{
+			vm("vm-a", "agent-shared", "agent-live"),
+			vm("vm-b", "agent-shared"),
+			{ID: "agent-live", Type: ResourceTypeAgent, Name: "agent-live", Status: StatusOnline, LastSeen: now, Sources: []DataSource{SourceAgent}},
+			{
+				ID: "vm-c", Type: ResourceTypeVM, Name: "vm-c", Status: StatusOnline, LastSeen: now,
+				Sources: []DataSource{SourceVMware}, Identity: ResourceIdentity{Hostnames: []string{"agent-shared"}},
+			},
+		})
+		if got, ok := rr.ResolveReferenceID("agent-shared"); ok {
+			t.Fatalf("ResolveReferenceID(agent-shared) = %q, want no answer while two rows hold it", got)
+		}
+		if got, ok := rr.ResolveReferenceID("agent-live"); !ok || got != "agent-live" {
+			t.Fatalf("ResolveReferenceID(agent-live) = %q, %t, want the live row itself", got, ok)
+		}
+		rr.IngestRecords(SourceAvailability, []IngestRecord{linkedGuestCheck(t, "probe-shared", "192.0.2.62", "agent-shared", now)})
+		endpoint := availabilityEndpointByTarget(t, rr, "probe-shared")
+		if endpoint.Availability.CorrelationState != AvailabilityCorrelationUnresolved {
+			t.Fatalf("ambiguous folded link correlation = %+v, want unresolved", endpoint.Availability)
+		}
+	})
+
+	t.Run("holders merged by a link resolve to the survivor", func(t *testing.T) {
+		store := NewMemoryStore()
+		if err := store.AddLink(ResourceLink{ResourceA: "vm-a", ResourceB: "vm-b", PrimaryID: "vm-a"}); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+		rr := NewRegistry(store)
+		rr.IngestResources([]Resource{vm("vm-a", "agent-shared"), vm("vm-b", "agent-shared")})
+		for _, ref := range []string{"agent-shared", "vm-b"} {
+			if got, ok := rr.ResolveReferenceID(ref); !ok || got != "vm-a" {
+				t.Fatalf("ResolveReferenceID(%s) = %q, %t, want vm-a", ref, got, ok)
+			}
+		}
+	})
+
+	t.Run("re-keyed holder keeps its folds", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		disk := vm("disk-old", "disk-folded")
+		disk.Type = ResourceTypePhysicalDisk
+		rr.IngestResources([]Resource{disk})
+		rr.mu.Lock()
+		rr.rekeyPhysicalDiskLocked(rr.resources["disk-old"], "disk-new")
+		rr.mu.Unlock()
+		if got, ok := rr.ResolveReferenceID("disk-folded"); !ok || got != "disk-new" {
+			t.Fatalf("ResolveReferenceID(disk-folded) = %q, %t, want the re-keyed holder disk-new", got, ok)
+		}
+	})
 }

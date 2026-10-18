@@ -34,6 +34,7 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import {
   connectionAgentVersionPresentation,
+  infrastructureRowMonitoringPath,
   infrastructureSourcePresentation,
   surfaceLabel,
   type InfrastructureSourcePresentation,
@@ -42,7 +43,6 @@ import {
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
 import {
-  getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureEmptyStateDetail,
   getInfrastructureEmptyStateSummary,
   getInfrastructureOnboardingProductPresentation,
@@ -52,6 +52,7 @@ import {
   type InfrastructureSourcePickerRouteStep,
 } from '@/utils/infrastructureOnboardingPresentation';
 import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
+import { ClusterAgentDeployDialog } from './ClusterAgentDeployDialog';
 
 interface InfrastructureSourceManagerProps {
   rows: Accessor<readonly InfrastructureSystemRow[]>;
@@ -68,6 +69,12 @@ interface InfrastructureSourceManagerProps {
   onOpenAgentDoctor?: (agentIds?: string[]) => void;
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
+
+// A connected system's name opens the page that shows its data (#2905).
+// Underlined at rest: touch users get no hover hint, and the user in #2905 was
+// not looking for something to click.
+const MONITORING_LINK_CLASS =
+  'text-blue-700 underline decoration-blue-700/40 underline-offset-2 hover:decoration-current focus-visible:decoration-current dark:text-blue-300 dark:decoration-blue-300/40';
 
 // Per-section 'Add' shortcuts are demoted to ghost text buttons so the
 // primary '+ Add infrastructure' CTA at the top of the page stays visually
@@ -204,14 +211,9 @@ const memberMethodPresentation = (
   return infrastructureSourcePresentation(member.source);
 };
 
-type SetupConfidenceActionKind = 'add' | 'agent' | 'scan';
-
 interface SetupConfidenceAction {
-  kind: SetupConfidenceActionKind;
   label: string;
-  detail: string;
-  onClick?: () => void;
-  disabled?: boolean;
+  onClick: () => void;
 }
 
 interface ConfiguredSourceGroup {
@@ -467,6 +469,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     props.onAddSource?.('agent');
   };
 
+  // Cluster members are installed in one step when a sibling already runs
+  // the agent: Pulse asks that agent to install on its peers, so there is no
+  // per-host token to copy. Clusters without a reporting agent, and standalone
+  // hosts, keep the scoped manual installer.
+  const [clusterDeploy, setClusterDeploy] = createSignal<{
+    clusterName: string;
+    nodeName?: string;
+  } | null>(null);
+  const canInstallFromCluster = (row: InfrastructureSystemRow): boolean =>
+    !props.readOnly &&
+    row.isCluster &&
+    Boolean(row.clusterName) &&
+    row.members.some((member) => Boolean(member.agentConnection));
+  const handleInstallAgent = (
+    row: InfrastructureSystemRow,
+    member?: InfrastructureSystemMemberRow,
+  ) => {
+    if (canInstallFromCluster(row)) {
+      setClusterDeploy({
+        clusterName: row.clusterName!,
+        nodeName: member?.nativeName || member?.name,
+      });
+      return;
+    }
+    handleInstallAgentShortcut();
+  };
+
   const hasAnyConfigured = createMemo(() => infrastructureRows().length > 0);
   const hasAnyDiscovered = createMemo(() => props.discoveredNodes().length > 0);
 
@@ -474,6 +503,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     !props.readOnly && Boolean(props.onOpenConnection) && (row.canEdit || row.isAgent);
 
   const actionColumnVisible = () => !props.readOnly;
+  // Actions holds Manage (about 96px with padding) and, on a row missing agent
+  // coverage, an install button beside it. Reserving the wide column only when
+  // a row shows that button leaves Health room for its state, the Agent update
+  // badge and the last-seen time on one line.
+  const actionColumnShowsInstall = createMemo(
+    () =>
+      Boolean(props.onAddSourceStep || props.onAddSource) &&
+      infrastructureRows().some((row) => rowNeedsAgentCoverage(row)),
+  );
   const lastDiscoveryResultText = createMemo(() =>
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
@@ -492,16 +530,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     infrastructureRows().flatMap((row) => missingAgentTargetNames(row)),
   );
   const uncoveredAgentTargetCount = createMemo(() => uncoveredAgentTargets().length);
-  // Names list keeps the descriptive 'Install agents' hint actionable: when
-  // there are 1 or 2 hosts missing an agent, surface their names directly so
-  // the user knows exactly which boxes the install applies to.
-  const uncoveredAgentTargetNamesText = createMemo(() => {
-    const names = uncoveredAgentTargets().filter(Boolean);
-    if (names.length === 0) return null;
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return null;
-  });
   // Counters read directly off the row state the user sees: a row is live
   // when its status is "Active" and needs attention when its derived
   // problem (or any member's) is non-empty. Going via signal predicates
@@ -514,6 +542,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       infrastructureRows().filter(
         (row) => Boolean(row.problem) || row.members.some((member) => member.problem),
       ).length,
+  );
+  // Outdated agents are maintenance rather than attention (see
+  // FleetGovernanceSignal.maintenance); the band still counts them once.
+  const agentUpdateTotal = createMemo(() =>
+    infrastructureRows().reduce((total, row) => total + row.agentUpdateCount, 0),
   );
   const discoveryMonitorTitle = createMemo(() => {
     const status = props.discoveryScanStatus();
@@ -552,49 +585,30 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       return `Started ${formatRelativeTimestamp(status.lastScanStartedAt) ?? 'just now'}`;
     }
     if (lastDiscoveryResultText()) return `Last scanned ${lastDiscoveryResultText()}`;
-    return props.discoveryEnabled ? 'Never scanned' : 'Not configured';
+    // Off with no result says nothing more than the Off badge beside it. A
+    // manual scan's result is not stored server-side, so after a reload "never
+    // scanned" could be false; "no result yet" is true either way.
+    return props.discoveryEnabled ? 'No scan result yet' : '';
   });
-  const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
-    if (connectedSystemCount() === 0) {
-      // Distinct from the page-header 'Add infrastructure' CTA, which is
-      // also visible in the zero-connected state; two identically named
-      // buttons on one page are ambiguous for assistive tech (and for
-      // accessible-name locators).
-      return {
-        kind: 'add',
-        label: 'Add your first system',
-        detail: 'Add a platform, host, NAS, or cluster to start monitoring.',
-        onClick: props.onAddInfrastructure,
-      };
-    }
-
+  // Follow-up action for systems that are already connected. With none
+  // connected the page-header 'Add infrastructure' button is the one way in,
+  // so this band offers nothing rather than a second button for the same job.
+  const setupConfidenceAction = createMemo<SetupConfidenceAction | undefined>(() => {
     if (uncoveredAgentTargetCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
-      const namesText = uncoveredAgentTargetNamesText();
-      const target = namesText ?? formatCount(uncoveredAgentTargetCount(), 'Proxmox host');
+      // When every uncovered host sits in one cluster that can install from a
+      // sibling, the summary action opens that one-step install directly.
+      const uncoveredRows = infrastructureRows().filter((row) => rowNeedsAgentCoverage(row));
+      const soleCluster =
+        uncoveredRows.length === 1 && canInstallFromCluster(uncoveredRows[0])
+          ? uncoveredRows[0]
+          : undefined;
       return {
-        kind: 'agent',
         label: uncoveredAgentTargetCount() === 1 ? 'Install agent' : 'Install agents',
-        detail: `Install one Pulse Agent on each uncovered Proxmox host (${target}) to add node-local telemetry such as temperatures, SMART data, and host identity.`,
-        onClick: handleInstallAgentShortcut,
+        onClick: soleCluster ? () => handleInstallAgent(soleCluster) : handleInstallAgentShortcut,
       };
     }
 
-    if (props.onRunDiscovery && props.discoveryEnabled && !lastDiscoveryResultText()) {
-      return {
-        kind: 'scan',
-        label: props.discoveryScanStatus().scanning ? 'Scanning networks' : 'Scan networks',
-        detail: `Run discovery to check whether more ${discoveryScanTargetLabel} are waiting on the configured networks.`,
-        onClick: props.onRunDiscovery,
-        disabled: props.discoveryScanStatus().scanning,
-      };
-    }
-
-    const completeAction = getInfrastructureCoverageCompleteActionPresentation();
-    return {
-      kind: 'add',
-      label: completeAction.label,
-      detail: completeAction.detail,
-    };
+    return undefined;
   });
   const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -651,20 +665,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
-  const setupConfidenceActionIcon = (kind: SetupConfidenceActionKind) => (
-    <>
-      <Show when={kind === 'agent'}>
-        <Cpu class="h-4 w-4" />
-      </Show>
-      <Show when={kind === 'scan'}>
-        <RotateCw class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`} />
-      </Show>
-      <Show when={kind === 'add'}>
-        <Plus class="h-4 w-4" />
-      </Show>
-    </>
-  );
-
   const discoveryMonitorBand = () => (
     <section
       aria-label="Discover Proxmox systems"
@@ -694,7 +694,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             >
               {discoveryMonitorTitle()}
             </span>
-            <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
+            <Show when={discoveryMonitorMeta()}>
+              <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
+            </Show>
           </div>
           <p class="mt-1 max-w-4xl text-xs leading-5 text-muted">{discoveryMonitorDetail()}</p>
           <Show when={discoveryErrorSummary(props.discoveryScanStatus().errors)}>
@@ -780,7 +782,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               ·
             </span>
             <span class="font-medium text-amber-700 dark:text-amber-300">
-              {formatCount(fleetAttentionSystemCount(), 'system')} needs attention
+              {formatCount(fleetAttentionSystemCount(), 'system')}{' '}
+              {fleetAttentionSystemCount() === 1 ? 'needs' : 'need'} attention
+            </span>
+          </Show>
+          <Show when={agentUpdateTotal() > 0}>
+            <span aria-hidden="true" class="text-muted">
+              ·
+            </span>
+            <span class="text-muted" data-infrastructure-agent-updates>
+              {formatCount(agentUpdateTotal(), 'agent update')} available
             </span>
           </Show>
           <Show when={uncoveredAgentTargetCount() > 0}>
@@ -788,7 +799,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               ·
             </span>
             <span class="font-medium text-amber-700 dark:text-amber-300">
-              {formatCount(uncoveredAgentTargetCount(), 'host')} has limited coverage
+              {formatCount(uncoveredAgentTargetCount(), 'host')}{' '}
+              {uncoveredAgentTargetCount() === 1 ? 'has' : 'have'} limited coverage
             </span>
           </Show>
         </div>
@@ -805,31 +817,31 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 Open Agent Doctor
               </Button>
             </Show>
-            <Show when={Boolean(setupConfidenceAction().onClick)}>
-              <Button
-                type="button"
-                variant="secondary"
-                size="mdCompact"
-                onClick={() => setupConfidenceAction().onClick?.()}
-                disabled={setupConfidenceAction().disabled}
-                class="min-h-11 gap-2 lg:min-h-9"
-              >
-                {setupConfidenceActionIcon(setupConfidenceAction().kind)}
-                {setupConfidenceAction().label}
-              </Button>
+            <Show when={setupConfidenceAction()}>
+              {(action) => (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="mdCompact"
+                  onClick={() => action().onClick()}
+                  class="min-h-11 gap-2 lg:min-h-9"
+                >
+                  <Cpu class="h-4 w-4" />
+                  {action().label}
+                </Button>
+              )}
             </Show>
           </div>
         </Show>
       </div>
-
-      <Show when={connectedSystemCount() === 0}>
-        <p class="mt-2 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
-      </Show>
     </section>
   );
 
+  // Rendered inside a `.table-fixed` cell, whose global rule forces nowrap on
+  // the cell itself (and a utility class on the cell loses to it), so the
+  // wrapper resets wrapping: the prose below must wrap, not clip.
   const emptyStateContent = () => (
-    <div class="mx-auto max-w-3xl space-y-2">
+    <div class="mx-auto max-w-3xl space-y-2 whitespace-normal">
       <div class="text-sm font-semibold text-base-content">Start monitoring infrastructure</div>
       <p>{getInfrastructureEmptyStateSummary()}</p>
       <p class="text-xs leading-5 text-muted">{getInfrastructureEmptyStateDetail()}</p>
@@ -862,17 +874,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="">
               <TableRow>
-                <TableHead class="w-[30%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[29%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   System
                 </TableHead>
-                <TableHead class="w-[32%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[29%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Coverage
                 </TableHead>
-                <TableHead class="w-[23%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[27%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Health
                 </TableHead>
                 <Show when={actionColumnVisible()}>
-                  <TableHead class="w-48 px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
+                  <TableHead
+                    class={`${actionColumnShowsInstall() ? 'w-48' : 'w-28'} px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap`}
+                  >
                     Actions
                   </TableHead>
                 </Show>
@@ -949,14 +963,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     >
                                       <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                         <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                          <div
-                                            class={`min-w-0 truncate text-[13px] ${
-                                              row.isCluster ? 'font-medium text-base-content' : ''
-                                            }`}
-                                            title={rowSystemTitle(row)}
+                                          <Show
+                                            when={infrastructureRowMonitoringPath(row)}
+                                            fallback={
+                                              <div
+                                                class={`min-w-0 truncate text-[13px] ${
+                                                  row.isCluster
+                                                    ? 'font-medium text-base-content'
+                                                    : ''
+                                                }`}
+                                                title={rowSystemTitle(row)}
+                                              >
+                                                {row.name}
+                                              </div>
+                                            }
                                           >
-                                            {row.name}
-                                          </div>
+                                            {(path) => (
+                                              <a
+                                                href={path()}
+                                                class={`${MONITORING_LINK_CLASS} min-w-0 truncate text-[13px] ${
+                                                  row.isCluster ? 'font-medium' : ''
+                                                }`}
+                                                title={rowSystemTitle(row)}
+                                              >
+                                                {row.name}
+                                              </a>
+                                            )}
+                                          </Show>
                                           {(() => {
                                             const presentation = infrastructureSourcePresentation(
                                               row.source,
@@ -1090,11 +1123,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   variant="outline"
                                                   size="xs"
                                                   class="gap-1.5"
-                                                  onClick={handleInstallAgentShortcut}
+                                                  onClick={() => handleInstallAgent(row)}
                                                   aria-label={installAgentActionLabel(row)}
                                                   title={
                                                     row.isCluster
-                                                      ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                      ? canInstallFromCluster(row)
+                                                        ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
+                                                        : 'Generate an installer command to run once on each uncovered Proxmox node.'
                                                       : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
                                                   }
                                                 >
@@ -1255,9 +1290,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                         variant="outline"
                                                         size="xs"
                                                         class="gap-1.5"
-                                                        onClick={handleInstallAgentShortcut}
+                                                        onClick={() =>
+                                                          handleInstallAgent(row, member)
+                                                        }
                                                         aria-label={`Install agent on ${member.name}`}
-                                                        title={`Generate an installer command to run on ${member.name}.`}
+                                                        title={
+                                                          canInstallFromCluster(row)
+                                                            ? `Install Pulse Agent on ${member.name} from a node that already runs it.`
+                                                            : `Generate an installer command to run on ${member.name}.`
+                                                        }
                                                       >
                                                         <Cpu class="h-3.5 w-3.5" />
                                                         Install agent
@@ -1444,12 +1485,27 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               <article class="rounded-md border border-border-subtle bg-surface p-3 shadow-xs">
                                 <header class="flex items-start justify-between gap-2">
                                   <div class="min-w-0 flex-1">
-                                    <div
-                                      class="wrap-break-word text-[13px] font-medium text-base-content"
-                                      title={row.name}
+                                    <Show
+                                      when={infrastructureRowMonitoringPath(row)}
+                                      fallback={
+                                        <div
+                                          class="wrap-break-word text-[13px] font-medium text-base-content"
+                                          title={row.name}
+                                        >
+                                          {row.name}
+                                        </div>
+                                      }
                                     >
-                                      {row.name}
-                                    </div>
+                                      {(path) => (
+                                        <a
+                                          href={path()}
+                                          class={`${MONITORING_LINK_CLASS} block wrap-break-word text-[13px] font-medium`}
+                                          title={row.name}
+                                        >
+                                          {row.name}
+                                        </a>
+                                      )}
+                                    </Show>
                                     <Show when={row.isCluster && row.subtitle}>
                                       <div class="mt-0.5 text-[11px] text-muted">
                                         {row.subtitle}
@@ -1580,9 +1636,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   variant="outline"
                                                   size="xs"
                                                   class="mt-2 min-h-11 gap-1.5 lg:min-h-0"
-                                                  onClick={handleInstallAgentShortcut}
+                                                  onClick={() => handleInstallAgent(row, member)}
                                                   aria-label={`Install agent on ${member.name}`}
-                                                  title={`Generate an installer command to run on ${member.name}.`}
+                                                  title={
+                                                    canInstallFromCluster(row)
+                                                      ? `Install Pulse Agent on ${member.name} from a node that already runs it.`
+                                                      : `Generate an installer command to run on ${member.name}.`
+                                                  }
                                                 >
                                                   <Cpu class="h-3.5 w-3.5" />
                                                   Install agent
@@ -1669,11 +1729,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             variant="outline"
                                             size="xs"
                                             class="min-h-11 gap-1.5 lg:min-h-0"
-                                            onClick={handleInstallAgentShortcut}
+                                            onClick={() => handleInstallAgent(row)}
                                             aria-label={installAgentActionLabel(row)}
                                             title={
                                               row.isCluster
-                                                ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                ? canInstallFromCluster(row)
+                                                  ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
+                                                  : 'Generate an installer command to run once on each uncovered Proxmox node.'
                                                 : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
                                             }
                                           >
@@ -1795,6 +1857,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           </div>
         </Show>
         {discoveryMonitorBand()}
+        {/* Keyed so the dialog gets plain values: an install it started keeps
+            running after close, and must not read a stale <Show> accessor. */}
+        <Show when={clusterDeploy()} keyed>
+          {(target) => (
+            <ClusterAgentDeployDialog
+              isOpen={true}
+              clusterName={target.clusterName}
+              preselectNodeName={target.nodeName}
+              onClose={() => setClusterDeploy(null)}
+              onUseInstaller={handleInstallAgentShortcut}
+            />
+          )}
+        </Show>
       </SettingsPanel>
     </div>
   );

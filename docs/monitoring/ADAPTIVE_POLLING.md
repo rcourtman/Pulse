@@ -31,7 +31,7 @@ The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standa
 1. **Closing the Circuit**: One successful poll moves *Half-Open* → *Closed* and resets failure count.
 2. **Backoff Calculation**: Retries use exponential backoff starting at 5s (multiplier 2, jitter 0.2) capped at 5m.
 3. **Transient vs. Permanent**:
-   - **Transient** errors (retryable) are retried up to 5 times before moving to the Dead Letter Queue.
+   - **Transient** errors (retryable) are retried until they fail 5 times in a row (the first attempt plus 4 retries), then move to the Dead Letter Queue.
    - **Permanent** errors move directly to the Dead Letter Queue.
 
 **Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 4s max) to keep fast feedback loops during tight polling windows.
@@ -47,12 +47,29 @@ There is currently no dedicated UI for adaptive polling. Use environment variabl
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `ADAPTIVE_POLLING_ENABLED` | `false` | Enable/disable. |
-| `ADAPTIVE_POLLING_BASE_INTERVAL` | `10s` | Healthy poll rate. |
-| `ADAPTIVE_POLLING_MIN_INTERVAL` | `5s` | Active/busy rate. |
-| `ADAPTIVE_POLLING_MAX_INTERVAL` | `5m` | Idle/backoff rate. |
+| `ADAPTIVE_POLLING_BASE_INTERVAL` | `10s` | Starting interval before an instance has a schedule. |
+| `ADAPTIVE_POLLING_MIN_INTERVAL` | `5s` | Shortest interval, approached as data goes unrefreshed. |
+| `ADAPTIVE_POLLING_MAX_INTERVAL` | `5m` | Longest interval. Healthy instances approach it. |
 
 ### system.json
 You can also set `adaptivePollingEnabled` (and related interval fields) in `system.json` and restart Pulse.
+
+### What changes when it is on
+Adaptive polling replaces the Proxmox VE, PBS and PMG polling intervals
+(Settings → General → Monitoring cadence, `PBS_POLLING_INTERVAL`,
+`PMG_POLLING_INTERVAL`) for those platforms. Each successful poll resets an
+instance's staleness score, so the scheduler stretches a healthy instance's
+interval toward `ADAPTIVE_POLLING_MAX_INTERVAL`. With the defaults, healthy
+instances are polled every few minutes, not every 10 seconds.
+
+Freshness follows that cadence. A Proxmox VE, PBS or PMG resource is shown as
+stale only when its last sighting from a poll is older than twice the maximum
+interval (10 minutes with the defaults). A Proxmox node that stops answering can
+keep showing online for the same window after it was last seen online, although
+a cluster's own report that a member is offline applies immediately. Offline
+nodes and lost data therefore take longer to show than with fixed polling. For a
+lighter but predictable load, raise the polling intervals instead: freshness and
+offline detection then scale with the interval you choose.
 
 ## 📊 Metrics
 The separate metrics listener defaults to port 9091; `METRICS_PORT` can override

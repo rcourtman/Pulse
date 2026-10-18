@@ -2,9 +2,6 @@ package logging
 
 import (
 	"container/ring"
-	"fmt"
-	"io"
-	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -20,9 +17,8 @@ const (
 )
 
 var (
-	broadcaster         *LogBroadcaster
-	broadcastMu         sync.Once
-	broadcastWarnWriter io.Writer = os.Stderr
+	broadcaster *LogBroadcaster
+	broadcastMu sync.Once
 )
 
 // LogBroadcaster captures log writes, buffers them, and broadcasts them to subscribers.
@@ -46,13 +42,12 @@ func GetBroadcaster() *LogBroadcaster {
 // Write implements io.Writer. It writes to the internal buffer and notifies subscribers.
 func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 	// Copy at most a bounded prefix so oversized log lines cannot inflate memory.
-	msg := string(p)
+	var msg string
 	if len(p) > maxBroadcastMessageBytes {
 		keep := maxBroadcastMessageBytes - len(broadcastTruncationTag)
-		if keep < 0 {
-			keep = 0
-		}
 		msg = string(p[:keep]) + broadcastTruncationTag
+	} else {
+		msg = string(p)
 	}
 
 	b.mu.Lock()
@@ -63,20 +58,15 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 	b.buffer = b.buffer.Next()
 
 	// 2. Broadcast to subscribers
-	for subscriberID, ch := range b.subscribers {
+	for _, ch := range b.subscribers {
 		select {
 		case ch <- msg:
 			// Sent successfully
 		default:
-			// Channel blocked, too slow consumer.
-			// In a real production system we might drop the client,
-			// here we just skip this message for them to avoid blocking writer.
-			// Ideally we should warn or close their channel.
-			fmt.Fprintf(
-				broadcastWarnWriter,
-				"logging: subscriber_blocked subscriber_id=%s action=drop_message\n",
-				subscriberID,
-			)
+			// A passive log viewer must not stall the producer or other viewers.
+			// Skip only this delivery; bounded history and normal log sinks are
+			// independent. Do not warn here: stderr can block too, and
+			// doing so under this lock would also stall subscribe and shutdown.
 		}
 	}
 

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "50b3fd822697e60a9675374e7b17de306da4f625",
+  "verified_at": "2026-10-06T19:11:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "e91be59f68e507aa1403e564ff1f9d25e2701cf68173911cf660030e6463323a"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Type-only change: MetricAlertStatus and the Alert.metricStatus field moved to different positions in types/api.ts so they no longer abut main's Alert.resolution insertion",
+    "vite build of the tree before and after this change produces byte-identical output (diff -rq over every emitted asset), so no rendered surface can differ",
+    "The rendered surfaces themselves were verified live earlier on this branch (receipts 4766668c29936861 and 68deecd720b4873b): /proxmox node drawer and TEMP cell through breaching, held, recovering and resolved at 1440x900 and 375x812"
+  ],
+  "interactions": [
+    "Built frontend-modern with vite before and after the move and compared every output file",
+    "Relies on the earlier live passes for drawer expansion, TEMP cell hover text and narrow layout; no runtime bytes changed since"
+  ]
+}

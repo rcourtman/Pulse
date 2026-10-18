@@ -21,7 +21,7 @@ For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
 | **ProxmoxVE LXC** | ✅ Yes | In-app update button |
 | **Systemd Service** | ✅ Yes | In-app update button |
 | **Docker** | ❌ Manual | Pull new image |
-| **Source Build** | ❌ Manual | Git pull + rebuild |
+| **Source Build** | ❌ Manual | Build, then install through the existing deployment procedure |
 
 ## Using One-Click Updates
 
@@ -32,9 +32,11 @@ For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
 3. Click the button to open the confirmation dialog
 4. Review the update details:
    - Current version → New version
-   - Estimated time
-   - Changelog highlights
-5. Click **"Install Update"** to begin
+   - Major-version or pre-release warning, when the update carries one
+   - Estimated time and prerequisites, when listed
+   - Root-access notice, when the update requires root
+   - Automatic backup notice, when rollback is supported
+5. Click **"Start Update"** in the confirmation dialog to begin
 
 ### Update Process
 
@@ -61,8 +63,17 @@ In **Settings → System → Updates**:
 
 | Setting | Description |
 |---------|-------------|
-| **Update Channel** | Stable (recommended for production) or Pre-release (opt-in preview) |
-| **Auto-Check** | Enable or disable automatic updates |
+| **Update Channel** | Stable (recommended for production) or Preview (opt-in beta builds and release candidates) |
+| **Automatic Stable Updates** | Allow unattended stable updates on supported host installations with an installed update timer |
+
+The update timer must already be installed and enabled for unattended updates.
+Saving the UI preference does not provision or start a missing timer. Check the
+existing deployment rather than editing `system.json` or creating another
+update service to make the preference take effect.
+
+For a failed or uncertain unattended update, use
+[timer-only containment](#pause-further-unattended-attempts-without-stopping-pulse)
+to pause further scheduled attempts without stopping Pulse.
 
 ### Stored Settings (system.json)
 
@@ -81,6 +92,13 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 
 ## Manual Update Methods
 
+Before updating, record the running server version and edition, preserve the
+existing deployment definition privately, and keep a consistent
+[full-state backup](MIGRATION.md#full-state-recovery) with its matching keys.
+An update interrupts monitoring and alert delivery. Follow
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model);
+do not update during a backup, freeze/thaw or an unresponsive-guest incident.
+
 ### Docker
 
 Use [Docker server updates](DOCKER.md#-updates). Change the configured image to
@@ -96,28 +114,79 @@ container updates are separate operations.
 
 ### ProxmoxVE LXC (Manual)
 
-```bash
-sudo /bin/update
-```
-
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+Work **inside the existing Pulse LXC**, not on the Proxmox host or a monitored
+guest. Follow the [existing-installation update procedure](INSTALL.md#-updates),
+including its helper-ownership check. On a community-scripts installation,
+`/bin/update` can be a different updater; its filename does not establish that
+it uses Pulse's signed installer or accepts an exact target version.
 
 ### Systemd Service (Manual)
 
-```bash
-sudo /bin/update
-```
+Follow the [existing-installation update procedure](INSTALL.md#-updates) using
+the actual installed server service, paths and update helper. Do not run a
+helper whose owner is unknown or apply default installation paths over a
+custom deployment. Server updates do not install or update `pulse-agent`;
+agent installation commands come from **Settings → Infrastructure → Install
+on a host**.
 
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+### A helper selects a Helm-chart release
+
+A Pulse server release uses a tag such as `vX.Y.Z`. A `helm-chart-*` release
+contains a Kubernetes chart, not the Linux server archive. A helper selecting
+a chart does not establish that Pulse's server release is missing or that
+GitHub's latest-release pointer is wrong; preserve the selected tag and error.
+
+Do not supply a GitHub personal access token, bypass signatures or change
+permissions to make that helper continue. An unknown helper may ignore
+`--version`; even a Pulse-owned helper must download its installer before the
+installer can apply that option. Adding the flag is not proof of an exact or
+successful update.
+
+Before another attempt, check the running version and service health and
+preserve the existing container, configuration, keys and history. Do not
+recreate the LXC or install a second server to recover from release selection.
+For a public Community server, the
+[existing-installation procedure](INSTALL.md#-updates) links the signed
+server-installer flow with an exact `PULSE_VERSION`; use it only after checking
+the installed service and paths. Private Pro installations must retain their
+private runtime, not substitute that public installer. Use
+[update failure checks](#update-failed) if the attempted update's result is
+uncertain. Guidance is not confirmation that the helper or installation is
+repaired.
 
 ### Source Build
 
-```bash
-cd /path/to/pulse
-git pull
-make build
-sudo systemctl restart pulse
-```
+`make build` writes a `pulse` binary in the source checkout. It does not install
+that binary into the running service's executable path. Restarting the service
+after a build can therefore restart the old installed binary; if the service
+runs directly from the checkout, building there can instead overwrite its live
+executable. Do not build in the active installation directory.
+
+For a production update, prefer the exact signed release and the
+[existing-installation update procedure](INSTALL.md#-updates).
+Keep private Pro installations on their private runtime; a public source build
+is not a replacement for it.
+
+If you intentionally maintain a source-built deployment:
+
+1. Select the intended source tag or commit explicitly in a separate build
+   checkout, preserving local changes. A moving `main` branch is development
+   source, not the latest published stable release.
+2. Use that checkout's declared toolchain and locked dependencies. Build and
+   check the resulting binary's version before stopping the running service;
+   a successful build alone is not an installed update.
+3. Install through your existing deployment procedure, preserving its service
+   identity, executable path, configuration, credentials and data. Stage the
+   replacement separately; do not copy onto a running executable or remove
+   the previous binary and recovery snapshots first. If the active executable
+   path or recovery procedure is unknown, stop before changing the service.
+4. Restore only a service that was active before the update, then confirm the
+   running version, ordinary collection and notification delivery. Retain the
+   previous binary and state backup until recovery is verified; a restart or
+   version check alone does not establish healthy monitoring.
+
+Do not pull, rebuild or restart just to reproduce an update failure. Follow
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model) before another attempt.
 
 ## Rollback
 
@@ -247,12 +316,117 @@ Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp
 3. Ensure you have the latest frontend loaded (hard refresh)
 
 ### Update failed
-1. Check the error message in the progress modal
-2. Review logs: `journalctl -u pulse -n 100` or `/var/log/pulse/update-<timestamp>.log`
-3. Verify disk space is available for both the extracted release payload and a rollback snapshot of your current install
-4. Check network connectivity to GitHub
+
+First identify what was updated: this guide covers the **Pulse server**.
+An installed agent has its [own update path](UNIFIED_AGENT.md#auto-update).
+For a monitored Docker workload, use the [failed or pending workload checks](DOCKER.md#check-a-failed-or-pending-workload-update)
+on that workload's host, not inside Pulse.
+
+Keep the original target version, attempt time, last displayed step and redacted
+error from the progress modal or updater log. If Pulse still opens, check
+**Settings → System → Updates** for its running version and retain the existing
+**Update History** entry when available. Check the ordinary UI and monitoring
+freshness too. A failed updater exit, disconnected progress stream or stuck
+modal does not establish which version is running or whether rollback succeeded.
+Do not rerun an update, restart or reinstall merely to obtain evidence.
+
+For server logs, use the [bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs)
+for the actual deployment. Run them on the Pulse host, or inside the Pulse LXC,
+not on a monitored guest. They have a deadline as well as time and record limits;
+do not substitute a log-follow command or an unbounded reader if they fail.
+Inspect the relevant part of the original `/var/log/pulse/update-<timestamp>.log`
+privately when that systemd/LXC update produced one; a server journal alone may
+not contain the installer failure. Missing logs are unavailable evidence, not
+proof that no change occurred. Do not enable Debug or repeat the failing action.
+
+If the error names disk space, check headroom on the actual staging, installation
+and data filesystems before planning another attempt; the release payload and
+rollback snapshot both need space. Do not delete configuration backups, keys or
+history to clear the error. A download error needs its original HTTP, connectivity
+or certificate evidence; do not disable TLS verification or switch a paid Pro
+installation to the public Community runtime as a workaround.
+
+Share only the relevant times, versions, failed step and redacted error. Keep
+full logs, service environments, configuration, credentials and private backup
+paths out of public reports.
+
+### Pause further unattended attempts without stopping Pulse
+
+If an automatic server update failed or its result is uncertain, you can pause
+the existing update timer while keeping Pulse's monitoring service running.
+This is containment, not rollback or a fix. It does not cancel an updater
+already running, prevent a manual or in-app update, or recover a stopped LXC.
+Do not stop the updater midway through replacement merely to collect evidence.
+
+Work on the **Pulse server**, inside its LXC when applicable, not on the Proxmox
+host or a monitored guest. First identify the timer from the existing
+deployment. The default signed installation uses `pulse-update.timer`;
+legacy installations may use `pulse-backend-update.timer`, and custom names
+can differ. A name alone does not establish ownership. If the timer's identity
+is unknown, stop here; do not try every matching unit or run the installer to
+create one.
+
+For the confirmed default timer, privately record its state before changing it:
+
+```bash
+timeout --signal=TERM --kill-after=1s 5s systemctl show pulse-update.timer \
+  --property=LoadState --property=ActiveState --property=UnitFileState \
+  --property=Triggers
+```
+
+Use the actual known timer name in both commands on a legacy or custom install.
+This read prints only unit state and trigger names, not service environments.
+`LoadState=not-found`, a failed read or a timeout is not an inactive timer:
+stop rather than guessing. If `timeout` is unavailable, do not substitute an
+unbounded reader. Keep a masked timer masked; an inactive or disabled timer
+must not be enabled just to follow these instructions. Enabled state and
+current active state are separate; preserve both for later recovery. If the
+timer is runtime-enabled or managed by another scheduler, use that deployment's
+pause procedure instead of assuming the default command applies.
+
+To pause that confirmed timer, use your authorised administrative account:
+
+```bash
+sudo systemctl disable --now pulse-update.timer
+```
+
+This stops and disables **only the timer**, not `pulse.service`,
+`pulse-backend.service` or `pulse-update.service`. Re-read its bounded state
+above: it should be inactive and disabled, or remain masked. If the command
+fails or its result is uncertain, retain the error and current state; do not
+assume the schedule was paused or issue broader stop/reset commands. Keep
+independent monitoring and notifications available if Pulse itself is down.
+
+Retain the original update's starting and intended versions, last recorded
+result, time and timezone, and any recovery already performed. Today's running
+version is not proof of the version at failure. A verified signature is not a
+completed install or rollback; `Broken pipe` does not explain a host stop, and
+a later boot does not supply its time or cause. If the whole LXC or host stopped,
+use only an already available, relevant Proxmox task or host event to distinguish
+that from a Pulse-service failure; keep unknowns unknown. Do not repeat the
+update, reboot, run Diagnostics or delete rollback backups to fill these gaps.
+
+After the incident is understood and recovery is verified, restore the
+separately recorded enabled and active states through the existing deployment:
+enable only if previously enabled, and start only if previously active. Do not
+unmask a unit, enable a previously disabled timer or create a second schedule.
+A paused timer does not undo the saved
+**Automatic Stable Updates** preference; restoring the schedule may allow the
+next stable update. Keep configuration, keys, history and backups private and
+preserved until recovery is verified.
 
 ### Service won't restart after update
-1. Check systemd status: `systemctl status pulse`
-2. View recent logs: `journalctl -u pulse -f`
-3. Manually restore from backup if needed
+
+Distinguish the **Pulse service** from the separate updater service: a failed
+`pulse-update.service` is not proof that `pulse` is stopped. Use the read-only
+service discovery in [Manual Rollback](#manual-rollback), substituting the actual
+service name (`pulse-backend` on some older installs), and the bounded log readers
+above. For Docker, use the [current container-state and image checks](DOCKER.md#check-a-failed-or-pending-workload-update)
+with the Pulse server's container name. A running process or container alone is
+not proof that the UI, saved connections and history are healthy.
+
+If recovery is needed, follow [Manual Rollback](#manual-rollback): preserve the
+failed state, verify the intended backup's version and complete scope, and use
+the stopped-service recovery procedure. An absent or partial backup is a reason
+to stop, not to overwrite live data, create an empty data directory or retry the
+update. Do not restore a guessed snapshot just because the progress modal failed.

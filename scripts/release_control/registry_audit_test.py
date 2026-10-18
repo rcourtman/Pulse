@@ -213,6 +213,62 @@ class RegistryAuditTest(unittest.TestCase):
                     proof_files.issubset(set(policy(subsystem_id, policy_id)["exact_files"]))
                 )
 
+    def test_native_updater_registry_owns_runtime_and_rejects_broken_proof_routes(self) -> None:
+        runtime = "scripts/installtests/auto_update_systemd.py"
+        proofs = [
+            "scripts/installtests/pulse_auto_update_test.go",
+            "scripts/tests/test_auto_update_systemd.py",
+        ]
+        registry = registry_audit.load_registry_payload()
+        rule = next(
+            item for item in registry["subsystems"]
+            if item["id"] == "deployment-installability"
+        )
+        self.assertEqual(registry_audit.owned_runtime_files(rule, {runtime}), [runtime])
+        matching = [
+            item for item in rule["verification"]["path_policies"]
+            if registry_audit.path_policy_matches(item, runtime)
+        ]
+        self.assertEqual([item["id"] for item in matching], ["current-source-unattended-systemd"])
+        self.assertEqual(matching[0]["exact_files"], proofs)
+        self.assertEqual(matching[0]["test_prefixes"], [])
+        self.assertFalse(matching[0]["allow_same_subsystem_tests"])
+
+        # Audit the real route in isolation, retaining its actual ownership and
+        # verification settings. A policy that names a harness without owning
+        # it must not count as usable coverage, even when its proof files exist.
+        scoped_rule = copy.deepcopy(rule)
+        scoped_rule["owned_prefixes"] = []
+        scoped_rule["owned_files"] = [path for path in rule["owned_files"] if path == runtime]
+        scoped_rule["verification"]["path_policies"] = copy.deepcopy(matching)
+        payload = {
+            "version": registry["version"],
+            "shared_ownerships": [],
+            "subsystems": [scoped_rule],
+        }
+        tracked = {rule["contract"], runtime, *proofs}
+        report = audit_registry_payload(payload, tracked_files=tracked, status_lane_ids={"L1"})
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["subsystems"][0]["owned_runtime_file_count"], 1)
+        self.assertEqual(report["subsystems"][0]["default_fallback_count"], 0)
+
+        for drift, diagnostic in (
+            ("missing-ownership", "does not match any owned runtime files"),
+            ("unsorted-proofs", "exact_files must be sorted lexicographically"),
+            ("missing-proof", "missing tracked file 'scripts/tests/test_auto_update_systemd.py'"),
+        ):
+            with self.subTest(drift=drift):
+                changed = copy.deepcopy(payload)
+                files = tracked.copy()
+                if drift == "missing-ownership":
+                    changed["subsystems"][0]["owned_files"] = []
+                elif drift == "unsorted-proofs":
+                    changed["subsystems"][0]["verification"]["path_policies"][0]["exact_files"].reverse()
+                else:
+                    files.remove(proofs[1])
+                rejected = audit_registry_payload(changed, tracked_files=files, status_lane_ids={"L1"})
+                self.assertIn(diagnostic, "\n".join(rejected["errors"]))
+
     def test_patrol_autopilot_registry_uses_dedicated_proof_and_rejects_drift(self) -> None:
         registry = registry_audit.load_registry_payload()
         rules = {rule["id"]: rule for rule in registry["subsystems"]}
@@ -571,9 +627,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["internal/monitoring/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -615,11 +671,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["pulse-mobile:src/relay/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": [
-                            "pulse-mobile:src/relay/__tests__/client.test.ts",
-                        ],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -661,9 +715,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["pulse-mobile:src/relay/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["pulse-mobile:src/relay/__tests__/client.test.ts"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -714,7 +768,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["internal/alerts/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
                         "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
@@ -743,9 +797,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["pkg/licensing/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["pkg/licensing/cloud_paid_guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -788,7 +842,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": False,
                         "path_policies": [
                             {
@@ -819,6 +873,110 @@ class RegistryAuditTest(unittest.TestCase):
             "\n".join(report["errors"]),
         )
 
+    def test_audit_registry_payload_rejects_same_subsystem_tests_wildcard(self) -> None:
+        # Explicit path-policy coverage is mandatory, so the flag could only
+        # widen a policy to every test the subsystem owns.
+        payload = {
+            "version": 13,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "monitoring",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "owned_prefixes": ["internal/monitoring/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": True,
+                        "test_prefixes": [],
+                        "exact_files": [],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "monitoring-runtime",
+                                "label": "monitoring runtime proof",
+                                "match_prefixes": ["internal/monitoring/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": True,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+            "internal/monitoring/monitor.go",
+            "internal/monitoring/canonical_guardrails_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        same_subsystem_errors = [
+            error for error in report["errors"] if "allow_same_subsystem_tests must be false" in error
+        ]
+        self.assertEqual(
+            [error.split(":", 1)[0] for error in same_subsystem_errors],
+            [
+                "subsystems[0].verification.allow_same_subsystem_tests must be false",
+                "subsystems[0].verification.path_policies[0].allow_same_subsystem_tests must be false",
+            ],
+        )
+        self.assertIn("test_prefixes or exact_files", same_subsystem_errors[0])
+
+    def test_audit_registry_payload_rejects_default_verification_proofs(self) -> None:
+        # The default policy is never consulted under explicit path-policy
+        # coverage, so a proof listed there would look accepted and count for
+        # nothing.
+        payload = {
+            "version": 13,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "monitoring",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "owned_prefixes": ["internal/monitoring/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": ["internal/monitoring/"],
+                        "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "monitoring-runtime",
+                                "label": "monitoring runtime proof",
+                                "match_prefixes": ["internal/monitoring/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+            "internal/monitoring/monitor.go",
+            "internal/monitoring/canonical_guardrails_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        self.assertEqual(
+            [error.split(":", 1)[0] for error in report["errors"]],
+            [
+                "subsystems[0].verification.test_prefixes must be empty",
+                "subsystems[0].verification.exact_files must be empty",
+            ],
+        )
+        self.assertIn("list them on the path policy", report["errors"][0])
+
     def test_audit_registry_payload_rejects_uncanonical_ordering(self) -> None:
         payload = {
             "version": 13,
@@ -831,12 +989,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["internal/monitoring/", "frontend/monitoring/"],
                     "owned_files": ["internal/monitoring/b.go", "internal/monitoring/a.go"],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
-                        "test_prefixes": ["internal/monitoring/tests/", "frontend/tests/"],
-                        "exact_files": [
-                            "internal/monitoring/z_test.go",
-                            "internal/monitoring/a_test.go",
-                        ],
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -861,9 +1016,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["internal/alerts/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/alerts/guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -900,8 +1055,6 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertIn("registry.json subsystems must be sorted by subsystem id", joined)
         self.assertIn("subsystems[0].owned_prefixes must be sorted lexicographically", joined)
         self.assertIn("subsystems[0].owned_files must be sorted lexicographically", joined)
-        self.assertIn("subsystems[0].verification.test_prefixes must be sorted lexicographically", joined)
-        self.assertIn("subsystems[0].verification.exact_files must be sorted lexicographically", joined)
         self.assertIn(
             "subsystems[0].verification.path_policies[0].match_prefixes must be sorted lexicographically",
             joined,
@@ -931,9 +1084,9 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_prefixes": ["internal/monitoring/"],
                     "owned_files": [],
                     "verification": {
-                        "allow_same_subsystem_tests": True,
+                        "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/monitoring/guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -986,7 +1139,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1010,7 +1163,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1067,7 +1220,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1091,7 +1244,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {

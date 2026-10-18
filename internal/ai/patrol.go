@@ -49,7 +49,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -66,6 +65,17 @@ type ThresholdProvider interface {
 	GetGuestDiskThreshold() float64
 	// GetStorageThreshold returns the usage alert trigger threshold for storage (0-100%)
 	GetStorageThreshold() float64
+	// GetDiskTemperatureThreshold returns the disk temperature alert trigger
+	// and clear values (°C) for a disk of the given type that the given host
+	// agent reports. A host with no ID means no agent reports the disk. A zero
+	// trigger means disk temperature alerting is off for it.
+	GetDiskTemperatureThreshold(host alerts.DiskTemperatureHost, diskType string) (trigger, clear float64)
+	// GetTrueNASDiskTemperatureThreshold returns the disk temperature alert
+	// trigger and clear values (°C) for one TrueNAS disk, given its resource
+	// ID and type: the disk's own override, then the TrueNAS-wide value, then
+	// the per-type policy, as its temperature alert resolves them. A zero
+	// trigger means disk temperature alerting is off for it.
+	GetTrueNASDiskTemperatureThreshold(resourceID, diskType string) (trigger, clear float64)
 }
 
 // AlertResolver provides the ability to review and resolve alerts
@@ -483,17 +493,16 @@ type PatrolService struct {
 	findings            *FindingsStore
 	objectiveStore      *PatrolObjectiveStore
 	observerRuntime     *patrolObserverRuntime
-	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
-	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
-	guestProber         GuestProber             // For pre-patrol guest reachability checks
-	metricsHistory      MetricsHistoryProvider  // For trend analysis and predictions
-	baselineStore       *baseline.Store         // For anomaly detection via learned baselines
-	changeDetector      *ChangeDetector         // For tracking infrastructure changes
-	remediationLog      *RemediationLog         // For tracking remediation actions
-	patternDetector     *PatternDetector        // For failure prediction from historical patterns
-	correlationDetector *CorrelationDetector    // For multi-resource correlation
-	incidentStore       *memory.IncidentStore   // For incident timeline capture
-	alertResolver       AlertResolver           // For AI-based alert resolution
+	knowledgeStore      *knowledge.Store       // For per-resource notes in patrol context
+	guestProber         GuestProber            // For pre-patrol guest reachability checks
+	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
+	baselineStore       *baseline.Store        // For anomaly detection via learned baselines
+	changeDetector      *ChangeDetector        // For tracking infrastructure changes
+	remediationLog      *RemediationLog        // For tracking remediation actions
+	patternDetector     *PatternDetector       // For failure prediction from historical patterns
+	correlationDetector *CorrelationDetector   // For multi-resource correlation
+	incidentStore       *memory.IncidentStore  // For incident timeline capture
+	alertResolver       AlertResolver          // For AI-based alert resolution
 
 	// verifyFixResolvedFn is the deterministic-verification seam used by the
 	// stale-finding reconcile pass. Tests inject a stub; nil means use the
@@ -574,7 +583,7 @@ type PatrolService struct {
 	lastBlockedReason string
 	lastBlockedCause  PatrolFailureCause
 	lastBlockedAt     time.Time
-	nextScheduledAt   time.Time // Tracks actual next patrol time (accounts for ticker resets)
+	nextScheduledAt   time.Time // Live timer projection; enabled deadlines are checkpointed in runHistoryStore.
 
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore

@@ -268,9 +268,10 @@ describe('sortStorageRecords branch coverage', () => {
       'Alpha',
       'Bravo',
     ]);
+    // Ties read A to Z whichever way the sorted column runs.
     expect(sortStorageRecords([a, b], 'usage', 'desc').map((r) => r.name)).toEqual([
-      'Bravo',
       'Alpha',
+      'Bravo',
     ]);
   });
 

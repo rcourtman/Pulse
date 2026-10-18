@@ -6,10 +6,10 @@ import {
   within,
   waitFor,
 } from '@solidjs/testing-library';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
+import { ChartsAPI } from '@/api/charts';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
-import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
@@ -98,6 +98,7 @@ const actionAuditMock = vi.hoisted(() => ({
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
+    activeAlerts: {},
     state: { pmg: [] as any[] },
     connected: () => true,
     initialDataReceived: () => true,
@@ -105,10 +106,6 @@ vi.mock('@/contexts/appRuntime', () => ({
     reconnect: vi.fn(),
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/api/resources', () => ({
@@ -165,24 +162,265 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
+  it('keeps retained guest memory and paused filesystems out of current chart fallbacks', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    const source = baseResource({
+      id: 'provenance-vm',
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      metricsTarget: { resourceType: 'vm', resourceId: 'fixture:pve:101' },
+      memory: {
+        current: 25,
+        observation: {
+          state: 'last-known',
+          source: 'guest-agent-meminfo',
+          observedAt: '2026-10-04T12:00:00Z',
+        },
+      },
+      disk: { current: 50 },
+      proxmox: { diskStatusReason: 'prev-vm-locked', backupInProgress: true },
+    });
+    const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'fixture:pve:101',
+      range: '24h',
+      start: Date.parse('2026-10-04T12:00:00Z'),
+      end: Date.parse('2026-10-05T00:00:00Z'),
+      source: 'store',
+      metrics: {},
+    });
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => (
+      <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+    ));
+    try {
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+      expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
+      expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+        '25.0%last known',
+      );
+      expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+        '2026-10-04 12:00:00 UTC',
+      );
+      expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+      expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+        '50.0%last known',
+      );
+      setResource({ ...source, lastSeen: Date.parse('2026-10-05T00:00:00Z') });
+      expect(chart.querySelector('[data-history-deferred="memory"]')).not.toHaveTextContent(
+        '2026-10-05',
+      );
+      setResource({
+        ...source,
+        memory: { current: 0, observation: { state: 'unavailable', source: 'status-mem' } },
+        proxmox: { diskStatusReason: 'agent-busy' },
+      });
+      expect(chart.querySelector('[data-history-last-known]')).toBeNull();
+      expect(chart).toHaveTextContent('Memory-');
+      expect(chart).toHaveTextContent('Disk-');
+      setResource({
+        ...source,
+        memory: {
+          current: 0,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-10-04T13:00:00Z',
+          },
+        },
+        proxmox: { diskStatusReason: '' },
+      });
+      expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+      expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+        '0.0%current',
+      );
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+        '50.0%current',
+      );
+      expect(chart.querySelector('[data-history-deferred]')).toBeNull();
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
+  it('reactively withdraws stopped VM disk carriers without discarding the Overview charts or independent readings', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    const source = baseResource({
+      id: 'native-power-vm',
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      metricsTarget: { resourceType: 'vm', resourceId: 'power:pve:101' },
+      cpu: { current: 10 },
+      memory: {
+        current: 0,
+        observation: { state: 'current', source: 'agent', observedAt: '2026-10-10T00:00:00Z' },
+      },
+      disk: { current: 90 },
+      proxmox: { runtimeStatus: 'running' },
+    });
+    const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'power:pve:101',
+      range: '24h',
+      start: Date.parse('2026-10-10T00:00:00Z'),
+      end: Date.parse('2026-10-10T01:00:00Z'),
+      source: 'store',
+      metrics: {},
+    });
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => (
+      <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+    ));
+    try {
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+        '90.0%current',
+      );
+      for (const diskStatusReason of ['', 'prev-agent-busy']) {
+        setResource({
+          ...source,
+          lastSeen: source.lastSeen + 3600000,
+          proxmox: { runtimeStatus: 'stopped', diskStatusReason },
+        });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'Guest filesystem stats unavailable while the VM is stopped.',
+        );
+        expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
+          '10.0%current',
+        );
+      }
+      setResource({ ...source, status: 'offline', disk: { current: 0 } });
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent('0.0%current');
+      expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+      expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+      expect(chart.querySelector('path[data-history-series]')).toBeNull();
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
+  it.each(['vm', 'system-container'] as const)(
+    'keeps the mounted %s Overview charts on the selected filesystem producer',
+    async (type) => {
+      resetCreateNonSuspendingQueryCacheForTest();
+      const disks = [{ mountpoint: '/', total: 100, used: 62, free: 38 }];
+      const source = baseResource({
+        id: 'linked-filesystem-guest',
+        type,
+        platformType: 'proxmox-pve',
+        status: 'online',
+        metricsTarget: { resourceType: type, resourceId: 'linked:pve:105' },
+        cpu: { current: 10 },
+        memory: {
+          current: 0,
+          observation: { state: 'current', source: 'agent', observedAt: '2026-10-12T00:00:00Z' },
+        },
+        disk: { current: 62 },
+        proxmox: { runtimeStatus: 'running', diskStatusReason: 'agent-not-running' },
+        agent: { agentId: 'in-guest', stale: false, disks },
+      });
+      const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+        resourceType: type,
+        resourceId: 'linked:pve:105',
+        range: '24h',
+        start: Date.parse('2026-10-12T00:00:00Z'),
+        end: Date.parse('2026-10-12T01:00:00Z'),
+        source: 'store',
+        metrics: {},
+      });
+      const [resource, setResource] = createSignal(source);
+      const view = render(() => (
+        <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+      ));
+      try {
+        await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+        const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+        expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+          '62.0%current',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        setResource({
+          ...source,
+          lastSeen: source.lastSeen + 3600000,
+          agent: { ...source.agent, stale: true },
+        });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+          '62.0%last known',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'The Pulse Agent in this guest stopped reporting.',
+        );
+        setResource({
+          ...source,
+          proxmox: { runtimeStatus: 'running', disks, diskStatusReason: 'prev-vm-locked' },
+        });
+        if (type === 'vm') {
+          expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+            '62.0%last known',
+          );
+          expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+            'VM operation lock',
+          );
+        } else {
+          expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+            '62.0%current',
+          );
+          expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        }
+        setResource({ ...source, proxmox: { runtimeStatus: 'stopped' } });
+        expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+          'unavailable',
+        );
+        setResource({ ...source, disk: { current: 0 }, status: 'offline' });
+        expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+        expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+          '0.0%current',
+        );
+        expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
+          '10.0%current',
+        );
+        expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+        expect(chart.querySelector('path[data-history-series]')).toBeNull();
+        expect(read).toHaveBeenCalledTimes(1);
+      } finally {
+        view.unmount();
+        read.mockRestore();
+        resetCreateNonSuspendingQueryCacheForTest();
+      }
+    },
+  );
+
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
     expect(guestDrawerHistorySource).toContain('No stored history in this range');
     expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
   });
 
-  it('keeps discovery context presentation separate from discovery runtime ownership', () => {
-    expect(discoveryTabSource).toContain('useDiscoveryTabState');
-    expect(discoveryTabStateSource).toContain('export function useDiscoveryTabState');
-    expect(discoveryTabStateSource).toContain('createResource');
-    expect(discoveryTabStateSource).toContain("eventBus.on('ai_discovery_progress'");
-    expect(discoveryTabStateSource).toContain('triggerDiscovery(');
-    expect(discoveryTabStateSource).toContain('updateDiscoveryNotes(');
-    expect(discoveryTabSource).not.toContain("eventBus.on('ai_discovery_progress'");
-    expect(discoveryTabSource).not.toContain('createResource(');
-    expect(discoveryTabSource).not.toContain('getConnectedAgents(');
-    expect(discoveryTabSource).not.toContain('triggerDiscovery(');
-    expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
+  it('keeps drawer presentation separate from runtime ownership', () => {
     expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceDetailSummary'");
     expect(resourceDetailDrawerOverviewSource).toContain(
       "from './ResourceInvestigationContextTables'",
@@ -288,9 +526,6 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceIdentityView',
-    );
-    expect(resourceDetailDrawerIdentityModelSource).toContain(
-      'export const buildDiscoveryContextSummary',
     );
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceDebugBundle',
@@ -570,7 +805,8 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show access' })).toBeNull();
-    expect(screen.queryByText('Details')).toBeNull();
+    // One Details disclosure holds the inventory; no per-card "Show details".
+    expect(screen.getAllByText('Details')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.queryByText('Platform ID')).toBeNull();
     expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
@@ -602,10 +838,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Correlations')).toBeInTheDocument();
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(screen.getByText('VM Child')).toBeInTheDocument();
+    // Platform context sits inside the Overview's Details, opened by render().
     await screen.findByText('Platform details');
-    const platformDetails = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
-    platformDetails.open = true;
-    fireEvent(platformDetails, new Event('toggle'));
     expect(screen.getByText('Context')).toBeInTheDocument();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
@@ -824,6 +1058,66 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Capabilities')).toBeNull();
     expect(panel.queryByText('Relationships')).toBeNull();
     expect(panel.queryByText('Runs on')).toBeNull();
+  });
+
+  it('labels an alert that moved to its Pulse agent as a move, not a recovery', async () => {
+    const summary =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      recentChanges: [
+        {
+          id: 'change-moved',
+          observedAt: '2026-10-06T15:00:00Z',
+          occurredAt: '2026-10-06T15:00:00Z',
+          resourceId: 'node:pve1',
+          kind: 'alert_resolved',
+          sourceType: 'heuristic',
+          confidence: 'high',
+          reason: summary,
+          metadata: {
+            alert_identifier: 'pve1-memory',
+            alert_type: 'memory',
+            alert_resolution: 'moved_to_agent',
+          },
+        },
+        {
+          id: 'change-recovered',
+          observedAt: '2026-10-06T14:00:00Z',
+          resourceId: 'node:pve1',
+          kind: 'alert_resolved',
+          sourceType: 'heuristic',
+          confidence: 'high',
+          reason: 'Alert resolved: Node CPU at 91%',
+          metadata: { alert_identifier: 'pve1-cpu', alert_type: 'cpu' },
+        },
+      ],
+      counts: { recentChanges: 2, recentChangeKinds: { alert_resolved: 2 } },
+    });
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'node:pve1',
+          type: 'agent',
+          name: 'pve1',
+          displayName: 'pve1',
+          platformType: 'proxmox-pve',
+          platformData: { sources: ['proxmox', 'agent'] },
+        })}
+      />
+    ));
+
+    await screen.findByText('Change history');
+    const panel = within(screen.getByTestId('resource-change-history-section'));
+    const movedReason = await panel.findByText(summary);
+    const movedEntry = movedReason.parentElement as HTMLElement;
+    expect(within(movedEntry).getByText('Alert moved')).toBeInTheDocument();
+    expect(within(movedEntry).queryByText('Alert resolved')).toBeNull();
+
+    // An ordinary recovery keeps its kind label.
+    const recoveredEntry = panel.getByText('Alert resolved: Node CPU at 91%')
+      .parentElement as HTMLElement;
+    expect(within(recoveredEntry).getByText('Alert resolved')).toBeInTheDocument();
   });
 
   it('surfaces resource-scoped action history from the canonical action audit API', async () => {
@@ -1466,5 +1760,39 @@ describe('ResourceDetailDrawer change history section', () => {
     fireEvent.click(within(actions).getByRole('button', { name: /^Retry$/ }));
     await waitFor(() => expect(actions).toHaveTextContent('No actions yet.'));
     expect(actions).not.toHaveTextContent('Actions temporarily unavailable');
+  });
+});
+
+describe('ResourceDetailDrawer Overview alert sources', () => {
+  it('charts only the resource own alerts and explains latched ones with the shared copy', () => {
+    // Needs attention lists every alert for the resource and what nests under
+    // it; a chart trigger must be the resource's own (a host's container
+    // memory alert is not the host's memory trigger).
+    expect(resourceDetailDrawerOverviewSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(resourceDetailDrawerOverviewSource).toContain('...getAlertAttentionCopy(alert, now)');
+    expect(resourceDetailDrawerOverviewSource).not.toContain('message: alert.message,');
+  });
+});
+
+describe('ResourceDetailDrawer header status dot', () => {
+  it("reads a container's run state and health check, as its row does", () => {
+    const { unmount } = render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'app-container:edge-web',
+          type: 'app-container',
+          name: 'edge-web',
+          status: 'online',
+          docker: { containerId: 'abc', containerState: 'running', health: 'unhealthy' },
+        })}
+      />
+    ));
+    // Running but failing its check is red with the row's label, not green.
+    expect(screen.getByRole('img', { name: 'Unhealthy' })).toHaveClass('bg-red-500');
+    unmount();
+
+    render(() => <ResourceDetailDrawer resource={baseResource({ status: 'online' })} />);
+    // Other resources keep the shared run-status dot.
+    expect(screen.queryByRole('img', { name: 'Unhealthy' })).toBeNull();
   });
 });

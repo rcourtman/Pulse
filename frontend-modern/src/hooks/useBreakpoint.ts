@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, createMemo, Accessor } from 'solid-js';
+import { createSignal, onMount, onCleanup, createMemo, createRoot, Accessor } from 'solid-js';
 
 /**
  * Tailwind CSS breakpoint values (in pixels)
@@ -62,11 +62,87 @@ export interface UseBreakpointReturn {
   isDesktop: Accessor<boolean>;
 }
 
+const readViewportWidth = (): number => (typeof window !== 'undefined' ? window.innerWidth : 0);
+
+/**
+ * One viewport width shared by every useBreakpoint() caller. Workload rows call
+ * the hook once or twice each, so a per-call listener made every window resize
+ * run one callback per row. A single rAF-debounced listener feeds this signal
+ * while at least one caller is mounted.
+ */
+const [viewportWidth, setViewportWidth] = createSignal(readViewportWidth());
+let mountedCallers = 0;
+let resizeFrame: number | undefined;
+
+const handleViewportResize = () => {
+  if (resizeFrame !== undefined) {
+    window.cancelAnimationFrame(resizeFrame);
+  }
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = undefined;
+    setViewportWidth(window.innerWidth);
+  });
+};
+
+function retainViewportWidthListener(): () => void {
+  setViewportWidth(window.innerWidth);
+  mountedCallers += 1;
+  if (mountedCallers === 1) {
+    window.addEventListener('resize', handleViewportResize, { passive: true });
+  }
+
+  return () => {
+    mountedCallers -= 1;
+    if (mountedCallers > 0) return;
+    window.removeEventListener('resize', handleViewportResize);
+    if (resizeFrame !== undefined) {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = undefined;
+    }
+  };
+}
+
+const sharedBreakpoint = createRoot((): UseBreakpointReturn => {
+  const breakpoint = createMemo(() => getBreakpointName(viewportWidth()));
+
+  const isAtLeast = (bp: Breakpoint): boolean => {
+    return viewportWidth() >= BREAKPOINTS[bp];
+  };
+
+  const isBelow = (bp: Breakpoint): boolean => {
+    return viewportWidth() < BREAKPOINTS[bp];
+  };
+
+  const isVisible = (priority: ColumnPriority): boolean => {
+    const minBreakpoint = PRIORITY_BREAKPOINTS[priority];
+    return viewportWidth() >= BREAKPOINTS[minBreakpoint];
+  };
+
+  const isMobile = createMemo(() => viewportWidth() < BREAKPOINTS.md);
+  const isTablet = createMemo(
+    () => viewportWidth() >= BREAKPOINTS.md && viewportWidth() < BREAKPOINTS.xl,
+  );
+  const isDesktop = createMemo(() => viewportWidth() >= BREAKPOINTS.xl);
+
+  return {
+    width: viewportWidth,
+    breakpoint,
+    isAtLeast,
+    isBelow,
+    isVisible,
+    isMobile,
+    isTablet,
+    isDesktop,
+  };
+});
+
 /**
  * Reactive hook for tracking viewport width and breakpoints.
  *
  * Use this for conditional rendering based on screen size,
  * which is more performant than rendering and hiding with CSS.
+ * Every caller reads the same shared width; mounting a caller never adds
+ * another window resize listener.
  *
  * @example
  * ```tsx
@@ -80,63 +156,13 @@ export interface UseBreakpointReturn {
  * ```
  */
 export function useBreakpoint(): UseBreakpointReturn {
-  // Initialize with current window width (or 0 for SSR)
-  const initialWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
-  const [width, setWidth] = createSignal(initialWidth);
+  // The shared width goes stale while no caller is mounted (and for up to a
+  // frame after a resize), so a new caller starts from the live width.
+  setViewportWidth(readViewportWidth());
 
   onMount(() => {
-    // Debounce resize events to avoid excessive re-renders
-    let resizeTimeout: number | undefined;
-
-    const handleResize = () => {
-      if (resizeTimeout) {
-        window.cancelAnimationFrame(resizeTimeout);
-      }
-      resizeTimeout = window.requestAnimationFrame(() => {
-        setWidth(window.innerWidth);
-      });
-    };
-
-    // Set initial width in case it changed between SSR and mount
-    setWidth(window.innerWidth);
-
-    window.addEventListener('resize', handleResize, { passive: true });
-
-    onCleanup(() => {
-      window.removeEventListener('resize', handleResize);
-      if (resizeTimeout) {
-        window.cancelAnimationFrame(resizeTimeout);
-      }
-    });
+    onCleanup(retainViewportWidthListener());
   });
 
-  const breakpoint = createMemo(() => getBreakpointName(width()));
-
-  const isAtLeast = (bp: Breakpoint): boolean => {
-    return width() >= BREAKPOINTS[bp];
-  };
-
-  const isBelow = (bp: Breakpoint): boolean => {
-    return width() < BREAKPOINTS[bp];
-  };
-
-  const isVisible = (priority: ColumnPriority): boolean => {
-    const minBreakpoint = PRIORITY_BREAKPOINTS[priority];
-    return width() >= BREAKPOINTS[minBreakpoint];
-  };
-
-  const isMobile = createMemo(() => width() < BREAKPOINTS.md);
-  const isTablet = createMemo(() => width() >= BREAKPOINTS.md && width() < BREAKPOINTS.xl);
-  const isDesktop = createMemo(() => width() >= BREAKPOINTS.xl);
-
-  return {
-    width,
-    breakpoint,
-    isAtLeast,
-    isBelow,
-    isVisible,
-    isMobile,
-    isTablet,
-    isDesktop,
-  };
+  return sharedBreakpoint;
 }

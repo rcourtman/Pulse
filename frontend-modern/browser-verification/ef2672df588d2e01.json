@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "834fcaeb366b2644bfa5c081e81bb2f286c34e55",
+  "verified_at": "2026-10-05T15:03:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesNameText.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesNameText.tsx": "0d293feee3fc1f1bdda26000013b44199963a8054fb18990cfc7dc62363e03d1"
+  },
+  "routes": [
+    "/kubernetes/pods"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    }
+  ],
+  "states": [
+    "Private mock-mode stack built from this tree (backend :7745, Vite :5265), headless Chromium via Playwright with clipboard read/write granted.",
+    "Pods table Pod name cron-nightly-backfill-28918234, Pods table Node column prod-euw1-k8s-03 and Workload controllers name nightly-backfill-28918234 at both widths. At 768 px the pod and controller heads truncate (cron-ni\u2026 -28918234) and the tails stay visible, unchanged from before the fix.",
+    "Before the fix (component swapped back via HMR) every one of the six copies put a newline between head and tail in the clipboard, e.g. cron-nightly-backfill\\n-28918234. After the fix all six clipboard reads equal the bare name.",
+    "A whole-row selection still copies as the browser builds it (cells on separate lines), so wider selections are not rewritten. No page errors.",
+    "Not verified: Firefox or Safari clipboard serialization, or a pasted kubectl command against a real cluster."
+  ],
+  "interactions": [
+    "Programmatic Range over each name wrapper, then a real ControlOrMeta+C keypress, then navigator.clipboard.readText().",
+    "Real mouse drag from the first to the last character of each name, then ControlOrMeta+C and a clipboard read; selection.toString() still holds the newline while the clipboard does not.",
+    "Range over the whole cron-nightly-backfill pod row, ControlOrMeta+C, clipboard read to confirm the handler leaves it alone."
+  ]
+}

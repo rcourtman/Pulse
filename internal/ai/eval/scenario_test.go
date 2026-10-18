@@ -166,51 +166,6 @@ func TestRunner_RunScenario_PreflightFail(t *testing.T) {
 	assert.False(t, result.Steps[0].Success)
 }
 
-func TestRunner_RunScenario_SendsAutonomousOverride(t *testing.T) {
-	var sawAutonomousOverride *bool
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-			if raw, ok := req["autonomous_mode"]; ok {
-				if v, ok := raw.(bool); ok {
-					sawAutonomousOverride = &v
-				}
-			}
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"type\":\"content\",\"data\":{\"text\":\"ok\"}}\n\n")
-		fmt.Fprintf(w, "data: {\"type\":\"done\",\"data\":{\"session_id\":\"session-1\"}}\n\n")
-	}))
-	defer server.Close()
-
-	runner := NewRunner(DefaultConfig())
-	runner.config.BaseURL = server.URL
-	runner.config.Preflight = false
-	runner.config.Verbose = false
-
-	autonomous := false
-	scenario := Scenario{
-		Name: "Autonomous override",
-		Steps: []Step{
-			{
-				Name:           "step",
-				Prompt:         "hello",
-				AutonomousMode: &autonomous,
-				Assertions: []Assertion{
-					AssertContentContains("ok"),
-				},
-			},
-		},
-	}
-
-	result := runner.RunScenario(scenario)
-	assert.True(t, result.Passed)
-	if assert.NotNil(t, sawAutonomousOverride) {
-		assert.False(t, *sawAutonomousOverride)
-	}
-}
-
 func TestRunner_RunScenario_SendsHandoffEnvelope(t *testing.T) {
 	var req map[string]interface{}
 
@@ -229,7 +184,6 @@ func TestRunner_RunScenario_SendsHandoffEnvelope(t *testing.T) {
 	runner.config.Preflight = false
 	runner.config.Verbose = false
 
-	autonomous := false
 	scenario := Scenario{
 		Name: "Handoff envelope",
 		Steps: []Step{
@@ -244,7 +198,6 @@ func TestRunner_RunScenario_SendsHandoffEnvelope(t *testing.T) {
 					Node: "delly",
 				}},
 				HandoffMetadata: StepHandoffMetadata{Kind: "resource_context"},
-				AutonomousMode:  &autonomous,
 				Assertions: []Assertion{
 					AssertContentContains("handoff ok"),
 				},
@@ -255,7 +208,9 @@ func TestRunner_RunScenario_SendsHandoffEnvelope(t *testing.T) {
 	result := runner.RunScenario(scenario)
 	assert.True(t, result.Passed)
 	assert.Equal(t, "model-only context", req["handoff_context"])
-	assert.Equal(t, false, req["autonomous_mode"])
+	// /api/ai/chat sets approval-required mode server-side; the runner sends no
+	// execution-mode field for it to ignore.
+	assert.NotContains(t, req, "autonomous_mode")
 
 	resources, ok := req["handoff_resources"].([]interface{})
 	if assert.True(t, ok, "handoff_resources should be an array") && assert.Len(t, resources, 1) {
@@ -283,7 +238,7 @@ func TestResourceContextHandoffScenarioUsesConfiguredResource(t *testing.T) {
 
 	scenario := ResourceContextHandoffScenario()
 	assert.Equal(t, "Resource Context Handoff", scenario.Name)
-	if assert.Len(t, scenario.Steps, 5) {
+	if assert.Len(t, scenario.Steps, 4) {
 		first := scenario.Steps[0]
 		if assert.Len(t, first.HandoffResources, 1) {
 			assert.Equal(t, StepHandoffResource{
@@ -294,9 +249,7 @@ func TestResourceContextHandoffScenarioUsesConfiguredResource(t *testing.T) {
 			}, first.HandoffResources[0])
 		}
 		assert.Equal(t, StepHandoffMetadata{Kind: "resource_context"}, first.HandoffMetadata)
-		assert.NotNil(t, first.AutonomousMode)
-		assert.False(t, *first.AutonomousMode)
-		assert.Equal(t, "Report discovery readiness from context", scenario.Steps[1].Name)
+		assert.Equal(t, "Respect action boundary", scenario.Steps[1].Name)
 		assert.Empty(t, scenario.Steps[1].HandoffResources, "later steps should exercise persisted session handoff")
 	}
 }

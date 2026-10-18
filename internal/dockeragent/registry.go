@@ -23,6 +23,7 @@ type RegistryChecker struct {
 	// credentials optionally resolves host Docker credentials so private
 	// registries can be checked; nil keeps every lookup anonymous.
 	credentials registryCredentialSource
+	localImages localImageMemo
 	logger      zerolog.Logger
 	mu          sync.RWMutex
 
@@ -30,6 +31,63 @@ type RegistryChecker struct {
 	enabled       bool
 	checkInterval time.Duration
 	lastFullCheck time.Time
+}
+
+// localImageDigests is the local side of an update comparison: the image's
+// RepoDigests and the platform used to resolve a manifest list.
+type localImageDigests struct {
+	digests []string
+	arch    string
+	os      string
+	variant string
+}
+
+// localImageMemo keeps the last successful local digest lookup per image ID,
+// the fallback when an inspect fails. It holds only images in use by the
+// collected containers.
+type localImageMemo struct {
+	entries map[string]localImageDigests
+	mu      sync.Mutex
+}
+
+func (r *RegistryChecker) rememberLocalImage(imageID string, local localImageDigests) {
+	if r == nil || imageID == "" {
+		return
+	}
+	r.localImages.mu.Lock()
+	defer r.localImages.mu.Unlock()
+	if r.localImages.entries == nil {
+		r.localImages.entries = make(map[string]localImageDigests)
+	}
+	local.digests = append([]string(nil), local.digests...)
+	r.localImages.entries[imageID] = local
+}
+
+func (r *RegistryChecker) lastLocalImage(imageID string) (localImageDigests, bool) {
+	if r == nil || imageID == "" {
+		return localImageDigests{}, false
+	}
+	r.localImages.mu.Lock()
+	defer r.localImages.mu.Unlock()
+	local, ok := r.localImages.entries[imageID]
+	if !ok {
+		return localImageDigests{}, false
+	}
+	local.digests = append([]string(nil), local.digests...)
+	return local, true
+}
+
+func (r *RegistryChecker) pruneLocalImages(active map[string]struct{}) {
+	if r == nil {
+		return
+	}
+	r.localImages.mu.Lock()
+	defer r.localImages.mu.Unlock()
+	for imageID := range r.localImages.entries {
+		if _, ok := active[imageID]; !ok {
+			delete(r.localImages.entries, imageID)
+		}
+	}
 }
 
 // digestCache provides thread-safe caching of digest lookups.
@@ -72,9 +130,11 @@ type ImageUpdateResult struct {
 
 func isPulseManagedImageReference(image string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(image))
+	if host, rest, explicit := strings.Cut(normalized, "/"); explicit && isDockerHubRegistry(host) {
+		normalized = rest
+	}
 	for _, repository := range []string{
 		"rcourtman/pulse",
-		"docker.io/rcourtman/pulse",
 		"license.pulserelay.pro/pulse-pro",
 		"registry.pulserelay.pro/pulse/pulse-pro",
 	} {
@@ -83,6 +143,17 @@ func isPulseManagedImageReference(image string) bool {
 			strings.HasPrefix(normalized, repository+"@") {
 			return true
 		}
+	}
+	return false
+}
+
+// Hub reference and credential aliases name the same registry, but manifests
+// and pull tokens must use the v2 API rather than Docker Hub's web/index hosts.
+// A port or a lookalike domain is a distinct registry and must not be rewritten.
+func isDockerHubRegistry(host string) bool {
+	switch strings.ToLower(host) {
+	case "docker.io", "index.docker.io", "registry.docker.io", "registry-1.docker.io":
+		return true
 	}
 	return false
 }
@@ -891,6 +962,15 @@ func parseImageReference(image string) (registry, repository, tag string) {
 	} else {
 		// Docker Hub with namespace (e.g., "myrepo/myapp")
 		repository = image
+	}
+
+	if isDockerHubRegistry(registry) {
+		registry = "registry-1.docker.io"
+		// Explicit official-image references need the same library namespace
+		// as their short form; never add it to a custom registry's repository.
+		if !strings.Contains(repository, "/") {
+			repository = "library/" + repository
+		}
 	}
 
 	return registry, repository, tag

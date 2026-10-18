@@ -1,0 +1,207 @@
+import { describe, expect, it } from 'vitest';
+
+import type { Resource } from '@/types/resource';
+import {
+  getDockerContainerHealthCheckPresentation,
+  getDockerContainerRunStatePresentation,
+  getDockerContainerStatePresentation,
+  getDockerContainerUptimeSeconds,
+} from '../dockerContainerStatePresentation';
+import { mapDockerContainerStatus } from '../dockerPageModel';
+
+const container = (docker: NonNullable<Resource['docker']>, status = 'online'): Resource =>
+  ({
+    id: 'app-container-1',
+    type: 'app-container',
+    name: 'web',
+    status,
+    docker,
+  }) as Resource;
+
+describe('getDockerContainerStatePresentation', () => {
+  it('reads a running container plainly and names its health check on hover', () => {
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', health: 'healthy' }),
+      ),
+    ).toEqual({
+      label: 'Healthy',
+      title: 'Running, and its health check is passing',
+      tone: null,
+    });
+    expect(getDockerContainerStatePresentation(container({ containerState: 'running' }))).toEqual({
+      label: 'Running',
+      title: 'Running, with no health check',
+      tone: null,
+    });
+  });
+
+  it('flags a failing or starting health check on a running container', () => {
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', health: 'unhealthy' }),
+      ),
+    ).toEqual({
+      label: 'Unhealthy',
+      title: 'Running, but its health check is failing',
+      tone: 'danger',
+    });
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', health: 'starting' }),
+      ),
+    ).toEqual({
+      label: 'Starting',
+      title: 'Running, and its health check has not passed yet',
+      tone: 'warning',
+    });
+  });
+
+  it('shows the exit code of a container that crashed, and mutes a clean stop', () => {
+    expect(
+      getDockerContainerStatePresentation(container({ containerState: 'exited', exitCode: 139 })),
+    ).toEqual({ label: 'Exited (139)', title: 'Exited with code 139', tone: 'danger' });
+    expect(
+      getDockerContainerStatePresentation(container({ containerState: 'exited', exitCode: 0 })),
+    ).toEqual({ label: 'Exited', title: 'Exited with code 0', tone: 'muted' });
+    expect(getDockerContainerStatePresentation(container({ containerState: 'paused' }))).toEqual({
+      label: 'Paused',
+      title: 'Paused',
+      tone: 'muted',
+    });
+  });
+
+  it('says what a dead container means on hover', () => {
+    expect(getDockerContainerStatePresentation(container({ containerState: 'dead' }))).toEqual({
+      label: 'Dead',
+      title: 'Docker failed to stop or remove it',
+      tone: 'danger',
+    });
+  });
+
+  it('marks a restarting container for attention', () => {
+    expect(
+      getDockerContainerStatePresentation(container({ containerState: 'restarting' })),
+    ).toEqual({ label: 'Restarting', title: 'Docker is restarting it', tone: 'warning' });
+  });
+});
+
+describe('a container whose agent reported no Docker state', () => {
+  it('reads the online resource status as running, health check and uptime included', () => {
+    expect(
+      getDockerContainerStatePresentation(container({ health: 'unhealthy' }, 'online')),
+    ).toEqual({
+      label: 'Unhealthy',
+      title: 'Running, but its health check is failing',
+      tone: 'danger',
+    });
+    expect(getDockerContainerStatePresentation(container({}, 'online'))).toEqual({
+      label: 'Running',
+      title: 'Running, with no health check',
+      tone: null,
+    });
+    expect(getDockerContainerUptimeSeconds(container({ uptimeSeconds: 120 }, 'online'))).toBe(120);
+  });
+});
+
+describe('getDockerContainerUptimeSeconds', () => {
+  it('reports the current run of a running or paused container', () => {
+    expect(
+      getDockerContainerUptimeSeconds(container({ containerState: 'running', uptimeSeconds: 8 })),
+    ).toBe(8);
+    expect(
+      getDockerContainerUptimeSeconds(container({ containerState: 'paused', uptimeSeconds: 3600 })),
+    ).toBe(3600);
+  });
+
+  it('drops the leftover uptime Docker keeps on a stopped container', () => {
+    expect(
+      getDockerContainerUptimeSeconds(
+        container({ containerState: 'exited', exitCode: 1, uptimeSeconds: 184082 }),
+      ),
+    ).toBeUndefined();
+    expect(
+      getDockerContainerUptimeSeconds(container({ containerState: 'running', uptimeSeconds: 0 })),
+    ).toBeUndefined();
+  });
+});
+
+describe('drawer runtime rows', () => {
+  it('splits a running container into its Docker state and its health check', () => {
+    const unhealthy = container({ containerState: 'running', health: 'unhealthy' });
+    expect(getDockerContainerRunStatePresentation(unhealthy)).toEqual({
+      label: 'Running',
+      title: 'Running',
+      tone: null,
+    });
+    expect(getDockerContainerHealthCheckPresentation(unhealthy)).toEqual({
+      label: 'Failing',
+      title: 'Its health check is failing',
+      tone: 'danger',
+    });
+    expect(
+      getDockerContainerHealthCheckPresentation(
+        container({ containerState: 'running', health: 'healthy' }),
+      ),
+    ).toMatchObject({ label: 'Passing', tone: null });
+    expect(
+      getDockerContainerHealthCheckPresentation(container({ containerState: 'running' })),
+    ).toBeUndefined();
+  });
+
+  it('shows no health check for a stopped container and keeps its exit code', () => {
+    const crashed = container({ containerState: 'exited', exitCode: 1, health: 'unhealthy' });
+    expect(getDockerContainerRunStatePresentation(crashed)).toEqual({
+      label: 'Exited (1)',
+      title: 'Exited with code 1',
+      tone: 'danger',
+    });
+    expect(getDockerContainerHealthCheckPresentation(crashed)).toBeUndefined();
+  });
+});
+
+describe('restart warning where the Restarts column is hidden', () => {
+  it('names a crash-looping running container in State only when asked', () => {
+    const looping = container({ containerState: 'running', health: 'healthy', restartCount: 7 });
+    expect(getDockerContainerStatePresentation(looping, { flagRestarts: true })).toEqual({
+      label: '7 restarts',
+      title: 'Running. Docker has restarted it 7 times in total, not necessarily recently',
+      tone: 'warning',
+    });
+    expect(getDockerContainerStatePresentation(looping)).toMatchObject({ label: 'Healthy' });
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', restartCount: 5 }),
+        { flagRestarts: true },
+      ),
+    ).toMatchObject({ label: 'Running', tone: null });
+  });
+
+  it('colours the row dot by the same restart verdict in every layout', () => {
+    const looping = container({ containerState: 'running', health: 'healthy', restartCount: 7 });
+    // The dot cannot change colour with the viewport, so it always carries
+    // the verdict; the words name it where no Restarts column does.
+    expect(mapDockerContainerStatus(looping)).toEqual({ variant: 'warning', label: '7 restarts' });
+    expect(
+      mapDockerContainerStatus(container({ containerState: 'running', restartCount: 5 })),
+    ).toEqual({ variant: 'success', label: 'Running' });
+    // A stopped container's restart history is not a running crash-loop.
+    expect(
+      mapDockerContainerStatus(container({ containerState: 'paused', restartCount: 9 })),
+    ).toMatchObject({ label: 'Paused' });
+    // The drawer shows the count on its own row, so its state stays Docker's.
+    expect(getDockerContainerRunStatePresentation(looping)).toMatchObject({
+      label: 'Running',
+      tone: null,
+    });
+  });
+
+  it('keeps a worse state ahead of the restart count', () => {
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', health: 'unhealthy', restartCount: 9 }),
+        { flagRestarts: true },
+      ),
+    ).toMatchObject({ label: 'Unhealthy', tone: 'danger' });
+  });
+});

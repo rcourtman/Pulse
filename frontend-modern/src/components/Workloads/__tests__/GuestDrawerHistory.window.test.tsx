@@ -9,6 +9,7 @@ import {
   getGuestDrawerHistoryRangeBounds,
   normalizeGuestDrawerHistoryPoints,
 } from '../guestDrawerModel';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -56,7 +57,7 @@ const group = (id: string) =>
 const pathXs = (chart: HTMLElement) =>
   [
     ...chart
-      .querySelector('path')!
+      .querySelector('path[data-history-series]')!
       .getAttribute('d')!
       .matchAll(/[ML](-?[\d.]+),/g),
   ].map((match) => Number(match[1]));
@@ -67,8 +68,55 @@ const selectSharedTime = (chart: HTMLElement) => {
   const slider = within(chart).getByRole('slider');
   slider.focus();
   fireEvent.input(slider, { target: { value: '1' } });
-  return chart.querySelector('circle[r="3"]')!;
+  return chart.querySelector('[data-history-hover-marker]')!;
 };
+
+describe('GuestDrawerHistory reading source', () => {
+  const readout = () => within(group('utilization')).getByTestId('guest-history-hover-time');
+
+  it.each([
+    ['store', 'Latest stored', 'Stored', null],
+    ['memory', 'Latest recorded', 'Recorded', 'Recent readings only.'],
+    ['live', 'Current', 'Current', 'No history for this range yet.'],
+  ] as const)('names %s readings as such', async (source, latest, inspected, notice) => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response({ source }));
+    mount();
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    expect(readout().textContent).toMatch(new RegExp(`^${latest} · `));
+    if (notice) expect(screen.getByTestId('history-source-notice')).toHaveTextContent(notice);
+    else expect(screen.queryByTestId('history-source-notice')).toBeNull();
+    slider.focus();
+    fireEvent.input(slider, { target: { value: '0' } });
+    expect(readout().textContent).toMatch(new RegExp(`^${inspected} · `));
+    expect(readout()).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(new RegExp(`^${inspected} observation: `)),
+    );
+  });
+});
+
+describe('GuestDrawerHistory value axis', () => {
+  it('labels a quiet link\'s rate axis once, not "<1K/s" on two gridlines', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      response({
+        metrics: {
+          cpu: [point(end - 10 * 60_000, 12), point(end - 5 * 60_000, 25)],
+          netin: [point(end - 10 * 60_000, 200), point(end - 5 * 60_000, 400)],
+          netout: [point(end - 10 * 60_000, 100), point(end - 5 * 60_000, 300)],
+        },
+      }),
+    );
+    mount();
+    await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
+    const labels = (id: string) =>
+      Array.from(
+        group(id).querySelectorAll('[data-history-axis-label]'),
+        (label) => label.textContent,
+      );
+    expect(labels('network')).toEqual(['<1K/s', '', '0']);
+    expect(labels('utilization')).toEqual(['100%', '50%', '0%']);
+  });
+});
 
 describe('GuestDrawerHistory shared time window', () => {
   it('does not stretch five minutes of stored CPU across a 24-hour query', async () => {
@@ -85,8 +133,8 @@ describe('GuestDrawerHistory shared time window', () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
     mount();
     await screen.findByRole('slider', { name: 'Inspect Network I/O history' });
-    const utilizationX = selectSharedTime(group('utilization')).getAttribute('cx');
-    const networkX = selectSharedTime(group('network')).getAttribute('cx');
+    const utilizationX = selectSharedTime(group('utilization')).getAttribute('data-x');
+    const networkX = selectSharedTime(group('network')).getAttribute('data-x');
     expect(networkX).toBe(utilizationX);
     expect(Number(networkX)).toBeCloseTo(expectedX(end - 5 * 60_000));
   });
@@ -107,15 +155,21 @@ describe('GuestDrawerHistory shared time window', () => {
   });
 
   it('retains the last fulfilled window with its data after a failed refresh', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     vi.spyOn(ChartsAPI, 'getMetricsHistory')
       .mockResolvedValueOnce(response())
       .mockRejectedValueOnce(new Error('Private fixture detail'));
     mount();
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
-    const before = group('utilization').querySelector('path')!.getAttribute('d');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    const before = group('utilization')
+      .querySelector('path[data-history-series]')!
+      .getAttribute('d');
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
     await screen.findByText('History refresh failed. Showing previously loaded history.');
-    expect(group('utilization').querySelector('path')).toHaveAttribute('d', before);
+    expect(group('utilization').querySelector('path[data-history-series]')).toHaveAttribute(
+      'd',
+      before,
+    );
     expect(axis(group('utilization')).querySelector('time')).toHaveAttribute(
       'datetime',
       new Date(start).toISOString(),
@@ -141,7 +195,9 @@ describe('GuestDrawerHistory shared time window', () => {
       valueText,
     );
     expect(
-      Number(group('utilization').querySelector('circle[r="3"]')!.getAttribute('cx')),
+      Number(
+        group('utilization').querySelector('[data-history-hover-marker]')!.getAttribute('data-x'),
+      ),
     ).toBeCloseTo(expectedX(end - 5 * 60_000, start + shift, end + shift));
     expect(axis(group('utilization')).querySelectorAll('time')[1]).toHaveAttribute(
       'datetime',
@@ -168,7 +224,7 @@ describe('GuestDrawerHistory shared time window', () => {
     await waitFor(() =>
       expect(screen.queryAllByTestId('guest-history-time-window')).toHaveLength(0),
     );
-    expect(group('utilization').querySelectorAll('path')).toHaveLength(0);
+    expect(group('utilization').querySelectorAll('path[data-history-series]')).toHaveLength(0);
     finish(response({ range: '1h', start: end - hour }));
     await waitFor(() => expect(screen.getAllByTestId('guest-history-time-window')).toHaveLength(4));
     expect(pathXs(group('utilization'))[0]).toBeCloseTo(expectedX(end - 10 * 60_000, end - hour));
@@ -181,7 +237,7 @@ describe('GuestDrawerHistory shared time window', () => {
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(4),
     );
     expect(screen.queryByRole('slider')).toBeNull();
-    expect(document.querySelectorAll('path')).toHaveLength(0);
+    expect(document.querySelectorAll('path[data-history-series]')).toHaveLength(0);
     expect(screen.getAllByTestId('guest-history-time-window')).toHaveLength(4);
   });
 
@@ -197,8 +253,8 @@ describe('GuestDrawerHistory shared time window', () => {
       'datetime',
       new Date(end - hour).toISOString(),
     );
-    expect(selectSharedTime(group('utilization')).getAttribute('cx')).toBe(
-      selectSharedTime(group('network')).getAttribute('cx'),
+    expect(selectSharedTime(group('utilization')).getAttribute('data-x')).toBe(
+      selectSharedTime(group('network')).getAttribute('data-x'),
     );
   });
 

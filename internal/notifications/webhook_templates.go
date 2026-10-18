@@ -56,7 +56,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"embeds": [{
 					"title": "Resolved: {{.ResourceName | jsonString}}",
 					"description": "{{.Message | jsonString}}",
-					"color": 3066993,
+					"color": {{if .NotRecovered}}3447003{{else}}3066993{{end}},
 					"fields": [
 						{"name": "Resource", "value": "{{.ResourceName | jsonString}}", "inline": true},
 						{"name": "Node", "value": "{{.Node | jsonString}}", "inline": true},
@@ -82,7 +82,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID | jsonString}}",
-				"text": "*Pulse Alert: {{.Level | title | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | jsonString}}\n\n[View in Pulse]({{.Instance | jsonString}})",
+				"text": "*Pulse Alert: {{.Level | title | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | jsonString}}\n\n[View in Pulse]({{.AlertURL | jsonString}})",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
@@ -145,7 +145,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"elements": [
 							{
 								"type": "mrkdwn",
-								"text": "View in <{{.Instance | jsonString}}|Proxmox> | Alert Identifier: {{.ID | jsonString}}"
+								"text": "View in <{{.AlertURL | jsonString}}|Pulse> | Alert Identifier: {{.ID | jsonString}}"
 							}
 						]
 					}
@@ -231,17 +231,17 @@ func GetWebhookTemplates() []WebhookTemplate {
 				}],
 				"potentialAction": [{
 					"@type": "OpenUri",
-					"name": "View in Proxmox",
+					"name": "View in Pulse",
 					"targets": [{
 						"os": "default",
-						"uri": "{{.Instance | jsonString}}"
+						"uri": "{{.AlertURL | jsonString}}"
 					}]
 				}]
 			}`,
 			ResolvedPayloadTemplate: `{
 				"@type": "MessageCard",
 				"@context": "http://schema.org/extensions",
-				"themeColor": "2DC72D",
+				"themeColor": "{{if .NotRecovered}}0076D7{{else}}2DC72D{{end}}",
 				"summary": "Resolved: {{.ResourceName | jsonString}}",
 				{{if .Mention}}"text": "{{.Mention | jsonString}}",{{end}}
 				"sections": [{
@@ -292,10 +292,10 @@ func GetWebhookTemplates() []WebhookTemplate {
 					}
 				},
 				"client": "Pulse Monitoring",
-				"client_url": "{{.Instance | jsonString}}",
+				"client_url": "{{.AlertURL | jsonString}}",
 				"links": [{
-					"href": "{{.Instance | jsonString}}",
-					"text": "View in Proxmox"
+					"href": "{{.AlertURL | jsonString}}",
+					"text": "View in Pulse"
 				}]
 			}`,
 			ResolvedPayloadTemplate: `{
@@ -352,8 +352,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 						],
 						"actions": [{
 							"type": "Action.OpenUrl",
-							"title": "View in Proxmox",
-							"url": "{{.Instance | jsonString}}"
+							"title": "View in Pulse",
+							"url": "{{.AlertURL | jsonString}}"
 						}]
 					}
 				}]
@@ -372,7 +372,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 								"text": "Resolved: {{.ResourceName | jsonString}}",
 								"weight": "Bolder",
 								"size": "Large",
-								"color": "Good"
+								"color": "{{if .NotRecovered}}Accent{{else}}Good{{end}}"
 							},
 							{
 								"type": "TextBlock",
@@ -435,7 +435,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:      "POST",
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName | jsonString}}\n- **Node:** {{.Node | jsonString}}\n- **Type:** {{.Type | title | jsonString}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration | jsonString}}\n- **Alert Identifier:** {{.ID | jsonString}}\n\n[View in Pulse]({{.Instance | jsonString}})",
+				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName | jsonString}}\n- **Node:** {{.Node | jsonString}}\n- **Type:** {{.Type | title | jsonString}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration | jsonString}}\n- **Alert Identifier:** {{.ID | jsonString}}\n\n[View in Pulse]({{.AlertURL | jsonString}})",
 				"title": "{{.ResourceName | jsonString}} - {{.Type | title | jsonString}} {{.Level | upper | jsonString}} Alert",
 				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
 				"extras": {
@@ -500,7 +500,7 @@ Alert Details:
 - Duration: {{.Duration}}
 - Alert Identifier: {{.ID}}
 
-View in Pulse: {{.Instance}}`,
+View in Pulse: {{.AlertURL}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
@@ -516,12 +516,12 @@ View in Pulse: {{.Instance}}`,
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |\n\n[View in Pulse]({{.Instance | jsonString}})"
+				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |\n\n[View in Pulse]({{.AlertURL | jsonString}})"
 			}`,
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": "{{if .Mention}}{{.Mention | jsonString}}\n\n{{end}}:white_check_mark: **RESOLVED**\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Duration | {{.Duration | jsonString}} |\n| Resolved At | {{.ResolvedAt | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |"
+				"text": "{{if .Mention}}{{.Mention | jsonString}}\n\n{{end}}{{if .NotRecovered}}:arrow_right:{{else}}:white_check_mark:{{end}} **RESOLVED**\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Duration | {{.Duration | jsonString}} |\n| Resolved At | {{.ResolvedAt | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |"
 			}`,
 			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
 		},

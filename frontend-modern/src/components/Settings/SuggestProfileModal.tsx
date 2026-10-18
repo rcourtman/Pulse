@@ -19,6 +19,7 @@ import { FormTextarea } from '@/components/shared/FormTextarea';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS,
   formatAgentProfileSuggestionValue,
@@ -59,6 +60,7 @@ interface SettingPreviewItem {
 const createHistoryId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) => {
+  const now = useRelativeTimeNow();
   const [prompt, setPrompt] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -525,8 +527,8 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                       </div>
                       <div class="space-y-3">
                         <h5 class="text-sm font-medium text-base-content">Raw JSON</h5>
-                        <div class="bg-base rounded-md p-3 overflow-x-auto">
-                          <pre class="text-xs text-slate-300 font-mono">
+                        <div class="bg-page rounded-md p-3 overflow-x-auto">
+                          <pre class="text-xs text-base-content font-mono">
                             {JSON.stringify(sugg().config, null, 2)}
                           </pre>
                         </div>
@@ -572,7 +574,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 {item.suggestion.name}
                               </span>
                               <span class="text-xs text-muted">
-                                {formatRelativeTime(item.createdAt)}
+                                {formatRelativeTime(item.createdAt, { now: now() })}
                               </span>
                             </div>
                             <p class="text-xs text-muted mt-1 truncate" title={item.prompt}>

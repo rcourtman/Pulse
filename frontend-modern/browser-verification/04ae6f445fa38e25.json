@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "967e51701e215cba3522dbafa4b1b6ac8620d333",
+  "verified_at": "2026-10-05T00:14:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksAction.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadWebLinksState.ts",
+    "frontend-modern/src/components/Workloads/workloadGuestMetadataRecord.ts",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "72db08228690ba571a285771ef81b2ef9be308794da2ff1cd09be612efbbd29b",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksAction.tsx": "9b57f62cf0de2196918f8faf9791e227fabaf960ad2ec3aa4302325379955e30",
+    "frontend-modern/src/components/Workloads/WorkloadWebLinksDialog.tsx": "e779b8210c85326fda8bc37f7213384136766f93c80f06b6ac43eb8d0340f93c",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "42169c016a13fceb359fbd72b3284101769c27519aa749deb9c7a9fc72c12221",
+    "frontend-modern/src/components/Workloads/useWorkloadWebLinksState.ts": "8affd5f0798fa9c4af05cf1c763d1c3176200756a95e54294553f3b09969ac27",
+    "frontend-modern/src/components/Workloads/workloadGuestMetadataRecord.ts": "532af19b043255ebcc116faa3b2247ca828c552f2f00ad544e06a62524761099",
+    "frontend-modern/src/components/Workloads/workloadWebLinksModel.ts": "bab44fddeb88d842c60eddcbef834dcddc602e37a9e92af2a773ff3b3cca071a"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Follow-up to the bulk web-link editor: the CI bundle budget failed with WorkloadsSurface at 71.44 kB gzip against a 70.23 kB max (main was 68.80 kB). After moving the panel, its state and row model into a lazily loaded chunk, a local production build measured WorkloadsSurface at 69.13 kB and the new WorkloadWebLinksDialog chunk at 3.9 kB gzip; check-bundle-size reported no violations.",
+    "Private mock stack from this tree (backend :7701, Vite :5221, 31 Proxmox guests): Edit links opened the lazily loaded panel with all 31 rows and '7 of 31 in this view have a link', focus on the close button.",
+    "A draft typed into grafana-agent-01 survived Escape closing the panel; focus returned to the trigger, which showed (unsaved); reopening restored the draft; editing checkout-web-01 away and back to its saved value did not count as a change (footer stayed at 1 unsaved change).",
+    "Submitting saved grafana-agent-01 through PUT /api/guests/metadata, closed the panel, cleared the (unsaved) marker and the table row gained its link without reload.",
+    "Phone 375x812: full-width sheet, 44px inputs, no horizontal overflow; an invalid entry ('redis admin') showed the shared validator's message under its row with aria-invalid and focus. This is not physical-device, vSphere-estate or release acceptance."
+  ],
+  "interactions": [
+    "Clicked Edit links at 1280 and 375 widths; typed into inputs across live inventory ticks; pressed Escape; reopened; submitted the form.",
+    "Submitted an invalid link on phone width; the shared validator's error appeared under that row, aria-invalid was set and focus moved to the field."
+  ]
+}

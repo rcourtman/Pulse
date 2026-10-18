@@ -47,7 +47,7 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 	if !ok {
 		t.Fatal("network-endpoint scope was not recognized")
 	}
-	for _, required := range []string{PulseQueryToolName, PulseDiscoveryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
+	for _, required := range []string{PulseQueryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
 		if !slices.Contains(detection, required) {
 			t.Fatalf("detection surface missing %q: %v", required, detection)
 		}
@@ -60,5 +60,21 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 	}
 	if slices.Contains(detection, PatrolProposeActionToolName) {
 		t.Fatalf("detection surface gained investigation proposal authority: %v", detection)
+	}
+}
+
+func TestGuestInvestigationsCanReadCollectedBackupEvidence(t *testing.T) {
+	for _, kind := range []string{"vm", "system-container"} {
+		t.Run(kind, func(t *testing.T) {
+			names, ok := PatrolInvestigationToolNamesForResourceTypes([]string{kind})
+			if !ok || !slices.Contains(names, PulseStorageToolName) {
+				t.Fatalf("guest investigation lacks backup evidence: %v", names)
+			}
+			for _, name := range names {
+				if !IsPatrolInfrastructureEvidenceToolName(name) && name != PatrolActionCapabilitiesToolName && name != PatrolProposeActionToolName {
+					t.Fatalf("read projection gained action authority: %s", name)
+				}
+			}
+		})
 	}
 }

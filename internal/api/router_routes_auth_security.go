@@ -247,7 +247,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	}))
 
 	r.mux.HandleFunc("/api/security/tokens/relay-mobile", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsWriteScope(r.config, w, req) {
+		// The token minted here is bound to the request organization and carries
+		// only the relay mobile scope, so an org manager may issue it.
+		if !ensureOrgSettingsWriteScope(r.config, w, req) {
 			return
 		}
 		if req.Method != http.MethodPost {
@@ -710,13 +712,12 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		if router == nil {
 			return nil
 		}
-		previous := router.ssoConfig
-		router.ssoConfig = toCoreSSOConfig(snapshot)
-		if err := router.saveSSOConfig(); err != nil {
-			router.ssoConfig = previous
-			return err
-		}
-		return nil
+		// Publish the replacement only once it is persisted.
+		_, err := router.commitSSOConfig(func(cfg *config.SSOConfig) error {
+			*cfg = *toCoreSSOConfig(snapshot)
+			return nil
+		})
+		return err
 	}
 	runtime.GetPublicURL = func() string {
 		if router == nil || router.config == nil {

@@ -26,6 +26,29 @@ describe('CollapsibleSection', () => {
     expect(screen.getByText('Child content')).toBeInTheDocument();
   });
 
+  it('states the default limits in the collapsed header, except while disabled', () => {
+    const [disabled, setDisabled] = createSignal(false);
+    const { container } = render(() => (
+      <CollapsibleSection
+        id="guests"
+        title="VMs & Containers"
+        collapsed
+        defaultsSummary="Defaults: CPU 80% · Memory 85% · Disk 90%"
+        isGloballyDisabled={disabled()}
+      >
+        <p>Rows</p>
+      </CollapsibleSection>
+    ));
+
+    const summary = () => container.querySelector('[data-thresholds-defaults-summary]');
+    expect(summary()?.textContent).toBe('Defaults: CPU 80% · Memory 85% · Disk 90%');
+    expect(summary()?.closest('button')?.getAttribute('aria-expanded')).toBe('false');
+
+    setDisabled(true);
+    expect(summary()).toBeNull();
+    expect(screen.getByText(ALERT_THRESHOLDS_SECTION_DISABLED_LABEL)).toBeInTheDocument();
+  });
+
   it('uses default data-testid from id prop', () => {
     const { container } = render(() => (
       <CollapsibleSection id="vms" title="VMs">

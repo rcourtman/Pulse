@@ -37,17 +37,6 @@ export interface PatrolRunOperatorRecordPresentation {
   headline: string;
 }
 
-export interface PatrolActivityBreakdown {
-  totalRuns: number;
-  fullPatrols: number;
-  verificationChecks: number;
-  alertTriggeredRuns: number;
-  anomalyTriggeredRuns: number;
-  alertClearedRuns: number;
-  otherScopedRuns: number;
-  newFindings: number;
-}
-
 export type PatrolRunPrimaryActionPresentation = PatrolRuntimeActionPresentation;
 
 export const PATROL_FINDING_RECORD_UNAVAILABLE_LABEL = 'Finding record unavailable';
@@ -435,114 +424,6 @@ export function getPatrolTriggerStatusSummary(
   if (!status.anomaly_triggers_enabled) notes.push('anomalies off');
 
   return notes.length > 0 ? notes.join(' · ') : undefined;
-}
-
-function isSameLocalDay(timestamp: string | undefined, referenceDate: Date): boolean {
-  if (!timestamp) return false;
-  const value = new Date(timestamp);
-  if (Number.isNaN(value.getTime())) return false;
-  return (
-    value.getFullYear() === referenceDate.getFullYear() &&
-    value.getMonth() === referenceDate.getMonth() &&
-    value.getDate() === referenceDate.getDate()
-  );
-}
-
-export function getPatrolActivityBreakdown(
-  runs: PatrolRunRecord[],
-  referenceDate: Date = new Date(),
-): PatrolActivityBreakdown {
-  return runs.reduce<PatrolActivityBreakdown>(
-    (summary, run) => {
-      if (!isSameLocalDay(run.started_at, referenceDate)) {
-        return summary;
-      }
-
-      summary.totalRuns += 1;
-      summary.newFindings += Math.max(0, run.new_findings || 0);
-
-      if (isFullPatrolRunType(run.type)) {
-        summary.fullPatrols += 1;
-        return summary;
-      }
-
-      switch (normalizePatrolRunType(run.type)) {
-        case 'verification':
-          summary.verificationChecks += 1;
-          return summary;
-      }
-
-      switch (normalizePatrolRunType(run.trigger_reason)) {
-        case 'alert_fired':
-          summary.alertTriggeredRuns += 1;
-          break;
-        case 'anomaly':
-          summary.anomalyTriggeredRuns += 1;
-          break;
-        case 'alert_cleared':
-          summary.alertClearedRuns += 1;
-          break;
-        default:
-          summary.otherScopedRuns += 1;
-          break;
-      }
-
-      return summary;
-    },
-    {
-      totalRuns: 0,
-      fullPatrols: 0,
-      verificationChecks: 0,
-      alertTriggeredRuns: 0,
-      anomalyTriggeredRuns: 0,
-      alertClearedRuns: 0,
-      otherScopedRuns: 0,
-      newFindings: 0,
-    },
-  );
-}
-
-function formatCountLabel(count: number, singular: string, plural?: string): string {
-  return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
-}
-
-export function formatPatrolActivityBreakdown(summary: PatrolActivityBreakdown): string {
-  const segments: string[] = [];
-  if (summary.fullPatrols > 0) {
-    segments.push(formatCountLabel(summary.fullPatrols, 'full check', 'full checks'));
-  }
-  if (summary.alertTriggeredRuns > 0) {
-    segments.push(
-      formatCountLabel(
-        summary.alertTriggeredRuns,
-        'alert-triggered check',
-        'alert-triggered checks',
-      ),
-    );
-  }
-  if (summary.anomalyTriggeredRuns > 0) {
-    segments.push(
-      formatCountLabel(
-        summary.anomalyTriggeredRuns,
-        'anomaly-triggered check',
-        'anomaly-triggered checks',
-      ),
-    );
-  }
-  if (summary.alertClearedRuns > 0) {
-    segments.push(
-      formatCountLabel(summary.alertClearedRuns, 'alert-cleared check', 'alert-cleared checks'),
-    );
-  }
-  if (summary.verificationChecks > 0) {
-    segments.push(
-      formatCountLabel(summary.verificationChecks, 'follow-up check', 'follow-up checks'),
-    );
-  }
-  if (summary.otherScopedRuns > 0) {
-    segments.push(formatCountLabel(summary.otherScopedRuns, 'targeted check', 'targeted checks'));
-  }
-  return segments.join(', ');
 }
 
 export function getPatrolRunCoverageSummary(

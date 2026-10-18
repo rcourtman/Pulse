@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "f4d452bf698e0e4d63376da8704d096753a68380",
+  "verified_at": "2026-10-16T20:13:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/nodes.ts": "3f227e0f405207d8ed08f16f48cfc94518a809101edce790ea58fd5463c4e0c1",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "35fad7b3be1afa4a885a005ff883740049664897f7fb6b68428a1f7e55dab385",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "8244931621e7538d92a6010390a623e239451f0fb1cfca9216512d02aa708e4f"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Existing PVE connection with saved credentials and SSL settings",
+    "Edited fingerprint with SSL verification enabled",
+    "SSL verification disabled and saved fingerprint cleared",
+    "Pending probe with disabled Test connection control",
+    "Probe success and probe failure with unsaved fields retained",
+    "Replacement credentials using the provided-configuration probe",
+    "Cancel, reopen and reload restore saved SSL settings",
+    "Delete confirmation with the longer action label",
+    "Guided and manual add-node footer states"
+  ],
+  "interactions": [
+    "Open Manage, edit fingerprint, hover and focus Test connection, then test without saving",
+    "Assert retained-credential requests contain the current verifySSL and fingerprint values, including false and empty string",
+    "Repeat pending, success and error probes, then verify failure keeps draft inputs",
+    "Cancel and reopen, test unchanged settings, replace credentials and test through the provided-configuration endpoint",
+    "Dismiss with Escape and verify focus returns to Manage, then reload and confirm no updates were saved",
+    "Scroll to the footer and inspect all action bounds at each viewport, including delete confirmation",
+    "Dismiss by outside click on desktop, then exercise guided and manual setup footers without creating or deleting a connection",
+    "Inspect actual screenshots for input focus, pending, error, replacement success, persisted settings and shared footer placement"
+  ],
+  "browsers": [
+    "Chromium"
+  ],
+  "limitations": [
+    "Browser requests use deterministic connection fixtures. Real TLS and retained credentials for PVE, PBS and PMG are independently covered by backend integration regressions."
+  ]
+}

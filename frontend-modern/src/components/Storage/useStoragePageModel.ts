@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   SUMMARY_TIME_RANGE_LABEL,
@@ -11,13 +11,6 @@ import {
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
-import {
-  isSummarySeriesInGroupScope,
-  type SummarySeriesGroupScope,
-} from '@/components/shared/summaryCardInteraction';
-import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
-import { areSearchParamsEquivalent } from '@/utils/searchParams';
-import { parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { useStorageExpansionState } from './useStorageExpansionState';
 import { useStorageFilterState } from './useStorageFilterState';
 import { useStoragePageData } from './useStoragePageData';
@@ -31,28 +24,20 @@ import {
   DEFAULT_STORAGE_SOURCE_FILTER,
   DEFAULT_STORAGE_DISK_GROUP_FILTER,
   DEFAULT_STORAGE_DISK_ROLE_FILTER,
-  isStorageRecordCeph,
 } from './storagePageState';
-import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
 
 type UseStoragePageModelOptions = {
   forcedSourceFilter?: () => string | undefined;
   resourceSource?: StoragePageResourceSource;
+  // False while a platform page keeps Storage mounted behind another tab.
+  routeActive?: () => boolean;
 };
 
 export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const routeStateNavigate = createRouteStateNavigateScheduler(
-    navigate,
-    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
-  );
   const kioskMode = useKioskMode();
   const [hoveredStorageRowId, setHoveredStorageResourceId] = createSignal<string | null>(null);
-  const [hoveredStorageGroupScope, setHoveredStorageGroupScope] =
-    createSignal<SummarySeriesGroupScope | null>(null);
-  const [selectedStorageGroupId, setSelectedStorageGroupIdRaw] = createSignal<string | null>(null);
-  const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
   // Growth column on the storage table is anchored to a 24h window. The
   // standalone summary chart that let operators retune the range was
@@ -66,6 +51,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     storageResources,
     nodes,
     physicalDisks,
+    getDiskAlertResourceIds,
     cephResources,
     alertsEnabled,
   } = useStoragePageResources({ resourceSource: options.resourceSource });
@@ -158,15 +144,12 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     void storageResources.refetch();
     reconnect();
   };
-  const {
-    expandedGroups,
-    expandedPoolId,
-    setExpandedPoolId: setExpandedPoolIdRaw,
-    toggleGroup,
-  } = useStorageExpansionState({
-    groupedKeys: () => groupedRecords().map((group) => group.key),
-    view,
-  });
+  const { expandedGroups, expandedPoolId, setExpandedPoolId, toggleGroup } =
+    useStorageExpansionState({
+      groupBy,
+      groupedKeys: () => groupedRecords().map((group) => group.key),
+      view,
+    });
   const storageRecordMetricIds = createMemo(() => {
     const ids = new Map<string, string>();
     for (const record of records()) {
@@ -208,52 +191,9 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     }
     return keys;
   });
-  const physicalDiskSeriesIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const disk of physicalDisks()) {
-      ids.add(resolvePhysicalDiskMetricResourceId(disk));
-    }
-    return ids;
-  });
-  const storageSummaryGroupScopes = createMemo<Map<string, SummarySeriesGroupScope>>(() => {
-    if (view() !== 'pools' || groupBy() === 'none') {
-      return new Map<string, SummarySeriesGroupScope>();
-    }
-    return buildStorageSummaryGroupScopeMap(groupedRecords(), groupBy());
-  });
-  const focusedStorageGroupScope = createMemo<SummarySeriesGroupScope | null>(() => {
-    const groupId = selectedStorageGroupId();
-    if (!groupId) {
-      return null;
-    }
-    return storageSummaryGroupScopes().get(groupId) ?? null;
-  });
-
-  const scheduleStorageSummaryGroupPath = (summaryGroupId: string | null) => {
-    const currentParams = new URLSearchParams(location.search);
-    const nextParams = new URLSearchParams(location.search);
-    nextParams.delete(STORAGE_QUERY_PARAMS.summaryGroup);
-    const normalizedSummaryGroupId = summaryGroupId?.trim() || '';
-    if (normalizedSummaryGroupId) {
-      nextParams.set(STORAGE_QUERY_PARAMS.summaryGroup, normalizedSummaryGroupId);
-    }
-    if (areSearchParamsEquivalent(currentParams, nextParams)) {
-      return;
-    }
-    const nextSearch = nextParams.toString();
-    const nextPath = nextSearch ? `${location.pathname}?${nextSearch}` : location.pathname;
-    routeStateNavigate.schedule(nextPath);
-  };
-
-  const clearFocusedStorageGroup = () => {
-    setSelectedStorageGroupIdRaw(null);
-    scheduleStorageSummaryGroupPath(null);
-  };
-
   const clearPinnedSummaryScope = () => {
-    setExpandedPoolIdRaw(null);
+    setExpandedPoolId(null);
     setSelectedDiskId(null);
-    clearFocusedStorageGroup();
   };
   const clearStorageFilters = () => {
     setSearch('');
@@ -268,91 +208,9 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     clearStorageFilters();
   };
 
-  const setExpandedPoolId = (
-    value: string | null | ((current: string | null) => string | null),
-  ) => {
-    const nextValue = typeof value === 'function' ? value(expandedPoolId()) : value;
-    const focusedScope = focusedStorageGroupScope();
-    const nextResourceId =
-      nextValue && storageRecordMetricIds().get(nextValue)
-        ? storageRecordMetricIds().get(nextValue)!
-        : null;
-    if (
-      focusedScope &&
-      nextResourceId &&
-      !isSummarySeriesInGroupScope(focusedScope, nextResourceId)
-    ) {
-      clearFocusedStorageGroup();
-    }
-    setExpandedPoolIdRaw(nextValue);
-  };
-
-  const setFocusedStorageGroupScope = (scope: SummarySeriesGroupScope | null) => {
-    const nextGroupId = scope?.id ?? null;
-    setSelectedStorageGroupIdRaw(nextGroupId);
-    if (scope && !isSummarySeriesInGroupScope(scope, focusedStorageResourceId())) {
-      setExpandedPoolIdRaw(null);
-    }
-    scheduleStorageSummaryGroupPath(nextGroupId);
-  };
-
   createEffect(() => {
     view();
     setHoveredStorageResourceId(null);
-    if (view() !== 'pools') {
-      setHoveredStorageGroupScope(null);
-      if (selectedStorageGroupId()) {
-        setFocusedStorageGroupScope(null);
-      }
-    }
-  });
-
-  createEffect(() => {
-    const { summaryGroup } = parseStorageLinkSearch(location.search);
-    if (!summaryGroup) {
-      if (handledSummaryGroupId() === null) {
-        return;
-      }
-      setSelectedStorageGroupIdRaw(null);
-      setHandledSummaryGroupId(null);
-      return;
-    }
-    if (summaryGroup === handledSummaryGroupId()) {
-      return;
-    }
-    setSelectedStorageGroupIdRaw(summaryGroup);
-    setHandledSummaryGroupId(summaryGroup);
-  });
-
-  createEffect(() => {
-    const hoveredGroup = hoveredStorageGroupScope();
-    if (!hoveredGroup) {
-      return;
-    }
-    if (!storageSummaryGroupScopes().has(hoveredGroup.id)) {
-      setHoveredStorageGroupScope(null);
-    }
-  });
-
-  createEffect(() => {
-    const selectedGroupId = selectedStorageGroupId();
-    if (!selectedGroupId) {
-      return;
-    }
-    if (!focusedStorageGroupScope()) {
-      setFocusedStorageGroupScope(null);
-    }
-  });
-
-  createEffect(() => {
-    const focusedScope = focusedStorageGroupScope();
-    const focusedResourceId = focusedStorageResourceId();
-    if (!focusedScope || !focusedResourceId) {
-      return;
-    }
-    if (!isSummarySeriesInGroupScope(focusedScope, focusedResourceId)) {
-      clearFocusedStorageGroup();
-    }
   });
 
   const {
@@ -396,44 +254,29 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     locationSearch: () => location.search,
     navigate,
     records,
-    isStorageRecordCeph,
+    expandedPoolId,
     setExpandedPoolId,
+    active: options.routeActive,
   });
   const summaryInteraction = useSummaryPageInteractionState({
     clearPinnedScope: clearPinnedSummaryScope,
-    hoveredGroupScope: hoveredStorageGroupScope,
     hoveredSeriesId: hoveredStorageResourceId,
-    focusedGroupScope: focusedStorageGroupScope,
-    focusedGroupId: selectedStorageGroupId,
     focusedSeriesId: focusedStorageResourceId,
     onEscapeClear: clearAllPageStateOnEscape,
     revealActiveSeries: (seriesId) => {
-      if (physicalDiskSeriesIds().has(seriesId)) {
-        if (view() !== 'disks') {
-          setView('disks');
-        }
-        return;
-      }
-
-      const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
-      if (!groupKey) {
-        return;
-      }
+      // Focus only ever names a row in the active view, so reveal never
+      // switches views; it reopens a focused pool's collapsed group.
       if (view() !== 'pools') {
-        setView('pools');
+        return;
       }
-      if (!expandedGroups().has(groupKey)) {
+      const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
+      if (groupKey && !expandedGroups().has(groupKey)) {
         toggleGroup(groupKey);
       }
     },
   });
 
-  onCleanup(() => {
-    routeStateNavigate.cleanup();
-  });
-
   return {
-    activeSummaryStorageGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryStorageResourceId: summaryInteraction.activeSeriesId,
     clearPinnedSummaryScope,
     kioskMode,
@@ -471,6 +314,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     initialDataReceived: surfaceInitialDataReceived,
     nodeOptions,
     physicalDisks,
+    getDiskAlertResourceIds,
     nodes,
     groupedRecords,
     expandedGroups,
@@ -482,13 +326,8 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     getRecordAlertState,
     hoveredStorageResourceId,
     isLoadingPools,
-    focusedSummaryStorageGroupScope: focusedStorageGroupScope,
-    focusedSummaryStorageGroupId: selectedStorageGroupId,
-    hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,
     selectedDiskId,
     setClearSurfaceRootRef: summaryInteraction.setClearSurfaceRootRef,
-    setFocusedStorageGroupScope,
-    setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,

@@ -2,7 +2,6 @@ import type {
   Node,
   VM,
   Container,
-  PBSInstance,
   Agent,
   DockerRuntime,
   DockerContainer,
@@ -23,16 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
   running: 'Running',
   stopped: 'Stopped',
 };
-
-export const STATUS_SORT_ORDER = [
-  'online',
-  'degraded',
-  'paused',
-  'offline',
-  'stopped',
-  'unknown',
-  'running',
-] as const;
 
 const normalize = (value?: string | null): string => (value || '').trim().toLowerCase();
 
@@ -177,29 +166,6 @@ export function getNodeStatusIndicator(node: Partial<Node> | undefined | null): 
 
   if (isNodeOnline(node)) {
     return { variant: 'success', label: 'Online' };
-  }
-
-  return defaultIndicator;
-}
-
-export function getPBSStatusIndicator(
-  instance: Partial<PBSInstance> | undefined | null,
-): StatusIndicator {
-  if (!instance) return defaultIndicator;
-
-  const connection = normalize(instance.connectionHealth);
-  const status = normalize(instance.status);
-
-  if (OFFLINE_HEALTH_STATUSES.has(connection) || OFFLINE_HEALTH_STATUSES.has(status)) {
-    return { variant: 'danger', label: formatStatusLabel(connection || status, 'Offline') };
-  }
-
-  if (status === 'healthy' || status === ONLINE_STATUS) {
-    return { variant: 'success', label: formatStatusLabel(status, 'Online') };
-  }
-
-  if (DEGRADED_HEALTH_STATUSES.has(connection) || DEGRADED_HEALTH_STATUSES.has(status)) {
-    return { variant: 'warning', label: formatStatusLabel(connection || status, 'Degraded') };
   }
 
   return defaultIndicator;

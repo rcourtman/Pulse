@@ -31,7 +31,7 @@ func TestEvaluateResourceHealthPrecedenceAndVerdicts(t *testing.T) {
 		},
 		{
 			name:     "confirmed availability failure is critical",
-			resource: Resource{ID: "check-1", Type: ResourceTypeNetworkEndpoint, Status: StatusOnline, Availability: &AvailabilityData{Enabled: true, Available: false, ConsecutiveFailures: 3, FailureThreshold: 3}},
+			resource: Resource{ID: "check-1", Type: ResourceTypeNetworkEndpoint, Status: StatusOnline, Availability: &AvailabilityData{Enabled: true, Available: false, LastChecked: &now, ConsecutiveFailures: 3, FailureThreshold: 3}},
 			want:     HealthCritical, code: "availability_failed",
 		},
 		{

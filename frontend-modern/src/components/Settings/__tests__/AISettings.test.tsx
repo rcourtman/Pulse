@@ -6,19 +6,13 @@ import { PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
 import { aiChatStore } from '@/stores/aiChat';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
-import {
-  AIAssistantSettings,
-  AIDiscoverySettings,
-  AISettings,
-  AIPatrolSettings,
-} from '../AISettings';
+import { AIAssistantSettings, AISettings, AIPatrolSettings } from '../AISettings';
 
 const getSettingsMock = vi.fn();
 const updateSettingsMock = vi.fn();
 const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
-const runDiscoveryRefreshMock = vi.fn();
 const runPatrolModelReadinessMock = vi.fn();
 const getPatrolCostPreviewMock = vi.fn();
 const getPatrolModelGuidanceMock = vi.fn();
@@ -37,6 +31,8 @@ const loadCommercialPostureMock = vi.fn();
 const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
+const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
+const getRuntimeCapabilityBlockMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -53,10 +49,6 @@ vi.mock('@/api/aiChat', () => ({
     listSessions: (...args: unknown[]) => listSessionsMock(...args),
     summarizeSession: (...args: unknown[]) => summarizeSessionMock(...args),
   },
-}));
-
-vi.mock('@/api/discovery', () => ({
-  runDiscoveryRefresh: (...args: unknown[]) => runDiscoveryRefreshMock(...args),
 }));
 
 vi.mock('@/api/patrol', () => ({
@@ -95,7 +87,7 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  getRuntimeCapabilityBlock: () => undefined,
+  getRuntimeCapabilityBlock: (...args: unknown[]) => getRuntimeCapabilityBlockMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   runtimeCapabilities: () => ({ capabilities: [], runtime: undefined }),
 }));
@@ -110,7 +102,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesCommercialSurfaces: () => false,
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
@@ -132,7 +124,7 @@ const baseSettings = (): AISettingsType => ({
   configured_providers: [],
 });
 
-type AISettingsTestPage = 'provider' | 'patrol' | 'assistant' | 'discovery';
+type AISettingsTestPage = 'provider' | 'patrol' | 'assistant';
 
 const getTestComponent = (page: AISettingsTestPage) => {
   switch (page) {
@@ -140,8 +132,6 @@ const getTestComponent = (page: AISettingsTestPage) => {
       return AIPatrolSettings;
     case 'assistant':
       return AIAssistantSettings;
-    case 'discovery':
-      return AIDiscoverySettings;
     default:
       return AISettings;
   }
@@ -162,7 +152,6 @@ const resetAllMocks = () => {
   getModelsMock.mockReset();
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
-  runDiscoveryRefreshMock.mockReset();
   runPatrolModelReadinessMock.mockReset();
   getPatrolCostPreviewMock.mockReset();
   getPatrolModelGuidanceMock.mockReset();
@@ -181,6 +170,8 @@ const resetAllMocks = () => {
   commercialPostureMock.mockReset();
   entitlementsMock.mockReset();
   presentationPolicyHidesUpgradePromptsMock.mockReset();
+  presentationPolicyHidesCommercialSurfacesMock.mockReset();
+  getRuntimeCapabilityBlockMock.mockReset();
 };
 
 const setupDefaultMocks = () => {
@@ -198,20 +189,12 @@ const setupDefaultMocks = () => {
     message: 'OpenRouter reachable',
     provider: 'openrouter',
   });
-  runDiscoveryRefreshMock.mockResolvedValue({
-    mode: 'manual',
-    fingerprint_count: 1,
-    changed_count: 1,
-    stale_count: 0,
-    candidate_count: 1,
-    discovered_count: 1,
-    failed_count: 0,
-    last_run: '2026-05-15T12:00:00Z',
-  });
   fetchAgentCapabilitiesManifestMock.mockResolvedValue(null);
   listSessionsMock.mockResolvedValue([]);
   summarizeSessionMock.mockResolvedValue(undefined);
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
+  presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+  getRuntimeCapabilityBlockMock.mockReturnValue(undefined);
 };
 
 describe('AISettings model loading error states', () => {
@@ -238,14 +221,14 @@ describe('AISettings model loading error states', () => {
 
     expect(await screen.findByText('Assistant chat actions')).toBeInTheDocument();
     expect(
-      screen.getByText('This controls actions started from Assistant chat only', { exact: false }),
+      screen.getByText('This sets what Assistant chat may plan', { exact: false }),
     ).toBeInTheDocument();
     const chatActionMode = screen.getByLabelText('Chat action mode');
     expect(chatActionMode).toBeInTheDocument();
     expect(chatActionMode).toHaveClass('w-full', 'min-w-0', 'sm:flex-1');
     expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
     expect(
-      screen.getByText('Assistant asks before chat-only actions.', { exact: false }),
+      screen.getByText('Assistant can plan infrastructure actions', { exact: false }),
     ).toHaveClass('sm:ml-30');
     expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
@@ -265,6 +248,39 @@ describe('AISettings model loading error states', () => {
       'href',
       PULSE_MCP_TOKEN_SETUP_PATH,
     );
+  });
+
+  it('points Assistant protection at the per-guest lock and never sends a protected guests list', async () => {
+    // An older backend may still echo the retired list; it must not surface or round-trip.
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      control_level: 'controlled',
+      protected_guests: ['101', 'prod-db'],
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      ...payload,
+    }));
+
+    renderComponent('assistant');
+
+    const hint = await screen.findByTestId('ai-never-auto-remediate-hint');
+    expect(hint).toHaveTextContent('Never auto-remediate');
+    expect(screen.queryByLabelText(/Protected guests/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('101, prod-db')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Chat action mode'), { target: { value: 'read_only' } });
+    expect(screen.queryByTestId('ai-never-auto-remediate-hint')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
   });
 
   it('keeps Provider & Models focused on provider setup and runtime cost controls', async () => {
@@ -350,6 +366,132 @@ describe('AISettings model loading error states', () => {
     expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
   });
 
+  describe('container update risk lock', () => {
+    const lockedPatrolSettings = () => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      // The backend masks this to false when the install lacks ai_alerts.
+      alert_triggered_analysis: false,
+    });
+    const containerRiskToggle = () =>
+      screen.getByLabelText('Enable container update risk analysis');
+    const lockExplanation = () => {
+      const describedBy = containerRiskToggle().getAttribute('aria-describedby');
+      expect(describedBy).toBeTruthy();
+      return document.getElementById(describedBy!)!;
+    };
+
+    it('explains a plan lock without an upgrade link on a free install', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        "Higher license plan required. This install's plan does not include container update risk.",
+      );
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Plans & Billing' })).toBeNull();
+    });
+
+    it('links Plans & Billing when upgrade prompts are allowed', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      const link = within(lockExplanation()).getByRole('link', { name: 'Plans & Billing' });
+      expect(link).toHaveAttribute('href', 'https://example.com/upgrade');
+    });
+
+    it('drops plan and Pro wording when commercial surfaces are hidden', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        'Not available. This install does not include container update risk.',
+      );
+      expect(lockExplanation().textContent).not.toMatch(/plan|Pro\b/i);
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+    });
+
+    it('points a licensed community runtime at the Pro runtime download', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_alerts'
+          ? {
+              key: 'ai_alerts',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(lockExplanation()).toHaveTextContent(
+        'Pulse Pro runtime required. This install is running this runtime. Install the Pulse Pro runtime to use container update risk.',
+      );
+      expect(
+        within(lockExplanation()).getByRole('link', { name: 'Open Pro downloads' }),
+      ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+    });
+
+    it('keeps Pro runtime wording out when commercial surfaces are hidden', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_alerts'
+          ? {
+              key: 'ai_alerts',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        'Not available. This install does not include container update risk.',
+      );
+      expect(lockExplanation().textContent).not.toMatch(/\bPro\b|runtime|plan/i);
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+    });
+
+    it('shows no lock explanation when the install includes the feature', async () => {
+      getSettingsMock.mockResolvedValue({
+        ...lockedPatrolSettings(),
+        alert_triggered_analysis: true,
+      });
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeEnabled();
+      expect(containerRiskToggle()).not.toHaveAttribute('aria-describedby');
+      expect(screen.queryByText(/Higher license plan required/)).toBeNull();
+    });
+  });
+
   it('saves Patrol trigger settings from Pulse Intelligence Patrol settings', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
@@ -391,6 +533,146 @@ describe('AISettings model loading error states', () => {
     await waitFor(() => {
       expect(notificationSuccessMock).toHaveBeenCalledWith('Patrol settings saved');
     });
+  });
+
+  it('shows the alert severity selector only while alert triggers are on and writes it on Save', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      patrol_alert_triggers_enabled: false,
+      patrol_alert_trigger_min_severity: 'critical',
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      ...payload,
+    }));
+
+    renderComponent('patrol');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('180');
+    });
+    const alertToggle = screen.getByLabelText('Enable alert-triggered Patrols');
+    expect(alertToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+
+    fireEvent.click(alertToggle);
+    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+      target: { value: 'warning' },
+    });
+    fireEvent.click(alertToggle);
+    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+    fireEvent.click(alertToggle);
+    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(updateSettingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patrol_alert_triggers_enabled: true,
+        patrol_alert_trigger_min_severity: 'warning',
+      }),
+    );
+  });
+
+  it('keeps an unsaved alert severity edit in the form when the Patrol save is rejected', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      patrol_alert_triggers_enabled: true,
+      patrol_alert_trigger_min_severity: 'critical',
+    });
+    updateSettingsMock
+      .mockRejectedValueOnce(new Error('Settings store unavailable'))
+      .mockImplementation(async (payload: Record<string, unknown>) => ({
+        ...baseSettings(),
+        enabled: true,
+        configured: true,
+        patrol_interval_minutes: 360,
+        patrol_alert_triggers_enabled: true,
+        patrol_alert_trigger_min_severity: 'critical',
+        ...payload,
+      }));
+
+    renderComponent('patrol');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('180');
+    });
+    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+      target: { value: 'warning' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('Settings store unavailable'),
+      );
+    });
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(2);
+    });
+    expect(updateSettingsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ patrol_alert_trigger_min_severity: 'warning' }),
+    );
+    await waitFor(() => {
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Patrol settings saved');
+    });
+    // The form reloads from the saved response, so an unchanged severity is
+    // not sent again.
+    expect(screen.getByLabelText('Schedule')).toHaveValue('360');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(3);
+    });
+    expect(updateSettingsMock.mock.calls[2][0]).not.toHaveProperty(
+      'patrol_alert_trigger_min_severity',
+    );
+  });
+
+  it('names each Patrol trigger toggle with an accessible name containing its visible label', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_alert_triggers_enabled: true,
+      patrol_finding_notifications_enabled: true,
+    });
+
+    renderComponent('patrol');
+
+    await screen.findByLabelText('Enable alert-triggered Patrols');
+    for (const visibleLabel of [
+      'Alert-triggered Patrols',
+      'Anomaly-triggered Patrols',
+      'Container update risk',
+      'Finding notifications',
+    ]) {
+      const row = screen.getByText(visibleLabel).parentElement?.parentElement;
+      expect(row, visibleLabel).toBeTruthy();
+      const escaped = visibleLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      expect(
+        within(row as HTMLElement).getByRole('button', { name: new RegExp(escaped, 'i') }),
+      ).toHaveAttribute('aria-pressed');
+    }
   });
 
   it('shows inline warning when getModels throws a network error', async () => {
@@ -611,7 +893,7 @@ describe('AISettings model loading error states', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
+  it('presents an existing autonomous preference as Ask first even without upgrade prompts', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     getSettingsMock.mockResolvedValue({
@@ -625,8 +907,65 @@ describe('AISettings model loading error states', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole('option', { name: /Allow chat-only actions/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Chat action mode')).toHaveValue('controlled');
     expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
+  });
+});
+
+describe('Assistant saved-control compatibility', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each(['autonomous', 'suggest', 'controlled', 'read_only', 'unknown'])(
+    'does not rewrite the saved %s preference on an unrelated save',
+    async (level) => {
+      const saved = {
+        ...baseSettings(),
+        control_level: level,
+        patrol_autonomy_level: 'full',
+      };
+      getSettingsMock.mockResolvedValue(saved);
+      updateSettingsMock.mockResolvedValue(saved);
+      renderComponent('assistant');
+      const mode = await screen.findByLabelText('Chat action mode');
+      await waitFor(() =>
+        expect(mode).toHaveValue(
+          ['autonomous', 'suggest', 'controlled'].includes(level) ? 'controlled' : 'read_only',
+        ),
+      );
+      expect(within(mode).getAllByRole('option')).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+      await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('control_level');
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
+    },
+  );
+
+  it('explicitly opts out of legacy action planning without changing Patrol', async () => {
+    const saved = { ...baseSettings(), control_level: 'autonomous' };
+    getSettingsMock.mockResolvedValue(saved);
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...saved,
+      ...payload,
+    }));
+    renderComponent('assistant');
+    const mode = await screen.findByLabelText('Chat action mode');
+    await waitFor(() => expect(mode).toHaveValue('controlled'));
+    fireEvent.change(mode, { target: { value: 'read_only' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+    expect(updateSettingsMock.mock.calls[0][0]).toHaveProperty('control_level', 'read_only');
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
   });
 });
 
@@ -686,143 +1025,6 @@ describe('AISettings load failure error state', () => {
 
     // Verify retry actually called getSettings again
     expect(getSettingsMock).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('AISettings service context persistence', () => {
-  beforeEach(() => {
-    resetAllMocks();
-    setupDefaultMocks();
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('saves service context enablement and scan interval as an explicit pair', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 24,
-    });
-    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
-      ...baseSettings(),
-      discovery_enabled: payload.discovery_enabled as boolean,
-      discovery_interval_hours: payload.discovery_interval_hours as number,
-    }));
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Service Context Auto 24h/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Auto 24h/i }));
-    const intervalSelect = screen.getByLabelText('Scan Interval');
-    expect(intervalSelect).toHaveValue('24');
-
-    fireEvent.change(intervalSelect, {
-      target: { value: '6' },
-    });
-    expect(intervalSelect).toHaveValue('6');
-
-    fireEvent.click(screen.getByRole('button', { name: /Save service context settings/i }));
-
-    await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          discovery_enabled: true,
-          discovery_interval_hours: 6,
-        }),
-      );
-    });
-  });
-
-  it('runs a manual service context refresh from settings', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 0,
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Service Context Manual only/i }),
-      ).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: 1 workload refreshed.',
-      );
-    });
-  });
-
-  it('keeps the manual discovery refresh visible when recurring discovery is off', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: false,
-      discovery_interval_hours: 0,
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Service Context Off/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Off/i }));
-
-    expect(screen.queryByLabelText('Scan Interval')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Runs one service context scan without changing the schedule.'),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: 1 workload refreshed.',
-      );
-    });
-  });
-
-  it('reports when a manual discovery refresh has no pending work', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 0,
-    });
-    runDiscoveryRefreshMock.mockResolvedValue({
-      mode: 'manual',
-      fingerprint_count: 1,
-      changed_count: 0,
-      stale_count: 0,
-      candidate_count: 0,
-      discovered_count: 0,
-      failed_count: 0,
-      last_run: '2026-05-15T12:00:00Z',
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Service Context Manual only/i }),
-      ).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(notificationInfoMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: no new, changed, stale, or repairable workloads.',
-      );
-    });
   });
 });
 
@@ -1543,7 +1745,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
@@ -1568,7 +1770,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
@@ -1595,7 +1797,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
     expect(

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -474,6 +475,17 @@ func (s *IncidentStore) RecordAlertUnacknowledged(alert *alerts.Alert, user stri
 	s.saveAsync()
 }
 
+// alertResolvedEventSummary is the timeline line for an alert's close: the
+// handover account when it closed without recovering, else "Alert resolved".
+func alertResolvedEventSummary(alert *alerts.Alert) string {
+	if alert != nil {
+		if summary := alert.Resolution.Summary(); summary != "" {
+			return summary
+		}
+	}
+	return "Alert resolved"
+}
+
 // RecordAlertResolved records a resolved event and closes the incident.
 func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time.Time) {
 	if alert == nil {
@@ -507,7 +519,7 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 	shell.OccurrenceClosedAt = cloneTime(resolvedAt)
 
 	if !s.projectsFromCanonicalLocked() {
-		s.addEventAtLocked(shell, IncidentEventAlertResolved, resolvedAt, "Alert resolved", map[string]interface{}{
+		s.addEventAtLocked(shell, IncidentEventAlertResolved, resolvedAt, alertResolvedEventSummary(alert), map[string]interface{}{
 			"resolved_at": resolvedAt.Format(time.RFC3339),
 		})
 	}
@@ -522,8 +534,25 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 // canonical events exist, QueryIncidents replaces these snapshot-derived
 // lifecycle breadcrumbs with the durable projection.
 func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) *Incident {
-	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
+	if !s.materializeAlertOccurrence(alert, resolvedAt) {
 		return nil
+	}
+	return s.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+}
+
+// MaterializeAlertOccurrence repairs the same snapshot-derived occurrence as
+// EnsureAlertOccurrence without reading its projected timeline. Lifecycle
+// replay writes canonical changes separately and discards the returned
+// timeline, so hydrating it for every imported snapshot only adds history
+// reads and copies. Callers serving a timeline must use EnsureAlertOccurrence
+// or QueryIncidents, retaining canonical evidence and read-error semantics.
+func (s *IncidentStore) MaterializeAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) {
+	s.materializeAlertOccurrence(alert, resolvedAt)
+}
+
+func (s *IncidentStore) materializeAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) bool {
+	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
+		return false
 	}
 
 	s.mu.Lock()
@@ -563,7 +592,7 @@ func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *t
 	if resolvedAt != nil && !resolvedAt.IsZero() && (shell.OccurrenceRefiredAt == nil || !resolvedAt.Before(*shell.OccurrenceRefiredAt)) {
 		shell.OccurrenceClosedAt = cloneTime(*resolvedAt)
 		if !hasIncidentEventType(shell.Events, IncidentEventAlertResolved) {
-			s.addEventAtLocked(shell, IncidentEventAlertResolved, *resolvedAt, "Alert resolved", map[string]interface{}{
+			s.addEventAtLocked(shell, IncidentEventAlertResolved, *resolvedAt, alertResolvedEventSummary(alert), map[string]interface{}{
 				"resolved_at":       resolvedAt.Format(time.RFC3339),
 				"projection_source": incidentSnapshotSource,
 			})
@@ -577,7 +606,7 @@ func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *t
 	}
 	s.mu.Unlock()
 
-	return s.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+	return true
 }
 
 // RecordAnalysis adds an AI analysis event to the incident for an alert.
@@ -1113,6 +1142,13 @@ func incidentEventSummaryFromChange(change unifiedresources.ResourceChange, even
 	case IncidentEventAlertUnsnoozed:
 		return "Alert notifications resumed"
 	case IncidentEventAlertResolved:
+		// A handover closes the alert without recovering; its change reason
+		// says so and where the condition went.
+		if _, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertResolution); ok {
+			if reason := strings.TrimSpace(change.Reason); reason != "" {
+				return reason
+			}
+		}
 		return "Alert resolved"
 	default:
 		if summary := strings.TrimSpace(change.Reason); summary != "" {
@@ -1729,18 +1765,16 @@ func cloneTime(value time.Time) *time.Time {
 	return &cloned
 }
 
-var incidentCounter int64
-
+// IDs are opaque persisted references. Store-local locks cannot protect a
+// process-wide counter across tenant monitors, and a wrapping counter can
+// collide within a burst or after a restart. Random UUIDs need no shared state
+// and leave previously persisted IDs usable without a migration.
 func generateIncidentID() string {
-	incidentCounter++
-	return "inc-" + time.Now().Format("20060102150405") + "-" + intToString(int(incidentCounter%1000))
+	return "inc-" + uuid.NewString()
 }
 
-var incidentEventCounter int64
-
 func generateIncidentEventID() string {
-	incidentEventCounter++
-	return "inc-evt-" + time.Now().Format("20060102150405") + "-" + intToString(int(incidentEventCounter%1000))
+	return "inc-evt-" + uuid.NewString()
 }
 
 func formatAlertSummary(alert *alerts.Alert) string {

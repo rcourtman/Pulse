@@ -5,7 +5,10 @@ import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
-import type { GuestDrawerHistoryTarget } from '../guestDrawerModel';
+import {
+  buildGuestDrawerHistoryBandPath,
+  type GuestDrawerHistoryTarget,
+} from '../guestDrawerModel';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
@@ -86,14 +89,14 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation.`,
     );
     expect(utilization()).toHaveTextContent('CPU11.0%');
-    expect(utilization()).toHaveTextContent('Memory-');
+    expect(utilization()).toHaveTextContent('Memoryno reading');
     expect(utilization()).not.toHaveTextContent('88.0%');
     choose(slider, 1);
     expect(slider).toHaveAttribute(
       'aria-valuetext',
       `${new Date(time + 30_000).toLocaleString()}. CPU no observation. Memory 30.0%. Disk no observation.`,
     );
-    expect(utilization()).toHaveTextContent('CPU-');
+    expect(utilization()).toHaveTextContent('CPUno reading');
     expect(utilization()).toHaveTextContent('Memory30.0%');
     expect(slider).toHaveFocus();
   });
@@ -188,9 +191,10 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       else setRange('24h');
       await waitFor(() => expect(inspect()).toHaveValue('3'));
       expect(utilization()).toHaveTextContent('CPU43.0%');
-      expect(
-        within(utilization()).queryByTestId('guest-history-hover-time'),
-      ).not.toBeInTheDocument();
+      const restoredTime = within(utilization()).getByTestId('guest-history-hover-time');
+      expect(restoredTime).toHaveTextContent('Latest stored');
+      expect(restoredTime).toHaveAttribute('datetime', new Date(time + 120_000).toISOString());
+      expect(utilization().querySelectorAll('[data-history-hover-marker]')).toHaveLength(0);
     },
   );
 
@@ -242,7 +246,7 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       `1 stored observation time. ${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation.`,
     );
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    expect(utilization().querySelector('path')).toBeNull();
+    expect(utilization().querySelector('path[data-history-series]')).toBeNull();
   });
 
   it.each(['empty', 'invalid'] as const)(
@@ -269,5 +273,219 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
     await screen.findByText(/14 days history requires/);
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+// Min-max band: each stored point is a bucket average carrying its extremes.
+const bandStart = Date.UTC(2026, 9, 12, 12);
+const bandTarget = { resourceType: 'vm' as const, resourceId: 'fixture:pve:101' };
+const bandPoint = (minute: number, value: number, min = value, max = value) => ({
+  timestamp: bandStart + minute * 60_000,
+  value,
+  min,
+  max,
+});
+const bandResponse = (
+  metrics: AllMetricsHistoryResponse['metrics'],
+): AllMetricsHistoryResponse => ({
+  ...bandTarget,
+  range: '1h',
+  start: bandStart,
+  end: bandStart + 3 * 60_000,
+  source: 'store',
+  metrics,
+});
+const bandUtilization = () =>
+  screen
+    .getAllByTestId('guest-history-group-chart')
+    .find((el) => el.dataset.historyGroup === 'utilization')!;
+
+// A 99% CPU burst inside a bucket that averages 20%.
+const bandSpiky = {
+  cpu: [bandPoint(0, 10), bandPoint(1, 20, 10, 99), bandPoint(2, 12)],
+  memory: [bandPoint(0, 40), bandPoint(1, 40, 39.5, 41.5), bandPoint(2, 40)],
+};
+
+describe('drawer History min-max band', () => {
+  it("draws a band up to a bucket's peak so a short spike is not averaged away", async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(bandResponse(bandSpiky));
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    const band = bandUtilization().querySelector('path[data-history-band="cpu"]');
+    expect(band).not.toBeNull();
+    // 99% on the 0-100 scale sits at y = 8 + (1 - 0.99) * 66 = 8.66 of the viewBox.
+    expect(band?.getAttribute('d')).toContain(',8.66');
+    expect(band?.getAttribute('d')).toMatch(/ Z$/);
+    // The average line itself still passes through 20%, not the peak.
+    const line = bandUtilization().querySelector('path[data-history-series="cpu"]');
+    expect(line?.getAttribute('d')).not.toContain(',8.66');
+  });
+
+  it('draws no band for buckets whose readings never spread', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      bandResponse({
+        ...bandSpiky,
+        memory: [bandPoint(0, 40), bandPoint(1, 40), bandPoint(2, 40)],
+      }),
+    );
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    expect(bandUtilization().querySelector('path[data-history-band="memory"]')).toBeNull();
+    expect(bandUtilization().querySelectorAll('path[data-history-band]')).toHaveLength(1);
+  });
+
+  it('names the peak only while a time is inspected, and to assistive technology', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(bandResponse(bandSpiky));
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    // The default readout is the latest stored time: one number per series.
+    expect(bandUtilization().querySelector('[data-history-peak]')).toBeNull();
+
+    fireEvent.focus(slider);
+    fireEvent.input(slider, { target: { value: '1' } });
+    expect(bandUtilization().querySelector('[data-history-peak="cpu"]')).toHaveTextContent(
+      'peak 99.0%',
+    );
+    // Memory's bucket spread is too small to see, so it is not called a peak.
+    expect(bandUtilization().querySelector('[data-history-peak="memory"]')).toBeNull();
+    expect(slider).toHaveAttribute(
+      'aria-valuetext',
+      expect.stringContaining(
+        'CPU 20.0% average, 10.0% to 99.0%. Memory 40.0% average, 39.5% to 41.5%.',
+      ),
+    );
+
+    fireEvent.blur(slider);
+    expect(bandUtilization().querySelector('[data-history-peak]')).toBeNull();
+    expect(
+      within(bandUtilization()).getByRole('img', { name: 'Utilization history' }),
+    ).toBeTruthy();
+  });
+});
+
+describe('buildGuestDrawerHistoryBandPath', () => {
+  const scale = { minValue: 0, maxValue: 100 };
+
+  it('needs two points and some spread', () => {
+    expect(
+      buildGuestDrawerHistoryBandPath([bandPoint(0, 5, 1, 9)], scale, bandStart, bandStart + 1),
+    ).toBe('');
+    expect(
+      buildGuestDrawerHistoryBandPath(
+        [bandPoint(0, 5), bandPoint(1, 6)],
+        scale,
+        bandStart,
+        bandStart + 60_000,
+      ),
+    ).toBe('');
+  });
+
+  it('runs forward along the highs and back along the lows', () => {
+    const path = buildGuestDrawerHistoryBandPath(
+      [bandPoint(0, 50, 0, 100), bandPoint(1, 50, 0, 100)],
+      scale,
+      bandStart,
+      bandStart + 60_000,
+    );
+    expect(path).toBe('M34.00,8.00 L352.00,8.00 L352.00,74.00 L34.00,74.00 Z');
+  });
+});
+
+describe('drawer History range picker', () => {
+  it('names its options the same way as every history range picker', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" onRangeChange={() => {}} />);
+    const picker = (await screen.findByTestId('guest-history-range-control')) as HTMLSelectElement;
+    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+      '1 hour',
+      '6 hours',
+      '12 hours',
+      '24 hours',
+      '7 days',
+      '14 days',
+      '30 days',
+      '90 days',
+    ]);
+  });
+});
+
+describe('drawer History on a phone', () => {
+  const groupIds = () =>
+    screen
+      .getAllByTestId('guest-history-group-chart')
+      .filter((chart) => chart.dataset.phoneCollapsed !== 'true')
+      .map((chart) => chart.dataset.historyGroup);
+
+  it('keeps the first panel and collapses the rest behind one toggle', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => <GuestDrawerHistory target={target} range="24h" />);
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart').slice(1)) {
+      expect(chart).toHaveClass('max-sm:hidden');
+    }
+    const toggle = screen.getByTestId('history-phone-toggle');
+    expect(toggle).toHaveClass('sm:hidden');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The shared phone toggle controls the grid that holds the folded panels.
+    const grid = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(grid.querySelectorAll('[data-testid="guest-history-group-chart"]')).toHaveLength(3);
+    expect(toggle).toHaveTextContent('Show Network I/O, Disk I/O');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveTextContent('Show fewer charts');
+    expect(groupIds()).toEqual(['utilization', 'network', 'disk-io']);
+    for (const chart of screen.getAllByTestId('guest-history-group-chart')) {
+      expect(chart).not.toHaveClass('max-sm:hidden');
+    }
+  });
+
+  it('keeps a panel with an active alert visible on a phone', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'warning', value: 1024 } }}
+      />
+    ));
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(groupIds()).toEqual(['utilization', 'disk-io']);
+    expect(screen.getByTestId('history-phone-toggle')).toHaveTextContent('Show Network I/O');
+  });
+});
+
+describe('drawer History alert triggers', () => {
+  it('labels the trigger in the legend and draws no line before any history exists', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({ ...response(), metrics: {} });
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        alerts={{ diskread: { severity: 'critical', value: 100 * 1024 * 1024 } }}
+      />
+    ));
+    await screen.findAllByText('No stored history in this range');
+    expect(document.querySelector('[data-history-threshold]')).toBeNull();
+    expect(document.querySelector('[data-history-alert-label="diskread"]')).toHaveTextContent(
+      /^alert at 100(\.0)? MB\/s$/,
+    );
+  });
+
+  it('keeps a phone panel shown after the alert that revealed it clears', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [alerts, setAlerts] = createSignal<
+      Record<string, { severity: 'warning' | 'critical'; value?: number } | undefined>
+    >({ netin: { severity: 'warning', value: 1024 } });
+    render(() => <GuestDrawerHistory target={target} range="24h" alerts={alerts()} />);
+    const network = () =>
+      screen
+        .getAllByTestId('guest-history-group-chart')
+        .find((chart) => chart.dataset.historyGroup === 'network')!;
+    await screen.findAllByTestId('guest-history-group-chart');
+    expect(network()).not.toHaveClass('max-sm:hidden');
+    setAlerts({});
+    expect(network()).not.toHaveClass('max-sm:hidden');
   });
 });

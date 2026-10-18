@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "13d604e1c71a4b8388ecaf04ea4dbdcd731f7e0b",
+  "verified_at": "2026-10-06T13:13:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx",
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "8d69d7fb76016cbfff3051435a9a4c23d4444b21d115837115dc2d739bee132a",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "2f912423bc39e2a6d20ea49e1e00002d44923b7f2daf6993ae6a8257c9083a9a",
+    "frontend-modern/src/utils/resourceMonitoringPolicy.ts": "9e095a25929149463758ebd767b0a1e83f3ec7750e5f640a91cc3c45e510805d"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Alerts > Overview on a private mock stack built from this branch at main d4315cef51 (rebased onto 13d604e1c7 before landing; the new commit only touches node.go and alerts.md elsewhere) (backend binary includes the platformType stamping; Vite serves the frontend). Mock mode did not raise unified vSphere/Kubernetes metric alerts even with CPU thresholds lowered to 1%, so six alerts were cloned from the mock's real powered-off VM alert, reshaped to exactly what the producers emit (unified metric: resourceType 'vSphere VM' / 'Kubernetes Pod' plus platformType; connection-degraded: resourceType connection, connectionType truenas plus platformType; guest alerts: resourceType vm / VM), and appended to the live websocket activeAlerts snapshots. The vSphere VM and pod alerts point at real mock resources (finance-jump-01, checkout-api-6c746d5bcf-c7z2p)",
+    "With the change, at 1440 and 390: the vSphere VM CPU alert links to /vmware/overview and its More > Monitoring menu names VMware vSphere; the Kubernetes pod CPU alert links to /kubernetes/overview and names Kubernetes; the TrueNAS connection alert links to /truenas/overview and names TrueNAS; VM alerts in a cluster named agent, for a guest named vmware-test, and on a cluster named docker-lab all link to /proxmox/overview and name Proxmox",
+    "Controls, not injected: the real powered-off VM postgres-replica-01 links to Proxmox and names Proxmox; the real Docker container influxdb (app-container) and Docker service infra-rancher (docker-service) link to /docker/overview and read 'Container runtime remains the inventory owner', capitalised",
+    "Same session with main's AlertOverviewAlertCard.tsx, ResourceMonitoringPolicyAction.tsx and resourceMonitoringPolicy.ts swapped back in under Vite and the injected alerts without platformType (main's backend output): vSphere VM, pod and TrueNAS connection alerts linked to /proxmox/overview naming Proxmox; the agent-cluster VM linked to /standalone/machines naming Pulse agent; vmware-test linked to /vmware/overview naming VMware vSphere; the docker-lab VM linked to /docker/overview with lowercase 'container runtime'",
+    "Machines: the real agent-only host Apollo-114 drawer Manage tab still reads 'Retiring this machine ... Agent removal remains available from Machines' on this build. The mock has no libvirt domains, so the libvirt VM and Unraid array drawer copy is covered by unit tests only",
+    "Monitoring menu at 390 opens as a body portal within the viewport"
+  ],
+  "interactions": [
+    "Proxied the real websocket with Playwright routeWebSocket and appended the six producer-shaped alerts to each activeAlerts array; also appended them to the /api/alerts/active REST response",
+    "For each of the nine cards: read the resource link href, clicked More then Monitoring, read the menu header, closed with Escape, clicked Less",
+    "Lowered vmwareDefaults/kubernetesDefaults CPU to 1% via PUT /api/alerts/config to try for real unified metric alerts, then restored the original config",
+    "Swapped the three frontend runtime files to main's versions under the running Vite and dropped platformType from the injected alerts for a same-session before, then restored the change"
+  ]
+}

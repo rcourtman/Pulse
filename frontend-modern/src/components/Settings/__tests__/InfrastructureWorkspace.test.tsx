@@ -2,9 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
-import type {
-  InfrastructureSystemMemberRow,
-  InfrastructureSystemRow,
+import {
+  infrastructureRowMonitoringPath,
+  type InfrastructureSystemMemberRow,
+  type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
@@ -760,6 +761,63 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText(/Pulse Agent hosts/i)).toBeInTheDocument();
   });
 
+  it('offers one way to add the first system and lets the source list wrap', async () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+
+    renderWorkspace();
+
+    await waitFor(() =>
+      expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument(),
+    );
+    // The page-header button is the only add action; a second one for the same
+    // job, and its repeated sentence, read as two different choices.
+    expect(
+      screen.getAllByRole('button', { name: /^Add (infrastructure|your first system)$/i }),
+    ).toHaveLength(1);
+    expect(screen.queryByText('Add your first system')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Add a platform, host, NAS, or cluster to start monitoring.'),
+    ).not.toBeInTheDocument();
+    // The cell hosting this prose sits in a `.table-fixed` table whose global
+    // rule forces nowrap, so the wrapper itself has to opt back into wrapping.
+    expect(screen.getByText('Start monitoring infrastructure').parentElement).toHaveClass(
+      'whitespace-normal',
+    );
+  });
+
+  it('does not claim a scan time or a configured state before discovery has ever run', async () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+
+    renderWorkspace({
+      discoveryEnabled: () => false,
+      discoveryScanStatus: () => ({ scanning: false }),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Discover Proxmox systems' })).toBeInTheDocument(),
+    );
+    const band = screen.getByRole('region', { name: 'Discover Proxmox systems' });
+    expect(band).toHaveTextContent('Off');
+    expect(band).not.toHaveTextContent(/Last scanned/i);
+    expect(band).not.toHaveTextContent(/Not configured/i);
+  });
+
+  it('says there is no scan result yet when discovery is on but has none', async () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+
+    renderWorkspace({
+      discoveryEnabled: () => true,
+      discoveryScanStatus: () => ({ scanning: false }),
+    });
+
+    const band = await screen.findByRole('region', { name: 'Discover Proxmox systems' });
+    expect(band).toHaveTextContent('No scan result yet');
+    expect(band).not.toHaveTextContent(/Last scanned/i);
+  });
+
   it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
     const triggerDiscoveryScan = vi.fn();
     renderWorkspace({
@@ -1392,5 +1450,28 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.getByText('Connected systems')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+});
+
+describe('infrastructureRowMonitoringPath', () => {
+  // A PBS read as Active in this workspace while its servers sat under
+  // Proxmox > Backups, and its user could not find it (#2905).
+  it('sends each API-collected system to the page that shows its data', () => {
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pve' })).toBe('/proxmox/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pbs' })).toBe('/proxmox/backups');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'pmg' })).toBe('/proxmox/mail');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'vmware' })).toBe('/vmware/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'truenas' })).toBe('/truenas/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'docker' })).toBe('/docker/overview');
+    expect(infrastructureRowMonitoringPath({ ownerType: 'kubernetes' })).toBe(
+      '/kubernetes/overview',
+    );
+  });
+
+  it('gives agent hosts and availability checks no single destination', () => {
+    // An agent host shows on Proxmox, Machines or Kubernetes depending on
+    // what it runs, so a fixed link would often be wrong.
+    expect(infrastructureRowMonitoringPath({ ownerType: 'agent' })).toBeUndefined();
+    expect(infrastructureRowMonitoringPath({ ownerType: 'availability' })).toBeUndefined();
   });
 });

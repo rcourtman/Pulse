@@ -47,6 +47,9 @@ type viJSONEventFilterSpec struct {
 	TypeName string                   `json:"_typeName,omitempty"`
 	Entity   *viJSONEventFilterEntity `json:"entity,omitempty"`
 	MaxCount int                      `json:"maxCount,omitempty"`
+	// vCenter omits each event's fullFormattedMessage unless the filter sets
+	// this explicitly, so it is always sent: false asks for the message.
+	DisableFullMessage bool `json:"disableFullMessage"`
 }
 
 type viJSONEventFilterEntity struct {

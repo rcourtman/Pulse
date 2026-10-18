@@ -80,7 +80,17 @@ describe('guestDrawerModel (branch coverage)', () => {
     it('scales the canonical workload cpu ratio by 100 and returns finite metric values', () => {
       const guest = makeGuest({
         cpu: 1.0,
-        memory: { total: 100, used: 40, free: 60, usage: 0.4 },
+        memory: {
+          total: 100,
+          used: 40,
+          free: 60,
+          usage: 0.4,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-10-04T03:00:00Z',
+          },
+        },
         disk: { total: 100, used: 30, free: 70, usage: 0.3 },
         networkIn: 100,
         networkOut: 200,
@@ -359,7 +369,10 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({
-            id: 'cluster-a:pve1:101',
+            id: 'vm-stable-id',
+            instance: 'cluster-a',
+            node: 'pve2',
+            vmid: 101,
             type: 'qemu',
             workloadType: 'vm',
             metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
@@ -376,7 +389,7 @@ describe('guestDrawerModel (branch coverage)', () => {
       ).toBeNull();
     });
 
-    it('maps a vm to the canonical node-scoped id', () => {
+    it('maps a vm to its native metric key', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({ type: 'qemu', workloadType: 'vm', instance: 'c', node: 'pve', vmid: 101 }),
@@ -384,7 +397,7 @@ describe('guestDrawerModel (branch coverage)', () => {
       ).toStrictEqual({ resourceType: 'vm', resourceId: 'c:pve:101' });
     });
 
-    it('maps a system-container to the canonical node-scoped id', () => {
+    it('maps a system-container to its native metric key', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({
@@ -397,6 +410,34 @@ describe('guestDrawerModel (branch coverage)', () => {
         ),
       ).toStrictEqual({ resourceType: 'system-container', resourceId: 'c:pve:102' });
     });
+
+    it.each([
+      ['vm', 'qemu', 101],
+      ['system-container', 'lxc', 102],
+    ] as const)(
+      'keeps %s selection stable while legacy History follows a node move',
+      (workloadType, type, vmid) => {
+        const original = makeGuest({
+          id: 'opaque-resource-id',
+          canonicalResourceId: 'opaque-resource-id',
+          workloadType,
+          type,
+          vmid,
+          instance: 'cluster-a',
+          node: 'pve1',
+        });
+        const moved = { ...original, node: 'pve2' };
+        expect(original.id).toBe(moved.id);
+        expect(getGuestDrawerHistoryTarget(original)).toStrictEqual({
+          resourceType: workloadType,
+          resourceId: 'cluster-a:pve1:' + vmid,
+        });
+        expect(getGuestDrawerHistoryTarget(moved)).toStrictEqual({
+          resourceType: workloadType,
+          resourceId: 'cluster-a:pve2:' + vmid,
+        });
+      },
+    );
 
     it('maps an app-container to its plain id', () => {
       expect(
@@ -676,21 +717,25 @@ describe('guestDrawerModel (branch coverage)', () => {
     const expectPresentation = (days: number) => {
       const lastBackup = backupNDaysAgo(days);
       const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
-      expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
+      expect(result.dateLabel).toBe(
+        new Date(lastBackup).toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+      );
+      expect(result.completedAt).toBe(new Date(lastBackup).toISOString());
       return result;
     };
 
-    it('labels day 0 as Today and uses the green (fresh) class', () => {
+    it('labels a just-completed backup with elapsed time and the green (fresh) class', () => {
       expect(expectPresentation(0)).toStrictEqual({
         ageClass: 'text-green-600 dark:text-green-400',
-        ageLabel: 'Today',
-        dateLabel: new Date(backupNDaysAgo(0)).toLocaleDateString(),
+        ageLabel: '0s ago',
+        dateLabel: now.toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+        completedAt: now.toISOString(),
       });
     });
 
-    it('labels day 1 as Yesterday', () => {
+    it('labels day 1 as elapsed days', () => {
       const result = expectPresentation(1);
-      expect(result.ageLabel).toBe('Yesterday');
+      expect(result.ageLabel).toBe('1d ago');
       expect(result.ageClass).toBe('text-green-600 dark:text-green-400');
     });
 
@@ -723,7 +768,10 @@ describe('guestDrawerModel (branch coverage)', () => {
       const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
       expect(result.ageLabel).toBe('10d ago');
       expect(result.ageClass).toBe('text-yellow-600 dark:text-yellow-400');
-      expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
+      expect(result.dateLabel).toBe(
+        new Date(lastBackup).toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+      );
+      expect(result.completedAt).toBe(new Date(lastBackup).toISOString());
     });
   });
 });

@@ -14,6 +14,8 @@ body:
 
         Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
+        If a credential has already been posted, revoke it with its issuer and remove the public copy; editing a post is not revocation or proof that every copy is gone. Do not repost the original evidence; use the [private security disclosure route](https://github.com/rcourtman/Pulse/security/policy) for sensitive details.
+
   - type: dropdown
     id: feedback_type
     attributes:
@@ -32,25 +34,45 @@ body:
     id: pulse_version
     attributes:
       label: Pulse version
-      description: Running version for an existing install; for a failed install, the exact version or release asset attempted, or "unknown" if it was not shown.
-      placeholder: v6.0.0-rc.N, release asset name, or unknown
+      description: Version running when the problem occurred, or "unknown" if unavailable. For a failed install, give the exact version or release asset attempted. Keep an interrupted upgrade's target and later recovered version separate in Upgrade attempt and recovery below.
+      placeholder: v6.x.y-rc.N, release asset name, or unknown
     validations:
       required: true
+
+  - type: input
+    id: previous_version
+    attributes:
+      label: Last known working Pulse version
+      description: If you already observed the same behaviour working, give that version. The version before an upgrade is not necessarily a working baseline. Leave blank or write "unknown" if not known; do not downgrade, restart or repeat the action to find out.
+      placeholder: v6.x.y or unknown
+    validations:
+      required: false
+
+  - type: input
+    id: agent_version
+    attributes:
+      label: Agent version
+      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      placeholder: v6.x.y, none, or unknown
+    validations:
+      required: false
 
   - type: input
     id: image_ref
     attributes:
       label: Running Pulse container image tag or digest
       description: For a running Docker, Compose, or Kubernetes container, give its exact Pulse image tag or digest. Leave blank for LXC, bare metal, and failed installs that never started; put an attempted release asset in Pulse version instead.
-      placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...
+      placeholder: rcourtman/pulse:v6.x.y-rc.N or rcourtman/pulse@sha256:...
 
   - type: dropdown
     id: install_path
     attributes:
       label: Install path
+      description: How you reached the affected version; an upgrade path alone does not establish that the previous version worked.
       options:
         - Clean v6 install
         - Upgrade from v5
+        - Upgrade from a stable v6 release
         - Upgrade from an earlier v6 prerelease
         - Not sure
     validations:
@@ -60,6 +82,7 @@ body:
     id: installation_type
     attributes:
       label: Installation type
+      description: How the Pulse server is installed, not the kind of workload being monitored.
       options:
         - Docker
         - Docker Compose
@@ -74,8 +97,34 @@ body:
     id: installer_source
     attributes:
       label: Installer or helper source
-      description: For a failed install, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
+      description: For a failed install or upgrade, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
       placeholder: Official Pulse installer, helper URL, or command name
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        <details>
+        <summary>Failed upgrade: which attempt, stop and recovery?</summary>
+
+        For an interrupted or failed upgrade only: give the starting version, intended version or asset, route (in-app, automatic timer, manual installer or helper), original time and timezone, and last recorded updater/installer result or exit code. Distinguish Pulse stopping from the whole LXC, VM or host stopping. Say what recovery you already performed and which version and state you observed afterwards.
+        A verified download signature is not a completed upgrade; a later boot does not explain the stop. Today's running version does not establish the version at failure. Use existing observations; blank or "unknown" is valid. If already available, include only relevant, locally reviewed and redacted updater and host stop records in the evidence field, not full journals.
+        Do not rerun the update, reboot, restore, run Diagnostics or delete rollback backups just to complete this report. Keep backups private and preserve the original evidence.
+
+        </details>
+
+  - type: textarea
+    id: upgrade_context
+    attributes:
+      label: Upgrade attempt and recovery
+      description: |
+        For failed or interrupted upgrades only. Use the original attempt, stop and recovery already observed; blank or "unknown" is valid. Do not repeat the update or delete rollback backups.
+      placeholder: |
+        Attempt: starting version → intended version; route; time and timezone
+        Last recorded result: error or exit code, or unknown
+        Observed stop: Pulse service / whole LXC, VM or host / unknown
+        Recovery already performed: none or original steps; version/state afterwards or unknown
     validations:
       required: false
 
@@ -83,10 +132,10 @@ body:
     id: environment
     attributes:
       label: OS / environment
-      description: Host OS, distro, or environment details that matter to the report.
-      placeholder: Ubuntu 24.04, Debian 12, Unraid 7, Proxmox 8, macOS 15
+      description: Pulse server OS and, for platform-specific failures, the affected monitored platform and its release where known (for example, Proxmox VE 9.2 or TrueNAS SCALE 26 / CORE 13). Say whether the affected readings use the platform API, a Pulse agent, or both; keep this separate from the Pulse server's installation and version. Use existing settings or observations; leave blank or write "unknown" if unavailable. Do not run diagnostics, probe, restart or change a connection just to answer.
+      placeholder: Pulse on Debian 13; TrueNAS CORE 13.0-U6.1 via API, no Pulse agent
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: license_tier
@@ -104,11 +153,24 @@ body:
     validations:
       required: true
 
+  - type: markdown
+    attributes:
+      value: |
+        <details>
+        <summary>Several hosts or clusters: preserve which names and IDs repeat</summary>
+
+        For reports involving several hosts or clusters, say which nodes share a cluster, which belong to independent installations, whether node names or guest IDs (VMIDs) repeat, and whether they share a backup destination.
+        Use consistent aliases for private names and addresses across the description, screenshots and logs; preserve which values repeat (for example, cluster A/node 1 and standalone B/node 1). Use existing observations, or write "unknown"; do not add, rename, remove or re-enrol anything just to answer.
+
+        </details>
+
   - type: textarea
     id: summary
     attributes:
       label: What happened?
-      description: Describe the problem, friction, or feedback clearly and directly.
+      description: |
+        Describe the problem, friction, or feedback and where you see it. Distinguish the affected target (for example, a VM, LXC, Docker container, NAS or Pulse itself) from how the Pulse server is installed.
+        For missing readings, say whether the affected workload's usual UI was still responsive when the problem occurred. Use existing observations; write "unknown" if you cannot safely tell. Do not run another update, backup or guest-agent probe just to answer.
       placeholder: Pulse upgraded cleanly, but the new storage filters are hard to understand and I could not find the previous view quickly.
     validations:
       required: true
@@ -143,6 +205,38 @@ body:
     validations:
       required: true
 
+  - type: markdown
+    attributes:
+      value: |
+        Optional context: open only the section that matches your report. Use existing observations; missing details are valid.
+
+        <details>
+        <summary>Notification delivery: Test versus ordinary alerts</summary>
+
+        For notification reports, distinguish an already-observed **Test** result from ordinary alert delivery: single, grouped/digest or resolved. Give the destination type (such as email or Telegram), built-in or custom template, original time and redacted error or missing host/resource context where known. A successful Test does not establish ordinary delivery or correct identity.
+        Use existing messages and queue details only; blank or "unknown" is valid. Do not send a Test, trigger an alert, retry/replay a queued message, clear the queue or change notification settings just to complete this report. Keep destination addresses, webhook URLs, chat IDs, tokens and full notification settings or payloads private.
+
+        </details>
+
+        <details>
+        <summary>Pulse CPU, memory or disk writes: comparable measurements</summary>
+
+        For CPU, memory or disk-write reports about Pulse itself, use existing readings or safe, passive observations. Say whether the reading covers the Pulse process, its container or the whole host, and give its units, measurement window and uptime. Include allocated CPUs or memory limit, fleet size, polling interval and open dashboards where relevant and known. A process-start CPU average is not a recent sampling window; database size is not a write rate.
+        Existing screenshots are useful; write "unavailable" when safe collection is not possible. Do not restart, create load or change polling or retention just to measure. Do not attach raw profiles, heap dumps, databases or full process command lines; summarise only relevant counters after local review.
+
+        For Pulse memory reports, distinguish a higher steady baseline from growth during one uninterrupted run. A higher baseline is worth reporting even if usage stays flat. Keep already available versions, uptime, workload and enabled collectors/features with each reading; a lower reading shortly after an upgrade is not proof of recovery compared with a days-old run. Unknown context is valid; do not restart, downgrade or change features to create a comparison.
+
+        </details>
+
+        <details>
+        <summary>VM or LXC memory: guest versus hypervisor readings</summary>
+
+        For VM or LXC memory disagreements, say where each existing reading appears (overview, History, alert, Patrol or another tool) and whether the comparison was measured inside the affected guest or on its hypervisor node. Give original times, units and memory source or sample age only if already known or displayed; use consistent private aliases and write "unknown" for missing details.
+        Available memory, buff/cache and a process's RSS measure different things: RSS alone is not total guest usage, and a cache-inclusive hypervisor footprint does not establish guest pressure. A Proxmox VM API connection may still obtain QEMU guest-agent (QGA) readings without a Pulse agent.
+        Use existing observations only. Do not run commands, Diagnostics or guest-agent probes, install an agent, change memory settings or workloads, or repeat a backup just to answer.
+
+        </details>
+
   - type: textarea
     id: evidence
     attributes:
@@ -150,13 +244,12 @@ body:
       description: |
         Attach screenshots or paste relevant redacted logs if useful. For connection or data failures, a reviewed GitHub diagnostics export can help; prefer existing evidence when new collection is unsafe.
         Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
-
   - type: checkboxes
     id: confirmations
     attributes:
       label: Confirmations
       options:
-        - label: I gave the running Pulse version, or for an install that never started, the attempted version or "unknown"; for a running container I also gave its Pulse image tag or digest.
+        - label: I gave the Pulse version at the failure or "unknown" if unavailable; for an install that never started, the attempted version or "unknown"; for a running container I also gave its Pulse image tag or digest.
           required: true
         - label: I searched existing issues and the pinned v6 pre-release feedback hub first.
           required: true

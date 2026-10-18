@@ -4,6 +4,13 @@ Start here for installation, platform setup, security, operations, and Pulse
 Intelligence. Commands, configuration keys, image names, API fields, and
 product identifiers remain untranslated in localized guides.
 
+**Need help with a failure?** Read the
+[safe reporting guidance](TROUBLESHOOTING.md#-getting-help) before sharing
+evidence. A second reproduction or diagnostics export is not required; keep
+the original evidence if another attempt could interrupt workloads or send
+duplicate notifications. GitHub reports and attachments are public: review
+them locally and keep credentials and private details out.
+
 ## Start here
 
 - [Install Pulse](INSTALL.md) — signed Proxmox/Linux installation, Docker,

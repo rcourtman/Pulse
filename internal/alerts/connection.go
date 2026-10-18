@@ -40,6 +40,25 @@ const (
 	ConnectionTypeTrueNAS ConnectionType = "truenas"
 )
 
+// platformType returns the canonical platform id of the connection's source,
+// so a connection alert links to and names the platform it belongs to.
+func (t ConnectionType) platformType() string {
+	switch t {
+	case ConnectionTypePVE:
+		return "proxmox-pve"
+	case ConnectionTypePBS:
+		return "proxmox-pbs"
+	case ConnectionTypePMG:
+		return "proxmox-pmg"
+	case ConnectionTypeVMware:
+		return "vmware-vsphere"
+	case ConnectionTypeTrueNAS:
+		return "truenas"
+	default:
+		return ""
+	}
+}
+
 // ConnectionErrorSnapshot mirrors the api.ConnectionError shape that the
 // aggregator computes per target. Only the fields used in alert metadata are
 // carried.
@@ -136,9 +155,29 @@ func (m *Manager) suppressConnectionDegradedAlert(snap ConnectionSnapshot) {
 	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
 
 	m.mu.Lock()
+	m.interruptConnectionDegradedRunNoLock(snap.ID)
 	m.mu.Unlock()
 
 	m.clearAlert(alertID)
+}
+
+// interruptConnectionDegradedRunNoLock ends confirmation and intent runs for
+// this connection only. Unknown evidence is neither degradation nor recovery:
+// keep any firing occurrence, but require fresh consecutive healthy polls.
+// Callers hold m.mu.
+func (m *Manager) interruptConnectionDegradedRunNoLock(resourceID string) {
+	specKey := canonicalDiscreteStateSpecID(resourceID, connectionDegradedStateKey)
+	for _, state := range m.mirrorStatesNoLock() {
+		state.InterruptDiscreteRun(resourceID, specKey)
+	}
+	m.clearConnectionDegradedIntentNoLock(resourceID)
+}
+
+func (m *Manager) clearConnectionDegradedIntentNoLock(resourceID string) {
+	trackingKey := canonicalDiscreteStateStateID(resourceID, connectionDegradedStateKey)
+	if m.clearIntentPendingNoLock(trackingKey) {
+		m.saveActiveAlertsAsync("connection confirmation interrupted")
+	}
 }
 
 // CheckConnection raises or clears the connection-degraded alert for one
@@ -168,10 +207,10 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 	case ConnectionStateStale, ConnectionStateUnreachable, ConnectionStateUnauthorized:
 		// fall through and fire
 	default:
-		// pending/unknown — no alert, but reset the consecutive count so a
-		// later degraded run starts from zero instead of accumulating across
-		// a transient pending blip.
+		// Pending/unknown breaks both confirmation runs without resolving an
+		// existing outage or carrying activation grace across the gap.
 		m.mu.Lock()
+		m.interruptConnectionDegradedRunNoLock(snap.ID)
 		m.mu.Unlock()
 		return
 	}
@@ -181,11 +220,8 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		severity = AlertLevelCritical
 	}
 
-	// Another degraded observation invalidates any in-flight recovery
-	// confirmations — recovery must build back up from zero.
+	// The reducer resets recovery confirmations on degraded observations.
 	alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
-	m.mu.Lock()
-	m.mu.Unlock()
 
 	spec, err := buildCanonicalDiscreteStateSpec(
 		snap.ID,
@@ -220,6 +256,9 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		"resourceType":   "connection",
 		"connectionType": string(snap.Type),
 		"state":          string(snap.State),
+	}
+	if platformType := snap.Type.platformType(); platformType != "" {
+		metadata[alertPlatformTypeKey] = platformType
 	}
 	var correlation *AlertCorrelation
 	if snap.Type == ConnectionTypePVE {
@@ -288,8 +327,8 @@ func (m *Manager) clearConnectionDegradedAlert(snap ConnectionSnapshot) {
 	defer m.mu.Unlock()
 	defer m.shadowObserveRecoveryNoLock(snap.ID, specKey, alertID, offlineRecoveryConfirmationsDefault)
 
-	// Reset the legacy degraded counter; the reducer core owns the
-	// confirmation run itself.
-
+	// Healthy evidence ends pending activation grace as well as the reducer's
+	// activation count. A firing incident still uses the recovery gate below.
+	m.clearConnectionDegradedIntentNoLock(snap.ID)
 	m.resolveDiscreteRecoveryNoLock(snap.ID, specKey, alertID, offlineRecoveryConfirmationsDefault, "Connection", snap.Name, snap.ID)
 }

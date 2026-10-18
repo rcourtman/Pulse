@@ -26,16 +26,18 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	pkgsecurityutil "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
 // Webhook configuration constants
 const (
 	// HTTP client settings
-	WebhookTimeout         = 30 * time.Second
-	WebhookMaxResponseSize = 1 * 1024 * 1024 // 1 MB max response size
-	WebhookMaxRedirects    = 3               // Maximum number of redirects to follow
-	WebhookTestTimeout     = 10 * time.Second
+	WebhookTimeout          = 30 * time.Second
+	WebhookMaxResponseSize  = 1 * 1024 * 1024 // 1 MB max response size
+	WebhookMaxRedirects     = 3               // Maximum number of redirects to follow
+	WebhookTestTimeout      = 10 * time.Second
+	webhookDNSLookupTimeout = 5 * time.Second
 
 	// Retry settings
 	WebhookInitialBackoff = 1 * time.Second
@@ -130,13 +132,11 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 				if isPrivateIP(ip) && !n.isIPInAllowlist(ip) {
 					return nil, fmt.Errorf("blocked private IP: %s", ip)
 				}
-				// It's an IP, dial directly
-				d := net.Dialer{Timeout: 10 * time.Second}
-				return d.DialContext(ctx, network, addr)
+				return pkgsecurityutil.DialPinnedIPs(ctx, network, port, []net.IP{ip}, 10*time.Second)
 			}
 
 			// Resolve hostname
-			ips, err := n.lookupWebhookHostIPs(host)
+			ips, err := n.lookupWebhookHostIPs(ctx, host)
 			if err != nil {
 				return nil, fmt.Errorf("resolve webhook host %q: %w", host, err)
 			}
@@ -162,24 +162,7 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 					Msg("dns resolution pinned for webhook security")
 			}
 
-			// Try every permitted IP from the validating resolution, not just the
-			// first: a hostname can resolve to ::1 ahead of 127.0.0.1 while the
-			// webhook receiver listens only on one loopback family, and a
-			// multi-A-record host can lead with a dead address. Each candidate was
-			// validated above, so rebinding protection is unchanged.
-			d := net.Dialer{Timeout: 10 * time.Second}
-			var dialErr error
-			for _, permittedIP := range permittedIPs {
-				conn, err := d.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
-				if err == nil {
-					return conn, nil
-				}
-				dialErr = err
-				if ctx.Err() != nil {
-					break
-				}
-			}
-			return nil, dialErr
+			return pkgsecurityutil.DialPinnedIPs(ctx, network, port, permittedIPs, 10*time.Second)
 		},
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
@@ -195,11 +178,20 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 		Timeout:   timeout,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// SSRF admission is not permission to forward private alert bodies,
+			// custom authentication headers or signatures to a different receiver.
+			if len(via) == 0 || via[0] == nil || !sameNotificationOrigin(via[0].URL, req.URL) {
+				return FailWithClass(NotificationFailureConfiguration, errNotificationRedirectOrigin)
+			}
+			// Origin refusal takes precedence even when the redirect budget is
+			// exhausted: a foreign Location must not enter diagnostics or become
+			// an unknown/retryable error instead of a local configuration failure.
 			if len(via) >= WebhookMaxRedirects {
 				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
-			// Re-validate strictly on redirect
-			return n.validateWebhookURL(req.URL.String(), diagnosticURL)
+			// Re-validate strictly on an admitted redirect, including DNS/IP
+			// changes. Foreign origins are rejected before resolution or logging.
+			return n.validateWebhookURLWithContext(req.Context(), req.URL.String(), diagnosticURL)
 		},
 	}
 }
@@ -260,22 +252,24 @@ type NotificationManager struct {
 	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
 	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
 	appriseExec        appriseExecFunc
-	queue              *NotificationQueue                  // Persistent notification queue
-	tenantID           string                              // Tenant identity stamped into webhook payloads (env default)
-	tenantName         string                              // Tenant display name stamped into webhook payloads (env default)
-	tenantResolver     func() (id string, name string)     // Org-backed tenant identity override (multi-tenant)
-	webhookClient      *http.Client                        // Shared HTTP client for webhooks
-	stopCleanup        chan struct{}                       // Signal to stop cleanup goroutine
-	cleanupDone        chan struct{}                       // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets []*net.IPNet                        // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex                        // Protects allowedPrivateNets
-	resolveWebhookIPs  func(host string) ([]net.IP, error) // Test seam for webhook dialer DNS resolution; nil means net.LookupIP
+	queue              *NotificationQueue                              // Persistent notification queue
+	tenantID           string                                          // Tenant identity stamped into webhook payloads (env default)
+	tenantName         string                                          // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver     func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
+	webhookClient      *http.Client                                    // Shared HTTP client for webhooks
+	stopCleanup        chan struct{}                                   // Signal to stop cleanup goroutine
+	cleanupDone        chan struct{}                                   // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex                                    // Protects allowedPrivateNets
+	resolveWebhookIPs  func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
 }
 
 type webhookHTTPResult struct {
-	statusCode int
-	headers    http.Header
-	body       string
+	statusCode           int
+	headers              http.Header
+	responseBytes        int64
+	responseLimitReached bool
+	responseIncomplete   bool
 }
 
 type webhookRequestOptions struct {
@@ -360,6 +354,23 @@ func NormalizeWebhookConfig(webhook WebhookConfig) WebhookConfig {
 	if strings.EqualFold(strings.TrimSpace(normalized.Service), "pushover") {
 		normalized.CustomFields = normalizePushoverWebhookCustomFields(normalized.CustomFields)
 	}
+	normalized.Headers = normalizeWebhookHeaders(normalized.Headers)
+	return normalized
+}
+
+// normalizeWebhookHeaders drops headers with a blank name or value. A cleared
+// header field in the editor means "no header"; sending it empty would replace
+// the default Content-Type and leave receivers unable to parse the body.
+func normalizeWebhookHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return headers
+	}
+	normalized := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			normalized[key] = value
+		}
+	}
 	return normalized
 }
 
@@ -413,6 +424,47 @@ func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
 		alert.Metadata = make(map[string]interface{})
 	}
 	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
+}
+
+// resolvedAlertMessage is the one-line account of a resolved alert. A close
+// that was not a recovery, such as a node alert that moved to the Pulse agent
+// now monitoring the machine, says what happened instead of "now healthy".
+func resolvedAlertMessage(alert *alerts.Alert) string {
+	if summary := resolvedAlertNotRecoveredSummary(alert); summary != "" {
+		return summary
+	}
+	return fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+}
+
+// resolvedAlertNotRecoveredSummary names the alert in its resolution summary,
+// so one of several closes for a machine says which alert moved. It is empty
+// for an ordinary recovery.
+func resolvedAlertNotRecoveredSummary(alert *alerts.Alert) string {
+	label := alertTypeDisplay(alert.Type)
+	if label != "" {
+		label += " alert"
+	}
+	return alert.Resolution.Describe(label)
+}
+
+// resolvedAlertsIncludeNotRecovered reports whether any close in a resolved
+// notification was not a recovery, so recovery visuals must not be used.
+func resolvedAlertsIncludeNotRecovered(alertList []*alerts.Alert) bool {
+	for _, alert := range alertList {
+		if alert != nil && alert.Resolution.Outcome() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvedAlertListEntry names one alert in a grouped recovery list.
+func resolvedAlertListEntry(alert *alerts.Alert) string {
+	entry := fmt.Sprintf("%s on %s", alert.ResourceName, alert.Node)
+	if outcome := alert.Resolution.Outcome(); outcome != "" {
+		entry += ", " + outcome
+	}
+	return entry
 }
 
 func quietHoursReplayAtForAlert(alert *alerts.Alert, now time.Time) *time.Time {
@@ -2038,7 +2090,6 @@ func (n *NotificationManager) dispatchNotificationJobsAsync(jobs []notificationD
 				Str("smtpHost", job.EmailConfig.SMTPHost).
 				Int("smtpPort", job.EmailConfig.SMTPPort).
 				Strs("recipients", job.EmailConfig.To).
-				Bool("hasAuth", job.EmailConfig.Username != "" && job.EmailConfig.Password != "").
 				Msg("email notifications enabled - dispatching delivery job")
 		}
 		n.dispatchNotificationJobAsync(job, "failed to send notification")
@@ -2126,7 +2177,7 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	// by using the From address as the recipient
 
 	// Generate email using template
-	subject, htmlBody, textBody := EmailTemplate(alertList, false)
+	subject, htmlBody, textBody := EmailTemplate(alertList, false, n.publicURL)
 
 	// Send using HTML-aware method
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
@@ -2141,6 +2192,7 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 	if subject == "" && textBody == "" {
 		return fmt.Errorf("failed to build resolved email content")
 	}
+	subject = resolvedEmailSubject(alertList)
 
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
@@ -2217,6 +2269,9 @@ func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, s
 		if alert.Instance != "" && alert.Instance != alert.Node {
 			bodyBuilder.WriteString(fmt.Sprintf("Instance: %s\n", alert.Instance))
 		}
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			bodyBuilder.WriteString("View in Pulse: " + link + "\n")
+		}
 		bodyBuilder.WriteString("\n")
 	}
 
@@ -2250,6 +2305,9 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 	resolvedLabel := resolvedAt.Format(time.RFC3339)
 
 	title := fmt.Sprintf("Pulse alert resolved: %s", primary.ResourceName)
+	if primary.Resolution.Outcome() != "" {
+		title = fmt.Sprintf("Pulse alert moved: %s", primary.ResourceName)
+	}
 	if len(validAlerts) > 1 {
 		title = fmt.Sprintf("Pulse alerts resolved (%d)", len(validAlerts))
 	}
@@ -2263,6 +2321,10 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s\n", strings.ToUpper(string(alert.Level)), alert.ResourceName))
 		if alert.Message != "" {
 			bodyBuilder.WriteString(alert.Message)
+			bodyBuilder.WriteString("\n")
+		}
+		if summary := resolvedAlertNotRecoveredSummary(alert); summary != "" {
+			bodyBuilder.WriteString(summary)
 			bodyBuilder.WriteString("\n")
 		}
 		if !alert.StartTime.IsZero() {
@@ -2285,6 +2347,11 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 		}
 		if alert.Threshold != 0 || alert.Value != 0 {
 			bodyBuilder.WriteString(fmt.Sprintf("Last value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
+		}
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			bodyBuilder.WriteString("View in Pulse: ")
+			bodyBuilder.WriteString(link)
+			bodyBuilder.WriteString("\n")
 		}
 		bodyBuilder.WriteString("\n")
 	}
@@ -2503,7 +2570,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 
 // sendEmail sends an email notification
 func (n *NotificationManager) sendSingleEmailWithError(alert *alerts.Alert, config EmailConfig) error {
-	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, n.publicURL)
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID([]*alerts.Alert{alert}), config)
 }
 
@@ -2586,30 +2653,21 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 		return newEmailDeliveryManager(config, recipients), recipients
 	}
 
-	manager.config.EmailConfig = EmailConfig{
-		Provider:  config.Provider,
-		From:      config.From,
-		To:        recipients,
-		SMTPHost:  config.SMTPHost,
-		SMTPPort:  config.SMTPPort,
-		Username:  config.Username,
-		Password:  config.Password,
-		TLS:       config.TLS,
-		StartTLS:  config.StartTLS,
-		RateLimit: config.RateLimit,
-	}
-	manager.config.Provider = config.Provider
-	manager.config.StartTLS = config.StartTLS
-	manager.config.RateLimit = effectiveEmailRateLimit(config.RateLimit)
-	manager.config.AuthRequired = config.Username != "" && config.Password != ""
-
-	if manager.rateLimit != nil {
-		manager.rateLimit.mu.Lock()
-		manager.rateLimit.rate = manager.config.RateLimit
-		manager.rateLimit.mu.Unlock()
-	}
-
-	return manager, recipients
+	// Concurrent queue workers and reports may share an SMTP transport while
+	// carrying different admitted envelopes. Keep the cached manager immutable:
+	// otherwise preparing one delivery changes another delivery's recipients,
+	// sender and rate policy while it is being sent or waiting to retry.
+	deliveryConfig := manager.config
+	deliveryConfig.EmailConfig = copyEmailConfig(config)
+	deliveryConfig.To = append([]string(nil), recipients...)
+	deliveryConfig.Provider = config.Provider
+	deliveryConfig.StartTLS = config.StartTLS
+	deliveryConfig.RateLimit = effectiveEmailRateLimit(config.RateLimit)
+	deliveryConfig.AuthRequired = config.Username != "" && config.Password != ""
+	delivery := NewEnhancedEmailManager(deliveryConfig)
+	// Isolating envelopes must not give every delivery a fresh rate budget.
+	delivery.rateLimit = manager.rateLimit
+	return delivery, recipients
 }
 
 // sendHTMLEmailWithError sends an HTML email with multipart content and returns any error
@@ -2635,7 +2693,7 @@ func (n *NotificationManager) sendThreadedHTMLEmailWithError(subject, htmlBody, 
 		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
 		Strs("to", recipients).
-		Bool("hasAuth", config.Username != "" && config.Password != "").
+		Bool("hasAuth", manager.config.AuthRequired).
 		Bool("startTLS", manager.config.StartTLS).
 		Msg("attempting to send email via SMTP with enhanced support")
 
@@ -2690,7 +2748,56 @@ func (n *NotificationManager) prepareWebhookDeliveryContext(webhook WebhookConfi
 		}
 	}
 
+	// Without a custom template Pulse renders the service's built-in body, so
+	// the template's headers describe that body. The stored headers are only a
+	// copy the UI seeded at creation, and an edit can blank or replace them;
+	// Telegram then ignores the JSON and answers "message text is empty"
+	// (#2540). Test sends always applied these headers, so they passed while
+	// every real alert failed.
+	if strings.TrimSpace(webhook.Template) == "" {
+		if tmpl, ok := builtInWebhookServiceTemplate(webhook.Service); ok {
+			webhook = withWebhookTemplateHeaders(webhook, tmpl.Headers)
+		}
+	}
+
 	return webhook, data, nil
+}
+
+// builtInWebhookServiceTemplate returns the template Pulse renders for a
+// service without a custom template. Generic webhooks send the fallback
+// payload instead, so they have none.
+func builtInWebhookServiceTemplate(service string) (WebhookTemplate, bool) {
+	if service == "" || service == "generic" {
+		return WebhookTemplate{}, false
+	}
+	for _, tmpl := range GetWebhookTemplates() {
+		if tmpl.Service == service {
+			return tmpl, true
+		}
+	}
+	return WebhookTemplate{}, false
+}
+
+// withWebhookTemplateHeaders returns a copy of webhook whose headers carry the
+// template's static headers, replacing stored values under any spelling of the
+// same name. Templated values are skipped, as executeWebhookRequest skips them.
+func withWebhookTemplateHeaders(webhook WebhookConfig, templateHeaders map[string]string) WebhookConfig {
+	webhook = copyWebhookConfig(webhook)
+	for key, value := range templateHeaders {
+		if strings.Contains(value, "{{") {
+			continue
+		}
+		if webhook.Headers == nil {
+			webhook.Headers = make(map[string]string, len(templateHeaders))
+		}
+		for stored := range webhook.Headers {
+			if strings.EqualFold(stored, key) {
+				delete(webhook.Headers, stored)
+			}
+		}
+		webhook.Headers[key] = value
+	}
+	return webhook
 }
 
 func webhookServiceTemplate(webhook WebhookConfig, mode webhookRenderMode) (string, bool) {
@@ -2841,6 +2948,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	data := n.prepareWebhookData(primaryAlert, customFields)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
+	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, false), data.Instance)
 	data.Mention = webhook.Mention
 	if webhook.Service == "ntfy" {
 		webhook = withNtfyAlertHeaders(webhook, alertList)
@@ -2859,6 +2967,9 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			"timestamp": time.Now().Unix(),
 			"source":    "pulse-monitoring",
 			"grouped":   true,
+		}
+		if link := alertsPageURL(n.publicURL, alertList, false); link != "" {
+			payload["alertUrl"] = link
 		}
 		return json.Marshal(payload)
 	})
@@ -2914,14 +3025,16 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.ResolvedAt = resolvedAt.Format(time.RFC3339)
 	data.ResolvedAtISO = resolvedAt.Format(time.RFC3339)
 	data.Duration = formatWebhookDuration(resolvedAt.Sub(alert.StartTime))
-	data.Message = fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+	data.Message = resolvedAlertMessage(alert)
+	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
+	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, true), data.Instance)
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
 		for _, a := range alertList {
 			if a != nil {
-				names = append(names, fmt.Sprintf("%s on %s", a.ResourceName, a.Node))
+				names = append(names, resolvedAlertListEntry(a))
 			}
 		}
 		data.Message = fmt.Sprintf("%d alerts resolved: %s", len(alertList), strings.Join(names, "; "))
@@ -2950,6 +3063,9 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		if len(alertList) == 1 {
 			payload["alertIdentifier"] = alert.ID
 		}
+		if link := alertsPageURL(n.publicURL, alertList, true); link != "" {
+			payload["alertUrl"] = link
+		}
 		return json.Marshal(payload)
 	})
 	if err != nil {
@@ -2970,26 +3086,32 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
 
-	// Build plain-text body
+	// Build plain-text body and title. A single alert that moved rather than
+	// recovered says so in both, and no batch holding such a close carries
+	// the green check.
 	var body strings.Builder
+	title := "RESOLVED"
+	tags := "white_check_mark,pulse,resolved"
+	if resolvedAlertsIncludeNotRecovered(alertList) {
+		tags = "arrow_right,pulse,resolved"
+	}
 	if len(alertList) == 1 && alertList[0] != nil {
 		a := alertList[0]
-		fmt.Fprintf(&body, "Resolved: %s on %s is now healthy", a.ResourceName, a.Node)
+		title = fmt.Sprintf("RESOLVED: %s", a.ResourceName)
+		if summary := resolvedAlertNotRecoveredSummary(a); summary != "" {
+			title = fmt.Sprintf("MOVED: %s", a.ResourceName)
+			body.WriteString(summary)
+		} else {
+			fmt.Fprintf(&body, "Resolved: %s", resolvedAlertMessage(a))
+		}
 	} else {
+		title = fmt.Sprintf("RESOLVED: %d alerts", len(alertList))
 		fmt.Fprintf(&body, "%d alerts resolved at %s:\n", len(alertList), resolvedAt.Format(time.RFC822))
 		for _, a := range alertList {
 			if a != nil {
-				fmt.Fprintf(&body, "- %s on %s\n", a.ResourceName, a.Node)
+				fmt.Fprintf(&body, "- %s\n", resolvedAlertListEntry(a))
 			}
 		}
-	}
-
-	// Build title
-	title := "RESOLVED"
-	if len(alertList) == 1 && alertList[0] != nil {
-		title = fmt.Sprintf("RESOLVED: %s", alertList[0].ResourceName)
-	} else {
-		title = fmt.Sprintf("RESOLVED: %d alerts", len(alertList))
 	}
 
 	method := webhook.Method
@@ -3005,7 +3127,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("Title", title)
 	req.Header.Set("Priority", "default")
-	req.Header.Set("Tags", "white_check_mark,pulse,resolved")
+	req.Header.Set("Tags", tags)
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
 
 	// Apply any custom headers from webhook config
@@ -3026,25 +3148,8 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 	defer resp.Body.Close()
 
-	// Read response with size limit
-	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	var respBody bytes.Buffer
-	if _, err := respBody.ReadFrom(limitedReader); err != nil {
-		log.Warn().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Str("service", "ntfy").
-			Msg("failed to read resolved ntfy webhook response body")
-		// A rejected recovery has the same authoritative HTTP verdict as a
-		// firing delivery, even if its diagnostic body is interrupted. Keep
-		// permanent refusals out of the connectivity retry path.
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: failed to read ntfy webhook response: %w", resp.StatusCode, err)
-		}
-		return fmt.Errorf("failed to read ntfy webhook response: %w", err)
-	}
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	result, err := readWebhookResponse(resp)
+	if err == nil {
 		log.Info().
 			Str("webhook", webhook.Name).
 			Str("service", "ntfy").
@@ -3056,12 +3161,15 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 
 	log.Warn().
+		Err(err).
 		Str("webhook", webhook.Name).
 		Str("service", "ntfy").
 		Int("status", resp.StatusCode).
-		Str("response", respBody.String()).
-		Msg("resolved ntfy webhook returned non-success status")
-	return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
+		Int64("responseBytes", result.responseBytes).
+		Bool("responseLimitReached", result.responseLimitReached).
+		Bool("responseIncomplete", result.responseIncomplete).
+		Msg("resolved ntfy webhook response did not complete successfully")
+	return fmt.Errorf("ntfy %w", err)
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
@@ -3200,46 +3308,25 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	}
 	defer resp.Body.Close()
 
-	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	var respBody bytes.Buffer
-	bytesRead, err := respBody.ReadFrom(limitedReader)
-	if err != nil {
-		result := &webhookHTTPResult{statusCode: resp.StatusCode, headers: resp.Header.Clone()}
-		// Headers already establish a rejection even when its diagnostic body
-		// is interrupted. Preserve that verdict for transport and queue retries,
-		// rather than turning a terminal HTTP failure into a connectivity retry.
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: failed to read webhook response: %w", resp.StatusCode, err)
-		}
-		return result, fmt.Errorf("failed to read webhook response: %w", err)
-	}
-	if bytesRead >= WebhookMaxResponseSize {
+	result, err := readWebhookResponse(resp)
+	if result.responseLimitReached {
 		log.Warn().
 			Str("webhook", webhook.Name).
-			Int64("bytesRead", bytesRead).
+			Int64("responseBytes", result.responseBytes).
 			Int("maxSize", WebhookMaxResponseSize).
-			Msg("webhook response exceeded size limit, truncated")
-	}
-
-	result := &webhookHTTPResult{
-		statusCode: resp.StatusCode,
-		headers:    resp.Header.Clone(),
-		body:       respBody.String(),
+			Msg("webhook response read limit reached; body withheld")
 	}
 
 	if opts.responseLogging || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Int("status", resp.StatusCode).
-			Str("response", result.body).
+			Int64("responseBytes", result.responseBytes).
+			Bool("responseLimitReached", result.responseLimitReached).
+			Bool("responseIncomplete", result.responseIncomplete).
 			Msg("webhook response")
 	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: %s", resp.StatusCode, result.body)
-	}
-
-	return result, nil
+	return result, err
 }
 
 func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string, eventID string) error {
@@ -3288,12 +3375,12 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Int("payloadSize", len(jsonData)).
 			Msg("webhook notification sent successfully")
 
-		// Log response body only in debug mode for successful requests
-		if len(result.body) > 0 {
+		if result.responseBytes > 0 {
 			log.Debug().
 				Str("webhook", webhook.Name).
-				Str("response", result.body).
-				Msg("webhook response body")
+				Int64("responseBytes", result.responseBytes).
+				Bool("responseLimitReached", result.responseLimitReached).
+				Msg("webhook response body withheld")
 		}
 		return nil
 	} else {
@@ -3302,9 +3389,8 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("service", webhook.Service).
 			Str("type", alertType).
 			Int("status", result.statusCode).
-			Str("response", result.body).
 			Msg("webhook returned non-success status")
-		return FailfWithClass(ClassFromHTTPStatus(result.statusCode), "webhook returned HTTP %d: %s", result.statusCode, result.body)
+		return FailfWithClass(ClassFromHTTPStatus(result.statusCode), "webhook returned HTTP %d (response body withheld)", result.statusCode)
 	}
 }
 
@@ -3415,6 +3501,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Node:               alert.Node,
 		NodeDisplayName:    alertNodeDisplay(alert),
 		Instance:           instance,
+		AlertURL:           firstNonEmpty(alertLinkURL(n.publicURL, alert), instance),
 		Message:            alert.Message,
 		Value:              roundedValue,
 		Threshold:          roundedThreshold,
@@ -3597,6 +3684,10 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 // Validation and redirect security are shared; only diagnostic URL rendering
 // differs for Apprise, whose endpoint path may itself be a configuration key.
 func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticURL func(string) string) error {
+	return n.validateWebhookURLWithContext(context.Background(), webhookURL, diagnosticURL)
+}
+
+func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context, webhookURL string, diagnosticURL func(string) string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("webhook URL cannot be empty")
 	}
@@ -3642,7 +3733,7 @@ func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticUR
 	}
 
 	// Resolve hostname to IPs and check for private ranges (DNS rebinding protection)
-	ips, err := net.LookupIP(host)
+	ips, err := n.lookupWebhookHostIPs(ctx, host)
 	if err != nil {
 		// DNS resolution failed - reject for security
 		return fmt.Errorf("failed to resolve webhook hostname %s: %w (DNS resolution required for security)", host, err)
@@ -3686,8 +3777,25 @@ func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticUR
 	return nil
 }
 
-// isPrivateIP checks if an IP address is in a private range
+// isPrivateIP reports whether ip, or any IPv4 destination an IPv6 transition
+// address (NAT64, 6to4, Teredo and friends) embeds in it, is in a private or
+// special-use range. Without the embedded check 64:ff9b::a9fe:a9fe passes as a
+// public address while a NAT64 gateway delivers it to 169.254.169.254.
 func isPrivateIP(ip net.IP) bool {
+	if isPrivateIPLiteral(ip) {
+		return true
+	}
+	for _, embedded := range pkgsecurityutil.EmbeddedIPv4Candidates(ip) {
+		if isPrivateIPLiteral(embedded) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivateIPLiteral checks the address exactly as given against the private
+// and special-use ranges.
+func isPrivateIPLiteral(ip net.IP) bool {
 	// Private and special-use ranges that should not be reachable via webhooks.
 	privateRanges := []string{
 		"10.0.0.0/8",      // RFC1918
@@ -3812,12 +3920,27 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 	return nil
 }
 
-// lookupWebhookHostIPs resolves a webhook hostname for the SSRF-pinned dialer.
-func (n *NotificationManager) lookupWebhookHostIPs(host string) ([]net.IP, error) {
-	if n.resolveWebhookIPs != nil {
-		return n.resolveWebhookIPs(host)
+// lookupWebhookHostIPs bounds DNS work for both admission and pinned dialing.
+func (n *NotificationManager) lookupWebhookHostIPs(ctx context.Context, host string) ([]net.IP, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IP{ip}, nil
 	}
-	return net.LookupIP(host)
+	resolveCtx, cancel := context.WithTimeout(ctx, webhookDNSLookupTimeout)
+	defer cancel()
+	var ips []net.IP
+	var err error
+	if n.resolveWebhookIPs != nil {
+		ips, err = n.resolveWebhookIPs(resolveCtx, host)
+	} else {
+		ips, err = net.DefaultResolver.LookupIP(resolveCtx, "ip", host)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, &net.DNSError{Err: "no addresses", Name: host, IsNotFound: true}
+	}
+	return ips, nil
 }
 
 // isIPInAllowlist checks if an IP is in the configured allowlist

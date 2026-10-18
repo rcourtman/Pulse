@@ -1,8 +1,10 @@
 package installtests
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -15,9 +17,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -2654,7 +2658,8 @@ func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
 		`parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')`,
 		`daemon:*)`,
 		`/usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}`,
-		`kill -KILL "\${supervisor_pid}" 2>/dev/null || true`,
+		`kill -KILL "\${supervisor_pid}" 2>/dev/null || return 1`,
+		`pulse_agent_wait_stopped "\${supervisor_pid}" || return 1`,
 		`rm -f \${pidfile} \${child_pidfile}`,
 		`legacy child pid \${legacy_pid} supervised by pid \${legacy_supervisor}`,
 	}
@@ -2811,11 +2816,12 @@ func TestInstallSHUsesCanonicalFreeBSDAgentTeardown(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`teardown_freebsd_agent_service() {`,
-		`"$service_path" stop 2>/dev/null || true`,
-		`sysrc -x pulse_agent_enable >/dev/null 2>&1 || true`,
+		`quiesce_freebsd_agent_for_removal "$service_path" ||`,
+		`timeout -k 1 15 "$service_path" onestop >/dev/null 2>&1 || return 1`,
+		`timeout -k 1 5 sysrc pulse_agent_enable=NO >/dev/null 2>&1 || return 1`,
 		`rm -f /usr/local/etc/rc.d/pulse_agent.sh`,
 		`rm -f /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid`,
-		`log_info "Removing FreeBSD rc.d installation..."`,
+		`uninstall_legacy_manager=FreeBSD`,
 		`teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"`,
 	}
 	for _, needle := range required {
@@ -3190,11 +3196,14 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
-// harness that executes it has to pull those in alongside it.
+// harness that executes it has to pull those in alongside it. These isolated
+// asset-rendering tests admit an unmasked inventory; the whole-installer Python
+// controls below exercise the actual effective-mask guard and all its callers.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
-	return extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
+	return "auto_update_units_refreshable() { return 0; }\n" +
+		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
 		extractRootInstallShellFunction(t, "install_auto_update_assets")
@@ -4366,7 +4375,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `helper_args=()`) || !strings.Contains(got, `helper_args=("$@")`) {
 		t.Fatalf("update helper missing passthrough helper args:\n%s", got)
 	}
-	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
+	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--prerelease|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
 		t.Fatalf("update helper missing auto-selector guard for explicit flags:\n%s", got)
 	}
 	if !strings.Contains(got, `extra_args+=("${helper_args[@]}")`) {
@@ -4374,6 +4383,9 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	}
 	if !strings.Contains(got, `extra_args+=(--rc)`) {
 		t.Fatalf("update helper missing rc channel forwarding:\n%s", got)
+	}
+	if !strings.Contains(got, `extra_args+=(--stable)`) {
+		t.Fatalf("update helper must bind the parsed stable channel before the installer rereads configuration:\n%s", got)
 	}
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured repo installer url:\n%s", got)
@@ -4501,6 +4513,93 @@ func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
 	}
 }
 
+// Run the production selectors with bounded, offline transport doubles. This
+// does not run installer main, mutate services or establish native acceptance.
+func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T) {
+	out, err := exec.Command("python3", repoFile("scripts", "tests", "test_server_release_selection.py"), "-v").CombinedOutput()
+	if err != nil {
+		t.Fatalf("server release selection controls: %v\n%s", err, out)
+	}
+}
+
+// Exercise installer main only with confined transport and mutation doubles.
+// In particular, a mistaken remove choice exits before any real removal code.
+func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_menu.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("existing installer menu consent/target controls: %v\n%s", err, out)
+	}
+}
+
+// Execute the real staging and container-bootstrap functions with confined
+// transports/host commands and real fixture signatures, never a live LXC.
+func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_temporary_inputs.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer private/authenticated temporary-input controls: %v\n%s", err, out)
+	}
+}
+
+// Execute discovery and every installer refresh consumer together. systemd
+// manager operations are confined doubles; real inventory uses a fixture root.
+func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_timer.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer timer discovery/refresh controls: %v\n%s", err, out)
+	}
+}
+
+// Execute both standalone discovery producers and every mutation-owning
+// consumer, including OR-list callers where Bash disables function errexit.
+func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v")
+	cmd.Env = append(os.Environ(),
+		"PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer service discovery/caller controls: %v\n%s", err, out)
+	}
+	// Do not let deleting a fresh-host or failure-retention control silently
+	// leave this all-method fixture green. Real systemctl remains optional on
+	// platforms without it; the portable production-function controls do not.
+	for _, name := range []string{
+		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"test_partial_failed_inventory_is_not_absence",
+		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"test_only_silent_exit_one_is_admitted_as_absence",
+		"test_blank_line_output_is_not_a_silent_failed_inventory",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
+			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
+		}
+	}
+	// The real-systemctl control needs systemctl: it must pass where systemctl exists
+	// and be skipped, not silently absent, where it does not (macOS).
+	realControl := "test_real_systemctl_on_a_host_without_pulse_units_selects_the_default"
+	outcome := `\.\.\. ok`
+	if _, lookErr := exec.LookPath("systemctl"); lookErr != nil {
+		outcome = `\.\.\. skipped`
+	}
+	if !regexp.MustCompile(regexp.QuoteMeta(realControl) + ` \(.*\) ` + outcome).Match(out) {
+		t.Fatalf("service discovery control %s did not report %q:\n%s", realControl, outcome, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
@@ -4562,6 +4661,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		resolve_latest_release_tag_for_channel stable
@@ -4586,6 +4687,8 @@ func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *tes
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		if resolve_latest_release_tag_for_channel stable; then
@@ -4633,6 +4736,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
@@ -4663,7 +4768,7 @@ func TestResolveInstallScriptDownloadURLUsesRCReleaseTag(t *testing.T) {
 	curlStub := `#!/usr/bin/env bash
 for arg in "$@"; do
 	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
-		printf '%s\n' '[{"draft":false,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
+		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
 		exit 0
 	fi
 done
@@ -4680,6 +4785,8 @@ exit 1
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
 		UPDATE_CHANNEL=""
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
 		resolve_install_script_download_url
@@ -5313,97 +5420,182 @@ exit 0
 }
 
 func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
-	tmpDir := t.TempDir()
-	curlPath := filepath.Join(tmpDir, "curl")
-	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
-	logPath := filepath.Join(tmpDir, "curl.log")
-	installDir := filepath.Join(tmpDir, "install")
-
-	if err := os.MkdirAll(filepath.Join(installDir, "bin"), 0755); err != nil {
-		t.Fatalf("mkdir install bin: %v", err)
+	// Load the complete helper, not an extracted perform_update with a stale
+	// hand-written dependency list. Its real state/version gates must precede
+	// the URL check. Transport, signature verification and the manager remain
+	// confined doubles; this is not native or published-installer acceptance.
+	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "bin", "pulse"), []byte("old"), 0755); err != nil {
-		t.Fatalf("write fake pulse binary: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v1.0.0\n"), 0644); err != nil {
-		t.Fatalf("write VERSION: %v", err)
-	}
-
-	curlStub := `#!/usr/bin/env bash
-set -e
-printf '%s\n' "$*" >> "` + logPath + `"
+	for _, tc := range []struct {
+		name, state, observation string
+		admitted                 bool
+	}{
+		{"active", "active", "complete", true},
+		{"inactive", "inactive", "complete", true},
+		{"failed-read-with-output", "active", "error", false},
+		{"partial-read", "active", "partial", false},
+		{"duplicate-read", "active", "duplicate", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			installDir := filepath.Join(tmpDir, "install")
+			for _, dir := range []string{"tools", "tmp", "config", "install/bin"} {
+				if err := os.MkdirAll(filepath.Join(tmpDir, dir), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			old := "#!/bin/sh\necho 'Pulse v1.0.0'\n"
+			binary := filepath.Join(installDir, "bin", "pulse")
+			if err := os.WriteFile(binary, []byte(old), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v1.0.0\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			writeTool := func(name, script string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(tmpDir, "tools", name), []byte(script), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeTool("systemctl", `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE_DIR/manager.log"
+[[ "$*" == "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" ]] || exit 97
+printf 'LoadState=loaded\n'
+[[ "$OBSERVATION" == partial ]] || printf 'ActiveState=%s\n' "$PRIOR_STATE"
+[[ "$OBSERVATION" != duplicate ]] || printf 'ActiveState=inactive\n'
+[[ "$OBSERVATION" != error ]] || exit 42
+`)
+			writeTool("ssh-keygen", "#!/bin/sh\nexit 0\n")
+			writeTool("curl", `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE_DIR/curl.log"
 out=""
 url=""
 while [[ $# -gt 0 ]]; do
-	case "$1" in
-		-o)
-			out="$2"
-			shift 2
-			;;
-		-fsSL)
-			shift
-			;;
-		*)
-			url="$1"
-			shift
-			;;
-	esac
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -fsSL) shift ;;
+        *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
+    esac
 done
 case "$url" in
-	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
-		printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
-		;;
-	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig")
-		printf 'signed-payload\n' > "$out"
-		;;
+    "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
+        cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+set -eu
+[[ "$*" == "--version v9.9.9" ]]
+[[ "$PULSE_SERVICE_NAME" == pulse-url-fixture ]]
+[[ "$PULSE_INSTALL_DIR" == "$FIXTURE_DIR/install" ]]
+[[ "$PULSE_CONFIG_DIR" == "$FIXTURE_DIR/config" ]]
+printf '#!/bin/sh\necho '\''Pulse v9.9.9'\''\n' > "$PULSE_INSTALL_DIR/bin/pulse"
+printf 'v9.9.9\n' > "$PULSE_INSTALL_DIR/VERSION"
+printf 'installed\n' >> "$FIXTURE_DIR/installer.log"
+INSTALLER
+        ;;
+    "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig")
+        printf 'signed-payload\n' > "$out" ;;
+    *) exit 96 ;;
 esac
+`)
+			script := `source "$AUTO_UPDATER"
+log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+# This URL/handoff fixture has script binaries and a simulated manager,
+# not a managed process. Record the exact verifier handoff; real owned
+# process identity and fail-closed transactions are required separately.
+verify_update_running_executable() {
+    [[ "$1" == pulse-url-fixture ]] || return 97
+    printf '%s\n' "$1" >> "$FIXTURE_DIR/process-readback.log"
+}
+# Relocate only the helper's temporary files, keeping creation/mode/cleanup real.
+mktemp() {
+    local -a args=("$@")
+    local last=$((${#args[@]} - 1))
+    if [[ "${args[last]}" == /tmp/pulse-* ]]; then
+        args[last]="$FIXTURE_DIR/tmp/${args[last]##*/}"
+    fi
+    command mktemp "${args[@]}"
+}
+if perform_update v9.9.9; then
+    echo UPDATE_ACCEPTED
+else
+    echo UPDATE_REFUSED
+    exit 1
+fi
+[[ -z "$(trap -p RETURN)" ]]
 `
-	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
-		t.Fatalf("write curl stub: %v", err)
-	}
-	if err := os.WriteFile(sshKeygenPath, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
-		t.Fatalf("write ssh-keygen stub: %v", err)
-	}
-
-	script := `
-		PATH="` + tmpDir + `:$PATH"
-		GITHUB_REPO="rcourtman/Pulse"
-		INSTALL_DIR="` + installDir + `"
-		log() { :; }
-		detect_service_name() { echo pulse; }
-		get_current_version() { echo v9.9.9; }
-		systemctl() { return 0; }
-		INSTALL_SIGNATURE_IDENTITY="pulse-installer"
-		INSTALL_SIGNATURE_NAMESPACE="pulse-install"
-		PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
-` + extractAutoUpdateFunction(t, "release_signature_key_available") + `
-` + extractAutoUpdateFunction(t, "require_release_signature_verifier") + `
-` + extractAutoUpdateFunction(t, "verify_release_signature") + `
-` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
-		wait_for_service_active() { return 0; }
-` + extractAutoUpdateFunction(t, "perform_update") + `
-		perform_update v9.9.9
-	`
-
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
-	if err != nil {
-		t.Fatalf("bash: %v\n%s", err, out)
-	}
-
-	logContent, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read curl log: %v", err)
-	}
-	got := string(logContent)
-	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh") {
-		t.Fatalf("perform_update did not use versioned installer url:\n%s", got)
-	}
-	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig") {
-		t.Fatalf("perform_update did not use versioned installer signature url:\n%s", got)
-	}
-	if strings.Contains(got, "releases/latest/download/install.sh") {
-		t.Fatalf("perform_update still used latest installer url:\n%s", got)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", script)
+			cmd.Env = append(os.Environ(), "AUTO_UPDATER="+updater, "FIXTURE_DIR="+tmpDir,
+				"PATH="+filepath.Join(tmpDir, "tools")+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"GITHUB_REPO=rcourtman/Pulse", "PULSE_SERVICE_NAME=pulse-url-fixture",
+				"PULSE_INSTALL_DIR="+installDir, "PULSE_CONFIG_DIR="+filepath.Join(tmpDir, "config"),
+				"PRIOR_STATE="+tc.state, "OBSERVATION="+tc.observation)
+			out, runErr := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("fixture exceeded deadline: %v\n%s", ctx.Err(), out)
+			}
+			if (runErr == nil) != tc.admitted {
+				t.Fatalf("admitted=%v, bash: %v\n%s", tc.admitted, runErr, out)
+			}
+			manager, err := os.ReadFile(filepath.Join(tmpDir, "manager.log"))
+			if err != nil || len(manager) == 0 {
+				t.Fatalf("real helper did not observe the selected unit: %v\n%s", err, manager)
+			}
+			for _, call := range strings.Split(strings.TrimSpace(string(manager)), "\n") {
+				if call != "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" {
+					t.Fatalf("unexpected manager mutation or query: %s\n%s", call, out)
+				}
+			}
+			processReadback, processErr := os.ReadFile(filepath.Join(tmpDir, "process-readback.log"))
+			if tc.admitted && tc.state == "active" {
+				if processErr != nil || string(processReadback) != "pulse-url-fixture\n" {
+					t.Fatalf("active verifier handoff did not use the selected service: %v\n%s", processErr, processReadback)
+				}
+			} else if !os.IsNotExist(processErr) {
+				t.Fatalf("inactive/refused transaction reached process verification: %v\n%s", processErr, processReadback)
+			}
+			temporary, err := os.ReadDir(filepath.Join(tmpDir, "tmp"))
+			if err != nil || len(temporary) != 0 {
+				t.Fatalf("unexpected retained temporary/backup files: %v, %v\n%s", temporary, err, out)
+			}
+			if !tc.admitted {
+				for _, name := range []string{"curl.log", "installer.log"} {
+					if _, err := os.Stat(filepath.Join(tmpDir, name)); !os.IsNotExist(err) {
+						t.Fatalf("unknown state reached %s: %v\n%s", name, err, out)
+					}
+				}
+				got, err := os.ReadFile(binary)
+				if err != nil || string(got) != old || !strings.Contains(string(out), "UPDATE_REFUSED") {
+					t.Fatalf("refusal did not preserve the original installation: %v\n%s\n%s", err, got, out)
+				}
+				version, err := os.ReadFile(filepath.Join(installDir, "VERSION"))
+				if err != nil || string(version) != "v1.0.0\n" {
+					t.Fatalf("refusal changed version metadata: %v\n%s", err, version)
+				}
+				return
+			}
+			logContent, err := os.ReadFile(filepath.Join(tmpDir, "curl.log"))
+			want := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
+			wantSignature := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
+			requests := strings.Split(strings.TrimSpace(string(logContent)), "\n")
+			if err != nil || len(requests) != 2 || !strings.HasPrefix(requests[0], want) ||
+				!strings.HasPrefix(requests[1], wantSignature) {
+				t.Fatalf("expected only the two exact versioned requests: %v\n%s", err, logContent)
+			}
+			installed, err := os.ReadFile(filepath.Join(tmpDir, "installer.log"))
+			if err != nil || string(installed) != "installed\n" || !strings.Contains(string(out), "UPDATE_ACCEPTED") {
+				t.Fatalf("targeted installer did not execute exactly once and complete verification: %v\n%s\n%s", err, installed, out)
+			}
+			got, err := os.ReadFile(binary)
+			if err != nil || string(got) != "#!/bin/sh\necho 'Pulse v9.9.9'\n" {
+				t.Fatalf("installer did not replace the executable identity: %v\n%s", err, got)
+			}
+		})
 	}
 }
 
@@ -5452,6 +5644,8 @@ func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *tes
 		timeout() { return 1; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
@@ -5733,7 +5927,10 @@ exit 1
 		get_latest_release_from_redirect() { return 1; }
 ` + extractRootInstallShellFunction(t, "read_configured_update_channel") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_target_release") + `
 		resolve_target_release
 		printf '%s\n' "$LATEST_RELEASE"
@@ -7113,42 +7310,127 @@ write_action_runner_config
 	}
 }
 
-func TestInstallSHActionRunnerRejectsGenericInsecureHTTPSBeforeCredentialWrite(t *testing.T) {
+func TestInstallSHActionRunnerRecoveredCollectorTrust(t *testing.T) {
 	root := t.TempDir()
-	tokenPath := filepath.Join(root, "config", "token")
-	script := `
-set -u
+	runnerBinary := filepath.Join(root, "pulse-agent-runner")
+	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
+	build.Dir = filepath.Dir(repoFile("go.mod"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build action runner: %v\n%s", err, output)
+	}
+	const token = "fixture-runner-credential"
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Header.Get("Authorization") != "Bearer "+token || r.Method != http.MethodDelete {
+			t.Errorf("unexpected credential lifecycle request")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	caFile := filepath.Join(root, "ca.pem")
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := sha256.Sum256(server.Certificate().Raw)
+	for _, tc := range []struct {
+		name, ca, pin       string
+		systemTrust, wantOK bool
+	}{
+		{name: "system roots", systemTrust: true, wantOK: true},
+		{name: "recovered custom CA", ca: caFile, wantOK: true},
+		{name: "recovered exact pin", pin: hex.EncodeToString(fingerprint[:]), wantOK: true},
+		{name: "untrusted certificate"},
+		{name: "mismatched pin", pin: strings.Repeat("00", 32), systemTrust: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "system roots" && runtime.GOOS != "linux" {
+				t.Skip("process-confined system roots require the Linux root loader")
+			}
+			root := t.TempDir()
+			tokenPath := filepath.Join(root, "config", "token")
+			envFile := filepath.Join(root, "config", "runner.env")
+			script := `
+set -euo pipefail
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Join(root, "config") + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Join(root, "state") + `"
 ACTION_RUNNER_TOKEN_FILE="` + tokenPath + `"
-ACTION_RUNNER_ENV_FILE="` + filepath.Join(root, "config", "runner.env") + `"
+ACTION_RUNNER_ENV_FILE="` + envFile + `"
+ACTION_RUNNER_BINARY_PATH="` + runnerBinary + `"
 ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(root, "state", "health.json") + `"
 ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
 STATE_DIR="` + filepath.Join(root, "collector") + `"
 HOSTNAME_OVERRIDE="host.local"
 AGENT_ID="agent-1"
-ACTION_TOKEN="must-not-be-written"
-PULSE_URL="https://pulse.example"
+ACTION_TOKEN="` + token + `"
+PULSE_URL="` + server.URL + `"
+PULSE_TOKEN="fixture-collector-credential"
 SERVER_FINGERPRINT=""
 CURL_CA_BUNDLE=""
-INSECURE="true"
+INSECURE="false"
 EXIT_GENERAL=1
 EXIT_MISSING_ARGS=2
 fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+chown() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
 ` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
 ` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
+` + extractInstallShellFunction(t, "cancel_pending_action_runner_credential") + `
+recover_connection_state_from_env_stream <<'SAVED_STATE'
+PULSE_INSECURE_SKIP_VERIFY=true
+PULSE_CACERT=` + tc.ca + `
+PULSE_SERVER_FINGERPRINT=` + tc.pin + `
+SAVED_STATE
+[[ "$INSECURE" == "true" ]]
 write_action_runner_config
+[[ "$INSECURE" == "true" && -z "$ACTION_TOKEN" ]]
+# Load the installed environment as systemd would, preserving machine trust
+# when no explicit CA is configured. The collector's bypass must stay absent.
+set -a
+. "$ACTION_RUNNER_ENV_FILE"
+set +a
+[[ "${PULSE_INSECURE:-false}" == "false" ]]
+cancel_pending_action_runner_credential "agent-1" "host.local" "` + token + `"
 `
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "refuses generic insecure HTTPS") {
-		t.Fatalf("generic insecure HTTPS was not rejected: %v\n%s", err, out)
-	}
-	if _, statErr := os.Stat(tokenPath); !os.IsNotExist(statErr) {
-		t.Fatalf("runner credential was written before transport rejection: %v", statErr)
+			cmd := exec.Command("bash", "-c", script)
+			// Go's system root loader uses these paths. Confine the fixture's
+			// machine trust to this child, without changing the host trust store.
+			roots := filepath.Join(root, "empty-roots.pem")
+			mustWrite(t, roots, "")
+			if tc.systemTrust {
+				roots = caFile
+			}
+			cmd.Env = append(os.Environ(), "SSL_CERT_FILE="+roots, "SSL_CERT_DIR="+root, "PULSE_INSECURE=")
+			before := requests.Load()
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("recovered collector trust: error=%v, want success=%v\n%s", err, tc.wantOK, out)
+			}
+			if got := requests.Load() - before; (got == 1) != tc.wantOK || got > 1 {
+				t.Fatalf("credential-bearing requests = %d, trusted=%v", got, tc.wantOK)
+			}
+			content, readErr := os.ReadFile(envFile)
+			if readErr != nil || strings.Contains(string(content), "PULSE_INSECURE") || strings.Contains(string(content), token) {
+				t.Fatalf("runner environment contains collector bypass/credential or is missing: %v", readErr)
+			}
+			persisted, readErr := os.ReadFile(tokenPath)
+			if readErr != nil || string(persisted) != token+"\n" || strings.Contains(string(out), token) {
+				t.Fatalf("private runner credential was lost or exposed: %v", readErr)
+			}
+		})
 	}
 }
 
@@ -7766,11 +8048,40 @@ ACTION_RUNNER_TOKEN_FILE="` + paths[3] + `"
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(paths[3]) + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Dir(paths[4]) + `"
 EXIT_GENERAL=1
-systemctl() { printf '%s\n' "$*" >> "` + serviceLog + `"; return 0; }
+runner_stopped=false runner_disabled=false
+timeout() {
+    [[ "$1 $2 $3 $4" == '-k 1 5 systemctl' ]] || return 90
+    shift 4
+    systemctl "$@"
+}
+systemctl() {
+    printf '%s\n' "$*" >> "` + serviceLog + `"
+    case "$1" in
+        show)
+            if [[ "$runner_stopped" == true ]]; then
+                printf 'ActiveState=inactive\n'
+            else
+                printf 'ActiveState=active\n'
+            fi
+            if [[ "$runner_disabled" == true ]]; then
+                printf 'UnitFileState=disabled\n'
+            else
+                printf 'UnitFileState=enabled\n'
+            fi
+            printf 'LoadState=loaded\n'
+            ;;
+        stop) runner_stopped=true ;;
+        disable) runner_disabled=true ;;
+        *) return 91 ;;
+    esac
+}
 revoke_action_runner_credential() { return 1; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "read_agent_removal_unit_state") + `
+` + extractInstallShellFunction(t, "confirm_agent_unit_quiescent") + `
+` + extractInstallShellFunction(t, "quiesce_agent_units_for_removal") + `
 ` + extractInstallShellFunction(t, "teardown_action_runner_service") + `
 teardown_action_runner_service
 `
@@ -8034,4 +8345,285 @@ grep -qx 'saved installer' "$PWD/state/install.sh"
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("lifecycle ownership: %v\n%s", err, out)
 	}
+}
+
+func agentIDRecoveryShell(t *testing.T, binaryPath, root, path string) string {
+	t.Helper()
+	return `
+        set -euo pipefail
+        COLLECTOR_LIFECYCLE_BINARY_PATH="` + binaryPath + `"
+        INSTALL_DIR="` + root + `"
+        BINARY_NAME="absent-legacy-agent"
+        LEAST_PRIVILEGE_USER="pulse-agent-test-missing"
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+` + extractInstallShellFunction(t, "read_agent_id_file_safely") + `
+        read_agent_id_file_safely "` + path + `"
+    `
+}
+
+func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		name string
+		body []byte
+		want string
+	}{
+		{"newline", []byte("agent-safe-123\n"), "agent-safe-123"},
+		{"no-newline", []byte("agent-safe-123"), "agent-safe-123"},
+		{"maximum", []byte(strings.Repeat("a", 128) + "\n"), strings.Repeat("a", 128)},
+		{"oversized-valid-prefix", []byte("agent-safe-123\n" + strings.Repeat("a", 5000)), ""},
+		{"second-identity", []byte("agent-safe-123\nother-agent\n"), ""},
+		{"nul-with-newline", []byte("agent-safe-123\x00\n"), ""},
+		{"nul-without-newline", []byte("agent-safe-123\x00"), ""},
+		{"carriage-return", []byte("agent-safe-123\r\n"), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(root, tc.name)
+			if err := os.WriteFile(path, tc.body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", agentIDRecoveryShell(t, "", root, path))
+			cmd.WaitDelay = time.Second
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("legacy recovery deadline expired: %v exit=%v", ctx.Err(), err)
+			}
+			if tc.want != "" {
+				if err != nil || string(out) != tc.want+"\n" {
+					t.Fatalf("valid legacy identity rejected: %v output=%q", err, out)
+				}
+			} else if err == nil || len(out) != 0 {
+				t.Fatalf("legacy recovery accepted or disclosed corrupt state: %v output=%q", err, out)
+			}
+		})
+	}
+}
+
+// Run the production Unix removal gate through private state/service/transport
+// doubles. Native platform installation and actual transport remain separate.
+func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_uninstall_state.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Unix removal state controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_missing_url_retains_every_credential_representation_without_a_request",
+		"test_server_refusal_unknown_or_other_identity_retains_service_and_state",
+		"test_systemd_refusal_precedes_remote_removal_and_every_local_mutation",
+		"test_exact_confirmation_precedes_process_service_and_state_teardown",
+		"test_credential_free_local_only_removal_needs_no_url_or_request",
+		"test_server_confirmation_does_not_grant_unknown_path_removal",
+		"test_noninteractive_input_token_survives_missing_url_refusal",
+		"test_noninteractive_input_token_survives_unconfirmed_removal",
+		"test_confirmed_removal_retains_caller_owned_input_token",
+		"test_confirmed_removal_deletes_runtime_token_only_with_authorised_state",
+		"test_noninteractive_input_token_survives_root_refusal",
+		"test_interactive_input_token_is_read_only_at_ingress",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.UnixUninstallState."+name+") ... ok") {
+			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_systemd_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("systemd teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unknown_read_stop_and_disable_retain_every_artifact",
+		"test_unsettled_or_unknown_states_never_authorise_deletion",
+		"test_helper_socket_and_service_are_reconciled_together",
+		"test_known_quiescence_allows_only_owned_teardown",
+		"test_failed_revocation_retains_stopped_runner_recovery_material",
+		"test_full_batch_reconciles_earlier_activation_sources",
+		"test_real_read_timeout_stops_its_owned_child",
+		"test_timeout_probe_keeps_prepared_tool_and_refuses_missing_preparation",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentSystemdTeardown."+name+") ... ok") {
+			t.Fatalf("systemd teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 8 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete systemd teardown verdict:\n%s", output)
+	}
+	entry, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	uninstall := strings.SplitN(string(entry), "# --- Uninstall Logic ---", 2)[1]
+	quiesce := strings.Index(uninstall, "quiesce_agent_units_for_removal")
+	if quiesce < 0 || quiesce >= strings.Index(uninstall, "if ! uninstall_collector_registration;") ||
+		quiesce >= strings.Index(uninstall, "pkill -f") {
+		t.Fatal("full removal must quiesce every affected systemd unit before remote removal or process mutation")
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_openrc_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("OpenRC teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_stop_and_disable_refusals_retain_every_local_file",
+		"test_failed_partial_or_diagnostic_observations_are_not_replaced_by_another_read",
+		"test_independent_post_stop_and_runlevel_reads_are_mandatory",
+		"test_refused_manager_cannot_start_remote_or_local_removal",
+		"test_quiescence_precedes_server_process_and_state_mutation",
+		"test_server_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_keeps_recovery_after_confirmed_remote_removal",
+		"test_known_stopped_state_and_every_runlevel_allow_only_selected_teardown",
+		"test_absent_and_repeated_removal_need_manager_and_process_absence",
+		"test_unexpected_service_paths_refuse_before_stop_or_deletion",
+		"test_source_selection_and_caller_order_have_one_bounded_observation_per_operation",
+		"test_real_status_timeout_stops_its_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentOpenRCTeardown."+name+") ... ok") {
+			t.Fatalf("OpenRC teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete OpenRC teardown verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix rc.d/SysV controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_legacy_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("legacy manager removal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_stop_refusal_retains_all_local_recovery",
+		"test_manager_refusal_precedes_remote_and_state_erasure",
+		"test_ignored_stop_disable_and_reactivation_are_not_success",
+		"test_failed_empty_diagnostic_or_duplicate_reads_are_not_absence",
+		"test_enablement_refusals_and_unknown_values_retain_recovery",
+		"test_missing_required_tools_refuse_without_losing_recovery",
+		"test_final_process_read_and_orphan_supervisor_are_required",
+		"test_pid_ownership_and_unexpected_paths_refuse_before_signals",
+		"test_every_owned_runlevel_link_and_both_layouts_are_removed",
+		"test_foreign_malformed_or_unobservable_runlevels_are_not_deleted",
+		"test_confirmed_manager_then_server_then_recheck_then_erasure",
+		"test_remote_refusal_keeps_stopped_install_and_all_recovery_files",
+		"test_late_refusal_keeps_local_recovery_after_remote_confirmation",
+		"test_known_stopped_missing_and_repeated_removal_are_safe",
+		"test_legacy_script_pid_erasure_cannot_authorise_credential_erasure",
+		"test_process_inventory_does_not_return_arguments_or_secrets",
+		"test_real_process_timeout_stops_owned_child_without_erasure",
+		"test_rendered_stop_retains_pidfiles_on_refused_or_ignored_signals",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentLegacyTeardown."+name+") ... ok") {
+			t.Fatalf("legacy manager control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 18 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete legacy manager verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_upstart_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("DSM Upstart retirement and production EXIT cleanup controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_refused_manager_precedes_remote_and_state_erasure",
+		"test_failed_empty_partial_diagnostic_status_cannot_authorise_removal",
+		"test_effective_disabled_config_is_required_after_override_reload",
+		"test_independent_process_inventory_rejects_orphan_or_unavailable_read",
+		"test_untrusted_config_override_and_prior_retirement_refuse_without_changes",
+		"test_concurrent_override_file_or_directory_is_not_replaced_or_written_inside",
+		"test_missing_tools_refuse_without_remote_or_erasure",
+		"test_remote_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_retains_recovery_after_remote_confirmation",
+		"test_unconfirmed_job_retirement_restores_exact_config_and_retains_manual",
+		"test_concurrent_config_is_not_clobbered_and_original_staged_recovery_is_retained",
+		"test_confirmed_job_absence_precedes_selected_local_erasure",
+		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
+		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
+		"test_real_status_timeout_stops_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
+			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
+		"test_foreign_or_indirect_bootstrap_is_not_mutated",
+		"test_missing_activation_target_cannot_hide_an_owned_task",
+		"test_bootstrap_symlink_directory_or_writable_file_refuses_before_mutation",
+		"test_missing_tools_are_not_local_only_removal_permission",
+		"test_every_matching_task_is_disabled_and_independently_observed_before_stop",
+		"test_partial_refused_ignored_or_reactivated_disable_retains_recovery",
+		"test_unit_or_process_uncertainty_keeps_stopped_task_recovery",
+		"test_task_activation_during_systemd_stop_refuses_before_remote",
+		"test_server_refusal_retains_disabled_tasks_and_all_recovery_without_restart",
+		"test_changed_or_refused_post_remote_inventory_precedes_first_deletion",
+		"test_partial_refused_ignored_or_recreated_task_deletion_keeps_recovery",
+		"test_all_owned_tasks_retire_before_state_erasure_and_unrelated_task_survives",
+		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
+		"test_ordinary_linux_state_is_not_appliance_evidence",
+		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
+			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
 }

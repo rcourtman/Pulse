@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "21b496152c42737d435d2af72aaacbbe469c58ec",
+  "verified_at": "2026-10-10T08:50:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "159551fe3b0c0e66accd24e4a364f3c2c999c713da0f2a2e8eec91c876cb3255"
+  },
+  "routes": [
+    "/proxmox/overview?kiosk=1",
+    "/proxmox/overview?kiosk=0",
+    "/proxmox/storage?kiosk=1",
+    "/proxmox/storage?kiosk=0",
+    "/proxmox/backups?kiosk=1",
+    "/proxmox/backups?kiosk=0",
+    "/docker?kiosk=1",
+    "/docker?kiosk=0",
+    "/kubernetes?kiosk=1",
+    "/kubernetes?kiosk=0",
+    "/vmware?kiosk=1",
+    "/vmware?kiosk=0",
+    "/truenas/overview?kiosk=1",
+    "/truenas/overview?kiosk=0",
+    "/standalone/machines?kiosk=1",
+    "/standalone/machines?kiosk=0"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 400
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Vite dev server serving this exact tree (sharedPlatformPage.tsx byte-identical to the staged file, sha256 matches content_sha256, rebased on origin/main 21b496152c with PR 2779's FilterBar) over a private DEMO_MODE mock backend (50 Proxmox nodes, 929 guests, 7 ESXi hosts, Docker, Kubernetes, TrueNAS, Machines), driven by headless Chromium. 1280x400 is the rack LCD from issue 917. Every check below ran on this final revision; an earlier revision whose preview reset was tied to kiosk gave the same kiosk results, and review of it led to the expansion-preserving reset verified below The staged sharedPlatformPage.tsx differs from the bytes exercised below only by one added sentence in a helper comment, so its compiled behaviour is unchanged.",
+    "Baseline on main's sharedPlatformPage.tsx with the same FilterBar: kiosk still rendered a section rail on every route (two on Proxmox Backups: Proxmox sections and Backup views), costing the 400px display 53px (first table top 142px against 89px after, Backups 169px against 63px), and the Proxmox overview listed 12 of 50 nodes behind a Show all 50 nodes button. A scroll sweep of the kiosk page saw 12 nodes and no offline node",
+    "Final source, kiosk on at 1440x900, 1280x400 and 390x844 across Proxmox overview, Storage, Backups, Docker, Kubernetes and vSphere (TrueNAS and Machines at 1440x900 and 390x844): zero section or view rails, zero filter bars, no Show all button; every table still renders. 44 route and mode checks, none failing",
+    "Proxmox overview in kiosk: all 50 nodes render (36 rows in the DOM at 390 wide, where rows are windowed, 21 of them in the first fold); a scroll sweep at 1440 sees 50 nodes including Disaster Recovery D marked Offline at position 23, which the capped baseline never showed",
+    "Kiosk off control: every route renders its rail again (Proxmox Backups both), the Proxmox overview shows 12 node rows (6 at 390) with Show all 50 nodes, and the phone rail shows its scroll-right arrow",
+    "Backups at 1280x400 in kiosk starts its first table at 63px and shows the backup servers, the Backup health bar and the first workload rows without the By date / Coverage rail"
+  ],
+  "interactions": [
+    "Clicked the header Enter kiosk mode button at 1440 and 390: rail and Show all button disappeared without a reload and the node table grew from 12 (6) to 50 rows (36 windowed); pressed Escape: the rail, Show all 50 nodes and the 12 (6) row cap returned, and at 390 the rail scroll-right arrow came back on the new element",
+    "Outside kiosk clicked Show all 50 nodes then Show fewer nodes at 1440 and 390: 12 to 50 to 12 rows (6 to 36 to 6 windowed)",
+    "Expanded the node table, opened the drawer of a node past the cap (14th row), entered kiosk and left it with Escape at 1440 and 390: the expansion (Show fewer nodes) and the open drawer both survived the round trip, and Show fewer nodes then collapsed to 12 (6) rows and closed the drawer",
+    "Clicked the Storage link in the restored Proxmox rail at 1440 and 390: navigated to /proxmox/storage",
+    "Typed analytics with kiosk on at /proxmox/overview: no input appeared and the 50 node rows were unchanged; with no drawer open on /kubernetes typing zz reached no input",
+    "Clicked the VMS cell of Research C in kiosk: heading read Guests on Research C 18 with a Show all nodes button, which returned the heading to Guests 929",
+    "Opened the Kubernetes cluster drawer in kiosk: Namespaces and Deployments tabs each showed their search field and typing pr after clicking blank page took the keys into it. No Swarm tab appeared on any Docker row opened in the mock estate, so the Swarm drawer was not exercised"
+  ]
+}

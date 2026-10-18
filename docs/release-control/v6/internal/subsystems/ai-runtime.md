@@ -25,6 +25,268 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Uncertain remediation retains a model-led follow-up
+
+An inconclusive verification remains unresolved and may be investigated again
+when the model reports it present, without another cooldown on top of Watch's
+schedule. Existing attempt admission and autonomy checks still apply.
+A model's fresh `present` assessment records evidence during Watch and hands off
+only after the Watch adapter has unwound. It does not dispatch a second
+investigation inside the detection conversation. Deliberate rejection,
+needs-attention and cannot-fix outcomes keep their existing terminal meaning.
+
+`pulse-enterprise:internal/investigation/orchestrator.go` captures the prior
+investigation context before replacing the finding's session identity. It reads
+only the exact retained session for the current occurrence and gives the model
+its bounded summary and canonical action receipt as historical evidence.
+Reopened occurrences with no current session cannot borrow an old receipt.
+The model must reconcile an uncertain effect using current reads before deciding
+whether a new action is justified. This adds no mutation or approval authority.
+`findings_verification_followup_test.go` covers eligibility, persistence and the
+Watch handoff. The enterprise orchestrator test covers receipt continuity and
+session isolation. Native unattended runs remain necessary outcome evidence.
+
+
+### Patrol resumes its actual next-check deadline after restart
+
+The main Patrol timer checkpoints its next deadline and effective interval in
+the existing run-history persistence envelope. A restart retains that deadline
+after the normal collection/configuration startup grace. An overdue deadline
+causes one immediate check after that grace, without replaying missed intervals.
+An explicit interval change resets and checkpoints the new timer deadline.
+Scoped checks and capped run-history retention cannot move an existing deadline.
+Older stores without a cursor resume from the last successful full run and the
+current interval. Disabled preparation never checkpoints a check that did not run.
+
+`patrol_schedule_test.go` exercises the real timer loop with Go simulated time,
+including repeated restarts, due/overdue execution, interval changes and first
+startup. History adapter and configuration tests verify file reconstruction,
+failed-write retry and concurrent history/deadline preservation. Live native
+Patrol and independent workload observations remain necessary for operational
+outcome qualification.
+
+### Investigations retain collected backup and storage history evidence
+
+Guest investigation manifests include the existing read-only storage tool so
+backup failures do not require a host command connection. `backup_tasks` queries
+the tenant's canonical recovery store without misclassifying execution records
+as backup artifacts, supports canonical subject IDs and preserves failed-task
+error text. Task success alone never proves that a restore artifact exists.
+The API and tool adapter share `Manager.ListPointsForOrg`, including the
+canonical graph source in demo mode, rather than presenting fixture evidence
+through HTTP alone while tools consult an empty store.
+`TestInvestigationReadsCanonicalBackupFailureWithoutAgent` uses mapped, persisted
+task evidence and checks subject and tenant isolation. The `backups` inventory
+also reads this org-scoped source with `KindBackup` and canonical subject IDs.
+It returns canonical points with repository references, provenance and optional
+verification fields, rather than VM-ID-filtered PBS/PVE summary lists or an
+unscoped recent-task cache. Global offset pagination preserves source ordering
+across providers and does not scan earlier pages. Read failures remain errors;
+an artifact record alone is not proof of restorability.
+
+Storage performance reads resolve the canonical registry metrics target and use
+the monitor-owned history selector. Responses contain usage percentages with
+timestamps and source provenance, including `mock_synthetic`, rather than
+invented zero CPU/memory observations. Retained read errors remain errors and an
+empty requested window cannot be filled with older chart samples.
+History downsampling covers every observation in the returned window, including
+the newest remainder samples when the count is not a multiple of the tool limit.
+`TestDownsampleMetrics_IncludesNewestRemainder` covers dense retained series.
+`TestStoragePerformanceReadsRetainedHistoryAcrossRestart`,
+`TestStorageInvestigationHistoryKeepsRequestedWindowAndStoreErrors` and
+`TestInvestigationStorageHistoryUsesCommunityMonitoringSource` cover retained
+storage history, measured zero, failure, window bounds and API/tool parity.
+These are read-path controls, not proof of real remediation or release readiness.
+
+### Pro Patrol defaults to Ask first until the operator chooses
+
+`AIConfig.PatrolAutonomyLevel` stays empty until an operator saves a Patrol
+mode, and only explicit saves write it. `AIConfig.PatrolAutonomyLevelChosen`
+reports that, and `AIConfig.ResolvedPatrolAutonomyLevel(entitled)` returns
+`approval` (Ask first) for a never-chosen install that is entitled to
+investigation, otherwise the stored or monitor level.
+`Service.GetEffectivePatrolAutonomyLevel` applies the same default, but only on
+a positive licence answer from `Service.PatrolInvestigationLicensed`, which
+treats a missing licence checker as unlicensed. `HasLicenseFeature` stays
+fail-open for its existing callers; the default must not, because a startup
+window without a checker would otherwise start spending provider budget on an
+install that may not be Pro. Unlicensed and unknown installs stay Watch only, an
+explicit choice always wins, and readiness reads the same resolved level. The
+default sends new and re-detected warning and critical findings to
+investigation through the existing dispatch path and budget checker; it adds no
+execution authority, because Ask first still waits for approval before any
+change. Proofs: `internal/ai/service_patrol_default_test.go`,
+`internal/config/ai_config_test.go`
+(`TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls`) and
+`internal/api/patrol_autopilot_test.go` (`TestPatrolAutonomyReportsTheProDefault`).
+
+### Guest memory remains qualified through tools and local observers
+
+The existing guest get/list/topology tools and Assistant inventory context carry
+selected memory evidence with the percentage. Unavailable/invalid memory is
+null, not zero usage; a measured zero stays numeric. Evidence retains source,
+state and original observation time, including unknown pressure and possible
+reclaimable cache. Condensed query facts retain the same qualification rather
+than saving a bare percentage. `TestGuestMemoryQueryEvidence` and
+`TestAssistantGuestMemoryContextAndFacts` check the real tool/context/fact paths.
+
+The existing local memory observer uses that same interpretation for VM/system
+containers. Unknown pressure wakes it with an explicit evidence gap, not a
+numeric breach or a healthy predicate. A known selected guest sample is bounded
+by its own observation age; refreshing the resource through another source does
+not renew it. Other-platform legacy readings and other metric observers retain
+their existing semantics. `TestPatrolObserverGuestMemoryOrigin` checks unknown,
+retained, undated, future, invalid and stale origins alongside genuine low/zero/
+high pressure and the age boundary. This changes no objective ABI, threshold,
+collection lease, observer authority or guest-command admission.
+
+Performance-tool guest memory history remains numeric, but explicitly lacks
+per-sample source/pressure qualification. A live current reading cannot reattribute
+past samples or prove that past high usage was pressure/a leak.
+`TestGuestMemoryHistoryDoesNotBorrowLiveOrigin` checks unchanged numeric history,
+its truthful limitation and non-guest compatibility. No History writer/schema
+or existing stored finding is changed. These controls do not establish #2762's
+running source, episode cause, native recovery or a containing release.
+
+### Patrol guest memory is qualified evidence, not an unlabelled percentage
+
+Patrol consumes the selected guest memory metric's original observation,
+including absence, last-known state, source and time. It does not borrow a
+different raw Proxmox facet, a refreshed resource timestamp or disk readiness.
+Current, dated cache-aware Proxmox/QGA/Pulse-agent readings can support guest
+pressure flags, anomalies, forecasts, actionability and recovery verification.
+Cache-inclusive status/cluster/total-minus-used estimates, unknown sources,
+undated/future origins and retained readings remain visible but cannot establish
+current pressure or recovery. Missing memory is N/A, not measured zero; real
+current zero and real high pressure both retain their meaning. Other platforms
+without Proxmox observations keep their existing selected readings.
+
+Full, quiet and condensed inventory and actual triage seeds preserve these
+qualifications, including unflagged running guests within the existing analysis scope. Guest
+analysis opt-outs do not acquire the new evidence section. The no-flag rollup is
+not a health verdict. Native guest runtime status, rather than canonical collection
+status, owns running/paused/stopped eligibility. A snapshot-only alert review
+cannot auto-resolve a memory alert from unknown guest pressure; independently
+verified current recovery and removed-resource handling remain separate.
+
+`TestPatrolGuestMemoryEvidence`, `TestPatrolGuestMemoryForecastsAndAnomalies`,
+`TestPatrolGuestMemoryAlertRecovery` and
+`TestPatrolGuestMemorySelectedMetricAndOtherPlatforms` exercise these connected
+paths. `TestIssue2762NamedMemoryFields` checks the existing named MemAvailable
+parser against synthetic cache-heavy/reordered evidence, not a new free-table
+parser. These controls do not establish issue #2762's installed input or cause,
+a cleared finding, or a containing release. Monitoring collection, guest-agent
+admission, configured alert thresholds, history storage and access are unchanged.
+
+The `cluster-resources` source is read by guest type. For an LXC, Proxmox's
+listing `mem` is cgroup usage with page cache subtracted (`PVE::CGroup::get_memory_stat`:
+`memory.current` minus `memory.stat` `file` on cgroup v2, `usage_in_bytes` minus
+`total_cache` on v1), measured against the container's own limit, so a current
+dated reading on an agentless container keeps its pressure meaning for flags,
+forecasts, anomalies and alert review. A QEMU guest's listing value is the host's
+view of guest RAM and stays cache-inclusive and pressure-unknown, as do
+`status-mem`, `status-freemem` and `derived-total-minus-used` for every guest.
+`TestPatrolAgentlessLXCListingMemoryIsPressure` checks both guest types through
+legacy and canonical read state.
+
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
+
+### Assistant protection is the per-resource lock, not a settings list
+
+Settings no longer offers a Protected guests list, because it never filtered
+canonical saved resource plans. The Assistant settings panel points the operator
+at the resource's Never auto-remediate lock, and both existing help pages say
+the same and state that the list is gone. The settings component, the
+`settingsArchitecture` source pin and the mirrored-help checks prevent a
+restored exclusion promise. `TestService_isAutonomousModeEnabled` also covers
+every current saved level, explicit core-owned investigation enable/disable and
+unchanged stored values.
+
+### Interactive Assistant modes reflect action planning
+
+Interactive Assistant offers Read-only and Ask first (`controlled`).
+`config.AssistantControlLevel` projects legacy `autonomous` to controlled only
+for interactive responses/tool availability. Saved bytes, shared capability
+vocabulary, entitlement checks and legacy `IsAutonomous` approval-admission
+remain intact; removing that legacy check would relax command approval.
+Chat's control tool saves typed plans to Actions without execution. Scoped
+handoff flags, execute authority, policy and action lifecycle
+review/run/verification remain necessary; Patrol mode/Autopilot is separate.
+Unrelated Settings saves compare normalised values and preserve saved legacy
+preferences. Runtime, real encrypted-settings roundtrip/API, mounted component
+and public-help controls cover this boundary; no installed action is proved.
+
+### Assistant action plans do not guess an installation from session placement
+
+An explicit current canonical resource ID takes precedence over stale session
+aliases in `pulse_control`. Without one, session-to-inventory binding must have
+one canonical match: repeated VMID/node pairs, container-ID/host pairs, agent
+names or conflicting canonical aliases cannot select the first listed resource.
+Ambiguity returns the canonical alternatives with the tool error bit before
+calling the action planner, including for an older session-only reference.
+The advertised-action projection omits these ambiguous targets too.
+
+Unique placement, canonical aliases and inventory-only lookup remain usable
+without another discovery step. Inventory-only canonical lookup retains session
+registration. Capability checks, approval policy and execution remain with the
+existing action lifecycle; these source controls establish no native action or
+cross-installation monitoring recovery.
+`control_target_identity_test.go` covers both inventory orders, all four control
+resource kinds, conflicting aliases, planning refusal, stale-session canonical
+override, unique placement and session continuity.
+
+### Guest-config tools require an unambiguous resource identity
+
+The existing VM/system-container configuration tool selects an exact canonical
+resource ID before considering a name or bare VMID. A name/VMID matching more
+than one guest or a target lacking complete provider placement returns a useful
+error without invoking the config provider. Successful configuration and its
+governance metadata come directly from the selected typed guest view, never a
+second name-based resolution. Unique aliases remain supported; app-container configuration,
+command authority and provider permissions are unchanged.
+
+`TestGuestConfigToolIdentity` covers both inventory orders, shared names/VMIDs,
+canonical-ID/name collisions, unique aliases and missing/invalid placement at
+the actual tool/provider boundary. It checks config attribution and no provider
+read on refusal. Source controls are not installed multi-instance recovery.
+
+
+### Permanent suppression rules remain reversible — issue #2528
+
+The existing manual suppression API/store semantics remain unchanged. Patrol
+Activity now exposes scoped list/confirm/remove/readback for explicitly manual
+rules. Deleting a rule permits future matches but does not reopen historical
+dismissals, erase findings, broaden creation scope or modify other rules.
+Finding-specific Reopen and remembered decisions remain distinct. Frontend
+API/component controls plus authenticated handler/store controls verify these
+boundaries; source/browser proof does not establish installed or reporter
+acceptance.
+
+Manual-rule confirmation retains a readable scope and exact ID with a scrollable long reason and separate action footer. This is an existing-flow accessibility repair, not a change to deletion, finding history or server authority.
+
+
+### Host filesystem alerts retain exact subjects in scoped Patrol
+
+An alert-button request may name a collected child subject such as
+`agent:<source-id>/disk:docker-data`. Patrol binds that reference through the
+shared current-inventory resolver only when the exact collected alert identifier
+and subject agree. The canonical owner becomes the collection scope. The alert
+keeps its original child identity, filesystem metadata, observed value, threshold
+and message in both full and budgeted model context. Related child alert evidence
+is retained only for the selected current owner. Missing owners, caller-authored
+child paths, names and conflicting source identities cannot broaden scope.
+
+Linked VM, container and node owners retain their agent observations. Node/host
+views of the same proven canonical owner are one identity. Automatic alert type
+hints follow that owner while explicit caller type restrictions stay intact.
+Admission and execution resolve independently against current collection state.
+`patrol_alert_scope_test.go` covers linked owners, evidence, repeated resolution
+and rejected subjects. `patrol_host_disk_scope_test.go` exercises the production
+host alert evaluator and HTTP handler. The opt-in browser backend and
+`scripts/check-host-disk-patrol.mjs` verify `/alerts` admission and feedback at
+1440 and 390 pixels. Browser fixtures qualify admission, not model diagnosis.
+
 ### Fully cached Patrol usage — issues #2118 / #2350
 
 Zero ordinary input tokens do not mean a run was free or skipped. Any positive
@@ -128,6 +390,19 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
+### Process-wide memory ID ownership
+
+`internal/ai/memory` preserves random UUID incident and incident-event IDs from
+the reviewed occurrence repair. They have no shared mutable counter and do not
+reuse a local timestamp after restart. Existing persisted references remain valid.
+Remediation-record and context-memory IDs use the upstream package-wide atomic
+`Int64` sequences through `nextSequencedID` in `ids.go`, without wrapping at 1000.
+Their existing `<prefix><local second>-<n>` format remains; across restarts those
+four sequences still depend on the local timestamp and retain that limitation.
+`ids_test.go` checks all six actual formats and concurrent uniqueness, plus
+independent concurrent tenant-store recording under `-race`. The reviewed
+`incidents_identity_test.go` continues to pin UUID occurrence/event ownership.
+
 ### Canonical incident-history queries
 
 Incident context reads `IncidentStore.QueryIncidents`, whose page contains
@@ -138,6 +413,28 @@ status does not establish current resource health. Assistant handoff includes
 the latest bounded events, their source provenance and query coverage. It
 preserves the existing exclusion of raw command arguments/output. An absent
 closure does not acquire a duration measured up to the current time.
+A PVE disk alert row written under the physical disk its hardware identity
+names (`unifiedresources.OwnedAlertReference`) is matched to occurrences under
+its alert's own reference, as when it was journaled there, while its evidence
+keeps the owning disk. Reads by alert identifier and by that reference
+therefore return the same occurrences as before ownership, including one
+occurrence whose rows two disks own after one took over the path while
+failing. The one difference is an owned row whose occurrence's firing the
+read does not hold (another disk owns it, or retention removed it): before
+any event is assigned, its recorded start takes the occurrence that starts
+there, else the closest saved shell within the start tolerance, else opens
+the occurrence under the ID the alert-centric read gives it, instead of
+leaving the row as partial evidence. That boundary is not canonical, so a
+truncated read still keeps events without a start away from it. A read by a
+disk returns the occurrences its rows belong to and admits their saved
+shells, so a note recorded from a disk read reaches the occurrence the
+alert-centric read shows. The exception is two occurrences of one alert
+starting within the shell tolerance: the alert-centric read assigns a saved
+shell by firing order, which a disk read missing a firing cannot reproduce.
+`TestIncidentQueryKeepsOccurrencesOfHardwareOwnedDiskAlerts` and
+`TestIncidentQueryTruncatedReadKeepsOwnedOccurrencesGuarded` in
+`internal/ai/memory/incident_query_disk_owner_test.go` compare both layouts,
+the first on the memory and SQLite stores.
 
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
@@ -175,6 +472,20 @@ evidence change and remains recorded in the customer-journey qualification.
 
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
+Action truth is authoritative for its originating investigation, not for every
+later occurrence sharing the finding ID. Finding outcome and record writes
+check the current session and persisted regression boundary under the findings
+store lock. Historical callbacks and review hydration retain their original
+action result without resolving, queuing, or replacing a newer occurrence,
+including after restart and before its next investigation starts. A verified
+action from the new occurrence can still resolve that occurrence normally.
+Finding-scoped investigation and transcript reads return no current
+investigation while only an older occurrence's session exists. Explicit
+session and action history retains that older evidence.
+The canonical Patrol handler suite in
+`internal/api/ai_handlers_patrol_actions_additional_test.go` exercises three
+occurrences with a persisted restart and historical action replay; findings
+store controls also exercise concurrent re-detection and reconciliation.
 The same builder owns initial completion and later refresh. Completion replaces
 an early action projection with the final investigation evidence. Later action
 refresh preserves original prose, impact, confidence, evidence and rollback. Unchanged hydration is a no-op, and a
@@ -287,6 +598,65 @@ remains present. The tool projection labels `life_remaining_percent` explicitly,
 exposing the source-specific ambiguous `wearout` name, and distinguishes it from
 `smart.percentageUsed` as consumed endurance. The regression proof is
 `internal/ai/tools/physical_disk_evidence_test.go`.
+
+Disk temperatures reach the model as current readings only when they were
+collected now. `tools.SplitDiskTemperature` classifies a physical disk
+temperature with `diskinventory.TemperatureCollected`. The physical-disk
+projection's `temperature` and the `disk_health` SMART row's `temperature`
+carry only a reading the current observation collected. A value normalization
+retained instead (a disk in standby, a host agent past its reporting lease)
+moves to `last_known_temperature` with `last_known_temperature_reason`. The
+same split feeds the AI chat context and Patrol. The "Physical Disks Needing
+Attention" list and Patrol's disk issue gate, triage flags and finding
+verification judge heat on the collected reading alone. Their text renders a
+retained value as "last known 41C (disk is in standby)". Proofs:
+`TestDiskToolsReportRetainedTemperatureAsLastKnown` in
+`internal/ai/tools/physical_disk_evidence_test.go`,
+`TestBuildUnifiedResourceContextJudgesDiskHeatOnCollectedTemperature` in
+`internal/ai/resource_context_test.go` and
+`TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature` in
+`internal/ai/patrol_ai_more_test.go`.
+
+They judge that collected reading against the alert disk temperature policy,
+not a fixed line. `ThresholdProvider.GetDiskTemperatureThreshold(host, diskType)`
+(the alert manager's `HostDiskTemperatureThreshold` trigger and clear) resolves
+each disk's limits once in `patrolPhysicalDiskRows` and in the AI chat context,
+for the host agent that reports the disk. `physicalDiskTemperatureHost` finds it
+by walking the disk's parent to the agent machine, through the pool for an
+Unraid disk, so that agent's Disk Temp override (or one inherited from its
+linked node or guest) replaces the per-type trigger, and an override or agent
+default that switches the host's alerts off leaves no heat to judge. A disk no
+agent reports gets the per-type policy. The global alerts switch and the agent
+alert-type switch stop `CheckHost` without changing this policy, as before.
+A TrueNAS disk (`alerts.IsTrueNASDiskResource`, the disks the unified evaluator
+alerts on as `truenas-disk`) skips that walk, because its TrueNAS system carries
+a synthetic `Agent.AgentID` that would pass for a host agent:
+`physicalDiskTemperatureLimits` resolves it through
+`ThresholdProvider.GetTrueNASDiskTemperatureThreshold(resourceID, diskType)`
+(the alert manager's `TrueNASDiskTemperatureThreshold`, the `truenas-disk`
+tiers of `effectiveAlertPolicyNoLock`), so the disk's own override, then the
+TrueNAS-wide TrueNAS Disks value, then the per-type policy decide, as for its
+temperature alert, and a disabled override or TrueNAS Disks default leaves no
+heat. A host override under the system's synthetic ID no longer reaches its
+disks, and Disable all TrueNAS silences the alert without changing this policy.
+The run state carries the provider (`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
+configuration applies. A disk is hot from its trigger: a triage warning, a disk
+issue and an AI chat "needing attention" entry, as its temperature alert and
+Physical Disks Running Hot verdict are. A disk-high finding recovers at or
+below the clear value (under the trigger when there is no band below it), as
+the alert does. With no current reading, a disk last seen hot leaves that
+verification unknown rather than recovered. Scoped runs keep the provider, and a
+provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
+quiet and a SATA disk at 56C is flagged. Proofs:
+`internal/ai/patrol_disk_temperature_test.go` (a real registry with one
+overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`,
+and TrueNAS fixture disks under a per-disk override, a TrueNAS-wide value and a
+host override on the system ID, one with a retained reading, in
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers`),
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy`,
+`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` and
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` in
+`internal/ai/alert_threshold_adapter_test.go`.
 
 Retained summaries disclose that point and bucket timestamps describe returned
 history inside the requested window. Their spacing does not measure collection
@@ -962,6 +1332,8 @@ model-facing content, tool exposure, or approval authority, and it does not clai
 a measured cost reduction or installed-deployment cache-read rate.
 
 ## Canonical Files
+
+- `pulse-enterprise:internal/investigation/orchestrator.go`: private investigation execution and current-occurrence follow-up context.
 
 - `pkg/reporting/evidence.go`: measured retained-history evidence contract for model-facing summaries, with no report narrator or heuristic health judgement.
 
@@ -1897,13 +2269,13 @@ and search matches through `addCanonicalGuestSearchMatches` /
 disk summaries flow through `appendGuestDiskSummaries` in
 `internal/ai/tools/tools_storage.go`. A new guest family extends those
 helpers (their view-constraint interfaces name the read-state methods they
-need) rather than re-rolling a parallel loop. The same shape applies to
-mutating tool pipelines: file append/write share `executeFileMutation`
-driven by `fileMutationSpec` (`internal/ai/tools/tools_file.go`), and
-namespaced kubectl actions share `executeKubernetesResourceAction` driven by
-`kubernetesResourceAction` (`internal/ai/tools/tools_kubernetes.go`) — new
-file or kubectl actions add a spec, keeping approval-command text stable,
-instead of duplicating the approval/audit pipeline. OpenAI-compatible message
+need) rather than re-rolling a parallel loop. The Assistant tool layer holds
+no mutating tool pipeline to extend: `pulse_control` only plans typed resource
+actions into Pulse Actions through `executeControlResource`
+(`internal/ai/tools/tools_control.go`), and the shell, guest, Docker,
+Kubernetes and file-mutation handlers that once carried their own approval and
+audit steps were removed because nothing in production called them.
+OpenAI-compatible message
 conversion for both non-streaming and streaming turns is shared through
 `convertMessagesToOpenAI` (`internal/ai/providers/openai.go`), Anthropic message
 conversion for both non-streaming and streaming turns is shared by the API-key
@@ -1929,7 +2301,7 @@ tool-result payloads must project through
 `OrchestratorToolResultInfo.ProviderToolResult` so the public investigation
 handoff contract inherits the same `agentcapabilities` input-map,
 thought-signature, and provider-result normalization as Assistant and MCP —
-`TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
+`TestOrchestratorAndChatAdaptersMapTheirMessageContracts` enforces it.
 
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
@@ -2009,18 +2381,11 @@ deriving an older display status from `workflowStatusHistory`.
    Per-surface model fallback chains are owned by the `Get*Model()` getters in
    `internal/config/ai.go` and follow the operator's intent split between
    interactive and background work. Interactive chat resolves
-   `ChatModel -> Model`. Background bulk work — Patrol, auto-fix, and
-   service-context discovery — resolves through the Patrol tier:
-   `PatrolModel -> Model` for Patrol itself, `AutoFixModel -> PatrolModel ->
-   Model` for auto-fix, and `DiscoveryModel -> PatrolModel -> Model` for
-   discovery. Discovery is high-fan-out (one model call per container or
-   service per refresh), so it must NOT fall back straight to the shared
-   default model past a configured Patrol override: an operator who selected
-   a cheap Patrol model has declared their background-work model, and
-   scheduled context refreshes silently burning the shared (often premium)
-   model with no chat activity is the bug this chain prevents. Settings copy
-   that describes the shared default model must state this chain rather than
-   claiming the shared default governs discovery unconditionally.
+   `ChatModel -> Model`. Background work — Patrol and auto-fix — resolves
+   through the Patrol tier: `PatrolModel -> Model` for Patrol itself and
+   `AutoFixModel -> PatrolModel -> Model` for auto-fix, so background work
+   never falls back straight to the shared default model past a configured
+   Patrol override.
    Cloud context privacy is a FIXED posture, not a user setting. Pulse is a
    self-hosted homelab/SMB tool: when the operator points the Assistant at a cloud
    model they have accepted that their (non-secret) infrastructure detail reaches
@@ -2478,8 +2843,9 @@ deriving an older display status from `workflowStatusHistory`.
    popup/dialog only; it must not also close the Assistant drawer.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
-   structured mentions, finding id, approval override, handoff resources,
-   handoff actions, and handoff metadata, but must not reconstruct scoped
+   structured mentions, finding id, model route, handoff context, handoff
+   resources, handoff actions, and handoff metadata (execution mode is not
+   part of that request; `/api/ai/chat` sets it), but must not reconstruct scoped
    context from prompt history or saved transcript prose. Provider/model route
    recovery is explicit user-visible recovery, not hidden chat execution. A
    failed turn may expose route-and-retry actions through the existing drawer
@@ -3471,7 +3837,7 @@ query...`, and `Reading storage...` before streamed tool arguments are
    browser-safe session summary, clear redo state when a new message or trim
    changes the transcript, and keep forked sessions independent from the source
    redo stack. The drawer must restore the removed prompt, structured mentions,
-   finding id, handoff metadata, approval/autonomous override, and selected
+   finding id, handoff context and metadata, and selected
    model route when available so the operator can edit and resend without
    reconstructing hidden context from transcript prose.
    Retry and regenerate are turn re-runs over the same undo boundary, not a
@@ -3490,6 +3856,12 @@ query...`, and `Reading storage...` before streamed tool arguments are
    answer (nothing streaming, no error block, no pending approval or
    question, and a user prompt available to re-send) because the undo
    boundary only operates on the last durable turn.
+   Session mutations stay POST-only at the handler: abort, summarize, fork,
+   undo, redo, and steer refuse every other method with `405` and
+   `Allow: POST` before resolving the Assistant service. A `GET` or `HEAD`
+   that the demo-mode read-only guard or the CSRF check admits as a read
+   therefore cannot cancel a running turn, compact or rewind a transcript,
+   or persist a fork.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt
@@ -3720,22 +4092,23 @@ query...`, and `Reading storage...` before streamed tool arguments are
    dispatches the shared evidence-first explanation request through
    `frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts`.
    It preserves drafts and current work, captures the selected context before
-   asynchronous initialization, and uses normal send, queue, and retry handling
-   with request-local `autonomousMode:false`. It must not prescribe a diagnosis
+   asynchronous initialization, and uses normal send, queue, and retry handling.
+   The store marks that context `autonomousMode:false` so the drawer discloses
+   approval-required posture; the request itself carries no execution-mode
+   field, because `/api/ai/chat` sets that mode server-side. It must not prescribe a diagnosis
    or a tool sequence or grant action authority. The drawer
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
    steps, evidence chips, command summaries, recommendations, or suggested-prompt
-   chips as the answer. Patrol assessment handoffs must use the same
-   `patrol-assessment` target identity for live opens and restored sessions
-   rather than inheriting retired dashboard context. While such a handoff is
-   attached, the Assistant empty
+   chips as the answer. Restored Patrol assessment sessions must use the
+   `patrol-assessment` target identity rather than inheriting retired dashboard
+   context; Patrol no longer opens live assessment handoffs. While such a
+   session is attached, the Assistant empty
    message state must also remain source-named and must not fall back to generic
    cluster/system starter prompts that compete with the attached briefing.
-   Structured Patrol run and Patrol mode save-failure handoffs may render bounded,
-   redacted diagnostic lines in the drawer when they are opened directly from
-   Patrol runtime/control surfaces, but the attached headline must remain
-   source-owned (`Patrol run attached`, `Patrol mode ... attached`)
+   Structured Patrol run handoffs may render bounded, redacted diagnostic lines
+   in the drawer when they are opened directly from Patrol run history, but the
+   attached headline must remain source-owned (`Patrol run attached`)
    and the drawer must still exclude raw provider payloads, commands, and
    Patrol-authored remediation steps.
    Platform tabs in that same `frontend-modern/src/App.tsx` shell may remain
@@ -4037,32 +4410,22 @@ resolve canonical/source IDs and unique aliases before collection, reject
    provider-safe rewrite replaces the user message, plain-text resolution runs
    only as a fallback when the prefetcher did not already resolve a structured
    mention or handoff resource; otherwise it would discard the injected
-   cloud-safe operational context. Ambiguous or
+   resource context. Ambiguous or
    non-live prompts must fail closed to normal model clarification/query
    behavior; this is not a prompt-keyword router and must not choose, retry, or
    execute the model's next investigative action.
    Context-only resource handoff turns must be enforced at the tool-manifest
    boundary, not only by prompt wording: unless the operator explicitly asks for
-   live runtime verification, a read attempt, or discovery execution, the
+   live runtime verification or a read attempt, the
    Assistant loop must receive no tools and must answer from the attached
    context or state that Pulse does not currently have that fact.
-   Resource-context model packs and drawer handoff briefings must carry the
-   canonical discovery readiness state (`fresh`, `stale`, `missing`, `running`,
-   `failed`, `unavailable`, or `unsupported`) with provenance and freshness
-   metadata so Assistant can explain whether it is grounded in current
-   discovery data before choosing any tool. Drawer handoffs route their attached
-   resources through the same context-prefetch path as explicit `@`-mentions, so
-   on a cloud turn the resource's cloud-safe operational context (access pattern,
-   config/data/log paths, ports, and discovery freshness/age) reaches the model
-   exactly as it does for an `@`-mention; identifying fields (hostname, IP, alias)
-   stay redacted at the model boundary. The cloud-safe context must carry the
-   discovery's age (a non-identifying timestamp) when known so the model can
-   caveat staleness rather than presenting cached operational detail as current.
-   The handoff path must not withhold operational context that the `@`-mention
-   path delivers.
+   Drawer handoffs route their attached resources through the same
+   context-prefetch path as explicit `@`-mentions, so a handoff never delivers
+   less resource context than an `@`-mention; identifying fields for local-only
+   resources stay redacted at the model boundary.
    The base Assistant system prompt must instruct the model to use this
    provenance: briefly attribute facts drawn from Pulse context to their source
-   (a discovered fact's source, a metric/event timestamp), caveat stale or cached
+   (a context section, a metric/event timestamp), caveat stale or cached
    context instead of presenting it as current, and keep attribution concise and
    inline rather than citing every sentence.
    Patrol deterministic triage signals are prioritized evidence seeds for the
@@ -4105,10 +4468,14 @@ resolve canonical/source IDs and unique aliases before collection, reject
    human-facing labels in the settings payload must frame the operator boundary
    as Patrol mode rather than Patrol configuration.
    Monitor-only Patrol autonomy saves are part of the same runtime gate:
-   when the safe-remediation extension or entitlement is unavailable, both the
-   browser state owner and `internal/api/ai_handlers.go` must clear stale
-   full-mode unlock state while clamping autonomy back to `monitor`, so paid
-   remediation permission cannot survive through a free runtime save.
+   when the safe-remediation extension or entitlement is unavailable, the
+   API must clear stale full-mode unlock and Autopilot activation state while
+   clamping autonomy back to `monitor` (the monitor-only handler in
+   `internal/api/ai_handlers.go` without the extension, the
+   `SaveAutonomySettings` adapter in `internal/api/router_routes_ai_relay.go`
+   behind the paid handler), and the browser state owner must refuse a paid
+   level when a save starts, so paid remediation permission cannot survive
+   through a free runtime save.
    Event-triggered Patrol runtime policy is also part of this gate: when local
    development background automation or another runtime policy pauses automatic
    alert/anomaly-triggered checks, `internal/ai` must expose an explicit
@@ -4119,7 +4486,7 @@ resolve canonical/source IDs and unique aliases before collection, reject
    divergence must be sourced from canonical `ReadState.DockerHosts()` views,
    with model-shaped data limited to the watcher adapter input rather than
    direct `StateSnapshot.DockerHosts` reads in the Patrol run loop.
-4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops. `internal/api/ai_handlers.go` must preserve an explicitly supplied `discovery_interval_hours: 0` as the manual-only setting and may only apply the 24-hour default when discovery is enabled without an explicit interval payload. Discovery analysis remains a Pulse tool-led model workflow: Pulse supplies agent/API/metrics evidence and cache orchestration, while the selected model provides the intelligence. Background, settings-triggered, or drawer-triggered discovery progress must describe that discovery analysis directly and must not imply a live Pulse Assistant chat transcript unless the run is actually executing inside the chat surface. Settings-triggered manual discovery is an explicit operator refresh and must not open, append to, or masquerade as a Pulse Assistant session. Assistant and Patrol access to discovery must stay behind the governed `pulse_discovery` tool, including an explicit forced refresh action for known resources, while settings-level manual runs must use the canonical `/api/discovery/run` new/changed/stale/repairable sweep rather than a frontend-only shortcut. Discovery analysis must use the selected discovery route only: provider-owned default resolution may choose a model before the request when no explicit route exists, but `AnalyzeForDiscovery` must not fall back to a stale default provider or another configured provider after selected-route provider construction or execution fails. Fresh-but-unidentified service-discovery records are not complete when canonical resource metadata, stored facts, or safe command evidence can deterministically identify a known workload and endpoint; cached reads and the canonical sweep must repair those records instead of presenting `Unknown Service` as fresh.
+4. Keep AI Discovery retired. The model-backed service-discovery runtime (`internal/servicediscovery`, `internal/ai/infradiscovery`, the `pulse_discovery` tool, `/api/discovery*` routes, and the `discovery_enabled`/`discovery_interval_hours`/`discovery_model` AI settings) was removed on 2026-10-11: no telemetry counter measured its use and the maintainer judged it a flop. Assistant and Patrol read resource evidence through `pulse_query`, `pulse_read`, and the unified-resource context sections; do not reintroduce a parallel model-backed discovery store, scheduler, or tool without a new evidence-backed `FEATURE_REQUESTS.md` entry. Network subnet discovery (`internal/discovery`) and the `discoveryTarget` agent coordinates are separate and stay.
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same
    data-handling policy the export audit records: `local-only` resources are
@@ -4143,26 +4510,12 @@ resolve canonical/source IDs and unique aliases before collection, reject
    `internal/ai/tools/executor.go` instead of maintaining hand-written
    prompt-only tool lists. Fallback Assistant governance text and Patrol
    system-prompt tool summaries must mirror the same registry-owned capability
-   shape, including `pulse_discovery` read-or-refresh behavior, instead of
-   presenting stale read-only summaries. Frontend approval cards must surface backend
+   shape instead of presenting stale read-only summaries. Frontend approval cards must surface backend
    approval risk/description without hiding a pending approval when skip or
    deny fails. Action-producing tools must also persist the unified
-   `ActionPlan.Preflight` dry-run boundary through
-   `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
-   as chat-only text.
-   The `pulse_discovery` tool response must carry each discovered fact's
-   provenance — the `source` that produced it and its `confidence` — alongside
-   the fact's category/key/value, so the model can attribute and weight what it
-   reports instead of stating untraceable facts. Both are omitted when empty.
-   A targetless `action=get` (including the common `{action:get, limit:N}`
-   form) is a bounded alias for `action=list`; because it requests no specific
-   resource, it must not fail merely on missing resource type. Any partially
-   specified get remains the strict single-resource operation. An exact
-   canonical `app-container` resource ID is itself a complete coordinate: the
-   runtime may derive its target and provider container ID only from the unique
-   unified-resource record. Names, aliases, prefixes, provider IDs, and
-   ambiguous or unknown canonical IDs never authorize that inference and fail
-   closed until an explicit target is supplied.
+   `ActionPlan.Preflight` dry-run boundary through the canonical planner
+   (`internal/actionplanner/planner.go`) rather than leaving dry-run
+   availability as chat-only text.
    When the shared registry blocks a control tool in read-only mode, its
    operator guidance must point to Pulse Intelligence > Provider & Models
    settings and the Pulse Assistant Permissions Control mode, not legacy Pulse
@@ -4309,65 +4662,20 @@ resolve canonical/source IDs and unique aliases before collection, reject
     and to leave `impact` empty rather than fabricate one when the
     consequence is genuinely unknown; the runtime must not synthesize a
     default in that case.
-    The action broker enforces a plan-hash drift check at the execute
-    boundary: when an approval ID resolves to a stored plan with a
-    PlanHash, the freshly-recomputed approval-equivalent hash from the
-    actual payload (using `approvalPlanHash`, the same function used at
-    approval-creation time) must match. Mismatch returns
-    `ErrActionPlanDrift` and refuses dispatch; the contract is "the
-    operator approved exactly this (command, target, reason)
-    combination" and a different one cannot run under the stale
-    approval. When `approvedHash` is empty (older approval records, or
-    contract paths that did not author one), validation is skipped to
-    preserve existing behavior. The check is currently wired in
-    `executeCommandWithAudit` for shell-command actions; the native-
-    action path uses a different hash function (`actionPlanHashForParams`)
-    so a coherent canonical-hash refactor must precede adding the same
-    check there.
-    The broker runs a class-derived read-after-write verification check
-    immediately after a successful dispatch. `VerificationCommandForCommand`
-    in `internal/ai/tools/tools_control.go` returns the executable check
-    keyed on the same command class as the preflight authoring (e.g.
-    `systemctl is-active <unit>` after a service-restart). The check
-    runs through the same agent path as the dispatch and the outcome is
-    persisted on `ExecutionResult.Verification` so the audit history
-    shows not only what the action did but whether the read-back
-    confirmed the intended state. Container-class verification is
-    deferred to pulse_docker's existing tool-level runtime inspect
-    check (`docker inspect` or `podman inspect`, according to the
-    resolved container runtime); classes without a derivable verification command leave
-    `Verification` nil rather than fabricating a verified=true entry.
-    The approval preflight presented to operators authors per-command-class
-    safety and verification context on top of the default broker-level
-    posture. `classifyApprovalCommand` and
-    `approvalCommandClassPreflightAdditions` in
-    `internal/ai/tools/tools_control.go` bucket common Pulse remediation
-    actions (service-restart, service-stop, service-start, service-reload,
-    container-restart, container-stop, k8s-rollout-restart, plus the
-    Proxmox VM lifecycle classes proxmox-vm-reboot, proxmox-vm-stop,
-    proxmox-vm-start, proxmox-vm-shutdown and the matching pct-driven
-    proxmox-ct-\* container lifecycle classes) and return hand-authored
-    operational copy: what the command actually touches, how Pulse will
-    read back success. The additions append onto the default
-    safety/verification arrays rather than replacing them, so the
-    broker's structural posture (org scope, hash match, single-use
-    approval) remains visible alongside the class-specific copy.
-    Unknown command classes must return empty additions rather than
-    fabricated padding — operators see only the default content, not
-    invented assertions about what an unrecognized command will do.
-    The Proxmox classes intentionally do not derive a broker-level
-    `VerificationCommandForCommand` check because pulse_control's
-    `verifyGuestAction` already runs `qm status` / `pct status` at the
-    tool layer; adding a parallel broker dispatch would double-run the
-    same read-after-write check.
-    Drift refusal must also persist a Failed audit record with the
-    Request, Plan, and Approvals snapshots intact and a Result whose
-    ErrorMessage is prefixed `plan_drift:` so the audit trail shows
-    every drift attempt that was caught. Operators reviewing the action
-    audit history must be able to see drift refusals as first-class
-    audit rows, not only in WARN-level logs; the `plan_drift:` prefix
-    is a stable token for audit-UI filters and alert rules to
-    distinguish drift from generic execution failures.
+    The Assistant tool layer carries no action broker. Its former
+    shell-command, guest, Docker, Kubernetes and file-mutation handlers,
+    the `executeCommandWithAudit` and `executeNativeActionWithAudit`
+    execution lanes, and the approval-record, preflight and plan-hash helpers
+    behind them (`createApprovalRecord`, `approvalPreflight`,
+    `classifyApprovalCommand`, `VerificationCommandForCommand`,
+    `approvalPlanHash`) were removed because nothing in production called
+    them: `pulse_control` only plans a typed resource action through
+    `executeControlResource`, and plan freshness
+    (`unifiedresources.ErrActionPlanDrift`) and the operator remediation lock
+    are enforced by `internal/actionlifecycle`. Class-derived read-after-write
+    verification, per-class preflight copy and the `plan_drift:` audit prefix
+    therefore have no tool-layer implementation; a change that needs one
+    belongs in the lifecycle, not back in `internal/ai/tools`.
     `FindingsStore.GetTrustSummary` returns a snapshot of how currently
     tracked findings have resolved (tracked, currently-active, resolved,
     auto-resolved, fix-verified, fix-failed, dismissed-as-noise,
@@ -4443,13 +4751,14 @@ resolve canonical/source IDs and unique aliases before collection, reject
     Assistant explains the current Patrol record rather than only the original
     investigation narrative. The saved-session handoff envelope must also
     preserve first-class Patrol source identity when product callers provide
-    safe metadata. Patrol assessment handoffs remain `patrol_assessment`
-    whole-surface review sessions even when their bounded action references
-    name individual findings; the session list must not infer a
-    `patrol_finding` identity from those action references once metadata is
-    present. Patrol mode save-failure handoffs remain
-    `patrol_configuration_failure` sessions for compatibility and may expose only the safe
-    runtime-failure boolean needed for browser presentation. Run-specific
+    safe metadata. Saved Patrol assessment sessions (the browser no longer
+    creates them) remain `patrol_assessment` whole-surface review sessions even
+    when their bounded action references name individual findings; the session
+    list must not infer a `patrol_finding` identity from those action
+    references once metadata is present. Saved Patrol mode save-failure
+    sessions remain `patrol_configuration_failure` sessions for compatibility
+    and may expose only the safe runtime-failure boolean needed for browser
+    presentation. Run-specific
     fields stay reserved for `patrol_run` handoffs, while hidden model context,
     command payloads, preflight output, and action results remain
     backend-owned. The finding briefing may surface the primary
@@ -4535,10 +4844,11 @@ resolve canonical/source IDs and unique aliases before collection, reject
     completed, failed, expired, or otherwise historical action references must
     remain action context without being relabeled as requiring approval.
     When the Assistant drawer restores any session from that `handoff_summary`,
-    it must restore the scoped request-local approval boundary as well as the
-    safe visible briefing: the next chat turn must carry
-    `autonomous_mode:false` even when the summary is context-only and has no
-    queued action, while the visible badge/action copy must still reflect the
+    it must restore the scoped approval-required disclosure (the drawer-only
+    `autonomousMode:false` context flag) as well as the safe visible briefing,
+    even when the summary is context-only and has no queued action. The next
+    chat turn carries no execution-mode field; `/api/ai/chat` runs it
+    approval-required server-side. The visible badge/action copy must still reflect the
     actual last-known action state or Patrol assessment context instead of
     inventing a pending approval or restoring a Patrol recommendation. That
     restoration is success-bound: if the underlying session message load fails,
@@ -4572,8 +4882,8 @@ resolve canonical/source IDs and unique aliases before collection, reject
     model-context text parsing must not resurrect them as a legacy fallback.
     After that send succeeds, the drawer
     must clear those request payloads while preserving the safe visible
-    briefing and request-local
-    approval-required posture; later turns must rely on backend-owned session
+    briefing and the drawer's
+    approval-required disclosure; later turns must rely on backend-owned session
     model-context hydration and current canonical stores instead of resending
     stale browser handoff payloads. Patrol approval-row Assistant entries are
     still Patrol finding handoffs, not local prompt-only shortcuts: live
@@ -4585,34 +4895,38 @@ resolve canonical/source IDs and unique aliases before collection, reject
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
-    `/api/ai/chat` must also clamp Patrol finding handoffs to
-    approval-required mode when a request carries a non-empty `finding_id` or
-    resolves to model-only briefing, resource, or action context, by forcing the
-    request-local autonomous-mode override to false, even when a caller supplied
-    `autonomous_mode:true`. That clamp belongs to the
+    `/api/ai/chat` clamps every exchange to approval-required mode, Patrol
+    finding handoffs included: `ChatRequest` has no `autonomous_mode` field, so
+    caller JSON (a stale client's `autonomous_mode:true` included) is dropped at
+    decode, and `HandleChat` passes `AutonomousMode:false` into the chat service
+    whether or not the request carries a `finding_id` or model-only briefing,
+    resource, or action context. The browser sends no execution-mode field.
+    That clamp belongs to the
     backend/API execution boundary, does not mutate the user's persistent AI
     control setting, and prevents product-originated Patrol action context from
     becoming silent command authority.
-    The chat runtime must apply any request-local autonomous-mode override to
+    The chat runtime must apply that server-set request-local mode
+    (`chat.ExecuteRequest.AutonomousMode`) to
     both the per-request `AgenticLoop` and the cloned `PulseToolExecutor`;
-    persistent autonomous settings must not leak into scoped approval-required
-    handoffs through executor state. When such an override forces approval mode
+    persistent autonomous settings must not leak into approval-required
+    requests through executor state. When the request forces approval mode
     and the saved control level is autonomous, the executor clone must clamp its
     effective control level to controlled for that request only, so even
-    policy-allowed diagnostic commands require operator approval in scoped
-    handoffs without mutating the user's saved setting.
+    policy-allowed diagnostic commands require operator approval in public chat
+    without mutating the user's saved setting.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.
     Resource-drawer Assistant entries use that same briefing path with
     `handoff_metadata.kind=resource_context`, a structured `handoff_resources`
-    reference, and `autonomous_mode:false`; they must not prefill or submit a
+    reference, and the drawer-only `autonomousMode:false` approval disclosure;
+    they must not prefill or submit a
     browser-authored prompt, and any rich resource facts must be hydrated by the
     backend context-pack path rather than reconstructed in the browser.
     Safe route-owned briefing actions may render as app links when the handoff
     includes an `actionHref`, but those links are navigation guidance only and
     do not grant tool execution or approval authority.
-    Request-local approval-required scoped handoffs must present that boundary
+    Scoped handoffs must present the approval-required boundary
     through compact source-named drawer state and the effective control label,
     so Patrol approval/finding handoffs and alert-investigation handoffs are
     named by their source rather than as generic dashboard briefs.
@@ -4629,7 +4943,36 @@ titles: provider alarm messages yield their bounded alarm subject, generic
 resource/storage incident types become plain issue language, and known
 acronyms such as CPU, ZFS, and I/O retain their canonical casing. Clients must
 not receive machine-title-cased placeholders such as `Resource Incident` and
-repair them independently. The projection also collapses open/resolved churn:
+repair them independently. VMware incidents are recognized by the alert's
+`incidentCode` metadata, never by parsing message wording: a
+`vmware_alarm_state` alert is titled with the alarm name its message carries,
+cut before any appended consumer summary, and a `vmware_health_state` alert
+reads as VMware host or datastore health. Records persisted before VMware
+summaries became the alarm name still carry "<entity> <moref> has VMware alarm
+<name> (<colour>)", so the title strips that wording to the same alarm name.
+Patrol's seed context lists active and recently resolved alerts by resource:
+each line names the alert's resource unless the message already does, because
+provider incidents such as vCenter alarms say only what was flagged.
+A recently resolved alert that closed without recovering, such as a node metric
+handed to its Pulse agent, must not read as a recovery to Patrol, the
+assistant or the alert tool: Patrol's seed writes `closed <ago>. <summary>` in place of `resolved <ago>`, the
+assistant's alert context writes `closed <ago> ago) <summary>`, the
+`pulse_alerts` `resolved` action returns the summary as `resolution` with
+`successor_resource_id`, and incident memory titles the close with the summary
+(`alertResolvedEventSummary`, or the `alert_resolution` resource-change
+metadata when it projects from the canonical timeline).
+`TestSeedHealthAndAlerts_HandoverIsNotARecovery`,
+`TestService_buildAlertContext_HandoverIsNotARecovery`,
+`TestExecuteListResolvedAlertsReportsHandover` and
+`TestIncidentStore_HandoverCloseIsNotARecovery` pin it. Performance reports
+carry the resolution too: the report narrator sends such an alert with
+`resolved: false` and the engine's summary as `resolution`, plus
+`successor_alert_listed` when the same report lists the alert the resource
+it moved to raised for that metric. Its system prompt forbids counting the
+alert as resolved or calling the resource healthy on its account, and tells
+the model to describe a covered condition once, from the successor's alert
+(`TestBuildReportNarratorPayload_HandoverIsNotARecovery`). The
+deterministic verdict lives in `pkg/reporting` (see api-contracts). The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and
@@ -4643,6 +4986,21 @@ calm-evaluation age; raw resource IDs are forbidden as metric labels.
 Assistant receives a selected attention item only after the operator opens it.
 The handoff is explanation-only and cannot infer a capability, approve an
 action, or replace evidence and lifecycle truth.
+
+A held threshold alert's attention summary leads with the live reading (issue
+#2068). An alert's `Message` keeps the last breach while the alert waits below
+its trigger for the clear level, so for a `MetricStatus` in the `latched` or
+`recovering` phase that is under ten minutes old, the projection builds
+`plainLanguageSummary` from the status instead: the reading now, then for a
+latched alert the alert level it is back under and the clear level with its
+hold, and for a recovering alert the clear level, delay and progress so far
+(rounded down). The words and rounding follow the frontend's
+`features/alerts/metricAlertPresentation.ts`, and a guest's disk is named
+from `metadata.label`. Temperatures stay in °C like the alert messages,
+because the server does not know a viewer's unit preference. A breaching
+alert keeps `Message`, which tracks the breach, and a stale or missing status
+falls back to it. The Patrol inbox, the investigation handoff and API clients
+read that summary, so none of them re-derives the phase.
 
 ### Patrol model-readiness evidence
 
@@ -4704,6 +5062,29 @@ rather than blocking, because the dimension that actually failed carries the
 verdict on its own check.
 
 ## Current State
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
+
+Patrol's guest inventory table drops the Service column, the resource-context prefetcher no longer reads a Discovery provider, and stored HTTP JSON observers that depended on Discovery endpoints now fail as `observer_runtime_unsupported`.
 
 ### Agent surfaces expose execution-time readiness refusal
 
@@ -4931,8 +5312,7 @@ companion tests (`internal/ai/findings_lifecycle_test.go`) pin the behavior.
 
 The interaction-quality scenario corpus
 (`internal/ai/chat/interaction_scenario_corpus_test.go`) is the canonical
-regression home for chat-feel promises, mirroring the Discovery corpus
-(`internal/servicediscovery/scenario_corpus_test.go`). Each scenario drives a
+regression home for chat-feel promises. Each scenario drives a
 full `ExecuteStream` turn against a scripted provider and pins the
 browser-facing event stream — ordered event types, forbidden event types,
 answer-text teeth, and payload teeth — for the user-visible promises shipped
@@ -5395,17 +5775,11 @@ factor by the ratio of errored runs to relevant runs in the scoring
 window. Above 50% of recent runs erroring is a `-30` impact and is
 described as "Most recent Patrol runs encountered errors"; above 25%
 is `-20`; otherwise the original `-10` light-tier description applies.
-This prevents the score chip from showing grade A while the same
-assessment surface warns the operator that coverage is incomplete or
-recent runs failed, which previously happened whenever one successful
-manual run sat among many failed startup runs.
-Downstream Assistant handoffs must treat that coverage factor as a
-secondary caveat when Patrol also carries active findings, pending
-approvals, or governed action references. The coverage-gap explanation
-and scoped-activity prompt are primary Assistant framing only for
-coverage-only assessments; active Patrol findings keep the prompt,
-briefing action label, and safety note focused on finding priority,
-affected resources, evidence, and the governed next step.
+This keeps the grade from reading A when most recent runs errored, which
+previously happened whenever one successful manual run sat among many failed
+startup runs. A light error share still deducts only 10 points, and three
+trailing successful full runs drop the penalty entirely. The Patrol page no longer renders the score; it reads the overall
+health only to qualify the findings empty state.
 
 Absence-based auto-resolve paths in `internal/ai/patrol_ai.go` are
 all gated on the category whitelist exposed by
@@ -5490,19 +5864,15 @@ approvals (the common shape on the approval hot path) still carry
 a canonical resource id agents can match against the rest of
 Pulse.
 
-`PulseToolExecutor` exposes `SetOnActionCompleted(cb)` as the
-parallel seam for action-audit terminal states. The action-audit
-hot path in `internal/ai/tools/action_audit.go` routes every
-terminal-state record (Completed, runtime-Failed, plan-drift
-refusal, operator-lock refusal, recovery-branch fail) through a
-single helper `publishActionCompleted(record)` which guards on
-nil callback, defensively filters non-terminal states, and fires
-the callback on its own goroutine after the audit record has
-been persisted. Refused-before-dispatch failures preserve the
-canonical `plan_drift:` and `resource_remediation_locked:`
-error-token prefixes on `record.Result.ErrorMessage` so the agent
-SSE stream's `action.completed` payload carries them verbatim —
-agents branch on the prefix rather than parsing human text.
+`PulseToolExecutor` still exposes `SetOnActionCompleted(cb)` as the
+parallel seam for action-audit terminal states, and the API layer installs
+the agent SSE bridge on it, but no production path dispatches the callback:
+its only dispatcher, `publishActionCompleted` in
+`internal/ai/tools/action_audit.go`, was reachable solely from the retired
+`executeCommandWithAudit` and `executeNativeActionWithAudit` lanes and was
+removed with them. The `action.completed` agent event is therefore published
+only by API-owned execution (`ResourceHandlers` through
+`PublishActionCompletedRecord`), not by the Assistant executor.
 
 The investigation runtime now hands the orchestrator a Finding
 pre-enriched with operator-set state and operational memory.
@@ -5578,36 +5948,34 @@ attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
 history. The active boundary may come from a one-shot or recurring schedule;
-both are evaluated by the canonical operator-state model. Descendant-scope
-inheritance is alert-intent behavior and does not weaken exact-resource
-action-remediation locks or invent inherited action authority.
+both are evaluated by the canonical operator-state model, and the projection
+carries the active occurrence's own start and end
+(`ActiveMaintenanceOccurrenceAt`), never the one-shot fields, which a recurring
+schedule leaves nil. Patrol inherits maintenance exactly as alert intent does:
+`unifiedresources.ActiveMaintenanceCoverageAt` resolves the resource's own
+window and every ancestor window scoped `resource_and_descendants` on the live
+canonical parent chain, and the latest-ending active window wins. A window
+stored on an ancestor reaches the projection with `Inherited` and its
+`SourceID`; the dismissal note says the window is on a parent resource and the
+lifecycle event carries `maintenance_inherited` and `maintenance_source_id`.
+Only maintenance is inherited. Monitoring mode, lifecycle, criticality and
+action-remediation locks stay exact-resource state, so descendant scope never
+weakens a lock or invents inherited action authority.
 
-The action broker consults the same `resource_operator_state` table
-on every dispatch — both the agent-command path
-(`executeCommandWithAudit`) and the native provider path
-(`executeNativeActionWithAudit`) in
-`internal/ai/tools/action_audit.go` run the shared
-`checkRemediationLockForDispatch` gate — and refuses with
-`unifiedresources.ErrResourceRemediationLocked` when the operator
-has set `NeverAutoRemediate=true` on the target resource. Refusal
-persists a Failed audit record whose `ErrorMessage` is prefixed
-`resource_remediation_locked:` so the audit timeline shows every
-refused dispatch, paralleling the `plan_drift:` shape from the drift
-guard. Operator state outranks per-action approval — the broker
-refuses even when the approval ID resolves and the plan hash matches.
-When the lock state cannot be determined (no audit store wired, or
-the operator-state lookup errors), dispatches that do not carry an
-approved human decision fail CLOSED with
-`ErrRemediationLockStateUnknown` and a Failed audit record prefixed
-`remediation_lock_state_unknown:` — the broker must not assume an
-unreadable lock is unset while Patrol or Assistant run autonomously.
-Dispatches backed by an approved human decision keep the historical
-fail-open posture on unknown lock state (the operator explicitly
-signed off on the exact plan), with the degraded lookup logged. The `IntentionallyOffline` branch is the indefinite
+Operator state outranks per-action approval on the Pulse Actions path:
+`validateExecutionPolicy` in `internal/actionlifecycle/service.go` reads the
+same `resource_operator_state` table at the dispatch decision point, refuses
+with `unifiedresources.ErrResourceRemediationLocked` when the operator has set
+`NeverAutoRemediate=true` on the target resource, and fails closed when the
+audit store is unavailable. The Assistant tool layer no longer consults the
+table itself: the tool-layer broker that did so (`checkRemediationLockForDispatch`
+inside the retired execution lanes) and its `ErrRemediationLockStateUnknown`
+were removed with the unreachable handlers. The `IntentionallyOffline` branch is the indefinite
 counterpart — same auto-dismiss but with
 `operator_state_cause: intentionally_offline` and no
 `maintenance_end_at` field because the suppression has no scheduled
-end. Maintenance windows take priority over intentionally-offline
+end — and, like `expected_offline`, it silences only availability findings
+(see "Patrol consumes canonical monitoring and lifecycle policy"). Maintenance windows take priority over intentionally-offline
 when both are active, because the time-bounded suppression is the
 more honest one to surface to the operator. Deployments without a
 provider keep the original new-finding behavior — suppression is
@@ -5946,49 +6314,14 @@ then highest operational risk, then oldest request time, with approval ID as
 the final tie-break so map iteration cannot decide which governed action looks
 most urgent.
 That same approval boundary also owns approved command execution. When
-`internal/api/ai_handlers.go`, `internal/ai/service.go`, or
-`internal/ai/tools/action_audit.go` consume a governed approval record, the
+`internal/api/ai_handlers.go` or `internal/ai/service.go` consume a governed
+approval record, the
 runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands
 instead of treating control-plane approval as an implicit bypass.
-Discovery deep scans are the one runtime that does not flow through the
-approval boundary. `internal/ai/discovery_adapter.go` is the only call site
-allowed to mark an `agentexec.ExecuteCommandPayload` as `Trusted`. The
-catalog of probes lives in `internal/servicediscovery/commands.go`, is
-read-only by construction (`cat`, `ps`, `ss`, `find` under known config
-roots) and is wrapped in `docker exec`, `pct exec`, or `qm guest exec`
-without ever interpolating caller-supplied strings. Both the server-side
-`agentexec` authorize path and the agent-side `hostagent` authorize path
-must honor that `Trusted` flag by bypassing the approval requirement,
-while still enforcing `PolicyBlock`. AI tool calls, Patrol fixes, and
-Assistant remediation must continue to flow through the governed approval
-record path and must never set `Trusted` on their payloads.
-Discovery command-backed scans are additionally gated by the operator's
-Discovery setting, not by the mere presence of a service-discovery store,
-connected agent, or command-capable agent token. `discovery_enabled=false`
-must fail closed for background sweeps, `/api/discovery/run`, forced
-single-resource discovery, and `pulse_discovery` refreshes before any
-`DeepScanner` command dispatch. `discovery_enabled=true` with
-`discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
-scans stay stopped, but explicit admin-triggered refreshes may use the
-hardcoded trusted catalog.
-Each per-organization AI service now passes its organization-pinned
-`AgentServer` interface directly into `internal/ai/discovery_adapter.go`.
-Deep discovery does not recover the concrete global `agentexec.Server` or
-silently drop command execution when the runtime supplies an
-`agentexec.OrganizationServer`; connected-agent lookup and command dispatch
-therefore remain on the same tenant-scoped view. The interface-backed service
-regression in `internal/ai/service_test.go` requires a real deep-discovery run
-to dispatch the trusted probe catalog and retain its command evidence.
-The value boundary for keeping Discovery is observed workload context:
-Assistant and Patrol may consume normalized service name, version, endpoint,
-port, config path, data path, log path, bind-mount, confidence, and user-note
-fields through `pulse_discovery` or scoped prefetch. Raw command output remains
-debug/admin material and must not become the primary Assistant context. When a
-Discovery record includes a suggested web URL, the tool response and prefetch
-summary may include that URL as observed context, but it must be treated as a
-candidate rather than an operator-approved management URL.
+AI tool calls, Patrol fixes and Assistant remediation must not mark
+command payloads as `Trusted` to bypass the governed approval path.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and
@@ -6373,6 +6706,18 @@ That availability contract also applies when recovery points are the only storag
 `internal/ai/tools/executor.go` must keep `pulse_storage` exposed whenever a
 `RecoveryPointsProvider` is configured, so tenant and self-hosted Chat surfaces do not lose
 recovery-backed snapshot and backup-task reads just because backup/read-state adapters are absent.
+Storage pool rows built by `storagePoolSummaryFromResource` in
+`internal/ai/tools/tools_storage.go` (`pulse_storage` pools and `pulse_query`
+storage pools) take `enabled` from the storage facet's own
+`StorageMeta.Enabled`, so storage that reported itself unavailable (Proxmox
+`active=0`, unified status `offline`) never reads as administratively disabled
+to Patrol or Assistant. `active` is the facet's `Active` flag and also requires
+the row not to be `offline`, because some sources (PBS datastores) report
+`Active` even while unavailable. Only a row without a storage facet falls back
+to the status-derived value.
+`TestStoragePoolSummaryReadsStorageFacetFlags` in
+`internal/ai/tools/tools_storage_test.go` pins unavailable, disabled, online,
+offline-but-flagged-active and facet-less rows.
 Tenant-scoped AI services must now also follow canonical runtime ownership:
 Patrol may initialize and operate from tenant `ReadState` and unified-resource
 providers without requiring a tenant snapshot-provider bridge, and
@@ -6460,21 +6805,24 @@ the summary layout locally.
 The chat prefetch path now also calls the shared governed-summary predicate
 directly at each mention site, so it no longer carries a local wrapper around
 the canonical policy decision or a separate mention-summary trim helper.
-Structured mention resolution also uses the shared AI tools discovery
-canonicalization helpers now, so chat prefetch and discovery responses agree
-on resource-type and target-ID formatting instead of maintaining chat-local
-copies.
+Structured mentions and command routing use the shared unified-resource
+reference resolver. An explicit ID selects one owned record for current name,
+type, policy and native execution coordinates. Client labels, node hints and
+unscoped provider IDs cannot replace an unknown or ambiguous selection.
 The chat mention picker now also carries the canonical preferred resource
 label as `label` through the structured mention payload, and the insertion
 path uses that same label for prompt text and cursor placement, so mention
 search, selection, and submission do not depend on a raw `displayName` field
 fork.
-Structured `app-container` mentions must now use canonical unified-resource
-identity (`app-container:<host>:<provider_uid>`) instead of a Docker-transport
-ID. Frontend mention pickers should emit that canonical ID for every
-app-container, including API-backed platforms such as TrueNAS, while backend
-structured-mention resolution may continue to accept legacy `docker:...`
-mentions only as a compatibility path.
+All mention kinds carry the registry-issued ID from /api/resources unchanged.
+The ID's spelling is not an execution contract. Bounded legacy mention and
+session-registration formats remain readable only when they identify a unique
+current owner. ResolvedContext stores records by that ID and indexes only
+unambiguous names and aliases, including after JSON reload and pinned clearing.
+Native provider IDs remain executor coordinates. Session registration and
+explicit-access marking share ResourceRegistration.ResolvedID rather than
+rebuilding identity independently. Recent context omits unresolved owners and
+continues to withhold governed identifiers.
 Compatibility-only top-level TrueNAS mention types must also collapse to the
 canonical `agent` host type at that same handler boundary, so the AI runtime
 does not carry a parallel raw `truenas` mention contract once transport input
@@ -6484,6 +6832,20 @@ Patrol scope payloads. API-backed TrueNAS systems may still keep `truenas`
 platform metadata and separate run-history coverage counts, but AI resource
 type fields must normalize to canonical `agent` once they cross the governed
 runtime boundary.
+Patrol scope resolution registers the alert subsystem's Docker references as
+aliases, built by the same `internal/alerts` builders rather than formatted
+locally: `DockerHostResourceID` on the Docker host record, and on each
+container record `dockerAlertScopeAlias`, which passes the container's name so
+a container reported without an ID answers to its marked name reference
+(`docker:<host ID>/name:<name>`) and never to its host's reference.
+`dockerServiceAlertScopeAliases` registers service references, including
+`docker:<host ID>/service/name:<name>` for a service without an ID, on the
+owning host. The legacy snapshot record of a container without an ID has no ID
+to scope by, so only the unified read state can scope its alerts. Proof:
+`TestResolvePatrolScopeResolvesDockerAlertResourceIDs` in
+`internal/ai/patrol_run_test.go` and
+`TestDockerServiceAlertScopeAliasesDeriveIDFromName` in
+`internal/ai/patrol_state_scope_alias_test.go`.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved
@@ -6593,6 +6955,16 @@ seed prompt correlations now flow through the shared AI intelligence facade
 first, so the detector remains an implementation detail behind one canonical
 correlation access path instead of being routed directly by handlers or prompt
 builders.
+The browser does not read the global learned-correlation list:
+`frontend-modern/src/api/ai.ts` carries no client for
+`/api/ai/intelligence/correlations`, and neither the shared AI intelligence
+store nor the Patrol page loads it, because no page renders it. The resource
+drawer reads per-resource correlations from the resource-intelligence payload.
+The browser does not read `GET /api/ai/circuit/status` either:
+`frontend-modern/src/api/ai.ts` carries no client for it and the shared AI
+intelligence store holds no breaker state, because an open breaker already
+reaches Patrol as the `circuit_open` runtime block cause. The route stays a
+backend API surface.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly
@@ -6715,13 +7087,11 @@ The related-resource correlation section now also comes from the shared
 correlation formatter in `internal/ai/correlation`, so resource chat and
 incident prompts reuse the same learned-edge wording instead of rebuilding a
 second patrol-local bullet format.
-The Patrol intelligence page now also fetches the learned correlation list
-from the canonical AI correlations endpoint, so the global AI surface and the
-resource drawer both expose the same learned edge evidence instead of only
-showing a correlation count. The same page and drawer now render that list
-through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the learned-correlation layout and edge wording stay aligned across
-both surfaces. That shared card also owns the correlation ordering and
+The Patrol intelligence page renders no learned correlations. The resource
+drawer renders its resource-scoped learned edges through the shared
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+card, so any surface that shows learned correlations keeps the same layout and
+edge wording. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
 top-N slices.
 Assistant finding handoffs now also receive a model-only finding briefing
@@ -6745,10 +7115,13 @@ and related context are policy-sanitized by the chat handoff runtime before
 prompt injection, so governed resource names, IDs, aliases, nodes, paths, and
 addresses are redacted or represented through the canonical AI-safe summary
 instead of leaking through product prose.
-The same page and drawer now also render their recent-change timeline through
-the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-card, so the canonical recent-change layout and relative-time wording stay
-aligned across both surfaces instead of being rebuilt as page-local feeds.
+The Patrol page renders no recent-change timeline. The resource drawer renders
+its latest canonical change through the shared
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+card, and its `Change history` list through the shared
+`frontend-modern/src/utils/resourceChangePresentation.ts` helpers, so the
+canonical recent-change wording stays aligned instead of being rebuilt per
+surface.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share
@@ -6764,8 +7137,8 @@ That posture snapshot must render redaction labels through the canonical
 unified-resource hint order, not alphabetically, so the AI summary, drawer,
 and any future policy surfaces all present the same redaction precedence.
 Its sensitivity and routing counts must also follow the canonical
-unified-resource order and shared human-readable count summaries, so both the
-backend summary and the frontend policy card stay aligned on the same
+unified-resource order and shared human-readable count summaries, so the
+backend summary and any frontend posture presentation stay aligned on the same
 presentation sequence.
 The unified AI resource data-governance block must also use the shared
 unified-resource redaction-label helper directly, so the same canonical
@@ -6786,8 +7159,9 @@ silently dropping the summary block.
 The per-resource intelligence payload returned from
 `/api/ai/intelligence?resource_id=...` now carries recent changes,
 dependencies, dependents, correlations, and knowledge only; policy posture
-stays on the system-wide intelligence summary and the Patrol governance card
-instead of riding the resource-detail payload.
+stays on the system-wide intelligence summary instead of riding the
+resource-detail payload, and no frontend surface currently renders those
+posture counts.
 That same resource-intelligence payload also carries dependency and
 dependent correlation context from unified-resource correlations, so the drawer
 can show canonical correlation relationships without reconstructing them from the
@@ -6807,19 +7181,22 @@ operator paragraph. Future overview or brief surfaces need a governed product
 owner first, must pass fact-bound structured context from owning Infrastructure,
 Workloads, Patrol, storage, recovery, and alert summaries, and must not let an
 unbounded prompt become a route's source of truth.
-Future route-to-Assistant handoffs must also keep their execution mode scoped
-to the request. When an overview brief opens Assistant, the drawer may prefill
-only governed prompt/context data, but the submitted chat request must set
-`autonomous_mode:false`, preserve the operator's persistent Assistant
-control-level setting, and disclose the temporary approval-required mode in
-the drawer instead of showing the generic Autonomous warning.
+Future route-to-Assistant handoffs inherit the server-set execution mode
+instead of carrying one. When an overview brief opens Assistant, the drawer may
+prefill only governed prompt/context data; the submitted chat request carries
+no execution-mode field (`/api/ai/chat` runs every request approval-required),
+the operator's persistent Assistant control-level setting stays untouched, and
+the drawer discloses the approval-required mode through the
+`autonomousMode:false` context flag instead of showing the generic Autonomous
+warning.
 Scoped Assistant handoffs that originate in owned product surfaces may also
 send bounded `handoff_context` text, structured `handoff_resources`, and safe
 structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
 `/api/ai/chat`. That context is model-only session metadata, not saved
 user-authored message text, and the backend must clamp the exchange to
 approval-required mode whenever such scoped handoff context, resources, or
-action references are present. Patrol finding IDs remain stricter: when
+action references are present (`HandleChat` currently clamps every exchange).
+Patrol finding IDs remain stricter: when
 `finding_id` resolves, backend-refreshed durable Patrol context remains the
 canonical authority; the handler may merge only a recognized same-finding
 Patrol product handoff section as secondary model-only briefing, and it must
@@ -6846,10 +7223,9 @@ slice that the prompt context uses.
 The system-wide `/api/ai/intelligence` summary should also surface the same
 canonical recent-change slice, alongside the count, so the aggregate payload
 and the prompt context stay aligned on the same shared timeline source.
-The frontend Patrol intelligence page now also consumes that canonical
-summary payload directly through the shared AI client and store, so the
-visible summary card stays aligned with the same recent-change slice that the
-runtime and API contracts expose.
+The frontend Patrol page reads that canonical summary payload through the
+shared AI client and store, but only for its overall health; it renders no
+summary card and no recent-change slice.
 The Patrol runtime now also exports a canonical `runtime_state` alongside
 `blocked_reason` in the Patrol status payload, so provider-availability and any
 legacy managed-credit block conditions remain part of the governed runtime
@@ -7374,6 +7750,18 @@ prompt budget. Reporting is therefore an additive consumer of AI
 runtime, not a new ownership boundary, and the narrator/findings
 surfaces inherit the same governance the rest of the canonical AI
 runtime already enforces.
+Report narration is caller-requested spend, so on the single-resource HTTP
+route only `POST /api/admin/reports/generate` reaches it (fleet reports, from
+`POST .../generate-multi` or a report schedule, use the fleet narrator). The
+reporting narrator resolver goes through `AISettingsHandler.GetAIService`,
+which constructs a tenant service on first use and can then list provider
+models or start background discovery. A GET single-resource report never calls
+that resolver:
+it narrates deterministically and reads Patrol findings through
+`AISettingsHandler.ExistingAIService`, which returns only a service that is
+already running and never constructs one
+(`TestAISettingsHandler_ExistingAIServiceNeverConstructs`, and through the
+router's real wiring `TestContract_SingleReportGETDoesNotConstructTenantAIService`).
 
 The same canonical AI runtime now also owns the fleet-level report
 narrative through `report_fleet_narrator.go`. `Service` implements
@@ -7469,6 +7857,16 @@ remain available for report generation but are not invoked by `pulse_summarize`.
 `TestMetricEvidenceRetainsObservedCoverageAcrossRestart` verifies retained
 coordinates, sparse timestamps, statistics, empty results and query failures.
 
+Retained metric evidence is organization-scoped. Every `pulse_summarize`
+request carries the executor's organization as `MetricReportRequest.OrgID`, and
+the server's report engine resolves that organization's own metrics store
+(`EngineConfig.MetricsStoreForOrg`), refusing a request without one
+(`ErrReportOrgRequired`) rather than reading the default organization's store.
+A tenant's Assistant therefore summarizes only its own organization's history,
+even for a resource ID that also exists in another organization.
+`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` and
+`TestReportEngineReadsOnlyTheRequestOrganizationsMetrics` hold this.
+
 The same canonical AI runtime now also records user-chat token
 usage to the cost ledger. `chat.Service.ExecuteStream` was a
 long-standing gap: the agentic loop accumulated token counts via
@@ -7542,6 +7940,12 @@ contacts infrastructure directly. Retired tool names and compatibility aliases
 cannot be registered or shadowed by extensions. Docker update/control,
 Kubernetes scale/restart/delete, arbitrary exec, raw command, and file writes
 are omitted from offered schemas and denied if fabricated.
+
+The Pulse self-update administrative exception `admin.pulse.self-update`
+covers `POST /api/updates/apply`, `/api/updates/rollback` and
+`/api/updates/pro-runtime/apply`. The runtime-switch route is the same
+admin-only manager apply pipeline as an update, with no model-originated,
+Assistant tool or agent transport path.
 
 The registry audits enumerate actual registered tool discriminator values and
 bind mechanically discovered API, job, and transport candidates to one registry
@@ -7696,6 +8100,54 @@ inspection failure, stale facts, or mismatched identities remain
 continues to project only `agent_attested` evidence, so adding the production
 observer does not loosen the verification rule.
 
+### Incomplete investigation follow-up
+
+An empty or unusable final model response, provider error, or final-summary
+timeout does not constitute a model conclusion. The shared agentic loop retains
+a readable failure receipt and returns the original error identity for Patrol
+investigations. Interactive chat retains its existing best-effort fallback.
+The investigation service must not advance a captured proposal after that error.
+
+A final summary that leaks a textual tool call is unusable only for Patrol
+investigations: the model was still investigating, and the orchestrator would
+read the unmarked prefix as a terminal `needs_attention` conclusion. Interactive
+chat keeps the non-empty clean prefix it already streamed as the final message,
+so the persisted message matches the stream, and falls back only when that
+prefix is empty. Proof: `TestInteractiveFinalSummaryKeepsCleanPrefixBeforeLeakedToolCall`
+and `TestInvestigationFinalSummaryWithLeakedToolCallIsNotAConclusion` in
+`internal/ai/chat/agentic_final_failure_test.go`.
+The same rule holds for a main-loop turn with no structured tool calls whose
+content leaked a textual tool call: a Patrol investigation drops that prefix and
+takes the bounded summary turn and failure receipt, while interactive chat keeps
+it. Proof: `TestInvestigationMainLoopLeakedToolCallIsNotAConclusion` and
+`TestInteractiveMainLoopKeepsCleanPrefixBeforeLeakedToolCall` in
+`internal/ai/chat/agentic_main_loop_leak_test.go`.
+
+The private orchestrator clears the previous finding outcome when starting a
+new session, after retaining its prior context. Failed runs preserve evidence,
+counts and any existing action reference. They remain failed rather than being
+classified from fallback prose as a completed `needs_attention` investigation.
+Failed runs without a conclusion, including timeouts, may be assessed at the
+next scheduled Watch without another cooldown. Existing attempt limits,
+admission, autonomy and action authority still apply. A real completed model
+decision requiring human attention remains terminal.
+
+Proofs: `internal/ai/chat/agentic_final_failure_test.go`,
+`internal/ai/findings_provider_failure_test.go`, and the private
+`TestProviderFailureClearsPriorConclusionAndRetainsEvidence` regression.
+These causal tests do not themselves qualify model-owned unattended recovery.
+
+### Bounded unattended provider follow-up rerun (2026-10-16)
+
+- Pulse PR2994 and enterprise PR123 retain incomplete investigations as failures, preserve their evidence, clear prior outcomes before execution, and leave the next scheduled assessment eligible within the existing policy and attempt limit. New tests fail on the original code and pass after the repair; full affected suites and the private investigation race suite pass. Both source PRs have passing CI.
+- Frozen proof `provider-followup-20261016` ran Pro and free Pulse plus Claude for 36 minutes each with the same Opus 5.5 model, goal, ten-minute cadence, target faults at 120/840/1500 seconds, persistent dependency fault at 120 seconds, and controller restart at 1440 seconds. No operator diagnosis, approval, remediation or configuration change occurred inside either scored window. The independent observer retained 208 samples per arm, with no transport loss or source/helper/binary identity mismatch.
+- Both arms recovered all three distinct target outages with HTTP 200 and a new process boot, including after controller restart. Both left the healthy control untouched and the dependency unresolved without restart. Pro recovery delays from injection were 672.734/504.897/457.347 seconds; Claude delays were 514.012/397.035/332.276 seconds, sampled approximately every ten seconds. Pro retained three succeeded action receipts with confirmed health. All four external scheduled turns completed and retained their journal.
+- Provider-reported list-equivalent usage was US$5.5860168 for Pro and US$1.2533858 for Claude. All 38 Pro CLI invocations and four external turns retained completion receipts. These counts describe different architectural units; actual subscription cash cost and steady-state operating cost were not measured.
+- The live Pro run did not naturally encounter an empty response or summary timeout. Controlled causal tests establish those error and eligibility boundaries. The live result establishes this bounded workflow only: fixed order, one trial per arm, restart-only authority and development-mode licensing. Production licence onboarding, repeatability, permanent root-cause repair and wider customer readiness remain unqualified. Keep the customer-outcome gap and candidate planned.
+- Community used shipped monitoring MCP/APIs, a monitoring-only agent/read token and the retained scoped Docker bridge, timer and journal. Core free unified action APIs also exist; this experiment does not establish minimum DIY effort or make manual action receipts and guardrails paid-only. Pro restarted the Pulse process; the external arm restarted its scheduler while monitoring continued.
+- The external journal repeatedly claimed Pulse had raised no alerts, while retained state included critical container-health alerts. Zero fleet findings did not establish zero alerts. The Pro late history collector also stopped on an unrelated finding ID containing a slash; retained sessions, final records and independent observations succeeded, and a separate read-only post-cutoff supplement retained both workload investigation records. Preserve that collector error with the evidence.
+- Final-source browser proof covered `/patrol` > Activity > Finding options and history at 1440x1000 and 390x844: failed empty response, timed-out summary, genuine human attention, retained error/evidence scrolling, thread disclosure, enabled retry focus, close/focus return and reload persistence. This qualification entry changes evidence metadata only; runtime and rendered source remain the tested bytes. Scoped tokens were revoked, owned containers removed, agent state archived and task listeners closed.
+
 ### Proxmox guest lifecycle Patrol detector floor
 
 `internal/ai/findings_proxmox_lifecycle.go` owns the deterministic production
@@ -7848,7 +8300,23 @@ The findings operator-state projection carries canonical `MonitoringMode` and
 lock state. Active maintenance, expected-offline, muted, and retired policy
 produce distinct lifecycle causes in durable finding history. Suppression is
 reversible when the canonical cause lifts. Legacy providers that project only
-`IntentionallyOffline` retain their established cause and behavior.
+`IntentionallyOffline` (no `MonitoringMode`) retain their established
+`intentionally_offline` cause and read as expected-offline.
+
+Expected-offline is availability-specific in Patrol exactly as it is in the
+alert runtime. `ResourceOperatorStateProjection.monitoringSuppressionCauseFor`
+decides per finding: retired and muted silence every finding, while
+expected-offline (and the legacy flag) silence only findings in the shared
+down condition class (`findingConditionClass` in
+`internal/ai/findings_alert_mirror.go`: stopped, exited, offline, unreachable,
+PDM offline, Proxmox guest stopped). Capacity, performance, backup, security,
+and disk-health findings on an expected-offline resource stay visible; SMART
+"offline uncorrectable" reports are disk health, not the resource being down.
+The wake path judges the re-detected finding with the same helper, so a
+finding silenced under muted wakes when the resource moves to expected-offline
+unless it is itself an availability finding.
+`internal/ai/findings_expected_offline_test.go` pins the split with muted as
+the negative control.
 
 Retired lifecycle also projects an effective remediation lock into Patrol
 investigation and the shared execution admission paths, so a resource cannot
@@ -8194,6 +8662,33 @@ separate recorded steps, and the current Actions controls own their ordering.
 A prepared plan awaiting approval is not an executed write. A subsequent read,
 self-reported verification flag or successful call cannot establish recovery.
 
+`pulse_control` also declines to plan when the target's operator state blocks
+remediation (`NeverAutoRemediate`, or a retired lifecycle).
+`assistantTypedActionPlanner` (`internal/api/assistant_typed_action_planner.go`)
+reads that state through the tenant-scoped lifecycle store
+(`actionlifecycle.Service.ResourceOperatorState`, the same read Patrol's broker
+and dispatch use, not the chat executor's own audit store) and returns
+`unifiedresources.ErrResourceRemediationLocked` before `Plan`, so no plan is
+written. `controlPlanFailureResult` turns that into an `ACTION_NOT_ALLOWED` tool
+response whose details carry `reason_code: resource_remediation_locked` and a
+`policy_boundary` telling the model to report the block and that it is cleared
+from the resource's Operator overrides. This is a courtesy refusal when the
+state can be read, not the safety gate: the lifecycle's dispatch gate stays
+authoritative and refuses even a human-approved plan once the lock is stored (a
+lock saved while a human dispatch is being admitted is a known narrow race that
+the lifecycle owns), an operator state that
+cannot be read at planning is not a refusal (planning executes nothing and
+dispatch re-checks), and REST and Patrol planning still go through the
+unchanged lifecycle planner. The block applies to typed actions that target the
+exact locked resource, not its host, its descendants or read-only investigation.
+The Assistant has no guest allowlist or denylist of its own: the per-resource
+lock is the single place an operator tells Pulse not to act. The former
+`protected_guests` AI setting was saved and pushed into the tool executor but
+read only by an unreachable handler, so it never constrained `pulse_control`.
+It is removed from the AI settings projection, the tool executor and the
+Settings panel; `PUT /api/settings/ai/update` ignores the field from older
+clients, and a stored value is dropped the next time the settings are written.
+
 `pulse_query action=action` reads an exact action ID from the tenant-pinned
 canonical audit. It retains the full plan, recorded decisions, origin and
 canonical `ActionResultV2`, including independent observer identity and timestamps.
@@ -8316,11 +8811,9 @@ recompute digest counts from run history, findings, or cost events, and must
 not call the endpoint through any other client. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Subscription routing content boundary
 
@@ -8358,6 +8851,15 @@ explicit renderer fixtures at 1440, 900 and 390 pixel widths.
 
 
 ### Monitoring identity without command access
+
+An ambiguous target returns `STRICT_RESOLUTION` with the tool error bit and
+guidance to select an exact canonical resource ID. It cannot be described as a
+missing command connection or fall back to a connected hostname. Docker children
+inherit placement, not their reporting host's identity aliases, through the
+shared canonical identity owner. `TestDockerLogReadRoutesToHostWithCollectedChildren`
+checks registered read dispatch with host/child ingestion and real-collision
+refusal; `TestAmbiguousResourceNameCannotFallBackToConnectedHostname` checks the
+failure envelope without dispatch.
 
 Command routing resolves monitored topology independently of agent connection
 availability. A missing connection must preserve the known target kind and
@@ -8533,3 +9035,26 @@ paths keep the buckets, the final delta does not double them),
 `patrol_cost_projection_test.go` and `cost_persistence_test.go`. This repairs
 the lost accounting data from Pulse #2350; it is not a measured provider bill
 or a claim of savings across six-hourly runs.
+
+### pulse_read admits only argument-validated read forms
+
+`pulse_read` runs commands on monitored hosts, usually as root, without an
+approval prompt at any control level, so `ClassifyExecutionIntent` is the only
+gate between a model-proposed command and the agent. The classifier used to
+approve a command from its first word and checked arguments only for `find`,
+`curl` and `timeout`, which admitted state-changing forms such as `date -s`,
+`sort -o`, `journalctl --vacuum-time`/`--rotate`, `fuser -k`, `dmesg -C`,
+`sar -o`, `ss -K`, `hostname NAME` and interface, ARP and route setters.
+`internal/ai/tools/tools_query_readonly.go` now owns the read-only forms:
+commands are parsed as literal shell words (expansions, chaining, redirects
+other than the fixed fd ones, and globs on validated programs are refused),
+every pipeline stage must itself be read-only, intrinsically read-only
+programs are listed by name, and every other allowlisted program accepts only
+explicitly listed options and subcommands, failing closed on anything unknown.
+`route` is judged on purpose rather than through the `dd` substring rule, and
+plain `blkid` needs `-p` because without it blkid updates its cache. Ordinary
+diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
+`sar 1 1`, `docker ps`/`logs`, `smartctl -a`, `systemctl status`) stay
+read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
+`TestExecutionIntent_RouteOperationBoundary` in
+`internal/ai/tools/tools_query_readonly_test.go`.

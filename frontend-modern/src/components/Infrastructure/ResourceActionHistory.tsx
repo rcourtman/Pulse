@@ -3,6 +3,7 @@ import type { Component } from 'solid-js';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import type { ActionAuditRecord } from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   formatActionApprovalPolicyLabel,
   formatActionCapabilityLabel,
@@ -23,6 +24,7 @@ interface ResourceActionHistoryProps {
 }
 
 const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
+  const now = useRelativeTimeNow();
   const state = () => getActionAuditRecordStatePresentation(props.audit);
   const preflight = () => props.audit.plan?.preflight;
   const resultPresentation = () => getActionAuditResultPresentation(props.audit);
@@ -39,7 +41,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
             {formatActionCapabilityLabel(props.audit.request?.capabilityName)}
           </div>
           <div class="mt-0.5 text-muted">
-            {formatRelativeTime(props.audit.updatedAt || props.audit.createdAt)}
+            {formatRelativeTime(props.audit.updatedAt || props.audit.createdAt, { now: now() })}
             <Show when={props.audit.request?.requestedBy}>
               <span class="mx-1">•</span>
               <span>{props.audit.request.requestedBy}</span>
@@ -162,7 +164,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(presentation) => (
             <div
               data-testid="resource-apt-action-next-step"
-              class="rounded-sm border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900/25 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+              class="rounded-sm border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
             >
               <span class="font-medium">Next: </span>
               {presentation().nextStep}

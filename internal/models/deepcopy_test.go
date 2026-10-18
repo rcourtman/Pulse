@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -510,5 +512,27 @@ func TestCloneHostXCPNGInventoryIsolation(t *testing.T) {
 	dst.XCPNG.VMs[0].Name = "mutated"
 	if src.XCPNG.VMs[0].Name != "app" {
 		t.Fatal("cloned XCP-ng inventory aliases source VMs")
+	}
+}
+
+// AgentSMARTReported and AgentSMARTSplit are internal poll evidence: a state
+// snapshot copy keeps them for the alert check and the poll's evidence
+// retention, and neither reaches an API or websocket payload.
+func TestPhysicalDiskAgentSMARTReportedStaysInternal(t *testing.T) {
+	disk := PhysicalDisk{ID: "lab-pve1-sda", DevPath: "/dev/sda", AgentSMARTReported: true, AgentSMARTSplit: true}
+	if clone := clonePhysicalDisk(disk); !clone.AgentSMARTReported || !clone.AgentSMARTSplit {
+		t.Fatalf("clone dropped AgentSMARTReported/AgentSMARTSplit: %+v", clone)
+	}
+	if clones := clonePhysicalDisks([]PhysicalDisk{disk}); !clones[0].AgentSMARTReported || !clones[0].AgentSMARTSplit {
+		t.Fatalf("slice clone dropped AgentSMARTReported/AgentSMARTSplit: %+v", clones[0])
+	}
+	payload, err := json.Marshal(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"agentsmartreported", "agentsmartsplit"} {
+		if strings.Contains(strings.ToLower(string(payload)), field) {
+			t.Fatalf("%s leaked into JSON: %s", field, payload)
+		}
 	}
 }

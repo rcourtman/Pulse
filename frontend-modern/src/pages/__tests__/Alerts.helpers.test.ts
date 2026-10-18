@@ -100,6 +100,7 @@ import {
   buildProjectedOverrides,
   normalizeRawOverridesConfig,
 } from '@/features/alerts/alertOverridesModel';
+import { buildAlertHistoryItems } from '@/features/alerts/alertHistoryModel';
 import {
   getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentEventFilterActionButtonClass,
@@ -324,6 +325,9 @@ describe('tab path helpers', () => {
     );
     expect(alertsPageSource).toContain('getAlertsTabGroups({ readOnly: readOnlySession() })');
     expect(alertsPageSource).toContain('touch-scroll');
+    expect(alertsPageSource).toContain(
+      'shouldConfirmAlertsLeave(e.to, e.from.pathname, hasUnsavedChanges())',
+    );
     expect(alertsPageSource).toContain('scrollbar-hide');
     expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
     expect(alertsPageSource).not.toContain('const loadAlertConfiguration = async');
@@ -500,6 +504,7 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).not.toContain('allowInfrastructureFallback');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildResourceSurfaceLinksForResource');
+    expect(alertResourceIncidentsPanelSource).not.toMatch(/from ['"][^'"]*resourceLinks['"]/);
     expect(alertResourceIncidentsPanelSource).not.toContain('{link.compactLabel}');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');
@@ -522,9 +527,35 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toMatch(/<Table(?:\s|>)/);
     expect(alertHistoryTableSectionSource).toContain('alert-history-responsive-table');
     expect(alertHistoryTableSectionSource).toContain('<colgroup>');
+    // Each track carries its own width so message, the column that says what
+    // happened, is not held to the same share as the timestamp.
+    expect(alertHistoryTableSectionSource).toMatch(
+      /alert-history-timestamp-track[\s\S]*alert-history-resource-track[\s\S]*alert-history-type-track[\s\S]*alert-history-severity-track[\s\S]*alert-history-message-track[\s\S]*alert-history-duration-track[\s\S]*alert-history-status-track[\s\S]*alert-history-node-track[\s\S]*alert-history-actions-track/,
+    );
     expect(alertHistoryTableSectionSource).toContain('alert-history-timestamp-column');
     expect(alertHistoryTableSectionSource).toContain('alert-history-full-detail-column');
     expect(alertHistoryTableAlertRowSource).toContain('alert-history-timestamp-column');
+    // The time column is headed "Time", as on the phone card, because
+    // "Timestamp" needed 93px and ended in an ellipsis in the time track.
+    expect(alertHistoryTableSectionSource).toMatch(/>\s*Time\s*<\/TableHead>/);
+    expect(alertHistoryTableSectionSource).not.toMatch(/>\s*Timestamp\s*<\/TableHead>/);
+    // A history row has no disclosure, so the cells that say which resource and
+    // what happened wrap instead of truncating. Only the node cell may still end
+    // in an ellipsis, and a cell-level max-width would cap a track the CSS sized.
+    expect(alertHistoryTableAlertRowSource).toContain('ALERT_HISTORY_MESSAGE_TEXT_CLASS');
+    expect(alertHistoryTableAlertRowSource).toContain('ALERT_HISTORY_RESOURCE_TEXT_CLASS');
+    // Message holds two lines on every row so the windowing hook's single
+    // measured row height stays true as a long history scrolls.
+    expect(alertHistoryTableAlertRowSource).toMatch(
+      /ALERT_HISTORY_MESSAGE_TEXT_CLASS =\s*'line-clamp-2 min-h-\[2lh\] @min-\[80rem\]:line-clamp-1 @min-\[80rem\]:min-h-0 whitespace-normal wrap-break-word /,
+    );
+    expect(alertHistoryTableAlertRowSource).toMatch(
+      /ALERT_HISTORY_RESOURCE_TEXT_CLASS =\s*'line-clamp-2 @min-\[80rem\]:line-clamp-1 whitespace-normal wrap-break-word /,
+    );
+    expect(alertHistoryTableAlertRowSource).not.toMatch(/max-w-\[\d+px\]/);
+    expect(alertHistoryTableAlertRowSource).not.toMatch(
+      /ALERT_HISTORY_(?:MESSAGE|RESOURCE)_TEXT_CLASS =\s*'[^']*\btruncate\b/,
+    );
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded-sm border border-border',
     );
@@ -543,6 +574,10 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableAlertRowSource).toContain('export function AlertHistoryTableAlertRow');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('AlertHistoryItemActions');
+    // An open threshold alert's row leads with its live reading, not the
+    // breach message it opened with (#2068).
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryRowCopy(props.alert, now)');
+    expect(alertHistoryTableAlertRowSource).not.toContain('{props.alert.description}');
     expect(alertHistoryItemActionsSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain(
       'export function AlertHistoryAdministrationCard',
@@ -578,7 +613,7 @@ describe('tab path helpers', () => {
     );
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.getIncidentTimeline');
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.addIncidentNote');
-    expect(alertOverviewTabSource).toContain('AlertOverviewStatsCards');
+    expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewStatsCards');
     expect(alertOverviewTabSource).toContain('AlertOverviewActiveAlertsSection');
     expect(alertOverviewTabSource).toContain('useAlertOverviewState');
     expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
@@ -593,7 +628,8 @@ describe('tab path helpers', () => {
     expect(alertOverviewStateSource).not.toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().acknowledged');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().total24h');
-    expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().overrides');
+    // Override count is configuration, not alert status; it left the overview.
+    expect(alertOverviewStatsCardsSource).not.toContain('alertStats().overrides');
     expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewAlertCard');
     expect(alertOverviewActiveAlertsSectionSource).toContain('getAlertListEmptyState');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewCardPresentation');
@@ -1094,9 +1130,6 @@ describe('normalizeEmailConfigFromAPI', () => {
       to: ['ops@example.com'],
       tls: false,
       startTLS: false,
-      replyTo: '',
-      maxRetries: 3,
-      retryDelay: 5,
       rateLimit: 0,
       tagFilter: [],
       tagFilterMode: 'all',
@@ -1132,9 +1165,6 @@ describe('normalizeEmailConfigFromAPI', () => {
       to: ['ops@example.com'],
       tls: true,
       startTLS: false,
-      replyTo: '',
-      maxRetries: 3,
-      retryDelay: 5,
       rateLimit: 60,
       tagFilter: [],
       tagFilterMode: 'all',
@@ -1312,5 +1342,61 @@ describe('Unified selector parity', () => {
     ).toEqual(
       buildExpectedGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
     );
+  });
+});
+
+describe('alert history close outcome', () => {
+  it('lists a node alert handed to its Pulse agent as moved, not resolved', () => {
+    const base = {
+      type: 'memory',
+      level: 'warning' as const,
+      resourceName: 'pve1',
+      node: 'pve1',
+      instance: 'pve1',
+      value: 95,
+      threshold: 85,
+      startTime: '2026-10-06T09:00:00Z',
+      lastSeen: '2026-10-06T11:00:00Z',
+      acknowledged: true,
+    };
+    const items = buildAlertHistoryItems({
+      activeAlerts: {},
+      alertHistory: [
+        {
+          ...base,
+          id: 'pve1-memory',
+          resourceId: 'pve1',
+          message: 'Memory usage at 95%',
+          resolution: {
+            reason: 'moved_to_agent',
+            successorResourceId: 'agent-pve1',
+            successorName: 'pve1 (Host Agent)',
+          },
+        },
+        {
+          ...base,
+          id: 'pve1-cpu',
+          resourceId: 'pve1',
+          message: 'CPU usage at 90%',
+          acknowledged: false,
+        },
+      ],
+      getResource: () => undefined,
+      allResources: [],
+      now: Date.parse('2026-10-06T12:00:00Z'),
+    });
+
+    const moved = items.find((item) => item.id === 'pve1-memory');
+    // Acknowledgement does not hide the outcome: the condition went to the agent.
+    expect(moved?.status).toBe('moved');
+    expect(moved?.description).toBe('Memory usage at 95%');
+    expect(moved?.closeDetail).toBe(
+      'Moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.',
+    );
+    const recovered = items.find((item) => item.id === 'pve1-cpu');
+    expect(recovered?.status).toBe('resolved');
+    expect(recovered).not.toHaveProperty('closeDetail');
+
+    expect(alertHistoryTableAlertRowSource).toContain('title={props.alert.closeDetail}');
   });
 });

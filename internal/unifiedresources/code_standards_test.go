@@ -25,8 +25,7 @@ package unifiedresources
 //
 // Consumer package policy:
 //
-//   - internal/ai/*, internal/api/*, internal/infradiscovery/,
-//     internal/servicediscovery/: MUST use ReadState. Direct state reads
+//   - internal/ai/*, internal/api/*: MUST use ReadState. Direct state reads
 //     are banned for all migrated resource types.
 //
 //   - internal/monitoring/, internal/mock/, internal/models/,
@@ -322,7 +321,6 @@ func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *t
 		// Boundary-only compatibility conversions and retired command-shaped
 		// audit history remain readable but are not canonical action producers.
 		"../api/router_routes_ai_relay.go": true,
-		"../ai/tools/action_audit.go":      true,
 		// Graph-owned mock records are immutable presentation fixtures. They do
 		// not admit, approve, or dispatch executable actions.
 		"../mock/action_fixtures.go": true,
@@ -472,7 +470,6 @@ var consumerPackages = []consumerPackage{
 	{dir: "ai/chat", exemptFiles: nil},
 	{dir: "ai", exemptFiles: nil},
 	{dir: "api", exemptFiles: nil},
-	{dir: "servicediscovery", exemptFiles: nil},
 }
 
 // TestNoDirectStateAccessForMigratedResources ensures that consumer packages
@@ -726,6 +723,57 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 	if !strings.Contains(source, "UnifiedResourceSnapshotForTenant(orgID)") {
 		t.Fatalf("internal/api/resourceapi/resources.go must use tenant unified resource snapshots as the canonical seed")
+	}
+}
+
+// The resources API rebuilds its registry from a monitor's seed, so the
+// rebuild must judge source freshness by the thresholds that seed was judged
+// by, delivered with the seed in one call, and must not reuse a registry built
+// with other thresholds. A bare NewRegistry falls back to the defaults and
+// marks a slowly polled source stale between its configured polls.
+func TestResourceAPIRebuildsWithTheSeedingMonitorStaleThresholds(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"registry := unified.NewRegistryWithStaleThresholds(store, seed.staleThresholds)",
+		"seed.resources, seed.lastUpdate, thresholds = provider.UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID)",
+		"resources, lastUpdate, thresholds := provider.UnifiedResourceSnapshotWithStaleThresholds()",
+		"seed.staleThresholds = maps.Clone(thresholds)",
+		"maps.Equal(entry.staleThresholds, seed.staleThresholds)",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resourceapi/resources.go must contain %q", snippet)
+		}
+	}
+	if strings.Contains(source, "unified.NewRegistry(store)") {
+		t.Fatal("internal/api/resourceapi/resources.go must not rebuild a tenant registry with the default stale thresholds")
+	}
+}
+
+// Report-merge undoes an operator link through the registry's fold record. A
+// candidate ID derived from the merged resource's type names neither side of
+// a link, and the resources API's registry, seeded from the monitor's
+// already-linked listing, never holds the folded row to derive one from.
+func TestResourceAPIReportMergeExcludesRegistryLinkFolds(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"linkFolds := registry.ManualLinkFolds(path)",
+		"if len(resource.Sources) < 2 && len(linkFolds) == 0 {",
+		"for _, fold := range unified.ReportedManualLinkFolds(path, linkFolds, selected) {",
+		"pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resourceapi/resources.go report-merge must contain %q", snippet)
+		}
 	}
 }
 
@@ -1143,7 +1191,8 @@ func TestPlatformActivityTimelineContractStaysCanonical(t *testing.T) {
 		},
 		filepath.Join("..", "monitoring", "monitor.go"): {
 			"type MonitorSupplementalChangesProvider interface {",
-			"recordSupplementalResourceChanges(store, supplementalChanges)",
+			"binding := m.captureResourceStoreBinding()",
+			"recordSupplementalResourceChanges(store, binding.providers.changes(m))",
 			"func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {",
 		},
 		filepath.Join("..", "monitoring", "vmware_poller.go"): {
@@ -1309,16 +1358,12 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"unifiedresources.ResourcePolicyRedactedValue(",
 		},
 		filepath.Join("..", "ai", "chat", "context_prefetch.go"): {
-			"tools.CanonicalDiscoveryResourceType(",
-			"tools.DiscoveryProviderResourceType(",
-			"tools.CanonicalDiscoveryTargetID(",
+			"tools.CanonicalToolResourceType(",
 			"unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy)",
 			"unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy)",
 		},
-		filepath.Join("..", "ai", "tools", "tools_discovery.go"): {
-			"func CanonicalDiscoveryResourceType(raw string) string",
-			"func DiscoveryProviderResourceType(canonical string) string",
-			"func CanonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string",
+		filepath.Join("..", "ai", "tools", "executor.go"): {
+			"func CanonicalToolResourceType(raw string) string",
 		},
 		filepath.Join("..", "ai", "resource_export.go"): {
 			"unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)",
@@ -2332,21 +2377,6 @@ func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_info_test.go"),
-			requiredSnippets: []string{
-				`/api/discovery/info/host`,
-				`unsupported resource type "host"`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
-			requiredSnippets: []string{
-				`/api/discovery/type/host`,
-				`/api/discovery/host/host-1/host-1`,
-				`unsupported resource type "host"`,
-			},
-		},
-		{
 			path: filepath.Join(repoRoot, "internal", "api", "docker_agents_routes_more_test.go"),
 			requiredSnippets: []string{
 				`legacy hosts alias status = %d, want 400`,
@@ -2407,13 +2437,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
-			requiredSnippets: []string{
-				`TestParseDiscoveryResourceType_RejectsLegacyHostAlias`,
-				`legacy host rejected`,
-			},
-		},
-		{
 			path: filepath.Join(repoRoot, "internal", "ai", "resource_type_legacy_test.go"),
 			requiredSnippets: []string{
 				`TestIsUnsupportedLegacyAIResourceTypeToken`,
@@ -2427,14 +2450,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 				`TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType`,
 				`"resource_type"] = "physical_disk"`,
 				`[]string{"host", "container", "docker"`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_discovery_test.go"),
-			requiredSnippets: []string{
-				`TestIsUnsupportedDiscoveryLegacyResourceTypeToken`,
-				`"host", "lxc"`,
-				`TestExecuteListDiscoveries_RejectsLegacyTypeAlias`,
 			},
 		},
 		{
@@ -2525,13 +2540,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_read_test.go"),
 			requiredSnippets: []string{
 				`TestPulseToolExecutor_ExecuteReadRejectsLegacyAppContainerArg`,
-				`app_container is no longer supported; use app-container`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_file_test.go"),
-			requiredSnippets: []string{
-				`Legacy AppContainer Rejected`,
 				`app_container is no longer supported; use app-container`,
 			},
 		},
@@ -2695,9 +2703,9 @@ func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
 
 	requiredMonitorSnippets := []string{
 		"unifiedView := m.currentUnifiedStateView()",
-		"return string(unifiedresources.ContractResourceType(resource))",
-		"unifiedresources.ResourceDisplayName(resource)",
-		"unifiedresources.ResourceClusterName(resource)",
+		"return string(unifiedresources.ContractResourceType(*resource))",
+		"unifiedresources.ResourceDisplayName(*resource)",
+		"unifiedresources.ResourceClusterName(*resource)",
 	}
 	for _, snippet := range requiredMonitorSnippets {
 		if !strings.Contains(string(monitorSource), snippet) {

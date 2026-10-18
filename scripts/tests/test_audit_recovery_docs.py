@@ -11,7 +11,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDES = ("AUDIT_LOGGING", "TROUBLESHOOTING", "CONFIGURATION", "DEPLOYMENT_MODELS")
+GUIDES = ("AUDIT_LOGGING", "TROUBLESHOOTING", "CONFIGURATION", "DEPLOYMENT_MODELS", "WEBHOOKS")
 
 
 def read_guide(name: str) -> str:
@@ -80,6 +80,118 @@ class AuditRecoveryDocsTest(unittest.TestCase):
         self.assertIn("**inside the audit store directory**", guide)
         self.assertIn("organisation's data directory", guide)
         self.assertIn("runtime may supply a different audit directory or managed signing key", guide)
+
+
+class AuditWebhookDocsTest(unittest.TestCase):
+    """Static guidance/source binding, not delivery or signature execution.
+
+    Override text for literal-parent/adverse controls without altering source
+    or reducing a substantive failure to a shipped-mirror mismatch.
+    """
+
+    text = None
+
+    def setUp(self):
+        text = self.text if self.text is not None else (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.guide = " ".join(text.split("## 🧾 Audit Webhooks", 1)[1].split(
+            "## 🏢 Provider-hosted MSP webhooks", 1)[0].replace("**", "").split())
+        self.sender = (ROOT / "pkg/audit/webhook.go").read_text()
+
+    def test_audit_access_is_not_alert_configuration_or_licence_only(self):
+        for phrase in ("separate from", "retry policies and delivery activity do not configure",
+                       "`audit_logging` capability and a supporting runtime",
+                       "public Community runtime does not enable", "Pulse Pro runtime required",
+                       "Download Pulse Pro", "Do not buy another licence or reset data",
+                       "Configuration is organisation-scoped", "administrator access",
+                       "`settings:read` for GET and `settings:write` for updates",
+                       "complete URL list", "not an append operation"):
+            self.assertIn(phrase, self.guide)
+        route = (ROOT / "internal/api/router_routes_licensing.go").read_text().split(
+            "// Audit Webhook routes", 1)[1].split("type auditAdminEndpointAdapter", 1)[0]
+        for boundary in ("ensureAdminSession", "featureAuditLoggingValue", "ScopeSettingsRead",
+                         "ScopeSettingsWrite", "auth.ResourceAuditLogs"):
+            self.assertIn(boundary, route)
+        handler = (ROOT / "internal/api/activity_audit_handlers.go").read_text().split(
+            "func (h *AuditHandlers) HandleUpdateWebhooks", 1)[1].split(
+                "// validateWebhookURL", 1)[0]
+        self.assertIn('URLs []string `json:"urls"`', handler)
+        self.assertIn("getLoggerForOrg(orgID)", handler)
+        self.assertIn("logger.UpdateWebhookURLs(validatedURLs)", handler)
+
+    def test_audit_endpoint_restrictions_are_not_an_alert_setting(self):
+        for phrase in ("using HTTPS with valid certificate trust", "placeholder",
+                       "private/reserved IPs", "public names resolving to those addresses",
+                       "does not relax this audit restriction", "Do not bypass it",
+                       "separately secured, authorised ingress", "not a delivery test",
+                       "Do not create failed logins"):
+            self.assertIn(phrase, self.guide)
+        self.assertNotIn("https://siem.corp.local", self.guide)
+        validator = self.sender.split("func validateWebhookURL(", 1)[1]
+        for boundary in ('".local"', "isPrivateOrReservedIP(addr.IP)", "isPrivateOrReservedIP(ip)"):
+            self.assertIn(boundary, validator)
+        self.assertNotIn("WebhookAllowedCIDRs", self.sender)
+
+    def test_queue_attempts_and_success_are_not_complete_delivery(self):
+        constants = dict(re.findall(r"webhook(QueueSize|MaxRetries|WorkerCount)\s*=\s*(\d+)", self.sender))
+        self.assertIn(f"at most {int(constants['QueueSize']):,} events", self.guide)
+        self.assertEqual(int(constants["MaxRetries"]), 3)
+        self.assertEqual(int(constants["WorkerCount"]), 3)
+        self.assertIn("webhookTimeout     = 30 * time.Second", self.sender)
+        self.assertIn("[]time.Duration{1 * time.Second, 5 * time.Second, 30 * time.Second}", self.sender)
+        for phrase in ("best effort", "drops new events when full", "in-memory queue",
+                       "restart does not replay", "up to four attempts", "1, 5 and 30 seconds",
+                       "30-second request timeout", "not a total delivery deadline",
+                       "Only an HTTP 2xx", "does not prove the receiver verified or durably stored"):
+            self.assertIn(phrase, self.guide)
+        self.assertNotIn("payload of every security-relevant action", self.guide)
+        self.assertIn("make(chan Event, webhookQueueSize)", self.sender)
+        self.assertIn("attempt <= webhookMaxRetries", self.sender)
+        self.assertIn("resp.StatusCode < 200 || resp.StatusCode >= 300", self.sender)
+
+    def test_receiver_and_missing_event_guidance_preserve_uncertainty(self):
+        for phrase in ("duplicates and out-of-order arrival", "no audit dead-letter queue",
+                       "automatic history replay", "do not recover audit deliveries",
+                       "not a guaranteed cancellation", "bounded local sender error",
+                       "not proof that the action was never recorded",
+                       "history query error is not an empty history", "not a broad export",
+                       "Preserve keys and history", "do not restart or clear data"):
+            self.assertIn(phrase, self.guide)
+        for anchor in ("#viewing-audit-events", "#tamper-detection", "#storage"):
+            self.assertIn(f"AUDIT_LOGGING.md{anchor}", self.guide)
+        self.assertIn("urls := make([]string, len(w.urls))", self.sender)
+        self.assertIn("copy(urls, w.urls)", self.sender)
+
+    def test_signature_is_on_the_event_not_the_raw_post_body(self):
+        for phrase in ("`data.id`", "`X-Pulse-Event-ID`", "instance/organisation",
+                       "headers alone do not authenticate", "`data.signature`",
+                       "not a top-level payload field", "not the raw POST body",
+                       "not an audit verifier", "without signing can omit this field",
+                       "unsigned, failed or unknown", "freedom from replay"):
+            self.assertIn(phrase, self.guide)
+        payload = self.sender.split("type WebhookPayload struct {", 1)[1].split("\n}", 1)[0]
+        for field in ('`json:"event"`', '`json:"timestamp"`', 'Data      Event     `json:"data"`'):
+            self.assertIn(field, payload)
+        event = (ROOT / "pkg/audit/audit.go").read_text()
+        self.assertIn('Signature string    `json:"signature,omitempty"`', event)
+        self.assertIn('req.Header.Set("X-Pulse-Event-ID", event.ID)', self.sender)
+        signer = (ROOT / "pkg/audit/signer.go").read_text()
+        self.assertIn("s.mac(s.canonicalV2Form(event))", signer)
+
+    def test_key_paths_and_private_evidence_do_not_offer_key_disclosure_or_reset(self):
+        for phrase in ("`audit/.audit-signing.key`", "instance or organisation data directory",
+                       "matching `.encryption.key`", "different audit directory",
+                       "managed signing key", "not a guessed root path",
+                       "Do not copy an encrypted key", "disclose keys or reset them",
+                       "Keep raw payloads, full URLs, headers and logs private",
+                       "locally reviewed, redacted excerpt"):
+            self.assertIn(phrase, self.guide)
+        store = (ROOT / "pkg/audit/sqlite_logger.go").read_text()
+        self.assertIn('auditDir = filepath.Join(cfg.DataDir, "audit")', store)
+        self.assertIn("NewSigner(auditDir, cfg.CryptoMgr)", store)
+        self.assertIn("NewSignerWithKey(cfg.SigningKey)", store)
+        signer = (ROOT / "pkg/audit/signer.go").read_text()
+        self.assertIn('keyPath := filepath.Join(dataDir, ".audit-signing.key")', signer)
+        self.assertIn("cryptoMgr.Decrypt(data)", signer)
 
 
 if __name__ == "__main__":

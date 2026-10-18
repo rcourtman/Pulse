@@ -189,6 +189,101 @@ describe('AlertResourceIncidentsPanel', () => {
     ).toBeNull();
   });
 
+  it('describes only the open occurrence from its live alert', () => {
+    // The recorded message is the breach that opened the occurrence; a
+    // threshold alert held below its trigger reads lower now.
+    const alertId = 'homelab-minipc::metric-threshold:temperature';
+    const occurrence = (overrides: Partial<Incident>): Incident => ({
+      id: 'occurrence',
+      alertIdentifier: alertId,
+      alertType: 'temperature',
+      level: 'warning',
+      resourceId: 'homelab-minipc',
+      resourceName: 'minipc',
+      status: 'open',
+      acknowledged: false,
+      openedAt: '2026-10-06T07:57:44Z',
+      message: 'Node temperature at 80.0°C',
+      events: [],
+      ...overrides,
+    });
+    const now = Date.now();
+    render(() => (
+      <AlertResourceIncidentsPanel
+        state={
+          {
+            resourceIncidentPanel: () => ({ resourceId: 'homelab-minipc', resourceName: 'minipc' }),
+            resourceIncidents: () => ({
+              'homelab-minipc': [
+                occurrence({ id: 'open' }),
+                // A cached row still marked open from an earlier start is a
+                // different occurrence and must not take this alert's reading.
+                occurrence({
+                  id: 'cached-earlier',
+                  openedAt: '2026-10-04T09:00:00Z',
+                  message: 'Node temperature at 81.0°C',
+                }),
+                occurrence({
+                  id: 'closed',
+                  status: 'resolved',
+                  openedAt: '2026-10-05T07:00:00Z',
+                  closedAt: '2026-10-05T08:00:00Z',
+                  message: 'Node temperature at 83.0°C',
+                }),
+              ],
+            }),
+            activeAlerts: () => ({
+              [alertId]: {
+                id: alertId,
+                type: 'temperature',
+                level: 'warning',
+                resourceId: 'homelab-minipc',
+                resourceName: 'minipc',
+                node: 'minipc',
+                instance: 'homelab',
+                message: 'Node temperature at 80.0°C',
+                value: 80,
+                threshold: 80,
+                startTime: '2026-10-06T07:57:44Z',
+                lastSeen: new Date(now - 5 * 60_000).toISOString(),
+                acknowledged: false,
+                metricStatus: {
+                  phase: 'latched',
+                  value: 76,
+                  unit: '°C',
+                  observedAt: new Date(now).toISOString(),
+                  trigger: 80,
+                  recovery: 75,
+                  recoveryDelaySeconds: 300,
+                },
+              },
+            }),
+            resourceIncidentError: () => ({}),
+            resourceIncidentLoading: () => ({ 'homelab-minipc': false }),
+            expandedResourceIncidentIds: () => new Set<string>(),
+            resourceIncidentEventFilters: () => new Set<string>(['opened']),
+            setResourceIncidentEventFilters: vi.fn(),
+            refreshResourceIncidentPanel: vi.fn(),
+            setResourceIncidentPanel: vi.fn(),
+            toggleResourceIncidentDetails: vi.fn(),
+          } as any
+        }
+      />
+    ));
+
+    const live = screen.getByText(
+      'Temperature 76°C now, back under the 80°C alert level. Stays open until it reaches 75°C or lower and stays there for 5 minutes.',
+    );
+    expect(live).toHaveAttribute(
+      'title',
+      expect.stringMatching(/^Last reading at or above 80°C: 80°C, /),
+    );
+    expect(screen.queryByText('Node temperature at 80.0°C')).toBeNull();
+    expect(screen.getByText('Node temperature at 83.0°C')).toBeInTheDocument();
+    expect(screen.getByText('Node temperature at 81.0°C')).toBeInTheDocument();
+    expect(screen.getAllByText(/now, back under the 80°C alert level/)).toHaveLength(1);
+  });
+
   it('opens Assistant from a resource incident without carrying raw command details', () => {
     const openSpy = vi.spyOn(aiChatStore, 'open');
     aiChatStore.setEnabled(true);

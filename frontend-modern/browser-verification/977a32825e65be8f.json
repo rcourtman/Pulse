@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "af4e6a493cbca1e6c7d4397964efb146e950fca2",
+  "verified_at": "2026-10-06T10:36:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "73b1cd6cb17494a95c266697755f68537d3d71cac6bb6cb3f7ce9dda5b892f45"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/vmware/overview",
+    "/truenas/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Alerts > Overview on a private mock stack (backend :7711, sidecar Vite :5231) at main af4e6a493c with the change. A vCenter alarm on the real mock vSphere VM client-portal-01 (vm-aceb0f0c3469f43a; metadata resourceType vm, incidentProvider vmware, incidentCode vmware_alarm_state, resourceSources [vmware]; message 'Virtual machine memory usage', no 'VMware' in it) was appended to the live websocket activeAlerts snapshots, because the mock scenario clears VM alarms. An agent-host CPU alert on the real agent-only mock host Apollo-114 (metadata resourceType agent, no incident metadata) was appended the same way",
+    "The mock's own TrueNAS pool incident on 'archive' (zfs-pool-state, incidentProvider truenas, resourceSources [truenas]), not injected",
+    "With the change, at 1440 and 390: the vSphere VM alarm card links to /vmware/overview and its More > Monitoring menu reads 'VMware vSphere remains the inventory owner' and 'VMware vSphere keeps the inventory record'; the TrueNAS pool card links to /truenas/overview and the menu names TrueNAS; the agent-host card links to /standalone/machines and the menu names Pulse agent",
+    "Each link followed to a rendered platform page: the vSphere overview, the TrueNAS overview, and Machines listing Apollo-114; none showed Page not found",
+    "Same session with main's AlertOverviewAlertCard.tsx swapped back in under Vite: the vSphere VM alarm was already right on main (#2559 + #2560), the TrueNAS pool card linked to /proxmox/overview with 'Proxmox remains the inventory owner', and the agent-host card linked to /machines, which rendered 'Page not found: No route matched /machines', at 1440 and 390",
+    "Monitoring menu at 390 opens as a body portal within the viewport"
+  ],
+  "interactions": [
+    "Proxied the real websocket with Playwright routeWebSocket and appended the two alerts to each activeAlerts array; also appended them to the /api/alerts/active REST response",
+    "Clicked More, then Monitoring, on each of the three cards and read the menu header and the Retire from monitoring description",
+    "Clicked each card's resource link, recorded the landed route, checked for the Page not found state, screenshotted the page, then went back",
+    "Swapped AlertOverviewAlertCard.tsx to main's version under the running Vite for a same-session before, then restored the change"
+  ]
+}

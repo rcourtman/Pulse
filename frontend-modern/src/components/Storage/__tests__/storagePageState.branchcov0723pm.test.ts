@@ -4,7 +4,6 @@ import {
   getActiveStorageNodeOptions,
   getStorageFilterGroupBy,
   storageResourceMatchesSourceFilter,
-  syncExpandedStorageGroups,
   toStorageHealthFilterValue,
   type StoragePageNodeOption,
   type StorageStatusFilterValue,
@@ -132,23 +131,6 @@ describe('storagePageState branch coverage 0723pm', () => {
       });
       expect(storageResourceMatchesSourceFilter(node, 'agent')).toBe(true);
       expect(storageResourceMatchesSourceFilter(node, 'proxmox-pve')).toBe(false);
-    });
-  });
-
-  describe('syncExpandedStorageGroups (changed=false arm)', () => {
-    it('returns the previous set unchanged (same reference) when every key is already present', () => {
-      // No new keys => `changed` stays false => the `: previous` arm fires and
-      // the input reference is returned verbatim.
-      const previous = new Set(['A', 'B']);
-      const result = syncExpandedStorageGroups(previous, ['A', 'B']);
-      expect(result).toBe(previous);
-      expect(result).toEqual(new Set(['A', 'B']));
-    });
-
-    it('returns previous unchanged when allKeys is empty but previous is non-empty', () => {
-      const previous = new Set(['A']);
-      const result = syncExpandedStorageGroups(previous, []);
-      expect(result).toBe(previous);
     });
   });
 });

@@ -38,3 +38,27 @@ These hashes do not retain binaries or establish equivalent instructions,
 linked data, host state or performance. They make later reconstructions
 checkable; a hash mismatch means they are not the original measured bytes.
 Historical failures without hashes remain unresolved evidence.
+
+Paired runs sample only packages whose in-module dependency closure (`go list
+-deps -test` in the candidate tree) holds a file whose committed content
+differs between the two HEADs. A changed `_test.go` file selects only its own
+package, since no other test binary compiles it; any other file selects every
+package whose closure holds its directory or a parent of it, which covers
+embeds and testdata. Module or workspace files, trees that are not both clean
+Git roots, or an unreadable package graph select every package. Metadata `selection=` names the rule applied and
+`packages=` the packages sampled; an empty list leaves empty timing files and
+nothing to compare. A benchmark reading files outside that closure at run time
+escapes selection. Unpaired runs always sample every package.
+
+With `PULSE_BENCH_BUDGET_SECONDS` set, a paired run projects its total,
+warm-up included, after each round and exits 1 once the projection reaches the
+budget, printing each package's mean seconds per sample. CI keeps the budget
+below the step timeout so an outgrown suite fails with that attribution, not a
+bare timeout. Partial timing files are uploaded but are not a comparison.
+
+Keep untimed work per iteration in proportion to timed work. Setup between
+`b.StopTimer` and `b.StartTimer` is excluded from the estimate Go uses to pick
+`b.N`, so a nanosecond operation is repeated hundreds of thousands of times
+with all of that setup. `BenchmarkRegistryProjectionSnapshot`'s empty cold cases
+took 16 s per sample at a 100 ms benchtime that way and pushed paired runs past
+their timeout.

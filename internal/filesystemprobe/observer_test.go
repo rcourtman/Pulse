@@ -79,3 +79,57 @@ func TestObserverRejectsInvalidCoordinatesBeforeNativeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A Proxmox guest is identified by its exact lxc/<vmid> cgroup and its init
+// process. Neither another VMID with the same prefix, LXC's monitor cgroup,
+// nor the PID 1 of a namespace nested inside the guest (Docker in LXC) may
+// stand in for it.
+func TestProxmoxLXCIdentityIsExact(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"0::/lxc/126/ns":                        true,
+		"0::/lxc/126/ns/init.scope":             true,
+		"0::/lxc/126":                           true,
+		"0::/lxc/1260/ns":                       false,
+		"0::/lxc/12/ns":                         false,
+		"0::/lxc.monitor/126":                   false,
+		"0::/system.slice/lxc/126/ns":           false,
+		"0::/docker/" + strings.Repeat("a", 64): false,
+	} {
+		if got := CgroupMatches(raw, "lxc", "126"); got != want {
+			t.Errorf("CgroupMatches(%q) = %v, want %v", raw, got, want)
+		}
+	}
+	for status, want := range map[string]bool{
+		"Name:\tinit\nNSpid:\t3019253\t1\n": true,
+		"NSpid:\t3019253\t413\n":            false,
+		"NSpid:\t3019253\t420\t1\n":         false, // nested namespace init
+		"NSpid:\t1\n":                       false, // the host's own init
+		"NSpid:\t999\t1\n":                  false, // another process's line
+		"Name:\tinit\n":                     false,
+	} {
+		if got := IsNamespaceInit(status, 3019253); got != want {
+			t.Errorf("IsNamespaceInit(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
+
+func TestObserverRejectsInexactProxmoxVMIDs(t *testing.T) {
+	o := &Observer{probe: func(context.Context, ContainerRequest) ([]filesystem.Observation, error) {
+		t.Error("invalid coordinates reached native read")
+		return nil, nil
+	}}
+	for _, id := range []string{"99", "0126", "126a", "-126", "1000000000", ""} {
+		r := ContainerRequest{PID: 42, ContainerID: id, Runtime: "lxc", Mountpoints: []string{"/"}}
+		if _, err := o.Observe(context.Background(), r); err == nil {
+			t.Fatalf("accepted VMID %q", id)
+		}
+	}
+	accepted := false
+	o.probe = func(context.Context, ContainerRequest) ([]filesystem.Observation, error) {
+		accepted = true
+		return nil, nil
+	}
+	if _, err := o.Observe(context.Background(), ContainerRequest{PID: 42, ContainerID: "126", Runtime: "lxc", Mountpoints: []string{"/"}}); err != nil || !accepted {
+		t.Fatalf("exact VMID rejected: %v", err)
+	}
+}

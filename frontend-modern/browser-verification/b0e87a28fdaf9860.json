@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "bdfe5b8668f188fb9f8df4a90ae0f90f0e16f9d6",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "e6d3871f234016e250036641a4e25beaec6f55b384c7f63b902cfc97ba5024dd",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "3bbb0942323aed151ef81e36a7da07976449fbbe79d243702183261b6a2b4372",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "9abb6224d8dc80f3181552eda6fc8a81d1564812e321f50b0b303c84393e346a",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "bb6d57ebdf4ab18c70f12395f82f8c68fb6f82c8f95591aadd94d0de0f8eae4c",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "a9026fd3bade8efafb58a41f9b87e907fc15e5655b8a47d09aabbfc52d46f055",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "17709978833073abb9385f7e773e96a3edcbd88524cfe98c6cdaa713c049fb02"
+  },
+  "routes": [
+    "/workloads (existing-row/backup fixture)",
+    "/infrastructure/proxmox (node overview fixture)",
+    "/docker (host management fixture)",
+    "/standalone/availability (real page surface on synthetic data)",
+    "/patrol (real workbench fixture)"
+  ],
+  "states": [
+    "Stable completed backup evidence at configured freshness boundary, running/unknown/absence/template controls and open read-only date evidence.",
+    "Attached guest probe expiry, retained successful/stale update checks and source withdrawal.",
+    "Queued Docker check with operator-hidden actions and summary-only management exclusion.",
+    "Availability posture and latest data on a held source, plus held Patrol list, detail, empty evaluation and flapping observations."
+  ],
+  "interactions": [
+    "Advance the existing shared clock without a new backup/probe/update result; observe ages, protection badge and probe/posture tone/count transitions.",
+    "Open and close completed-backup evidence with focus restoration; withdraw probe source and switch failed-update or summary-only evidence without executing an operation.",
+    "Select Patrol detail and expand its existing history; hold its loader after first result to prove clock-only invalidation, keeping locked autonomy and the phone-owned hidden-list state."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "verified_at": "2026-10-10T21:34:23.726Z",
+  "browser": {
+    "client": "1.56.1",
+    "engines": [
+      "Chromium 141.0.7390.37",
+      "WebKit 26.0"
+    ]
+  },
+  "scope": "Fourteen selected completed runtime cases on exact matching bytes across independently retained attempts; the two Settings cases have their own receipt. Canonical Vite config/CSS, real components/adapters/store and synthetic local input. All selected captures inspected. No full authenticated application, native notifications/guests, installed recovery or publication is claimed."
+}

@@ -21,6 +21,137 @@
 
 ## Purpose
 
+### Patrol timer checkpoints preserve run and recovery history
+
+The existing Patrol history envelope retains the next scheduled deadline and
+its effective interval. History and timer writes share a serialized
+read-modify-write boundary, preserving each other's records, daily tallies and
+cursor. A failed history read must fail the timer write instead of replacing
+unreadable evidence. The configuration and Patrol history tests cover concurrent
+writes, file reconstruction and failed-write retry. This cursor schedules a
+check only; it grants no additional recovery execution authority.
+
+### Recurring findings preserve the ownership of recovery evidence
+
+Storage and recovery findings use the same occurrence-bound investigation
+projection as other Patrol findings. A previous verified action remains
+historical evidence when the finding is re-detected; it cannot resolve the new
+occurrence or replace its investigation record. Finding-scoped investigation
+and transcript reads select the current session, including an explicit absent
+state before a new session starts. Explicit session and action history retain
+the earlier result. The shared three-occurrence and persisted-restart controls
+live in `internal/api/ai_handlers_patrol_actions_additional_test.go`.
+
+### Recovery APIs and investigations share the org-scoped point reader
+
+`Manager.ListPointsForOrg` selects the composed recovery evidence source for
+both the HTTP points API and investigation tools. Real installations retain
+tenant-scoped SQLite reads, including errors; demo composition projects the
+current canonical fixture graph through shared recovery filters and pagination.
+It does not seed a second store or grant recovery execution. Source selection is
+bound before consumers share the manager and follows runtime demo-mode changes
+without exposing persisted rows through demo reads. Manager boundary tests preserve tenant
+validation, cancellation and read failures; the API/tool parity regression in
+`internal/api/investigation_evidence_parity_test.go` reads actual graph-owned
+failure text without a PVE command connection.
+
+### Patrol maintenance coverage adds no recovery execution
+
+Patrol's operator-state projection now projects the active recurring
+occurrence instead of the nil one-shot fields and inherits descendant-scoped
+ancestor maintenance. It reads existing operator-state rows only; it adds no
+recovery endpoint, execution route or recovery-point access.
+
+Legacy Assistant mode echo and stored-preference compatibility follow the
+[API settings contract](api-contracts.md#assistant-control_level-is-an-interactive-projection).
+
+### Pro Patrol default adds no recovery execution
+
+The Patrol autonomy handler now reports the Pro Ask first default for installs
+that never chose a mode. Investigations propose fixes for approval; the change
+adds no recovery endpoint, execution route or recovery-point access.
+
+### Assistant planning mode grants no recovery execution
+
+The AI settings control projection describes read/query or plans for review in
+Actions. It does not authorise a backup, restore, replay or data change; action
+approval/run and independent verification remain separate. Stored legacy
+preferences, recovery-point access and Patrol policy are preserved. The retired
+Protected guests list was never a canonical saved-plan exclusion or a recovery
+execution safeguard. The handler change adds no recovery endpoint or execution route.
+
+### Retained guest identity cannot renew QGA eligibility
+
+The shared VM's internal `GuestAgentEvidence` bounds eligibility when a fresh
+VM-status read is unavailable. Snapshot copy and canonical replacement keep
+its original time, including explicit missing evidence, without changing disk
+capacity, usage, History storage or linked-agent precedence. No JSON field,
+credential or command path is added.
+`TestGuestAgentEvidenceIsInternalSnapshotEvidence` checks the shared-model
+copy/wire boundary; `TestGuestAgentAdmissionEvidenceContract` covers expiry,
+unknown/future origins and ordinary zero-reading recovery through both collectors.
+Synthetic source proof does not establish native recovery or published availability.
+
+
+### Shared guest disk evidence is not recovery-point identity
+
+The canonical Proxmox facet carries internal QGA filesystem source/time evidence
+for bounded monitoring fallback. It is omitted from JSON and does not change
+guest identity, backup attribution, storage selection or recovery-point keys.
+Complete guest observations replace a missing/expired origin rather than
+inheriting it. Canonical disk observation wire/identity and merge controls cover
+this shared type boundary; no native backup or recovery acceptance follows.
+
+### PMG collection scope remains separate from backup recovery
+
+PMG settings readback emits explicit false dataset options; absence must not
+re-enable the existing edit form defaults. Backup polling remains independent
+of these mail/queue/quarantine/domain options and requires a pause to stop.
+
+Shared node-settings and connections code preserves PMG collection opt-outs
+without changing storage identity, capacity, History or recovery semantics.
+The four mail/queue/quarantine/domain switches do not disable PMG configuration
+backup discovery, and pausing the PMG connection still prevents subsequent
+ordinary polls including backup reads. `TestPMGCollectionScope` in
+`monitor_pmg_test.go` checks independent backup reads in every scope; no backup
+restore, mail manipulation or native recovery is introduced or proved.
+
+### Persisted trust edits and restart consistency
+
+The shared `internal/api/` settings path durably saves an explicit empty
+`allowedOrigins` before clearing live CORS policy. An omitted field does not
+replace a different effective value; a failed or deployment-locked patch does
+not partially change disk/runtime/cache state. Production config reload retains
+the saved clear while existing deployment overrides stay authoritative.
+Webhook edits resolve every saved placeholder before persistence or live
+publication, and saved-form Test uses the same resolution without changing
+configuration. Unknown/ambiguous placeholders fail rather than silently lose a
+credential. `TestAllowedOriginsSavedEffectiveLifecycle`,
+`TestAllowedOriginsSaveFailurePreservesPolicy` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` cover these shared boundaries.
+No database/driver/schema, backup recovery, retention or old queue snapshot
+policy changes are part of this repair.
+
+### Storage usage headline follows the alert phase — issue #2068
+
+`describeStorageAlertHeadline` says "Over N% usage limit" only while a usage
+alert is breaching. When `metricStatus.phase` is `latched` or `recovering`,
+the row says usage is under the limit and names the clear level, so the
+headline never contradicts the usage bar beside it. Fill-forecast headlines
+are unchanged.
+
+### Guest-memory read state stays independent of backup disk state
+
+The existing guest drawer retains Core's selected memory provenance through
+both resources-API and canonical snapshot consumers. Retained memory remains
+last-known at its original observation time, even after a new poll or cleared
+backup lock. Missing provenance is unknown, unavailable memory is not zero,
+and an independent current Proxmox/Pulse Agent memory reading remains current
+while guest-agent filesystem reads are deferred. History samples and its
+access-denial boundary remain authoritative. This client repair does not run
+backup/QGA operations or establish independent thaw, covered-filesystem writes,
+liveness, resumption or delivery. Existing outage precautions remain effective.
+
 ### Memory provenance does not imply recoverability
 
 Canonical metric values may carry optional selected guest memory observation
@@ -110,6 +241,19 @@ source evidence and independent datastore identity. The production-component
 browser fixture checks desktop and narrow phone layouts. These synthetic
 checks establish no native datastore repair, backup/thaw or release acceptance.
 
+### A multi-datastore PBS server reads as one server
+
+The Backups "Backup server" table keeps one row per server and datastore, so
+each datastore keeps its own capacity, count, dedup, detail toggle and web
+link. Host status, version, CPU, memory and uptime render only on a server's
+first datastore row (`buildBackupServerRows` marks later rows
+`continuesServer`); later rows show the server name muted and leave those host
+cells empty, so two datastores no longer read as two identical servers. Rows
+stay grouped (servers by name then ID, datastores by name), and windowing
+follows the scroll position, so a later row is only ever mounted without its
+first row once that first row has scrolled out of view. Capacity evidence is
+unchanged: an offline server's later datastore still reads Unavailable.
+
 ### TrueNAS connection probes do not settle recovery inventory
 
 A successful settings probe reads system information only, on a separate client.
@@ -159,6 +303,20 @@ backup files, never guest-local snapshots. Guest snapshots remain listed as
 restore evidence but cannot make an old independent backup look current.
 Archive detail uses its format (or filename fallback), preserving the full
 provider volid for hover and search in both Coverage and By date.
+Coverage rows carry that one counted backup age at every width; per-source
+PBS, PVE-file and guest-snapshot age columns are not row columns, because a
+fresh snapshot beside a stale backup read as protection that posture does not
+grant. The row expansion keeps the newest point and the newest completed point
+of every source inside its bounded evidence list, so neither recent snapshots
+nor a running or failed job hide the latest usable backup. The Backup health
+strip states what its attention, unprotected and unknown counts mean from the
+server posture policy (`freshnessWindowSeconds`) using the causes
+`internal/recovery/posture.go` evaluates, and renders no rule until that policy
+has loaded rather than a guessed window.
+
+The workload backup shield explains its colour from the configured Fresh and
+Stale Hours and links to the Recovery thresholds through the shared
+`ALERT_BACKUP_THRESHOLDS_PATH`; it reads no recovery evidence of its own.
 
 Phone pool/disk rows preserve health and identity while using weighted widths,
 consistent gutters and compact capacity/health labels. Full disk risk reasons
@@ -543,29 +701,28 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 9. `frontend-modern/src/types/recovery.ts`
 10. `frontend-modern/src/utils/recoveryDatePresentation.ts`
 11. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
-12. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-13. `frontend-modern/src/utils/textPresentation.ts`
-14. `frontend-modern/src/utils/storageSummaryCache.ts`
-15. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-16. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-17. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
-18. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
-19. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-20. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-21. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
-22. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
-23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
-24. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
-25. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
-26. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
-27. `internal/recovery/model/posture.go`
-28. `internal/recovery/posture.go`
-29. `internal/recovery/store/store_posture.go`
-30. `frontend-modern/src/hooks/useProtectionPostures.ts`
-31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
-32. `internal/mock/recovery_points.go`
-33. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
-34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
+12. `frontend-modern/src/utils/textPresentation.ts`
+13. `frontend-modern/src/utils/storageSummaryCache.ts`
+14. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+15. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+16. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
+17. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
+18. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+19. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+20. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+21. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+22. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+23. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+24. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
+25. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
+26. `internal/recovery/model/posture.go`
+27. `internal/recovery/posture.go`
+28. `internal/recovery/store/store_posture.go`
+29. `frontend-modern/src/hooks/useProtectionPostures.ts`
+30. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+31. `internal/mock/recovery_points.go`
+32. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
+33. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
 
@@ -901,8 +1058,9 @@ coverage, restore capability, recovery-job proof, storage-health verification,
 or evidence that a specific resource was protected or recovered.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
-Those notices may link an operator to scoped agent update commands for
-agent-contributed node detail and command support, but they must not be
+Those notices may link an operator to scoped agent update commands for the
+latest fixes and node details (the notice's own wording; command execution is
+a separate setting the update does not change), but they must not be
 interpreted as backup visibility, recovery readiness, restore capability, or a
 storage/recovery-owned command path. Suppressing those notices when the API has
 no deployable agent update target is likewise lifecycle/frontend behavior and
@@ -913,6 +1071,15 @@ Patrol coverage, schedule, finding, and approval state belongs on Patrol-owned
 surfaces or explicit Patrol affordances; Proxmox overview must not treat it as
 backup coverage, restore readiness, PBS verification/protection proof, or a
 replacement for the Proxmox Backups tab and workload Backup column.
+The outdated sensor setup notice above the Proxmox tabs is temperature
+guidance, not storage or recovery evidence. It reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict from the node rows the active tab already
+loads (Overview, Storage, Replication and Backups load nodes; Ceph and Mail do
+not, so it does not render there), so the Overview query must not add
+`physical_disk` rows to feed it; the derived `ProxmoxData` flag opens no storage
+or recovery path.
+`ProxmoxPageSurface.contract.test.tsx` pins the notice on Overview with no disk
+rows and an Overview query without `physical_disk`.
 The Proxmox inline estate totals are likewise an adjacent frontend-primitives
 and unified-resource projection, not backup or recovery evidence.
 `ProxmoxPageSurface` must flow the already-loaded workload inventory into the
@@ -927,7 +1094,16 @@ viewport; narrow layouts must not move it after the full guest list's virtual
 scroll extent, where the node estate would become effectively undiscoverable.
 The workload filter belongs immediately before the workload table it controls,
 after the node preview, and its committed search term must also flow into the
-node table. The node table must use the shared Proxmox search model so a
+node table. `ProxmoxPageSurface` renders that one `WorkloadsFilter` itself and
+passes the embedded `WorkloadsSurface` the same workload state; the surface
+renders no filter row of its own. That state is the surface's only data input:
+the app-container exclusion and its nested-context cue
+(`excludedWorkloadTypes`, `showNestedExcludedWorkloads`) live on the page's
+`useWorkloadsState` call, and the surface mount carries only the state, the
+locked platform, the empty-state copy and the `Guests` title. The state call
+carries no `vms`, `containers`, `nodes` or `useWorkloads` option: guests, and
+the nodes they resolve their parents against, both come from the page's one
+resource snapshot. The node table must use the shared Proxmox search model so a
 matching guest retains its owning node while unrelated nodes disappear; a
 node search must likewise retain the directly matching node. The table still
 receives the real already-loaded PVE node collection as its source, so the
@@ -939,6 +1115,12 @@ the page supplies it through the Workloads `tableTitle` slot and the shared
 states. This heading alignment changes neither workload backup scope nor the
 storage/recovery evidence carried by the adjacent Backup column and Backups
 tab.
+The guest table's grouped node rows are identity-only dividers. Node stats and
+the node drawer stay with the Proxmox nodes table above it: the embedded
+Workloads table has no grouped-row drawer, hover preview, or group pin, and
+`ProxmoxPageSurface` passes no host-metric option to the embedded Workloads
+state. Those dividers carry no backup or recovery evidence; the per-guest
+Backup column remains the overview's protection signal.
 The overview's node-row action selects the shared workload node scope and
 reveals the guest section. The title names the selected node and reports the
 filtered guest count, including zero. Activating the selected node again or
@@ -961,6 +1143,24 @@ Proxmox backup source/state chips are also a frontend-primitives boundary:
 badge tones, `proxmoxBackupsTableShared.tsx` owns the backup table helper
 composition, and visible source/state chips must render through `MetadataBadge`
 instead of restoring local rounded-sm xs badge spans.
+Backup ages read the frontend-primitives shared relative-time clock:
+`ProxmoxBackupAgeText` measures the full and compact age text and its
+current, aging, or stale band from `useRelativeTimeNow`, so a backup row that
+stays mounted for days moves from current to aging without new inventory, and
+because every clock read returns the wall clock, a backup that finished since
+the last tick never bands as a future, unknown age. `ProxmoxPageSurface` reads
+replication jobs through `createNonSuspendingQuery` with a 30-second background
+poll, because the Replication table's Last sync and Next sync move on the same
+clock. Each read forwards the query's abort signal, so a replaced or unmounted
+read is cancelled. Whether replication exists is unknown until a read
+succeeds, counted from the last reset (an organization switch): a failed read
+before then holds a direct replication link on the error and its Retry instead
+of falling back to Overview, and once a read has succeeded a failed poll
+reports the error but keeps that answer (the jobs and the tab, or the Overview
+fallback for an empty answer) rather than reopening the route. An access
+denial (401 or 403) withdraws the jobs and the tab, and a direct link holds on
+the denial so the operator sees why. The poll re-reads the existing read-only
+`/api/replication/jobs` snapshot and opens no new storage or recovery path.
 Proxmox backup-health and recoverable-artifact summary rows follow the same
 platform-table density contract as every other provider surface. Storage and
 recovery owns which backup, datastore, workload-type, and VMID facts matter to
@@ -1015,6 +1215,12 @@ PDF/CSV files are not recovery points, backup artifacts, storage-health
 evidence, restore manifests, or cross-client storage inventory. Storage and
 recovery flows may preserve them as normal tenant data during backup/restore,
 but must not interpret their presence as infrastructure protection.
+Report attempt counts, retry deadlines and delivery outcomes are persisted
+alongside the tenant's schedule definitions. A saved report file is separate
+from an SMTP acceptance record and does not establish recipient receipt.
+Restart recovery preserves pending safe retries and marks an interrupted email
+attempt unconfirmed. These fields are normal tenant configuration data, not
+restore verification or independent proof of an external delivery.
 Commercial downgrade preserves the schedule definitions as inert tenant
 configuration and blocks background generation when `advanced_reporting` is
 absent. Existing generated files outside the lower entitlement become hidden
@@ -1322,16 +1528,11 @@ actual filesystem is pressured. Storage/recovery consumers may observe its
 redacted byte outcome as operational context, but package-cache deletion is
 not backup pruning, restore evidence, arbitrary path cleanup, or a
 storage-owned executor.
-Storage and recovery surfaces may consume Discovery context from the shared
-API boundary when it helps explain protected workloads or storage-adjacent
-services, including mock-mode config/data/log path examples. That context is
-read-only evidence: it must not become a storage/recovery-owned command path,
-secret source, restore entitlement, or frontend-only fixture separate from the
-canonical `/api/discovery` payload. For Proxmox VM and system-container
-resources, a node-agent-backed workload `discoveryTarget` is shared API and
-unified-resource evidence only; storage/recovery consumers may use it to reach
-the canonical discovery/action path, but must not treat it as backup
-visibility, restore authority, or storage-local command ownership.
+For Proxmox VM and system-container resources, a node-agent-backed workload
+`discoveryTarget` is shared API and unified-resource evidence only;
+storage/recovery consumers may use it to reach the canonical action path, but
+must not treat it as backup visibility, restore authority, or storage-local
+command ownership.
 The agent resource-context endpoint follows the same adjacent-evidence rule for
 storage/recovery consumers: bounded context sections, provenance, redactions,
 and recent action counts may help explain a workload or protected service, but
@@ -1350,6 +1551,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+The POST-only guard on Assistant session mutations (`/abort`,
+`/summarize`, `/fork`, `/undo`, `/redo`, `/steer`; `405` with `Allow: POST`
+for any other method that reaches the handler) is transport hardening in
+`internal/api/ai_handler.go`.
+It opens no storage, backup, or recovery read or write path, and a rejected
+request never reaches session state.
 Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
 is also adjacent API/AI action plumbing for storage/recovery consumers.
 `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already
@@ -1435,6 +1642,20 @@ recovery scope, or a storage/recovery-owned secret source.
    generated report output when a separate reporting surface exposes it, but
    workspace logo settings are not backup artifacts, recovery-point metadata,
    restore evidence, or storage-provider credentials.
+   The alert rows that request assembly builds now keep an alert's
+   handover resolution (moved to a Pulse agent, not recovered). That changes
+   how a report states alert health only; it opens no storage, backup or
+   recovery path, and report backups still come from the recovery store.
+   Machine (`agent`) reports now list the storage pools and physical disks
+   whose unified parent is the machine, through the same row builders as
+   node reports. Storage reports attach their pool's own alerts (the Proxmox
+   source ID plus ZFS pool and device children, or the agent's alert on an
+   Unraid array), and physical-disk reports attach the Proxmox health and
+   wearout alerts owned by the disk's recorded hardware through the journal's
+   shared serial/WWN and ambiguity rules, including earlier paths, rather
+   than inheriting a replacement's current path. All of it reads the existing unified storage
+   and disk projections only; it opens no storage, backup or recovery path
+   and grants no storage action.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery
@@ -1682,6 +1903,12 @@ recovery scope, or a storage/recovery-owned secret source.
    reorder the REST-first hydration guarantee above, and a skipped store read
    must never leave a storage/recovery projection behind the shared cache's
    applied revision.
+   The shared hook's full merge also clones the connection store's rows before
+   merging them, so a cached storage/recovery row never shares a nested array
+   with a row the store reconciles in place, and the browser no longer re-joins
+   same-hostname host rows itself (each server row is one display row, as the
+   server's presentation coalesce delivers it). Neither may change which
+   canonical storage, disk, or recovery fields a merged row carries.
    The same invisibility bound covers the per-key fast merge: a changed row
    whose recorded patch keys stay within the metric fast-path allow-list may
    be merged as the previous display row with only the patched subtrees
@@ -1742,25 +1969,11 @@ recovery scope, or a storage/recovery-owned secret source.
    reachability, backup freshness, protection, or recovery evidence, and the
    reported node name is grouping identity, not a storage or recovery health
    input.
-   The settings-level manual discovery refresh at `/api/discovery/run` belongs
-   to that adjacent discovery/API boundary. Storage and recovery surfaces may
-   consume refreshed workload discovery records, but they must not reinterpret
-   the sweep as a recovery scan, protected-system admission, or storage-local
-   ownership signal. Because that sweep can dispatch agent-backed discovery
-   commands, adjacent storage/recovery surfaces must also inherit the
-   API/runtime gate: `settings:write` plus enabled Discovery are required
-   before command-backed refresh, and `monitoring:write` remains insufficient.
    Storage and recovery may also observe `/api/connections` agent
    command-policy and config-rollout state from this adjacent API boundary, but
    that state must already be token-gated by agent lifecycle. It must not be
    reinterpreted as storage readiness, protected-system ownership, backup
    visibility, or a recovery-local command grant.
-   If the shared discovery boundary repairs a fresh unknown workload record
-   into a known service identity and endpoint candidate from canonical resource
-   metadata, stored facts, or safe command evidence, storage and recovery may
-   consume the repaired context only as read-only explanation; that repair does
-   not create backup visibility, restore authority, storage ownership, or a
-   recovery-local endpoint contract.
    Approved-action tool invocation parsing in `internal/api/router_routes_ai_relay.go`
    is also adjacent API infrastructure rather than storage/recovery grammar:
    storage and recovery surfaces may consume governed Pulse tool execution
@@ -1888,7 +2101,7 @@ recovery scope, or a storage/recovery-owned secret source.
     resources always withheld) is not a storage/recovery restore approval, backup
     freshness, recovery-scope, or restore-command signal.
     Patrol finding chat handoff execution controls in `internal/api/ai_handler.go`
-    follow the same boundary: backend-forced `autonomous_mode:false` for
+    follow the same boundary: the backend-forced approval-required mode for
     `finding_id` handoffs with model-only Patrol briefing, resource, or action
     context is Assistant action-governance, not a storage/recovery approval,
     recovery freshness, or restore-command signal.
@@ -1903,7 +2116,7 @@ recovery scope, or a storage/recovery-owned secret source.
     details attached to that briefing are review context only and must not
     become backup freshness evidence, restore eligibility, storage health truth,
     or recovery execution authority.
-    Alert, incident, and Patrol assessment Assistant handoffs that send bounded
+    Alert, incident, and Patrol attention Assistant handoffs that send bounded
     model-only `handoff_context`, `handoff_resources`, or `handoff_actions`
     through `/api/ai/chat` without a `finding_id` stay on that same adjacent
     AI/runtime boundary. Storage and recovery surfaces may consume the
@@ -2111,7 +2324,7 @@ recovery scope, or a storage/recovery-owned secret source.
     recovery, SMART, or cleanup action.
 22. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
 23. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
-24. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
+24. Keep recovery context inside the platform tab that owns it without restoring standalone recovery navigation. TrueNAS recovery context lives on the TrueNAS Protection tab and Proxmox recovery context on the Proxmox Backups tab; no shared recovery query vocabulary exists to reuse. A surface that exposes recovery context must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
     That same shared route-helper boundary also owns exact workload handoffs
     when storage or recovery surfaces send operators back to node-scoped
     workloads for investigation context. Proxmox VM and system-container links
@@ -2123,7 +2336,7 @@ recovery scope, or a storage/recovery-owned secret source.
     Patrol control anchor, must stay owned by their product surface and
     must not be reused as recovery entry points or storage/recovery navigation
     aliases.
-25. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
+25. Keep alert-side recovery follow-up inside the owning platform tab. The resource-incident panel offers no recovery links today, and no shared recovery query vocabulary exists. A future alert-side recovery follow-up for TrueNAS or another API-backed platform must open the platform tab that owns those rows instead of freezing alert-local recovery URLs or reviving the retired Recovery aggregate route.
 26. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
     A successful VMware connection test with `degraded` optional signal or
     performance diagnostics remains connection-readiness context only; storage
@@ -2135,6 +2348,10 @@ recovery scope, or a storage/recovery-owned secret source.
     route remains deployment-installability and API-contract owned; storage
     and recovery must not treat release-note availability or publication time
     as protection freshness, recovery evidence, or restore state.
+    Its authenticated exact-version PNG screenshot route is presentation of
+    that same release body only. Even when an image depicts backup coverage,
+    the screenshot is illustrative release evidence and must never supply
+    live protection state, restore readiness or storage mutation authority.
 27. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
     The same shared unified-resource boundary also covers canonical
     Resource.Uptime fallback on the consumer side. When
@@ -2217,21 +2434,15 @@ recovery scope, or a storage/recovery-owned secret source.
     signed command grant, or command result as restore authorization or
     recovery evidence; that authority remains action-governance and
     agent-lifecycle owned.
-32. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
-    The same adjacent chart boundary now covers compact storage capacity
-    transport. `internal/api/chartapi/service.go` may batch only the canonical
-    `used` and `avail` storage series for `/api/charts/storage-summary`, but
-    storage and recovery must not treat the omitted `usage` or `total` series
-    as lost recovery truth or widen that compact route back into the full
-    storage-page payload.
+32. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload chart payload for repeated operator-facing workload requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+    The compact `/api/charts/storage-summary` capacity route is retired, and
+    storage and recovery must not reopen it as a second storage-history
+    transport beside `/api/storage-charts`.
     That same adjacent API boundary also owns summary-request minimization:
     storage/recovery-adjacent consumers may rely on filtered infrastructure or
     guest summary payloads, but they must not widen a scoped chart request back
     into full guest metric fan-out just because adjacent pages carry richer
     detail charts elsewhere.
-    In mock mode, that same compact route must stay aggregate-only and
-    sampler-prewarmed; storage and recovery must not trigger per-pool chart
-    reconstruction on the first dashboard request after each mock refresh.
 33. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
@@ -2363,11 +2574,13 @@ recovery scope, or a storage/recovery-owned secret source.
     Storage and recovery UI must keep sourcing those signals from their
     existing canonical page models instead of polling the connections
     ledger for per-datastore or per-backup truth.
-    Platform-first top-level pages may embed `StorageSurface` and
-    `RecoverySurface` with `embedded tableOnly` and forced source or
-    platform filters (e.g. `forcedSourceFilter`, `forcedPlatformFilter`)
-    so platform-scoped storage and recovery rows render through the same
-    canonical surfaces rather than a forked per-platform table.
+    Platform-first top-level pages may embed `StorageSurface`
+    (`frontend-modern/src/components/Storage/Storage.tsx`) with a forced
+    source filter (`forcedSourceFilter`) so platform-scoped storage rows
+    render through the same canonical surface rather than a forked
+    per-platform table. The surface has no `embedded` or `tableOnly` mode
+    and no `forcedPlatformFilter`, and no `RecoverySurface` component
+    exists to embed alongside it.
     `frontend-modern/src/App.tsx` may carry the platform-page route
     registrations that mount those embedded canonical surfaces, but the
     routes themselves must derive their paths from the canonical builders
@@ -2377,22 +2590,30 @@ recovery scope, or a storage/recovery-owned secret source.
     canonical surface that actually populates. The canonical TrueNAS
     adapter already emits the top-level TrueNAS system as a unified
     `agent` row tagged with the `truenas` platform, so the platform
-    page defaults to `/truenas/overview` (the Systems sub-tab) and the
-    embedded `StorageSurface` lives at `/truenas/storage`. The Source
-    filter chip in `StoragePageControls` is also suppressed when a
-    platform page locks source scope through `forcedSourceFilter` (via
-    `suppressSourceFilter`, auto-applied whenever `forcedSourceFilter`
-    is set), so the user never sees the platform's name pinned as a
-    removable filter chip inside the embedded surface.
-    Platform pages that embed `StorageSurface` reuse the canonical
-    `StoragePageControls` toolbar through the `showFilterToolbar` prop on
-    `StorageProps`. The page keeps `tableOnly` to hide the storage summary
-    section but opts in to the shared search, status, grouping, sort,
-    node, view, and chart-collapse controls so platform operators get
-    dense-table storage controls on every embedded storage tab without
-    forking the toolbar. The source scope flows through
-    `forcedSourceFilter` as a typed page input; the source filter remains
-    available in the toolbar only when not forced. The seven-state Storage
+    page defaults to `/truenas/overview`, whose Overview sub-tab lists
+    those systems. `/truenas/storage` renders the TrueNAS-owned
+    `TrueNASStorageTopologyTable`, not `StorageSurface`; the Proxmox
+    Storage tab in `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    is the only page that embeds `StorageSurface` today.
+    An embedding page gets the canonical `StoragePageControls` toolbar
+    without opting in: `Storage.tsx` always renders it (only kiosk mode
+    hides it), there is no `showFilterToolbar` prop, and there is no storage
+    summary section to hide. The Proxmox embed passes `forcedSourceFilter`,
+    its own `resourceSource`, `suppressNodeFilter`, `filterAriaLabel`, and
+    Proxmox search placeholder and empty-history copy. It passes no
+    `forcedView`, so the Storage / Physical Disks view tabs stay.
+    `forcedSourceFilter` is a typed page input that the route state reads
+    as the source value and never writes back to the URL, and `Storage.tsx`
+    sets `suppressSourceFilter` whenever it is present. `StoragePageControls`
+    then drops the Source chip, so the user never sees the platform's name
+    pinned as a removable filter chip, and the locked source does not count
+    as an active filter that surfaces the toolbar's clear action.
+    `suppressNodeFilter` drops the Node chip so search carries host and
+    node scoping, and `Storage.tsx` resets any selected node to all nodes
+    while it is set. The embedded toolbar otherwise keeps search, the
+    Status filter on the Storage view (Role and Group filters on Physical
+    Disks once there is more than one choice), and the View popover's
+    grouping and sort; it has no chart-collapse control. The seven-state Storage
     status catalog stays in the shared Add filter menu instead of occupying a
     permanent segmented rail; a non-default status surfaces through the
     canonical FilterBar chip. Grouping and sort remain durable presentation
@@ -2470,6 +2691,17 @@ is outside backup, restore, and recovery, and a missing or corrupt tally must be
 discarded and rebuilt rather than surfaced as a recovery failure. Nothing may
 take a correctness dependency on its contents.
 
+### Bounded audit investigation scope
+
+Audit list/export/summary consumers must not mistake a malformed time bound
+for an unfiltered storage read. `internal/api/activity_audit_handlers.go`
+rejects supplied empty/invalid RFC3339 bounds and equal/reversed windows with
+HTTP 400 before querying; list/export also validate literal success booleans.
+Absent filters and existing export/summary non-pagination remain supported.
+This boundary adds no database/schema, retention, signing, quota or recovery
+change. Fake persistent-logger controls in
+`internal/api/audit_filter_validation_test.go` prove rejection without a store.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
@@ -2480,27 +2712,11 @@ take a correctness dependency on its contents.
 6. Letting whitespace-padded storage route params hydrate non-canonical page state; shared storage URLs must trim and normalize `tab`, `source`, `status`, `node`, `group`, `sort`, `order`, `query`, and deep-link `resource` before the page model consumes them so pasted or hand-edited links resolve to the same canonical state as UI-authored routes without dropping adjacent unmanaged params
 7. Letting storage `source` aliases or case drift survive in canonical route state; shared storage URLs must rewrite pasted values like `PVE`, `pbs`, or `ALL` to the owned source option values (for example `proxmox-pve`) or the canonical unset state so copied links match the same source filter values the storage toolbar presents
 8. Letting explicit storage `all` sentinels survive in canonical route state; shared storage URLs must collapse case- or whitespace-variant `all` values for the managed `node` filter back to the canonical unset state so copied links do not preserve a fake active node filter
-9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, `itemType`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
-10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, `namespace`, and `itemType` back to the canonical unset route state so copied links do not preserve fake active filters
-11. Letting non-canonical recovery platform values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `platform` values back to the canonical unset state, and only owned source-platform options or canonical legacy aliases may reach rollups, points, series, and facets transport filters
-    11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All platforms`
-    11d. Letting recovery filter default labels drift between protected inventory and recovery events; both recovery filter surfaces must consume the shared `recoveryTablePresentation` labels (`All item types`, `All platforms`, and `Any item`) instead of hard-coding title-case local variants.
-    11a. Letting adjacent workload route-state changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical workload platform scoping must not alter the owned recovery `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
-    11b. Letting adjacent storage route-state additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical storage deep links for unified resources must not reuse recovery-owned query names or alter the owned recovery parse/build contract while those surfaces continue sharing the same route-helper module
-    11e. Letting adjacent platform-route additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; adding canonical `/standalone/machines`, `/standalone/availability`, or other platform paths must not reuse storage/recovery query names, alter storage or recovery parse/build behavior, or convert agent-platform membership into storage/recovery ownership
-    11f. Letting adjacent Patrol control starter route state in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `patrolControlStarter=patrol_control` is a first-party Patrol control handoff flag only, legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` are only compatibility aliases, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
-    11g. Letting adjacent Pulse Intelligence external-agent setup anchors in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `/settings/pulse-intelligence/assistant#external-agent-setup` is the canonical external-agent setup hash, `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` are legacy compatibility hashes, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
-    11h. Letting the Kubernetes platform page's route-local `cluster` scope perturb recovery's separate `cluster` filter merely because both constants live in shared `frontend-modern/src/routing/resourceLinks.ts`; `/kubernetes` may serialize `cluster=<clusterId>` for native inventory scoping, while `/recovery` continues to normalize and transport its own protected-item cluster vocabulary through the recovery parser/builders, with neither surface importing the other's option set or state owner
-12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
-13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
-14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with recovery events as the default workspace and protection coverage as an explicit secondary review so Pulse does not collapse back into a single-platform backup screen
-15. Letting secondary recovery workspace state drift out of canonical route state; explicit `view=inventory` protection-coverage links must round-trip, while default recovery-events state should serialize without a redundant `view=events` query unless compatibility input is being normalized
-16. Treating a selected protected-item rollup as row-click-only or header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface through the same user-creatable item filter control, count it with the rest of the active filters, and let the same filter reset path clear it
-17. Letting recovery-event focus leak as hidden state on the protection coverage surface; opening coverage must clear event-only `rollupId` and `day` context, and coverage drill-ins must open recovery events without preserving an invisible day filter that can make valid history look empty.
-18. Letting the recovery details panel lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, restore readiness, and readable metadata labels first, while raw JSON and provider-specific keys stay behind an explicitly technical disclosure.
-19. Letting protection coverage navigation bypass the canonical recovery workspace and route-state owner; coverage actions may focus stale inventory, attention inventory, or all protected items, but they must not mutate local-only filter state or revive passive posture-counter cards as the navigation owner.
-20. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
-21. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
+9. Reintroducing an aggregate cross-platform Recovery page, a recovery route-state owner, or a shared recovery query serializer in `frontend-modern/src/routing/resourceLinks.ts` without a governed product decision. The aggregate page (`frontend-modern/src/components/Recovery/` with its state owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`) was deleted on 2026-05-26, and `RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`, and `buildRecoveryRouteSearch` were deleted once nothing read them. Recovery rows render in the platform-owned Proxmox Backups and TrueNAS Protection tabs; the Proxmox Backups tab owns its route state through the `/proxmox/backups/:view` segment and `PROXMOX_BACKUPS_QUERY_PARAMS`, and the TrueNAS Protection tab keeps its search and status filter in component state and its sort in local storage, outside the URL.
+10. Letting adjacent route state in shared `frontend-modern/src/routing/resourceLinks.ts` reuse storage or Proxmox Backups query names or alter their parse/build behavior. Workload platform scoping, unified-resource storage deep links, `buildStandalonePath()` platform paths, the Kubernetes page's route-local `KUBERNETES_QUERY_PARAMS.cluster` scope, the Patrol control starter (`patrolControlStarter=patrol_control`, with legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` as compatibility aliases only), and the Pulse Intelligence external-agent setup anchors (`/settings/pulse-intelligence/assistant#external-agent-setup`, with `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` as legacy compatibility hashes) share that module, and none of them is recovery state, storage focus, platform scope, or proof of backup or recovery posture.
+11. Letting recovery row details on the Proxmox Backups or TrueNAS Protection tabs lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, and readable metadata labels first, and raw JSON or provider-specific keys must not lead the primary detail.
+12. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
+13. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
 
 ## Completion Obligations
 
@@ -2642,7 +2858,7 @@ canonical pre-handler authorization proof covering both transfer routes.
    is likewise API/AI-owned transport: storage and recovery may consume the
    resulting incident context, but must not define storage-local approval
    argument keys or bypass the shared `internal/agentcapabilities` helper.
-5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose three to five semantically distinct phone fields, allow a sixth only when measured content remains legible, fix identity at the shared 30-percent track, use explicit compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. A status already conveyed by the identity indicator must not consume a duplicate phone column. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
+5. Keep storage and recovery table width budgeting source-owned rather than derived from raw visible-column counts, so long item labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must expose three to five semantically distinct phone fields, allow a sixth only when measured content remains legible, fix identity at the shared 30-percent track, use explicit compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. A status already conveyed by the identity indicator must not consume a duplicate phone column. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
    Below 360 pixels of content width, those models must promote identity to 40
    percent and may demote the lowest-priority field through the shared
    `platform-table-narrow-hidden`/source-owned layout contract rather than
@@ -2712,30 +2928,42 @@ canonical pre-handler authorization proof covering both transfer routes.
     top-level GitHub install.sh SERVER installer, so a correct local script
     (signed or not) is always preferred over a wrong-identity proxied one on the
     unverified curl-piped-into-bash agent path (issue #1470).
-15. Keep storage summary chart identity and sticky-shell behavior on the
-    shared storage path. Pool rows, disk rows, storage summary cards, and
-    storage detail charts must all address history through the canonical
-    unified-resource metrics-target IDs, and the storage page must reuse the
-    shared sticky summary primitive instead of a storage-local scroll wrapper.
-    Expanded pool and physical-disk details must also follow the canonical
-    object-detail information architecture: current configuration, topology,
-    health, and SMART facts land on `Overview`; stored capacity and I/O charts
-    land behind the shared `Subtabs` `History` tab; and the active range uses
-    the shared filter-select presentation in that tab row. Storage must not
-    place historical charts directly into the default detail view or restore
-    the retired storage-local range-selector classes and inline SVG select
-    decoration.
+15. Keep storage chart identity on the shared storage path. Pool rows, disk
+    rows, the pool Growth column, and storage detail charts must all address
+    history through the canonical unified-resource metrics-target IDs.
+    Expanded pool and physical-disk details follow the canonical
+    object-detail information architecture, which since 2026-10-13
+    (maintainer decision, carried from the resource drawers) keeps stored
+    history in the default view rather than behind a `History` tab: a pool
+    detail leads with its Capacity Trend card, whose header holds the range
+    picker, then configuration, topology and devices; a disk detail shows its
+    health verdict and SMART facts, then its History charts with the range
+    picker beside their heading, then live I/O. With only one view left, these
+    details render no `Subtabs` strip. Both pickers label their options with
+    the shared `formatHistoryRangeOptionLabel` ("24 hours", "7 days"), the
+    same names the resource drawers use. The range picker keeps the shared
+    filter-select presentation; storage must not restore the retired
+    storage-local range-selector classes and inline SVG select decoration.
+    A disk detail mounted where it can be hidden (a guest drawer's Overview
+    behind Manage) takes `historyEnabled` and passes it to every chart,
+    history and live I/O alike, so a hidden disk reads nothing.
+    Below the `sm` breakpoint a disk detail shows its first History chart
+    and any chart whose SMART card is out of bounds (cards and charts share
+    labels, `getDiskDetailPhonePinnedChartLabels`); the remaining History
+    charts and the whole Live I/O section fold behind the shared
+    `PhoneChartsToggle`. A pinned chart stays pinned after its card recovers.
+    Folded charts read nothing until the toggle opens them; wider layouts
+    show and read every chart. Its charts draw the shared min-max band.
     Storage-page pool growth readouts belong to that same contract: the table
     may derive per-pool used-capacity deltas from the shared
     `/api/storage-charts` summary payload, but it must not fan out row-local
     `/api/metrics-store/history` calls, invent a second storage-history cache,
     or drift onto storage-page-only metric identifiers.
-    Dashboard storage trends belong to that same owned summary contract: the
-    dashboard may derive a 24-hour storage capacity delta from
-    `/api/charts/storage-summary`, but it must not rebuild storage summary
-    behavior by fanning out per-pool `/api/metrics-store/history` reads, by
-    pulling the full storage-page `/api/storage-charts` payload, or by
-    inventing a dashboard-only storage history transport.
+    No dashboard storage trend survives the overview retirement, and its
+    `/api/charts/storage-summary` route is gone with it. A future aggregate
+    storage trend must not rebuild that behavior by fanning out per-pool
+    `/api/metrics-store/history` reads or by inventing a dashboard-only storage
+    history transport.
     15a. Keep shared diagnostics cache scope honest when storage/recovery-adjacent
     surfaces reuse `internal/api/diagnostics.go`. The shared diagnostics
     payload must not include local commercial funnel summaries or
@@ -2762,32 +2990,33 @@ canonical pre-handler authorization proof covering both transfer routes.
     likewise native Assistant tool-visibility plumbing, not MCP transport
     state and not storage/recovery execution authority.
     When operators hover or focus pools versus physical disks, the storage
-    summary must reuse one resolved active-series ID across card state and
-    chart highlighting so pool-only cards demote cleanly during disk focus and
-    disk-temperature cards demote cleanly during pool focus, instead of
-    leaving stale row-local IDs or storage-local hover branches on the page.
-    Any page, group, or entity scope that becomes pinned through storage
-    interaction must stay row-first: the pinned row or group remains the
-    visible scoped state, and explicit clearing belongs to the shared storage
-    content-card header action plus the shared `Escape` reset path rather than
-    an extra storage-local strip, search-row widget, or filter-bar badge.
+    page must reuse one resolved active-series ID for row emphasis in both
+    views instead of leaving stale row-local IDs or storage-local hover
+    branches on the page.
+    Any pool or disk focus that becomes pinned through storage interaction
+    must stay row-first: the open row is the scoped state, and explicit
+    clearing belongs to the shared storage content-card header action plus the
+    shared `Escape` reset path rather than an extra storage-local strip,
+    search-row widget, or filter-bar badge. Collapsing the open row's group
+    hides the row without clearing that focus.
     Background whitespace clearing may remain a convenience, but storage must
     not rely on it as the only reversible control.
-    When that scope is a storage
-    pool group, member pool rows should expose shared
-    `data-summary-group-member-active="preview|pinned"` state so the grouped
-    block reads as one scoped set without adding storage-local outlines, pill
-    buttons, or heavy full-row fills.
-18. Keep storage summary remount caches versioned with the chart contract.
-    `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
-    bounded in-memory cache for same-tab remounts, but its cache key must carry
-    an explicit summary contract version so long-lived demo sessions do not
-    rehydrate stale pool or disk sparkline shapes after the storage summary
-    chart model changes. The shared storage history owner at
-    `frontend-modern/src/utils/storageSummaryCache.ts` must likewise remain
-    bounded to 20 recent node/range summaries, use LRU replacement, and abort
-    in-flight requests when organization ownership changes so a late response
-    cannot recreate an old-scope cache entry.
+    Storage pool-group headers pin nothing. A header click opens or closes its
+    group, exactly like its chevron, so it neither closes an open pool in
+    another group nor writes a `summaryGroup` route param, and Storage reads
+    none. The group pin and its member-row emphasis were removed after the
+    storage summary charts the pinned scope was built to rescope were
+    retired: one click pinned a group and toggled it, so pinning an open
+    group also collapsed it and hid the rows it emphasised.
+18. Keep the storage summary history cache versioned with the chart contract.
+    `frontend-modern/src/utils/storageSummaryCache.ts`, which
+    `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts` reads
+    for the pool Growth column, must carry an explicit summary contract version
+    in its cache key so long-lived demo sessions do not rehydrate stale pool or
+    disk series shapes after the storage summary chart model changes. It must
+    also remain bounded to 20 recent node/range summaries, use LRU replacement,
+    and abort in-flight requests when organization ownership changes so a late
+    response cannot recreate an old-scope cache entry.
 19. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
     chart transport may look up provider-backed VM history through unified
     metrics targets, but infrastructure/workloads/storage/recovery navigation
@@ -2804,39 +3033,54 @@ canonical pre-handler authorization proof covering both transfer routes.
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
     rather than carrying storage-local sky fill classes that drift from the
-    rest of the product or obscure inline capacity bars. Storage pool rows,
-    physical-disk rows, and storage group headers must also route pointer,
-    and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`. Pool
-    rows and physical-disk rows may keep deliberate expand/pin ownership on
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, but
-    storage group headers should pin through the row itself and must not add a
-    separate scope/pinned pill button beside the disclosure chevron. Touch
-    pool, physical-disk, and storage group rows own expansion through the whole
-    row, so they must explicitly suppress the redundant visible mobile
-    chevron. Storage group row activation performs disclosure and summary
-    focus together rather than preserving a storage-only chevron exception.
+    rest of the product or obscure inline capacity bars. Storage pool rows
+    and physical-disk rows must also route pointer and focus preview through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, and may
+    keep deliberate expand/pin ownership on
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`.
+    Storage group headers have no preview or pin: the whole row and its
+    disclosure chevron perform the same open/close, the row keeps
+    `data-summary-group-id` so the shared clear-surface click leaves an open
+    pool alone, and the header must not add a separate scope/pinned pill
+    button beside the chevron. Touch pool, physical-disk, and storage group
+    rows own expansion through the whole row, so they must explicitly
+    suppress the redundant visible mobile chevron.
+    A drag that selects pool row text, such as a pool name being copied, must
+    not expand the row: `StoragePoolRow` wires the shared
+    `createRowTextSelectionGuard()` from
+    `frontend-modern/src/components/shared/Table.tsx`, and a press released in
+    place still expands on the first click. This is presentation only; it
+    changes no storage evidence, alert state or recovery authority.
     Touch users still must not inherit
     synthetic hover branches, and storage must not keep a special trailing
     expand column once the shared leading action contract exists.
-    Static subgroup header emphasis for storage group rows and recovery history
-    day headers must also route through
-    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
-    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than storage- or recovery-local background classes or left-accent
-    marker variants.
+    Static subgroup header emphasis for storage group rows must also route
+    through `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
+    and the shared `.grouped-table-row` CSS contract in
+    `frontend-modern/src/index.css`, rather than storage-local background
+    classes or left-accent marker variants. The recovery history day headers
+    this rule also named went with the aggregate Recovery page; the Proxmox
+    Backups date feed's day dividers (`ProxmoxRecoverableTable.tsx`) style
+    their cell directly because a cell-level background renders reliably
+    across table layout engines.
     Storage pool rows must also keep sizing and alert accents on canonical
     class/data-attribute presentation rather than row-local inline style maps,
     so the public storage page stays CSP-safe under both normal and
     alert-highlighted demo/runtime states.
-21. Keep recovery transport refreshes inside the recovery-owned feature state.
-    `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
-    recovery data hooks may retain the last fulfilled rollups, points, facets,
-    and series while the next request is in flight through
-    the shared `frontend-modern/src/hooks/createNonSuspendingQuery.ts`, but
-    that retained-value behavior must stay route-owned and filter-owned through
-    the canonical recovery state model instead of recreating page-local
-    suspense escape hatches in `Recovery.tsx` or the recovery sections.
+21. Keep recovery transport refreshes on the shared non-suspending query.
+    Every recovery read retains its last fulfilled response while the next
+    request is in flight through
+    `frontend-modern/src/hooks/createNonSuspendingQuery.ts`:
+    `frontend-modern/src/hooks/useRecoveryPoints.ts` (the TrueNAS Protection
+    tab's points) and `frontend-modern/src/hooks/useProtectionPostures.ts`
+    poll every 30 seconds, and `ProxmoxBackupsTable.tsx` reads
+    `/api/backups/pve` and `/api/backups/pbs` through the same primitive.
+    The points and posture reads stay keyed by the query or resource IDs
+    their tab passes, and the PVE and PBS inventory reads by fixed source
+    keys, instead of recreating page-local suspense escape hatches or a second
+    refetch state in the platform tables. The aggregate Recovery page's state owner, which
+    this item used to name, was deleted on 2026-05-26 with the rollup, facet,
+    and series hooks.
 22. Keep storage/recovery-adjacent resource metadata on the shared unified
     resource contract. When canonical storage resources expose provider-backed
     identity such as Proxmox storage `pool`, storage and recovery consumers
@@ -2926,12 +3170,40 @@ vdev layout is reported` in
 
 ## Current State
 
+Webhook destination edits restore submitted masks per key while preserving
+explicit map edits/removals. They retain encrypted persistence, serialized
+save-before-publish and owned rollback on live publication failure; invalid
+masks fail before either write. Restored secrets do not reach the response.
+The connected notification edit/reopen test verifies durable new settings;
+already admitted queue work remains a snapshot, not an implied retry or rewrite.
+No storage schema, retention, database internals or recovery mechanism changes.
+
+### Stored disk I/O cannot suppress native thermal History
+
+The existing disk History response can supplement only its absent/shallow
+thermal series after a successful persistent-store read. Independent stored
+I/O values, timestamps and aggregate bounds stay intact; a closed/failed
+store returns its existing error rather than native success. No retention,
+pruning, schema, writer, recovery or database-internal change is involved.
+The connected native History route covers ordinary store writes, shallow
+readback, sufficient coverage and the error boundary.
+
+
 The agent config-fetch audit suppression cache is bounded to 4,096
 organisation/agent pairs, independently of persisted security audit history.
 Expiry-index pruning forgets only suppression state, never audit rows or
 recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
+
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
 
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
@@ -2977,6 +3249,13 @@ System → Recovery with backup polling and configuration export/import, stays
 withheld from every org-scoped session, so an org manager is not offered
 instance recovery or configuration transfer. See the api-contracts contract,
 rule 35.
+
+Superseded in part: `reportingRead` was briefly withheld from org managers
+while report generation read the instance's default metrics store. Reports now
+read only the request organization's metrics store and refuse resources outside
+its inventory, so org managers again hold `reportingRead` alongside
+`infrastructureRead` and `availabilityRead`, and the reporting routes use
+`ensureOrgAdminSession`.
 
 ### TLS verification preference survives node re-registration
 
@@ -3072,6 +3351,37 @@ presentation and sort change only; it adds no backup, restore, or retention
 authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 `ProxmoxCoverageTable.test.tsx`.
 
+### Backup health counts filter Coverage to their workloads
+
+The Backups health strip's protected, attention, unprotected and unknown
+counts are toggles for the Coverage posture filter (`?posture=`), the same
+URL state the inline posture pills and the phone Filters sheet set. In
+Coverage a count toggles that filter; from By date it opens Coverage already
+filtered, through the same view path the tabs use, so date-only facets drop
+and scope facets stay. On the bare Backups route, where Coverage was chosen
+only because something needs attention, a count also navigates to the
+Coverage route so the view cannot fall back to By date when the counts
+change. The legend keeps each item's node across updates, so a focused count
+that stays a button keeps focus when it toggles. A zero count stays text
+unless it is the active filter, and checking and not-evaluated have no
+filter, so they stay text. On a 375px phone the coverage list starts below
+the fold and the posture filter sits behind Filters, so "which 11 are
+unprotected?" took three taps through a sheet; it is now one tap on the
+count. The rule footnote, the posture sort (attention before unprotected)
+and the servers table are unchanged, and no posture, freshness or protection
+evaluation changes.
+
+### Backup table values truncate inside their own column
+
+The coverage Node cell, the restore-evidence Location and Details cells, and
+the recoverable table's Location and Details cells render their value in a
+block span that fills the fixed-layout cell, so a long node name, datastore path
+or detail ends in an ellipsis inside its column on the row's text line, with the
+full value on the title. A capped inline-block span let a long detail run past
+its cell with no ellipsis and sat above the row. This is presentation only; it
+adds no backup, restore, or retention authority. Pinned by
+`ProxmoxCoverageTable.test.tsx` and `platformOverviewLayout.guardrails.test.ts`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to
@@ -3103,6 +3413,20 @@ pointer isolation are
 pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 `TestCloneResourceIsolatesCustomSensorValues`.
 
+### Source status verdicts change status only
+
+`SourceStatus` carries an unexported verdict: the status each source reported
+for the resource. It replaced the narrower marker for push reporters past their
+lease. Status aggregation reads it, so a node a live poll reports offline, a
+node the poller expired, an agent past its lease and a stopped guest on a quiet
+source are `offline` instead of `online` or `warning`, unless another source
+reports otherwise. The verdict is not serialized, persisted or exposed on the
+wire, and the public `status`, `lastSeen` and cadence fields are unchanged. A
+storage or datastore row that reported itself unavailable likewise stays
+`offline` when its only source's poll goes quiet. No storage path, recovery
+read or protection judgement depends on that status.
+`TestCloneResource_MutateSourceStatusMap` pins that clones keep the verdict.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes
@@ -3131,6 +3455,13 @@ save (#1638). Nothing is persisted by the reset — `system.json` shape and the
 settings persistence path are unchanged — so tenant workspace preservation,
 recovery flows that copy `system.json` forward, and backup or restore
 attribution are unaffected.
+
+### Live temperature fallback opens no storage path
+
+The shared `internal/api` live metrics fallback (`router.go`) now chooses CPU
+temperature through `models.PrimaryCPUTemperatureCelsius` instead of local
+copies. It writes nothing, adds no persisted field and touches no backup,
+restore or recovery flow.
 
 ### Agent exec token binding repairs are fail-closed durable writes
 
@@ -3168,8 +3499,8 @@ outside the fixed remount budget.
 
 `useStoragePoolsTableWindowing.ts` reconciles flattened group and pool items by
 their stable logical key. A refreshed unified-resource snapshot updates the
-existing row proxy instead of remounting `StoragePoolDetail`, so the selected
-Overview/History tab and history range survive normal polling. Provider-derived
+existing row proxy instead of remounting `StoragePoolDetail`, so the open
+detail and its history range survive normal polling. Provider-derived
 mock storage and Ceph rows resolve capacity history through their canonical
 metrics target and receive deterministic `usage` fallback from current unified
 capacity when no legacy history row exists. The row-identity regression and
@@ -3374,36 +3705,44 @@ the platform-first migration. The chip strips that previously rendered them
 inside the alert resource-incidents panel and Patrol findings panel were
 retired in the same pass; storage and recovery drilldowns now stay inside
 the platform-page sub-tabs rather than offering external surface jumps.
-Future cross-surface storage or recovery affordances must compose against
-the embedded `StorageSurface` / `RecoverySurface` consumers rather than
-reintroducing top-level URL builders.
+Future cross-surface storage or recovery affordances must link into the
+platform tab that owns those rows (the Proxmox Storage tab's embedded
+`StorageSurface`, `/truenas/storage`, the Proxmox Backups tab, or the TrueNAS
+Protection tab) rather than reintroducing top-level URL builders.
 The remaining storage and recovery route builders in
-`frontend-modern/src/routing/resourceLinks.ts` are query-state serializers, not
-destination builders: callers must append `buildStorageRouteSearch()` or
-`buildRecoveryRouteSearch()` to the current platform-owned pathname such as
-`/proxmox/storage`, `/proxmox/backups`, or `/truenas/protection`. They must not
-emit `/storage` or `/recovery` as hidden compatibility paths.
+`frontend-modern/src/routing/resourceLinks.ts` come down to one query-state
+serializer, not a destination builder: `buildStorageRouteSearch()` is appended
+to the current platform-owned pathname, today only by the Storage surface's
+own filter state on the Proxmox Storage tab, and must not emit `/storage` as a
+hidden compatibility path. The recovery serializer (`RECOVERY_QUERY_PARAMS`,
+`parseRecoveryLinkSearch`, `buildRecoveryRouteSearch`) was deleted once
+nothing read it: the Proxmox Backups tab keeps its view in the
+`/proxmox/backups/:view` segment and its filters in
+`PROXMOX_BACKUPS_QUERY_PARAMS`, and nothing emits `/recovery`.
 Adjacent route-query constants for other platform surfaces, including
 `STANDALONE_QUERY_PARAMS`, must remain namespaced and must not be reused as
 storage source, node, resource, workspace, rollup, or day state. Adding a
 shareable filter query to another surface must not broaden or reinterpret the
-storage and recovery serializer contract.
+storage serializer contract or the Proxmox Backups query.
 
-Storage and Recovery can now be embedded by a platform page in table-only mode
-with a forced platform source/filter. Proxmox uses that embedding for
-source-scoped storage and recovery history, while the TrueNAS Protection tab
-uses the same Recovery surface with a forced `truenas` platform filter and the
-protection-coverage workspace as its default entry point. The embedded mode
-suppresses standalone page chrome, summary charts, and full filter chrome, but
-the Storage surface must keep the canonical Storage / Physical Disks view
-selector inside the table header unless the embedding explicitly locks a
-`forcedView`, and the Recovery surface must keep protection/events workspace
-state in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`.
-The canonical route-backed filter state, fetch builders, table rendering, and
-storage/recovery vocabulary remain owned by the Storage and Recovery surfaces.
-Platform pages must compose those owners rather than cloning storage pools,
-physical disks, recovery events, or protected-inventory tables under
-platform-specific data contracts.
+A platform page embeds `StorageSurface` with a forced source filter; there is
+no table-only mode, and no Recovery surface exists to embed. The Proxmox
+Storage tab is the only embedder: it passes `forcedSourceFilter`, and the
+surface keeps the canonical Storage / Physical Disks view selector because
+Proxmox locks no `forcedView`. Recovery rows render in platform-owned tabs.
+The Proxmox Backups tab (`frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`)
+reads `/api/backups/pve`, `/api/backups/pbs`, and protection postures itself,
+and the TrueNAS Protection tab feeds
+`frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx` from
+`useRecoveryPoints` with the `truenas` platform forced. `/truenas/storage`
+renders `TrueNASStorageTopologyTable`, not `StorageSurface`. The Storage
+surface keeps owning its route-backed filter state, fetch builders, table
+rendering, and storage vocabulary for its embedder. The Proxmox Storage tab
+must keep its storage pools and physical disks on that embed rather than a
+Proxmox-local copy; TrueNAS storage is deliberately a TrueNAS-owned topology
+table built from the TrueNAS page model. Platform recovery tables must read
+the canonical backup, posture, and recovery-point transports rather than a
+platform-specific recovery data contract.
 
 The investigation enrichment path reads operator-state from the
 in-memory provider already wired against the durable
@@ -3411,6 +3750,13 @@ in-memory provider already wired against the durable
 commitments survive across restarts on the investigation read path
 the same way they do on the suppression read path — both flow
 through the same provider over the same durable table.
+That provider resolves a finding's resource reference through the
+organization monitor's current read state before it reads the table,
+so a reference that read state folds into another resource through an
+operator link reads the merged row. This changes which existing row is read,
+not what is stored: no new persistence, migration or recovery path
+opens, and a row left under a folded ID is neither rewritten nor
+removed.
 
 The agent SSE stream at `/api/agent/events` is in-memory and
 stateless. No persistence; each connection starts fresh from the
@@ -3597,11 +3943,6 @@ live wire-up and persistence resync so a finding the operator
 manually closed before a restart still reads as "Resolved by you"
 afterward, instead of being misattributed to Pulse's auto-detection.
 
-`StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
-now surface `poolsDegraded` and `disksFailing` health indicators alongside
-pool/disk counts. These additions project from existing websocket pool/disk
-state; they must not introduce new API polling or widen the storage-fetch
-boundary.
 Agentless availability endpoints are adjacent infrastructure context only, not
 storage or recovery inventory. Storage/recovery consumers may receive
 `network-endpoint` resources through shared unified-resource snapshots, but
@@ -3614,19 +3955,36 @@ not Standalone Machines membership, storage ownership, repository membership,
 backup coverage, or restore authority.
 That same owned summary path now also runs through
 `useStorageSummaryCharts.ts`: the storage page owns one page-scoped summary
-range and one shared storage-summary history fetch, and both the sticky
-summary cards and per-pool growth column reuse that payload instead of
-forking separate row-local history reads or duplicate polling loops.
+range and one shared storage-summary history fetch, and the per-pool Growth
+column and its growth sort reuse that payload instead of forking separate
+row-local history reads or duplicate polling loops.
+The storage table's default `priority` order is a risk list: records with an
+open, unacknowledged alert sort first by severity (fed into
+`sortStorageRecords` through `StorageSortContext.alertWeightByRecordId` from
+the page's existing per-record alert state), then by the record's own
+`incidentPriority`, then by usage percent; ties read A to Z under every sort
+key and direction. A highlighted row always states its reason: the per-record
+alert state carries a headline from the most severe, most recent open alert
+(`describeStorageAlertHeadline` in `storageRowAlertPresentation.ts`), using the
+alert engine's `forecastDaysToFull` metadata ("Full in ~N days"), the crossed
+usage limit, or the alert message, with a compact form for the phone layouts,
+and the State cell shows it in place of the plain online label. This reads
+existing alert truth only: it adds no storage polling, forecast computation,
+or alert lifecycle.
 Storage physical-disk requirements copy now consumes the shared
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` Settings
 Infrastructure target label. Disk-health guidance may refer to Proxmox node
 requirements, but it must not revive removed nested Pulse settings paths such
 as `Settings → Infrastructure → Proxmox`.
-Recovery item-type labels now route through
-`frontend-modern/src/utils/recoveryItemTypePresentation.ts`. Recovery surfaces
-must not render a bare `Cluster` item type for Kubernetes protected subjects;
-use the canonical `K8s Cluster` label so protected inventory and event filters
-do not confuse Kubernetes clusters with Proxmox clusters or table grouping.
+The cross-platform recovery item-type columns and filters went with the
+aggregate Recovery page on 2026-05-26, and
+`frontend-modern/src/utils/recoveryItemTypePresentation.ts` was deleted once
+its last reader, the recovery query serializer, was. The Proxmox Backups
+tables label workload types (`VM`, `LXC`, `Host`, or `Guest`) from
+`frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`. A future
+cross-platform recovery item-type label must not render a bare `Cluster` for
+Kubernetes protected items; it uses `K8s Cluster` so Kubernetes clusters are
+not confused with Proxmox clusters or table grouping.
 
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
@@ -3718,6 +4076,46 @@ values may remain visible as history, but their current collection state must
 remain explicit. In particular, members behind a shared controller must not
 inherit aggregate I/O counters, and a disk drawer must hide live-I/O charts
 when per-member collection is unavailable or unsupported.
+On a disk merged from several rows (Proxmox, host agent SMART, Unraid
+inventory, TrueNAS), the temperature state these surfaces read is the state of
+the reading the disk shows (`pairPhysicalDiskTemperatureState` in
+`internal/unifiedresources/registry.go`), so a retained value never arrives
+under another row's `available`. The merge keeps each row's reading in an
+unexported record on `PhysicalDiskMeta` (`internal/unifiedresources/types.go`)
+that is never serialized; storage surfaces read only the presented temperature
+and its state.
+
+A retained disk temperature reads as last known, never as a live reading. The
+Physical Disks table, the disk drawer and the pool drawer's linked-disk list
+decide through `isPhysicalDiskTemperatureCurrent` and
+`getPhysicalDiskTemperaturePresentation` in
+`frontend-modern/src/features/storageBackups/diskPresentation.ts`: only an
+`available` temperature state, or a source that predates collection state, is
+current and takes the per-disk-type threshold colour. Any other state, such as
+a disk in standby or a host agent past its reporting lease, renders the value
+muted with no hot or warm colour, a dotted underline, a title carrying the
+collection reason and screen-reader "last known" text; the drawer card is
+labelled "Last known temperature" beneath the existing collection message.
+This is presentation only. It does not change the stored value, history writes
+or alert evaluation. Verification: `diskPresentation.test.ts`,
+`diskDetailPresentation.test.ts`, `storagePoolDetailPresentation.test.ts`,
+`DiskList.test.tsx` (a row moving between current, retained and legacy states)
+and `DiskDetail.test.tsx`.
+The same decision reaches the disks that only a host agent's own SMART rows
+describe. `HostDiskSMART.collection` now crosses into the frontend type, and the
+helpers live in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+(re-exported by `diskPresentation.ts`, one implementation) so the Machines
+table and the machine drawer can use them without loading the Storage
+presenter. The guest drawer's card already loads it for extraction and health.
+A silent agent's retained SMART temperature never becomes the Machines row's
+value while another disk has a current reading. When the machine has no
+positive direct or `temperatureCelsius` reading and no non-standby disk is
+current, the cell shows the hottest retained non-standby value as last known,
+without the per-disk-type threshold colour. The guest drawer's Physical Disks card marks a
+retained value the way the Physical Disks table does. Still presentation only.
+Verification: `diskPresentation.test.ts` (one implementation behind both import
+paths), `agentMachineTableModel.test.ts`, `AgentsMachinesTable.test.tsx`,
+`resourceDetailMappers.test.ts` and `GuestPhysicalDisks.test.tsx`.
 
 Direct SATA, SAS, and NVMe device fallback identities remain compatible.
 Controller-member fallback identities add controller/target scope only where
@@ -3773,6 +4171,16 @@ expected. Stale, failed, partial, or unverified evidence is attention;
 unprotected requires complete evidence of no qualifying backup; unavailable
 identity, history, collection, or permission evidence fails to unknown.
 Snapshots remain distinct and never prove independent recovery by themselves.
+The posture `explanation` is user-facing copy (the Coverage row tooltip and
+expansion render it verbatim), so it is written in plain words rather than the
+model's vocabulary: "recent backup", "full backup history", "one of its backup
+sources has reported a failure", "verification is missing or overdue", and
+the stale case names the policy window ("the newest confirmed backup is older
+than 7 days") through `formatPostureWindow`, which never rounds a sub-hour or
+fractional window up. Copy only claims a backup exists on branches that have
+one. Terms such as
+"subject-linked", "provider history" and "freshness window" stay in code and
+contracts, not in the explanation.
 
 The per-tenant recovery store persists provider observations and a materialized
 posture index, refreshes it after writes, reconciliation, migration, identity
@@ -4078,7 +4486,9 @@ may coexist with AI controls, but they must keep consuming the canonical AI
 settings payload rather than reviving storage-local provider defaults, modal
 setup logic, or route-specific BYOK model guesses when shared handlers change.
 The retained-value recovery transport helper is now shared too.
-Recovery still owns when rollups, points, facets, and series refetch, but the
+Recovery still owns when recovery points and protection postures refetch
+(`useRecoveryPoints.ts` and `useProtectionPostures.ts` each set a 30-second
+poll interval; the rollup, facet, and series hooks are gone), but the
 non-suspending query primitive itself now lives under the shared frontend
 primitives contract so other governed surfaces can reuse the same app-shell
 fallback boundary without forking it.
@@ -4109,8 +4519,8 @@ AI/runtime review identity only. Storage and recovery may display or link from
 the safe run ID, run type/status, runtime-failure flag, or scoped resource label
 as incident context, but they must not reinterpret it as backup freshness,
 restore proof, storage health authority, or recovery-local remediation state.
-Patrol finding handoffs that force approval-required Assistant mode from a
-non-empty `finding_id` follow the same adjacent API boundary: storage and
+Patrol finding handoffs, which the backend runs in approval-required
+Assistant mode from a non-empty `finding_id`, follow the same adjacent API boundary: storage and
 recovery may treat the resulting Assistant session as incident context, but
 must not reinterpret the finding ID or approval-required chat mode as backup
 freshness, restore authorization, storage remediation permission, or recovery
@@ -4154,12 +4564,8 @@ controls, so those headings must not duplicate that interaction with buttons,
 their real button and `aria-sort` semantics, but their visible direction marker
 must come from the frontend-primitives-owned `tableSortPresentation.ts` helper;
 only the active backup sort column displays its direction.
-Recovery all-history, all-item-type, and all-platform defaults follow the same
-shared filter-option contract through
-`frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history
-and protected-item tables do not invent separate default-filter wording.
 Physical-disk role and group filter defaults plus disk-type display labels
-must likewise come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
+must come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
 storage pages must not reintroduce local `All Roles`, `All Groups`, or
 `NVME Disk` strings that drift away from the shared filter-label and hardware
 acronym presentation contract.
@@ -4191,38 +4597,44 @@ split: storage derives the health semantics through
 Storage components and `features/storageBackups` presentation helpers must not
 recreate raw green/yellow rounded-dot classes locally.
 That same storage page ownership now also includes contextual focus behavior
-for pools and disks. Expanding a storage row may set a focused metrics-target
-ID for shared summary emphasis, but `frontend-modern/src/components/Storage/StorageSummary.tsx`
-must keep the storage summary page-scoped instead of collapsing its sparklines
-to the single expanded row or replacing the page overview with row-local empty
-states.
-That same page-scoped summary contract now also owns canonical hover-isolation
-behavior. Pool and disk rows must publish the resolved metrics-target ID into
-the shared summary contract so pool usage, used capacity, and available space
-cards can isolate the active row through the shared sparkline primitive while
-non-matching cards such as disk temperature demote to inactive context instead
-of rebuilding a row-local summary surface.
-That same shared summary contract now also owns chart-driven emphasis.
-Hovering one storage summary chart must promote the same canonical metrics
-target ID through sibling cards, so pool charts cross-highlight the same pool
-while non-matching cards such as disk temperature demote to inactive context
-instead of keeping chart-local hover state. When a sibling storage card can map
-that same entity into its own series set, it must also surface the synchronized
-value as a compact card-header readout instead of opening a second floating
-tooltip away from the pointer.
-That same storage summary contract now uses the shared contextual-focus owner.
-`frontend-modern/src/components/Storage/StorageSummary.tsx` must route
-interactive-series filtering, focused-label lookup, and active-series
-resolution through `frontend-modern/src/components/shared/contextualFocus.ts`
-so storage keeps the same page-scoped focus semantics as infrastructure and
-workloads instead of preserving a storage-local hover/focus branch.
-That same storage ownership now also governs summary-to-table reveal. Hovering
-pool or disk charts may highlight the matching row when the active view already
-shows it, but storage hover must not auto-filter or auto-scroll the table.
-When the active chart entity is off-screen or hidden behind the other storage
-view, the page must use the shared summary-table focus bridge and reveal the
-target row only through an explicit `Jump to row` action, switching views or
-expanding the owning group only for that deliberate reveal path.
+for pools and disks. Expanding a pool row or selecting a disk row sets the
+focused summary series ID and row hover sets the hovered one;
+`frontend-modern/src/components/Storage/useStoragePageModel.ts` must resolve
+both through the shared `useSummaryPageInteractionState` bridge in
+`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool and disk
+row emphasis keeps the same page/entity semantics as workloads instead of
+preserving a storage-local hover/focus branch. The
+storage summary history that `useStorageSummaryCharts.ts` loads feeds only the
+pool Growth column and its sort; no storage summary card strip renders, and
+one that returns must stay page-scoped instead of collapsing to the expanded
+row or replacing the page overview with row-local empty states.
+That same storage ownership now also governs reveal. Row hover may highlight
+the matching row in place, but storage hover must not auto-filter or
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone. Reveal runs once per deliberate focus change: the
+bridge starts a reveal only when the focused series id or the table root
+element changes, and runs the callback and the inline-detail scroll untracked,
+so the storage state the callback reads (the pool-to-group lookup that every
+live update rebuilds, the expanded group set) never starts another. A live
+update therefore cannot pull the page back to an open pool the operator
+scrolled away from, and collapsing the open pool's group does not bounce it
+back open. Filter changes do not re-run the callback either, so a focused
+pool whose row stays filtered out past the reveal's short retry window is not
+revealed when the filter later clears; storage filters live in the URL and a
+storage link without filter parameters resets them, so only a link carrying a
+filter that excludes its own pool reaches that case.
+`frontend-modern/src/components/Storage/useStorageExpansionState.ts` stores
+only the groups the operator collapsed and derives the expanded set from the
+current group keys, so a group that appears later opens by default and a
+collapsed group stays collapsed across live updates until the operator reopens
+it, focus moves to one of its pools, or the grouping changes. Group keys are
+bare labels, so a grouping change clears the collapsed set rather than letting
+a label carry collapse state into another grouping or hide the headerless
+ungrouped `All` group.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
@@ -4241,12 +4653,12 @@ That same recovery boundary now also assumes mock recovery context is projected
 from one canonical mock graph. `internal/mock/recovery_points.go` may synthesize
 inventory-only recovery artifacts for supported mock platforms, but those
 subjects must derive from the shared `internal/mock/fixture_graph.go` owner
-instead of a separate hardcoded recovery cache, so recovery filters, rollups,
-and shared route handoffs see the same platform set as settings and
-infrastructure.
+instead of a separate hardcoded recovery cache, so recovery points, rollups,
+and the platform tabs that read them see the same platform set as settings
+and infrastructure.
 That same graph-owned mock boundary also owns demo-readiness for storage and
-recovery surfaces. Mock summary cards, seeded history, and provider-backed
-storage/recovery counts must come from the same canonical fixture graph so
+recovery surfaces. Mock seeded history and provider-backed storage/recovery
+counts must come from the same canonical fixture graph so
 storage and recovery demos show realistic healthy-versus-attention balance
 instead of blank history, stale provider context, or page-local fixture drift.
 That same recovery-facing demo contract also owns subject readability. When
@@ -4255,16 +4667,11 @@ subject identity shown to operators must stay human-readable
 `<cluster>/<namespace>/<pvc>` context from the canonical graph instead of
 opaque hash-like IDs that break demo trust and cross-surface recognition.
 That same adjacent chart boundary now also assumes seeded and live mock
-storage timelines are one continuous series. Disk-temperature, pool-usage,
-used-capacity, and available-space cards may consume shaped chart payloads for
-presentation, but those payloads must still reflect one canonical mock metric
-timeline instead of a seeded seven-day sparkline with a second live tail
-stitched on afterward.
-That same chart boundary now also owns row-hover summary filtering. Storage
-pool and disk rows may focus the summary cards, but the shared storage summary
-must filter every supported card through the same canonical metrics-target
-identity rather than letting temperature, capacity, or detail cards drift onto
-page-local row identifiers.
+storage timelines are one continuous series. Storage chart consumers such as
+the pool Growth column and the pool and disk History charts may consume shaped
+chart payloads for presentation, but those payloads must still reflect one
+canonical mock metric timeline instead of a seeded seven-day series with a
+second live tail stitched on afterward.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or
@@ -4335,92 +4742,39 @@ That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 storage- and recovery-adjacent transport work cannot accidentally widen that
 credential into a broader AI access bundle by touching neighboring routes.
-The recovery frontend now also separates that ownership more explicitly:
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
-canonical route parsing, filter/query state, transport hook inputs, and URL
-synchronization, while `frontend-modern/src/components/Recovery/Recovery.tsx`
-is the composition root for the operator-facing recovery surface and the split
-section owners under `frontend-modern/src/components/Recovery/` hold the
-protection coverage, activity, and history presentation layers. The history
-surface is further split so `RecoveryHistorySection.tsx` owns the toolbar and
-controller boundary, `useRecoveryHistorySectionState.ts` owns local section UI
-state, and `RecoveryHistoryTable.tsx` owns the row/detail renderer.
-That composition root now also owns one primary recovery workspace rather than
-stacking protection-coverage and event-history tables on the same desktop page.
-The governed default is event-first so operators land on concrete
-backup/snapshot/replication history, while the header action and compatibility
-`view=inventory` links open the secondary protection coverage review.
-That same operator-facing workspace must lead with current protection status
-rather than only the latest backup outcome. Protection coverage should surface
-stale, never-succeeded, failed, warning, and running rollups as the primary
-monitoring status so an item with an old successful point does not scan as
-healthy when it still needs operator attention.
-That same workspace contract also keeps Pulse's provider-neutral recovery model
-explicit in the page language: recovery sections should talk about protected
-items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
-Kubernetes artifacts, and future providers all fit the same first-class UI
-frame without removing the source badges and row-level cues that make Proxmox
-operators productive.
+No aggregate Recovery page exists. Its composition root
+`frontend-modern/src/components/Recovery/Recovery.tsx`, the section owners
+beside it (`RecoveryActivitySection.tsx`, `RecoveryHistorySection.tsx`,
+`RecoveryHistoryTable.tsx`, `RecoveryProtectedInventorySection.tsx`,
+`RecoveryPointDetails.tsx`, `useRecoveryHistorySectionState.ts`), and its
+route-state owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+were deleted on 2026-05-26, and the event-first workspace, the secondary
+protection-coverage review, and the `view=inventory` / `view=events` route
+state went with them. Recovery rows render only in platform-owned tabs: the
+Proxmox Backups tab, whose `/proxmox/backups/date` and
+`/proxmox/backups/coverage` views are described under "Proxmox backup views
+use canonical workflow routes", and the TrueNAS Protection tab, whose
+`TrueNASProtectionTable.tsx` lists the points `useRecoveryPoints` returns with
+the `truenas` platform forced. Bringing back a cross-platform recovery page is
+a product decision that needs its own governed contract, not an extension of
+either tab.
 License recovery stays reachable through the direct Plans & Billing route.
 `SelfHostedCommercialRecoverySection` inside `ProLicensePanel.tsx` remains
 available for explicit activation and recovery even when the ordinary free
 self-hosted navigation hides commercial surfaces. Recovery flows must not
 acquire proactive commercial prompts of their own.
-Operator-facing filter and detail labels should likewise prefer `platform`
-wording over implementation-facing `provider` wording, so the recovery surface
-describes the monitored platform families Pulse covers rather than exposing
-backend transport vocabulary as the primary UI model.
-That same operator-facing vocabulary should also prefer `item` over backend
-`subject` wording, and `platform` over generic `source` wording, across the
-primary recovery headers, tables, filter controls, and detail metadata labels.
-The data model can keep its internal subject/provider fields, but the page
-frame that operators read should present one consistent protected-item and
-platform model from summary through drill-in. Shared recovery URLs and
-transport filters should likewise treat `platform` as the canonical
-operator-facing query field, with legacy `provider` aliases accepted only as
-compatibility input that rewrites back to canonical `platform` route state.
-Shared recovery link builders should therefore accept canonical `platform`
-inputs only; legacy `provider` belongs at parse-time compatibility boundaries,
-not in new caller-facing recovery route helpers.
-Cross-surface recovery drill-in links must also target the correct primary
-workspace without relying on legacy inventory-first defaults. When a platform
-service surface such as PBS links into recovery activity, that shared entry
-point should land on the default recovery events workspace and describe the
-destination as recovery events rather than reverting to PBS-backup wording.
+Operator-facing recovery labels prefer `platform` over implementation-facing
+`provider` and `item` over backend `subject`; the transport and data model may
+keep subject/provider fields only as compatibility aliases. No shared recovery
+query state exists any more (the Proxmox Backups tab's own query is its
+`PROXMOX_BACKUPS_QUERY_PARAMS`), so a future cross-platform recovery filter or
+link must treat `platform` as its canonical query field and accept legacy
+`provider` only as parse-time compatibility input.
 That same recovery contract should keep response payloads canonical as well:
 recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
-`provider` / `providers` aliases stay compatibility-only so the page does not
-silently drift back to backend-shaped vocabulary during decode.
-That same shared recovery table contract should keep its runtime column model
-canonical as well. Recovery inventory and event-history columns should use
-`item` and `platform` identities rather than preserving `subject` and `source`
-as the primary runtime model, and any saved legacy column IDs must migrate at
-the shared column-visibility boundary instead of forcing recovery renderers to
-carry deleted column identities indefinitely. Once that migration exists,
-recovery tables and shared table presenters should not continue accepting
-legacy `subject` and `source` ids in the live runtime path.
-That same runtime-helper contract should prefer `item` terminology in shared
-recovery presenters too. Helper exports that resolve labels or item-type badges
-should expose canonical item-facing names, while any retained `subject` aliases
-remain compatibility wrappers instead of the primary runtime boundary.
-That same shared badge contract applies to table rendering too. Recovery item
-type cells should use the same compact monitoring-table badge base that
-workloads uses for `VM` and `Container`, rather than copying only the colors
-and drifting on padding or visual weight.
-The same rule applies inside recovery-owned helpers and selectors. Shared
-summary helpers and platform filter renderers should use canonical `item` and
-`platform` naming internally once compatibility boundaries already exist,
-rather than keeping fresh `subject` or `provider` terminology alive in the
-live recovery runtime path.
-The same runtime vocabulary rule applies to cross-section recovery props too.
-Live page-to-section boundaries should carry item-focused names like
-`selectedHistoryItemLabel` instead of preserving `subject` labels after the
-shared recovery presenters already expose canonical item terminology.
-That same rule applies to recovery detail helpers. Provider-specific helper
-names like `isPbsProvider` should become platform-specific helpers like
-`isPbsPlatform` once the runtime recovery model is already canonically
-platform-first.
+`provider` / `providers` aliases stay compatibility-only so frontend decode
+does not silently drift back to backend-shaped vocabulary.
 The same canonical boundary applies to linked-resource identifiers. Recovery
 API payloads, query filters, and normalized frontend runtime models should use
 `itemResourceId` as the canonical field while accepting or emitting
@@ -4429,11 +4783,6 @@ That same canonical boundary also applies to external item references. Recovery
 API payloads and normalized frontend runtime models should use `itemRef` as
 the canonical item-reference field while treating `subjectRef` only as a
 compatibility alias during the transition.
-That same presenter boundary should also own canonical item-type derivation.
-Recovery surfaces must resolve rollup and point item types through one shared
-item-type helper instead of repeating `display.itemType` / `subjectType` /
-`subjectRef.type` fallback chains across state, summary, details, and table
-renderers.
 That same recovery-store decode boundary must fail soft on malformed persisted
 metadata. If a stored recovery row contains bad `subject_ref_json`,
 `repository_ref_json`, or `details_json`, the list endpoints should log and
@@ -4483,60 +4832,34 @@ derivation — sweeping protection-posture rows stranded under retired
 subject keys — so a live migration or a canonical-ID era change never forks
 one guest's protected item into stale and fresh rows. Rows without a
 recomputable guest identity keep their stored keys unchanged.
-That same hook-boundary normalization also owns the runtime recovery display
-model. Canonical recovery points and rollups must expose `display.itemLabel`
-and `display.itemType` to recovery consumers, while legacy transport fields
-such as `subjectLabel` and `subjectType` remain decode-only compatibility
-aliases in the shared normalization layer instead of leaking into runtime
-presenters.
+The frontend decode boundary owns the runtime recovery display model:
+`frontend-modern/src/utils/recoveryPlatformModel.ts`, which
+`frontend-modern/src/hooks/useRecoveryPoints.ts` applies to every response,
+exposes `display.itemLabel` and `display.itemType` to recovery consumers. The
+points handler's display carries the item label only as `subjectLabel`, so the
+transport's `subjectLabel`, `subjectType`, and `subjectRef` stay decode-only:
+`frontend-modern/src/types/recovery.ts` declares them on the transport types
+alone, and tables read the canonical item fields.
 That same canonical item-label boundary must prefer recognizable protected-item
 names over raw entity IDs. When unresolved Proxmox-backed recovery points only
 have a VMID/CTID in the subject ref but still carry a richer backup comment or
 notes label, the canonical recovery index and store backfill must promote that
 human-readable label into the persisted subject/item label instead of leaving
 protected inventory rows to lead with bare numeric IDs.
-That same operator-facing row-identity rule should still preserve the governed
-entity identifier as secondary context when it exists. Recovery inventory and
-event rows should lead with the canonical item name, then show a muted
-secondary compact `VMID`/`CTID`/`ID` cue when `display.entityIdLabel` is
-available, so operators can disambiguate familiar names without turning the
-primary scan path back into raw numeric identifiers or bloating the table with
-an extra recovery-only identity row.
-That same shared presentation layer also owns the distinction between
-aggregate recovery-method language and single-record recovery-method language.
-Timeline legends and daily breakdowns must use aggregate labels such as
-`Snapshots`, `Local Copies`, and `Remote Copies`, while event rows, filters,
-and point details must use the singular operator-facing forms `Snapshot`,
-`Local Copy`, and `Remote Copy`. Recovery point detail summaries must also
-humanize backend fields like kind, mode, outcome, and boolean state into
-operator-facing labels such as `Point Type`, `Method`, `Outcome`, `Verified`,
-and `Encrypted` instead of leaking raw transport values like `backup`,
-`remote`, or lowercase outcome tokens into the primary drawer surface.
-That primary workspace selection now also lives in canonical recovery route
-state through `frontend-modern/src/routing/resourceLinks.ts` and
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
-links and browser restores reopen explicit protection-coverage state instead
-of silently falling back to page-local UI state. Focused recovery routes with
-an active `rollupId` or `day` remain recovery-events-first by default, and
-default event routes should omit redundant `view=events` query state.
-That same shared route-helper contract now also has to preserve exact storage
-and recovery handoffs for unified resources discovered outside the storage or
-recovery pages. When alerts, Patrol, or infrastructure drawers route a
-TrueNAS-backed disk, app, or system into an owning platform/runtime surface,
-the shared helper must keep the owned `source`, `node`, `platform`, `view`,
-and exact `resource` semantics intact instead of collapsing those handoffs
-back to provider-local URLs, retired aggregate workspace routes, or generic
-top-level tabs.
-That history table layout now also derives its minimum width from the same
-canonical column-width spec that owns the header sizing in
-`frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed
-subject labels do not force the trailing outcome/status columns off-screen by
-budget drift.
-That same recovery product proof surface now also includes a browser-level
-desktop layout guard in `tests/integration/tests/17-recovery-layout.spec.ts`,
-which opens the recovery page against deterministic recovery payloads and
-fails when the history table needs horizontal scrolling or lets the outcome
-column drift outside the visible wrapper at desktop width.
+Alerts, Patrol, and resource drawers hand no resources into storage or
+recovery surfaces today: their cross-jump chips were retired on 2026-05-16,
+and `buildStorageRouteSearch()` is read only by the Storage surface's own
+filter state. A future handoff of a TrueNAS-backed disk, app, or system into
+an owning platform tab must keep the owned `source`, `node`, `platform`,
+`view`, and exact `resource` semantics instead of collapsing to provider-local
+URLs, retired aggregate workspace routes, or generic top-level tabs.
+The recovery product proof surface's browser-level layout guard is
+`tests/integration/tests/17-proxmox-backups-layout.spec.ts`. Against the
+mock-mode dataset it checks that selecting an activity day keeps the operator
+on `/proxmox/backups` with an `N of M backups` count, and that a one-year
+activity range keeps the page inside the horizontal viewport with the PBS
+servers table's trailing column inside its wrapper; the activity chart may
+scroll inside its own card.
 That same shared `internal/api/` dependency now also assumes tenant-scoped
 resource handlers seed registries from canonical unified resources only:
 recovery- and storage-adjacent API helpers may not fall back to raw tenant
@@ -4643,6 +4966,10 @@ whose nested VM inventory definition owns panel copy, stable column schema,
 and filename prefix. Storage and recovery flows may read those facts when they
 need fleet context, but they must not fork their own reporting or inventory
 column contract.
+The API-owned `vm_inventory` schedule kind reuses that same exporter and the
+reporting-owned email/disk delivery and retry path. Current-state inventory
+scheduling does not add storage history, change retention entitlements or
+move generated artifacts out of their organization-local reporting storage.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; storage- and recovery-adjacent
@@ -4702,8 +5029,8 @@ the cloud-summary decision is derived from scope rather than stored as a
 separate boolean flag.
 The same storage-facing runtime paths now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
-multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
-adjacent consumers do not each keep a local `getOrgID() || 'default'`
+multi-tenant fetch state, so `storageSummaryCache.ts` and other
+storage-adjacent consumers do not each keep a local `getOrgID() || 'default'`
 fallback.
 
 The frontend storage and recovery surfaces are also first-class embedded
@@ -4722,383 +5049,107 @@ The storage page's readiness now stays route-owned as well:
 loading, reconnect, and disconnect presentation from the storage unified-resource
 fetch contract before consulting websocket churn so the storage surface does
 not present healthy REST-backed data as down or stale.
-Meanwhile,
-`frontend-modern/src/components/Recovery/` and the recovery hooks define the
-event timeline, protection-coverage review, and recovery-history UX. The
-governed page frame is event-first: operators land directly on concrete
-backup/snapshot/replication history, with `RecoveryActivitySection.tsx` acting
-as compact orientation for the visible event table. The former decorative
-recovery summary-card strip is retired because workloads already owns the
-object-level "has a backup" scan, while Recovery owns concrete recovery events
-and an explicit secondary protection-coverage review.
-That top recovery frame must rely on solid elevated operator panels and border
-hierarchy rather than decorative gradients so the page reads like a monitoring
-workspace instead of a marketing-style dashboard shell. The page must stay
-compact enough to keep the activity chart and primary event table in the first
-scroll window instead of stacking dashboard-like slabs above the work surface.
-Protection coverage remains a secondary review, opened through the explicit
-header action or canonical compatibility route state when the operator needs to
-audit stale, failed, warning, running, unknown, or never-succeeded items. It
-must expose a reciprocal page-header action back to Recovery events, so opening
-coverage never leaves the operator dependent on the global Recovery nav item or
-small table chrome to return to the primary page. It must not return as an
-equal-weight subtab or a top-level posture-card action strip without a separate
-governed product decision.
-Recovery is also intentionally outside the interactive page/group/entity
-summary-card contract used by workloads, infrastructure, and storage. The
-recovery route must not adopt `summaryCardInteraction.ts`, synchronized card
-hover, row-driven summary scope, or shared `SummaryPanel` card framing simply
-because adjacent monitoring pages use those primitives. Recovery may still show
-coverage breadth and platform context inside the Protection coverage table and
-event filters, but the page must read item-first so the unified recovery model
-is not visually anchored to one platform family.
-That same item-first rule also applies to the protection coverage table:
-`RecoveryProtectedInventorySection.tsx` must surface protected item type as a
-first-class column in the main inventory grid rather than leaving platform as
-the only structural classifier beside the item label. Platform badges remain
-important supporting operator context, especially for Proxmox-heavy fleets,
-but the table frame itself must make protected item class explicit.
-That same inventory contract must keep the protected-items grid operationally
-bounded. The governed desktop recovery surface should not dump the entire
-protected estate into one endless slab; it should page or otherwise bound the
-primary inventory table so the workspace, filters, and adjacent activity panel
-remain readable as one monitoring surface instead of dissolving into a raw list
-dump.
-That same protected-inventory surface should carry compact operator orientation
-inside the table shell itself. `RecoveryProtectedInventorySection.tsx` should
-expose the current bounded range, page, and sort state near the primary grid,
-and the first column should carry enough secondary item metadata to read as a
-monitored inventory row rather than a bare export line.
-That same hierarchy rule also applies to the activity timeline. The governed
-recovery surface should not append `RecoveryActivitySection.tsx` underneath the
-default protected-items view as if trend telemetry were a second page bolted
-onto inventory. The timeline owns recovery-event day selection, so it belongs
-inside the `Recovery events` workspace and should read as history analysis for
-the selected window rather than as a second copy of the page-level posture
-summary.
-The same owned vocabulary applies to recovery events as well:
-`frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
-history-table `type` column labeled as `Item Type` within recovery surfaces so
-event history does not fall back to a generic shared `Type` header once the
-recovery lane has already established item-first operator vocabulary.
-That same item-first vocabulary must carry through the point-details drawer:
-when a recovery point includes canonical item-class metadata,
-`RecoveryPointDetails.tsx` must surface it as `Item Type` in the summary grid
-instead of jumping directly from item identity to platform and point-method
-metadata.
-That same shared presentation layer also owns recovery placement vocabulary.
-Cluster, node, and namespace facets remain valid supporting filters for
-Proxmox-heavy and Kubernetes-heavy operators, but the governed recovery
-surface must present them through platform-neutral labels such as
-`Cluster / Site`, `Host / Agent`, and `Namespace / Group` across advanced
-filters, active chips, table headers, column-picker entries, and point
-details so the page treats placement as optional context inside a
-multi-platform recovery model rather than a Proxmox-native spine. When
-normalized display labels are present, the visible history rows must prefer
-those labels over raw transport values for the same placement dimensions.
-The recovery table presentation helper now owns the canonical subject-type
-label fallback for recovery rows and delegates its title-casing to the shared
-`frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
-local recovery-only formatter, so subject and outcome labels stay aligned with
-the shared frontend label contract. Protected-inventory and recovery-event
-filters, table headers, and column-picker labels must use that helper for
-artifact fields such as `Item Type`, so the recovery tabs do not drift into
-near-identical page-local casing.
-That same recovery drill-in surface now also keeps provider-specific metadata
-inside a provider-neutral detail shell through
-`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS
-datastore and verification enrichments remain available without presenting the
-details drawer as a PBS-only surface.
-The point-details drawer also owns restore-safe operator guidance. It may
-surface restore readiness, verification provenance, and chain coverage for the
-selected point, but it must stay read-side until the backend exposes a governed
-restore execution contract. The drawer must not present a freestanding restore
-runbook or next-action path that reads as an approved restore workflow; target
-confirmation and isolated test-restore planning belong in a future governed
-action or restore flow, not in the evidence drawer. Chain context must be
-derived from the current recovery result set only when at least two concrete
-stages are visible, so mixed PVE/PBS/TrueNAS history can explain adjacent local
-snapshot, local copy, and remote copy stages without filling the drawer with
-missing-only cards. Raw transport IDs, provider refs, provider task IDs, and
-raw JSON copy actions belong behind `Technical details`; the primary drawer
-should keep human metadata, recorded verification provenance, target health,
-and collapsed file lists without repeating the same verification fact in
-provider-specific sections or rendering empty verifier/evidence placeholders
-when no verification record exists. Verification provenance should translate
-provider states such as PBS catalog `ok` into operator language instead of
-surfacing raw transport status tokens. Container recovery points should present
-container ids with operator vocabulary such as `CTID`, and duplicated placement
-or target values should not be repeated under lower-priority metadata labels.
-Provider-specific metadata must not recast the event drawer itself as if PBS
-were the native recovery model. Provider-owned repository data should sit under
-target-oriented wording such as `Target Details`, `Repository owner`, and
-`Target Health`; when target-specific technical labels are surfaced, they
-should prefer neutral wording such as `Target Ref` and `Target Resource`.
-Those transport hooks are direct governed runtime surfaces, not just page
-implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
-`frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,
-`frontend-modern/src/hooks/useRecoveryPointsSeries.ts`, and
-`frontend-modern/src/hooks/useRecoveryRollups.ts` must stay on the explicit
-`recovery-product-surface` proof path instead of inheriting release-control
-coverage only through a retired standalone Recovery page shell.
-Those same hooks now also own recovery transport normalization at the frontend
-boundary: raw compatibility fields such as `provider` / `providers` may be
-accepted from older `/api/recovery/*` payloads, but the runtime values they
-return to the rest of the recovery UI must be canonical `platform` /
-`platforms` models.
+Recovery has no page frame of its own. The event timeline, protection-coverage
+review, recovery-history table, point-details drawer, activity strip, and the
+recovery table, filter-chip, status, record, action, issue, and empty-state
+presenters that served them were deleted with the aggregate Recovery page on
+2026-05-26 (its summary strip had gone on 2026-05-14), along with
+`useRecoveryRollups.ts`,
+`useRecoveryPointsFacets.ts`, and `useRecoveryPointsSeries.ts`. The rules that
+governed that frame's layout, density, workspace order, and default columns
+have no surface to bind. Recovery evidence now reads through two
+platform-owned tabs built on the shared platform-page table primitives: the
+Proxmox Backups tab (`ProxmoxBackupsTable.tsx` and its activity chart, date
+feed, coverage, recoverable-artifact, and backup-server tables) and the
+TrueNAS Protection tab (`TrueNASProtectionTable.tsx`). Neither adopts the
+interactive summary-scope primitives (`summaryCardInteraction.ts`,
+`summaryTableFocus.ts`) or a summary card strip.
+Recovery row details on those tabs stay read-side until the backend exposes a
+governed restore execution contract. They may show verification and target
+facts for the selected row, but must not present a freestanding restore
+runbook or next-action path that reads as an approved restore workflow.
+The Proxmox Backups activity chart keeps long ranges contained:
+`BackupActivityChart.tsx` sizes the plot through
+`getRecoveryTimelineChartMinWidthPx` (2,560 pixels for a year) and scrolls
+inside its own card, so the page itself never overflows horizontally;
+`tests/integration/tests/17-proxmox-backups-layout.spec.ts` asserts that at
+desktop width.
+The recovery transport hooks are direct governed runtime surfaces, not page
+implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts` and
+`frontend-modern/src/hooks/useProtectionPostures.ts` stay on the explicit
+`recovery-product-surface` proof path, as do the shared recovery helpers that
+survived the page: `frontend-modern/src/types/recovery.ts`,
+`frontend-modern/src/utils/recoveryDatePresentation.ts`,
+`frontend-modern/src/utils/recoveryOutcomePresentation.ts`,
+`frontend-modern/src/utils/recoveryTimelinePresentation.ts`, and
+`frontend-modern/src/utils/recoveryTimelineChartPresentation.ts`. They must not
+inherit release-control coverage only through the platform tabs that render
+them. They hold only what those tabs read: the date and timeline helpers serve
+the Proxmox Backups tab and the outcome helper the TrueNAS Protection tab.
+Exports no tab reads, and `recoveryArtifactModePresentation.ts`, which only
+those exports read, have been removed.
+`useRecoveryPoints.ts` also owns recovery transport normalization at the
+frontend boundary: raw compatibility fields such as `provider` may still
+arrive from older `/api/recovery/points` payloads, but the points it returns
+are canonical `platform` models.
+The hook also holds only what the TrueNAS Protection tab reads. Its query
+carries `platform`, `page`, and `limit`, it needs a query accessor, and it
+returns the points, the loading and error state, and a refetch. The points
+endpoint accepts more filters, but no surface sends them: the hook's other
+query options (rollup, kind, mode, outcome, item type, linked resource, text,
+cluster, node, namespace, workload scope, verification, and the time window),
+its `meta` and `resolvedOnce` results, and the call without a query accessor
+that fetched the unfiltered first page had no reader once the aggregate Recovery
+page was deleted, and are gone. A surface that needs one of those filters adds
+it to the query type together with its caller, and sends a linked-resource
+filter as `itemResourceId`, never `subjectResourceId`.
+The decode of that response follows the same rule:
+`normalizeRecoveryPointsResponse` and the `RecoveryPointsResponse` and
+`RecoveryPointsTransportResponse` types in
+`frontend-modern/src/types/recovery.ts` carry the points alone. The endpoint
+still returns its pagination meta (`page`, `limit`, `total`, `totalPages`) and
+that backend contract is unchanged, but no frontend surface reads it, so a
+surface that pages the points adds the meta back to the response types together
+with its reader.
+`frontend-modern/src/api/__tests__/recoveryTransport.test.ts` pins the query
+keys, the result members and the response keys at the type level, and at
+runtime the three parameters that reach the wire and that a backend response's
+meta does not survive the decode.
+`useProtectionPostures.ts` holds the same line for `GET /api/recovery/postures`:
+`ProtectionPosturesResponse` carries the posture rows and the policy that the
+Proxmox Backups tab reads, and nothing else. That endpoint also returns its
+pagination meta and the backend contract is unchanged, but the hook joins its
+200-ID batches into one response, so a `limit` or page count would only be
+invented client-side and no surface reads one. A surface that pages postures
+adds the meta back together with its reader. `RecoveryResponseMeta` went with
+the last response type that carried it.
+`frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts` pins the
+response keys at the type level.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and
 dashboard widget orchestration must not return as direct proof surfaces. New
-storage or recovery summary proof must attach to the owning Storage,
-Recovery, Infrastructure drawer, or shared summary component instead of
-borrowing coverage through a broader dashboard shell.
-The shared recovery type contract must be pinned the same way:
-`frontend-modern/src/types/recovery.ts` must stay on the explicit
-`recovery-product-surface` proof path instead of riding indirectly on route or
-component coverage.
-That same direct proof rule applies to the shared recovery date helper:
-`frontend-modern/src/utils/recoveryDatePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery status helper:
-`frontend-modern/src/utils/recoveryStatusPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-The default protected-inventory recovery route must also keep its primary
-table shell on class-driven sizing (`table-fixed` plus owned width classes)
-instead of inline `table-layout` / `min-width` styles, so the public recovery
-surface stays CSP-safe without drifting from the shared table contract.
-That same direct proof rule also applies to the shared recovery record helper:
-`frontend-modern/src/utils/recoveryRecordPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That shared recovery record contract now also includes rollup-side display
-payload continuity: the recovery backend must preserve the latest normalized
-subject label on rollups, and recovery UI helpers must prefer that canonical
-display label before raw subject ids whenever the live unified-resource map is
-missing or only resolves to opaque machine identifiers.
-That same direct proof rule also applies to the shared recovery outcome helper:
-`frontend-modern/src/utils/recoveryOutcomePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery action helper:
-`frontend-modern/src/utils/recoveryActionPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery artifact mode
-helper: `frontend-modern/src/utils/recoveryArtifactModePresentation.ts` must
-stay on the explicit `recovery-product-surface` proof path instead of
-inheriting coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery empty-state
-helper: `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery filter-chip
-helper: `frontend-modern/src/utils/recoveryFilterChipPresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery issue helper:
-`frontend-modern/src/utils/recoveryIssuePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery table helper:
-`frontend-modern/src/utils/recoveryTablePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery timeline-chart
-helper: `frontend-modern/src/utils/recoveryTimelineChartPresentation.ts` must
-stay on the explicit `recovery-product-surface` proof path instead of
-inheriting coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery timeline
-helper: `frontend-modern/src/utils/recoveryTimelinePresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-
-Those recovery transport surfaces now also share one normalized filter
-contract: protection rollups, point history, facets, and chart series must
-all honor the same canonical `platform`, canonical `itemType`, cluster, node, namespace,
-workload-scope, verification, and route-backed free-text `q` filter so the
-protection coverage list cannot drift from the timeline and facet state under the
-same active recovery view. That same recovery filter contract now depends on
-the canonical recovery index carrying a normalized `itemType` instead of
-forcing each UI surface to re-derive protected item classes from raw
+storage or recovery summary proof must attach to the owning Storage surface,
+platform tab, or shared summary component instead of borrowing coverage
+through a broader dashboard shell.
+The recovery backend preserves rollup-side display payload continuity: it keeps
+the latest normalized subject label on rollups, so a reader can prefer that
+canonical display label over raw subject ids whenever the live
+unified-resource map is missing or only resolves to opaque machine
+identifiers.
+The `/api/recovery/*` transports share one normalized filter contract:
+protection rollups, point history, facets, and chart series all honor the same
+canonical `platform`, canonical `itemType`, cluster, node, namespace,
+workload-scope, verification, and free-text `q` filters, so any two of them
+read under the same filters describe the same items. That filter contract
+depends on the canonical recovery index carrying a normalized `itemType`
+instead of forcing each reader to re-derive protected item classes from raw
 provider-native `subjectType` values.
-That same recovery product surface keeps the primary workspace visually ahead
-of secondary analytics: `frontend-modern/src/components/Recovery/Recovery.tsx`
-must lead directly into the route-backed recovery events workspace, with
-recovery events owning both the activity timeline and the event table together.
-Protection coverage opens only through the explicit header action or
-compatibility route state. The activity timeline remains required even when
-point-history loading fails, but it belongs to the events workspace rather than
-hanging beside coverage as a competing page-level peer.
-That same recovery product surface must not reintroduce a four-card posture,
-freshness, coverage, or activity strip as decorative orientation. Workloads is
-the better object-level place to scan whether a resource has backup coverage;
-Recovery should reserve its first viewport for concrete recovery history and
-only expose coverage rollups when the operator asks for the secondary review.
-That same page-level ownership applies to the recovery time window. The
-canonical range selector now lives inside `RecoveryActivitySection.tsx` because
-it controls the event timeline and the event query window, not a page-level KPI
-strip. Range changes must clear selected-day focus and return the events table
-to page one through the route-state owner so the chart and table remain aligned.
-That same activity-section contract should stay compact and scan-first:
-recovery-point volume, active-day count, stale count, and average rate may
-appear as concise inline readouts beside the chart controls, but not as separate
-top-level metric cards or nested mini-panels. The activity strip must also avoid
-interpreted anomaly callouts such as "lowest active day" unless the recovery
-model has canonical schedule expectations that make the signal actionable.
-Item-type labels should continue to render through canonical workload/resource
-badge classes in the event and coverage tables instead of adding recovery-only
-wrapper chrome around VM, container, or other resource badges.
-That same event-first shell rule should hand straight from the activity section
-into the active events workspace without an extra page-local spacer band,
-default tab row, or duplicate status strip that makes the surface softer than
-storage or workloads.
-That same scan-first rule applies to the secondary coverage surface. Recovery
-should not show equal workspace tab labels and then repeat the same workspace
-count as standalone text; protection coverage cues should focus on issues,
-drill-in context, and active filters.
-That same coverage surface should also follow the established monitoring-table
-scan pattern in its first column. Coverage rows should lead with a clear
-status cue, the primary item name, and compact badge-backed item/platform
-context instead of relying on recovery-only rails or plain-text metadata lines
-that make the table read like a report instead of an operational grid.
-That same triage rule applies to the coverage sort. Protection coverage should
-open with attention-state rollups first instead of defaulting to
-newest-successful backups, so operators land on failed, never-succeeded, stale,
-warning, and running items before the healthy catalog.
-That same row contract should avoid duplicating context that already has a
-dedicated column. When `Item Type` and `Platform` columns are visible, the
-primary item cell should not restate those same badges on desktop; duplicate
-context belongs only as a small-screen fallback when those columns collapse.
-That same scan rule applies to the supporting columns themselves. Recovery
-tables should keep one dominant identity cue and one canonical platform cue.
-`Item Type` should use the same shared workload/resource badge treatment that
-other Pulse tables use for `VM` and `Container`, while `Method` and similar
-supporting fields stay on restrained metadata text instead of turning every
-adjacent column into another colored badge.
-That same item-identity contract also applies to synthetic Proxmox task
-recovery points. When the persisted subject label is just a raw
-`pve-task:*`/`UPID:*` identifier or `vmid=0`, the canonical recovery index
-should derive a readable task label and `task` item type from point details so
-recovery tables scan by operator meaning instead of transport IDs.
-That same coverage surface should stay on the flat monitoring-table pattern
-already used elsewhere in Pulse. Protection coverage should surface posture through
-row-level status cues, outcome pills, and filters rather than inserting extra
-`Needs Attention` / `Healthy Coverage` section rows that add height and turn
-the table into a recovery-only grouped report.
-That same protection-coverage table should also avoid recovery-local pagination
-chrome. The workspace already holds the filtered rollups client-side, so it
-should read as one continuous monitoring table with a simple coverage-item
-count instead of introducing `Prev` / `Next` buttons and page counters that do
-not match the canonical Pulse scan pattern.
-That same table-shell contract must avoid duplicate framing once the summary
-action has established the secondary coverage workspace.
-`RecoveryProtectedInventorySection.tsx` should keep page/count/sort
-orientation inside a slim table-shell status row and let the filter strip lead
-directly into the grid instead of reintroducing a second large inventory header
-card above the same table.
-That same shell rule should also avoid low-signal bookkeeping above the grid.
-The protected-items status row should surface the active workspace, protected
-item count, and issue cues, but page-number and sort-direction bookkeeping
-belongs in the table chrome itself rather than competing with the primary scan
-path before operators even reach the rows.
-That same table density rule also applies to recovery table chrome and filter
-rows. Recovery inventory and event tables should use the same restrained
-title-case header typography, compact control heights, and thin row density as
-the established Pulse monitoring tables instead of drifting into report-style
-uppercase headers or oversized filter chrome.
-That same protected-items table contract should stay on the canonical shared
-table separator treatment used by the rest of Pulse. Recovery inventory should
-use the standard shared header/body dividers and avoid both local suppression
-of those separators and local duplicate row or header borders that make the
-lines read heavier than other monitoring tables.
-That same workspace-shell rule should also avoid a dedicated recovery-only
-status strip above the control bar. Recovery should use an event-first handoff:
-activity context, a shared controls card, then a data card. Protection coverage
-may use its own shared controls card and table when explicitly opened, but
-Recovery should not collapse controls and content back into one fused workspace
-slab or bury secondary workspace navigation inside the filter row.
-That same strip should not repeat page-level counts or posture cues as a
-replacement for the retired summary strip. Protection coverage controls should
-stay focused on drill-in context and active filters instead of echoing page-wide
-posture pills above the same table.
-That same workspace handoff should stay on shared primitive styling too.
-Recovery events and protection coverage should keep using shared `FilterBar`,
-`TableCard`, and `TableCardHeader` primitives instead of inventing a
-recovery-only variant or recovery-only class stack.
-That same canonical-row rule also means the subtabs row should stand on its own
-full-width shell instead of sharing a flex line with recovery-only chips or
-adjacent badges that break the storage-style border and spacing treatment.
-That same shared page-controls contract applies to recovery search width too.
-The protected-items and recovery-events workspaces should keep the search field
-on the standard full-width shared search row, and any counts or utility cues
-should live in the toolbar actions instead of narrowing the search row through
-recovery-local grid overrides or width hacks. Protected-items controls should
-also use the same shared `Reset all` page-controls action pattern as storage
-and workloads when visible filters are active, instead of forcing operators to
-clear each inventory filter manually.
-That same handoff should keep Recovery out of shared summary-card density
-tuning unless a new governed product decision reintroduces a first-viewport
-summary owner. The current route should spend its top-level density budget on
-the activity section, compact controls, and one primary data card.
-That same shell rule applies to the recovery-events workspace.
-`RecoveryHistorySection.tsx` should use the same slim status-row-plus-filter-row
-pattern as the protected inventory surface, not a separate large titled header
-bar plus another full toolbar slab. Event filter labels should also stay on the
-canonical short Pulse vocabulary like `Platform` and `Status` instead of
-recovery-only variants such as `History platform` or `History status`. Both
-recovery toolbars should also stay on compact shared select sizing instead of
-inflating the row with recovery-local min-width overrides that make the
-controls denser and wider than storage for the same amount of operator input.
-That same events-workspace rule should keep the activity strip as orientation
-for the event list rather than burying it at the bottom. The events workspace
-should move from the subtabs row to `RecoveryActivitySection.tsx`, then shared
-controls, then the recovery history table as sibling sections, so the timeline
-frames the event list without turning the page back into stacked primary
-tables or embedding the activity strip inside the history card.
-That same events-shell contract should avoid repeating page-state bookkeeping
-ahead of the history grid. Recovery events should keep the toolbar utility area
-focused on actual controls like advanced filters and column visibility instead
-of passive `day groups` narration; day grouping should stay legible through the
-history surface itself, while current page and other table bookkeeping remain
-in the table footer instead of competing with the scan path above the filters.
-That same activity panel should stay compact and analytical rather than
-becoming a second dashboard header. `RecoveryActivitySection.tsx` should keep a
-single slim telemetry header, compact active-filter chips, a shorter chart
-frame, reduced vertical insets, and a smaller legend footprint so the events
-workspace hands off quickly from activity context to the history table instead
-of spending a disproportionate slice of the screen on chart chrome. The range
-picker and legend should share one compact control row, and the activity strip
-should not burn a separate descriptive subtitle row once the headline metrics
-already explain the chart context.
-That same timeline contract must keep long-range activity fully constrained to
-the card width. Extended ranges such as `365d` should compress their day
-columns to fit the available plot width instead of carrying per-column minimum
-widths that make the chart overflow its containing card.
-That telemetry header should also avoid derivative pace rows once the chart
-already carries the rhythm. Total points, active days, and issue cues can
-stay, but average-per-day style readouts should not re-expand the strip into a
-second mini report above the event table.
-That same events-table contract should also keep the default column set on a
-monitoring-style scan path rather than a report-export path. Recovery events
-should default to the concise columns operators need to triage quickly, while
-secondary fields such as verification, size, target, and details remain
-available through the shared column picker instead of crowding the baseline
-desktop view. When the responsive event table collapses columns on mobile, the
-primary item cell must retain enough method, platform, target, and verification
-context to preserve restore-readiness meaning rather than hiding all secondary
-evidence behind desktop-only columns in the desktop grid.
-That same event-row scan rule should mirror the protected-items table in the
-primary identity cell. `RecoveryHistoryTable.tsx` should lead each event row
-with a compact outcome status cue plus the canonical item name, so operators
-can scan event health by row without relying only on the far-right outcome
-column.
-That same density rule should also keep history grouping and badges restrained.
-Day-group headers should read as slim dividers instead of banner rows, and
-platform/method/outcome pills should stay compact enough that the event grid
-still scans like a monitoring table rather than a report export.
+The same item-identity contract applies to synthetic Proxmox task recovery
+points. When the persisted subject label is just a raw `pve-task:*`/`UPID:*`
+identifier or `vmid=0`, the canonical recovery index should derive a readable
+task label and `task` item type from point details so recovery rows scan by
+operator meaning instead of transport IDs.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
@@ -5654,29 +5705,12 @@ and proof surface describe one /api/auto-register path instead of a fake
 /api/auto-register/secure sibling, so adjacent transport and governed
 evidence do not drift onto a route split that the runtime does not actually
 expose.
-That same filter contract applies to the advanced history facets transport as a
-whole: changing node or namespace filters must narrow the facets request too,
-so node and namespace option sets cannot drift back to the broader chart window
-while the visible history table is already scoped to a smaller recovery slice.
-That same narrowing rule now also applies when a timeline day is selected: the
-facets request must use the same narrowed day window as the points request so
-node and namespace option sets stay coherent with the visible history slice
-instead of showing options from the full chart range while the table is already
-scoped to a single day.
-The recovery timeline drill-down now also treats day selection as a real
-history transport boundary: choosing a day in the "Backups By Date" chart must
-narrow the point-history request window to that selected local day rather than
-only updating local selection chrome while the table remains on the broader
-chart window.
-That selected-day boundary must also be durable route state: the recovery URL
-must preserve the active timeline day so reload, navigation, and shared links
-reconstruct the same point-history window instead of silently widening back to
-the broader chart range.
-That same route continuity rule also applies to the selected chart window
-itself: changing the recovery timeline range to `7d`, `90d`, or `1y` must stay
-in canonical recovery route state so reload, navigation, and shared links
-reconstruct the same rollup and series transport window instead of widening
-back to the default `30d` range.
+The facet, point-window, and range route-state rules that served the deleted
+Recovery page's history table no longer have a reader. Day and range selection
+now belong to the Proxmox Backups activity chart: choosing a day filters the
+date feed in place and writes `PROXMOX_BACKUPS_QUERY_PARAMS.day`, so reload and
+shared links reopen the same day, while the chart range (`7d`, `30d`, `90d`,
+`1y`) is component state that starts at 30 days and is not written to the URL.
 
 This lane intentionally depends on other governed boundaries instead of
 overreaching into them. API transport and payload contract ownership remain in
@@ -5846,16 +5880,19 @@ settings, but they must not reinterpret provider auth, provider connection, or
 model-selection causes as recovery-source health, backup readiness, or
 storage-control capability.
 That bounded projection is the current TrueNAS floor for storage and recovery:
-operators can inspect TrueNAS pools, datasets, disks, snapshots, and
-replication artifacts through the shared storage and recovery pages plus
-cross-surface handoffs. Storage and recovery do not promise a TrueNAS-local
-onboarding path, restore/control plane, or separate diagnostic transport;
-backend-native app actions, logs, and config reads stay on the adjacent
-AI/runtime path and only feed refreshed canonical recovery/state afterward.
-The TrueNAS platform page may embed that same canonical recovery surface as a
-scoped Protection tab, but it must keep the `truenas` platform filter forced,
-reuse recovery-owned protection/event workspace state, and avoid growing a
-TrueNAS-only snapshot or replication table contract.
+operators can inspect TrueNAS pools, datasets, and disks on the TrueNAS
+page's Storage tab (`TrueNASStorageTopologyTable`) and snapshots and
+replication artifacts on its Protection tab. Storage and recovery do not
+promise a TrueNAS-local onboarding path, restore/control plane, or separate
+diagnostic transport; backend-native app actions, logs, and config reads stay
+on the adjacent AI/runtime path and only feed refreshed canonical
+recovery/state afterward.
+The Protection tab is a platform-owned table, not an embedded recovery
+surface: `TrueNASProtectionTable.tsx` lists the recovery points
+`useRecoveryPoints` returns with the `truenas` platform filter forced. It must
+keep that filter forced and keep reading the canonical recovery-points
+transport rather than growing a TrueNAS-only snapshot or replication data
+contract.
 VMware vSphere is the current admitted narrower phase-1 direction. Storage and
 recovery may consume vCenter-backed
 datastore inventory plus VM snapshot-tree visibility as shared storage and
@@ -5934,10 +5971,9 @@ collector, agent-id/device fallback stream, or separate "real-time" history
 store once monitoring and `/api/metrics-store/history` already own the disk
 timeline.
 The same shell/runtime split now applies to websocket consumers:
-`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx` and
 `frontend-modern/src/components/Storage/useStoragePageResources.ts` may consume
 websocket state only through `frontend-modern/src/contexts/appRuntime.ts`.
-They must not import `@/App` or create storage/recovery-local shell coupling,
+It must not import `@/App` or create storage/recovery-local shell coupling,
 because provider placement remains app-shell-owned and storage/recovery
 surfaces must stay lazy-load safe.
 The Storage page also keeps large-estate hydration and rendering bounded at
@@ -6115,6 +6151,19 @@ is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
 
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
@@ -6129,17 +6178,8 @@ than drifting into "has ever used"
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
 
 ### Report-ack version echo persists nothing
 
@@ -6344,6 +6384,19 @@ no backup, snapshot, restore, retention, cleanup, or verification authority.
 The storage/recovery resource query and its admission, freshness, and
 persistence contracts are unchanged.
 
+### Saved-host link holds open no recovery path
+
+`internal/unifiedresources/types.go` gains an unexported
+`Resource.continuityOnly`: it marks a row saved-host continuity introduced (a
+machine that has not reported since a restart), so an operator link holds the
+row beside its primary instead of merging it, and, unless the saved row is
+itself the link's effective primary (an agent linked into its guest makes the
+guest primary), reference reads by its IDs resolve to the primary. It is
+in-memory only, never serialized, persisted or exposed on the API, and storage
+and recovery code neither reads it nor resolves references through the
+registry, so recovery ownership, restore targeting and protection grouping are
+unchanged.
+
 ### Token creation and deletion preserve restart-time persistence truth
 
 The shared `internal/api` token creation path treats its persisted inventory as
@@ -6398,6 +6451,54 @@ no backup, restore, retention, snapshot, or recovery authority; they prevent a
 successful enrollment response from describing credential state that a restart
 would undo. Their success and forced-write-failure proofs live in
 `internal/api/deploy_handlers_test.go`.
+
+### Deploy job admission reads persisted state, bounded in time
+
+Install-job admission on a cluster reads the persisted deploy store, not
+in-memory state. `HandleCreateJob` refuses a new install while
+`Store.UnfinishedJobsForCluster` returns an install job for the same
+organization and cluster created within the last 30 minutes, and it checks and
+inserts under one admission lock. A job left unfinished by a crash or a
+vanished source agent therefore keeps blocking overlapping installs across a
+restart, but only until it ages out of that window, so a stale row never locks
+a cluster out for good. This adds no backup, restore, retention, snapshot, or
+recovery authority. `internal/api/deploy_handlers_test.go` and
+`internal/deploy/store_test.go` pin the admission and the query.
+
+### Deploy token identity repair is one persisted transition
+
+The one-time move of a deploy runtime token from the placeholder
+`agent-<hostname>` identity to the registering agent's ID is written through
+the existing API-token persistence inside the same command-channel admission
+as other binding repairs, together with the `deploy_identity_binding=repaired`
+marker that prevents a second move. When that save fails, the previous binding
+metadata and marker are restored and registration is refused, so a failed
+write never leaves a half-moved token. This adds no backup, restore, retention, snapshot, or
+recovery authority. `internal/api/security_regression_test.go` pins the
+persisted binding.
+
+### Reported agent identity is one persisted token transition
+
+Recording a report's agent identity on a hostname-bound token writes
+`bound_agent_id`, `bound_at`, and the binding version through the existing
+API-token persistence, under the token lock, in one save. When that save
+fails, the previous metadata is restored, the report itself is still
+acknowledged, and the next report retries, so a failed write never leaves a
+half-bound token. This adds no backup, restore, retention, snapshot, or
+recovery authority. `TestReportedIdentityRestoresTheTokenWhenTheSaveFails` in
+`internal/api/security_regression_test.go` pins the restore and the retry.
+
+### Naming a command identity persists nothing
+
+Naming `commandAgentId` on a report acknowledgement reads the request's token
+snapshot and writes nothing: the command binding is still persisted only by
+command admission and by the report-side identity recording, each in its one
+existing save. The agent keeps the named identity in memory for the process and
+asks again after every restart. This adds no backup, restore, retention,
+snapshot, or recovery authority.
+`TestHostAgentCommandChannelBindsTheIdentityPulseAcknowledges` in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` pins the
+binding the command registration persists.
 
 ### Destination severity policy preserves notification recovery identity
 
@@ -6503,18 +6604,9 @@ results. A running guest alone cannot prove a reboot.
 
 ### Quick security setup preserves unrelated settings
 
-Authenticated force setup in `internal/api/security_setup_fix.go` retains the
-existing authentication and settings-write authorization checks. Rotating local
-credentials does not reset non-auth system preferences.
-`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
-creates defaults only when system settings are absent, under the same instance
-mutex as ordinary saves; existing bytes (including unknown fields and malformed
-data requiring recovery) are not rewritten. A read error prevents initialization,
-while authentication setup retains its existing nonfatal settings-error behavior.
-This does not change token scopes, agent admission, or existing agent cleanup.
-Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
-`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
-`TestInitializeSystemSettingsReadError`.
+Quick security setup follows the [API settings-preservation contract](api-contracts.md#quick-security-setup-preserves-unrelated-settings),
+including byte-preserving first-run initialization and read-error handling.
+It grants no additional agent or recovery authority.
 
 ### Storage pool rows do not retain their whole group
 
@@ -6526,6 +6618,39 @@ windowing test pins the row shape, and the 50-node browser fixture exercises
 expanded rows and History at desktop and phone widths. This is presentation
 work only; it changes no storage evidence, alert state or recovery authority.
 
+### Storage deep links resolve through the registry and open the pool
+
+`useStorageResourceHighlight` matches `?resource=` against a record's id,
+then its metrics resource id (alerts and history use it), then its name only
+when exactly one record carries that name, because every Proxmox node can
+have a `local-zfs` and two PBS servers can both expose `primary-vault`. Any
+other reference is resolved by `ResourceAPI.getResource` (the registry owns
+aliases, succession and ambiguity) and matched by the resolved id; a shared
+name is never looked up. Every matched pool is opened, not only Ceph, so the
+shared summary focus bridge reveals its row and details. The Proxmox page
+keeps Storage mounted behind its other tabs, whose guest links also use
+`?resource=`, so the hook acts only while Storage is the active tab
+(`routeActive`). A visit is one stretch of Storage showing one link: a
+refusal lasts for the visit, so live updates do not repeat the request but a
+later visit (another link, or the tab again) retries, and a resolved pool not
+listed yet opens when its record arrives. Once a visit has needed a lookup,
+any pool the operator opens or closes outranks the link, whether the lookup
+or a record update finds the pool first.
+
+### Thresholds deep links open no storage or recovery path
+
+`buildAlertThresholdsPath` in `frontend-modern/src/routing/resourceLinks.ts`
+adds only a thresholds tab and its `?q=` name search. It reads no storage or
+recovery state and grants no storage action, and Patrol's alert-only guidance
+sends a physical disk to its tab unsearched, so it never filters storage or
+recovery rows by a disk name they do not carry.
+
+### Alert History links open no storage or recovery path
+
+`buildAlertHistoryAlertPath` adds only an alert id to the History route. It
+reads no storage or recovery state and grants no action; the History page
+reads the same saved and live alerts it always did.
+
 ### App-shell AI navigation gating opens no recovery path
 
 `App.tsx` now passes the `assistantEnabled` session capability to the keyboard
@@ -6533,6 +6658,14 @@ shortcuts and the shortcuts help so Patrol entry points hide while AI is off.
 The change is navigation presentation only. It adds no storage, backup,
 snapshot or recovery surface, and it changes no route, authority or recovery
 state. The Recovery settings item and its capability gate are untouched.
+
+### Connection member composition ignores physical disks
+
+`internal/api/connections_grouping.go` now composes Proxmox cluster members on
+the `/api/connections` systems payload from node records only, so an
+agent-reported physical disk that carries its node's identity no longer turns
+the node row Stale. The disk's own risk, storage evidence and recovery state
+are unchanged, and this adds no backup, restore, retention or recovery surface.
 
 ### Pulse Mobile pairing copy only
 
@@ -6565,6 +6698,64 @@ disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
 `HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
 not live appliance collection or recovery success.
 
+### Physical-disk heat is not a replacement verdict
+
+The Physical Disks Health verdict names the action it asks for. A disk whose
+current temperature has reached its alert trigger reads `Running Hot` (compact
+`Hot`), red, with the reading and the trigger as its summary. `Replace Now`
+stays reserved for FAILED health, any critical risk reason, and a critical
+level that no listed reason explains. `Needs Attention` keeps the remaining
+warning evidence. Heat outranks warning evidence and failure evidence outranks
+heat. Sorting follows the verdict (replace, heat, attention), and the health
+filter places a hot disk with the critical disks, as its Temp cell reads red.
+
+Heat has one owner: the alert disk temperature policy (the per-type triggers in
+Alerts > Thresholds, `diskTempByType`, else the agent Disk Temp default).
+Disk risk never carries heat, because every registry that rebuilds it lacks the
+alert configuration. `extractPhysicalDiskPresentationData` takes the alerts
+store's `getDiskTemperatureThresholds` resolver, so the Temp cell colour and the
+verdict read one thresholds object. It resolves them under the alert override
+keys of the machine whose agent reports the disk, as disk temperature alerts
+are evaluated under that host. `getPhysicalDiskAlertResourceIds`
+(`components/Storage/physicalDiskAlertOwner.ts`) follows the disk's parent to
+the agent machine, through the pool for an Unraid array or cache disk, and
+reads that machine's keys in the order `CheckHost` reads them
+(`getAgentMachineAlertOverrideKeys`: the agent ID, the machine's canonical ID,
+then the node or guest the agent is merged with).
+A Disk Temp override set on the machine therefore replaces the per-type trigger
+for every disk it reports, on Physical Disks, the disk detail and the pool
+drawer's linked disks. A guest drawer passes the guest agent's ID, then the
+guest's own keys. An override that switches the machine's alerts off leaves its
+disks uncoloured and never hot. The band below the trigger is a Temp cell
+colour only, and a retained (not current) reading is never heat. The verdict
+judges the current reading, with no memory of an alert. A disk temperature
+alert held between its clear value and trigger shows an amber Temp cell, not
+`Running Hot`. A switched-off agent Disk Temp default resolves to null, which
+leaves the reading uncoloured and never hot, as alerting is off for it.
+The browser rebuilds that chain from what it loads, so it can differ from
+alerts and Patrol, which read the agent's own link hints and resolve every key
+to its canonical resource. On the Storage page, a disk whose agent an operator
+manually linked into a VM keeps the per-type trigger, because the page loads
+agents and pools, not guests. An override the agent inherits from a node or
+guest it is linked to without a merge, or one stored under that node's own
+canonical resource ID, does not reach the browser, because agent link hints
+are not published. The guest drawer applies the guest's own override keys,
+which `CheckHost` reads only when the agent is also linked to that guest
+automatically. Overrides set on the reporting agent's own row, or on the node
+or guest it is merged with, reach the browser through the keys above. PDF
+performance
+reports colour a disk reading by the same per-type thresholds, which
+`reporting.DiskInfo` carries.
+`frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
+pins cell-and-verdict agreement for every type from 40C to 80C under factory and
+raised triggers, plus retained readings, failure evidence, sorting and
+filtering. `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx`
+covers NVMe 63C, SATA 56C and a raised NVMe trigger loaded through the alerts
+store, and NVMe disks at 72C on three machines judged by an 80C override, the
+per-type trigger and switched-off alerts.
+`frontend-modern/src/components/Storage/__tests__/physicalDiskAlertOwner.test.ts`
+pins the owner walk and the key order.
+
 ### Pool-to-physical-disk ownership in Storage details
 
 `storagePoolDetailPresentation.ts` must scope inferred ZFS device and UnRAID
@@ -6596,3 +6787,261 @@ Pulse already writes, with `omitempty` encoding so existing records load
 unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
 reads them for the usage export only. No new file, directory, retention
 window, backup, migration or recovery authority is introduced.
+
+### Resource freshness thresholds open no storage or recovery path
+
+`internal/api/resourceapi/resources.go` builds the `/api/resources` registry
+with the stale thresholds its seed was judged by, and
+`internal/api/router_helpers.go` hands a tenant monitor's seed and thresholds
+to it.
+Both are read-path changes to source freshness and presentation; no storage,
+retention, backup or recovery path is added or moved.
+
+### Connection freshness cadence opens no storage or recovery path
+
+`internal/api/connections_alerts.go` now scales the connections list's
+active-to-stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`), which honours saved PBS and PMG intervals that
+reach a non-default org's monitor only as runtime overrides. This is a
+read-path change to connection freshness. Backup polling, PBS backup and
+datastore collection, retention and recovery are unchanged, and nothing new
+is persisted.
+
+### Webhook configuration never persists the API mask
+
+`internal/api/alerting/notifications.go` resolves each `***REDACTED***`
+value the webhook editor sends back to the saved value of the same key, or
+drops it, before the encrypted webhook file is written, so the mask is never
+persisted as a header, custom field or signing secret. Webhook normalization
+also drops blank header entries when the file is loaded or saved; a stored
+blank header is removed on the next save. Export and import pass through the
+same normalization. No new file, retention window, backup, migration or
+recovery authority is introduced; `TestWebhookMaskedValuesResolvePerKey` in
+`internal/api/alerting/notifications_test.go` covers the write path.
+
+### Retained disk temperatures open no storage or recovery path
+
+The metrics-history handler in `internal/api/router.go` serves a disk
+temperature live point only when `diskinventory.TemperatureCollected` holds,
+and the Unraid physical-disk adapter marks an inventory temperature kept past
+the host agent's lease as no longer collected. Both change presentation of
+values Pulse already holds: no metrics write, retention window, backup,
+migration or recovery authority is added or moved.
+The performance report and reporting runtime snapshot handlers apply the same
+test before tabulating a disk temperature. That changes only which held value a
+report shows, not any storage or recovery path.
+
+The handler likewise withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, or answers a lapsed linked agent from its node row. It reads
+only snapshot status and the registry's per-source sightings, and writes
+nothing.
+
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go` adds `requireRequestMethod`, and
+`internal/api/discovery_handlers.go` and `internal/api/saml_handlers.go` use it
+so `/api/discovery/settings` (`PUT` or `POST`) and `/api/saml/{id}/logout`
+(`POST`) answer `405` to any other method, `GET` and `HEAD` included, instead
+of changing the discovery staleness threshold or clearing a session. No
+storage, retention, backup, migration or recovery path is added or moved.
+
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` keeps each outstanding SAML LogoutRequest ID in
+memory on the provider's service, bound to the session-store hash of the
+session being logged out, and honors it for ten minutes (at most 1,024
+records; expired ones are dropped on the next logout). `internal/api/saml_handlers.go`
+refuses a LogoutResponse that does not answer one of them. The records are not
+persisted, and the SLO handler no longer writes session state. No storage,
+retention, backup, migration or recovery path is added or moved.
+
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` now encodes a manually configured SAML IdP
+signing certificate as base64 DER in the IdP descriptor it rebuilds in memory
+on each load. The saved settings are read as before: `idpCertificate` holds
+the PEM the administrator pasted and `idpCertFile` the path of a PEM file, so
+nothing persisted changes or needs migrating. No storage, retention, backup,
+migration or recovery path is added or moved.
+
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` keeps each outstanding SAML AuthnRequest ID in
+memory on the provider's service, with the login's return path and the hash of
+the browser's `pulse_saml_login` cookie token, and honors it for ten minutes
+(at most 1,024 records; expired ones are dropped on the next login). The cookie
+expires after ten minutes. Nothing is persisted, so a restart during the IdP
+round trip refuses the returning Response and the user signs in again. No
+storage, retention, backup, migration or recovery path is added or moved.
+
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
+### Demo write guard ignores websocket upgrade headers
+
+`internal/api/demo_middleware.go` no longer exempts every request carrying
+`Upgrade: websocket` from the demo read-only guard. On a `DEMO_MODE` instance a
+`POST`, `PUT`, `PATCH` or `DELETE` with websocket handshake headers is now
+judged like any other write: outside the login, logout, AI execute and OIDC
+allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
+includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
+are `GET` requests and still connect. No storage, retention, backup, migration
+or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.
+
+### Report-merge link folds
+
+`internal/unifiedresources/types.go` adds an unexported, in-memory
+`linkFolds` record of the operator links a resource absorbed, and
+`internal/api/resourceapi/resources.go` makes report-merge exclude those
+links' pairs, which deletes the pair's link row in the resource store as an
+unlink does. Nothing new is persisted: the record is rebuilt with each
+registry generation, and no schema, backup, retention, migration or
+recovery path is added or moved.
+
+Each fold also records its two sides' own sources (`HolderOwn`, `FoldedOwn`),
+in the same unexported in-memory field, and `ReportedManualLinkFolds` in
+`internal/unifiedresources/manual_link_folds.go` uses them so a
+source-filtered report-merge in `internal/api/resourceapi/resources.go`
+excludes the links that join a member carrying the named source to the rest
+of the merged resource. That changes which pairs the report excludes, through
+the same exclusion write as before; no schema, backup, retention, migration or recovery path is added or
+moved.
+
+### Mock-mode structure views open no storage or recovery path
+
+`internal/api/connections_alerts.go` and `internal/api/router.go` now ask the
+monitor for less in mock mode: the connection-degraded alert feed no longer
+reads the hosts and PBS instances it discards, and the demo Patrol resolver
+reads the structure view (see "Mock-mode metrics-target lookups ride the
+fixture structure revision" in the monitoring contract). Real mode, its stores,
+backups, retention, snapshots, migrations and recovery paths are unchanged, and
+none is added or moved.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Diagnostics output filters API-token inventory by the existing caller-management authority without changing token persistence, recovery, rotation or lifecycle. A narrow token receives only manageable records, not another organization's credential inventory; session diagnostic authority is unchanged.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.
+
+### Pulse Pro runtime switch opens no storage or recovery path (14 October 2026)
+
+The Pulse Pro runtime switch routes added under `internal/api/` reuse the
+update pipeline's existing backup of the installed binary before replacing it
+and its existing history-entry rollback. The data directory, metrics and
+configuration stores, backups, snapshots and recovery points are untouched,
+and no new backup, retention or restore path is added.
+
+### Extended history observation preserves existing read authority
+
+The shared chart/history response writer now observes successful extended
+history delivery for the security-privacy schema-v19 aggregate. It adds no
+query, resource, tenant, credential or action authority. The observer receives
+only a successful-read marker after serialization/write, and existing API
+entitlement checks remain before that boundary. Read semantics remain owned
+by api-contracts and telemetry retention/disclosure by security-privacy.
+
+### Saved-credential TLS probes leave storage and recovery unchanged (16 October 2026)
+
+`internal/api/configapi/config_node_handlers.go` accepts draft SSL verification
+and fingerprint settings only for its temporary saved-credential probe client.
+The probe does not write configuration, stored credentials, runtime connection
+health, backup coverage or recovery readiness. PVE, PBS and PMG retain their
+separate saved connection identities. The direct real-TLS regressions in
+`config_handlers_connection_test.go` assert unchanged configuration and health.
+The request and permission contract remains owned by api-contracts.
+
+### Concurrent chart service publication adds no recovery state (16 October 2026)
+
+Initializing the router's chart service once is in-memory synchronization.
+It adds no store, persisted shape, backup, restore or migration path and does
+not turn chart history into recovery-readiness authority. Separate routers
+retain separate services. Concurrent publication and tenant-isolation proof
+remain owned by api-contracts.
+
+### Inventory notifications preserve the request organization
+
+The shared node handlers scope `node_deleted`, `nodes_updated` and post-edit
+`discovery_update` messages to the request organization. Setup handlers also
+scope auto-registration and unregistration events and their cached discovery
+refreshes to the authorized request organization, including its setup token
+binding. The registered test-notification route sends its synthetic
+`node_auto_registered` event to that same request organization. An empty
+organization ID maps to the default tenant. Because the event stays inside the
+request organization, the route uses `RequireOrgAdmin`: that organization's
+managers, and tokens bound to it with `settings:write`, may send it.
+Storage and recovery consumers receive these inventory refresh signals within
+their own tenant; discovery results and successful node mutations do not
+establish backup coverage, protection freshness, restore readiness or recovery
+point evidence. The delivery change adds no persisted storage or recovery
+state and gives these events no storage mutation authority.
+
+### Durable backup execution history and observation coverage
+
+The per-organization recovery SQLite store retains backup task execution rows
+under the existing ninety-day policy. Task rows stay `KindOther`. Success never
+mints a restore artifact or protected posture. A shrinking provider task window
+does not reconcile away retained executions. Later running observations cannot
+erase a committed terminal outcome. Source identity is validated before writes.
+
+Collection-quality rows and continuous observation intervals share that store.
+Task evidence commits before collection success can extend coverage. Failed
+writes, failed/partial reads, downtime beyond the actual polling cadence and
+older observations cannot fabricate or bridge complete history. Returned old
+tasks never backdate Pulse's observation period. Report reads take outcomes and
+coverage from one database snapshot, and fail explicitly on query/decode limits.
+All early returns from point upserts release their transaction, including
+errors scoped inside a point loop.
+
+`BuildBackupHealth` scopes outcomes to current authoritative workload identities,
+using source/VMID only when unique within that selection. Ambiguous and
+unattributed multi-guest evidence reduces completeness without exposing another
+client's task details. Reports distinguish incomplete observations from an
+observed period with no attempts. Successful tasks do not prove backup retention
+or restorability. Metric retention and existing entitlements do not change.
+Proofs: `internal/recovery/store/backup_history_test.go` and
+`internal/recovery/backup_health_test.go` cover restart, shrinking inventory,
+failure/downtime boundaries, write failure, client isolation and DST/cutoffs.
+
+Backup collection starts with a bounded retained-history backfill, then uses a
+durable collection checkpoint with a day of overlap. The oldest known pending
+execution remains in range until completion, including after restart. Failed
+reads do not advance the checkpoint. A capped backfill may advance a later
+incremental read without backdating observation coverage. Another node's
+failure cannot be hidden by a truncation reason. The live API/state keeps its
+existing 200 provider tasks per node plus their guest details, while the recovery
+store retains executions beyond that live window. Checkpoint, long-running-job,
+failed-read, capped-backfill and bounded-live-payload regression tests exercise
+these boundaries.
+
+Router monitor replacement retains the shared per-organization recovery manager
+for existing and future monitors. Configuration reload must not silently stop
+durable task collection while reporting continues reading the original store.
+`internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
+exercise dependency retention and actual history persistence.
+
+Reporting telemetry counts generated backup-health documents by their existing
+complete, incomplete or unavailable source-data state. It never reinterprets
+those counts as backup success, protection, retention or restorability. The
+separate SMTP and saved-file counters describe report delivery only. Only daily
+aggregate counts leave the installation, with no workload, task, repository,
+client scope or reporting range. Recovery evidence, observation coverage and
+collection checkpoints remain owned by the existing recovery store.

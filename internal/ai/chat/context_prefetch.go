@@ -7,26 +7,9 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
-
-// CloudContextPolicy marks whether this turn routes to a cloud (external) model.
-// On cloud turns, governed resources surface PII-free operational context (access
-// commands, paths, ports) rather than raw identifiers; the model-boundary
-// sanitizer is the authoritative gate that still strips local-only identifiers
-// and credentials. The zero value (no cloud routing) injects full local context.
-type CloudContextPolicy struct {
-	// CloudRouting reports that this turn routes to an external (cloud) provider.
-	CloudRouting bool
-}
-
-// sharesCloudOperationalContext reports whether governed resources should have
-// their PII-free operational context injected for this cloud turn.
-func (p CloudContextPolicy) sharesCloudOperationalContext() bool {
-	return p.CloudRouting
-}
 
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
@@ -58,28 +41,18 @@ type MountInfo struct {
 
 // PrefetchedContext contains proactively gathered context for a user message
 type PrefetchedContext struct {
-	Mentions    []ResourceMention
-	Discoveries []*tools.ResourceDiscoveryInfo
-	Summary     string // Formatted summary for AI consumption
-	// CloudSafeContextSpans holds the exact PII-free operational-context blocks
-	// injected for cloud routing. The caller must allow-list these spans through
-	// the model-bound resource-policy sanitizer so they are not re-stripped at
-	// the provider boundary.
-	CloudSafeContextSpans []string
+	Mentions []ResourceMention
+	Summary  string // Formatted summary for AI consumption
 }
 
 // ContextPrefetcher proactively gathers context based on user message content
 type ContextPrefetcher struct {
-	readState         unifiedresources.ReadState
-	discoveryProvider tools.DiscoveryProvider
+	readState unifiedresources.ReadState
 }
 
 // NewContextPrefetcher creates a new context prefetcher
-func NewContextPrefetcher(readState unifiedresources.ReadState, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
-	return &ContextPrefetcher{
-		readState:         readState,
-		discoveryProvider: discoveryProvider,
-	}
+func NewContextPrefetcher(readState unifiedresources.ReadState) *ContextPrefetcher {
+	return &ContextPrefetcher{readState: readState}
 }
 
 func resourceMentionGovernance(resource *unifiedresources.Resource) (*unifiedresources.ResourcePolicy, string) {
@@ -87,7 +60,7 @@ func resourceMentionGovernance(resource *unifiedresources.Resource) (*unifiedres
 }
 
 func resourceSupportsControl(resourceType string, resource *unifiedresources.Resource) bool {
-	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	switch tools.CanonicalToolResourceType(resourceType) {
 	case "vm", "system-container":
 		return resource != nil && resource.Proxmox != nil
 	case "app-container":
@@ -103,7 +76,7 @@ func resourceSupportsControl(resourceType string, resource *unifiedresources.Res
 }
 
 func resourceRequiresReadOnlyGuidance(resourceType string, supportsControl bool) bool {
-	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	switch tools.CanonicalToolResourceType(resourceType) {
 	case "vm", "system-container", "agent", "storage":
 		return !supportsControl
 	default:
@@ -112,24 +85,11 @@ func resourceRequiresReadOnlyGuidance(resourceType string, supportsControl bool)
 }
 
 // Prefetch gathers context only for explicit structured mentions selected by
-// the user, using the default (cloud-redacting) policy. Plain chat text is left
-// untouched so the selected model decides whether it needs tools or more
-// context.
+// the user. Plain chat text is left untouched so the selected model decides
+// whether it needs tools or more context.
 func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
-	return p.PrefetchWithCloudPolicy(ctx, message, structuredMentions, CloudContextPolicy{})
-}
-
-// PrefetchWithCloudPolicy is Prefetch with an explicit cloud-context policy.
-// When the policy opts in for a cloud-routed turn, governed resources that would
-// otherwise be reduced to a terse redacted summary instead carry PII-free
-// operational context (service identity, access commands, paths, ports) via
-// servicediscovery.FormatCloudSafeContext. Genuinely identifying fields
-// (hostname, IP, alias, platform ID) are never emitted by that formatter and
-// stay redacted at the model boundary.
-func (p *ContextPrefetcher) PrefetchWithCloudPolicy(ctx context.Context, message string, structuredMentions []StructuredMention, cloudPolicy CloudContextPolicy) *PrefetchedContext {
 	log.Info().
 		Bool("hasReadState", p.readState != nil).
-		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
 		Int("structured_mentions", len(structuredMentions)).
 		Msg("[ContextPrefetch] Starting prefetch")
 
@@ -169,41 +129,9 @@ func (p *ContextPrefetcher) PrefetchWithCloudPolicy(ctx context.Context, message
 		Int("mentions_found", len(mentions)).
 		Msg("[ContextPrefetch] Found resource mentions in message")
 
-	// Gather discovery data for each mention
-	var discoveries []*tools.ResourceDiscoveryInfo
-	if p.discoveryProvider != nil {
-		for _, mention := range mentions {
-			// Governed resources are normally summarized without discovery. When
-			// the operator opted in to cloud operational-context sharing for a
-			// cloud-routed turn, gather discovery anyway so the cloud-safe
-			// formatter can surface the PII-free access path instead of a terse
-			// redaction. PII is stripped by FormatCloudSafeContext itself.
-			if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) &&
-				!cloudPolicy.sharesCloudOperationalContext() {
-				continue
-			}
-			discovery, err := p.getOrTriggerDiscovery(ctx, mention)
-			if err != nil {
-				log.Debug().
-					Err(err).
-					Str("resource", mention.Name).
-					Msg("[ContextPrefetch] Failed to get discovery")
-				continue
-			}
-			if discovery != nil {
-				discoveries = append(discoveries, discovery)
-			}
-		}
-	}
-
-	// Format the context summary
-	summary, cloudSafeSpans := p.formatContextSummaryWithPolicy(mentions, discoveries, cloudPolicy)
-
 	return &PrefetchedContext{
-		Mentions:              mentions,
-		Discoveries:           discoveries,
-		Summary:               summary,
-		CloudSafeContextSpans: cloudSafeSpans,
+		Mentions: mentions,
+		Summary:  p.formatContextSummary(mentions),
 	}
 }
 
@@ -256,219 +184,59 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	rs := p.readState
 
 	for _, sm := range structured {
-		// Parse the structured ID to extract resource details.
-		// Frontend ID formats: "vm:node:vmid", "system-container:node:vmid",
-		// "app-container:host:providerUid" (canonical), legacy "docker:hostId:containerId",
-		// "agent:id", "node:instance:name"
-		parts := strings.Split(sm.ID, ":")
-
-		// Enforce canonical v6 frontend mention types only.
-		legacyMentionType := strings.ToLower(strings.TrimSpace(sm.Type))
-		if legacyMentionType == "container" || legacyMentionType == "lxc" || legacyMentionType == "docker" || legacyMentionType == "docker-container" {
-			log.Warn().
-				Str("name", sm.Name).
-				Str("id", sm.ID).
-				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
+		if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
 			continue
 		}
-		resourceType := tools.CanonicalDiscoveryResourceType(sm.Type)
-
-		// Use the canonical unified-resource resolver for routing plus policy metadata.
-		resolved := unifiedresources.ResolveResourceContext(rs, sm.Name)
-		policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
+		var resolved unifiedresources.ResolvedResourceContext
+		if strings.TrimSpace(sm.ID) != "" {
+			resolved = unifiedresources.ResolveResourceReferenceContext(rs, sm.ID)
+		} else {
+			resolved = unifiedresources.ResolveResourceContext(rs, sm.Name)
+		}
+		resource := resolved.Resource
+		if resource == nil || !resolved.Location.Found {
+			continue
+		}
 		loc := resolved.Location
-
+		resourceType := tools.CanonicalToolResourceType(loc.ResourceType)
+		policy, summary := resourceMentionGovernance(resource)
+		mention := ResourceMention{
+			Name: loc.Name, ResourceType: resourceType,
+			ResourceID: mentionResourceIDFromResolved(resourceType, resource),
+			TargetID:   mentionTargetIDFromResolved(resourceType, resource),
+			Adapter:    mentionAdapterFromResolved(resource), MatchedText: sm.Name,
+			Policy: policy, AISafeSummary: summary, UnifiedResourceID: resource.ID,
+			TargetHost: loc.TargetHost, SupportsControl: resourceSupportsControl(resourceType, resource),
+		}
 		switch resourceType {
-		case "vm":
-			vmID := ""
-			node := sm.Node
-			if len(parts) >= 3 {
-				node = parts[1]
-				vmID = strings.Join(parts[2:], ":")
-			}
-			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("vm", resolved.Resource))
-			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("vm", resolved.Resource))
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "vm",
-				ResourceID:        vmID,
-				TargetID:          node,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-				SupportsControl:   resourceSupportsControl("vm", resolved.Resource),
-			})
-
-		case "system-container":
-			vmID := ""
-			node := sm.Node
-			if len(parts) >= 3 {
-				node = parts[1]
-				vmID = strings.Join(parts[2:], ":")
-			}
-			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("system-container", resolved.Resource))
-			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("system-container", resolved.Resource))
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "system-container",
-				ResourceID:        vmID,
-				TargetID:          node,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-				SupportsControl:   resourceSupportsControl("system-container", resolved.Resource),
-			})
-
 		case "app-container":
-			hostID, containerID := parseStructuredAppContainerMentionID(sm.ID, rs)
-			if resolved.Resource != nil {
-				resolvedHost, resolvedContainerID := resolvedAppContainerMentionCoordinates(resolved.Resource)
-				hostID = firstNonEmptyTrimmed(hostID, resolvedHost)
-				containerID = firstNonEmptyTrimmed(containerID, resolvedContainerID)
-			}
-
-			// Gather bind mounts via ReadState
-			var mounts []MountInfo
-			if rs != nil {
-				for _, container := range rs.DockerContainers() {
-					if container == nil {
-						continue
-					}
-					if container.Name() == sm.Name || container.ContainerID() == containerID {
-						for _, m := range container.Mounts() {
-							if m.Source != "" && m.Destination != "" {
-								mounts = append(mounts, MountInfo{
-									Source:      m.Source,
-									Destination: m.Destination,
-								})
-							}
-						}
-						break
+			mention.TargetID, mention.ResourceID = resolvedAppContainerMentionCoordinates(resource)
+			mention.DockerHostName, mention.DockerHostType = loc.DockerHostName, loc.DockerHostType
+			mention.DockerHostVMID, mention.NodeName = loc.DockerHostVMID, loc.Node
+			for _, container := range rs.DockerContainers() {
+				if container == nil || container.ID() != resource.ID {
+					continue
+				}
+				for _, mount := range container.Mounts() {
+					if mount.Source != "" && mount.Destination != "" {
+						mention.BindMounts = append(mention.BindMounts, MountInfo{Source: mount.Source, Destination: mount.Destination})
 					}
 				}
+				break
 			}
-
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "app-container",
-				ResourceID:        containerID,
-				TargetID:          hostID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				BindMounts:        mounts,
-				DockerHostName:    loc.DockerHostName,
-				DockerHostType:    loc.DockerHostType,
-				DockerHostVMID:    loc.DockerHostVMID,
-				NodeName:          loc.Node,
-				TargetHost:        loc.TargetHost,
-			})
-
 		case "storage":
-			resourceID := firstNonEmptyTrimmed(sm.ID, resolvedUnifiedResourceID(resolved.Resource), mentionResourceIDFromResolved("storage", resolved.Resource))
-			targetID := firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved("storage", resolved.Resource), loc.TargetHost)
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "storage",
-				ResourceID:        resourceID,
-				TargetID:          targetID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				SupportsControl:   resourceSupportsControl("storage", resolved.Resource),
-				TargetHost:        firstNonEmptyTrimmed(loc.TargetHost, targetID),
-			})
-
-		case "node":
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "node",
-				ResourceID:        sm.Name,
-				TargetID:          sm.Name,
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
-
+			mention.ResourceID = resource.ID
+			mention.TargetID = firstNonEmptyTrimmed(mention.TargetID, loc.TargetID, loc.TargetHost)
 		case "agent":
-			hostID := ""
-			if len(parts) >= 2 {
-				hostID = strings.Join(parts[1:], ":")
-			}
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      "agent",
-				ResourceID:        hostID,
-				TargetID:          hostID,
-				Adapter:           mentionAdapterFromResolved(resolved.Resource),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				SupportsControl:   resourceSupportsControl("agent", resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
-
-		default:
-			if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
-				log.Warn().
-					Str("name", sm.Name).
-					Str("id", sm.ID).
-					Msg("[ContextPrefetch] Ignoring unsupported structured mention type")
-				continue
-			}
-			log.Warn().
-				Str("name", sm.Name).
-				Str("type", sm.Type).
-				Msg("[ContextPrefetch] Unknown structured mention type, falling back to ResolveResource")
-			mentions = append(mentions, ResourceMention{
-				Name:              sm.Name,
-				ResourceType:      resourceType,
-				ResourceID:        firstNonEmptyTrimmed(sm.ID, mentionResourceIDFromResolved(resourceType, resolved.Resource)),
-				TargetID:          firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved(resourceType, resolved.Resource)),
-				MatchedText:       sm.Name,
-				Policy:            policy,
-				AISafeSummary:     aiSafeSummary,
-				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
-				TargetHost:        loc.TargetHost,
-			})
+			mention.ResourceID = firstNonEmptyTrimmed(mention.ResourceID, loc.TargetID, resource.ID)
+			mention.TargetID = firstNonEmptyTrimmed(mention.TargetID, loc.TargetID)
+		case "node":
+			mention.ResourceID, mention.TargetID = loc.Name, loc.Node
 		}
+		mentions = append(mentions, mention)
 	}
 
 	return mentions
-}
-
-type appContainerResourceGetter interface {
-	GetByType(unifiedresources.ResourceType) []unifiedresources.Resource
-}
-
-type appContainerResourceLister interface {
-	ListByType(unifiedresources.ResourceType) []unifiedresources.Resource
-}
-
-func appContainerResourcesFromReadState(rs unifiedresources.ReadState) []unifiedresources.Resource {
-	if rs == nil {
-		return nil
-	}
-	if getter, ok := any(rs).(appContainerResourceGetter); ok {
-		return getter.GetByType(unifiedresources.ResourceTypeAppContainer)
-	}
-	if lister, ok := any(rs).(appContainerResourceLister); ok {
-		return lister.ListByType(unifiedresources.ResourceTypeAppContainer)
-	}
-	return nil
 }
 
 func appContainerResourceHost(resource unifiedresources.Resource) string {
@@ -491,35 +259,6 @@ func appContainerResourceHost(resource unifiedresources.Resource) string {
 		}
 	}
 	return ""
-}
-
-func parseStructuredAppContainerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
-	const canonicalPrefix = "app-container:"
-	if strings.HasPrefix(mentionID, canonicalPrefix) {
-		if rs != nil {
-			for _, resource := range appContainerResourcesFromReadState(rs) {
-				if !strings.EqualFold(strings.TrimSpace(resource.ID), mentionID) {
-					continue
-				}
-				host := appContainerResourceHost(resource)
-				if host == "" {
-					continue
-				}
-				if providerUID := appContainerProviderUID(resource, host); providerUID != "" {
-					return host, providerUID
-				}
-			}
-		}
-
-		raw := strings.TrimPrefix(mentionID, canonicalPrefix)
-		parts := strings.SplitN(raw, ":", 2)
-		if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
-			return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-		}
-		return "", ""
-	}
-
-	return parseStructuredDockerMentionID(mentionID, rs)
 }
 
 func appContainerProviderUID(resource unifiedresources.Resource, host string) string {
@@ -550,19 +289,11 @@ func resolvedAppContainerMentionCoordinates(resource *unifiedresources.Resource)
 		return "", ""
 	}
 	hostID = appContainerResourceHost(*resource)
+	if resource.Docker != nil && strings.TrimSpace(resource.Docker.HostSourceID) != "" {
+		hostID = strings.TrimSpace(resource.Docker.HostSourceID)
+	}
 	containerID = appContainerProviderUID(*resource, hostID)
 	return strings.TrimSpace(hostID), strings.TrimSpace(containerID)
-}
-
-func resolvedUnifiedResourceID(resource *unifiedresources.Resource) string {
-	if resource == nil {
-		return ""
-	}
-	return strings.TrimSpace(resource.ID)
-}
-
-func resolvedStructuredUnifiedResourceID(structuredID string, resource *unifiedresources.Resource) string {
-	return firstNonEmptyTrimmed(resolvedUnifiedResourceID(resource), structuredID)
 }
 
 func mentionResourceIDFromResolved(resourceType string, resource *unifiedresources.Resource) string {
@@ -570,7 +301,7 @@ func mentionResourceIDFromResolved(resourceType string, resource *unifiedresourc
 		return ""
 	}
 
-	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	switch tools.CanonicalToolResourceType(resourceType) {
 	case "vm", "system-container":
 		if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
 			return strconv.Itoa(resource.Proxmox.VMID)
@@ -599,7 +330,7 @@ func mentionTargetIDFromResolved(resourceType string, resource *unifiedresources
 		return ""
 	}
 
-	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	switch tools.CanonicalToolResourceType(resourceType) {
 	case "vm", "system-container":
 		if resource.Proxmox != nil {
 			return strings.TrimSpace(resource.Proxmox.NodeName)
@@ -640,138 +371,21 @@ func firstNonEmptyTrimmed(values ...string) string {
 	return ""
 }
 
-func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
-	const prefix = "docker:"
-	if !strings.HasPrefix(mentionID, prefix) {
-		return "", ""
-	}
-
-	raw := strings.TrimPrefix(mentionID, prefix)
-	if raw == "" {
-		return "", ""
-	}
-
-	// Prefer matching known docker host IDs via ReadState so host IDs containing
-	// colons remain intact (V6 unified IDs can include colon separators).
-	bestHostID := ""
-	bestContainerID := ""
-	if rs != nil {
-		for _, dockerHost := range rs.DockerHosts() {
-			if dockerHost == nil {
-				continue
-			}
-			id := strings.TrimSpace(dockerHost.HostSourceID())
-			if id == "" {
-				continue
-			}
-			hostPrefix := id + ":"
-			if !strings.HasPrefix(raw, hostPrefix) {
-				continue
-			}
-			candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
-			if candidateContainerID == "" {
-				continue
-			}
-			if len(id) > len(bestHostID) {
-				bestHostID = id
-				bestContainerID = candidateContainerID
-			}
-		}
-	}
-	if bestHostID != "" {
-		return bestHostID, bestContainerID
-	}
-
-	// Legacy fallback: split once after the docker prefix.
-	parts := strings.SplitN(raw, ":", 2)
-	if len(parts) < 2 {
-		return "", ""
-	}
-	return parts[0], parts[1]
-}
-
-// getOrTriggerDiscovery gets existing discovery or triggers a new one
-func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
-	discoveryType := tools.DiscoveryProviderResourceType(mention.ResourceType)
-	canonicalType := tools.CanonicalDiscoveryResourceType(mention.ResourceType)
-
-	// First try to get existing discovery
-	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.TargetID, mention.ResourceID)
-	if err == nil && discovery != nil {
-		log.Debug().
-			Str("resource", mention.Name).
-			Msg("[ContextPrefetch] Using cached discovery")
-		return discovery, nil
-	}
-
-	// Trigger discovery if not found (for VMs, system containers, and Docker containers)
-	if canonicalType == "vm" || canonicalType == "system-container" || canonicalType == "app-container" {
-		log.Debug().
-			Str("resource", mention.Name).
-			Str("type", canonicalType).
-			Msg("[ContextPrefetch] Triggering discovery")
-
-		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID, false)
-		if err != nil {
-			return nil, err
-		}
-		return discovery, nil
-	}
-
-	return nil, nil
-}
-
-// formatContextSummary creates a formatted summary of the gathered context
-// using the default (cloud-redacting) policy.
-func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, discoveries []*tools.ResourceDiscoveryInfo) string {
-	summary, _ := p.formatContextSummaryWithPolicy(mentions, discoveries, CloudContextPolicy{})
-	return summary
-}
-
-// formatContextSummaryWithPolicy formats the gathered context and, when the
-// cloud policy opts in for a cloud-routed turn, replaces the terse governed
-// redaction with PII-free operational context. It returns the summary plus the
-// exact cloud-safe spans the caller must allow-list through the model-bound
-// resource-policy sanitizer.
-func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMention, discoveries []*tools.ResourceDiscoveryInfo, cloudPolicy CloudContextPolicy) (string, []string) {
+// formatContextSummary creates a formatted summary of the resolved mentions.
+func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention) string {
 	if len(mentions) == 0 {
-		return "", nil
+		return ""
 	}
 
-	var cloudSafeSpans []string
 	var sb strings.Builder
 	sb.WriteString("=== PULSE MONITORING DATA (AUTHORITATIVE) ===\n")
 	sb.WriteString("This is verified data from Pulse monitoring sources. Canonical resource policy is enforced below.\n")
 	sb.WriteString(unifiedresources.ResourcePolicyGovernedSummaryPreamble())
 	sb.WriteString("\n\n")
 
-	// Create a map for quick discovery lookup
-	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
-	for _, d := range discoveries {
-		discoveryTargetID := tools.CanonicalDiscoveryTargetID(d, "")
-		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(d.ResourceType), discoveryTargetID, d.ResourceID)
-		discoveryMap[key] = d
-	}
-
 	for _, mention := range mentions {
-		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
-		discovery, hasDiscovery := discoveryMap[key]
-
 		if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
-			// Cloud opt-in: surface PII-free operational context instead of the
-			// terse redaction so the Assistant can give resource-specific
-			// guidance on cloud models. FormatCloudSafeContext never emits
-			// hostname/IP/alias, so genuine PII stays withheld.
-			if cloudPolicy.sharesCloudOperationalContext() && hasDiscovery {
-				if cloudSafe := cloudSafeOperationalContext(discovery); cloudSafe != "" {
-					sb.WriteString(formatCloudSafeGovernedBlock(cloudSafe))
-					cloudSafeSpans = append(cloudSafeSpans, cloudSafe)
-					continue
-				}
-			}
-			// full / redacted without discovery data falls back to the terse
-			// governed summary. local_only never reaches here — it is withheld
-			// entirely upstream in PrefetchWithCloudPolicy.
+			// local_only never reaches here; it is withheld upstream.
 			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
 			continue
 		}
@@ -793,7 +407,7 @@ func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMe
 				sb.WriteString(fmt.Sprintf("Location: Docker on host \"%s\"\n", mention.DockerHostName))
 			}
 
-			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.TargetHost))
+			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.TargetHost)))
 
 			// Bind mounts - clarify these are on the LXC/VM filesystem
 			if len(mention.BindMounts) > 0 {
@@ -801,32 +415,6 @@ func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMe
 				for _, m := range mention.BindMounts {
 					sb.WriteString(fmt.Sprintf("  %s → %s\n", m.Source, m.Destination))
 				}
-			}
-
-			// Add discovery info if available
-			if hasDiscovery {
-				if discovery.ServiceVersion != "" {
-					sb.WriteString(fmt.Sprintf("Service version: %s\n", discovery.ServiceVersion))
-				}
-				if discovery.SuggestedURL != "" {
-					sb.WriteString(fmt.Sprintf("Suggested web URL: %s\n", discovery.SuggestedURL))
-				}
-				if len(discovery.ConfigPaths) > 0 {
-					sb.WriteString(fmt.Sprintf("Config paths: %v\n", discovery.ConfigPaths))
-				}
-				if len(discovery.LogPaths) > 0 {
-					var filePaths []string
-					for _, lp := range discovery.LogPaths {
-						if strings.HasPrefix(lp, "/") {
-							filePaths = append(filePaths, lp)
-						}
-					}
-					if len(filePaths) > 0 {
-						sb.WriteString(fmt.Sprintf("Log files: %v\n", filePaths))
-					}
-				}
-			} else {
-				sb.WriteString("Resource location and target_host are already resolved; discovery is not required to identify this resource.\n")
 			}
 
 			sb.WriteString("\n")
@@ -842,153 +430,32 @@ func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMe
 		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
 			if mention.SupportsControl {
-				sb.WriteString(fmt.Sprintf("Shared guest control actions are available with guest_id=\"%s\" and action=\"start|stop|shutdown|restart\".\n", mention.ResourceID))
+				sb.WriteString(fmt.Sprintf("Shared guest control actions use pulse_control with type=\"resource\", resource_id=\"%s\" and action=\"start|stop|shutdown|restart\".\n", firstNonEmptyTrimmed(mention.UnifiedResourceID, mention.ResourceID)))
 			} else {
 				sb.WriteString("This guest is read-only in Pulse; shared write/control actions are unavailable for this resource.\n")
 			}
 		}
 
-		if hasDiscovery && hint.mode == readRoutingTargetHost {
-			// Command routing
-			if discovery.Hostname != "" {
-				sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", discovery.Hostname))
-			} else {
-				sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
+		switch hint.mode {
+		case readRoutingNativeResource, readRoutingQueryOnly:
+			if hint.ref != "" {
+				sb.WriteString(fmt.Sprintf("resource_id: \"%s\"\n", hint.ref))
 			}
-
-			// Service info
-			if discovery.ServiceType != "" {
-				sb.WriteString(fmt.Sprintf("Service: %s", discovery.ServiceType))
-				if discovery.ServiceName != "" {
-					sb.WriteString(fmt.Sprintf(" (%s)", discovery.ServiceName))
-				}
-				sb.WriteString("\n")
+			if contextLine := hint.prefetchContext(); contextLine != "" {
+				sb.WriteString(contextLine + "\n")
 			}
-			if discovery.ServiceVersion != "" {
-				sb.WriteString(fmt.Sprintf("Service version: %s\n", discovery.ServiceVersion))
+		default:
+			targetHost := firstNonEmptyTrimmed(hint.ref, mention.Name)
+			if targetHost != "" {
+				sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", targetHost))
 			}
-			if discovery.SuggestedURL != "" {
-				sb.WriteString(fmt.Sprintf("Suggested web URL: %s\n", discovery.SuggestedURL))
-			}
-
-			// File paths - these are the verified paths to use
-			if len(discovery.LogPaths) > 0 {
-				// Separate file paths from commands for clarity
-				var filePaths []string
-				var commands []string
-				for _, lp := range discovery.LogPaths {
-					if strings.HasPrefix(lp, "/") {
-						filePaths = append(filePaths, lp)
-					} else {
-						commands = append(commands, lp)
-					}
-				}
-				if len(filePaths) > 0 {
-					sb.WriteString(fmt.Sprintf("Log files (check these first): %v\n", filePaths))
-				}
-				if len(commands) > 0 {
-					sb.WriteString(fmt.Sprintf("Log commands (alternative): %v\n", commands))
-				}
-			}
-			if len(discovery.ConfigPaths) > 0 {
-				sb.WriteString(fmt.Sprintf("Config paths: %v\n", discovery.ConfigPaths))
-			}
-			if len(discovery.DataPaths) > 0 {
-				sb.WriteString(fmt.Sprintf("Data paths: %v\n", discovery.DataPaths))
-			}
-
-			// Ports
-			if len(discovery.Ports) > 0 {
-				var portStrs []string
-				for _, p := range discovery.Ports {
-					portStrs = append(portStrs, fmt.Sprintf("%d/%s", p.Port, p.Protocol))
-				}
-				sb.WriteString(fmt.Sprintf("Ports: %v\n", portStrs))
-			}
-
-			// Docker bind mounts for containers/VMs running Docker
-			if len(discovery.BindMounts) > 0 {
-				sb.WriteString("Docker containers on this host:\n")
-				containerMounts := make(map[string][]tools.DiscoveryMount)
-				for _, m := range discovery.BindMounts {
-					name := m.ContainerName
-					if name == "" {
-						name = "(container)"
-					}
-					containerMounts[name] = append(containerMounts[name], m)
-				}
-				for containerName, mounts := range containerMounts {
-					sb.WriteString(fmt.Sprintf("  %s:\n", containerName))
-					for _, m := range mounts {
-						sb.WriteString(fmt.Sprintf("    %s → %s\n", m.Source, m.Destination))
-					}
-				}
-				sb.WriteString("  To edit container files: use the left path (host path)\n")
-			}
-		} else {
-			// No discovery - provide basic routing without suggesting discovery calls
-			switch hint.mode {
-			case readRoutingNativeResource, readRoutingQueryOnly:
-				if hint.ref != "" {
-					sb.WriteString(fmt.Sprintf("resource_id: \"%s\"\n", hint.ref))
-				}
-				if contextLine := hint.prefetchContext(); contextLine != "" {
-					sb.WriteString(contextLine + "\n")
-				}
-			default:
-				targetHost := firstNonEmptyTrimmed(hint.ref, mention.Name)
-				if targetHost != "" {
-					sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", targetHost))
-				}
-				if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
-					sb.WriteString("Capability context: this resource is read-only in Pulse; shared control and discovery routing are not valid for it.\n")
-				} else {
-					sb.WriteString("Resource location is already resolved; discovery is not required to identify this resource.\n")
-				}
+			if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
+				sb.WriteString("Capability context: this resource is read-only in Pulse; shared control routing is not valid for it.\n")
 			}
 		}
 
 		sb.WriteString("\n")
 	}
 
-	return sb.String(), cloudSafeSpans
-}
-
-// cloudSafeOperationalContext bridges the prefetcher's discovery DTO to the
-// canonical servicediscovery cloud-safe formatter. The result carries service
-// identity, the access command, and config/data/log paths plus port numbers but
-// never hostname, IP, alias, or bind-address — it is safe to send to a cloud
-// model when the operator has opted in.
-func cloudSafeOperationalContext(d *tools.ResourceDiscoveryInfo) string {
-	if d == nil {
-		return ""
-	}
-	ports := make([]servicediscovery.PortInfo, 0, len(d.Ports))
-	for _, p := range d.Ports {
-		ports = append(ports, servicediscovery.PortInfo{Port: p.Port, Protocol: p.Protocol})
-	}
-	return servicediscovery.FormatCloudSafeContext(&servicediscovery.ResourceDiscovery{
-		ServiceType:    d.ServiceType,
-		ServiceName:    d.ServiceName,
-		ServiceVersion: d.ServiceVersion,
-		Category:       servicediscovery.ServiceCategory(d.Category),
-		CLIAccess:      d.CLIAccess,
-		ConfigPaths:    d.ConfigPaths,
-		DataPaths:      d.DataPaths,
-		LogPaths:       d.LogPaths,
-		Ports:          ports,
-		// Carry freshness so the cloud-safe context can tell the model how old
-		// the discovery is (a timestamp is non-identifying).
-		UpdatedAt: d.UpdatedAt,
-	})
-}
-
-// formatCloudSafeGovernedBlock wraps the cloud-safe operational context with a
-// heading that tells the model PII is still withheld for cloud routing.
-func formatCloudSafeGovernedBlock(cloudSafe string) string {
-	var sb strings.Builder
-	sb.WriteString("## Governed resource (operational context shared for cloud)\n")
-	sb.WriteString(cloudSafe)
-	sb.WriteString("\nHostnames, IP addresses, aliases, and platform IDs remain withheld by canonical resource policy for cloud routing.\n\n")
 	return sb.String()
 }

@@ -48,7 +48,7 @@ func TestCleanupContinuingDockerUpdateKeepsOccurrence(t *testing.T) {
 				LastChecked: time.Now().Add(-6 * time.Hour),
 			}
 			container := models.DockerContainer{ID: "retention-container", Name: "web", Image: "mongo:7", UpdateStatus: pending}
-			resourceID := DockerResourceID(host.ID, container.ID)
+			resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 			trackingKey := dockerUpdateTrackingKey(host, container)
 			first := time.Now().Add(-25 * time.Hour)
 			m.mu.Lock()
@@ -128,7 +128,7 @@ func TestCleanupContinuingDockerUpdateKeepsOccurrence(t *testing.T) {
 			if len(restarted.GetActiveAlerts()) != 1 || afterRestartFirings.Load() != 0 || afterRestartDeliveries.Load() != 0 {
 				t.Fatal("restart/unknown report lost or re-fired the occurrence")
 			}
-			container.UpdateStatus = &models.DockerContainerUpdateStatus{LastChecked: time.Now()}
+			container.UpdateStatus = &models.DockerContainerUpdateStatus{CurrentDigest: "sha256:new", LatestDigest: "sha256:new", LastChecked: time.Now()}
 			restarted.checkDockerContainerImageUpdate(host, container, resourceID, container.Name, host.Hostname, host.Hostname)
 			if len(restarted.GetActiveAlerts()) != 0 || afterRestartResolutions.Load() != 1 || afterRestartDeliveries.Load() != 0 {
 				t.Fatal("affirmative clear did not resolve once without another firing notification")

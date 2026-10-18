@@ -38,7 +38,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -59,7 +58,7 @@ type AISettingsHandler struct {
 	aiServicesMu            sync.RWMutex
 	agentServer             *agentexec.Server
 	onModelChange           func() // Called when model or other AI chat-affecting settings change
-	onControlSettingsChange func() // Called when control level or protected guests change
+	onControlSettingsChange func() // Called when the control level changes
 
 	// Providers to be applied to new services
 	stateProvider           ai.StateProvider
@@ -101,7 +100,6 @@ type AISettingsHandler struct {
 	remediationEngines map[string]aicontracts.RemediationEngine
 	incidentStores     map[string]*memory.IncidentStore
 	circuitBreakers    map[string]*circuit.Breaker
-	discoveryStores    map[string]*servicediscovery.Store
 	unifiedStores      map[string]*unified.UnifiedStore
 	alertBridges       map[string]*unified.AlertBridge
 	triggerManagers    map[string]*ai.TriggerManager
@@ -114,9 +112,6 @@ type AISettingsHandler struct {
 
 	// Extension endpoints for enterprise feature gating
 	aiAutoFixEndpoints extensions.AIAutoFixEndpoints
-
-	// Discovery store for deep infrastructure discovery
-	discoveryStore *servicediscovery.Store
 }
 
 // SetAIAutoFixEndpoints sets the resolved AI auto-fix extension endpoints.
@@ -247,7 +242,6 @@ type aiSettingsProviderSnapshot struct {
 	incidentStore           *memory.IncidentStore
 	patternDetector         *ai.PatternDetector
 	correlationDetector     *ai.CorrelationDetector
-	discoveryStore          *servicediscovery.Store
 	licenseHandlers         *LicenseHandlers
 	chatHandler             *AIHandler
 }
@@ -279,7 +273,6 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 		incidentStore:           h.incidentStore,
 		patternDetector:         h.patternDetector,
 		correlationDetector:     h.correlationDetector,
-		discoveryStore:          h.discoveryStore,
 		licenseHandlers:         h.licenseHandlers,
 		chatHandler:             h.chatHandler,
 	}
@@ -329,7 +322,6 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		remediationEngines: make(map[string]aicontracts.RemediationEngine),
 		incidentStores:     make(map[string]*memory.IncidentStore),
 		circuitBreakers:    make(map[string]*circuit.Breaker),
-		discoveryStores:    make(map[string]*servicediscovery.Store),
 		unifiedStores:      make(map[string]*unified.UnifiedStore),
 		alertBridges:       make(map[string]*unified.AlertBridge),
 		triggerManagers:    make(map[string]*ai.TriggerManager),
@@ -385,6 +377,25 @@ func (h *AISettingsHandler) loadAIConfig(ctx context.Context) (*config.AIConfig,
 }
 
 // GetAIService returns the underlying AI service
+// ExistingAIService returns the org's AI service only when one already exists
+// and never constructs one. GetAIService builds and configures a tenant service
+// on first use, which can list provider models and start background workers,
+// so read paths that must not reach an AI provider use this instead.
+func (h *AISettingsHandler) ExistingAIService(ctx context.Context) *ai.Service {
+	if h == nil {
+		return nil
+	}
+	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
+	defaultAIService := h.providerSnapshot().defaultAIService
+	orgID := GetOrgID(ctx)
+	if orgID == "default" || orgID == "" || (mtPersistence == nil && mtMonitor == nil) {
+		return defaultAIService
+	}
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	return h.aiServices[orgID]
+}
+
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
 	providers := h.providerSnapshot()
@@ -488,12 +499,6 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 			svc.SetCorrelationDetector(providers.correlationDetector)
 		}
 	}
-	if discoveryStore := h.GetDiscoveryStoreForOrg(orgID); discoveryStore != nil {
-		svc.SetDiscoveryStore(discoveryStore)
-	} else if orgID == "default" && providers.discoveryStore != nil {
-		svc.SetDiscoveryStore(providers.discoveryStore)
-	}
-
 	// Set license checker if handler available
 	if providers.licenseHandlers != nil {
 		// Used context to resolve tenant license service
@@ -765,7 +770,7 @@ func (p aiSettingsProviderSnapshot) metadataProviderForOrg(orgID string) ai.Meta
 	return p.metadataProvider
 }
 
-// SetMetadataProvider sets the metadata provider for AI URL discovery
+// SetMetadataProvider sets the metadata provider the Assistant uses to save resource URLs
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
 	if h == nil {
 		return
@@ -1183,9 +1188,6 @@ func (h *AISettingsHandler) ensureIntelligenceMapsLocked() {
 	if h.circuitBreakers == nil {
 		h.circuitBreakers = make(map[string]*circuit.Breaker)
 	}
-	if h.discoveryStores == nil {
-		h.discoveryStores = make(map[string]*servicediscovery.Store)
-	}
 	if h.alertBridges == nil {
 		h.alertBridges = make(map[string]*unified.AlertBridge)
 	}
@@ -1337,70 +1339,6 @@ func (h *AISettingsHandler) GetUnifiedStoreForOrg(orgID string) *unified.Unified
 	h.intelligenceMu.RUnlock()
 	if orgID == "default" {
 		return h.unifiedStore
-	}
-	return nil
-}
-
-// SetDiscoveryStore sets the discovery store for the default org.
-func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
-	h.SetDiscoveryStoreForOrg("default", store)
-}
-
-// SetDiscoveryStoreForOrg sets the discovery store for deep infrastructure discovery for an org.
-func (h *AISettingsHandler) SetDiscoveryStoreForOrg(orgID string, store *servicediscovery.Store) {
-	if h == nil {
-		return
-	}
-	orgID = normalizeAIIntelligenceOrgID(orgID)
-	h.intelligenceMu.Lock()
-	h.ensureIntelligenceMapsLocked()
-	if store == nil {
-		delete(h.discoveryStores, orgID)
-	} else {
-		h.discoveryStores[orgID] = store
-	}
-	h.intelligenceMu.Unlock()
-
-	if orgID == "default" {
-		h.stateMu.Lock()
-		h.discoveryStore = store
-		defaultAIService := h.defaultAIService
-		h.stateMu.Unlock()
-		if defaultAIService != nil {
-			defaultAIService.SetDiscoveryStore(store)
-		}
-	}
-
-	h.aiServicesMu.RLock()
-	svc := h.aiServices[orgID]
-	h.aiServicesMu.RUnlock()
-	if svc != nil {
-		svc.SetDiscoveryStore(store)
-	}
-}
-
-// GetDiscoveryStore returns the discovery store for the default org.
-func (h *AISettingsHandler) GetDiscoveryStore() *servicediscovery.Store {
-	return h.GetDiscoveryStoreForOrg("default")
-}
-
-// GetDiscoveryStoreForOrg returns the discovery store for an org.
-func (h *AISettingsHandler) GetDiscoveryStoreForOrg(orgID string) *servicediscovery.Store {
-	if h == nil {
-		return nil
-	}
-	orgID = normalizeAIIntelligenceOrgID(orgID)
-	h.intelligenceMu.RLock()
-	if store := h.discoveryStores[orgID]; store != nil {
-		h.intelligenceMu.RUnlock()
-		return store
-	}
-	h.intelligenceMu.RUnlock()
-	if orgID == "default" {
-		h.stateMu.RLock()
-		store := h.discoveryStore
-		h.stateMu.RUnlock()
-		return store
 	}
 	return nil
 }
@@ -1622,7 +1560,7 @@ func (h *AISettingsHandler) StopPatrol() {
 }
 
 // StopServices stops all AI services owned by the handler, including their
-// debounced persistence timers and background discovery/patrol workers.
+// debounced persistence timers and background Patrol workers.
 func (h *AISettingsHandler) StopServices() {
 	if h == nil {
 		return
@@ -1679,7 +1617,6 @@ func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
 	delete(h.remediationEngines, orgID)
 	delete(h.incidentStores, orgID)
 	delete(h.circuitBreakers, orgID)
-	delete(h.discoveryStores, orgID)
 	bridge = h.alertBridges[orgID]
 	trigger = h.triggerManagers[orgID]
 	delete(h.unifiedStores, orgID)
@@ -1780,7 +1717,7 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 // transition from oldCfg to newCfg warrants an automatic Patrol
 // tool-call preflight. We only auto-preflight when the configuration
 // that affects Patrol's transport actually moved, so routine settings
-// saves (theme, control level, discovery toggles, etc.) don't burn
+// saves (theme, control level, etc.) don't burn
 // provider tokens or add 5-10s of latency to every save.
 //
 // Triggers preflight when:
@@ -1830,15 +1767,14 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
 
-// EffectiveControlLevel returns the Assistant control level that should be
-// exposed or enforced for the current entitlement state. The stored setting can
-// remain autonomous so it comes back if the entitlement returns, but runtime
-// execution without ai_autofix must stay in approval mode.
+// EffectiveControlLevel returns the interactive planning posture after existing
+// entitlement checks. Saved preferences stay intact, but no entitlement grants
+// Assistant chat approval or execution authority.
 func (h *AISettingsHandler) EffectiveControlLevel(ctx context.Context, settings *config.AIConfig) string {
 	if settings == nil {
 		return config.ControlLevelReadOnly
 	}
-	return settings.GetEffectiveControlLevel(
+	return settings.GetAssistantControlLevel(
 		h.GetAIService(ctx).HasLicenseFeature(ai.FeatureAIAutoFix),
 	)
 }
@@ -2007,29 +1943,9 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
 	}
 
-	// Wire up discovery context to the knowledge store for infrastructure context
+	// The knowledge store supplies the operator's infrastructure notes.
 	var infraContext aicontracts.OrchestratorInfraContextProvider
 	if knowledgeStore := svc.GetKnowledgeStore(); knowledgeStore != nil {
-		if discoveryService := svc.GetDiscoveryService(); discoveryService != nil {
-			knowledgeStore.SetDiscoveryContextProvider(func() string {
-				discoveries, err := discoveryService.ListDiscoveries()
-				if err != nil || len(discoveries) == 0 {
-					return ""
-				}
-				return servicediscovery.FormatForAIContext(discoveries)
-			})
-			knowledgeStore.SetDiscoveryContextProviderForResources(func(resourceIDs []string) string {
-				if len(resourceIDs) == 0 {
-					return ""
-				}
-				discoveries, err := discoveryService.ListDiscoveries()
-				if err != nil || len(discoveries) == 0 {
-					return ""
-				}
-				filtered := servicediscovery.FilterDiscoveriesByResourceIDs(discoveries, resourceIDs)
-				return servicediscovery.FormatForAIContext(filtered)
-			})
-		}
 		infraContext = knowledgeStore
 	}
 
@@ -2323,11 +2239,7 @@ type AISettingsResponse struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`    // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests"` // VMIDs/names that AI cannot control
-	// Discovery settings
-	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
-	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	ControlLevel string `json:"control_level"` // "read_only" or "controlled" (interactive projection)
 	// Current Patrol runtime readiness after this settings snapshot is applied.
 	PatrolReadiness *PatrolReadinessResponse `json:"patrol_readiness,omitempty"`
 	// Most recent Patrol tool-call preflight outcome, surfaced so the UI
@@ -2406,9 +2318,6 @@ func (r AISettingsResponse) NormalizeCollections() AISettingsResponse {
 	}
 	if r.Providers == nil {
 		r.Providers = []AIProviderDefinitionResponse{}
-	}
-	if r.ProtectedGuests == nil {
-		r.ProtectedGuests = []string{}
 	}
 	if r.PatrolAlertTriggerTypes == nil {
 		r.PatrolAlertTriggerTypes = []string{}
@@ -2519,11 +2428,7 @@ type AISettingsUpdateRequest struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
-	// Discovery settings
-	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
-	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	ControlLevel *string `json:"control_level,omitempty"` // "read_only", "controlled", "autonomous"
 }
 
 // AssistantEnabled reports whether the Pulse Assistant affordance should be
@@ -2659,10 +2564,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Providers:                 aiProviderDefinitionResponses(settings),
 		CostBudgetUSD30d:          settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:           settings.GetProtectedGuests(),
-		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
-		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
+		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
 		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
 		PatrolModelReadiness:      cachedPatrolModelReadinessSnapshot(aiService),
 		PatrolReadiness:           ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
@@ -3051,30 +2953,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		settings.ControlLevel = level
-	}
-
-	// Handle protected guests (nil = don't update)
-	if req.ProtectedGuests != nil {
-		settings.ProtectedGuests = req.ProtectedGuests
-	}
-
-	// Handle discovery settings
-	if req.DiscoveryEnabled != nil {
-		settings.DiscoveryEnabled = *req.DiscoveryEnabled
-	}
-	if req.DiscoveryIntervalHours != nil {
-		if *req.DiscoveryIntervalHours < 0 {
-			http.Error(w, "discovery_interval_hours cannot be negative", http.StatusBadRequest)
-			return
+		// Older clients may echo the projected GET value on an unrelated save.
+		// Keep a legacy preference when the interactive mode did not change:
+		// rewriting it can alter the legacy service's raw-command approval gate.
+		if !(level == config.ControlLevelControlled && settings.GetControlLevel() == config.ControlLevelAutonomous) {
+			settings.ControlLevel = level
 		}
-		settings.DiscoveryIntervalHours = *req.DiscoveryIntervalHours
-	}
-
-	// Auto-default discovery interval only when enabling without an explicit interval.
-	// A provided interval of 0 is the canonical manual-only setting and must persist.
-	if req.DiscoveryEnabled != nil && *req.DiscoveryEnabled && req.DiscoveryIntervalHours == nil && settings.DiscoveryIntervalHours == 0 {
-		settings.DiscoveryIntervalHours = 24
 	}
 
 	if aiSettingsRequireModelResolution(settings) {
@@ -3135,9 +3019,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		h.onModelChange()
 	}
 
-	// Update Assistant control settings if control level or protected guests changed.
+	// Update Assistant control settings if the control level changed.
 	// This updates tool visibility without restarting AI chat.
-	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
+	if h.onControlSettingsChange != nil && req.ControlLevel != nil {
 		h.onControlSettingsChange()
 	}
 
@@ -3213,10 +3097,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ConfiguredProviders:       settings.GetConfiguredProviders(),
 		Providers:                 aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:           settings.GetProtectedGuests(),
-		DiscoveryEnabled:          settings.DiscoveryEnabled,
-		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
+		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
 		PatrolReadiness:           ptrToPatrolReadiness(patrolReadiness),
 		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
 		PatrolModelReadiness:      cachedPatrolModelReadinessSnapshot(aiService),
@@ -7749,7 +7630,15 @@ func (h *AISettingsHandler) updateFindingInvestigationOutcome(ctx context.Contex
 		return
 	}
 	outcomeChanged := existing.InvestigationOutcome != outcome
-	if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
+	if investigation != nil {
+		var applied bool
+		applied, outcomeChanged = findingsStore.ReconcileInvestigationOutcome(findingID, investigation, outcome)
+		if !applied {
+			log.Debug().Str("findingID", findingID).Str("investigationID", investigation.ID).
+				Msg("Historical investigation result does not belong to current finding occurrence")
+			return
+		}
+	} else if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
 		log.Warn().Str("findingID", findingID).Msg("Finding not found for outcome update")
 		return
 	}
@@ -7899,6 +7788,9 @@ type PatrolAutonomyResponse struct {
 	AutopilotStatus         unifiedresources.PatrolAutopilotStatus `json:"autopilot_acknowledgement"`
 	InvestigationBudget     int                                    `json:"investigation_budget"`
 	InvestigationTimeoutSec int                                    `json:"investigation_timeout_sec"`
+	// DefaultModeApplied is true when the install never chose a Patrol mode
+	// and its licence includes investigation, so it runs Ask first by default.
+	DefaultModeApplied bool `json:"default_mode_applied"`
 }
 
 type patrolAutopilotAcknowledgementRequest struct {
@@ -8019,9 +7911,15 @@ func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mut
 	return nil
 }
 
-func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix bool) PatrolAutonomyResponse {
-	requested := cfg.GetPatrolAutonomyLevel()
+// patrolAutonomyResponseForConfig projects the stored settings. defaultApplied
+// is the runtime's own decision (never chosen and positively licensed), so the
+// response cannot disagree with the mode Patrol actually runs.
+func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix, defaultApplied bool) PatrolAutonomyResponse {
+	requested := cfg.ResolvedPatrolAutonomyLevel(defaultApplied)
 	effective, status := cfg.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
+	if defaultApplied {
+		effective = config.PatrolAutonomyApproval
+	}
 	if !hasAutoFix {
 		effective = config.PatrolAutonomyMonitor
 		status.Active = false
@@ -8035,6 +7933,7 @@ func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy 
 		AutopilotStatus:         status,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
+		DefaultModeApplied:      defaultApplied,
 	}
 }
 
@@ -8057,7 +7956,8 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	hasAutoFix := aiService.HasLicenseFeature(featureAIAutoFixValue)
-	settings := patrolAutonomyResponseForConfig(cfg, GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), hasAutoFix)
+	defaultApplied := !cfg.PatrolAutonomyLevelChosen() && aiService.PatrolInvestigationLicensed()
+	settings := patrolAutonomyResponseForConfig(cfg, GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), hasAutoFix, defaultApplied)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
@@ -8310,7 +8210,8 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}
-	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), aiService.HasLicenseFeature(featureAIAutoFixValue))
+	// The monitor-only save always stores an explicit choice, so no default applies.
+	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), aiService.HasLicenseFeature(featureAIAutoFixValue), false)
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"success":  true,
 		"settings": settings,
@@ -8365,7 +8266,8 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	}
 
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
-	if investigation == nil {
+	finding := patrol.GetFindings().Get(findingID)
+	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}
@@ -8418,7 +8320,8 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	}
 
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
-	if investigation == nil {
+	finding := patrol.GetFindings().Get(findingID)
+	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}

@@ -79,34 +79,75 @@ Use this only when you also need host-local telemetry. The Linux agent normally
 runs as root; it is not required to fix API authentication or missing backup
 permissions. Review [Agent Security](AGENT_SECURITY.md) first.
 
-Create a separate Pulse token in **API Access**, using the **Agent host** preset
-for reporting, configuration reads and agent management. This is a **Pulse**
+Create a separate Pulse token in **API Access**, using the **Agent** preset
+for reporting and configuration reads; it does not include agent lifecycle
+management (`agent:manage`). This is a **Pulse**
 token, not the **PBS** token used above. Do not enable command execution just
 for monitoring.
 
 On the PBS host, enter an administrator root shell before preparing the private
 file below. In the editor, save only the Pulse agent token, with no header or
-quotes; never put the secret in a command argument:
+quotes; never put the secret in a command argument. The preparation preserves
+an existing file and refuses symlinked or non-regular credential paths. Stop
+if it fails; do not continue to the installer:
 
 ```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-chmod 700 "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/pbs-agent-token"
-chmod 600 "$HOME/.config/pulse/pbs-agent-token"
-vi "$HOME/.config/pulse/pbs-agent-token"
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  credential_file="$config_dir/pbs-agent-token"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+    printf 'Credential file must be a regular file.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$config_dir"
+  chmod 700 "$config_dir"
+  touch "$credential_file"
+  chmod 600 "$credential_file"
+  vi "$credential_file"
+)
 ```
 
 Download the agent installer from **your Pulse server's HTTPS address**, then
 inspect the saved script before running it. Replace the example Pulse URL in
 both commands. Stop if the download fails; run the next command only after a
-successful download and inspection. Do not substitute GitHub's top-level `install.sh`: that installs
-the Pulse server, not the agent.
+successful HTTP **200** download and inspection. This ignores curl configuration
+and saves only a successful download to the installer path. It refuses an
+existing installer rather than overwriting it; review that file locally before
+deciding whether a new download is needed. Do not substitute GitHub's top-level
+`install.sh`: that installs the Pulse server, not the agent.
 
 ```bash
-curl --fail --silent --show-error \
-  --output "$HOME/.config/pulse/pbs-agent-install.sh" \
-  https://pulse.example.com/install.sh
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  installer_file="$config_dir/pbs-agent-install.sh"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ ! -d "$config_dir" ]; then
+    printf 'Prepare the private token directory first.\n' >&2
+    exit 1
+  fi
+  if [ -e "$installer_file" ] || [ -L "$installer_file" ]; then
+    printf 'Refusing to replace an existing installer path.\n' >&2
+    exit 1
+  fi
+  chmod 700 "$config_dir"
+  download_file=$(mktemp "$config_dir/pbs-agent-download.XXXXXX")
+  curl_exit=0
+  status=$(curl --disable --fail --silent --show-error --proto '=https' \
+    --connect-timeout 5 --max-time 60 --output "$download_file" \
+    --write-out '%{http_code}' https://pulse.example.com/install.sh) || curl_exit=$?
+  printf 'HTTP %s\n' "$status"
+  [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+  [ "$status" = 200 ]
+  mv -n "$download_file" "$installer_file"
+  [ ! -e "$download_file" ]
+)
 ```
 
 ```bash
@@ -117,7 +158,10 @@ bash "$HOME/.config/pulse/pbs-agent-install.sh" \
 ```
 
 Do not bypass certificate checks to fetch or run the installer. Use a trusted
-Pulse certificate or a CA file you verified separately. See
+Pulse certificate or add `--cacert` with a CA file you verified separately.
+A failed or redirected download is not an installer: do not run its temporary
+file. Keep `--disable` first in both curl examples on this page; it ignores
+local settings that could enable tracing, bypass TLS or follow redirects. See
 [Unified Agent Setup](UNIFIED_AGENT.md) for installer trust and other profiles.
 After installation, check a fresh agent report and the host's
 `pulse-agent --version`; installation or hardware capacity alone does not prove
@@ -177,15 +221,30 @@ another machine does not prove that Pulse can reach PBS.
   ```
 
 - **Authentication/permissions:** test a datastore request, not just `/version`.
-  Prepare a private header file on the machine running curl:
+  Prepare a private header file on the machine running curl. Stop if preparation
+  fails; an existing file is preserved, and symlinked or non-regular credential
+  paths are refused before opening the editor:
 
   ```bash
-  umask 077
-  mkdir -p "$HOME/.config/pulse"
-  chmod 700 "$HOME/.config/pulse"
-  touch "$HOME/.config/pulse/pbs-header"
-  chmod 600 "$HOME/.config/pulse/pbs-header"
-  vi "$HOME/.config/pulse/pbs-header"
+  (
+    set -eu
+    umask 077
+    config_dir="$HOME/.config/pulse"
+    credential_file="$config_dir/pbs-header"
+    if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+      printf 'Refusing a symlinked credential path.\n' >&2
+      exit 1
+    fi
+    if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+      printf 'Credential file must be a regular file.\n' >&2
+      exit 1
+    fi
+    mkdir -p "$config_dir"
+    chmod 700 "$config_dir"
+    touch "$credential_file"
+    chmod 600 "$credential_file"
+    vi "$credential_file"
+  )
   ```
 
   In the editor, save this line, replacing `<pbs-token-secret>` with the secret
@@ -195,12 +254,33 @@ another machine does not prove that Pulse can reach PBS.
   Authorization: PBSAPIToken=pulse-monitor@pbs!pulse-token:<pbs-token-secret>
   ```
 
-  Then use curl 7.76 or later, with your PBS hostname:
+  Then use curl 7.76 or later, with your PBS hostname. The request prints only
+  the HTTP status and a new private response-file path; inspect that file locally,
+  not in a public terminal recording or thread:
 
   ```bash
-  curl --fail-with-body --silent --show-error --connect-timeout 5 --max-time 15 \
-    --header "@$HOME/.config/pulse/pbs-header" \
-    https://pbs.example.com:8007/api2/json/admin/datastore
+  (
+    set -eu
+    umask 077
+    config_dir="$HOME/.config/pulse"
+    credential_file="$config_dir/pbs-header"
+    if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ] || [ ! -f "$credential_file" ]; then
+      printf 'Prepare the private header file first.\n' >&2
+      exit 1
+    fi
+    chmod 700 "$config_dir"
+    chmod 600 "$credential_file"
+    result_file=$(mktemp "$config_dir/pbs-response.XXXXXX")
+    printf 'Private response file: %s\n' "$result_file"
+    curl_exit=0
+    status=$(curl --disable --fail-with-body --silent --show-error --proto '=https' \
+      --connect-timeout 5 --max-time 15 --header "@$credential_file" \
+      --output "$result_file" --write-out '%{http_code}' \
+      https://pbs.example.com:8007/api2/json/admin/datastore) || curl_exit=$?
+    printf 'HTTP %s\n' "$status"
+    [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+    [ "$status" = 200 ]
+  )
   ```
 
   For curl with a private CA or self-signed certificate, add
@@ -209,7 +289,9 @@ another machine does not prove that Pulse can reach PBS.
   use `--insecure` or `-k`.
 
   `401` means authentication was rejected; `403` means the requested access was
-  refused. Both return a non-zero curl exit while retaining the error body.
+  refused. Both return a non-zero curl exit while retaining the error body
+  privately. A redirect or `000` is not successful access; this command neither
+  follows redirects nor retries.
   Inspect the existing token and both `Audit` grants before replacing anything.
   A `200` response listing the expected datastore establishes access to that
   list, not successful collection of every backup, job or History graph. An
@@ -220,6 +302,99 @@ verbose/trace curl output, full infrastructure responses, token values or
 private keys. If help is needed, provide only the HTTP status, relevant redacted
 error and which expected reading is missing. Do not clear History or recreate a
 working connection to make missing data look resolved.
+
+### Backup age colours for a longer backup cycle
+
+The VM/LXC backup shield uses **hours**, separately from the backup-age alert
+thresholds in **days**. An amber age badge does not by itself mean that a
+backup failed or that a notification was sent.
+
+Open **Alerts → Thresholds → Proxmox**, then expand **Recovery**. In
+**Global Defaults**:
+
+| Control | What it changes |
+| --- | --- |
+| **Fresh Hours** | How long the latest completed backup keeps a green shield. The default is 24 hours. |
+| **Stale Hours** | The end of the next age band, after which the backup is classified as overdue. Keep it at least as large as Fresh Hours. |
+| **Warning Days** / **Critical Days** | Backup-age alert thresholds, not the shield's freshness window. Leave these unchanged unless you intend to change alert policy. |
+
+For a three-day cycle, **Fresh Hours = 72** keeps a completed backup fresh
+through 72 hours. **Stale Hours = 96**, for example, leaves a further day in
+the stale band. Choose any scheduling margin to match your existing backup
+policy; these are global display settings, not a change to the backup schedule.
+Review the alert-day values before saving, then check the same guest's badge.
+The completed backup's time does not change, and missing or unknown backup
+evidence is not made healthy by a longer freshness window.
+
+**v6.5.0 caution:** if **Critical Days** is Off while **Warning Days** is
+enabled, do not save threshold edits on that version: its editor can re-enable
+critical alerts at the warning age. Cancel rather than changing alert policy
+just to remove an amber badge.
+
+If the problem is missing backups or conflicting protection evidence rather
+than an expected longer cycle, use the [backup health checks](#backups-are-visible-but-coverage-says-unprotected)
+instead. Do not run another backup, change retention, disable alerts or clear
+History just to change a colour.
+
+### Backups are visible but Coverage says Unprotected
+
+The **Backup health** strip and the backup list answer different questions.
+If they disagree, use **PBS's own backup and verification records** for the
+same guest while checking Pulse's assessment; do not assume either a failed
+backup or working protection from the strip alone.
+
+| Observation in Pulse | What it does not establish |
+| --- | --- |
+| **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
+| **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
+| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. |
+| **Protected**, **Attention**, **Unprotected** or **Unknown** on the workload | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
+
+Check one affected guest without changing its setup:
+
+1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
+   protection explanation and the PBS **Job**, **History** and **Access**
+   evidence. Access describes permissions; if provider evidence is absent,
+   record that rather than interpreting it as healthy. These are backup
+   evidence states, not the PBS host's CPU/metrics History chart.
+2. Compare the listed backup with the existing record in PBS: server,
+   datastore, namespace (including root), guest type/ID and backup time.
+   Independent PVE installations can reuse an ID; confirm the owning
+   installation too. Under **Restore evidence**, choose the newest point whose
+   **Source** is **PBS**, and read its **Created** time and **State**. Hover the
+   Created age for its absolute timestamp; if unavailable, keep the time
+   unknown. A relative age or Pulse's refresh time is not a matching backup
+   timestamp. A **guest snapshot** is not a PBS backup. Check the existing
+   backup task and verification result for that same point in PBS.
+3. If the records still disagree, report the Pulse version, one guest's
+   protection explanation, PBS Job/History/Access values and the matching
+   point's Created time, State and PBS verification result. Use consistent
+   placeholders for private server, datastore, namespace and guest identities.
+   Do not share tokens, full API responses, HAR exports, or screenshots with secrets.
+
+**If PBS says verified but Pulse disagrees:** an older or absent point in Pulse
+is an inventory discrepancy, before comparing verification. **Unverified** on
+the matching point means Pulse has no successful verification evidence for it;
+it does not prove that PBS's verification job failed. **Verified** with a
+workload still needing attention is a separate assessment disagreement: retain
+its explanation and Provider evidence. A **Protected** point leaves its
+verification state unknown from that label alone. **Job OK** is not an
+individual point's verification result. Use the records already available,
+without running Diagnostics or another verification just to compare them.
+
+Do not delete backups, clear History, change retention or freshness settings,
+recreate tokens/connections, restart or downgrade Pulse, or run a new backup,
+verification or restore just to clear the strip. Missing or contradictory
+Pulse evidence needs investigation, not a destructive diagnostic or an
+assumed freshness-policy cause. Use your established backup checks meanwhile.
+
+**An OK backup task or a Verified label does not prove the guest thawed.** If a
+backup left a guest unresponsive or frozen, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+and the platform's established recovery procedure, not this display check.
+Keep affected Pulse monitoring stopped until independent post-backup checks
+confirm thaw, fresh successful writes to every filesystem covered by the
+backup and workload liveness; restore only services and timers active before
+the pause. Monitoring and alerts are unavailable while Pulse is stopped.
 
 ### PBS is connected but History stays empty
 
@@ -283,10 +458,47 @@ separate symptom is missing filesystem information in a PVE VM row.
 
 ### Slow Backup Loading
 
-If you notice slow loading for PBS storage accessed via PVE:
-- This often happens with encrypted PBS datastores
-- The fix is to add PBS directly (this guide)
-- Direct PBS connections bypass the slow PVE content listing
+A slow backup list does not establish an encrypted-datastore or PVE-proxy
+cause. First distinguish the affected reading, without changing the setup:
+
+- **Slow Proxmox → Backups list:** note the source indicator on an existing
+  affected row. **PBS** means direct PBS inventory. **PVE file** means PVE
+  storage inventory, which can include a PBS-backed target; that badge alone
+  does not identify the storage type or prove a direct PBS connection exists.
+  See [Data Source Indicator](#data-source-indicator). A loaded row does not
+  prove that every backup, job or History reading is current.
+- **“Backup-age alerts were not evaluated” warning:** this is a failed monitoring
+  check, not evidence that a backup failed. Follow the
+  [evaluation warning checks](TROUBLESHOOTING.md#backup-age-alerts-were-not-evaluated).
+  Adding a connection or making the list load does not establish that this
+  separate evaluation recovered.
+- **PVE or PBS inventory “loading”/“unavailable” notice:** the list and counts
+  are incomplete even if the other inventory loaded. Missing rows do not mean
+  no backups exist. Record which source is affected and its existing error;
+  do not repeatedly press Retry to test recovery.
+- **Wrong installation, overlapping guest IDs or conflicting Coverage:** use
+  the [backup health checks](#backups-are-visible-but-coverage-says-unprotected)
+  and [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+  Keep the existing connections and records while comparing their origin.
+
+For a report, retain the Pulse version, affected view, source indicator,
+observed loading duration and relevant existing redacted error. Use consistent
+placeholders for private server, datastore, namespace and guest identities;
+do not share full responses, HAR exports or credentials. If loading makes
+Pulse unresponsive, stop and retain the observations already available, rather
+than repeatedly refreshing or running diagnostics.
+
+A direct PBS connection is an optional planned setup change when backups are
+currently available only through PVE passthrough and you need the additional
+API-backed readings described above. It bypasses PVE's proxy listing for those
+direct observations; it is **not a guaranteed performance or evaluation fix**.
+Check for an existing direct connection first and verify the owning PBS server
+before adding anything. Keep certificate verification and privilege separation
+enabled, and confirm the expected datastores and readings after normal polling.
+Do not add or recreate connections, install an agent, restart Pulse, clear
+History, change retention/polling limits, or run a backup, verification or restore
+just to diagnose slow loading. Use the existing native backup records meanwhile;
+a loaded list or an OK task is not proof of restore readiness or guest thaw.
 
 ### Duplicate Backups
 
@@ -297,6 +509,11 @@ If the same backup remains listed twice, report those redacted distinctions and
 whether each entry came from direct PBS or PVE passthrough. Do not delete backups
 or change retention to hide a display problem.
 
+If overlapping VMIDs also coincide with wrong-node errors or lost agent-backed
+Docker monitoring after adding another Proxmox connection, use the
+[cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+A duplicate-backup check alone does not resolve those other symptoms.
+
 ---
 
 ## Data Source Indicator
@@ -304,12 +521,26 @@ or change retention to hide a display problem.
 Under **Proxmox → Backups** (`/proxmox/backups`), PBS backups show a data source
 indicator. There is no current top-level Recovery page:
 
-- **"PBS"** badge alone = Direct PBS connection (full data)
-- **"PBS via PVE"** = Passthrough via PVE storage (limited data)
+The **By date** view's **Source** labels describe the collection origin:
 
-When the same backup is reconciled across both sources, Pulse prefers the
-direct PBS observation. Check the actual source and expected readings after
-adding the connection; the presence of a badge alone is not collection proof.
+| Source | What it means |
+| --- | --- |
+| **PBS** | Direct snapshot inventory from Proxmox Backup Server. It does not prove that every backup, job or History reading is current. |
+| **PVE file** | A backup file or volume reported by Proxmox VE storage. This can include a PBS-backed storage target; the label alone does not identify the storage type or establish a direct PBS connection. Compare the row's location with the existing PVE storage configuration. |
+| **Snapshot** | A Proxmox VE guest snapshot, not a separate backup. It does not count as independent backup coverage. |
+
+Do not look for an old **PBS via PVE** badge in this table. For a PBS-backed
+PVE file, the source explanation identifies a backup volume reported by PVE
+from a PBS-backed storage target. If that explanation is unavailable, keep the
+origin unknown rather than inferring it from a matching guest ID or name.
+
+A source label is not a protection, verification, restore or thaw result.
+**PVE/PBS inventory loading or unavailable** notices mean counts are incomplete,
+not that missing backups do not exist. Existing PBS and PVE observations can
+refer to the same backup; compare their owning installation, storage,
+namespace, guest type/ID and time before treating records as duplicates. See
+[Duplicate Backups](#duplicate-backups) and the
+[backup health checks](#backups-are-visible-but-coverage-says-unprotected).
 
 ---
 

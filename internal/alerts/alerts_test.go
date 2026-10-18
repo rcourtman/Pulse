@@ -25,6 +25,8 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
@@ -174,6 +176,61 @@ func newTestManager(t *testing.T) *Manager {
 	})
 
 	return m
+}
+
+// testLogCapture collects log events for captureTestLogs. TestMain installs
+// its hook before any test runs: writing log.Logger inside a test would race
+// with goroutines of managers that earlier tests left running.
+var testLogCapture struct {
+	mu     sync.Mutex
+	active bool
+	lines  []capturedLogLine
+}
+
+type capturedLogLine struct {
+	level   zerolog.Level
+	message string
+}
+
+func TestMain(m *testing.M) {
+	log.Logger = log.Logger.Hook(zerolog.HookFunc(func(_ *zerolog.Event, level zerolog.Level, message string) {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		if testLogCapture.active {
+			testLogCapture.lines = append(testLogCapture.lines, capturedLogLine{level: level, message: message})
+		}
+	}))
+	os.Exit(m.Run())
+}
+
+// captureTestLogs records log events, debug included, until the test ends.
+// The returned func counts the events seen so far with a level and message.
+func captureTestLogs(t *testing.T) func(zerolog.Level, string) int {
+	t.Helper()
+	originalLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	testLogCapture.mu.Lock()
+	testLogCapture.active = true
+	testLogCapture.lines = nil
+	testLogCapture.mu.Unlock()
+	t.Cleanup(func() {
+		testLogCapture.mu.Lock()
+		testLogCapture.active = false
+		testLogCapture.lines = nil
+		testLogCapture.mu.Unlock()
+		zerolog.SetGlobalLevel(originalLevel)
+	})
+	return func(level zerolog.Level, message string) int {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		n := 0
+		for _, line := range testLogCapture.lines {
+			if line.level == level && line.message == message {
+				n++
+			}
+		}
+		return n
+	}
 }
 
 func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
@@ -727,6 +784,137 @@ func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
 	}
 }
 
+// pulse-relaxed lifted an Off trigger to its floor like any low trigger, so a
+// relaxed guest with disk alerts off raised one at 96%. A config save then
+// re-judged it by the Off threshold and resolved it, and the next poll raised
+// it again. Relaxing a guest must not raise an alert its config turned off.
+func TestPulseRelaxedKeepsOffGuestThresholdOff(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+		Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/105",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 96},
+		Tags:     []string{"pulse-relaxed"},
+	}
+
+	m.CheckGuest(vm, "inst")
+	if testHasActiveAlert(t, m, canonicalMetricStateID(vm.ID, "disk")) {
+		t.Fatalf("expected no disk alert on a relaxed guest whose disk threshold is off")
+	}
+}
+
+// A config save re-judges a relaxed guest's alert by the thresholds CheckGuest
+// raised it under. Reevaluation rebuilt the guest from alert metadata without
+// its tags, so an unset memory threshold, which pulse-relaxed sets to 92, read
+// as no threshold there: the save resolved the alert with a recovery
+// notification and the next poll raised it again. The tags are read back in
+// the shape a restart restores them.
+func TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/106",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 95},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	memoryAlertID := canonicalMetricStateID(vm.ID, "memory")
+
+	m.CheckGuest(vm, "inst")
+	alert := testRequireActiveAlert(t, m, memoryAlertID)
+	if alert.Threshold != 92 {
+		t.Fatalf("memory alert threshold = %v, want the relaxed 92", alert.Threshold)
+	}
+
+	m.mu.Lock()
+	raw, err := json.Marshal(alert.Metadata)
+	if err != nil {
+		m.mu.Unlock()
+		t.Fatalf("marshal metadata: %v", err)
+	}
+	var restored map[string]interface{}
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		m.mu.Unlock()
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	alert.Metadata = restored
+	m.mu.Unlock()
+	if _, ok := restored["tags"].([]interface{}); !ok {
+		t.Fatalf("restored tags = %T, want []interface{}", restored["tags"])
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, memoryAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's memory alert over its relaxed trigger")
+	}
+}
+
+// pulse-relaxed lifts a guest's disk threshold, but a filesystem's own
+// override still decides that filesystem, while polling and on a config save.
+// Judged by the guest's relaxed floor on save, a filesystem alert over its
+// lower override resolved and the next poll raised it again.
+func TestConfigSaveKeepsRelaxedGuestFilesystemOverride(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 108)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 90, Clear: 85},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-disk:guest:pve1:108/disk:boot-dev-vda1": {
+			Disk: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     108,
+		Name:     "relaxed-fs",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks: []models.Disk{
+			{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 92, Total: 100, Used: 92, Free: 8},
+		},
+		Tags: []string{"pulse-relaxed"},
+	}
+	bootAlertID := canonicalMetricStateID(guestID+"-disk-boot-dev-vda1", "disk")
+
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a /boot alert over its 85%% override on a relaxed guest")
+	}
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's /boot alert over its own 85%% override")
+	}
+}
+
 func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -1060,6 +1248,32 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 		t.Fatalf("expected offline confirmations to be cleared when host online")
 	}
 	m.mu.RUnlock()
+}
+
+func TestHandleHostOfflineNamesSilentAgentNotHostOutage(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	// A Proxmox node keeps reporting through its API while its linked agent
+	// is silent, so the alert must not claim the host itself is offline.
+	host := models.Host{ID: "host-linked", Hostname: "delly", LinkedNodeID: "homelab-delly"}
+	alertID := canonicalConnectivityStateID(hostResourceID(host.ID))
+
+	for i := 0; i < 3; i++ {
+		m.HandleHostOffline(host)
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	alert, ok := testLookupActiveAlert(t, m, alertID)
+	if !ok {
+		t.Fatalf("expected alert %q after three offline detections", alertID)
+	}
+	if want := "Pulse agent on 'delly' stopped reporting"; alert.Message != want {
+		t.Fatalf("message = %q, want %q", alert.Message, want)
+	}
+	if want := "delly (Host Agent)"; alert.ResourceName != want {
+		t.Fatalf("resource name = %q, want %q", alert.ResourceName, want)
+	}
 }
 
 func TestHandleHostOfflineWithCorrelationPreservesHostLifecycleIdentity(t *testing.T) {
@@ -2699,6 +2913,101 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	}
 }
 
+// Host and guest evaluation used to fill in the Clear of a disk override's
+// threshold after dropping m.mu, writing through the live config's pointer
+// while GetConfig cloned it under the read lock, and Docker evaluation read
+// m.config.DockerDefaults with no lock while UpdateConfig replaced m.config.
+// Evaluation now copies what it needs under m.mu. Run with -race.
+func TestAlertEvaluationLeavesTheLiveConfigToTheLock(t *testing.T) {
+	originalLogLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	t.Cleanup(func() {
+		zerolog.SetGlobalLevel(originalLogLevel)
+	})
+
+	m := newTestManager(t)
+
+	host := models.Host{
+		ID:       "eval-lock",
+		Hostname: "eval-lock",
+		Status:   "online",
+		Disks:    []models.Disk{{Mountpoint: "/", Device: "/dev/sda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	hostDiskOverrideID, _ := hostDiskResourceID(host, host.Disks[0])
+	vm := models.VM{
+		ID:       BuildGuestKey("pve1", "node1", 101),
+		VMID:     101,
+		Name:     "eval-lock",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks:    []models.Disk{{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	guestDiskOverrideID := "guest-disk:guest:pve1:101/disk:boot-dev-vda1"
+	dockerHost := models.DockerHost{
+		ID:          "eval-lock-docker",
+		Hostname:    "eval-lock-docker",
+		DisplayName: "eval-lock-docker",
+		Containers: []models.DockerContainer{{
+			ID:            "abcdef123456",
+			Name:          "web",
+			State:         "running",
+			CPUPercent:    10,
+			MemoryPercent: 10,
+			MemoryUsage:   100 << 20,
+			MemoryLimit:   1 << 30,
+		}},
+	}
+
+	// A disk override saved with only a trigger leaves Clear for evaluation
+	// to default.
+	withTriggerOnlyDiskOverrides := func(cfg AlertConfig) AlertConfig {
+		cfg.Enabled = true
+		cfg.ActivationState = ActivationActive
+		cfg.Overrides = map[string]ThresholdConfig{
+			hostDiskOverrideID:  {Disk: &HysteresisThreshold{Trigger: 90}},
+			guestDiskOverrideID: {Disk: &HysteresisThreshold{Trigger: 90}},
+		}
+		return cfg
+	}
+	m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+
+	m.CheckHost(host)
+	m.CheckGuest(vm, "pve1")
+	live := m.GetConfig()
+	for _, id := range []string{hostDiskOverrideID, guestDiskOverrideID} {
+		if got := live.Overrides[id].Disk.Clear; got != 0 {
+			t.Fatalf("evaluating %s wrote clear %v into the live override", id, got)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			// Resetting the overrides gives evaluation a Clear to fill again.
+			m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+			m.UpdateConfig(m.GetConfig())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = m.GetConfig()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			m.CheckHost(host)
+			m.CheckGuest(vm, "pve1")
+			m.CheckDockerHost(dockerHost)
+		}
+	}()
+	wg.Wait()
+}
+
 func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	m := newTestManager(t)
 
@@ -2720,7 +3029,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 		Containers:  []models.DockerContainer{container},
 	}
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 
 	// Run twice to satisfy the confirmation threshold when not ignored
@@ -2759,7 +3068,7 @@ func TestCheckDockerHostContainerCPUUsesCapacityNormalizedPercent(t *testing.T) 
 			CPUPercent: 240,
 		}},
 	}
-	alertID := canonicalMetricStateID(DockerResourceID(host.ID, "container-1"), "cpu")
+	alertID := canonicalMetricStateID(DockerContainerResourceID(host.ID, "container-1", ""), "cpu")
 
 	m.CheckDockerHost(host)
 	m.mu.RLock()
@@ -3058,7 +3367,7 @@ func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3091,7 +3400,7 @@ func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("did not expect docker container state alert when defaults disable connectivity")
@@ -3121,7 +3430,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	m.CheckDockerHost(hostHigh)
 
-	resourceID := DockerResourceID(hostID, containerID)
+	resourceID := DockerContainerResourceID(hostID, containerID, "")
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3190,7 +3499,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+	resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 	alertID := canonicalMetricStateID(resourceID, "disk")
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3782,7 +4091,7 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 		Hostname:    "docker-host.local",
 		Containers:  []models.DockerContainer{container},
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	stateAlertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	healthAlertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 	restartAlertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
@@ -3954,20 +4263,25 @@ func TestDockerContainerDisplayName(t *testing.T) {
 	}
 }
 
-func TestDockerResourceID(t *testing.T) {
+func TestDockerContainerResourceID(t *testing.T) {
 	// t.Parallel()
 
 	tests := []struct {
-		name        string
-		hostID      string
-		containerID string
-		want        string
+		name          string
+		hostID        string
+		containerID   string
+		containerName string
+		want          string
 	}{
-		{name: "both ids present", hostID: "host1", containerID: "abc", want: "docker:host1/abc"},
+		{name: "both ids present", hostID: "host1", containerID: "abc", containerName: "web", want: "docker:host1/abc"},
 		{name: "trims ids", hostID: " host1 ", containerID: " abc ", want: "docker:host1/abc"},
 		{name: "missing host id", hostID: "", containerID: "abc", want: "docker:container/abc"},
-		{name: "missing container id", hostID: "host1", containerID: "", want: "docker:host1"},
-		{name: "both missing", hostID: "", containerID: "", want: "docker:unknown"},
+		// A container without an ID never takes its host's reference.
+		{name: "missing container id uses the marked name", hostID: "host1", containerID: "", containerName: " /web ", want: "docker:host1/name:web"},
+		{name: "a name never equals an ID reference", hostID: "host1", containerID: "", containerName: "abc", want: "docker:host1/name:abc"},
+		{name: "no id and no name", hostID: "host1", containerID: "", containerName: " / ", want: ""},
+		{name: "a name without a host identifies nothing", hostID: "", containerID: "", containerName: "web", want: ""},
+		{name: "all missing", want: ""},
 	}
 
 	for _, tc := range tests {
@@ -3975,10 +4289,254 @@ func TestDockerResourceID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// t.Parallel()
 
-			if got := DockerResourceID(tc.hostID, tc.containerID); got != tc.want {
-				t.Fatalf("DockerResourceID(%q, %q) = %q, want %q", tc.hostID, tc.containerID, got, tc.want)
+			if got := DockerContainerResourceID(tc.hostID, tc.containerID, tc.containerName); got != tc.want {
+				t.Fatalf("DockerContainerResourceID(%q, %q, %q) = %q, want %q", tc.hostID, tc.containerID, tc.containerName, got, tc.want)
 			}
 		})
+	}
+	if got := DockerHostResourceID(" host1 "); got != "docker:host1" {
+		t.Fatalf("DockerHostResourceID = %q, want docker:host1", got)
+	}
+	if got := DockerHostResourceID(" "); got != "" {
+		t.Fatalf("DockerHostResourceID without a host = %q, want empty", got)
+	}
+}
+
+// Containers and Swarm services reported without an ID alert under their own
+// marked name, never under the host's reference or another service's ID
+// reference, so cleanup, removal and the policy switches reach them like any
+// other container or service.
+func TestDockerAlertsWithoutIDsUseTheirOwnReferences(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.SuppressionWindow = 0
+	m.UpdateConfig(config)
+
+	containerID := strings.Repeat("c", 64)
+	serviceID := "x7k2m9q4w1e8r5t3y6u0i2o4p"
+	host := models.DockerHost{ID: "h1", Hostname: "tower", DisplayName: "tower", Status: "online", LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: containerID, Name: "web", State: "running", Health: "unhealthy"},
+			{Name: "/sidecar", State: "running", Health: "unhealthy"},
+			// Docker forbids slashes in names, but a report can carry anything.
+			{Name: "jobs/service/runner", State: "running", Health: "unhealthy"},
+			{State: "running", Health: "unhealthy"}, // no identity at all
+		},
+		Services: []models.DockerService{
+			{ID: serviceID, Name: "api", DesiredTasks: 2},
+			{Name: strings.ToUpper(serviceID), DesiredTasks: 2},
+			{DesiredTasks: 2},
+		}}
+	refs := func() map[string]bool {
+		got := map[string]bool{}
+		for _, alert := range m.GetActiveAlerts() {
+			got[alert.ResourceID] = true
+		}
+		return got
+	}
+	var firedMu sync.Mutex
+	fired := map[string]bool{}
+	m.SubscribeLifecycleCallback(func(event LifecycleEvent) {
+		if event.Type == eventlog.TypeFired && event.Alert != nil {
+			firedMu.Lock()
+			fired[event.Alert.ResourceID] = true
+			firedMu.Unlock()
+		}
+	})
+	m.CheckDockerHost(host)
+	want := map[string]bool{
+		"docker:h1/" + containerID:            true,
+		"docker:h1/name:sidecar":              true,
+		"docker:h1/name:jobs/service/runner":  true,
+		"docker:h1/service/" + serviceID:      true,
+		"docker:h1/service/name:" + serviceID: true,
+	}
+	if got := refs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("alert references = %v, want %v", got, want)
+	}
+	firedMu.Lock()
+	if !reflect.DeepEqual(fired, want) {
+		t.Fatalf("fired alert references = %v, want %v", fired, want)
+	}
+	firedMu.Unlock()
+
+	// A container that leaves the report clears under its own reference.
+	reported := host
+	reported.Containers = host.Containers[:1]
+	m.CheckDockerHost(reported)
+	if got := refs(); got["docker:h1/name:sidecar"] || got["docker:h1/name:jobs/service/runner"] {
+		t.Fatalf("alerts of removed containers without an ID survived the report: %v", got)
+	}
+
+	// Before this reference existed such a container alerted under its host's.
+	// No producer refreshes those, so the next report clears them.
+	legacy := func() {
+		m.mu.Lock()
+		m.activeAlerts["legacy"] = &Alert{ID: "legacy", Type: "docker-container-health", ResourceID: "docker:h1", StartTime: time.Now(), LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "h1", "containerId": "", "containerName": "sidecar"}}
+		m.mu.Unlock()
+	}
+	legacy()
+	m.CheckDockerHost(host)
+	if refs()["docker:h1"] {
+		t.Fatal("a pre-upgrade container alert on the host's reference survived the host's report")
+	}
+	// Going offline clears it too, and keeps the host's own alert.
+	legacy()
+	for range 3 {
+		m.HandleDockerHostOffline(host)
+	}
+	offline := 0
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ResourceID == "docker:h1" {
+			if alert.Type != "docker-host-offline" {
+				t.Fatalf("a pre-upgrade container alert on the host's reference survived going offline: %+v", alert)
+			}
+			offline++
+		}
+	}
+	if offline != 1 {
+		t.Fatalf("host offline alerts = %d, want 1", offline)
+	}
+
+	// The policy switches classify the name references by kind.
+	m.CheckDockerHost(host)
+	config = m.GetConfig()
+	config.DisableAllDockerContainers = true
+	m.UpdateConfig(config)
+	if got := refs(); len(got) != 2 || !got["docker:h1/service/"+serviceID] || !got["docker:h1/service/name:"+serviceID] {
+		t.Fatalf("after disabling containers, alert references = %v", got)
+	}
+	config.DisableAllDockerServices = true
+	m.UpdateConfig(config)
+	if got := refs(); len(got) != 0 {
+		t.Fatalf("after disabling services, alert references = %v", got)
+	}
+}
+
+// A Docker host disambiguated as "<base>::<suffix>" carries the canonical
+// state separator in its ID. Its alerts keep their full reference, so they
+// never take the reference of the host named "<base>", and a restored alert
+// whose reference was cut short there is not that host's to clear.
+func TestDockerHostIDWithSeparatorKeepsItsAlertReferences(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	m.UpdateConfig(config)
+	containerID := strings.Repeat("d", 64)
+	report := func(hostID string) models.DockerHost {
+		return models.DockerHost{ID: hostID, Hostname: "clone", LastSeen: time.Now(),
+			Containers: []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Health: "unhealthy"}}}
+	}
+	m.CheckDockerHost(report("base::suffix"))
+	m.CheckDockerHost(report("base"))
+	got := map[string]string{}
+	for _, alert := range m.GetActiveAlerts() {
+		got[alert.Metadata["hostId"].(string)] = alert.ResourceID
+	}
+	want := map[string]string{"base": "docker:base/" + containerID, "base::suffix": "docker:base::suffix/" + containerID}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("alert references by host = %v, want %v", got, want)
+	}
+
+	restored := &Alert{ID: "docker:base::suffix/x::docker:base::suffix/x-health", Type: "docker-container-health", ResourceID: "docker:base",
+		StartTime: time.Now(), LastSeen: time.Now(), Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": "x"}}
+	m.mu.Lock()
+	m.activeAlerts[restored.ID] = restored
+	m.mu.Unlock()
+	m.CheckDockerHost(report("base"))
+	m.mu.RLock()
+	_, kept := m.activeAlerts[restored.ID]
+	m.mu.RUnlock()
+	if !kept {
+		t.Fatal("host base cleared another host's restored alert as its own pre-upgrade container alert")
+	}
+}
+
+// Alerts saved before state IDs split after their own spec carry a resource
+// ID cut short at the first "::" of a host ID like "<base>::<suffix>". They
+// recover their reference on restore, so the owning host's report clears them
+// and carries the age of a pending update.
+func TestDockerAlertsRestoredWithCutShortReferencesRecover(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.DockerDefaults.UpdateAlertDelayHours = 24
+	m.UpdateConfig(config)
+	hostRef := "docker:base::suffix"
+	containerRef := hostRef + "/" + strings.Repeat("e", 64)
+	startedAt := time.Now().Add(-72 * time.Hour).Truncate(time.Second)
+	saved := []*Alert{
+		{ID: buildCanonicalStateID(hostRef, hostRef+"-image-update"), CanonicalSpecID: hostRef + "-image-update", Type: "docker-container-update",
+			ResourceID: "docker:base", Level: AlertLevelWarning, StartTime: startedAt, LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": "", "containerName": "sidecar"}},
+		{ID: buildCanonicalStateID(containerRef, containerRef+"-health"), CanonicalSpecID: containerRef + "-health", Type: "docker-container-health",
+			ResourceID: "docker:base", Level: AlertLevelCritical, StartTime: startedAt, LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": strings.Repeat("e", 64), "containerName": "gone"}},
+	}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(m.getAlertsDir(), alertsDirPerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(m.getAlertsDir(), "active-alerts.json"), data, alertsFilePerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.LoadActiveAlerts(); err != nil {
+		t.Fatalf("LoadActiveAlerts() error = %v", err)
+	}
+	restored := map[string]bool{}
+	for _, alert := range m.GetActiveAlerts() {
+		restored[alert.ResourceID] = true
+	}
+	if want := map[string]bool{hostRef: true, containerRef: true}; !reflect.DeepEqual(restored, want) {
+		t.Fatalf("restored references = %v, want %v", restored, want)
+	}
+
+	m.CheckDockerHost(models.DockerHost{ID: "base::suffix", Hostname: "clone", LastSeen: time.Now(), Containers: []models.DockerContainer{{
+		Name: "sidecar", State: "running",
+		UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:a", LatestDigest: "sha256:b", LastChecked: time.Now()},
+	}}})
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || active[0].ResourceID != hostRef+"/name:sidecar" || !active[0].StartTime.Equal(startedAt) {
+		t.Fatalf("active alerts = %+v, want only the update on %s/name:sidecar started %s", active, hostRef, startedAt)
+	}
+}
+
+// Before a container without an ID had a reference of its own, its pending
+// image update was recorded under its host's reference. The first report
+// after the upgrade keeps that age instead of restarting the delay.
+func TestDockerContainerWithoutIDKeepsPendingUpdateAgeAcrossUpgrade(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.DockerDefaults.UpdateAlertDelayHours = 24
+	m.UpdateConfig(config)
+	startedAt := time.Now().Add(-72 * time.Hour).Truncate(time.Second)
+	legacyID := buildCanonicalStateID("docker:h1", "docker:h1-image-update")
+	m.mu.Lock()
+	m.activeAlerts[legacyID] = &Alert{ID: legacyID, Type: "docker-container-update", ResourceID: "docker:h1", StartTime: startedAt, LastSeen: time.Now(),
+		Metadata: map[string]interface{}{"hostId": "h1", "containerId": "", "containerName": "sidecar"}}
+	m.mu.Unlock()
+
+	m.CheckDockerHost(models.DockerHost{ID: "h1", Hostname: "tower", LastSeen: time.Now(), Containers: []models.DockerContainer{{
+		Name: "sidecar", State: "running", Image: "nginx:latest",
+		UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:a", LatestDigest: "sha256:b", LastChecked: time.Now()},
+	}}})
+	var updates []Alert
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.Type == "docker-container-update" {
+			updates = append(updates, alert)
+		}
+	}
+	if len(updates) != 1 || updates[0].ResourceID != "docker:h1/name:sidecar" || !updates[0].StartTime.Equal(startedAt) {
+		t.Fatalf("update alerts = %+v, want one on docker:h1/name:sidecar started %s", updates, startedAt)
 	}
 }
 
@@ -4249,6 +4807,10 @@ func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
 	if alert.Threshold != 10.0 {
 		t.Errorf("expected threshold 10.0, got %f", alert.Threshold)
 	}
+	// Wearout is life remaining: the message must not read as 5% worn.
+	if want := "SSD life remaining is 5%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
 		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
 	}
@@ -4304,6 +4866,56 @@ func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
 	}
 	if alert.Value != 6 {
 		t.Errorf("expected value to be updated to 6, got %f", alert.Value)
+	}
+	if want := "SSD life remaining is 6%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
+}
+
+// The physical-disk poller re-evaluates every disk each cycle (and mock mode
+// on every alert tick), so a failed or worn disk must log at error/warn once,
+// when its alert opens, and at debug on every later poll.
+func TestCheckDiskHealthLogsAlertOpeningOnce(t *testing.T) {
+	count := captureTestLogs(t)
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// Exactly at the wearout threshold, which still alerts.
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdf",
+		Model:   "Crucial CT500MX500SSD1",
+		Serial:  "2034E4A1B2C3",
+		Type:    "ssd",
+		Health:  "FAILED",
+		Wearout: 10,
+		Size:    500107862016,
+	}
+	const polls = 3
+	for i := 0; i < polls; i++ {
+		m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	}
+
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 1 {
+		t.Errorf("error-level health log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk health check still failing"); got != polls-1 {
+		t.Errorf("debug-level health log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+	if got := count(zerolog.WarnLevel, "Disk wearout alert created"); got != 1 {
+		t.Errorf("warn-level wearout log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk life remaining still at or below wearout threshold"); got != polls-1 {
+		t.Errorf("debug-level wearout log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+
+	// A disk that passes and then fails again opens a new alert, which logs
+	// at error again.
+	disk.Health = "PASSED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	disk.Health = "FAILED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 2 {
+		t.Errorf("error-level health log count after the disk failed again = %d, want 2", got)
 	}
 }
 
@@ -5894,6 +6506,22 @@ func TestApplyRelaxedGuestThresholds(t *testing.T) {
 		}
 	})
 
+	t.Run("off thresholds stay off", func(t *testing.T) {
+		cfg := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 0, Clear: 0},
+			Memory: &HysteresisThreshold{Trigger: -1, Clear: -1},
+			Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		for name, th := range map[string]*HysteresisThreshold{"CPU": result.CPU, "Memory": result.Memory, "Disk": result.Disk} {
+			if th == nil || th.Trigger > 0 {
+				t.Errorf("%s = %+v, want it to stay off", name, th)
+			}
+		}
+	})
+
 	t.Run("original config unchanged", func(t *testing.T) {
 		// t.Parallel()
 		original := ThresholdConfig{
@@ -6127,81 +6755,89 @@ func TestDockerServiceResourceID(t *testing.T) {
 			expected:    "docker-service:svc-123",
 		},
 		{
-			name:        "derives ID from service name when ID empty",
+			name:        "marks the derived name when ID empty",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "My Service",
-			expected:    "docker:host-1/service/my-service",
+			expected:    "docker:host-1/service/name:my-service",
 		},
 		{
 			name:        "special chars in name replaced with dash",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my/service:v1.0",
-			expected:    "docker:host-1/service/my-service-v1-0",
+			expected:    "docker:host-1/service/name:my-service-v1-0",
 		},
 		{
 			name:        "backslash and colon replaced",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "path\\to:service",
-			expected:    "docker:host-1/service/path-to-service",
+			expected:    "docker:host-1/service/name:path-to-service",
 		},
 		{
 			name:        "preserves alphanumeric and underscore",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my_service_123",
-			expected:    "docker:host-1/service/my_service_123",
+			expected:    "docker:host-1/service/name:my_service_123",
 		},
 		{
 			name:        "preserves hyphens",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my-service-name",
-			expected:    "docker:host-1/service/my-service-name",
+			expected:    "docker:host-1/service/name:my-service-name",
 		},
 		{
 			name:        "trims leading/trailing dashes and underscores",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "---my-service___",
-			expected:    "docker:host-1/service/my-service",
+			expected:    "docker:host-1/service/name:my-service",
 		},
 		{
 			name:        "truncates long derived ID to 32 chars",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "this-is-a-very-long-service-name-that-exceeds-the-limit",
-			expected:    "docker:host-1/service/this-is-a-very-long-service-name",
+			expected:    "docker:host-1/service/name:this-is-a-very-long-service-name",
 		},
 		{
-			name:        "uses 'service' when name is all special chars",
+			name:        "no identity when name is all special chars",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "!!!@@@###",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
-			name:        "uses 'service' when both ID and name empty",
+			name:        "no identity when both ID and name empty",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
-			name:        "uses 'service' when both ID and name whitespace",
+			name:        "no identity when both ID and name whitespace",
 			hostID:      "host-1",
 			serviceID:   "   ",
 			serviceName: "   ",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
 			name:        "no host and derived name",
 			hostID:      "",
 			serviceID:   "",
 			serviceName: "webserver",
-			expected:    "docker-service:webserver",
+			expected:    "docker-service:name:webserver",
+		},
+		{
+			// A service named like another service's Swarm ID keeps its own reference.
+			name:        "a name never equals an ID reference",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "X7K2M9Q4W1E8R5T3Y6U0I2O4P",
+			expected:    "docker:host-1/service/name:x7k2m9q4w1e8r5t3y6u0i2o4p",
 		},
 	}
 
@@ -11932,6 +12568,65 @@ func TestCheckEscalations(t *testing.T) {
 	})
 }
 
+// A config save re-judges open TrueNAS disk temperature alerts against the
+// threshold the next evaluation applies to each disk's type.
+func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
+	sata := trueNASTemperatureDisk("sda", "sata", 57)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	checkTrueNASTemperatureDisk(t, m, sata)
+	for _, disk := range []unifiedresources.Resource{nvme, sata} {
+		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
+			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+		}
+	}
+
+	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
+	// SATA alert, still over its own trigger, open.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
+		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	}
+	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
+		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	}
+}
+
+// An alert raised before it recorded its disk type is held to the lowest
+// per-type trigger, so a save never resolves an alert the next evaluation
+// raises again.
+func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
+	if !firing {
+		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
+		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	}
+}
+
 func TestCleanupAlertsForNodes(t *testing.T) {
 	// t.Parallel()
 
@@ -12258,6 +12953,82 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 			t.Fatalf("resourceType = %v, want pmg", got)
 		}
 	})
+}
+
+// TestCleanupAlertsForNodesKeepsPlatformMetricAlerts pins that the Proxmox
+// node cleanup, which runs on every Proxmox poll, leaves Kubernetes, TrueNAS
+// and vSphere metric alerts alone. Their Node is a cluster or platform host,
+// never a Proxmox node, and their resourceType is a display label.
+func TestCleanupAlertsForNodesKeepsPlatformMetricAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	inputs := []*UnifiedResourceInput{
+		{ID: "physical-disk:truenas-main/sda", Type: "truenas-disk", Name: "sda", Node: "truenas-main", Instance: "TrueNAS", Temperature: &UnifiedResourceMetric{Value: 80, Percent: 80}},
+		{ID: "storage:truenas-main/pool:tank", Type: "truenas-pool", Name: "tank", Node: "truenas-main", Instance: "TrueNAS", Disk: &UnifiedResourceMetric{Percent: 95}},
+		{ID: "k8s:prod:pod:api", Type: "pod", Name: "api", Node: "k8s-node-1", Instance: "prod", CPU: &UnifiedResourceMetric{Percent: 99}},
+		{ID: "vmware:vc:vm:app-01", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "vc", CPU: &UnifiedResourceMetric{Percent: 99}},
+	}
+	for _, input := range inputs {
+		m.CheckUnifiedResource(input)
+	}
+	platformAlerts := alertKeys(m)
+	if len(platformAlerts) != len(inputs) {
+		t.Fatalf("expected one alert per platform resource, got %v", platformAlerts)
+	}
+
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	for _, alertID := range platformAlerts {
+		if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+			t.Fatalf("Proxmox node cleanup removed platform alert %q; remaining %v", alertID, alertKeys(m))
+		}
+	}
+
+	// The platform id alone keeps an alert whose label is not recognised.
+	m.mu.Lock()
+	labels := make(map[*Alert]interface{}, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		labels[alert] = alert.Metadata["resourceType"]
+		alert.Metadata["resourceType"] = "Unrecognised"
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("platform alerts removed despite their platformType: %v", got)
+	}
+	m.mu.Lock()
+	for alert, label := range labels {
+		alert.Metadata["resourceType"] = label
+	}
+	m.mu.Unlock()
+
+	// A legacy-shaped alert whose metadata predates platformType is still kept
+	// by its display label.
+	m.mu.Lock()
+	for _, alert := range m.activeAlerts {
+		delete(alert.Metadata, alertPlatformTypeKey)
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("display-label platform alerts removed without platformType: %v", got)
+	}
+}
+
+// The cleanup still removes a Proxmox guest alert whose node left the estate.
+func TestCleanupAlertsForNodesStillRemovesMissingProxmoxNodeAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{ID: "pve-gone:node-gone:101", Type: "vm", Name: "vm-101", Node: "node-gone", Instance: "pve-gone", CPU: &UnifiedResourceMetric{Percent: 99}})
+	if len(alertKeys(m)) != 1 {
+		t.Fatalf("expected the guest CPU alert, got %v", alertKeys(m))
+	}
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != 0 {
+		t.Fatalf("guest alert on a removed node survived cleanup: %v", got)
+	}
 }
 
 func TestCheckZFSPoolHealth(t *testing.T) {
@@ -13154,7 +13925,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for healthy container")
@@ -13181,7 +13952,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with empty health")
@@ -13208,7 +13979,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with none health")
@@ -13235,7 +14006,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for starting container")
@@ -13262,7 +14033,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13302,7 +14073,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13333,7 +14104,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected running unhealthy container to raise a health alert")
@@ -13376,7 +14147,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostUnhealthy)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected health alert to be raised")
@@ -13427,7 +14198,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for running container")
@@ -13454,7 +14225,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for container with exit code 1")
@@ -13478,7 +14249,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 			m.CheckDockerHost(host)
 
-			resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+			resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 			if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-oom-%s", resourceID)) {
 				t.Fatal("exit code 137 alone must not create an OOM alert")
 			}
@@ -13508,7 +14279,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13552,7 +14323,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13588,7 +14359,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		// First check - should create alert
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13633,7 +14404,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13687,7 +14458,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13738,7 +14509,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert on first check (just initializes tracking)")
@@ -13786,7 +14557,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Third check - still same restart count
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert for stable container")
@@ -13827,7 +14598,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 3
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert when restarts <= threshold")
@@ -13873,7 +14644,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 4
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13909,7 +14680,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		hostID := "host-restart-5"
 		containerID := "container-5"
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 
 		// Manually set up a restart loop state
 		m.mu.Lock()
@@ -13989,7 +14760,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// First check - initializes
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 
 		// Restart 1
@@ -14042,7 +14813,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 5
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -18679,7 +19450,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 	spamQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-spam")
 	virusQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-virus")
 
-	t.Run("nil quarantine clears alerts", func(t *testing.T) {
+	t.Run("nil quarantine preserves alerts", func(t *testing.T) {
 		m := newTestManager(t)
 
 		// Create an existing quarantine alert
@@ -18708,11 +19479,11 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		_, virusExists := testLookupActiveAlert(t, m, virusQuarantineState)
 		m.mu.RUnlock()
 
-		if spamExists {
-			t.Error("spam alert should be cleared when quarantine is nil")
+		if !spamExists {
+			t.Error("spam alert must be preserved when quarantine is nil")
 		}
-		if virusExists {
-			t.Error("virus alert should be cleared when quarantine is nil")
+		if !virusExists {
+			t.Error("virus alert must be preserved when quarantine is nil")
 		}
 	})
 
@@ -19793,8 +20564,8 @@ func TestSetAckRecordUsesCanonicalKeyWithoutMutatingLiveAlert(t *testing.T) {
 }
 
 func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.T) {
-	first := defaultAlertConfig()
-	second := defaultAlertConfig()
+	first := DefaultAlertConfig()
+	second := DefaultAlertConfig()
 
 	if first.BackupDefaults.AlertOrphaned == nil {
 		t.Fatal("first default backup AlertOrphaned is nil")
@@ -19810,6 +20581,41 @@ func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.
 	*first.BackupDefaults.AlertOrphaned = false
 	if !*second.BackupDefaults.AlertOrphaned {
 		t.Fatal("mutating one default config changed another default config")
+	}
+}
+
+// A fresh install runs the factory configuration, and the settings page has no
+// auto-acknowledge control, so the factory must never acknowledge a firing
+// alert on the user's behalf.
+func TestDefaultAlertConfigLeavesFiringAlertsUnacknowledged(t *testing.T) {
+	m := newTestManager(t)
+
+	now := time.Now()
+	m.mu.Lock()
+	m.activeAlerts["firing-alert"] = &Alert{
+		ID:        "firing-alert",
+		StartTime: now.Add(-72 * time.Hour),
+		LastSeen:  now,
+	}
+	m.mu.Unlock()
+
+	m.Cleanup(time.Hour)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, "firing-alert")
+	m.mu.RUnlock()
+	if alert.Acknowledged {
+		t.Fatalf("factory config acknowledged a firing alert as %q", alert.AckUser)
+	}
+}
+
+// The settings page offers the viewer's browser zone only while the stored
+// quiet-hours timezone is empty; a factory zone would replace it with one
+// fixed city for every fresh install.
+func TestDefaultAlertConfigLeavesQuietHoursTimezoneUnset(t *testing.T) {
+	cfg := DefaultAlertConfig()
+	if cfg.Schedule.QuietHours.Timezone != "" {
+		t.Fatalf("factory quiet-hours timezone = %q, want unset", cfg.Schedule.QuietHours.Timezone)
 	}
 }
 
@@ -20293,7 +21099,7 @@ func TestDockerContainerOverrideSurvivesContainerRecreate(t *testing.T) {
 		}
 	}
 	stateAlertID := func(hostID, containerID string) string {
-		return fmt.Sprintf("docker-container-state-%s", DockerResourceID(hostID, containerID))
+		return fmt.Sprintf("docker-container-state-%s", DockerContainerResourceID(hostID, containerID, ""))
 	}
 
 	// Subtests keep the two managers in separate lifetimes: newTestManager
@@ -20345,13 +21151,13 @@ func TestDockerContainerOverrideLegacyIDKeyStillHonoured(t *testing.T) {
 	}
 
 	m.mu.Lock()
-	m.config.Overrides[DockerResourceID(host.ID, container.ID)] = ThresholdConfig{Disabled: true}
+	m.config.Overrides[DockerContainerResourceID(host.ID, container.ID, "")] = ThresholdConfig{Disabled: true}
 	m.mu.Unlock()
 
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	alertID := fmt.Sprintf("docker-container-state-%s", DockerResourceID(host.ID, container.ID))
+	alertID := fmt.Sprintf("docker-container-state-%s", DockerContainerResourceID(host.ID, container.ID, ""))
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected legacy ID-keyed override to still disable container alerts")
 	}
@@ -21687,5 +22493,564 @@ func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
 				t.Fatalf("cleanup changed the retained occurrence: %+v", active[0])
 			}
 		})
+	}
+}
+
+func TestMetricStatusStaysOutOfDurableAlertSnapshots(t *testing.T) {
+	m, clock := newMetricStatusTestManager(t)
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+
+	live := m.GetActiveAlerts()
+	if len(live) != 1 || live[0].MetricStatus == nil || live[0].MetricStatus.Value != 78 {
+		t.Fatalf("live alerts do not carry the current reading: %+v", live)
+	}
+	if got := metricBreachTime(t, live[0].MetricStatus); !got.Equal(fired.LastSeen) {
+		t.Fatalf("live status lost the breach's date: %v, want %v", got, fired.LastSeen)
+	}
+	for _, alert := range m.snapshotActiveAlerts() {
+		if alert.MetricStatus != nil {
+			t.Fatalf("durable checkpoint carries volatile status for %s: %+v", alert.ID, alert.MetricStatus)
+		}
+	}
+	for _, alert := range m.activeRecoverySnapshot() {
+		if alert.MetricStatus != nil {
+			t.Fatalf("recovery projection carries volatile status for %s: %+v", alert.ID, alert.MetricStatus)
+		}
+	}
+}
+
+func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Now()
+	breachedLongAgo := now.Add(-StaleTrackingThreshold - time.Hour)
+
+	held := &Alert{
+		ID: "held::metric-threshold:usage", Type: "usage", ResourceID: "held",
+		StartTime: breachedLongAgo, LastSeen: breachedLongAgo,
+		MetricStatus: &models.MetricAlertStatus{Phase: models.MetricAlertPhaseLatched, ObservedAt: now},
+	}
+	abandoned := &Alert{
+		ID: "gone::metric-threshold:usage", Type: "usage", ResourceID: "gone",
+		StartTime: breachedLongAgo, LastSeen: breachedLongAgo,
+		MetricStatus: &models.MetricAlertStatus{Phase: models.MetricAlertPhaseLatched, ObservedAt: breachedLongAgo},
+	}
+	m.mu.Lock()
+	m.activeAlerts[held.ID] = held
+	m.activeAlerts[abandoned.ID] = abandoned
+	m.mu.Unlock()
+
+	m.cleanupStaleMaps()
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.activeAlerts[held.ID]; !ok {
+		t.Fatal("cleanup resolved a held alert whose condition is still being evaluated")
+	}
+	if _, ok := m.activeAlerts[abandoned.ID]; ok {
+		t.Fatal("cleanup kept an alert nobody has evaluated for over a day")
+	}
+}
+
+// Resource history owns each PVE disk alert row by the hardware identity the
+// alert records, and reads by the path reference find those rows by alert
+// identifier. Both must match what CheckDiskHealth and
+// CheckProxmoxDiskTemperature produce.
+func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.mu.Unlock()
+	disk := proxmox.Disk{DevPath: "/dev/sdb", Model: "Crucial MX500", Serial: "2117E59AB123", WWN: "0x5002538f12345678",
+		Type: "ssd", Health: "FAILED", Wearout: 3}
+	for i := 0; i < 3; i++ {
+		m.CheckDiskHealth("lab", "pve1", disk)
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: disk, Celsius: 80})
+	}
+
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", disk.DevPath)
+	want := map[string]bool{}
+	for _, identifier := range unifiedresources.ProxmoxPhysicalDiskAlertIdentifiers(ref) {
+		want[identifier] = true
+	}
+	active := m.GetActiveAlerts()
+	if len(active) != len(want) {
+		t.Fatalf("active alerts = %d, want %d", len(active), len(want))
+	}
+	for _, alert := range active {
+		if !want[alert.ID] || alert.ResourceID != ref {
+			t.Fatalf("alert %q on %q is not a history identifier of %q", alert.ID, alert.ResourceID, ref)
+		}
+		if alert.Metadata[unifiedresources.MetadataDiskSerial] != disk.Serial || alert.Metadata[unifiedresources.MetadataDiskWWN] != disk.WWN {
+			t.Fatalf("alert %q records serial %v and WWN %v", alert.ID, alert.Metadata[unifiedresources.MetadataDiskSerial], alert.Metadata[unifiedresources.MetadataDiskWWN])
+		}
+	}
+}
+
+func proxmoxTemperatureDisk(devPath, diskType string) proxmox.Disk {
+	return proxmox.Disk{DevPath: devPath, Model: "Test Disk", Serial: "SER-" + devPath, Type: diskType, Health: "PASSED"}
+}
+
+func proxmoxDiskTemperatureAlert(t *testing.T, m *Manager, devPath string) (*Alert, bool) {
+	t.Helper()
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	return testLookupActiveAlert(t, m, canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric))
+}
+
+func proxmoxDiskTemperatureResolution(m *Manager, devPath string) (*models.AlertResolution, bool) {
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	id := canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric)
+	for _, resolved := range m.GetRecentlyResolved() {
+		if resolved.ID == id {
+			return resolved.Resolution, true
+		}
+	}
+	return nil, false
+}
+
+// TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy pins Proxmox disk
+// temperature alerts to the disk temperature policy that judges an agent's
+// disks, TrueNAS disks and the Physical Disks verdict.
+func TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	check := func(devPath, diskType string, celsius int) {
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk(devPath, diskType), Celsius: celsius})
+	}
+	check("/dev/nvme0n1", "nvme", 63)
+	check("/dev/nvme1n1", "nvme", 72)
+	check("/dev/sda", "sata", 56)
+	check("/dev/sdb", "sas", 63)
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe at 63C fired under its 70C trigger: %v", alertKeys(m))
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); firing {
+		t.Fatalf("SAS at 63C fired under its 65C trigger: %v", alertKeys(m))
+	}
+	for devPath, trigger := range map[string]float64{"/dev/nvme1n1": 70, "/dev/sda": 55} {
+		alert, firing := proxmoxDiskTemperatureAlert(t, m, devPath)
+		if !firing {
+			t.Fatalf("%s did not fire: %v", devPath, alertKeys(m))
+		}
+		if alert.Threshold != trigger {
+			t.Fatalf("%s trigger = %v, want %v", devPath, alert.Threshold, trigger)
+		}
+		if alert.Type != proxmoxDiskTemperatureMetric || alert.Metadata["resourceType"] != proxmoxDiskResourceType {
+			t.Fatalf("%s alert type %q, resourceType %v", devPath, alert.Type, alert.Metadata["resourceType"])
+		}
+		if alert.Metadata["diskType"] == nil || alert.Metadata[unifiedresources.MetadataDiskSerial] != "SER-"+devPath {
+			t.Fatalf("%s metadata = %v", devPath, alert.Metadata)
+		}
+	}
+	if alert, _ := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); alert.Message != "Disk temperature at 56.0°C" {
+		t.Fatalf("message = %q", alert.Message)
+	}
+
+	// A raised NVMe trigger moves NVMe disks with it.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+	check("/dev/nvme2n1", "nvme", 72)
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme2n1"); firing {
+		t.Fatalf("NVMe at 72C fired under a 75C trigger")
+	}
+}
+
+// A disk the linked agent reports is the agent's: its open alert closes as
+// moved to the agent, and the disk never alerts twice. An excluded disk, or a
+// policy the agent Disk Temp default switched off, closes it as a plain clear.
+// A disk with no current reading keeps its alert.
+func TestProxmoxDiskTemperatureAlertOwnershipAndHolds(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	disk := proxmoxTemperatureDisk("/dev/sda", "sata")
+	read := func(reading ProxmoxDiskTemperatureReading) {
+		reading.Disk = disk
+		m.CheckProxmoxDiskTemperature("lab", "pve1", reading)
+	}
+	firing := func() bool {
+		_, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+		return ok
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("SATA at 60C did not fire: %v", alertKeys(m))
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 0})
+	if !firing() {
+		t.Fatalf("a poll without a current reading resolved the alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk kept its Proxmox temperature alert")
+	}
+	if resolution, ok := proxmoxDiskTemperatureResolution(m, "/dev/sda"); !ok || resolution == nil || resolution.Reason != string(AlertResolutionMovedToAgent) {
+		t.Fatalf("handover resolution = %+v (resolved %v), want moved_to_agent", resolution, ok)
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 80, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk raised a Proxmox temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("the disk did not alert again once the agent stopped listing it")
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, Excluded: true})
+	if firing() {
+		t.Fatalf("an excluded disk kept its temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if firing() {
+		t.Fatalf("a switched-off agent Disk Temp default kept the Proxmox disk alert")
+	}
+}
+
+// A Proxmox disk temperature warning waits out the factory stability window for
+// a noisy gauge, as agent and TrueNAS disk temperature warnings do; a critical
+// reading bypasses it.
+func TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	m.UpdateConfig(cfg)
+	if delay := m.GetConfig().TimeThresholds[proxmoxDiskResourceType]; delay != 5 {
+		t.Fatalf("proxmox-disk delay = %d, want the 5s factory default", delay)
+	}
+	m.mu.RLock()
+	grace := m.getTimeThreshold("lab:pve1:disk:dev-sda", proxmoxDiskResourceType, proxmoxDiskTemperatureMetric)
+	m.mu.RUnlock()
+	if grace != defaultNoisyGaugeStabilitySeconds {
+		t.Fatalf("Proxmox disk temperature delay = %ds, want the %ds stability window", grace, defaultNoisyGaugeStabilitySeconds)
+	}
+
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); firing {
+		t.Fatalf("a 57C SATA warning fired before its stability window")
+	}
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sdb", "sata"), Celsius: 70})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); !firing {
+		t.Fatalf("a 70C SATA critical reading waited out the stability window")
+	}
+}
+
+// A config save re-judges an open Proxmox disk temperature alert against its
+// disk type's trigger, as the next poll does; one without a recorded disk type
+// is held to the lowest per-type trigger.
+func TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	configureUnifiedEvalManager(t, m, cfg)
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/nvme0n1", "nvme"), Celsius: 72})
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	sata, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+	if !ok {
+		t.Fatalf("SATA at 57C did not fire: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	delete(sata.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe alert at 72C survived a save raising its trigger to 75C")
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); !firing {
+		t.Fatalf("a SATA alert without a disk type was resolved by the 70C agent default although its trigger is 55C")
+	}
+}
+
+func exitedDockerHost(hostID, containerID, name string) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:     containerID,
+			Name:   name,
+			State:  "exited",
+			Status: "Exited (1) seconds ago",
+		}},
+	}
+}
+
+// An override saved for a container's CPU threshold alone carries no
+// DisableConnectivity, and used to turn that container's state alerts back
+// on although the operator had turned them off for every container.
+func TestDockerContainerThresholdOverrideKeepsDisabledStateDefault(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StateDisableConnectivity = true
+	cfg.Overrides = map[string]ThresholdConfig{
+		dockerContainerOverrideKey("host-off", "web"): {CPU: &HysteresisThreshold{Trigger: 95, Clear: 90}},
+	}
+	m.UpdateConfig(cfg)
+
+	host := exitedDockerHost("host-off", "container-off", "web")
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := DockerContainerResourceID(host.ID, "container-off", "")
+	if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-state-%s", resourceID)) {
+		t.Fatal("a CPU-only override re-enabled container state alerts that the Docker default turns off")
+	}
+}
+
+// The row's own offline control stores a severity, and that alone turns
+// state alerts back on over a disabled default.
+func TestDockerContainerSeverityOverrideReenablesStateAlerts(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StateDisableConnectivity = true
+	cfg.Overrides = map[string]ThresholdConfig{
+		dockerContainerOverrideKey("host-on", "db"): {PoweredOffSeverity: AlertLevelCritical},
+	}
+	m.UpdateConfig(cfg)
+
+	host := exitedDockerHost("host-on", "container-on", "db")
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := DockerContainerResourceID(host.ID, "container-on", "")
+	alert, exists := testLookupActiveAlert(t, m, fmt.Sprintf("docker-container-state-%s", resourceID))
+	if !exists {
+		t.Fatal("an override with its own severity should re-enable container state alerts")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("alert level = %s, want critical from the override", alert.Level)
+	}
+}
+
+func restartingDockerHost(hostID, containerID string, restarts int) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:           containerID,
+			Name:         "flappy",
+			State:        "running",
+			Status:       "Up 1 second",
+			RestartCount: restarts,
+		}},
+	}
+}
+
+func TestDockerRestartLoopOffAtZero(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		count, window int
+		wantAlert     bool
+	}{
+		{name: "on", count: 3, window: 300, wantAlert: true},
+		{name: "count off", count: 0, window: 300},
+		{name: "window off", count: 3, window: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.DockerDefaults.RestartCount = tc.count
+			cfg.DockerDefaults.RestartWindow = tc.window
+			m.UpdateConfig(cfg)
+
+			hostID, containerID := "host-restart-off", "container-restart-off"
+			m.CheckDockerHost(restartingDockerHost(hostID, containerID, 0))
+			m.CheckDockerHost(restartingDockerHost(hostID, containerID, 5))
+
+			resourceID := DockerContainerResourceID(hostID, containerID, "")
+			got := testHasActiveAlert(t, m, fmt.Sprintf("docker-container-restart-loop-%s", resourceID))
+			if got != tc.wantAlert {
+				t.Fatalf("restart loop alert = %v, want %v (count %d, window %d)", got, tc.wantAlert, tc.count, tc.window)
+			}
+		})
+	}
+}
+
+func memoryLimitDockerHost(hostID, containerID string, usedPct int64) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:          containerID,
+			Name:        "memory-hog",
+			State:       "running",
+			Status:      "Up 10 minutes",
+			MemoryUsage: usedPct * 1024 * 1024,
+			MemoryLimit: 100 * 1024 * 1024,
+		}},
+	}
+}
+
+func TestDockerMemoryLimitLevelsOffAtZero(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		warn, crit int
+		usedPct    int64
+		wantLevel  AlertLevel // empty means no alert
+	}{
+		{name: "warning off, below critical", warn: 0, crit: 95, usedPct: 92},
+		{name: "warning off, above critical", warn: 0, crit: 95, usedPct: 97, wantLevel: AlertLevelCritical},
+		{name: "critical off, above both", warn: 90, crit: 0, usedPct: 97, wantLevel: AlertLevelWarning},
+		{name: "both off", warn: 0, crit: 0, usedPct: 99},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.DockerDefaults.MemoryWarnPct = tc.warn
+			cfg.DockerDefaults.MemoryCriticalPct = tc.crit
+			m.UpdateConfig(cfg)
+
+			hostID, containerID := "host-memlimit-off", "container-memlimit-off"
+			m.CheckDockerHost(memoryLimitDockerHost(hostID, containerID, tc.usedPct))
+
+			resourceID := DockerContainerResourceID(hostID, containerID, "")
+			alert, exists := testLookupActiveAlert(t, m, fmt.Sprintf("docker-container-memory-limit-%s", resourceID))
+			if tc.wantLevel == "" {
+				if exists {
+					t.Fatalf("unexpected %s memory limit alert at %d%% (warn %d, crit %d)", alert.Level, tc.usedPct, tc.warn, tc.crit)
+				}
+				return
+			}
+			if !exists {
+				t.Fatalf("expected %s memory limit alert at %d%% (warn %d, crit %d)", tc.wantLevel, tc.usedPct, tc.warn, tc.crit)
+			}
+			if alert.Level != tc.wantLevel {
+				t.Fatalf("alert level = %s, want %s", alert.Level, tc.wantLevel)
+			}
+		})
+	}
+}
+
+// The settings Off toggle sends -1. The normalizer used to turn it, and 0,
+// back into the factory value, so Off never stuck for these thresholds.
+func TestConfigUpdateKeepsDockerAndPMGThresholdsOff(t *testing.T) {
+	m := newTestManager(t)
+	update := []byte(`{
+		"dockerDefaults": {"cpu": {"trigger": 80, "clear": 75}, "restartCount": -1, "restartWindow": 300, "memoryWarnPct": 0, "memoryCriticalPct": 95},
+		"pmgDefaults": {"queueTotalWarning": -1, "queueTotalCritical": 0, "holdQueueWarn": 150}
+	}`)
+	if _, err := m.ApplyConfigUpdate(update); err != nil {
+		t.Fatalf("ApplyConfigUpdate: %v", err)
+	}
+	cfg := m.GetConfig()
+
+	docker := cfg.DockerDefaults
+	if docker.RestartCount != 0 || docker.MemoryWarnPct != 0 {
+		t.Fatalf("docker Off thresholds = restartCount %d, memoryWarnPct %d; want 0, 0", docker.RestartCount, docker.MemoryWarnPct)
+	}
+	if docker.RestartWindow != 300 || docker.MemoryCriticalPct != 95 {
+		t.Fatalf("docker set thresholds = restartWindow %d, memoryCriticalPct %d; want 300, 95", docker.RestartWindow, docker.MemoryCriticalPct)
+	}
+
+	pmg := cfg.PMGDefaults
+	if pmg.QueueTotalWarning != 0 || pmg.QueueTotalCritical != 0 {
+		t.Fatalf("PMG Off thresholds = queueTotalWarning %d, queueTotalCritical %d; want 0, 0", pmg.QueueTotalWarning, pmg.QueueTotalCritical)
+	}
+	if pmg.HoldQueueWarn != 150 {
+		t.Fatalf("PMG holdQueueWarn = %d, want the sent 150", pmg.HoldQueueWarn)
+	}
+	// A key the section omits is unset, not Off: it takes the factory value.
+	if pmg.HoldQueueCritical != 300 || pmg.OldestMessageWarnMins != 30 {
+		t.Fatalf("PMG omitted thresholds = holdQueueCritical %d, oldestMessageWarnMins %d; want factory 300, 30", pmg.HoldQueueCritical, pmg.OldestMessageWarnMins)
+	}
+}
+
+// One half of a quarantine growth level set to Off used to make the spec
+// invalid, which skipped the whole check, absolute thresholds included.
+func TestPMGQuarantineGrowthHalfOffKeepsAbsoluteCheck(t *testing.T) {
+	m := newTestManager(t)
+	defaults := m.GetConfig().PMGDefaults
+	defaults.QuarantineGrowthWarnMin = 0 // Off; QuarantineGrowthWarnPct stays 25
+	pmg := models.PMGInstance{ID: "pmg-half-off", Name: "mail"}
+
+	m.checkQuarantineMetric(pmg, "spam", defaults.QuarantineSpamWarn+500, nil, defaults)
+
+	if !testHasActiveAlert(t, m, fmt.Sprintf("%s-quarantine-spam", pmg.ID)) {
+		t.Fatal("spam quarantine above its absolute warning raised no alert while a growth level was half off")
+	}
+}
+
+// The node temperature alert judges the primary CPU reading, the value the
+// node's table, drawer headline and history show: a core above the package wins.
+func TestCheckNodeTemperatureJudgesPrimaryCPUReading(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	node := models.Node{
+		ID:       "node/pve-hot-core",
+		Name:     "pve-hot-core",
+		Instance: "pve-hot-core",
+		Status:   "online",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Temperature: &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			CPUPackage: 60,
+			Cores:      []models.CoreTemp{{Core: 0, Temp: 58}, {Core: 1, Temp: 92}},
+		},
+	}
+	m.CheckNode(node)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature"))
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatal("expected node temperature alert from the hot core")
+	}
+	if want := *models.PrimaryCPUTemperatureCelsius(node.Temperature); alert.Value != want || want != 92 {
+		t.Fatalf("alert value = %v, want the primary reading 92 (rule gave %v)", alert.Value, want)
+	}
+}
+
+// ZFS pool and device alerts are raised under "<storage>/zfs-pool:..." ids
+// that the resource registry cannot open; each names its storage so the
+// Alerts overview can open the pool on the Storage page.
+func TestZFSAlertsNameTheirStorage(t *testing.T) {
+	m := newTestManager(t)
+	storage := models.Storage{
+		ID:       "pve1-local-zfs",
+		Name:     "Local ZFS",
+		Node:     "pve1",
+		Instance: "lab",
+		ZFSPool: &models.ZFSPool{
+			Name:       "rpool",
+			State:      "DEGRADED",
+			ReadErrors: 3,
+			Devices: []models.ZFSDevice{
+				{Name: "sda", State: "FAULTED", ReadErrors: 3},
+			},
+		},
+	}
+
+	m.checkZFSPoolHealth(storage)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, id := range []string{
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-state"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool", "pve1-local-zfs/zfs-pool:rpool-errors"),
+		buildCanonicalStateID("pve1-local-zfs/zfs-pool:rpool/device:sda", "pve1-local-zfs/zfs-pool:rpool/device:sda-health"),
+	} {
+		alert := testRequireActiveAlert(t, m, id)
+		if got := alert.Metadata["storageResourceId"]; got != "pve1-local-zfs" {
+			t.Errorf("%s: storageResourceId = %v, want pve1-local-zfs", id, got)
+		}
 	}
 }

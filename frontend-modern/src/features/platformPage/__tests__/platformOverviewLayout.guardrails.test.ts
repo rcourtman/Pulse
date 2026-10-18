@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import * as ts from 'typescript';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
@@ -21,6 +22,7 @@ import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsT
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
+import dockerContainerTableModelSource from '@/features/docker/dockerContainerTableModel.ts?raw';
 import kubernetesControllersTableSource from '@/features/kubernetes/KubernetesControllersTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesEventsTableSource from '@/features/kubernetes/KubernetesEventsTable.tsx?raw';
@@ -34,6 +36,7 @@ import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorag
 // The backups page owns the scope controls and delegates dense table rendering
 // to current per-view components; the shared-primitive guardrail follows those
 // current table owners.
+import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
@@ -61,6 +64,9 @@ import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?r
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import storageSurfaceSource from '@/components/Storage/Storage.tsx?raw';
+import useWorkloadsStateSource from '@/components/Workloads/useWorkloadsState.ts?raw';
+import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 
 const indexCssSource = readFileSync('src/index.css', 'utf8');
 
@@ -174,6 +180,81 @@ const proxmoxInlineDetailTableSources = [
   proxmoxMailGatewayDrawerSource,
 ];
 
+type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
+
+function parseTsx(source: string): ts.SourceFile {
+  return ts.createSourceFile('source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+/** Every node under `root` (inclusive) that passes `test`, in source order. */
+function findNodes<T extends ts.Node>(root: ts.Node, test: (node: ts.Node) => node is T): T[] {
+  const found: T[] = [];
+  const visit = (node: ts.Node) => {
+    if (test(node)) found.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function isJsxTag(node: ts.Node): node is JsxTag {
+  return ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node);
+}
+
+function jsxTags(root: ts.Node, tag: string): JsxTag[] {
+  return findNodes(root, isJsxTag).filter((node) => node.tagName.getText() === tag);
+}
+
+/** The single `<tag>` under `root`; throws unless there is exactly one. */
+function onlyJsxTag(root: ts.Node, tag: string): JsxTag {
+  const tags = jsxTags(root, tag);
+  const [only] = tags;
+  if (tags.length !== 1 || !only) throw new Error(`expected one <${tag}>, found ${tags.length}`);
+  return only;
+}
+
+/** Source text of an attribute's value; a bare boolean attribute reads as `true`. */
+function jsxAttr(tag: JsxTag, name: string): string | undefined {
+  const attr = tag.attributes.properties.find(
+    (prop): prop is ts.JsxAttribute => ts.isJsxAttribute(prop) && prop.name.getText() === name,
+  );
+  if (!attr) return undefined;
+  if (!attr.initializer) return 'true';
+  return ts.isJsxExpression(attr.initializer)
+    ? attr.initializer.expression?.getText()
+    : attr.initializer.getText();
+}
+
+function functionDecl(root: ts.Node, name: string): ts.FunctionDeclaration {
+  const fn = findNodes(root, ts.isFunctionDeclaration).find((node) => node.name?.text === name);
+  if (!fn) throw new Error(`function ${name} not found`);
+  return fn;
+}
+
+/** Initializer text of every object property inside the first `callee(...)` call. */
+function callProperties(root: ts.Node, callee: string): Map<string, string> {
+  const call = findNodes(root, ts.isCallExpression).find(
+    (node) => node.expression.getText() === callee,
+  );
+  const properties = new Map<string, string>();
+  for (const property of call ? findNodes(call, ts.isPropertyAssignment) : []) {
+    properties.set(property.name.getText(), property.initializer.getText());
+  }
+  return properties;
+}
+
+/** Tab id of the nearest enclosing `activeTab() === 'x'` / `mountedTabs().has('x')` gate. */
+function enclosingTab(tag: ts.Node): string | undefined {
+  for (let node = tag.parent; node; node = node.parent) {
+    if (!ts.isJsxElement(node) || node.openingElement.tagName.getText() !== 'Show') continue;
+    const gate = (jsxAttr(node.openingElement, 'when') ?? '').match(
+      /^activeTab\(\) === '([a-z-]+)'$|^mountedTabs\(\)\.has\('([a-z-]+)'\)$/,
+    );
+    if (gate) return gate[1] ?? gate[2];
+  }
+  return undefined;
+}
+
 describe('platform overview layout guardrails', () => {
   it('keeps attention summaries canonical without a competing estate panel', () => {
     for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
@@ -234,7 +315,6 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toContain('const [search, ');
     }
 
-    expect(sharedPlatformPageSource).toContain('searchSuggestions={tableState.searchSuggestions}');
     expect(platformSearchSuggestionsSource).toContain('buildPlatformResourceSearchSuggestions');
     expect(platformSearchSuggestionsSource).not.toContain('platformData');
   });
@@ -322,18 +402,24 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('platform-table-mobile-w-30');
     }
     // The images phone row keeps image, size and the update verdict; host and
-    // consumers move to the row expansion so the verdict is not clipped.
+    // consumers move to the row expansion so the verdict is not clipped. In
+    // the tablet band and at md the Update check column keeps the ~122px its
+    // longest badge needs ("Update available", "Managed by Pulse"), taken
+    // from Size in the band and from Host, Used by and Size at md.
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[12%\]"/,
+      /sortKey="image"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[30%\]"\s*bandWidth=\{30\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="host"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[18%\]"/,
+      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[11%\]"\s*bandWidth=\{12\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="usedBy"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[24%\]"/,
+      /sortKey="host"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[17%\]"\s*bandWidth=\{17\.5\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-25 md:w-\[16%\]"/,
+      /sortKey="usedBy"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[23%\]"\s*bandWidth=\{17\.5\}/,
+    );
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-25 md:w-\[19%\]"\s*bandWidth=\{23\}/,
     );
     expect(dockerServicesTableSource).toMatch(
       /sortKey="mode"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
@@ -360,19 +446,32 @@ describe('platform overview layout guardrails', () => {
       '-my-3 inline-flex min-h-11 items-center truncate',
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[10%\]"/,
+      /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[8%\]"/,
+    );
+    // Status names the node state on desktop; the dot carries it on phones.
+    // Its badge must not clip (Degraded ~64px, Unschedulable ~89px), so Status
+    // takes md room from CPU, whose bar has no sublabel, and the tablet band
+    // sizes every header and Degraded at a 34rem table.
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[10\.5%\]"\s*bandWidth=\{14\.6\}/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[14%\]"/,
+      /sortKey="cpu"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7\.5%\]"\s*bandWidth=\{9\.2\}/,
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="memory"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"\s*bandWidth=\{11\.8\}/,
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"\s*bandWidth=\{13\.1\}/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[20%\]"/,
+      /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[18%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
-      /sortKey="node"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[13%\]"/,
+      /sortKey="node"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[12%\]"/,
     );
     expect(kubernetesServicesTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[15%\]"/,
@@ -384,11 +483,66 @@ describe('platform overview layout guardrails', () => {
       /sortKey="class"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"/,
     );
     expect(kubernetesConfigTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[16%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"/,
     );
     expect(kubernetesPolicyTableSource).toContain(
-      "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]",
+      "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]",
     );
+  });
+
+  it('keeps Docker image references readable by their repository and tag', () => {
+    // References that share a registry and namespace differ only at the end, so
+    // every image cell truncates the shared head and keeps name:tag visible.
+    expect(dockerImagesTableSource).toMatch(/<DockerResourceNameCell[\s\S]{0,80}?imageReference/);
+    for (const source of [dockerContainersTableSource, dockerServicesTableSource]) {
+      expect(source).toContain(
+        '<DockerImageReferenceText reference={image()} class="max-w-full" />',
+      );
+    }
+  });
+
+  it('keeps platform summary cells truncating inside their own column', () => {
+    // A capped inline-block (max-w-52 truncate) ignored the column width, so a
+    // long value spilled past a narrow cell without an ellipsis and sat above
+    // the row's text line; a block span fills the cell and ellipsizes there.
+    for (const source of [
+      dockerConfigsTableSource,
+      dockerImagesTableSource,
+      dockerNetworksTableSource,
+      dockerSecretsTableSource,
+      dockerServicesTableSource,
+      dockerTasksTableSource,
+      dockerVolumesTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxMailGatewayDrawerSource,
+      proxmoxRecoverableTableSource,
+      vsphereHostsTableSource,
+      kubernetesAutoscalingTableSource,
+      kubernetesConfigTableSource,
+      kubernetesControllersTableSource,
+      kubernetesEventsTableSource,
+      kubernetesNetworkingTableSource,
+      kubernetesNodesTableSource,
+      kubernetesPolicyTableSource,
+      kubernetesServicesTableSource,
+      kubernetesStorageTableSource,
+    ]) {
+      expect(source).not.toMatch(/class="[^"]*\binline-block\b[^"]*\btruncate\b/);
+      expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
+      // A block span that ellipsizes in its own cell, toned or not.
+      expect(source).toMatch(/class=(?:"|\{`)block truncate\b/);
+    }
+  });
+
+  it('keeps long tablet headers from clipping', () => {
+    // "Lifecycle / trust" outgrows its tablet-band column, so it keeps the
+    // compact label it shows on phones through that band.
+    expect(kubernetesConfigTableSource).toMatch(
+      /compact="Status"\s+full="Lifecycle \/ trust"\s+compactInBand/,
+    );
+    // The Docker Restarts header cannot fit below a 720px table; the count
+    // waits in the drawer there and a crash-looper says so in State.
+    expect(dockerContainerTableModelSource).toMatch(/restarts: 'tablet',/);
   });
 
   it('keeps phone-priority visibility container-led and symmetric across table rows', () => {
@@ -413,8 +567,17 @@ describe('platform overview layout guardrails', () => {
     expect(dockerVolumesTableSource).toMatch(
       /getPlatformTableCellClassForKind\('text'\)[\s\S]{0,100}?platform-table-phone-hidden[\s\S]{0,140}?dockerTextValue\(resource\.docker\?\.scope\)/,
     );
+    // Desired is the denominator Ready already shows (2/2), so it waits for a
+    // wide table rather than returning with the tablet tier.
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="desired"[\s\S]{0,120}?platform-table-phone-hidden/,
+      /sortKey="desired"[\s\S]{0,120}?class="hidden md:table-cell md:w-\[8%\]"/,
+    );
+    // On a phone Ready only shows 2/2 while Age needs room for "18h ago".
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="ready"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[7%\]"/,
+    );
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="age"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[8%\] platform-table-narrow-hidden"/,
     );
     expect(truenasVirtualMachinesTableSource).toMatch(
       /sortKey="state"[\s\S]{0,120}?platform-table-phone-hidden/,
@@ -433,10 +596,10 @@ describe('platform overview layout guardrails', () => {
       /sortKey="resource"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[32%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[24%\]"/,
+      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[20%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
+      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"/,
     );
     expect(agentsMachinesTableSource).toContain(
       'class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"',
@@ -468,10 +631,6 @@ describe('platform overview layout guardrails', () => {
       'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
     );
     expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
     expect(dockerPageSurfaceSource).toContain('<DockerContainersTable');
     expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
@@ -544,7 +703,7 @@ describe('platform overview layout guardrails', () => {
     expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toMatch(
-      /class="hidden sm:table-cell md:w-\[19%\]"[\s\S]{0,120}?Flags/,
+      /class="hidden sm:table-cell md:w-\[26%\]"[\s\S]{0,120}?Flags/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
@@ -557,7 +716,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7%\]"/,
+      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[5%\]"/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
@@ -574,7 +733,6 @@ describe('platform overview layout guardrails', () => {
     expect(standalonePageSurfaceSource).not.toContain('UnifiedResourceTable');
     expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
     expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
-    expect(standalonePageModelSource).not.toContain('infrastructureSelectors');
     expect(standalonePageModelSource).not.toContain('buildAgentsPageFilterModel');
     expect(standalonePageModelSource).not.toContain('buildStandalonePageFilterModel');
   });
@@ -600,8 +758,10 @@ describe('platform overview layout guardrails', () => {
     // Proxmox and vSphere overview pages render their own page-level
     // WorkloadsFilter above the embedded WorkloadsSurface so a single
     // toolbar drives both the page's top table and the workloads table.
-    // If the embedded surface also renders its own filter the page ends
-    // up with two stacked toolbars wired to the same state (RC6 bug).
+    // The surface renders no filter of its own; one there would stack a
+    // second toolbar wired to the same state (RC6 bug).
+    expect(workloadsSurfaceSource).not.toContain('<WorkloadsFilter');
+    expect(workloadsSurfaceSource).not.toContain("from './WorkloadsFilter'");
     const surfacesWithSharedToolbar: Array<[string, string]> = [
       ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
       ['VmwarePageSurface', vmwarePageSurfaceSource],
@@ -609,11 +769,148 @@ describe('platform overview layout guardrails', () => {
     for (const [name, source] of surfacesWithSharedToolbar) {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
+      expect(source, `${name} names its workloads table even in kiosk`).toContain('tableTitle={');
+      expect(source, `${name} uses an accessible table heading`).toContain('<h2');
       expect(
-        /<WorkloadsSurface\b[^>]*?suppressFilterToolbar/s.test(source),
-        `${name} should pass suppressFilterToolbar to <WorkloadsSurface>`,
-      ).toBe(true);
+        source.indexOf('<WorkloadsFilter'),
+        `${name} filter precedes the surface`,
+      ).toBeLessThan(source.indexOf('<WorkloadsSurface'));
     }
+  });
+
+  it('keeps canonical surface embeds to the tabs the platform-page contract names', () => {
+    // The platform-page rule in frontend-primitives.md (mirrored by
+    // cloud-paid, storage-recovery, unified-resources and
+    // performance-and-scalability) names exactly these embeds:
+    // WorkloadsSurface on the Proxmox and vSphere Overview tabs,
+    // StorageSurface on the Proxmox Storage tab, and no Recovery surface.
+    const proxmoxFile = parseTsx(proxmoxPageSurfaceSource);
+    const truenasFile = parseTsx(truenasPageSurfaceSource);
+    const expectedEmbeds: Array<[string, ts.SourceFile, { workloads: number; storage: number }]> = [
+      [
+        'StandalonePageSurface',
+        parseTsx(standalonePageSurfaceSource),
+        { workloads: 0, storage: 0 },
+      ],
+      ['ProxmoxPageSurface', proxmoxFile, { workloads: 1, storage: 1 }],
+      ['DockerPageSurface', parseTsx(dockerPageSurfaceSource), { workloads: 0, storage: 0 }],
+      [
+        'KubernetesPageSurface',
+        parseTsx(kubernetesPageSurfaceSource),
+        { workloads: 0, storage: 0 },
+      ],
+      ['TrueNASPageSurface', truenasFile, { workloads: 0, storage: 0 }],
+      ['VmwarePageSurface', parseTsx(vmwarePageSurfaceSource), { workloads: 1, storage: 0 }],
+    ];
+    for (const [name, file, expected] of expectedEmbeds) {
+      expect(jsxTags(file, 'WorkloadsSurface').length, `${name} WorkloadsSurface embeds`).toBe(
+        expected.workloads,
+      );
+      expect(jsxTags(file, 'StorageSurface').length, `${name} StorageSurface embeds`).toBe(
+        expected.storage,
+      );
+      const recoveryEmbeds = findNodes(file, isJsxTag)
+        .map((tag) => tag.tagName.getText())
+        .filter((tag) => /^Recovery(?:Surface)?$/.test(tag));
+      expect(recoveryEmbeds, `${name} must not embed a Recovery surface`).toEqual([]);
+    }
+    expect(existsSync('src/features/recovery')).toBe(false);
+    expect(existsSync('src/components/Recovery')).toBe(false);
+
+    // Neither surface has an embedded or table-only mode, and WorkloadsSurface
+    // has no toolbar prop at all: it renders no toolbar, and the embedding page
+    // renders the only one.
+    const surfaceSources: Array<[string, string]> = [
+      ['WorkloadsSurface', workloadsSurfaceSource],
+      ['useWorkloadsState', useWorkloadsStateSource],
+      ['Storage', storageSurfaceSource],
+    ];
+    for (const [name, source] of surfaceSources) {
+      expect(source, `${name} must not declare an embed-mode prop`).not.toMatch(
+        /\b(?:embedded|tableOnly|showFilterToolbar|suppressFilterToolbar)\??:/,
+      );
+      expect(source, `${name} must not read an embed-mode prop`).not.toMatch(
+        /props\.(?:embedded|tableOnly|showFilterToolbar|suppressFilterToolbar)\b/,
+      );
+    }
+
+    // WorkloadsSurface renders the state its page passes. It imports only that
+    // state's type, so it has no hook to call and cannot build a second state.
+    const workloadsSurfaceFile = parseTsx(workloadsSurfaceSource);
+    const stateModuleImports = findNodes(workloadsSurfaceFile, ts.isImportDeclaration).filter(
+      (node) =>
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === './useWorkloadsState',
+    );
+    expect(stateModuleImports.length).toBeGreaterThan(0);
+    for (const node of stateModuleImports) {
+      expect(node.importClause?.isTypeOnly, node.getText()).toBe(true);
+    }
+    expect(
+      findNodes(workloadsSurfaceFile, ts.isCallExpression).map((call) => call.expression.getText()),
+    ).not.toContain('useWorkloadsState');
+
+    // Each Workloads embed sits on its page's Overview tab, owns the state and
+    // the one toolbar, and locks the platform: the state is scoped to it and
+    // the Platform chip never shows as a removable filter.
+    const workloadsEmbedders: Array<[string, ts.SourceFile, string, string]> = [
+      ['ProxmoxPageSurface', proxmoxFile, 'ProxmoxOverview', 'PROXMOX_PLATFORM_FILTER'],
+      [
+        'VmwarePageSurface',
+        parseTsx(vmwarePageSurfaceSource),
+        'VmwareOverview',
+        'VMWARE_PLATFORM_FILTER',
+      ],
+    ];
+    for (const [name, file, overview, platform] of workloadsEmbedders) {
+      expect(enclosingTab(onlyJsxTag(file, overview)), `${name} overview tab`).toBe('overview');
+      const overviewFn = functionDecl(file, overview);
+      const state = callProperties(overviewFn, 'useWorkloadsState');
+      expect(state.get('forcedPlatform'), name).toBe(platform);
+      expect(state.get('suppressPlatformFilter'), name).toBe('true');
+      const toolbar = onlyJsxTag(overviewFn, 'WorkloadsFilter');
+      expect(jsxAttr(toolbar, 'platformFilter'), name).toBe('undefined');
+      expect(jsxAttr(toolbar, 'forcedPlatform'), name).toBe(platform);
+      const surface = onlyJsxTag(overviewFn, 'WorkloadsSurface');
+      expect(jsxAttr(surface, 'state'), name).toBe('workloadsState');
+      // The surface renders only that state; the scope it repeats for its
+      // empty-state copy must be the scope the state was built with.
+      const unquote = (text?: string) => text?.replace(/^(['"])(.*)\1$/, '$2');
+      expect(jsxAttr(surface, 'forcedPlatform'), name).toBe(platform);
+      expect(unquote(jsxAttr(surface, 'forcedViewMode')), name).toBe(
+        unquote(state.get('forcedViewMode')),
+      );
+    }
+
+    // StorageSurface sits on the Proxmox Storage tab with the source locked and
+    // no forcedView, so Storage keeps its Storage / Physical Disks view tabs.
+    const storageEmbed = onlyJsxTag(proxmoxFile, 'StorageSurface');
+    expect(enclosingTab(storageEmbed)).toBe('storage');
+    expect(jsxAttr(storageEmbed, 'forcedSourceFilter')).toBe('PROXMOX_PLATFORM_FILTER');
+    expect(jsxAttr(storageEmbed, 'forcedView')).toBeUndefined();
+    const storageControls = onlyJsxTag(parseTsx(storageSurfaceSource), 'StoragePageControls');
+    expect(jsxAttr(storageControls, 'showViewTabs')).toBe('!props.forcedView');
+
+    // TrueNAS storage and recovery rows render in TrueNAS-owned tables, and
+    // the Proxmox Backups tab is a Proxmox-owned table.
+    expect(enclosingTab(onlyJsxTag(truenasFile, 'TrueNASStorage'))).toBe('storage');
+    onlyJsxTag(functionDecl(truenasFile, 'TrueNASStorage'), 'TrueNASStorageTopologyTable');
+    expect(enclosingTab(onlyJsxTag(proxmoxFile, 'ProxmoxBackupsTable'))).toBe('backups');
+    expect(callProperties(truenasFile, 'useRecoveryPoints').get('platform')).toBe(
+      'TRUENAS_PLATFORM_FILTER',
+    );
+    const protectionHook = findNodes(truenasFile, ts.isVariableDeclaration).find(
+      (declaration) => declaration.name.getText() === 'protection',
+    );
+    expect(protectionHook?.initializer?.getText()).toMatch(/^useRecoveryPoints\(/);
+    const protectionTab = onlyJsxTag(truenasFile, 'TrueNASProtection');
+    expect(enclosingTab(protectionTab)).toBe('protection');
+    expect(jsxAttr(protectionTab, 'recoveryPoints')).toBe('protection');
+    const protectionTable = onlyJsxTag(
+      functionDecl(truenasFile, 'TrueNASProtection'),
+      'TrueNASProtectionTable',
+    );
+    expect(jsxAttr(protectionTable, 'points')).toBe('props.recoveryPoints.points()');
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {
@@ -660,6 +957,32 @@ describe('platform overview layout guardrails', () => {
     );
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'disk'[\s\S]{0,80}?label:\s*'Disk'[\s\S]{0,80}?kind:\s*'metric-bar'/,
+    );
+  });
+
+  it('keeps recovery view and filter state with the platform tab that owns the rows', () => {
+    // No aggregate Recovery page or shared recovery serializer exists, so each
+    // platform tab owns its recovery state (storage-recovery forbidden path 9).
+    // The Proxmox Backups view switch is navigation above the filter bar.
+    const sectionTabsAt = proxmoxBackupsTableSource.indexOf('<PlatformSectionTabs');
+    const filterBarAt = proxmoxBackupsTableSource.indexOf('<FilterBar');
+    expect(sectionTabsAt).toBeGreaterThan(-1);
+    expect(filterBarAt).toBeGreaterThan(sectionTabsAt);
+    // Its activity day is route state; its chart range is component state.
+    expect(proxmoxBackupsTableSource).toMatch(
+      /setSearchParams\(\{\s*\[PROXMOX_BACKUPS_QUERY_PARAMS\.day\]: value \|\| null \}/,
+    );
+    expect(proxmoxBackupsTableSource).toContain('createSignal<BackupActivityRangeDays>(30)');
+    expect(proxmoxBackupsTableSource).not.toMatch(/PROXMOX_BACKUPS_QUERY_PARAMS\.range\b/);
+    for (const call of proxmoxBackupsTableSource.match(/setSearchParams\([^;]*/g) ?? []) {
+      expect(call).not.toMatch(/\brange\b|chartRange/);
+    }
+    // The TrueNAS Protection table keeps search, status and sort out of the URL.
+    expect(truenasProtectionTableSource).not.toContain('useSearchParams');
+    expect(truenasProtectionTableSource).not.toContain('@/routing/resourceLinks');
+    expect(truenasProtectionTableSource).toContain('createPlatformTableFilterState({');
+    expect(truenasProtectionTableSource).toMatch(
+      /createPlatformTableSortState\(\{\s*storageKey: 'truenasProtection'/,
     );
   });
 });

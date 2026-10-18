@@ -10,6 +10,12 @@ type PlatformOutdatedSensorSetupNoticeProps = {
   actionLabel?: string;
 };
 
+// Leads with the label the nodes table shows so the user can match the row,
+// then names the Proxmox node the setup script is re-run on when that label
+// does not already contain it.
+const formatNodeLabel = (node: OutdatedSensorSetupNode): string =>
+  node.nodeName ? `${node.name} (${node.nodeName})` : node.name;
+
 // Inline notice shown on the Proxmox page when a node's SSH temperature
 // monitoring was set up by a pre-v6.0.0-rc.6 setup script. That setup locks
 // the SSH key to `sensors -j`, so SATA/SAS disk temperatures silently never
@@ -18,12 +24,12 @@ type PlatformOutdatedSensorSetupNoticeProps = {
 // clean in the healthy case. Sibling of PlatformOutdatedAgentNotice.
 export function PlatformOutdatedSensorSetupNotice(props: PlatformOutdatedSensorSetupNoticeProps) {
   const count = createMemo(() => props.nodes.length);
-  const names = createMemo(() => props.nodes.map((node) => node.name).join(', '));
+  const names = createMemo(() => props.nodes.map(formatNodeLabel).join(', '));
   const actionLabel = createMemo(() => props.actionLabel || 'Open Infrastructure settings');
 
   const message = createMemo(() => {
     if (count() === 1) {
-      return `${props.nodes[0].name} is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures. Re-run the node setup script to upgrade it.`;
+      return `${formatNodeLabel(props.nodes[0])} is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures. Re-run the node setup script to upgrade it.`;
     }
     return `${count()} nodes are using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures. Re-run the node setup script on each to upgrade them. Affected: ${names()}.`;
   });

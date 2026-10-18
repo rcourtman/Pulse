@@ -1,31 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
 const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
-  const details = getByTestId('resource-platform-details') as HTMLDetailsElement;
+  // Platform context sits inside the Overview's one Details disclosure.
+  const details = getByTestId('resource-technical-details') as HTMLDetailsElement;
   details.open = true;
   fireEvent(details, new Event('toggle'));
 };
 
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
+const wsActiveAlerts = vi.hoisted(() => ({}) as Record<string, any>);
 const reconnectSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: wsState,
+    activeAlerts: wsActiveAlerts,
     connected: () => true,
     initialDataReceived: () => true,
     reconnecting: () => false,
     reconnect: reconnectSpy,
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
@@ -44,7 +43,7 @@ vi.mock('@/api/resources', () => ({
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
-    getSettings: vi.fn().mockResolvedValue({ discovery_enabled: false }),
+    getSettings: vi.fn().mockResolvedValue({}),
     getResourceIntelligence: vi.fn().mockResolvedValue({
       resource_id: 'resource-1',
       health: {
@@ -75,6 +74,26 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   lastSeen: Date.now(),
   platformData: { sources: ['proxmox'] },
   ...overrides,
+});
+
+const openAlert = (overrides: Record<string, unknown>) => ({
+  id: 'alert-1',
+  type: 'cpu',
+  level: 'warning',
+  resourceId: 'resource-1',
+  resourceName: 'host-1',
+  node: 'host-1',
+  instance: 'agent',
+  message: 'Agent CPU at 97%',
+  value: 97,
+  threshold: 90,
+  startTime: '2026-10-06T10:00:00Z',
+  acknowledged: false,
+  ...overrides,
+});
+
+afterEach(() => {
+  for (const id of Object.keys(wsActiveAlerts)) delete wsActiveAlerts[id];
 });
 
 describe('ResourceDetailDrawer service cards', () => {
@@ -444,5 +463,132 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByTestId('availability-probe-status')).toBeInTheDocument();
     expect(getByText('Trusted')).toBeInTheDocument();
     expect(getByText('Example CA')).toBeInTheDocument();
+  });
+
+  it('keeps the other attention reasons when an open alert already states one', () => {
+    // A TrueNAS pool carries its own degraded alert and the copied disk alert.
+    // One matching open alert must not hide the pool's own reason.
+    const resource = baseResource({
+      type: 'storage',
+      status: 'degraded',
+      incidentSummary: 'Device /dev/sdc has SMART test failures.',
+      incidents: [
+        {
+          code: 'truenas_volume_status',
+          severity: 'warning',
+          summary: 'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+      ],
+    } as Partial<Resource>);
+    wsActiveAlerts['smart-sdc'] = openAlert({
+      id: 'smart-sdc',
+      type: 'smart',
+      resourceId: 'resource-1',
+      resourceName: 'archive',
+      // TrueNAS alert text can differ from the incident by its full stop.
+      message: 'Device /dev/sdc has SMART test failures',
+    });
+
+    const { getAllByText, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('Needs attention')).toBeInTheDocument();
+    expect(
+      getByText('Pool archive is DEGRADED: one member of mirror-0 is faulted.'),
+    ).toBeInTheDocument();
+    expect(getAllByText(/Device \/dev\/sdc has SMART test failures/)).toHaveLength(1);
+  });
+
+  it('keeps one row when an incident alert states the reason and its impact', () => {
+    // Unified incident alerts on storage with consumers join the reason and its
+    // impact as two sentences; neither health reason may repeat beside it.
+    const resource = baseResource({
+      id: 'storage-213567e8568ac638',
+      type: 'storage',
+      name: 'archive-tier',
+      displayName: 'archive-tier',
+      status: 'degraded',
+      incidentSummary: 'Datastore latency above threshold',
+      incidentImpactSummary: 'Affects 2 dependent resources: warehouse-db-01, etl-batch-01',
+      storage: {
+        postureSummary: 'Affects 2 dependent resources: warehouse-db-01, etl-batch-01',
+      },
+      incidents: [
+        {
+          code: 'vmware_alarm',
+          severity: 'warning',
+          summary: 'Datastore latency above threshold',
+        },
+      ],
+    } as Partial<Resource>);
+    wsActiveAlerts['datastore-latency'] = openAlert({
+      id: 'datastore-latency',
+      type: 'storage-incident',
+      resourceId: 'storage-213567e8568ac638',
+      resourceName: 'archive-tier',
+      message:
+        'Datastore latency above threshold. Affects 2 dependent resources: warehouse-db-01, etl-batch-01',
+    });
+
+    const { getByTestId } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    const attention = within(getByTestId('drawer-attention-section'));
+    expect(attention.getByText('1 active')).toBeInTheDocument();
+    expect(
+      attention.getByText(
+        'Datastore latency above threshold. Affects 2 dependent resources: warehouse-db-01, etl-batch-01',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('lists the open alerts of a machine and its components under Needs attention', () => {
+    // Host agent alerts key on "agent:<agent id>"; disk alerts nest under it.
+    // Resources carry no embedded alert list, so the drawer reads the live map.
+    const resource = baseResource({
+      id: 'agent-acdfdee2953587fb',
+      name: 'Apollo-114',
+      displayName: 'Apollo-114',
+      agent: { agentId: 'host-linux-1' },
+      canonicalIdentity: {
+        displayName: 'Apollo-114',
+        primaryId: 'agent:host-linux-1',
+        aliases: ['agent:host-linux-1', 'host-linux-1', 'apollo-114'],
+      },
+    } as Partial<Resource>);
+    wsActiveAlerts['agent:host-linux-1-cpu'] = openAlert({
+      id: 'agent:host-linux-1-cpu',
+      resourceId: 'agent:host-linux-1',
+      resourceName: 'Apollo-114',
+      message: 'Agent CPU at 97%',
+    });
+    wsActiveAlerts['agent:host-linux-1/disk:data-disk'] = openAlert({
+      id: 'agent:host-linux-1/disk:data-disk',
+      type: 'disk',
+      level: 'critical',
+      resourceId: 'agent:host-linux-1/disk:data',
+      resourceName: 'Apollo-114 (/data)',
+      message: 'Disk /data at 96%',
+    });
+    wsActiveAlerts['agent:host-linux-10-cpu'] = openAlert({
+      id: 'agent:host-linux-10-cpu',
+      resourceId: 'agent:host-linux-10',
+      resourceName: 'Other host',
+      message: 'Other host CPU at 99%',
+    });
+
+    const { getByTestId } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    const attention = within(getByTestId('drawer-attention-section'));
+    expect(attention.getByText('2 active')).toBeInTheDocument();
+    const rows = attention.getAllByRole('listitem');
+    // Most severe first.
+    expect(rows[0]).toHaveTextContent('Disk /data at 96%');
+    expect(rows[0]).toHaveTextContent('Apollo-114 (/data)');
+    expect(rows[1]).toHaveTextContent('Agent CPU at 97%');
+    expect(attention.queryByText('Other host CPU at 99%')).not.toBeInTheDocument();
   });
 });

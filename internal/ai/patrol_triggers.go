@@ -108,6 +108,9 @@ type PatrolScope struct {
 	// scopes. It is used only to reduce the provider tool manifest; it never
 	// broadens collection scope or mutation authority.
 	resolvedResourceTypes []string
+	// Alert constructors receive the producer's type hint. Current canonical
+	// ownership can replace that hint when an agent is linked into a guest/node.
+	alertResourceTypeHint bool
 }
 
 // PatrolScopeResolution records how caller-supplied identities map onto the
@@ -123,11 +126,15 @@ type PatrolScopeResolution struct {
 // PatrolAlertContext describes the alert that triggered a scoped patrol, so the
 // patrol prompt can focus the investigation on the specific breach.
 type PatrolAlertContext struct {
-	AlertType string  // cpu, memory, disk, etc.
-	Level     string  // warning | critical
-	Value     float64 // observed metric value at fire time
-	Threshold float64 // threshold that was crossed
-	Message   string  // human-readable alert message
+	ResourceID   string
+	ResourceName string
+	Mountpoint   string
+	Device       string
+	AlertType    string  // cpu, memory, disk, etc.
+	Level        string  // warning | critical
+	Value        float64 // observed metric value at fire time
+	Threshold    float64 // threshold that was crossed
+	Message      string  // human-readable alert message
 }
 
 // PatrolDepth controls how thorough a patrol run should be
@@ -693,26 +700,28 @@ func patrolScopeResourceTypes(resourceType string) []string {
 // AlertTriggeredPatrolScope creates a patrol scope for an alert that fired
 func AlertTriggeredPatrolScope(alertIdentifier, resourceID, resourceType, alertType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:     []string{resourceID},
-		ResourceTypes:   patrolScopeResourceTypes(resourceType),
-		Depth:           PatrolDepthQuick,
-		Reason:          TriggerReasonAlertFired,
-		Context:         "Alert: " + alertType,
-		Priority:        triggerPriorityAlertFired,
-		AlertIdentifier: alertIdentifier,
+		ResourceIDs:           []string{resourceID},
+		ResourceTypes:         patrolScopeResourceTypes(resourceType),
+		Depth:                 PatrolDepthQuick,
+		Reason:                TriggerReasonAlertFired,
+		Context:               "Alert: " + alertType,
+		Priority:              triggerPriorityAlertFired,
+		AlertIdentifier:       alertIdentifier,
+		alertResourceTypeHint: true,
 	}
 }
 
 // AlertClearedPatrolScope creates a patrol scope for an alert that cleared
 func AlertClearedPatrolScope(alertIdentifier, resourceID, resourceType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:     []string{resourceID},
-		ResourceTypes:   patrolScopeResourceTypes(resourceType),
-		Depth:           PatrolDepthQuick,
-		Reason:          TriggerReasonAlertCleared,
-		Context:         "Verify resolution",
-		Priority:        triggerPriorityAlertCleared,
-		AlertIdentifier: alertIdentifier,
+		ResourceIDs:           []string{resourceID},
+		ResourceTypes:         patrolScopeResourceTypes(resourceType),
+		Depth:                 PatrolDepthQuick,
+		Reason:                TriggerReasonAlertCleared,
+		Context:               "Verify resolution",
+		Priority:              triggerPriorityAlertCleared,
+		AlertIdentifier:       alertIdentifier,
+		alertResourceTypeHint: true,
 	}
 }
 

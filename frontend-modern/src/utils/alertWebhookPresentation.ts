@@ -145,7 +145,8 @@ export const ALERT_WEBHOOK_TESTING_ASCII_LABEL = 'Testing...';
 export const ALERT_WEBHOOK_TEST_SUCCESS = 'Test webhook sent successfully!';
 export const ALERT_WEBHOOK_TEST_FAILURE = 'Failed to send test webhook';
 export const ALERT_WEBHOOKS_SECTION_TITLE = 'Webhooks';
-export const ALERT_WEBHOOKS_SECTION_DESCRIPTION = 'Push alerts to chat apps or automation systems.';
+export const ALERT_WEBHOOKS_SECTION_DESCRIPTION =
+  'Discord, Telegram, Slack, Teams, ntfy, Gotify, Pushover, PagerDuty or any HTTP endpoint.';
 export const ALERT_WEBHOOK_ADD_SUCCESS = 'Webhook added successfully';
 export const ALERT_WEBHOOK_ADD_FAILURE = 'Failed to add webhook';
 export const ALERT_WEBHOOK_UPDATE_SUCCESS = 'Webhook updated successfully';

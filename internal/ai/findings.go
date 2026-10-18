@@ -451,6 +451,10 @@ func (f *Finding) IsResolved() bool {
 
 func investigationCooldownForOutcome(outcome string) time.Duration {
 	switch InvestigationOutcome(outcome) {
+	case InvestigationOutcomeFixVerificationUnknown:
+		// The next model assessment owns follow-up. Investigating an uncertain
+		// effect is a read, not permission to retry the infrastructure write.
+		return 0
 	case InvestigationOutcomeTimedOut:
 		return investigationTimeoutCooldown
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
@@ -458,6 +462,17 @@ func investigationCooldownForOutcome(outcome string) time.Duration {
 	default:
 		return investigationCooldown
 	}
+}
+
+func (f *Finding) investigationCooldown() time.Duration {
+	if InvestigationStatus(f.InvestigationStatus) == InvestigationStatusFailed &&
+		(f.InvestigationOutcome == "" || InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeTimedOut) {
+		// The run failed before producing a conclusion. The scheduled Watch
+		// cadence owns the next assessment; there is no additional cooldown.
+		// Admission, attempt limits and action authority still apply.
+		return 0
+	}
+	return investigationCooldownForOutcome(f.InvestigationOutcome)
 }
 
 func deriveLoopState(f *Finding) FindingLoopState {
@@ -549,8 +564,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
 		return false
 	}
 
@@ -572,7 +586,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	// Don't re-investigate within cooldown period
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
+		cooldown := f.investigationCooldown()
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
@@ -674,7 +688,7 @@ func (f *Finding) CanRetryInvestigation() bool {
 	// Can't retry if still in cooldown
 	// Timeout failures use a shorter cooldown (10min) since they're transient
 	if f.LastInvestigatedAt != nil {
-		cooldown := investigationCooldownForOutcome(f.InvestigationOutcome)
+		cooldown := f.investigationCooldown()
 		if time.Since(*f.LastInvestigatedAt) < cooldown {
 			return false
 		}
@@ -684,8 +698,7 @@ func (f *Finding) CanRetryInvestigation() bool {
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
 		return false
 	}
 	// Can't retry if currently running
@@ -847,10 +860,15 @@ type FindingsStore struct {
 // this through ResourceOperatorStateProvider; the package layout puts
 // the canonical type in `internal/unifiedresources` to avoid an import
 // cycle, so this is the projected shape the findings runtime needs.
+// StartAt/EndAt bound the active occurrence (one-shot or recurring).
+// Inherited marks a window stored on an ancestor whose scope covers its
+// descendants; SourceID names the resource the window is stored on.
 type ResourceOperatorStateMaintenanceWindow struct {
-	StartAt time.Time
-	EndAt   time.Time
-	Reason  string
+	StartAt   time.Time
+	EndAt     time.Time
+	Reason    string
+	SourceID  string
+	Inherited bool
 }
 
 // ResourceOperatorStateProjection is the per-resource view the
@@ -877,7 +895,14 @@ type ResourceOperatorStateProjection struct {
 	Criticality        string
 }
 
-func (p ResourceOperatorStateProjection) monitoringSuppressionCause() string {
+// monitoringSuppressionCauseFor names the monitoring or lifecycle policy that
+// silences f, or "" when none does. Retired and muted silence every finding.
+// Expected-offline is availability-specific, as it is in the alert runtime: it
+// silences only findings in the shared down condition class and leaves health,
+// capacity, backup, and security findings visible. A projection without a
+// MonitoringMode that sets only the legacy IntentionallyOffline flag is the
+// pre-enum spelling of expected-offline and carries the same scope.
+func (p ResourceOperatorStateProjection) monitoringSuppressionCauseFor(f *Finding) string {
 	if strings.EqualFold(strings.TrimSpace(p.LifecycleState), "retired") {
 		return "resource_retired"
 	}
@@ -885,16 +910,19 @@ func (p ResourceOperatorStateProjection) monitoringSuppressionCause() string {
 	case "muted":
 		return "monitoring_muted"
 	case "expected_offline":
-		return "expected_offline"
-	}
-	if p.IntentionallyOffline {
-		return "intentionally_offline"
+		if findingConditionClass(f) == mirrorConditionDown {
+			return "expected_offline"
+		}
+	case "":
+		if p.IntentionallyOffline && findingConditionClass(f) == mirrorConditionDown {
+			return "intentionally_offline"
+		}
 	}
 	return ""
 }
 
-func (p ResourceOperatorStateProjection) suppressesFindings() bool {
-	return p.MaintenanceWindow != nil || p.monitoringSuppressionCause() != ""
+func (p ResourceOperatorStateProjection) suppressesFinding(f *Finding) bool {
+	return p.MaintenanceWindow != nil || p.monitoringSuppressionCauseFor(f) != ""
 }
 
 // ResourceOperatorStateProvider is the narrow interface the findings
@@ -1939,7 +1967,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			if !willFixReminderDue && existing.DismissedReason == "expected_behavior" && !existing.Suppressed {
 				if cause := findOperatorStateDismissCause(existing); cause != "" {
 					if operatorStateProviderPresent {
-						currentlySuppressing := operatorProjectionOK && operatorProjection.suppressesFindings()
+						currentlySuppressing := operatorProjectionOK && operatorProjection.suppressesFinding(f)
 						operatorStateLifted = !currentlySuppressing
 					} else {
 						// No provider currently wired but the finding was
@@ -2124,9 +2152,10 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	// intent that suppresses findings, auto-dismiss the finding as
 	// expected_behavior with a reason that names the cause. Maintenance
 	// windows take priority because they're time-bounded ("expect this
-	// noise until the window closes"); IntentionallyOffline is the
-	// fallback branch ("expect this resource to stay quiet
-	// indefinitely"). The finding still lands in durable history so
+	// noise until the window closes"); monitoring and lifecycle policy is
+	// the indefinite fallback, scoped per finding by
+	// monitoringSuppressionCauseFor (expected-offline silences only
+	// availability findings). The finding still lands in durable history so
 	// the operator can audit what tripped during the suppression;
 	// severity escalation paths still wake it later if the underlying
 	// condition stays after the operator clears the state.
@@ -2138,24 +2167,36 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				window := projection.MaintenanceWindow
 				f.DismissedReason = "expected_behavior"
 				f.AcknowledgedAt = &now
-				noteParts := []string{fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))}
+				note := fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))
+				if window.Inherited {
+					note = fmt.Sprintf("Resource is covered by an operator-set maintenance window on a parent resource until %s.", window.EndAt.Format(time.RFC3339))
+				}
+				noteParts := []string{note}
 				if reason := strings.TrimSpace(window.Reason); reason != "" {
 					noteParts = append(noteParts, "Reason: "+reason)
 				}
 				f.UserNote = strings.Join(noteParts, " ")
-				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+				metadata := map[string]string{
 					"reason":               "expected_behavior",
 					"operator_state_cause": "maintenance_window",
 					"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
-				})
+				}
+				if window.Inherited {
+					metadata["maintenance_inherited"] = "true"
+					metadata["maintenance_source_id"] = window.SourceID
+				}
+				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), metadata)
 				s.syncLoopStateLocked(f)
-			case projection.monitoringSuppressionCause() != "":
-				cause := projection.monitoringSuppressionCause()
+			case projection.monitoringSuppressionCauseFor(f) != "":
+				cause := projection.monitoringSuppressionCauseFor(f)
 				f.DismissedReason = "expected_behavior"
 				f.AcknowledgedAt = &now
-				if cause == "intentionally_offline" {
-					f.UserNote = "Resource is marked intentionally offline by the operator. Clear the flag on the resource detail surface to resume notifications."
-				} else {
+				switch cause {
+				case "intentionally_offline":
+					f.UserNote = "Resource is marked intentionally offline by the operator, so Patrol keeps its availability findings quiet. Clear the flag on the resource detail surface to resume them."
+				case "expected_offline":
+					f.UserNote = "Resource is marked expected offline, so Patrol keeps its availability findings quiet. Set monitoring back to Normal on the resource detail surface to resume them."
+				default:
 					f.UserNote = "Resource monitoring policy suppresses Patrol attention. Return monitoring and lifecycle to active defaults on the resource detail surface to resume findings."
 				}
 				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource monitoring policy suppresses attention", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
@@ -2432,6 +2473,10 @@ func (s *FindingsStore) UpdateInvestigationRecord(id string, record *aicontracts
 		s.mu.Unlock()
 		return false
 	}
+	if record != nil && !f.acceptsInvestigationResult(record.SessionID, record.StartedAt) {
+		s.mu.Unlock()
+		return false
+	}
 
 	f.InvestigationRecord = record
 	meta := map[string]string{}
@@ -2533,6 +2578,56 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 		return false
 	}
 
+	s.updateInvestigationOutcomeLocked(f, outcome)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// ReconcileInvestigationOutcome projects an authoritative session result only
+// onto the occurrence that owns it. A finding ID survives regressions, while
+// the investigation session and regression boundary identify the current work.
+// Check and mutation share the store lock so a concurrent re-detection cannot
+// be closed by a result accepted against its previous occurrence.
+func (s *FindingsStore) ReconcileInvestigationOutcome(id string, session *aicontracts.InvestigationSession, outcome string) (applied, changed bool) {
+	if session == nil || session.FindingID != id {
+		return false, false
+	}
+	s.mu.Lock()
+	f := s.findings[id]
+	if f == nil || !f.IsCurrentInvestigation(session) {
+		s.mu.Unlock()
+		return false, false
+	}
+	changed = f.InvestigationOutcome != outcome
+	if changed {
+		s.updateInvestigationOutcomeLocked(f, outcome)
+	}
+	s.mu.Unlock()
+	if changed {
+		s.scheduleSave()
+	}
+	return true, changed
+}
+
+// IsCurrentInvestigation distinguishes current finding work from historical
+// sessions retained under the same finding ID.
+func (f *Finding) IsCurrentInvestigation(session *aicontracts.InvestigationSession) bool {
+	return f != nil && session != nil && session.FindingID == f.ID &&
+		f.acceptsInvestigationResult(session.SessionID, session.StartedAt)
+}
+
+func (f *Finding) acceptsInvestigationResult(sessionID string, startedAt time.Time) bool {
+	if f.InvestigationSessionID != "" && f.InvestigationSessionID != sessionID {
+		return false
+	}
+	// Re-detection clears the session reference. Its persisted regression time
+	// still excludes old sessions during the gap before a new one starts, and
+	// after a process restart. Missing historical time cannot prove ownership.
+	return f.LastRegressionAt == nil || (!startedAt.IsZero() && !startedAt.Before(*f.LastRegressionAt))
+}
+
+func (s *FindingsStore) updateInvestigationOutcomeLocked(f *Finding, outcome string) {
 	prevOutcome := f.InvestigationOutcome
 	f.InvestigationOutcome = outcome
 	// Replaying a persisted result must not invent a later recovery event.
@@ -2549,9 +2644,6 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 		})
 	}
 	s.syncLoopStateLocked(f)
-	s.mu.Unlock()
-	s.scheduleSave()
-	return true
 }
 
 // UpdateInvestigation updates all investigation fields on a finding

@@ -171,11 +171,10 @@ const resource = (read) => {
         const badge = row.locator('[data-workload-disk-read-status]');
         const drawer = page.getByRole('region', { name: 'Guest details' });
         const activate = (locator) => (width < 768 ? locator.tap() : locator.click());
-        const history = drawer.getByRole('tab', { name: 'History', exact: true });
-        await activate(history);
+        // History charts sit on Overview, which the drawer opens on.
         const chart = drawer.locator('[data-history-group="utilization"]');
         await chart.waitFor();
-        await page.waitForFunction(() => document.querySelector('button[aria-busy="false"]'));
+        await page.waitForFunction(() => !document.querySelector('button[aria-busy="true"]'));
         await page.evaluate(() => {
           window.__rowIdentity = document.querySelector('[data-workload-col="disk"]');
           window.__chartIdentity = document.querySelector('[data-history-group="utilization"]');
@@ -228,10 +227,10 @@ const resource = (read) => {
           }
           assert.equal(await badge.count(), reason ? 1 : 0);
           if (reason) {
-            assert.match(
-              await badge.innerText(),
-              retained ? /Last known|Prior/ : /Unavailable|N\/A/,
-            );
+            // Only a retained reading gets a visible label; an unavailable
+            // read keeps its reason as assistive text and the cell title.
+            assert.equal(await badge.locator('[aria-hidden="true"]').count(), retained ? 1 : 0);
+            if (retained) assert.match(await badge.innerText(), /Last known|Prior/);
             assert.match(
               await cell.getAttribute('title'),
               retained ? /Using last known/ : /Guest reads|Guest request/,
@@ -314,11 +313,9 @@ const resource = (read) => {
         await observe({ usage: 0, status: 'available' });
         await check('fresh-measured-zero', undefined, false, 0, '', 'available', undefined);
         await screenshot('zero');
-        // Existing Overview updates as well; real History tab can be revisited with keyboard/touch.
-        await activate(drawer.getByRole('tab', { name: 'Overview', exact: true }));
+        // Overview's own readings update in the same view as its charts.
         assert.equal((await drawer.innerText()).includes('Using last known'), false);
         assert.match(await drawer.innerText(), /0%/);
-        await activate(drawer.getByRole('tab', { name: 'History', exact: true }));
         assert.equal(await chart.locator('[data-history-current="disk"]').count(), 1);
         assert.equal(await chart.locator('[data-history-deferred="disk"]').count(), 0);
         const resourceRequests = record.requests.filter((r) => r.path === '/api/resources');

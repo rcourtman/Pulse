@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "846e3eb65aafaf3ee9b3c1d9271c53b06000c175",
+  "verified_at": "2026-10-09T14:04:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
+    "frontend-modern/src/utils/systemLogsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "bc56ad6111e902a83b4384f0b9ed53d1b83c2860f582ced8cd24fc032de0047f",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts": "4ee722c9a69f8e1ebaf52566907c36d7c6a74b50f555013b33ed488611b1df71",
+    "frontend-modern/src/utils/systemLogsPresentation.ts": "be895c330972e0180b41bc0dbfbda9ab7a80e62a9f30b32ef28e79fe810fda30"
+  },
+  "routes": [
+    "/settings/support?compare=before (synthetic base-source panel)",
+    "/settings/support?compare=after (synthetic composed-source panel)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 desktop/light and WebKit 26.0 phone/dark run the real panel, hook, presentation, shared controls and CSS, not the full authenticated App. EventSource and Info/Warn responses are synthetic; no private/live logs.",
+    "Newly composed panel preserves server-wide log-level guidance, private guest/path warning, local-only Pause/Clear and not-a-backup-safety-pause distinction, private support-bundle guidance and aria-describedby links on all controls; the shared button remains type=button.",
+    "Eight identical synthetic lines produce eight scroll-height reads/writes on assigned base and one on composed source in each engine, in the same order. This is a component mechanism observation, not CPU/RSS or native Debug recovery.",
+    "Final lines are immediately opaque with no entrance animation. Shared Support Bundle button has a visible background and correct desktop/phone touch height. Paused keyboard focus, text, retention footer and privacy descriptions are readable in all six inspected final-content captures without horizontal overflow.",
+    "Pause flushes the already accepted pending line and rejects paused arrivals; keyboard Clear/Resume work. A 1003-line frame retains ordered lines 3 to 1002, exactly 1000 rows, one layout read/write and scrolled to the bottom. Pending Clear does not resurrect a line. Unmount closes the synthetic stream once and late arrivals schedule no work.",
+    "Bounded component/browser acceptance only; no full-App or backend suite, native PBS/Debug failure reproduction, live logging change, guest polling/thaw, installed recovery, publication or release acceptance."
+  ],
+  "interactions": [
+    "Inspect rendered accessible names, aria-describedby texts, pause pressed state and non-submitting control types before delivering lines.",
+    "Deliver eight synthetic messages to exact-base and composed panels, measure frame-scoped layout/scroll and compare ordered rendered lines.",
+    "Pause with accepted pending work, reject paused arrivals, keyboard Clear and Resume, verify newest-1000 cap and retention copy, and inspect screenshots.",
+    "Clear pending work, select Warn using synthetic API only, dispose the panel and send a late synthetic message; await browser/context/server close."
+  ],
+  "screenshot_sha256": {
+    "chromium-composed-lines.png": "d7178faadcdf3573946dba1e72ab52ac8700a10c836a9142cf57e8d1ceef4c00",
+    "chromium-composed-paused-keyboard.png": "f7413fdd43ddcc73e59cfa8fc37c2329653cd76b834372723de714f9ee417a5a",
+    "chromium-composed-bounded.png": "083dcd83d61c8e9bb00961a193028c4d09ae4e32dfe06c6412e07525b7647e5e",
+    "webkit-composed-lines.png": "b218a95516cfe3d21b063aeb5b4cd9e96c2daa19cdc11ae355f4d9bf9cce8026",
+    "webkit-composed-paused-keyboard.png": "6a9d1a2d2aadfb5d979be4ce78b5de92ba38c809aa148281fc9be27a28257eb4",
+    "webkit-composed-bounded.png": "0a62a5bde4c124ea3d3a0674d91b8c31b6f57230ff7d22d641fde3dc61fdbd26"
+  }
+}

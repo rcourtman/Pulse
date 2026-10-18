@@ -55,6 +55,9 @@ function mount() {
         get data() {
           return props().data;
         },
+        get enabled() {
+          return props().enabled;
+        },
       },
       { getCanvas: () => undefined, getContainer: () => undefined },
     );
@@ -204,6 +207,104 @@ describe('History request ownership', () => {
       expect(state.loading()).toBe(false);
     },
   );
+
+  it('pauses reads while disabled, keeps the readings shown and resumes quietly', async () => {
+    request.mockResolvedValueOnce({ points: points(10), source: 'store' } as never);
+    const { state, change } = mount();
+    await settle();
+    const inFlight = deferred();
+    request.mockReturnValueOnce(inFlight.promise);
+    vi.advanceTimersByTime(10_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    // Hiding the chart aborts its read and keeps what it already shows.
+    change({ enabled: false });
+    expect(request.mock.calls[1][0].signal?.aborted).toBe(true);
+    inFlight.resolve({ points: points(99), source: 'store' } as never);
+    await settle();
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(state.data()).toEqual(points(10));
+    expect(state.source()).toBe('store');
+    expect(state.loading()).toBe(false);
+    // Showing it again catches up at once without a loading state, then polls.
+    const resumed = deferred();
+    request.mockReturnValueOnce(resumed.promise);
+    change({ enabled: true });
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(state.loading()).toBe(false);
+    expect(state.data()).toEqual(points(10));
+    resumed.resolve({ points: points(30), source: 'store' } as never);
+    await settle();
+    expect(state.data()).toEqual(points(30));
+    request.mockResolvedValueOnce({ points: points(40), source: 'store' } as never);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(request).toHaveBeenCalledTimes(4);
+    expect(state.data()).toEqual(points(40));
+  });
+
+  it('keeps its readings without a loading state when a resize changes the point cap', async () => {
+    let width = 800;
+    let resized: (() => void) | undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resized = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { get: () => width });
+    request.mockResolvedValue({ points: points(10), source: 'store' } as never);
+    let state!: HistoryChartState;
+    render(() => {
+      state = useHistoryChartState(
+        { resourceId: 'a', resourceType: 'agent', metric: 'cpu', range: '24h' },
+        { getCanvas: () => undefined, getContainer: () => container },
+      );
+      return <div />;
+    });
+    await settle();
+    await settle();
+    expect(state.data()).toEqual(points(10));
+    const caps = () => request.mock.calls.map((call) => call[0].maxPoints);
+    const before = request.mock.calls.length;
+    const resizedRead = deferred();
+    request.mockReturnValueOnce(resizedRead.promise);
+    width = 400;
+    resized?.();
+    expect(request.mock.calls.length).toBe(before + 1);
+    expect(caps().at(-1)).not.toBe(caps().at(-2));
+    // The same series at a new resolution: readings stay, no spinner.
+    expect(state.data()).toEqual(points(10));
+    expect(state.loading()).toBe(false);
+    resizedRead.resolve({ points: points(20), source: 'store' } as never);
+    await settle();
+    expect(state.data()).toEqual(points(20));
+    vi.unstubAllGlobals();
+  });
+
+  it('starts a selection changed while paused from nothing, without reading', async () => {
+    request.mockResolvedValueOnce({ points: points(10), source: 'store' } as never);
+    const { state, change } = mount();
+    await settle();
+    change({ enabled: false });
+    change({ resourceId: 'b' });
+    expect(state.data()).toEqual([]);
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    const next = deferred();
+    request.mockReturnValueOnce(next.promise);
+    change({ enabled: true });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][0].resourceId).toBe('b');
+    expect(state.loading()).toBe(true);
+    next.resolve({ points: points(20), source: 'store' } as never);
+    await settle();
+    expect(state.data()).toEqual(points(20));
+  });
 
   it('aborts and stops polling on unmount without consuming a late completion', async () => {
     const old = deferred();

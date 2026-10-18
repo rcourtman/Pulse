@@ -60,18 +60,6 @@ const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {
   return deduped;
 };
 
-export const getNormalizedIdentityLookupVariants = (value?: string | null): string[] => {
-  if (!value) return [];
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return [];
-  const variants = new Set<string>([normalized]);
-  const dotIndex = normalized.indexOf('.');
-  if (dotIndex > 0) {
-    variants.add(normalized.slice(0, dotIndex));
-  }
-  return Array.from(variants);
-};
-
 const formatIdentityTarget = (resourceType?: string, resourceId?: string): string | null => {
   const type = asTrimmedString(resourceType);
   const id = asTrimmedString(resourceId);
@@ -168,26 +156,6 @@ export const getResourceIdentityAliases = (resource: Resource): string[] => {
   ];
 
   return dedupeTrimmedValues(raw);
-};
-
-export const getAgentLikeIdentityAliases = (agent: Agent): string[] => {
-  const agentRecord = agent as unknown as Record<string, unknown>;
-  const discoveryTarget = agentRecord.discoveryTarget as Record<string, unknown> | undefined;
-  const platformData = agentRecord.platformData as Record<string, unknown> | undefined;
-  const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
-  const canonical = agentRecord.canonicalIdentity as Record<string, unknown> | undefined;
-
-  return dedupeTrimmedValues([
-    asTrimmedString(discoveryTarget?.resourceId),
-    asTrimmedString(discoveryTarget?.agentId),
-    asTrimmedString(platformAgent?.agentId),
-    asTrimmedString(platformData?.agentId),
-    asTrimmedString(platformData?.linkedAgentId),
-    asTrimmedString(agent.id),
-    asTrimmedString(canonical?.hostname),
-    asTrimmedString(agent.hostname),
-    asTrimmedString(platformAgent?.hostname),
-  ]);
 };
 
 export const getAgentLikeMetadataIds = (agent: Agent): string[] => {
@@ -289,11 +257,21 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
     rows.push({ label: 'Parent', value: resource.parentId });
   }
 
+  // Discovery and metrics targets usually point at the resource itself, so
+  // they show only when they name something not already on screen: the
+  // drawer header's name, the rows above, or the Platform ID row.
+  const shownIdentity = (value: string): boolean =>
+    [
+      getPreferredInfrastructureDisplayName(resource),
+      shouldShowResourcePlatformId(resource) ? asTrimmedString(resource.platformId) : undefined,
+      ...rows.map((row) => row.value),
+    ].some((shown) => Boolean(shown) && shown!.toLowerCase() === value.toLowerCase());
+
   const discoveryIdentity = formatIdentityTarget(
     resource.discoveryTarget?.resourceType,
     resource.discoveryTarget?.resourceId,
   );
-  if (discoveryIdentity) {
+  if (discoveryIdentity && !shownIdentity(discoveryIdentity)) {
     rows.push({ label: 'Discovery', value: discoveryIdentity });
   }
 
@@ -301,7 +279,7 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
     resource.metricsTarget?.resourceType,
     resource.metricsTarget?.resourceId,
   );
-  if (metricsIdentity) {
+  if (metricsIdentity && !shownIdentity(metricsIdentity)) {
     rows.push({ label: 'Metrics Target', value: metricsIdentity });
   }
 

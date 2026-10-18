@@ -20,6 +20,12 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  isPhysicalDiskRunningHot,
+} from '@/features/storageBackups/diskTemperaturePresentation';
+import type { TrueNASDiskTemperatureThresholdResolver } from '@/features/truenas/truenasPageModel';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
 
@@ -48,11 +54,6 @@ const normalizeDelimitedLabel = (value?: string): string | null => {
 const formatPercent = (percent?: number): string | null => {
   if (typeof percent !== 'number' || !Number.isFinite(percent)) return null;
   return `${percent.toFixed(percent >= 10 ? 1 : 2)}%`;
-};
-
-const formatTemperature = (celsius?: number): string | null => {
-  if (typeof celsius !== 'number' || !Number.isFinite(celsius) || celsius <= 0) return null;
-  return `${celsius.toFixed(0)}°C`;
 };
 
 const formatDurationSeconds = (seconds?: number): string | null => {
@@ -395,9 +396,48 @@ const formatDiskHours = (hours?: number): string | null => {
   return `${formatDetailIntegerValue(value) ?? value.toFixed(0)}h`;
 };
 
+const diskTemperature = (disk: ResourcePhysicalDiskMeta) =>
+  getPhysicalDiskTemperaturePresentation({
+    temperature: disk.temperature ?? 0,
+    collection: disk.collection,
+  });
+
+// A retained reading, such as a silent host agent's on a merged disk row, is
+// not current: it takes no heat tone and its title says why. A current reading
+// is hot from the trigger the disk's temperature alert fires at (its own
+// override, the TrueNAS-wide value, then its type's policy), the threshold the
+// TrueNAS storage table judges it by too. Without a resolver, heat is not
+// judged.
+const diskTemperatureRow = (
+  resource: Resource,
+  disk: ResourcePhysicalDiskMeta,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): ResourceDetailDrawerTrueNASRow | null => {
+  const reading = diskTemperature(disk);
+  if (!reading) return null;
+  if (!reading.current) {
+    return row('Temperature', `${reading.label} (last known)`, {
+      title: reading.title,
+      tone: 'muted',
+    });
+  }
+  const thresholds = resolveDiskTemperatureThresholds?.(resource) ?? null;
+  const hot = isPhysicalDiskRunningHot(
+    { temperature: disk.temperature ?? 0, collection: disk.collection },
+    thresholds,
+  );
+  return row('Temperature', reading.label, { tone: hot ? 'warning' : 'default' });
+};
+
+const currentDiskTemperatureLabel = (disk: ResourcePhysicalDiskMeta): string | null => {
+  const reading = diskTemperature(disk);
+  return reading?.current ? reading.label : null;
+};
+
 const buildTrueNASDiskSections = (
   resource: Resource,
   disk: ResourcePhysicalDiskMeta,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
   const riskReasons = (disk.risk?.reasons ?? [])
     .map((reason) => asString(reason.summary))
@@ -413,9 +453,7 @@ const buildTrueNASDiskSections = (
 
   const healthRows = compactRows([
     row('Health', normalizeDelimitedLabel(disk.health), { tone: diskStateTone(disk) }),
-    row('Temperature', formatTemperature(disk.temperature), {
-      tone: disk.temperature && disk.temperature >= 55 ? 'warning' : 'default',
-    }),
+    diskTemperatureRow(resource, disk, resolveDiskTemperatureThresholds),
     row(
       'Wearout',
       disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),
@@ -580,7 +618,25 @@ const formatVMTopology = (vm: ResourceTrueNASVMMeta): string | null => {
   return null;
 };
 
+// Matches the stopped states in mapTrueNASVMStatus (features/truenas). A VM set
+// to autostart that is stopped is the one stopped VM nobody chose, and the
+// VMs table hides its State note on phones, so the drawer says it too.
+const TRUENAS_VM_STOPPED_STATES = new Set(['stopped', 'shutoff', 'shutdown', 'poweroff']);
+
+// Stale TrueNAS data may hold an old state, so the note waits for a current one.
+const vmConditionLabel = (resource: Resource, vm: ResourceTrueNASVMMeta): string | null => {
+  if (hasImpairedResourceSource(resource, 'truenas')) return null;
+  if (!vm.autostart) return null;
+  const state = (asString(vm.state) ?? asString(vm.domainState))?.toLowerCase();
+  // Without a native state, the table falls back to the resource status.
+  const stopped = state
+    ? TRUENAS_VM_STOPPED_STATES.has(state)
+    : resource.status === 'offline' || resource.status === 'stopped';
+  return stopped ? 'Should be running' : null;
+};
+
 const buildTrueNASVMSections = (
+  resource: Resource,
   vm: ResourceTrueNASVMMeta,
 ): ResourceDetailDrawerTrueNASSection[] => {
   const state = normalizeDelimitedLabel(vm.state);
@@ -592,6 +648,7 @@ const buildTrueNASVMSections = (
       tone: (vm.state ?? vm.domainState)?.toLowerCase() === 'running' ? 'success' : 'warning',
     }),
     row('Domain state', sameState ? null : domainState),
+    row('Condition', vmConditionLabel(resource, vm), { tone: 'warning' }),
     row('vCPU', formatVMCpu(vm)),
     row('Topology', formatVMTopology(vm)),
     row('Memory', formatDetailBytesValue(vm.memoryBytes)),
@@ -703,15 +760,20 @@ const buildTrueNASShareSections = (
 
 export const buildTrueNASDetailSections = (
   resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
   if (resource.truenas?.share) return buildTrueNASShareSections(resource.truenas.share);
-  if (resource.truenas?.vm) return buildTrueNASVMSections(resource.truenas.vm);
+  if (resource.truenas?.vm) return buildTrueNASVMSections(resource, resource.truenas.vm);
   if (resource.truenas?.app) return buildTrueNASAppSections(resource.truenas.app);
   if (isTrueNASScopedResource(resource) && resource.storage) {
     return buildTrueNASStorageSections(resource, resource.storage);
   }
   if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
-    return buildTrueNASDiskSections(resource, resource.physicalDisk);
+    return buildTrueNASDiskSections(
+      resource,
+      resource.physicalDisk,
+      resolveDiskTemperatureThresholds,
+    );
   }
   if (isTrueNASScopedResource(resource) && resource.truenas) {
     return buildTrueNASSystemSections(resource, resource.truenas);
@@ -734,8 +796,10 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
   const vm = resource.truenas?.vm;
   if (vm) {
     const deviceCount = asPositiveNumber(vm.deviceCount);
+    const condition = vmConditionLabel(resource, vm);
     const summary = [
       normalizeDelimitedLabel(vm.state ?? vm.domainState),
+      condition?.toLowerCase(),
       formatVMCpu(vm),
       formatDetailBytesValue(vm.memoryBytes),
       deviceCount ? formatDetailCountValue(deviceCount, 'device') : null,
@@ -773,7 +837,8 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
       diskTypeLabel(disk.diskType),
       normalizeDelimitedLabel(disk.health),
       formatDetailBytesValue(disk.sizeBytes),
-      formatTemperature(disk.temperature),
+      // The summary has no room to say a retained reading is not current.
+      currentDiskTemperatureLabel(disk),
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
   }

@@ -11,7 +11,9 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import shutil
+import signal
 import subprocess
 import tempfile
 import textwrap
@@ -24,8 +26,11 @@ SCRIPT = ROOT / "scripts/test-vm-disk.sh"
 DOC = ROOT / "docs/VM_DISK_MONITORING.md"
 BASH = shutil.which("bash")
 REAL_TIMEOUT = shutil.which("timeout")
+REAL_PYTHON = os.sys.executable
 PRIVATE = "synthetic-private-infrastructure-marker"
 READS = [["status", "100"], ["config", "100", "--current"]]
+STATUS_LIMIT = 256
+CONFIG_LIMIT = 64 * 1024
 
 
 def guide_section(guide, heading):
@@ -54,10 +59,10 @@ def bash_examples(section):
             for block in re.findall(r"```bash\n(.*?)```", section, re.DOTALL)]
 
 # Record every attempted operation, including prohibited ones. The timeout
-# adapter checks the helper's real deadline arguments; one test uses real
-# coreutils timeout around the synthetic blocked qm child.
+# adapter checks the helper's real deadline arguments. Deadline controls use
+# real coreutils timeout and pidfds for only their synthetic local readers.
 TOOL = '''#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, signal, subprocess, sys, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['VM_FIXTURE'])
@@ -65,12 +70,24 @@ with (root / 'calls.jsonl').open('a') as stream:
     stream.write(json.dumps({'name': name, 'args': args}) + '\\n')
 settings = json.loads((root / 'settings.json').read_text())
 if name == 'timeout':
-    assert args[:4] == ['--signal=TERM', '--kill-after=2s', '10s', 'qm']
+    # Keep the former producer-only form available for exact-base evidence;
+    # normal assertions admit only the complete collection deadline.
+    if args[:4] == ['--signal=TERM', '--kill-after=2s', '10s', 'qm']:
+        command = args[3:]
+    else:
+        assert args[:5] == ['--signal=KILL', '10s', 'bash', '-s', '--']
+        assert args[5] in ('256', '65536') and args[6] == 'qm'
+        command = args[2:]
     if settings.get('real_timeout'):
         result = subprocess.run([os.environ['REAL_TIMEOUT'], *args])
     else:
-        result = subprocess.run(args[3:])
-    sys.exit(result.returncode)
+        result = subprocess.run(command)
+    # Popen reports a signal as a negative number; Bash exposes 128 + signal.
+    # Preserve the real command status rather than wrapping -SIGKILL to 247.
+    sys.exit(result.returncode if result.returncode >= 0 else 128 - result.returncode)
+elif name == 'bash':
+    assert args[:2] == ['-s', '--'] and args[2] in ('256', '65536')
+    os.execv(os.environ['REAL_BASH'], [os.environ['REAL_BASH'], *args])
 elif name == 'qm':
     if args == ['status', '100']:
         operation = 'status'
@@ -82,10 +99,46 @@ elif name == 'qm':
         # No fake succeeds on an unrecognised or guest-agent operation.
         sys.exit(90)
     if settings.get('sleep_operation') == operation:
-        time.sleep(20)
-    sys.stdout.write(settings.get(operation + '_output', default))
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        (root / 'blocked-reader.json').write_text(json.dumps({'pid': os.getpid()}))
+        time.sleep(60)
+    if settings.get('pipe_holder_operation') == operation:
+        # The producer exits successfully but its TERM-resistant child retains
+        # stdout. No bytes beyond the small normal reply are needed to hang an
+        # unbounded response reader.
+        subprocess.Popen([os.environ['REAL_PYTHON'], '-I', '-c',
+                          'import json, os, pathlib, signal, sys, time; '
+                          'signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+                          'pathlib.Path(sys.argv[1]).write_text(json.dumps({"pid": os.getpid()})); '
+                          'time.sleep(60)', str(root / 'blocked-reader.json')],
+                         stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Write bytes so corrupt transport controls are not silently repaired by
+    # the fixture's text encoding before they reach the actual helper.
+    output = settings.get(operation + '_output', default).encode('utf-8')
+    if settings.get(operation + '_invalid_utf8'):
+        output += b'\\xff'
+    try:
+        sys.stdout.buffer.write(output)
+        sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        # A bounded reader is entitled to close the pipe before the producer
+        # finishes. Do not turn this fixture's expected stop into raw output.
+        os._exit(1)
     sys.stderr.write('synthetic-private-infrastructure-marker\\n')
     sys.exit(settings.get(operation + '_exit', 0))
+elif name == 'python3':
+    # The non-isolated form exists only for the startup-code negative control.
+    assert (len(args) == 4 and args[:2] == ['-I', '-c'] or
+            len(args) == 3 and args[0] == '-c') and args[-1] in ('256', '65536')
+    if settings.get('blocked_response_reader') and args[-1] == settings.get('blocked_limit', '256'):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        (root / 'blocked-reader.json').write_text(json.dumps({'pid': os.getpid()}))
+        if settings.get('close_reader_pipes'):
+            os.close(0); os.close(1); os.close(2)
+        time.sleep(60)
+    if settings.get('reader_exit') is not None:
+        sys.exit(settings['reader_exit'])
+    os.execv(os.environ['REAL_PYTHON'], [os.environ['REAL_PYTHON'], *args])
 elif name == 'sudo':
     assert args == ['bash', './scripts/test-vm-disk.sh', '100']
     os.execv(os.environ['REAL_BASH'], [os.environ['REAL_BASH'], *args[1:]])
@@ -94,28 +147,89 @@ else:
 '''
 
 
+def run_owned_preflight(invocation, env, *, blocked=False):
+    """Observe the exact fixture process; emergency cleanup is not a pass.
+
+    A pidfd remains bound to that synthetic reader if its pipes close or its
+    parent exits. No hypervisor process, service or guest is signalled.
+    """
+    with subprocess.Popen(invocation, env=env, cwd=ROOT, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          start_new_session=True) as process:
+        reader_fd = None
+        try:
+            if blocked:
+                record = Path(env["VM_FIXTURE"]) / "blocked-reader.json"
+                deadline = time.monotonic() + 3
+                while not record.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not record.exists():
+                    raise AssertionError("owned blocked reader was not observed")
+                # The writer can be between creation and flush of its tiny
+                # record. Retain a bounded wait, not a favourable test replay.
+                while True:
+                    try:
+                        pid = json.loads(record.read_text())["pid"]
+                        break
+                    except json.JSONDecodeError:
+                        if time.monotonic() >= deadline:
+                            raise AssertionError("owned reader identity was incomplete")
+                        time.sleep(0.01)
+                reader_fd = os.pidfd_open(pid)
+                poller = select.poll()
+                poller.register(reader_fd, select.POLLIN)
+            try:
+                stdout, stderr = process.communicate(timeout=16)
+            except subprocess.TimeoutExpired as error:
+                raise AssertionError("preflight exceeded its complete-read deadline") from error
+            if reader_fd is not None:
+                if not poller.poll(1000):
+                    raise AssertionError("owned reader outlived the completed preflight")
+            return subprocess.CompletedProcess(invocation, process.returncode, stdout, stderr)
+        finally:
+            if reader_fd is not None:
+                if not poller.poll(0):
+                    signal.pidfd_send_signal(reader_fd, signal.SIGKILL)
+                    if not poller.poll(1000):
+                        raise AssertionError("test-owned reader cleanup was not observed")
+                os.close(reader_fd)
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=3)
+
+
 class VMDiskDiagnosticsTest(unittest.TestCase):
     def exercise(self, *, settings=None, args=None, recipe=None, source=None,
                  missing=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "settings.json").write_text(json.dumps(settings or {}))
-            for name in ("qm", "timeout", "sudo", "pveum", "pveversion", "curl", "systemctl"):
+            for name in ("qm", "timeout", "python3", "bash", "sudo", "pveum", "pveversion", "curl", "systemctl"):
                 if name == missing:
                     continue
                 tool = root / name
-                tool.write_text(TOOL)
+                # The collector adapter is itself named python3. Pin the
+                # fixture interpreter so /usr/bin/env cannot recurse through
+                # that adapter instead of ever executing the fake qm.
+                tool.write_text(TOOL.replace("/usr/bin/env python3", f"{REAL_PYTHON} -I"))
                 tool.chmod(0o700)
             env = dict(os.environ, VM_FIXTURE=str(root), REAL_BASH=BASH,
-                       REAL_TIMEOUT=REAL_TIMEOUT, PATH=f"{root}:{os.environ['PATH']}")
+                       REAL_TIMEOUT=REAL_TIMEOUT, REAL_PYTHON=REAL_PYTHON,
+                       PATH=f"{root}:{os.environ['PATH']}")
             if missing:
                 # The adapters use an absolute interpreter, so an empty
                 # fallback PATH can genuinely model unavailable dependencies.
                 env["PATH"] = str(root)
-                for tool in root.iterdir():
-                    if tool.name in ("settings.json",):
-                        continue
-                    tool.write_text(TOOL.replace("/usr/bin/env python3", os.sys.executable))
+            startup_marker = root / "startup-executed"
+            if (settings or {}).get("poison_pythonpath"):
+                startup = root / "python-startup"
+                startup.mkdir()
+                (startup / "sitecustomize.py").write_text(
+                    "from pathlib import Path\n"
+                    f"Path({str(startup_marker)!r}).write_text('synthetic startup')\n"
+                    "raise SystemExit(29)\n"
+                )
+                env["PYTHONPATH"] = str(startup)
             script = SCRIPT
             if source is not None:
                 script = root / "candidate.sh"
@@ -123,19 +237,131 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
             invocation = [BASH, str(script), *(args if args is not None else ["100"])]
             if recipe:
                 invocation = [BASH, "-c", recipe]
-            result = subprocess.run(invocation, env=env, cwd=ROOT,
-                                    capture_output=True, text=True, timeout=16)
+            blocked = any((settings or {}).get(key) for key in (
+                "sleep_operation", "pipe_holder_operation", "blocked_response_reader"
+            ))
+            result = run_owned_preflight(invocation, env, blocked=blocked)
             calls_file = root / "calls.jsonl"
             calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+            self.assertFalse(startup_marker.exists(), "untrusted Python startup code executed")
             self.assertNotIn(PRIVATE, result.stdout + result.stderr)
             return result, calls
 
     def assert_passive(self, calls, *, operations=READS):
         self.assertEqual([c["args"] for c in calls if c["name"] == "qm"], operations)
-        self.assertTrue(all(c["name"] in ("timeout", "qm", "sudo") for c in calls))
+        self.assertTrue(all(c["name"] in ("timeout", "qm", "python3", "bash", "sudo") for c in calls))
+        self.assertEqual([c["args"][-1] for c in calls if c["name"] == "python3"],
+                         [str(STATUS_LIMIT if operation[0] == "status" else CONFIG_LIMIT)
+                          for operation in operations])
         for call in calls:
             if call["name"] == "timeout":
-                self.assertEqual(call["args"][:4], ["--signal=TERM", "--kill-after=2s", "10s", "qm"])
+                self.assertEqual(call["args"][:5], ["--signal=KILL", "10s", "bash", "-s", "--"])
+                self.assertIn(call["args"][5], (str(STATUS_LIMIT), str(CONFIG_LIMIT)))
+                self.assertEqual(call["args"][6], "qm")
+            if call["name"] == "bash":
+                self.assertEqual(call["args"][:2], ["-s", "--"])
+            if call["name"] == "python3":
+                self.assertEqual(call["args"][:2], ["-I", "-c"])
+                self.assertIn(call["args"][3], (str(STATUS_LIMIT), str(CONFIG_LIMIT)))
+
+    def test_oversized_reads_fail_before_interpreting_partial_configuration(self):
+        cases = [
+            {"status_output": "status: running\n" + PRIVATE + "x" * (1024 * 1024)},
+            {"config_output": "agent: 1\nname: " + PRIVATE + "\ndescription: "
+                              + "x" * (1024 * 1024) + "\nlock: backup\n"},
+        ]
+        for settings in cases:
+            with self.subTest(operation=next(iter(settings))):
+                result, calls = self.exercise(settings=settings)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("exceeded the", result.stderr)
+                self.assertIn("byte limit; preflight incomplete", result.stderr)
+                self.assertNotIn("Guest agent configured:", result.stdout)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assertLess(len(result.stdout + result.stderr), 600)
+                self.assert_passive(calls, operations=READS[:1] if "status_output" in settings else READS)
+
+    def test_config_limit_is_measured_in_bytes_and_includes_trailing_newlines(self):
+        prefix = "agent: 1\nname: " + PRIVATE + "\ndescription: "
+        padding = CONFIG_LIMIT - len(prefix.encode()) - 1
+        exact = prefix + "x" * padding + "\n"
+        self.assertEqual(len(exact.encode()), CONFIG_LIMIT)
+        result, calls = self.exercise(settings={"config_output": exact})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_passive(calls)
+        # Shell command substitution removes trailing newlines. Neither that
+        # nor a multi-byte name may make an oversized response look complete.
+        for oversized in (exact + "\n", prefix + "é" * padding + "\n"):
+            with self.subTest(bytes=len(oversized.encode())):
+                result, calls = self.exercise(settings={"config_output": oversized})
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("byte limit; preflight incomplete", result.stderr)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls)
+
+    def test_status_limit_includes_trailing_newlines_before_interpretation(self):
+        exact = "status: running" + "\n" * (STATUS_LIMIT - len("status: running"))
+        result, calls = self.exercise(settings={"status_output": exact})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("VM status: running", result.stdout)
+        self.assert_passive(calls)
+        result, calls = self.exercise(settings={"status_output": exact + "\n"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("256-byte limit; preflight incomplete", result.stderr)
+        self.assertNotIn("VM status:", result.stdout)
+        self.assert_passive(calls, operations=READS[:1])
+
+    def test_corrupt_reads_cannot_be_silently_normalised_into_a_success(self):
+        for settings in (
+            {"status_output": "status: run\u0000ning\n"},
+            {"config_output": "agent: \u00001\nname: " + PRIVATE + "\n"},
+            {"config_output": "agent: 1\nname: " + PRIVATE + "\n", "config_invalid_utf8": True},
+        ):
+            with self.subTest(settings=settings):
+                result, calls = self.exercise(settings=settings)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("non-text bytes; preflight incomplete", result.stderr)
+                self.assertNotIn("Guest agent configured:", result.stdout)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls, operations=READS[:1] if "status_output" in settings else READS)
+
+    def test_valid_unicode_configuration_remains_passive(self):
+        result, calls = self.exercise(settings={"config_output": "agent: 1\nname: café\nlock: backup\n"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Guest agent configured: enabled", result.stdout)
+        self.assertIn("VM lock: backup", result.stdout)
+        self.assertNotIn("café", result.stdout + result.stderr)
+        self.assert_passive(calls)
+
+    def test_producer_failures_are_independent_of_reader_result_codes(self):
+        # Producer exit codes are independent of bounded-reader result codes.
+        for code in (80, 81):
+            with self.subTest(code=code):
+                result, calls = self.exercise(settings={"config_exit": code})
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"configuration read failed (exit {code})", result.stderr)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls)
+
+    def test_reader_failure_is_incomplete_not_an_empty_or_successful_response(self):
+        result, calls = self.exercise(settings={"reader_exit": 23})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("status read failed (exit 23)", result.stderr)
+        self.assertNotIn("VM status:", result.stdout)
+        self.assertNotIn("preflight completed", result.stdout)
+        self.assert_passive(calls, operations=READS[:1])
+
+    def test_reader_does_not_execute_python_environment_startup_code(self):
+        result, calls = self.exercise(settings={"poison_pythonpath": True})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_passive(calls)
+        unsafe = SCRIPT.read_text().replace("python3 -I -c", "python3 -c")
+        self.assertNotEqual(unsafe, SCRIPT.read_text())
+        with self.assertRaisesRegex(AssertionError, "untrusted Python startup"):
+            self.exercise(settings={"poison_pythonpath": True}, source=unsafe)
 
     def test_running_vm_preflight_is_passive_even_without_a_lock(self):
         result, calls = self.exercise()
@@ -259,7 +485,7 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(calls, [])
 
     def test_missing_dependencies_do_not_run_a_partial_preflight(self):
-        for missing in ("qm", "timeout"):
+        for missing in ("qm", "timeout", "python3", "bash"):
             with self.subTest(missing=missing):
                 result, calls = self.exercise(missing=missing)
                 self.assertEqual(result.returncode, 1)
@@ -275,6 +501,33 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
         self.assertIn("status read timed out", result.stderr)
         self.assertLess(elapsed, 14)
         self.assert_passive(calls, operations=READS[:1])
+
+    def test_complete_read_deadline_covers_inherited_stdout_and_the_reader(self):
+        self.assertIsNotNone(REAL_TIMEOUT)
+        for operation in ("status", "config"):
+            limit = str(STATUS_LIMIT if operation == "status" else CONFIG_LIMIT)
+            for mode in ("inherited-pipe", "reader", "closed-pipe-reader"):
+                with self.subTest(operation=operation, mode=mode):
+                    settings = {"real_timeout": True}
+                    if mode == "inherited-pipe":
+                        settings["pipe_holder_operation"] = operation
+                    else:
+                        settings.update(blocked_response_reader=True, blocked_limit=limit,
+                                        close_reader_pipes=mode == "closed-pipe-reader")
+                    start = time.monotonic()
+                    result, calls = self.exercise(settings=settings)
+                    elapsed = time.monotonic() - start
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    label = "status" if operation == "status" else "configuration"
+                    self.assertIn(f"{label} read timed out", result.stderr)
+                    self.assertLess(elapsed, 14)
+                    self.assertNotIn("preflight completed", result.stdout)
+                    self.assertNotIn("Guest agent configured:", result.stdout)
+                    self.assertNotIn("VM lock:", result.stdout)
+                    if operation == "status":
+                        self.assertNotIn("VM status:", result.stdout)
+                    self.assertLess(len(result.stdout + result.stderr), 600)
+                    self.assert_passive(calls, operations=READS[:1] if operation == "status" else READS)
 
     def test_exact_documented_command_uses_the_passive_helper(self):
         recipes = bash_examples(guide_section(DOC.read_text(), "Passive host preflight"))
@@ -299,6 +552,17 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
 
 
 class VMDiskHelpTest(unittest.TestCase):
+    def test_documented_read_limits_and_failure_meaning_match_the_helper(self):
+        section = guide_section(DOC.read_text(), "Passive host preflight")
+        for phrase in ("256 bytes", "64 KiB", "Python 3", "GNU `timeout`", "ten-second hard deadline",
+                       "both `qm` and its response", "only that local collection group",
+                       "No VM, guest agent or", "not an absent lock", "do not remove the deadline",
+                       "truncated prefix",
+                       "printing raw", "saving it to disk", "Inspect the configuration privately"):
+            self.assertIn(phrase, section)
+        self.assertIn(f"read_bounded status status_output {STATUS_LIMIT}", SCRIPT.read_text())
+        self.assertIn(f"read_bounded configuration config {CONFIG_LIMIT}", SCRIPT.read_text())
+
     def test_section_selection_preserves_shell_comments_and_rejects_missing_or_duplicate_headings(self):
         content = "```bash\n# From the reviewed checkout\n### Shell comment, not a heading\ntrue\n```\n"
         guide = "### Passive host preflight\n" + content + "## Next\nOther text\n"
@@ -319,9 +583,10 @@ class VMDiskHelpTest(unittest.TestCase):
             "systemctl show pulse-update.timer pulse-update.service \\\n"
             "  --property=Id,LoadState,ActiveState,MainPID",
             "sudo systemctl stop pulse.service\n"
-            "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
+            "systemctl show pulse.service \\\n"
+            "  --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus",
             "sudo systemctl start pulse.service\nsystemctl is-active pulse.service",
-            "sudo systemctl start pulse-update.timer",
+            "sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer",
         ])
         for block in bash_examples(guide.replace(precaution, "", 1)):
             self.assertNotRegex(block, r"\b(curl|wget|qm agent|pveum|systemctl)\b")
@@ -333,6 +598,7 @@ class VMDiskHelpTest(unittest.TestCase):
                           "systemctl restart pulse.service"),
             guide.replace("sudo systemctl stop pulse.service", "sudo systemctl restart pulse.service"),
             guide.replace("sudo systemctl start pulse-update.timer", "qm agent 100 ping"),
+            guide.replace(",Result,ExecMainCode,ExecMainStatus", ""),
             guide + "\n```bash\nsystemctl stop pulse.service\n```\n",
             guide.replace("sudo bash ./scripts/test-vm-disk.sh 100", "curl https://example.invalid"),
         ]
@@ -351,6 +617,140 @@ class VMDiskHelpTest(unittest.TestCase):
             self.assertIn(phrase, guide)
         self.assert_guide_commands(guide)
         self.assertNotIn("GUEST_AGENT_FSINFO_TIMEOUT=", guide)
+
+    def test_shutdown_readback_is_not_guest_request_completion_or_a_forced_stop(self):
+        precaution = " ".join(guide_section(
+            DOC.read_text(), "Pause Pulse for a planned freeze-enabled backup"
+        ).split())
+        for phrase in (
+            "`Result=success`", "`ExecMainCode=1`", "`ExecMainStatus=0`",
+            "Do not force-kill Pulse or clear its failed state",
+            "an old exit result is not evidence of a new shutdown",
+            "Stopping Pulse does not cancel a guest-agent request already issued",
+            "If their state is unknown, do not start the backup",
+        ):
+            self.assertIn(phrase, precaution)
+
+
+class ServerLogSafetyDocsTest(unittest.TestCase):
+    """Check help against existing controls, not browser or native recovery."""
+
+    def log_help(self):
+        guide = (ROOT / "docs/CONFIGURATION.md").read_text()
+        return " ".join(guide.split("#### Log Levels\n", 1)[1].split("\n| Variable |", 1)[0].split())
+
+    def contains(self, text, *phrases):
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(phrase in text, f"Missing safety explanation: {phrase}")
+
+    def assert_display_only_controls(self, state):
+        # Buffered lines are still browser-local. Follow the complete helper
+        # chain, not just the old one-line toggles, so a backend mutation in a
+        # pending-work helper cannot hide behind unchanged button handlers.
+        expected = {
+            "togglePaused": "if (!isPaused()) flushPendingLogs(); setIsPaused((prev) => !prev);",
+            "clearLogs": "resetPending(); setLogs([]);",
+            "resetPending": (
+                "pendingLogs = []; pendingCount = 0; pendingNext = 0; "
+                "if (renderFrame !== null) { cancelAnimationFrame(renderFrame); renderFrame = null; }"
+            ),
+            "flushPendingLogs": (
+                "if (disposed || pendingCount === 0) return; "
+                "const incoming = Array.from( { length: pendingCount }, "
+                "(_, index) => pendingLogs[(pendingNext - pendingCount + MAX_LOGS + index) % MAX_LOGS], ); "
+                "resetPending(); setLogs((prev) => [ "
+                "...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)), ...incoming, ]); "
+                "scrollToBottom();"
+            ),
+            "scrollToBottom": "if (logContainer) { logContainer.scrollTop = logContainer.scrollHeight; }",
+        }
+        for name, body in expected.items():
+            marker = f"const {name} = () => {{"
+            self.assertEqual(state.count(marker), 1, name)
+            actual = state.split(marker, 1)[1].split("\n  };", 1)[0]
+            actual = " ".join(re.sub(r"//[^\n]*", "", actual).split())
+            self.assertEqual(actual, body, name)
+        self.assertIn("if (disposed || isPaused()) return;", state)
+
+    def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
+        guide = " ".join(DOC.read_text().split("### Pause Pulse", 1)[0].split())
+        self.contains(guide, "**Pause Stream**", "only pauses the browser display",
+                      "does not stop the Pulse server", "guest-agent requests",
+                      "actual server stop procedure")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assert_display_only_controls(state)
+        self.assertIn("toggleTitle: 'Pause Stream'", (ROOT / "frontend-modern/src/utils/systemLogsPresentation.ts").read_text())
+
+    def test_log_level_is_server_wide_not_a_browser_filter(self):
+        self.contains(self.log_help(), "server-wide logging threshold", "not a browser-only filter",
+                      "`warn` also suppresses `info` operational records",
+                      "absence of a log line is not evidence that an event did not occur",
+                      "`LOG_LEVEL` takes precedence at startup")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleSetLevel", 1)[1]
+        self.assertIn("logging.SetGlobalLevel(level)", handler)
+        self.assertIn("settings.LogLevel = level", handler)
+        loader = (ROOT / "internal/config/config.go").read_text()
+        self.assertIn('if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {\n\t\tcfg.LogLevel = logLevel', loader)
+
+    def test_display_controls_do_not_delete_logs_or_reduce_server_logging(self):
+        self.contains(self.log_help(), "**Pause Stream**", "**Clear Log Output**",
+                      "only affect the browser display", "do not stop monitoring",
+                      "reduce server logging or erase the server's logs",
+                      "VM_DISK_MONITORING.md#backup-safety")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assert_display_only_controls(state)
+
+    def test_display_only_controls_reject_backend_calls_and_stale_pending_work(self):
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        for name, operation in (
+            ("togglePaused", "apiFetchJSON('/api/monitoring/stop', { method: 'POST' });"),
+            ("clearLogs", "apiFetchJSON('/api/logs', { method: 'DELETE' });"),
+            ("resetPending", "handleLevelChange('warn');"),
+            ("flushPendingLogs", "handleLevelChange('error');"),
+            ("scrollToBottom", "mutateServer();"),
+        ):
+            marker = f"const {name} = () => {{"
+            mutated = state.replace(marker, marker + "\n    " + operation)
+            with self.subTest(control=name), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(mutated)
+        for before, after in (
+            ("const clearLogs = () => {\n    resetPending();", "const clearLogs = () => {"),
+            ("if (disposed || isPaused()) return;", "if (disposed) return;"),
+            ("if (!isPaused()) flushPendingLogs();", "flushPendingLogs();"),
+        ):
+            with self.subTest(missing=before), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(state.replace(before, after))
+
+    def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
+        self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
+                      "configuration and environment information", "not just the visible lines",
+                      "Keep the archive private", "manually reviewed, redacted excerpts",
+                      "not a guarantee that all content is safe to publish")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleDownloadBundle", 1)[1].split("type SetLogLevelRequest", 1)[0]
+        for source in ('os.Open(h.config.LogFile)', 'zipWriter.Create("pulse.log")',
+                       'io.Copy(wr, f)', 'zipWriter.Create("pulse-tail.log")',
+                       'logging.GetBroadcaster().GetHistory()', 'zipWriter.Create("system-info.json")',
+                       'h.config.DeepCopy()', 'os.Environ()'):
+            self.assertIn(source, handler)
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assertIn("window.location.href = '/api/logs/download'", state)
+        trouble = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split("### Collect diagnostics safely\n", 1)[1].split("### Inspect Notification Logs", 1)[0].split())
+        self.contains(trouble, "**Support Bundle**", "different export",
+                      "not the **GitHub (review first)** diagnostics export",
+                      "not limited to the lines visible", "CONFIGURATION.md#log-levels")
+
+    def test_debug_guidance_preserves_working_monitoring_and_private_evidence(self):
+        self.contains(self.log_help(), "Start with the current level", "raw guest-filesystem responses",
+                      "private names or paths", "do not enable it just to obtain a report",
+                      "previous working level", "without repeating the stall",
+                      "not proof that the underlying problem is fixed",
+                      "TROUBLESHOOTING.md#inspect-notification-logs")
+    def test_safety_help_is_shipped_without_new_diagnostic_commands(self):
+        for name in ("VM_DISK_MONITORING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+        self.assertNotIn("```", self.log_help(), "reuse bounded readers, not another copied command")
 
 
 if __name__ == "__main__":

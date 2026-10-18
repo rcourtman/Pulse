@@ -7,8 +7,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'pricing.handoff.link.pulseAccount': 'weiter zu Pulse Account',
   'pricing.handoff.title.publicPricing': 'Weiterleitung zu den Preisen',
   'pricing.handoff.title.pulseAccount': 'Weiterleitung zu Pulse Account',
-  'alerts.activation.label.enabled': 'Benachrichtigungen aktiviert',
-  'alerts.activation.label.disabled': 'Benachrichtigungen pausiert',
+  'alerts.activation.switchLabel': 'Benachrichtigungen senden',
   'alerts.activation.toast.activated':
     'Benachrichtigungen aktiviert. Sie erhalten jetzt Hinweise, wenn Probleme erkannt werden.',
   'alerts.activation.toast.activateFailed':
@@ -42,6 +41,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} auf {resourceName}',
   'alerts.assistant.title': 'Warnungsanalyse angehaengt',
   'alerts.assistant.unlockedTitle': 'Pulse Assistant zu dieser Warnmeldung fragen',
+  'alerts.assistant.iconLabel': 'Pulse Assistant zu {alertType} auf {resourceName} fragen',
+  'alerts.assistant.iconLabelAt':
+    'Pulse Assistant zu {alertType} auf {resourceName} ({startedAt}) fragen',
   'alerts.assistant.explain.menuLabel': 'Mit Assistant erklaeren',
   'alerts.assistant.explain.menuHint': 'Diese Warnmeldung als reinen Kontext verwenden',
   'alerts.assistant.patrol.chevron': 'Weitere Aktionen fuer diese Warnmeldung',
@@ -56,13 +58,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.nav.collapseSidebar': 'Seitenleiste einklappen',
   'alerts.nav.expandSidebar': 'Seitenleiste ausklappen',
   'alerts.nav.title': 'Warnmeldungen',
-  'alerts.nav.toggleAlerts': 'Externe Benachrichtigungen umschalten',
   'alerts.overview.action.acknowledge': 'Bestaetigen',
   'alerts.overview.action.acknowledgeAll': 'Alle bestaetigen ({count})',
   'alerts.overview.action.acknowledging': 'Wird bestaetigt...',
   'alerts.overview.action.cancel': 'Abbrechen',
   'alerts.overview.action.hideAcknowledged': 'Bestaetigte ausblenden',
   'alerts.overview.action.hideTimeline': 'Zeitleiste ausblenden',
+  'alerts.overview.action.moreActions': 'Mehr',
+  'alerts.overview.action.lessActions': 'Weniger',
   'alerts.overview.action.processing': 'Wird verarbeitet...',
   'alerts.overview.action.resume': 'Fortsetzen',
   'alerts.overview.action.showAcknowledged': 'Bestaetigte anzeigen',
@@ -124,6 +127,25 @@ export const DE_MESSAGE_OVERRIDES = {
     'Schalten Sie Warnmeldungen ein, um die Ueberwachung fortzusetzen und Konfigurationstabs freizugeben',
   'alerts.overview.paused.title': 'Warnmeldungen sind pausiert',
   'alerts.overview.section.activeAlerts': 'Aktive Warnmeldungen',
+  'alerts.overview.summary.warning': '{count} Warnung',
+  'alerts.overview.summary.critical': '{count} kritisch',
+  'alerts.delivery.paused.title': 'Benachrichtigungen sind pausiert',
+  'alerts.delivery.paused.action': 'Zustellung einschalten',
+  'alerts.delivery.paused.setupLink': 'Ziele fuer Warnmeldungen einrichten',
+  'alerts.delivery.paused.reason.detectionOff':
+    'Warnmeldungen sind in der Warnkonfiguration ausgeschaltet.',
+  'alerts.delivery.paused.reason.snoozed':
+    'Die Zustellung von Benachrichtigungen ist zurueckgestellt.',
+  'alerts.delivery.paused.reason.notActivated':
+    'Die Zustellung von Benachrichtigungen ist ausgeschaltet.',
+  'alerts.delivery.paused.consequence.destinations':
+    'Pulse erkennt weiterhin Warnmeldungen, sendet aber keine davon an die Ziele unten. Testnachrichten umgehen die Pause, ein erfolgreicher Test bedeutet also nicht, dass echte Warnmeldungen ankommen.',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff':
+    'Solange Warnmeldungen ausgeschaltet sind, meldet Pulse keine neuen, und keine wird an die Ziele unten gesendet. Testnachrichten umgehen die Pause, ein erfolgreicher Test bedeutet also nicht, dass echte Warnmeldungen ankommen.',
+  'alerts.delivery.paused.consequence.overview':
+    'Pulse erkennt die Warnmeldungen unten weiterhin, aber niemand wird darueber benachrichtigt.',
+  'alerts.delivery.paused.consequence.overviewDetectionOff':
+    'Solange Warnmeldungen ausgeschaltet sind, meldet Pulse keine neuen, und niemand wird benachrichtigt.',
   'alerts.overview.snooze.description':
     'Pausiert Benachrichtigungen und Eskalationen fuer diesen Vorfall. Ueberwachung und Erkennung der Behebung laufen weiter.',
   'alerts.overview.snooze.option.eightHours': 'Fuer 8 Stunden',
@@ -151,7 +173,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Warnmeldungsuebersicht',
   'alerts.page.schedule.description':
     'Definieren Sie Ruhezeiten, Gruppierung, Abklingzeiten, Wiederherstellung und Eskalation fuer Warnmeldungen.',
-  'alerts.page.schedule.title': 'Wartungszeitplan',
+  'alerts.page.schedule.title': 'Zustellplan',
   'alerts.page.thresholds.description':
     'Passen Sie Schwellwerte und gezielte Ausnahmen fuer Infrastruktur, Workloads und Integrationen an.',
   'alerts.page.thresholds.title': 'Warnungsschwellwerte',
@@ -272,6 +294,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Bitte geben Sie ein Passwort ein',
   'setup.security.error.passwordTooShort': 'Das Passwort muss mindestens 12 Zeichen haben',
   'setup.security.error.setupFailed': 'Einrichtung fehlgeschlagen: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Ihr Admin-Konto wurde erstellt. Die Nutzungsstatistiken bleiben eingeschaltet, weil dieser Server PULSE_TELEMETRY=true setzt. Setzen Sie PULSE_TELEMETRY=false und starten Sie Pulse neu, um sie auszuschalten.',
   'setup.security.error.telemetryDisableFailed':
     'Ihr Admin-Konto wurde erstellt, aber die Nutzungsstatistiken konnten nicht ausgeschaltet werden. Sie koennen sie unter Einstellungen → System → Allgemein ausschalten.',
   'setup.security.generatedPasswordHelp':
@@ -470,9 +494,6 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.header.systemAiAssistant.description':
     'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
   'settings.header.systemAiAssistant.title': 'Assistant',
-  'settings.header.systemAiDiscovery.description':
-    'Konfigurieren Sie den KI-gestuetzten Service-Kontext fuer Assistant und Patrol. Infrastruktur-Erkennung und Onboarding bleiben unter Infrastruktur.',
-  'settings.header.systemAiDiscovery.title': 'Service-Kontext',
   'settings.header.systemAiPatrol.description':
     'Legen Sie fest, wann Patrol laeuft, was Patrol startet und welches Modell verwendet wird.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -519,7 +540,6 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.nav.item.dataReports': 'Daten & Berichte',
   'settings.nav.item.diagnosticsHealth': 'Diagnose & Zustand',
   'settings.nav.item.assistant': 'Assistant',
-  'settings.nav.item.discovery': 'Service-Kontext',
   'settings.nav.item.general': 'Allgemein',
   'settings.nav.item.infrastructure': 'Infrastruktur',
   'settings.nav.item.network': 'Netzwerk',

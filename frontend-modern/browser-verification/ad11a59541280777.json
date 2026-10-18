@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "8259a74c9d0503df630b09c12a2c1be906fa3d78",
+  "verified_at": "2026-10-06T22:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "87469b0d62a31a1657a94a5f645041ad34987cc5af55ca238c6cbf49b0c068ee"
+  },
+  "routes": [
+    "/proxmox/storage?tab=disks",
+    "/proxmox/storage?tab=disks&status=attention",
+    "/proxmox/storage?tab=disks&status=critical",
+    "/proxmox/storage?tab=disks&status=warning"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (8 nodes) whose generator was overlaid locally, never committed, to pin readings from a control file on pve3: Crucial MX500 2TB /dev/nvme2 (SMART PASSED) at 72C, WD Blue SN570 /dev/sd1 at 63C, and Crucial MX500 2TB /dev/nvme0 at 72C with 2 pending sectors. The API returned risk {critical: [temperature_high]}, {warning: [temperature_high]} and {critical: [pending_sectors, temperature_high]} respectively; the backend binary was rebuilt from base 8259a74c9d (includes #2611)",
+    "Same-session control with the pre-change diskPresentation.ts (3ac5664d95, whose verdict code is unchanged on base 8259a74c9d) swapped in under the running Vite: the 72C temperature-only disk read 'Replace Now' (phone 'Replace') titled 'Disk temperature is 72C' in the row and in its drawer, and the 63C disk read 'Needs Attention' and sorted above the 7%-life disk",
+    "After the change at 1440 (full layout): rows sort Replace Now (pending sectors, title 'Pending sectors detected (2)', rgb(185,28,28)), Running Hot (title 'Disk temperature is 72C', rgb(185,28,28)), Needs Attention (970 EVO, 'SSD life remaining is 7%', rgb(180,83,9)), Running Hot (title 'Disk temperature is 63C', rgb(180,83,9)), then Healthy/Unknown disks unchanged",
+    "After the change at 390 (narrow layout): the same rows show the compact words Replace, Hot, Attention, Hot with the same tones and titles",
+    "Disk drawer header for the 72C temperature-only disk reads 'Running Hot  Disk temperature is 72C' at both widths",
+    "Health filter from the URL at both widths: status=attention lists the two Replace/Hot critical rows plus Attention and the amber Hot row; status=critical lists only Replace Now and the red Running Hot; status=warning lists Needs Attention and the amber Running Hot",
+    "Known and unchanged: the 63C NVMe reads Running Hot in amber beside a green Temp cell, because the risk tier is the server's flat 60C while the Temp cell uses the NVMe alert threshold; the same disk read Needs Attention before this change. Threshold reconciliation is separate work",
+    "Amended content (empty-summary reasons keep their code and severity, an unexplained critical level no longer borrows a weaker reason's text): full pass repeated at 1440 and 390 with identical rows, compact words, titles, colours, drawer header and status=attention/critical/warning results"
+  ],
+  "interactions": [
+    "Loaded the Physical Disks tab unfiltered at 1440x900 and 390x844 and read every row's visible health word, its title, computed colour and the Temp cell",
+    "Opened the inline drawer for the 72C temperature-only disk by clicking its row at both widths and read the health header",
+    "Loaded status=attention, status=critical and status=warning at both widths and read the listed rows",
+    "Swapped the pre-change diskPresentation.ts in under the running Vite, repeated the reads, restored the change and confirmed it byte-identical with cmp; after rebasing onto 8259a74c9d repeated the full after-change pass with a rebuilt backend"
+  ]
+}

@@ -15,6 +15,345 @@
 
 ## Purpose
 
+### Legacy alert-history compaction releases removed-row storage
+
+Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
+for the surviving history rows, not the original loaded row count. Unchanged
+expiry and removal passes keep the current array. This reduces avoidable runtime
+retention after loading a mostly-expired or noisy history without changing the
+30-day cutoff, five-minute duplicate chain, earliest occurrence/latest observation,
+identity, ordering, evidence or empty-array shape.
+
+`history_retention_storage_test.go` verifies exact survivor capacity, recurrence
+and neighbour separation, detached migration snapshots, subsequent appends and
+concurrent reads/writes. Connected primary, backup and retired-JSON loads compact
+without rewriting the recovery files or changing their retirement state. JSON
+recovery and event-log authority remain unchanged. Array-capacity evidence is not
+whole-process RSS or attribution of a reported installation's memory growth.
+
+
+### Webhook list changes share the editor's acknowledged writer
+
+Enable/Disable, deletion, bulk changes and form saves cannot overlap in one
+webhook editor. An open add/edit draft also locks list actions so a saved
+row change cannot invalidate that draft's enabled state or identity. Pending
+list actions expose a live status and keep the saved inventory until the
+server acknowledges each change. Deletion requires `success: true` before
+removing a row; a resolved but unaccepted response retains it.
+
+Bulk Enable/Disable captures only rows whose state needs changing and sends
+them sequentially. A rejected or unconfirmed write stops the remaining batch,
+retains earlier acknowledged changes and gives fixed partial-change guidance.
+No automatic retry or rollback occurs. Unmount withdraws remaining unsent
+calls, without cancelling or undoing a request already issued. Existing masks,
+routing, payloads, endpoint policy and notification delivery remain unchanged.
+The retired destination-tab mutation owner cannot dispatch another call, publish
+a late toast or replace shared inventory belonging to a newly loaded context.
+
+`WebhookConfig.mutations.test.tsx` connects the real editor and destination
+owner to deferred/rejected synthetic API replies for serial batches, shared
+pending admission, no-op rows, partial failure, open drafts, deletion acceptance,
+explicit retry and unmount. `WebhookConfig.test.tsx` retains service, payload,
+form and list coverage with acknowledged bulk sequencing.
+`useAlertWebhookDestinationsState.test.tsx` checks late create/update/delete
+replies against replacement inventory and refuses calls from the retired owner.
+Browser proof uses
+the real existing section, hooks and API adapters at desktop/narrow widths,
+with synthetic local endpoints; it does not establish provider delivery.
+
+### Existing settings saves retain the pending and newer drafts
+
+One save per loaded editor owns a click-time snapshot of the alert policy and
+all separately persisted destinations. Save and Discard are unavailable while
+it is pending; fields stay editable. Completion clears the dirty flag only
+when no newer edits occurred. If newer edits exist, the acknowledgement says
+that the submitted settings were accepted and the newer changes remain
+unsaved. Failed writes stop later calls, retain drafts and restore Save for a
+deliberate retry. The existing multi-endpoint save is not atomic: earlier
+acknowledged writes are not rolled back or described as undone.
+
+Entering the notifications tab does not reload an unsaved draft or an active
+save. Explicit Discard still reloads saved settings when no save is pending.
+Reload, organisation switch and unmount invalidate stale completions and stop
+unsent writes; they cannot cancel or undo an already-issued request. The newer
+context alone owns load results and pending flags. Apprise response masking
+replaces only the untouched submitted draft, not newer input.
+
+Save admission additionally requires a successful saved-policy read in the
+current editor context. Initial load and every replacement withdraw that
+admission before resetting draft defaults. A failed read leaves editing and
+saving unavailable; an explicit reload must obtain the saved policy and finish
+destination loading before admitting writes. An older failed read cannot
+withdraw a newer successful context. Destination partial-load failures retain
+their existing separate save block. Defaults are not a recovered saved policy.
+
+`alertSettingsSave.acknowledgement.test.tsx` exercises the real policy and
+destination owners with deferred/rejected API replies, coherent snapshots,
+newer edits, duplicate admission, tab navigation, retry, normal masking and
+organisation invalidation. `useAlertDestinationsState.test.tsx` bounds the
+same downstream snapshot; `alertConfigPresentation.test.ts` distinguishes
+pending, accepted and newer-unsaved messages. Browser proof mounts the real
+configuration surface at desktop and narrow widths with synthetic local
+endpoints. These are source controls, not ordinary notification delivery.
+The acknowledgement controls also require failed-initial/replacement-read
+write refusal, deliberate reload recovery and superseded-error ownership.
+
+
+### PMG collection opt-outs are not recovery evidence
+
+Missing node queues (including an entirely disabled collector) cannot resolve
+aggregate queue-depth or oldest-message alerts: recovery and lower severity
+require every discovered node's observation. A partial non-negative reading
+is a lower bound and can still establish the highest configured severity
+(critical when configured, otherwise warning), never downgrade or resolve it.
+Observed per-node queues retain their existing independent evaluation. Missing quarantine totals preserve both category alerts
+and add no zero growth sample; a successful complete zero remains real recovery
+evidence. Explicit alert-policy disablement and the existing offline policy
+remain separate and unchanged. `pmg_collection_test.go` and the corrected
+nil-quarantine control in `alerts_test.go` cover missing/partial datasets and
+complete oldest-message recovery, known-high partial activation and refusal
+to downgrade a critical alert using an incomplete lower reading.
+
+### Connection confirmations cannot span unknown or disabled observations
+
+The existing PVE/PBS/PMG/vSphere/TrueNAS connection-degraded detector requires
+three consecutive degraded observations to activate and three consecutive
+healthy observations to recover. Pending or unknown connection state is neither
+degradation nor recovery: it drops pending activation and intent grace, restarts
+recovery confirmation, and retains an active occurrence's identity, severity,
+acknowledgement, trusted metadata and observation time without fire/resolve
+callbacks. Paused connections, disabled connections and owning-resource offline
+policy disablement clear active alerts immediately and reset pending activation
+even when no active alert exists. Healthy evidence also ends pending intent grace.
+
+Resets address exactly the connection's canonical discrete-state key, not another
+connection, condition or metric. Core and optional shadow reducer observe the same
+reset. Intent bookkeeping and its persisted checkpoint lose the interrupted run;
+re-enabled detection must establish fresh confirmations and any explicit grace.
+No new alert family, threshold, grace policy, route or external probe is added.
+
+`connection_confirmation_gap_test.go` covers all five platforms, six interruption
+paths, exact-connection isolation, fresh activation/grace, acknowledged recovery
+and exactly-once callbacks with shadow parity. `TestInterruptDiscreteRun` in
+`reducer/discrete_test.go` pins exact-key isolation, retained firing state,
+acknowledgement, no fabricated resolution and idempotent interruption. These
+synthetic source checks do not establish native outage or destination delivery.
+
+### Metric timing requires continuous observed evidence
+
+Unknown metric evidence interrupts timing, not the occurrence. Missing or
+rejected unified values, non-finite current readings, and unavailable,
+incomplete or invalid rolling windows drop a pending activation run and reset
+an open incident's recovery run. Explicit metric-intent grace and its durable
+pending checkpoint are reset as well. Fresh evidence must complete a new full
+configured delay; unknown time cannot fulfil a sustained-for or recovery rule.
+Existing alert values, identity, start time, acknowledgement, notification and
+lifecycle records are not refreshed or resolved by that interruption.
+
+Guest backup/QGA deferrals apply this boundary to retained memory and aggregate
+and per-filesystem disk readings. Failed or expired empty disk inventory
+interrupts tracked filesystem runs, including a guest's former node-scoped
+identities, without implying filesystem removal. Different guests, instances,
+metrics and independently current CPU/I/O remain independent. Host memory also
+interrupts timing when its usage is unknown; explicit rule disablement still
+uses its normal clearing path independently of telemetry. Node temperature's
+existing interruption rule is unchanged. Typed metric dispatchers must exclude
+metrics they evaluate separately from their own missing-value checks: node
+usage dispatch does not infer a temperature gap before the node's independent
+temperature evaluator observes its actual reading.
+
+`metric_observation_continuity_test.go` verifies actual legacy/canonical,
+unified, host and VM entry points, full-delay fresh activation/recovery,
+explicit grace, empty/migrated filesystem inventory and rejected-value/source
+isolation. `guest_observation_test.go` no longer treats a retained-reading gap
+as elapsed breach evidence. These controls establish source lifecycle
+truthfulness, not native freeze/thaw safety or external notification delivery.
+
+### Node temperature alerts judge the primary CPU reading
+
+`checkNodeTemperature` evaluates `models.PrimaryCPUTemperatureCelsius`, the
+hottest usable package, CPU-maximum or core reading, instead of the package
+with a CPU-maximum fallback. The alert value is therefore the reading the
+node's table, drawer headline and history show, and a core running above the
+package now drives the alert. The interruption rule is unchanged: no usable
+reading interrupts timing and never clears an open alert. Proof:
+`alerts_test.go` (`TestCheckNodeTemperatureJudgesPrimaryCPUReading`).
+
+### Open threshold alerts carry a volatile live status — issue #2068
+
+`evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own
+inputs on every evaluation, including the hysteresis hold and the recovery
+run, where `Value`, `Message` and `LastSeen` stay at the last breach and no
+branch may notify. The phase comes from the trigger, the clear level handed to
+the reducer (a value at or below it counts toward recovery) and the reducer's
+recovery run; progress uses that run's monotonic elapsed time. The status is
+stripped from the active-state checkpoint, the recovery mirror and the
+degraded recovery projection, so a held alert adds no durable writes, and
+after a restart it is absent until the next evaluation. Resolved records carry
+no live status. Stale-alert cleanup and the retention TTLs use the latest
+observation (`lastObservedAt`), so an alert held below its trigger for over a
+day is not auto-resolved as unmonitored. Frontend surfaces format the status
+through `features/alerts/metricAlertPresentation.ts` and never re-derive the
+phase or recovery timing.
+
+The optional `metricStatus.lastBreachAt` dates the evaluated value retained in
+`Alert.Value`, not the newer `observedAt` of a hold or recovery. A breaching
+sample (including equality at the trigger) advances it; a held or recovering
+sample uses the existing alert's `LastSeen`. Unknown/zero dates are omitted,
+never replaced by the occurrence start, restart or poll time. It remains
+volatile with the status, so restart rebuilds it from the saved breach and a
+hold does not rewrite the recovery mirror. Resolution drops the whole status.
+
+`TestMetricBreachTimeTracksTheEvaluatedBreach` checks holds, recovery progress
+and reset, exact-trigger and renewed breaches. The existing live-status and
+checkpoint controls also assert the breach date; restart controls cover both
+durable active state and the JSON mirror, unchanged mirror bytes/mtime, and
+legacy unknown-date recovery through a new breach.
+
+### Held breach dates in attention and Assistant
+
+`getMetricAlertLastBreachAt` selects a valid timezone-qualified ISO
+`metricStatus.lastBreachAt` before a valid legacy `Alert.lastSeen`.
+Unknown, malformed, impossible-calendar and Go-zero dates stay undated; the
+occurrence start, current poll and recovery start are never substitutes.
+Attention, overview/incident hover and active History share this selection.
+Relative ages use the caller's clock. Assistant model-only context carries
+the normalised UTC ISO date as `Last Breach At` when known, separate from
+the retained breach value and live reading/clear rule. The existing compact
+Chat attachment is unchanged; no removed detail surface is restored.
+Missing live status after restart keeps the existing recorded-message path.
+The scoped target and explicit operator-approval boundary are unchanged.
+
+Verification: date-selection/attention controls in `helpers.test.ts`,
+`alertAssistantHandoffModel.test.ts` and final-byte desktop/phone production
+surface fixture `browser-tests/held-breach-time.cjs`. These are synthetic
+source/rendering controls, not native readings, inference, notification
+provider delivery or restart recovery acceptance.
+
+### Alert card and open incident lead with the live reading — issue #2068
+
+The Alerts overview card leads an open threshold alert with the presentation's
+summary and clear rule, keeps the last breach as the summary's hover text, and
+labels the alert and clear levels in the status's unit (temperatures follow
+the viewer's °C/°F preference, as every frontend reading does). Without a live
+status it keeps the message and labels an alert level only for metric types
+whose unit is known; other thresholds (queue ages, counts) are stated in their
+own message, so the card never guesses a percent. The resource incident panel
+describes only the open occurrence whose `alertIdentifier` and `openedAt`
+match an active alert's id and `startTime` (the incident store's occurrence
+key), from that alert's live status, rechecked on the shared relative-time
+clock so it turns stale when evaluations stop; closed occurrences keep their
+recorded message. Every disk alert on a guest carries the guest's name, so the
+presentation names the disk from `metadata.label`, as the per-disk message
+does.
+
+### History leads its open row with the live reading — issue #2068
+
+Alerts > History is a log of occurrences, but its open row is the one
+occurrence still in progress: it already shows an Active badge and a running
+duration, so a breach message beside them reads as the reading now. An active
+history row for a threshold alert with a usable live status leads with the
+presentation's summary; the desktop row carries the clear rule and last
+breach in its hover, and the phone card shows them as muted lines because it
+has no hover. `buildAlertHistoryItems` keeps `description` as the recorded
+message, so search and the Assistant handoff still read the record, and
+attaches the source alert as `liveAlert` only to active, non-system rows.
+Closed rows, and open ones without a live status, keep their recorded message.
+
+### History row controls name the alert they act on
+
+Every Alerts > History row, in the desktop table and the phone cards, repeats
+Timeline, Resource and an icon-only Assistant button, and each used to share
+one name ("Timeline", "Resource", "Ask Pulse Assistant about this alert"), so
+a screen-reader or speech-input user could not tell rows apart.
+`AlertHistoryItemActions` now names Timeline with
+`getAlertHistoryTimelineActionLabel` (alert title, resource and the row's full
+start time, since history repeats one alert over time; "Hide timeline for
+..." while open, with `aria-expanded`) and Resource with
+`getAlertHistoryResourceActionLabel` (rows on one resource share it because
+they open the same panel). The Assistant icon names its alert through the
+`alerts.assistant.iconLabel` and `alerts.assistant.iconLabelAt` catalog keys
+from the host's `subjectLabel` and `subjectTime`; a locked button keeps its
+locked explanation and the hover title is unchanged. Each name begins with
+the visible label (`AlertHistoryItemActions.test.tsx`,
+`AlertHistoryMobileList.test.tsx`, `InvestigateAlertButton.test.tsx`,
+`alertIncidentPresentation.test.ts`).
+
+### The delivery switch has one name
+
+The Alerts overview header switch for external notification delivery is
+labelled **Send notifications** in every state
+(`alerts.activation.switchLabel`, English, German and Spanish), and that
+visible label is the checkbox's accessible name. It used to read
+"Notifications enabled" or "Notifications paused" depending on its own
+position, so an off switch beside "Notifications paused" read as "pausing is
+off". The switch position alone now carries the state. The delivery-paused
+banner and the pause toast still say Pulse keeps detecting and showing active
+alerts, which keeps the 2026-07-18 boundary between detection and delivery.
+`Alerts.readOnly.test.tsx` pins the stable name in both states, `i18n.test.ts`
+rejects state words in the label in every locale, and spec 01 finds the switch
+by the new name.
+
+### The paused banner claims only that delivery is off
+
+Pending notification delivery (`pending_review`) covers both a fresh install
+and someone switching delivery off, because `deactivate` writes the same state.
+The config cannot tell them apart: `activationTime` can arrive in an imported
+config without local activation, and the activation API can enable delivery
+without recording one. So the paused banner's cause for pending delivery
+(`alerts.delivery.paused.reason.notActivated`) reads "Notification delivery is
+turned off." in every locale, instead of claiming it was never turned on.
+`OverviewTab.emptystate.test.tsx` renders both histories through the real
+activation store and hook.
+
+### Retained guest observations are not alert evidence
+
+Guest memory marked `last-known`, `unavailable` or an unknown observation state
+cannot start, advance, refresh or resolve a memory incident. A VM filesystem
+read with a nonempty `diskStatusReason`, including retained `prev-*` values,
+or unavailable aggregate usage is likewise not current disk evidence. It cannot
+evaluate either aggregate or per-filesystem thresholds, replace an aggregate
+incident with filesystem incidents, or clear filesystem alerts as if a failed
+or expired inventory were authoritative removal. Metric filters do not match
+these unavailable memory/disk values, including a fabricated healthy zero.
+
+Existing incidents retain their last trusted value, occurrence, acknowledgement,
+observation time and lifecycle/delivery evidence until a current observation
+resumes evaluation. Successful current inventory still resolves removed
+filesystems. Explicit disablement, suppression and stopped-guest behavior remain
+effective independently of telemetry, including per-filesystem disable overrides
+on retained identities. Legacy unannotated memory and independent
+current PVE/Pulse-agent memory/disks keep their existing policy, even while QGA
+is deferred; current CPU and I/O continue to evaluate. Producers own freshness;
+no new age threshold, QGA request, payload, alert family or UI surface is added.
+
+`guest_observation_test.go` pins typed/pointer VM/LXC observation admission,
+delayed breaches, canonical incident/acknowledgement/ledger continuity, filters,
+fresh recovery and removal, independent metrics and deliberate disablement.
+`TestGuestBackupDeferralAlertObservationLifecycle` connects actual HTTP client,
+poll builder, retained snapshot, unified view, History and the production alert
+call. These are synthetic source proofs, not native backup/thaw, containing
+release, installed delivery or external recipient acceptance.
+
+### Pulse system alerts retain their service scope in the existing UI
+
+The `pulse-system-` identity prefix or explicit `systemAlert: true` metadata
+marks a Pulse service condition, not a monitored resource. Overview retains
+the warning, acknowledgement, snooze and occurrence timeline but offers no
+resource link or monitoring-policy action. History preserves this scope for
+active and retained conditions before any resource-name fallback: a machine
+named Pulse is not evidence that it owns the service warning. Ordinary resource
+alerts, including those called Pulse, retain their existing target affordances.
+
+The Assistant explanation keeps the exact alert identity, message and
+approval-required boundary, without invented metric values, a guest target or
+resource Patrol. Reconstructed History explanations preserve the system marker;
+new system types need no frontend allowlist. Connected overview/history/handoff
+and investigation-button controls verify both authoritative markers, legacy
+metadata, name collisions and ordinary resource controls. Browser acceptance
+checks the actual components on desktop and narrow touch views. This changes
+presentation only, not alert evaluation, delivery, API or operator permissions.
+
 ### Backup-age evaluation failures use the existing system-alert lifecycle
 
 `pulse-system-backup-evaluation` is a warning about Pulse's inability to read
@@ -325,9 +664,10 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
-Proxmox wearout recovery requires three consecutive reported readings of at
-least 10% remaining life. An absent reading does not prove recovery, and a
-new low reading resets the recovery run; until recovery is confirmed the
+Proxmox wearout recovery requires three consecutive reported readings above
+10% remaining life; a reading of exactly 10% still matches the alert. An
+absent reading does not prove recovery, and a new low reading resets the
+recovery run; until recovery is confirmed the
 existing alert retains its low-life value and occurrence. This bounds the
 resolved-then-refired notification loop when endurance data briefly looks
 healthy (#2112), while a sustained replacement/corrected reading can still
@@ -335,6 +675,23 @@ resolve. `TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications` and
 `TestCheckDiskHealthWearoutRecoveryAlertCleared` pin dispatch/history
 deduplication and confirmed recovery. This is synthetic source proof, not a
 claim that the reporter's installed image has been repaired.
+
+The Proxmox wearout value is percent life remaining, so its alert message names
+it that way (`SSD life remaining is 7%`), matching the host-agent SMART
+`wearout_low` summary; the threshold travels in the alert's `Threshold` field,
+which the Alerts card and notifications render beside the message. Calling the
+number "wearout" read as 7% worn and contradicted the low-life warning.
+`CheckDiskHealth` logs a failed disk at error and a worn disk at warn only on
+the evaluation that opens the alert (the canonical `activated` transition);
+later polls that still find the disk failed or at or below the wearout
+threshold, including mock mode's per-tick evaluation, log at debug. Logging on
+every evaluation repeated one failed disk's error on every poll for as long as
+it stayed failed. `TestCheckDiskHealthLowWearoutCreatesAlert` pins the message
+and `TestCheckDiskHealthLogsAlertOpeningOnce` pins the log-once boundary at the
+threshold, including a fresh error when a recovered disk fails again. That test
+captures logs through a hook installed in the package `TestMain`, because
+assigning `log.Logger` inside a test races with managers earlier tests left
+running.
 
 Host SMART counter growth is an event boundary rather than a warning on every
 historical non-zero value. For an agent-only disk, the first reported UDMA CRC
@@ -409,10 +766,40 @@ threshold row keeps the live `guestID-disk-*` alert resource identity for
 active-state and intent-policy linkage while persisting through the stable
 `guest-disk:*` override identity.
 
+Numeric threshold editing is owned by
+`frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx`.
+The table and card layouts delegate global defaults and resource overrides to
+that control, so input bounds, empty-input handling and Off/inherit transitions
+cannot diverge by layout. Table rows save when focus leaves the owning row.
+Focus movement between sliders, inputs, toggles and Cancel stays inside that
+edit, so Cancel cannot commit the value before its click runs. Cards retain
+explicit Save. The responsive table owner identifies the active layout.
+Retiring a row during a resize transfers the draft and metric focus instead
+of saving it. Both layouts focus the first supported numeric metric when
+editing starts from the resource action.
+Clearing an override shows the inherited metric state. When that default is
+Off, the badge remains Off and the table slider stays disabled. Enabling
+from that state stages the factory value in one toggle and leaves the group
+default unchanged. Existing Off/inherit serialization remains compatible.
+Table sliders sit above the numeric control so editing does not widen the table
+and hide the resource identity. Backup, snapshot and offline controls keep their
+separate configuration contracts. Global default cells never route backup or
+snapshot into numeric thresholds. Host cards preserve the canonical cluster
+context shown by table rows, so identically named hosts remain distinguishable.
+Every threshold control names itself for assistive tech, because moving
+between form controls reads a control's own name, not its column header:
+the editor's input is "<column> default" or "<column> for <resource>" and its
+On/Off badge "... alerts: On"; offline, backup and snapshot toggles and the
+three-state Warn / Crit / Off control are "Offline alerts for <resource>: Warn";
+display-mode value buttons are "Edit <column> threshold for <resource>: <value>";
+and the alert switches are "Alerts for <resource>". Each name ends with the
+control's visible word or value so voice control can say what is on screen
+(WCAG 2.5.3). `ResourceTable.test.tsx` pins the names in both layouts.
+
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
 `internal/alerts/config_runtime.go`), not a display convention: `-1` is the
-value Pulse writes, and `0` disables the metric just as completely because
+value the editors stage, and `0` disables the metric just as completely because
 earlier builds advertised `0` as the disable value and those overrides are still
 on disk. Every threshold editor reads that same `<= 0` rule through
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts` rather than
@@ -430,7 +817,28 @@ the metric's enabled default instead, and only clears the override when the
 inherited default is already enabled. Editors must also not manufacture an off
 state out of an empty input: a cleared box is mid-edit, and coercing it to `0`
 disabled the metric in the engine while the row still showed On. Disabling is
-the toggle's job, and the toggle writes the canonical `-1`.
+the toggle's job, and the toggle stages the canonical `-1`.
+
+The save path writes the backend's default contract, not the editors' sentinel.
+Alert config normalization reads a negative trigger on a global default as
+unset and restores the factory threshold, so `buildAlertsConfigurationPayload`
+in `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` writes
+every Off global default as trigger `0`. Sending the staged `-1` through made
+every Off default with a positive factory threshold come back On at that
+threshold after save and reload; only guest and node CPU, memory and disk
+escaped, because normalization leaves them alone. Overrides keep `-1`, which
+the override path stores as written. Because `-1` and `0` are the same
+setting, the Global Defaults "Custom" badge compares Off values as equal
+rather than by raw number, so the factory `-1` I/O defaults do not read
+Custom against a saved `0`. An unset factory value stays distinct from Off,
+since unset can mean the default follows another setting. A row's
+custom-threshold marker keeps comparing raw values: it drives the row's revert
+control and override removal, so an explicit `-1` override must stay visible
+against an Off default even though both alert the same way.
+`frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts`
+pins the payload for every section, and
+`internal/alerts/config_defaults_off_test.go` pins that a zero default stays
+off through `UpdateConfig` and raises no alert.
 
 External availability-probe reporting loss owns one canonical
 `external-probe-unavailable` alert per assigned agent, not one alert per target.
@@ -554,6 +962,7 @@ default construction path still restores.
 47a. `internal/alerts/capacity_forecast.go`
 47b. `internal/alerts/windowed_metric.go`
 48. `internal/alerts/node.go`
+48a. `internal/alerts/host_agent_node_links.go`
 49. `internal/alerts/host.go`
 50. `internal/alerts/backup_snapshot.go`
 51. `internal/alerts/disk_health.go`
@@ -722,6 +1131,34 @@ that fast path entirely: active-alert and resolved-alert stores keep their
 own commit path, resource `alerts` facets are not in the fast-path
 allow-list, and a row whose patch touches alert-relevant structure always
 takes the full canonical merge.
+That commit path replaces each stored alert with the server's payload for its
+id instead of merging into it. A field the server omits is removed from the
+store, whether the payload came from a socket snapshot, a keyed delta, or REST
+recovery: a threshold alert restored after a restart carries no `metricStatus`
+until its next evaluation, so the previous live reading must not keep reading
+as "now"; an unacknowledge from another session clears `ackTime` and
+`ackUser`; a dropped `nodeDisplayName` or `metadata` disappears. Resolved
+alerts follow the same rule. The pending acknowledgement hold still skips a
+payload that contradicts an unconfirmed local acknowledge or unacknowledge,
+and the confirming payload then replaces the optimistic copy. Because a
+replacement reconciles the stored alert in place, local optimistic updates are
+stored as copies, so it never rewrites a record a caller keeps for rollback.
+The store's `updateAlert` holds the only optimistic copy of an acknowledgement.
+`useAlertAcknowledgementState` writes through it and keeps no override of its
+own, so once the server confirms it, a later server change such as an
+unacknowledge from another session reaches the open tab. When no hold is
+pending and the stored alert already shows the local acknowledge or
+unacknowledge, the store sets no hold and keeps the server's `ackTime` and
+`ackUser`: the request's own broadcast can reach the socket before its HTTP
+response, and a hold would then wait for a second confirmation and skip the
+next real change. Every local acknowledgement write supersedes a REST recovery
+in flight: the store discards that response, which the server may have built
+before accepting the write, and fetches again once it settles. A hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active`, waiting for a
+recovery already in flight and fetching again if that one applies nothing,
+because the payloads the hold skipped may not be followed by another alert
+change. `websocket-unified.test.ts`, `useAlertAcknowledgementState.test.tsx`
+and `useAlertOverviewState.test.tsx` pin these paths.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.
@@ -732,6 +1169,39 @@ must migrate through `internal/alerts/operational_contract.go` and name their
 limited provenance honestly rather than inventing confirmed provider evidence.
 Acknowledgement remains distinct from resolution, and every resolution
 transition references recovery evidence separate from its trigger evidence.
+A resolved alert may carry a typed `AlertResolution`
+(`internal/alerts/resolution.go`) when it closed without its condition being
+observed to clear. The one reason so far, `moved_to_agent`, describes a metric
+alert whose resource's linked Pulse agent now owns the metric.
+`releaseCanonicalMetricAlert` is the disabled-threshold release extracted from
+`evaluateCanonicalMetricAlert`: a caller releasing a metric for any other
+reason passes a resolution, and `clearAlertWithResolution` stamps a copy on the
+removed alert before it is resolved. The resolved callback snapshot, the
+history row, the resolved event-log entry (the reason code, with `Summary()` as
+its message) and the Alert JSON then carry it. Resolved consumers still receive
+the close, because integrations close their incident by alert ID. The
+synthesized closing evidence carries the resolution reason and summary instead
+of `legacy_alert_recovery_projection`, and the resolve transition carries the
+summary as its `reason`. Its cause is `ownership_transferred`, an
+`operationaltrust.TransitionCause` that may only enter `resolved` and only with
+evidence (`resolvedTransitionCause` in `operational_contract.go`), so Patrol's
+timeline never labels a handover "Recovery evidence" and alert-quality
+telemetry does not count a handover during a snooze as resolved while snoozed.
+A nil resolution leaves the disabled-threshold path and every recovery on
+`recovery_evidence`.
+`TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery` and
+`TestResolvedHistoryRowKeepsResolutionWithoutEventLog` in
+`internal/alerts/operational_contract_test.go` pin this.
+The in-app readers carry it too. `GetRecentlyResolved` projects it into
+`models.Alert.Resolution` (reason, successor and the `Summary()` text) for the
+state snapshot, the websocket and the assistant and Patrol prompts, pinned by
+`TestRecentlyResolvedCarriesHandoverResolution` in `history_test.go`. The
+alerts history lists such a row as `moved to agent` instead of `resolved`, even
+when it was acknowledged, with the account in the badge title and on the phone
+card (`buildAlertHistoryItems`, `getAlertResolutionDetail`). The resolved
+lifecycle change written to the resource timeline carries the summary as its
+reason and the code as `alert_resolution` metadata, so the row's incident
+timeline says the alert moved instead of "Alert resolved: <breach message>".
 
 ## Extension Points
 
@@ -855,6 +1325,45 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Retired AI Discovery progress frames (2026-10-11)
+
+The websocket store no longer handles `ai_discovery_progress` frames or emits
+that event-bus type, because AI Discovery was removed. A server that still
+sends one is ignored without touching resources or alert state;
+`websocket-unified.test.ts` pins that. Alert detection and notification state
+are unchanged.
+
+### Webhook drafts survive unconfirmed persistence
+
+The existing Notifications editor awaits an explicit successful acknowledgement
+from its add/update owner before clearing a draft. The owner returns success
+only after the API responds and the returned destination replaces or joins the
+displayed inventory. A rejected or interrupted save keeps the same inputs,
+masked fields, template, mention and tag/severity policy. Fixed inline guidance
+does not claim the write was rejected: an interrupted response can follow a
+committed create, so the operator checks saved destinations in another tab
+before explicitly retrying. There is no editor-triggered automatic replay.
+
+One pending editor save locks the draft, Cancel and the conflicting local list
+controls, and subsequent Save calls do not invoke another mutation. Success
+closes the editor; failure unlocks it for correction or deliberate cancellation.
+The API, encrypted persistence/publication ordering, saved-value masking, Test
+payload parity, delivery policy, SSRF/TLS and existing shared API-client retry
+rules are unchanged. This is draft recovery, not exactly-once creation or proof
+that ordinary notifications arrive.
+
+`WebhookConfig.persistence.test.tsx` exercises the actual editor and mutation
+owner through deferred create/update responses, failure, explicit retry,
+canonical accepted response, cancellation and fixed callback-error guidance.
+The deliberate-retry control defers its response separately: clearing the old
+warning at retry start is not acknowledgement, and the draft stays locked until
+the accepted response incorporates the destination and closes the editor.
+`WebhookConfig.test.tsx` now acknowledges successful saves before expecting
+editor dismissal. The local `webhook-save-acknowledgement` browser fixture
+checks the same components with synthetic API transport, including desktop and
+phone keyboard/touch journeys and another-tab reconciliation after a lost
+response. It sends no real notification and establishes no installed outcome.
+
 ### Active Docker update pending age survives restart
 
 A positive Docker image-update report reuses the matching active occurrence's
@@ -879,6 +1388,26 @@ The saved observation is aged deliberately; this is deterministic source-level
 restart/housekeeping proof, not a naturally elapsed day, live registry or
 destination result, or reporter confirmation of #2353's full daily cycle.
 
+### A "no update" report without a local digest is unknown
+
+An image-update clear is a comparison: the agent must have known the local
+digest it compared. Agents before #2353 reported `UpdateAvailable: false` with
+an empty `CurrentDigest` when an image inspect failed, because an empty digest
+compares as "not different". The server took that as recovery, resolving the
+alert (attributed to `legacy-alert-recovery-adapter`, the default for clears
+without explicit recovery evidence) and restarting the delay, so the alert
+re-fired a full delay later with no fresh registry check in between.
+`checkDockerContainerImageUpdate` now treats a no-update status without a
+current digest like an absent or failed check: it refreshes `LastSeen` and
+keeps the occurrence and its pending age. Only the agent produces these
+statuses and it always sends the current digest when it knows it; locally
+built images, which have none, never assert an update, so they lose nothing.
+The "no update without a current digest" case of
+`TestCheckDockerContainerImageUpdate` pins the guard and that a real
+comparison still resolves; the retention and restart tests' clear fixtures
+carry a current digest as real agents do. The agent side is in the monitoring
+contract.
+
 ### Continuing unacknowledged alerts survive age-based cleanup
 
 `MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence
@@ -898,6 +1427,43 @@ cleanup/next-poll cycles, JSON and durable active-state restart, callback counts
 history and affirmative recovery. This is source-fixture lifecycle proof, not
 an installed registry/destination result or a diagnosis of a reporter's daily
 resolve/reopen cycle.
+
+### A settings save keeps the alert settings it did not send
+
+`PUT /api/alerts/config` applies the body to the stored configuration through
+`Manager.ApplyConfigUpdate` and `ApplyAlertConfigUpdate` in
+`internal/alerts/config/update.go`: a top-level key the client sent replaces
+that setting whole, a key it left out keeps the stored value, and the result
+is normalized as any update is. The thresholds page has no control for
+flapping detection (`flappingEnabled` and its window, threshold and cooldown),
+alert TTL cleanup (`maxAlertAgeDays`, `maxAcknowledgedAgeDays`,
+`autoAcknowledgeAfterHours`) or `customRules`, so it never sends them. The
+handler used to decode the body into a zero `AlertConfig`, so every thresholds
+save turned flapping detection and TTL cleanup off, reset the flapping tuning
+to its defaults, dropped custom rules, and persisted that. The page's
+`flapping`, `aggregation` and `ioNormalization` payload objects are not
+`AlertConfig` fields and never enabled anything. A stored config keeps what it
+holds, including values an earlier save zeroed; nothing rewrites them.
+
+The body is decoded on its own, so sent keys mean exactly what the decoder
+makes of them, duplicates and case-folded keys included. Unsent fields are
+copied from a JSON round trip of the stored config, so the result shares no
+maps or slices with it. `ApplyConfigUpdate` reads, merges and applies under
+the manager lock, so two concurrent partial saves cannot revert each other in
+memory, and returns a JSON-cloned snapshot so that persistence, which
+normalizes the config it is handed in place, never writes into the live
+config's maps.
+
+`internal/alerts/config/update_test.go` covers unsent, explicit-off,
+case-folded, duplicate-key, malformed and full-body updates, a sent object
+replacing its stored value whole (a sent `truenasDiskDefaults: {}` does not
+inherit the stored temperature) and the no-sharing rule.
+`TestUpdateConfigKeepsSettingsAThresholdsSaveDidNotSend` and
+`TestApplyConfigUpdateKeepsConcurrentPartialUpdates` in
+`config_validation_test.go` run saves through the manager, and
+`TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys` in
+`internal/api/alerting/alerts_test.go` drives the handler against a real
+manager.
 
 ### Confirmed empty storage is recovery evidence
 
@@ -1032,6 +1598,99 @@ low-urgency information accidentally. Informational alerts use the shared blue
 presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
+
+The alert history frequency chart in `AlertHistoryFrequencyCard.tsx` stacks
+each period by severity, critical at the base, from the `severityBuckets` that
+`buildAlertTrends` counts in the same pass as its totals. Those counts use
+`alertSeverityCountKey`, the closed vocabulary above: `error` is critical and
+an empty or unknown value is a warning, never information. Segment fills and
+legend dots share `getAlertSeverityFillClass`, each at least 3:1 against the
+chart surface in both themes (light-theme warnings use amber-700). A bar's
+height is the square root of its share of the busiest period (4px floor, 40px
+ceiling), so a burst stands well clear while ordinary periods stay tall
+enough to read their mix; each bar's tooltip and accessible name carry the
+exact counts. The legend counts critical, warnings and info (info only when
+present) over the current window and bar selection
+(`AlertHistoryFrequencyCard.test.tsx`, `alertHistoryModel.test.ts`).
+
+The chart's axis names round local times. Buckets start at the window start
+(now minus the range), so labelling bucket edges printed times such as
+`11:50`, and an hour without minutes reads as a bare number in 24-hour
+locales (`8 Oct, 11`). `formatAlertAxisTickLabel` writes an hour with its
+minutes, and `buildAlertAxisTicks` moves each inner tick to
+`nextAlertAxisBoundary`, the next whole bucket step within the day (or the
+next local midnight for date-only labels), at that time's true position. The
+first tick keeps the exact window start the range line shows, the last reads
+`Now`, and the buckets, bar tooltips and counts are unchanged
+(`alertHistoryModel.test.ts`).
+
+The desktop alert history table sizes each column for its content instead of
+giving all visible columns an equal share. Each density is sized for the
+narrowest card it serves (600px, 800px, 1024px and 1280px): Time (the column
+header; the cell is the row's clock time, `08:27 AM` in a 12-hour locale),
+severity, duration, status ("acknowledged" needs 119px with its cell padding),
+the Resource header, the type badge and node (from 1024px) and the three row
+actions on one line (177px) get the pixels their content and header need at
+that width, and Message, the column that says what happened, takes the rest
+and never falls under 18% of the card; `App.architecture.test.ts` holds those
+minimums and the 50rem, 64rem and 80rem switch points. From an 800px card the
+three actions share one line; below it they stack, which makes those rows
+taller, and rows there still differ by how many action buttons they stack.
+Below an 80rem card, Resource and Message cells wrap inside a `line-clamp-2`
+wrapper (`data-alert-history-cell`) instead of ending in an ellipsis after one
+line, so more of what happened reads without hover. A message or name longer
+than its two lines still ends in an ellipsis with the full text on its title;
+the table does not claim to expose every value without hover. The wrapper sets
+`whitespace-normal` itself because `.table-fixed td` forces nowrap. Message
+also keeps a two-line minimum height (`min-h-[2lh]`) so a message's length
+never changes its row's height: the shared windowing hook sizes its spacers
+from a single measured row. Scrolling a 600-row history in 60px wheel steps
+(414 tracked comparisons) moved a tracked row by exactly the scroll distance
+with uniform 49px rows, while the same history with the minimum removed (rows
+of 39px and 49px) showed 46 steps where the row jumped by up to 20px. From an
+80rem card both cells return to a one-line clamp, the single 39px row that
+card already had (`@min-[80rem]:line-clamp-1`, minimum height released).
+Measured on the mock estate in a real browser (the estate regenerates on
+every run, so the row count differs: 88 before, 90 after), messages that ended
+in an ellipsis fell from 82 of 88 rows to 24 of 90 at a 1024px window with the
+rail open (a 600px card), from 54 of 88 to 17 of 90 at 1280px, from 24 to 8 at
+1440px and from 32 to 4 at 1700px, and the median row from 75px to 49px at
+every window from 1280px to 1700px; at 2000px, where the cells keep a
+one-line clamp as before, 9 of 88 became 7 of 90. No time cell or header
+ended in an ellipsis at nine windows from 1024px to 2000px in a 12-hour
+locale. Cards narrower than 600px, which a window of about 900px with
+the rail open produces, are still cramped; a container-driven switch to the
+card list is the remaining fix.
+
+The history card's own width now chooses between the table and the cards,
+not the viewport. `AlertHistoryTableSection` measures its wrapper with
+`useObservedElementWidth` and shows the cards whenever the card is narrower
+than `ALERT_HISTORY_TABLE_MIN_WIDTH` (800px, the width from which the three
+row actions share one line); until the card is measured, the phone
+breakpoint decides as before. A 1024px to roughly 1240px window with the
+Alerts rail open, which gave the table a 600px to 800px card with stacked
+actions and names broken mid-word, now shows the cards; a 1280px window
+(an 837px card) keeps the table. The 600px density and the stacked-action
+rule above therefore serve only a card that has not been measured. The cards
+take `active` from that decision instead of a 768px media query, so an open
+timeline or resource view moves into the cards' drawer when the cards take
+over and back to the inline expansion when the table returns
+(`AlertHistoryTableSection.test.tsx`, `AlertHistoryMobileList.test.tsx`).
+
+`/alerts/history?alert=<id>` (`buildAlertHistoryAlertPath`) opens History
+narrowed to one alert's occurrences, the landing a notification can link to.
+`useAlertHistoryState` filters to that id before severity and search, shows
+every loaded occurrence regardless of the range window, and decides once per
+id, only after saved history has loaded and the live alert list is `ready`
+(saved history holds resolved alerts only): if nothing matches outside "All
+time" it widens to All time once, so a later range is the operator's;
+`focusedAlertMissing` reports an id history no longer holds. It opens the
+latest occurrence (still firing first) through the shared timeline expansion
+and hands the cards a one-shot drawer request a remounted list cannot replay.
+The tab names the alert in a status notice with "Show all alerts", and while
+the live list is `unavailable` it says the alert may still be firing and
+offers Retry instead of a verdict (`useAlertHistoryState.test.tsx`,
+`HistoryTab.test.tsx`, `alertOverviewPresentation.test.ts`).
 
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
@@ -1249,7 +1908,8 @@ That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
 guest snapshot and route threshold resolution through the shared
-guest-defaults → filter-driven custom rules → guest-override chain.
+guest-defaults → filter-driven custom rules → guest-override → `pulse-relaxed`
+chain.
 That canonical guest context must preserve the live guest name and tags for
 snapshot and backup posture evaluation. Ignored prefixes, `pulse-no-alerts`,
 configured ignored tags, and required-tag filtering must resolve through the
@@ -1259,6 +1919,27 @@ operator's suppression policy.
 Passing `nil` guest context or resolving only overrides/defaults is forbidden
 because it silently bypasses custom guest rules and makes guest lifecycle
 alerting diverge from running-guest metric truth.
+The `pulse-relaxed` step lives in `effectiveAlertPolicyNoLock`, not in
+`CheckGuest`, so polling and config-save reevaluation judge a relaxed guest's
+alert by one threshold. Reevaluation rebuilds the guest from alert metadata,
+so `guestSnapshotFromAlert` reads back the `tags` the evaluator recorded
+(`[]string` live, `[]interface{}` after a restart). Without them a save judged
+the alert by unrelaxed thresholds, resolved one raised under an unset
+threshold's relaxed floor with a recovery notification, and the next poll
+raised it again. Those tags must stay current: `metricOptionsWithTags` drops
+the key from an open alert once its resource has no tags, or a removed
+`pulse-relaxed` would keep judging the alert by the relaxed trigger. The tag
+lifts CPU, memory and disk triggers to a 95/92/95 floor and gives an unset
+threshold that floor, but an Off threshold (trigger <= 0) stays Off: relaxing
+a guest must never raise an alert its config turned off. A filesystem's own
+override still replaces the relaxed guest disk threshold for that filesystem,
+on save as while polling. Proof:
+`TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds`,
+`TestConfigSaveKeepsRelaxedGuestFilesystemOverride`,
+`TestPulseRelaxedKeepsOffGuestThresholdOff` and the Off case of
+`TestApplyRelaxedGuestThresholds` in `internal/alerts/alerts_test.go`, and
+`TestCheckGuestDropsRemovedTagsFromOpenAlerts` in
+`internal/alerts/unified_eval_test.go`.
 That same guest-alert owner also has to retire per-disk guest alerts when the
 guest stops, disk alerting is disabled, or the reported disk set changes.
 Canonical guest disk identity is only valid while the guest still exposes that
@@ -1326,6 +2007,34 @@ resolve overrides through the shared
 candidate set `buildProjectedOverrides` indexes platform alert rows under).
 Static metric-color defaults are only fallback presentation behavior for
 callers that do not have alert configuration in scope.
+Guest bars follow `pulse-relaxed` the same way. `resolveMetricDisplayThresholds`
+takes the tags the engine reads for a guest-scope resource and, when they
+include `pulse-relaxed`, applies the `applyRelaxedGuestThresholds` step to
+CPU, memory and disk before mapping to display thresholds: an unset threshold
+gets the 95/92/95 floor with a clear five below it, a lower trigger is raised
+to the floor and keeps its own clear point (a missing one filled five below,
+as `ensureHysteresisThreshold` does) unless the raised trigger reaches it, and
+an Off threshold stays Off. A relaxed guest's bar therefore turns critical
+where its alert fires; 88% memory reads warning, not critical, under the
+relaxed 92% trigger. The display resolver does not read filter-driven custom
+rules, which the engine folds in before the override, so a guest a custom
+rule matches can still colour by thresholds the engine does not use, relaxed
+or not. Only Proxmox VMs and LXCs carry their tags into alert
+policy, so `getWorkloadAlertPolicyTags` in
+`frontend-modern/src/components/Workloads/workloadTopology.ts` passes tags for
+those guests alone, and a vSphere VM or a container keeps its thresholds
+whatever it is tagged. The Alerts thresholds row for a relaxed Proxmox guest
+keeps showing the configured values its editor changes and adds one line
+naming the tag and the thresholds it raises
+(`getAlertResourceRelaxedTriggerSummary` in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, fed by
+`pulseRelaxed` from `useThresholdsGuestData`); before it, the tag overrode
+those settings with no visible sign in the UI (issue #863). Proof: the
+pulse-relaxed cases in `frontend-modern/src/utils/__tests__/metricThresholds.test.ts`,
+the alert policy tag cases in
+`frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`,
+and the pulse-relaxed guest cases in
+`frontend-modern/src/components/Alerts/ResourceTable.test.tsx`.
 
 Docker container image-update alerts are lifecycle-governed by the alerts
 runtime. Disabling Docker update alerts globally, disabling alerts for a
@@ -1349,6 +2058,45 @@ shared `dockerContainerOverrideIdCandidates` chain (name first; container-ID,
 short-ID, unified-hash, and slash-tail forms as trailing lookup candidates).
 Container override work must not reintroduce a runtime-container-ID
 persistence key.
+
+Docker alert references come only from the builders in
+`internal/alerts/docker.go`: a host's own alert `docker:<host ID>`
+(`DockerHostResourceID`, used only by its connectivity alert), a container
+`docker:<host ID>/<container ID>` (`DockerContainerResourceID`), and a Swarm
+service `docker:<host ID>/service/<service ID>` (`DockerServiceResourceID`).
+A container or service reported without an ID alerts under its name, marked in
+the ID position (`docker:<host ID>/name:<name>`,
+`docker:<host ID>/service/name:<normalized name>`). Docker and Swarm IDs never
+contain a colon, so a name reference never takes its host's reference or
+another service's ID reference, and one with neither an ID nor a name raises
+no alert. Report cleanup, host removal and the host's offline alert firing
+clear children by the `docker:<host ID>/` prefix; the container and service
+policy switches classify by the first path segment after the host
+(`dockerAlertResourcePath`), so a container name containing `/service/` stays
+a container; and Patrol's scope aliases and resource history parse the same
+forms. Service overrides key on the same reference, so an override written for
+a service without an ID under its old unmarked name no longer applies. A
+reference can contain the canonical state separator (a Docker host
+disambiguated as `<base>::<suffix>`), so `splitCanonicalStateID` splits a
+state ID before the alert's recorded spec ID, or else after its resource ID,
+and only without either at the first `::`. Splitting at the first `::` gave
+such a host's alerts the reference of the host named `<base>`; an alert saved
+that way recovers its reference on restore because its spec ID is intact.
+Before name references existed, a container without an ID alerted under its
+host's reference. Only the connectivity alert belongs there, so the host's
+next report, or its offline alert firing, clears any such alert
+left active whose recorded host matches and whose container ID is empty. A
+pending image update recorded there keeps its age under the container's new
+reference when that first report still shows the update pending; a first
+report with missing or failed update evidence clears it, and the delay starts
+again on the next positive report. Proof:
+`TestDockerAlertsWithoutIDsUseTheirOwnReferences`,
+`TestDockerHostIDWithSeparatorKeepsItsAlertReferences`,
+`TestDockerAlertsRestoredWithCutShortReferencesRecover`,
+`TestDockerContainerWithoutIDKeepsPendingUpdateAgeAcrossUpgrade` and
+`TestDockerContainerResourceID` in `internal/alerts/alerts_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
 
 Backup orphan evaluation is also inventory-scoped. The alerts runtime may
 evaluate recovery rollups for backup age, but unresolved Proxmox PVE backup
@@ -1504,8 +2252,8 @@ compatibility aliases and wrapper functions for the leaf config package,
 `model.go` owns alert runtime data structures and clone semantics,
 `constants.go` owns package-wide cleanup and storage constants,
 `metric_hooks.go` owns Prometheus integration callbacks, `manager.go` owns
-Manager state and construction, `default_config.go` owns the default runtime
-configuration literal, `lifecycle.go` owns shutdown, and `escalation.go` owns
+Manager state and construction, `default_config.go` owns the factory runtime
+configuration (`DefaultAlertConfig`), `lifecycle.go` owns shutdown, and `escalation.go` owns
 the escalation loop and escalation state mutation. Future changes must extend
 the owning file rather than reintroducing a central catch-all manager file.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
@@ -1514,6 +2262,288 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Fresh installs load the factory alert configuration
+
+`DefaultAlertConfig` in `internal/alerts/default_config.go` is the only
+declaration of factory alert settings. A new Manager starts from it, and
+`LoadAlertConfig` in `internal/config/persistence.go` returns it while
+`alerts.json` does not exist; persistence must not declare a second copy. The
+copy it used to return left out `DockerDefaults`, a value struct, so a fresh
+install loaded container CPU, memory and disk as trigger 0, `UpdateConfig`
+kept that as a deliberate Off, the thresholds page called the container Global
+Defaults Custom, and the startup identity migration wrote those zeros to
+`alerts.json` within a second of first boot. The missing-file config carries
+no activation state, because activation is a stored decision: node updates and
+imports reapply `LoadAlertConfig`, and `UpdateConfig` then keeps a running
+manager's state, while a new manager starts pending review. An existing
+`alerts.json` is never rewritten to factory values, because a stored trigger 0
+is how a saved Off looks. The factory leaves `AutoAcknowledgeAfterHours` at 0: no settings
+control shows it, and the 24 hours it used to declare never reached an
+install. It leaves the quiet-hours timezone empty so the settings page offers
+the viewer's browser zone. Flapping detection and alert TTL cleanup are on in
+the factory and now reach fresh installs; a thresholds-page save still sends
+neither field, so it turns them off. `TestLoadAlertConfigFreshInstallUsesFactoryConfig`,
+`TestLoadAlertConfigMissingFileKeepsRunningActivation` and
+`TestLoadAlertConfigKeepsStoredDockerDefaultsOff` in
+`internal/config/persistence_alert_fresh_install_test.go`, plus
+`TestDefaultAlertConfigLeavesFiringAlertsUnacknowledged` and
+`TestDefaultAlertConfigLeavesQuietHoursTimezoneUnset` in
+`internal/alerts/alerts_test.go`, pin this.
+
+### Agent disk temperature alerts clear when their threshold is off
+
+Host-agent SMART disk temperature alerts (`diskTemperature`, resource
+`agent:<host>/disk_temp:<device>`) follow one effective threshold: the
+resolved agent `DiskTemperature`, refined by the disk type's `DiskTempByType`
+entry unless an explicit host or linked-resource override set it
+(`hostDiskTemperatureThresholdNoLock` in `internal/alerts/host.go`). When the
+host's resolved `DiskTemperature` is off, `CheckHost` clears every disk
+temperature alert on the host. A disabled `DiskTempByType` entry clears only
+the alerts of disks of that type, through the disabled metric spec. The
+all-agents switch, a disabled host override, agent removal and confirmed
+agent offline clear them with the host's other disk alerts. Before this,
+nothing cleared them once the agent-level threshold was off.
+
+A config save judges an open disk temperature alert against the same
+threshold (`resolveHostAlertThresholdsNoLock` refines it by the alert's
+`diskType` metadata, and `metric_runtime.go` classifies `diskTemperature` as a
+threshold metric), so turning the host's `DiskTemperature` off resolves the
+alert immediately. An alert persisted before `CheckHost` recorded `diskType` (May
+2026) carries no disk type until its next firing evaluation, so a save judges
+it against the lowest enabled trigger any of the host's disks can use: the
+agent threshold or a `DiskTempByType` entry
+(`lowestHostDiskTemperatureThresholdNoLock`). A save therefore cannot resolve
+an alert its disk type would still fire.
+
+For a metric alert that reaches the threshold comparison in
+`reevaluateActiveAlertsLocked` (docker-host alerts return before it), a config
+save resolves an alert whose reading is
+below the new trigger. That includes readings inside a valid recovery band,
+which the evaluator would hold. A clear level at or above the trigger is no
+recovery band (`buildCanonicalMetricSpec` drops it), and a reading at the
+trigger stays firing, as it does in the reducer, so a save no longer resolves
+an alert the next evaluation raises again.
+`TestCheckHostClearsDiskTemperatureAlertsWhenThresholdTurnsOff`,
+`TestHostDiskTemperatureAlertsClearWhenAgentLeaves`,
+`TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold`,
+`TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType` and
+`TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
+
+### The disk temperature policy decides disk heat
+
+The policy `CheckHost` applies to a SMART disk (the agent Disk Temp default,
+refined by the disk type's `DiskTempByType` entry, and switched off for every
+type when that default is off) is the canonical answer to "is this disk too
+hot". `diskTemperatureThresholdForType` in `internal/alerts/host.go` holds it.
+`Manager.HostDiskTemperatureThreshold(host, diskType)` resolves it for the host
+agent that reports a disk exactly as `CheckHost` does: an explicit Disk Temp
+override on that host, or one inherited from its linked node or guest, replaces
+the per-type entry, the first override in that chain decides even when it sets
+no Disk Temp, and an override that switches the host's alerts off leaves no
+threshold. `TestHostDiskTemperatureThresholdMatchesCheckHostOverrides` pins each
+case against what `CheckHost` fires, including an override under the canonical
+resource the agent ID resolves to and one inherited from a linked guest. `Manager.DiskTemperatureThreshold(diskType)`
+is the hostless case. Patrol reads the policy through
+`AlertThresholdAdapter.GetDiskTemperatureThreshold`.
+`DefaultDiskTemperatureThreshold` serves callers with no manager. Disk risk
+(`internal/storagehealth`) judges no temperature. The Physical Disks Temp cell
+and Health verdict mirror the policy in `resolveDiskTemperatureDisplayThresholds`
+under the override keys of the machine whose agent reports the disk, in the
+order `CheckHost` reads them as far as the browser can see that chain
+(`storage-recovery.md` lists where it cannot). That resolver returns null when the agent Disk
+Temp default is off or an override or agent default switches the host's alerts
+off. The global alerts switch and the agent alert-type switch stop `CheckHost`
+without changing the policy.
+The displays that read it treat null as off: no threshold colour
+(`getTemperatureTextClass` with `diskTemperature`) and never hot. A
+`DiskTempByType` entry cannot be switched off on its own, because
+normalization restores a non-positive entry to its default.
+A disk is hot from its trigger. Alerts and Patrol findings stay open until the
+reading falls to the clear value, or under the trigger when there is no band
+below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
+current reading against the trigger. PDF reports colour disk temperatures by
+the same thresholds.
+`TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
+`internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
+NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
+the nil manager.
+
+TrueNAS disk temperature alerts follow the policy too:
+`trueNASDiskTemperatureDefaultNoLock`
+(`internal/alerts/truenas_disk_temperature.go`) is the type-default tier of
+`effectiveAlertPolicyNoLock` for `truenas-disk`, so an unset
+`TrueNASDiskDefaults.Temperature` resolves per disk type (the
+`alertPolicyQuery.DiskType` the unified input carries from
+`PhysicalDisk.DiskType`). A TrueNAS-wide value the user saved under TrueNAS
+Disks replaces it for every TrueNAS disk, as a host Disk Temp override does for
+an agent's disks, 0 meaning off, and a per-disk override beats both. The alert
+records `diskType` so a config save re-judges it per type; one without it is
+held to the lowest per-type trigger. A retained reading
+(`diskinventory.TemperatureCollected` false) is no evidence and raises nothing.
+The factory value is unset. `normalizeTrueNASDiskTemperature` drops a stored
+55/50 only from a config without `TrueNASDiskTemperatureByType`, because the
+thresholds page wrote that flat factory value back on every save; the page
+writes the marker, so a 55 typed later is kept. Every config `GetConfig`
+returns carries the marker, so a client that reads and writes back keeps it.
+Without the marker (an old saved file, or a page loaded before the upgrade)
+55/50 is read as that unchosen factory value; a client building a config from
+scratch with an explicit TrueNAS-wide 55 has to send the marker. The TrueNAS
+Disks Global Defaults cell reads `By type` while unset
+(`globalDefaultFallbacks` on `ResourceTable`,
+`resolveAlertResourceGlobalDefaultCell`), or Off when the agent Disk Temp
+default switches the policy off, and switching it on then stages an explicit
+TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
+trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
+The TrueNAS storage table and disk drawer now judge current disk heat through
+`getTrueNASDiskTemperatureThresholds(disk)`: the disk's canonical-ID temperature
+override, then a TrueNAS-wide value, then the per-type policy. Disabled disks
+or TrueNAS Disks defaults and explicit Off values leave readings unjudged;
+retained values never count as current heat. The API-only disk does not inherit
+a host Disk Temp override or the agent alerts switch. Patrol/AI use the disk-specific backend resolver described below; the
+frontend and backend retain their own verification boundaries.
+`TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
+`TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
+`internal/alerts/unified_eval_test.go` pin the tiers and retained readings;
+`TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger` in
+`internal/alerts/alerts_test.go` pin re-judging on a config save;
+`TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
+saved-config migration.
+
+Proxmox physical disks alert on temperature under the same policy.
+`CheckProxmoxDiskTemperature` (`internal/alerts/proxmox_disk_temperature.go`)
+raises a `diskTemperature` metric alert under the disk's PVE alert reference
+(`ProxmoxPhysicalDiskAlertResourceID`, resource type `proxmox-disk`), judged by
+`proxmoxDiskTemperatureThresholdNoLock`: the disk type's `DiskTempByType` entry
+under the agent Disk Temp default, which switches it off for every type. It
+carries the disk's serial, WWN and `diskType` like the health and wearout
+alerts, so `ProxmoxPhysicalDiskAlertIdentifiers` lists its
+`<reference>::metric-threshold:diskTemperature` identifier for history
+ownership, and `reevaluateActiveAlertsLocked` re-judges it per disk type (the
+lowest per-type trigger when the type was never recorded) instead of falling
+through to guest thresholds that have no disk temperature. A disk a
+still-reporting linked agent lists in its SMART report is the agent's: its
+alert closes with the `moved_to_agent` resolution and `CheckHost` raises the
+agent's own. The handover happens on the next disk poll, so for that one
+interval an agent newly linked to a disk with an open PVE alert can hold its
+own alert beside it. A lapsed agent owns nothing, so the node's own readings
+keep alerting while its agent is silent. An
+excluded disk, or a policy switched off, closes the alert; a poll without a
+current reading holds it. Like the health and wearout alerts, a disk that
+leaves the inventory keeps its alert until the 24-hour stale sweep. The
+`proxmox-disk` alert delay defaults to the factory 5 seconds, so a warning
+waits out the same 300-second noisy-gauge stability window agent and TrueNAS
+disk temperature warnings do, and a critical reading bypasses it.
+`TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy`,
+`TestProxmoxDiskTemperatureAlertOwnershipAndHolds`,
+`TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow`,
+`TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pin the policy, ownership, holds, re-judging
+and identifiers.
+
+### Agent disk temperature alerts clear when their disk leaves the report
+
+`CheckHost` also clears a disk temperature alert, and drops its pending
+threshold run, once its device is missing from three consecutive non-empty
+SMART lists (`cleanupHostDiskTemperatureAlerts`, a seen map keyed by resource
+ID like `cleanupHostCustomSensorAlerts`). A removed, replaced or renamed disk
+never sends the reading that would resolve its alert, and
+`shouldPreserveAlertOutsideNodeCleanup` exempts `agent:` alerts from node
+cleanup, so before this only the 24-hour stale-alert sweep in
+`cleanupStaleMaps` resolved it. One omission is not proof the disk left: the
+Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk whose
+probe fails, so the count restarts whenever the disk is reported again. Three
+reports in a row of failed probes on such a disk still clear its alert.
+
+An empty SMART list skips this cleanup and does not count toward the three,
+because the agent omits the list when SMART collection fails or is
+unsupported. A listed disk in standby or without a temperature also holds its
+alert, since neither shows the disk cooled: standby reports avoid waking the
+disk, and most failed Linux probes still list the disk with identity only.
+SMART health alerts hold through standby the same way. A held alert resolves
+through the normal recovery path, including any configured recovery delay,
+once the disk reports cool readings again; with no evaluation for 24 hours,
+the stale-alert sweep resolves it. Turning the threshold off, or removing the
+agent, drops the host's pending disk temperature runs and absence counts as
+well as its alerts.
+`TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
+restarted count and the pending-run and count cleanup.
+
+### Proxmox node cleanup keeps platform metric alerts
+
+`CleanupAlertsForNodes` runs on every Proxmox node poll (and every mock alert
+tick) and removes alerts whose `Node` is not a current Proxmox node or PBS
+instance. Kubernetes, TrueNAS and vSphere metric alerts carry a cluster or
+platform host in `Node` and a display label such as `TrueNAS Disk` or
+`Kubernetes Pod` in `metadata.resourceType`, which the preserve list's
+platform words never matched. The cleanup used to delete them silently on
+each poll while their reducer incident stayed firing, so the next evaluation
+re-created each one and handed it to the alert callback again as a new
+alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
+`metadata.platformType`, or whose label maps through
+`CanonicalAlertResourceType` to a Kubernetes, TrueNAS or vSphere type.
+`TestCleanupAlertsForNodesKeepsPlatformMetricAlerts` in
+`internal/alerts/alerts_test.go` pins both signals, and its
+sibling pins that a guest alert on a removed Proxmox node is still removed.
+
+### Agent disk temperature alerts judge the reading the disk shows
+
+`CheckHost` judges each agent disk on the temperature, collection state and
+disk type the disk shows, read by `unifiedresources.HostDiskTemperatureReadings`
+from the same adapters the registry builds the disks with. A SMART row shows its
+own reading or, when the agent's probe returned none, the one the host's Unraid
+inventory reports for that disk (`HostSMARTDiskTemperature`), and keeps its
+`agent:<host>/disk_temp:<device>` resource. An Unraid inventory row whose disk
+key no SMART row carries, a disk only the inventory lists, shows that row's
+reading (`HostUnraidDiskTemperature`) and its own transport as disk type, under
+its kernel block device token, the resource a plain Linux SMART row for the
+same device uses. A SMART row and an Unraid row with one key are one registry
+disk even under different device labels, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`), and alert once, under the
+SMART row's resource. When smartctl and Unraid name
+one device with different serials the registry shows two disks on it, and the
+device's one alert judges the reading that stands highest against its own disk
+type's threshold (`judgedHostDiskTemperature`): over its trigger first, then
+inside its recovery band, then the larger margin over the trigger, with a tie
+keeping the reading listed first.
+Before this `CheckHost` read only the SMART row's own field, while the Physical
+Disks Temp cell, the Running Hot verdict ("at or above its alert threshold")
+and Patrol judged the Unraid reading against the same trigger, so such a disk
+could read as at its alert threshold with no alert. Unraid's own warning and
+critical disk temperature notifications do not make this redundant: Pulse
+already alerts on the smartctl readings and array state of the same hosts,
+which Unraid also notifies on, and a user who routes alerts through Pulse sets
+these thresholds here.
+
+Only a reading collected now fires or resolves
+(`HostDiskTemperatureReading.Collected`: no standby row, and
+`diskinventory.TemperatureCollected`), so a spun-down disk holds the alert
+like a listed disk without a temperature. A disk only the
+inventory lists whose device matches the agent's `--disk-exclude` patterns
+(`fsfilters.MatchesDeviceExclude`) raises nothing, and an alert it raised before
+the exclusion resolves on the next report (`clearHostDiskTemperatureResources`),
+whatever the SMART list holds, unless another listed reading uses the same
+resource: `docs/UNIFIED_AGENT.md` documents exclusion as
+removing the disk from monitoring, and linked Proxmox hosts already judge an
+excluded disk healthy. A disk only the inventory lists is also judged in a
+report whose SMART list is empty, because the disk shows the inventory's
+reading in that report. The absence cleanup above still runs only on a
+non-empty SMART list, and such a report neither counts toward nor restarts a
+disk's three, so a disk that leaves the inventory while every report's SMART
+list stays empty keeps its alert until the 24-hour stale-alert sweep.
+`TestCheckHostJudgesTheUnraidTemperatureADiskShows` and
+`TestCheckHostHoldsUnraidDiskTemperatureAlertUntilAReadingOrDeparture` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin the fallback, the
+inventory-only disk, the empty SMART list, two disks on one device (also of
+different types), a controller member under another device label, standby,
+exclusion, the disk type
+and host override thresholds, the holds, the handover to a SMART reading,
+departure, and the exclusion clear with and without SMART rows and beside a
+listed SMART row. `TestJudgedHostDiskTemperatureOutranks` pins the ranking.
 
 ### Configured flapping thresholds remain reachable
 
@@ -1541,6 +2571,42 @@ acknowledge or change the identity of an active alert. The cleanup regression
 controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
 drained and retained windows, dispatch callbacks and delivery diagnosis. These
 modeled-time controls are not installed notification-destination acceptance.
+
+### Default thresholds keep a positive trigger's clear below it
+
+PBS, node temperature, agent, Kubernetes, TrueNAS and vSphere global defaults
+go through `normalizeThresholdPointer` in `internal/alerts/config/normalize.go`
+from `UpdateConfig`. The shared persistence normalization in
+`internal/config/persistence.go` applies the same normalizer, through
+`NormalizeHysteresisThreshold`, to the agent, node temperature and storage
+pairs. A missing or negative threshold takes the factory default and a zero
+trigger is off. A positive trigger always keeps a clear below it: a missing
+clear sits five points under the trigger, floored at 0, and a clear at or
+above the trigger is repaired. Guest and node usage, storage and Docker
+defaults hold the same bound through `EnsureValidHysteresis` in
+`ValidateHysteresisThresholds`, `NormalizeStorageDefaults` and
+`NormalizeDockerThreshold`. The canonical per-type entries (`nvme`, `sata` and
+`hdd` in `DiskFillByType`; `nvme`, `sas` and `sata` in `DiskTempByType`, the
+types the thresholds page edits) keep a positive trigger and follow the same
+clear rule; a non-positive trigger resets the entry to its type default,
+because the page cannot switch a type off on its own. Other per-type keys are
+stored as written.
+
+The thresholds page sends `max(0, trigger - 5)`, so a 1-5% default arrives
+with clear 0 and must not fall back to the factory clear. Agent defaults used
+to do that, storing `{trigger: 1, clear: 75}` for a 1% Machines CPU default,
+and per-type disk entries replaced the whole pair, trigger included. The
+evaluator already ignored a clear at or above the trigger
+(`buildCanonicalMetricSpec` drops it and the reducer then clears at the
+trigger), so those alerts fired and resolved the same way; `/api/alerts/config`
+served the factory clear and firing alerts reported it as `clearThreshold`. A
+repaired pair above the margin, such as `{50, 80}` written through the API,
+now has a real recovery band at 45 where it used to clear at the trigger.
+`internal/alerts/config/normalize_low_trigger_clear_test.go` pins every
+default family and both per-type maps, `TestUpdateConfigKeepsLowTriggerClearBelowTrigger` in
+`internal/alerts/config_validation_test.go` pins the saved config and the
+firing alert's clear level, and the low-trigger and stored-clear tests in
+`internal/config/persistence_test.go` pin the written file and load repair.
 
 ### Monitor-only delivery is terminal
 
@@ -1722,15 +2788,98 @@ clears the incident. `TestStorageUnknownConnectivityDoesNotRecover` and
 capacity activation, normalised offline activation and confirmed recovery.
 Proxmox node alert evaluation now lives in `internal/alerts/node.go`. That file
 owns node metric and temperature projection, node offline lifecycle handling,
-host-agent deduplication bookkeeping, and instance-scoped node display-name
-cache updates; future Proxmox node alert behavior should extend that resource
+and instance-scoped node display-name cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
+When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
+automatic or operator-set identity decision), the agent resource owns each
+CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
+its own copy of those metrics through the disabled-threshold path every cycle:
+the pending run is dropped and any node alert still open from before the link is
+resolved, never left frozen until the agent goes offline. `CheckHost` applies
+its link outcome after evaluation in per-agent report order. CPU and memory
+ownership requires a live threshold plus a usable, finite observation with a
+ready evaluation window, or a still-open agent alert or reducer run. For disk,
+that evidence must belong to the summary filesystem `models.SummaryDisk` picks,
+which is also what the linked node's disk metric reports. Configuration alone
+is not coverage: an agent with no observation and no open run leaves the node
+responsible. Missing readings keep an existing agent alert, without creating a
+node duplicate; observation-gap interruption and fresh confirmation/recovery
+remain unchanged. Disabling a usage metric releases canonical/shadow pending
+runs and explicit intent grace, even without a reading. A disabled agent or host
+also releases its CPU/memory pending runs. `UpdateConfig` immediately revokes
+unsupported link coverage, and in-flight reports recheck current policy before
+applying their outcome. Newer reports, offline and removal invalidate older
+link updates and removals. Several linked agents contribute the union of their
+coverage; stale alert metadata alone never suppresses a node. The accepted
+short duplicate window remains restart-before-first-report and
+first-offline-before-confirmed-offline; manually linked sibling agents retain
+their own alerts. Explicit host/inherited disk overrides beat `DiskFillByType`,
+as do direct filesystem overrides. A saved direct filesystem disable revokes
+summary disk ownership without a new agent report. Per-type defaults retain
+the existing normalization contract (zero is restored to the type default);
+this repair does not add a per-type Off setting. A nil effective filesystem
+threshold drops its pending run.
+
+A node-side close is an ownership handover, not observed recovery: each released
+metric carries `moved_to_agent` and the identity/name of an agent actually
+covering that metric in the same link snapshot. If several agents cover it,
+the lowest covering agent ID wins deterministically; a sibling covering only
+another metric must not be named. Resolved consumers still receive the close.
+`internal/alerts/host_agent_node_links.go` owns ordered links and per-metric
+successor selection, without persisting stale coverage across restart.
+Deduplication keys on that link,
+never on a hostname match, so a same-named node in another instance keeps its
+alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
+hands the alerts back. CPU temperature has no host-agent metric, so the node
+keeps evaluating it whether or not an agent is linked; the node poll already
+merges agent sensor readings into `node.Temperature`, giving one temperature
+alert per machine. A missing CPU reading is not evidence: with a live trigger,
+`checkNodeTemperature` neither feeds 0°C nor resolves the open alert, but
+`interruptMetricRun` (reducer `InterruptMetricRun`) drops a pending activation
+run and restarts a recovery run, so no sustained-for or recovery delay spans a
+gap in readings; a disabled threshold still clears. Config-save reevaluation
+classifies alerts whose metadata `resourceType` is `node` as node alerts and
+judges them against node thresholds; the `Instance` heuristic only covers legacy
+alerts without a resource type, because current node alerts keep the PVE
+instance name in `Instance`.
+`TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
+`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
+`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns`,
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger`,
+`TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate`,
+`TestCheckNodeKeepsMetricsTheAgentCannotEvaluate`,
+`TestDisabledAgentThresholdReleasesPendingRunWithoutReading`,
+`TestHostAgentNodeLinkFollowsConfigAndReportOrder`,
+`TestCheckNodeTakesBackMetricsWhenAgentUnlinks`,
+`TestHostDiskOverrideBeatsDiskFillByType`,
+`TestReleaseCanonicalMetricAlertClearsIntentPending` in
+`internal/alerts/threshold_resolution_shared_test.go` and
+`TestReportedAlertOwnershipComposition` in
+`internal/alerts/reported_alert_composition_test.go`, plus
+`TestHostAgentDeduplicationFollowsNodeLink` in
+`internal/alerts/host_dedup_test.go` and
+`TestCheckMetricReportsWhetherObservationWasUsable` in
+`internal/alerts/windowed_metric_test.go`, pin these rules.
+The real monitor lifecycle/History route is exercised by
+`TestMonitorReportedAgentHandoverUsesActualMetricOwner` in
+`internal/monitoring/monitor_alert_handling_test.go`.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+The host offline lifecycle is raised only by a lapsed agent report, and
+Pulse cannot tell a dead host from an agent that lost its route to Pulse.
+Its message therefore names the silent agent ("Pulse agent on '<name>'
+stopped reporting", using the agent's own name without the linked
+`(Host Agent)` qualifier) and never claims the host is offline, because a
+linked Proxmox node keeps reporting through its API while its agent is
+silent. The `host-offline` type, alert identity and lifecycle stay
+unchanged. `TestHandleHostOfflineNamesSilentAgentNotHostOutage` in
+`internal/alerts/alerts_test.go` pins this wording.
 Host long-running storage-operation alerts require fresh operation evidence.
 An accepted Unraid cancellation/completion or terminal Linux RAID report
 resolves the corresponding operation alert immediately. A normal polling gap
@@ -1819,6 +2968,17 @@ wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
 the persisted identity shape; monitoring's registry-backed
 `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
 path. These are source invariants, not evidence of installed field relief.
+Each PVE disk alert records the evaluated disk's serial and WWN
+(`unifiedresources.MetadataDiskSerial`, `MetadataDiskWWN`), and resource
+history owns each lifecycle row by that identity rather than by the path. A
+row without a usable serial or WWN names only an identity-less disk at its
+path, and a row whose identity is ambiguous, or names no disk but one another
+resource already holds, stays under the path reference.
+Reads by the path reference find those rows through the alert identifiers
+`ProxmoxPhysicalDiskAlertIdentifiers` lists, so spec IDs and occurrence IDs
+must keep matching it;
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pins both.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert
@@ -1924,6 +3084,34 @@ log text, and the English Assistant model-context labels must remain
 untranslated; only the user-visible briefing labels and alert controls may use
 the active app locale.
 
+The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
+expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
+
+The thresholds resource search is route state: `useThresholdsTableState`
+reads and writes `?q=` (`ALERT_THRESHOLDS_QUERY_PARAMS.query`) with replace
+navigation, keeps it across platform tab clicks, section hashes and the
+legacy-path redirects, so a link from elsewhere can open a tab already
+searched to one resource (`buildAlertThresholdsPath`). Host and Docker host
+rows match the search on their shown, display and raw names
+(`matchesThresholdResourceSearch`), because a link carries the full display
+label while those rows show a shortened name and keep the label as their raw
+name. Because each search edit navigates within the
+page, the Alerts page's unsaved-changes guard asks only when the destination
+path differs (`shouldConfirmAlertsLeave` in `alertConfigPresentation.ts`):
+narrowing the list keeps an unsaved edit without a prompt, leaving the page
+still asks (`useThresholdsTableState.test.tsx`,
+`alertConfigPresentation.test.ts`, `Alerts.helpers.test.ts`).
+
+A successful Alerts page save re-reads the shared `alertsActivation` config in
+`useAlertsConfigurationState.ts` (only when the config write landed and the
+save still owns the editor), because backup shields and metric colours on
+every page read that config and otherwise kept the old limits until a reload.
+`refreshConfig` in `frontend-modern/src/stores/alertsActivation.ts` installs a
+read only while it is the latest: each read and each organisation switch takes
+a new generation, so a slow reply for the previous organisation or an older
+read cannot overwrite the current config (`alertsActivation.test.ts`,
+`useAlertsConfigurationState.test.tsx`).
+
 The remaining alert configuration and history presentation helpers now also
 have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,
 `frontend-modern/src/utils/alertAdministrationPresentation.ts`,
@@ -1981,7 +3169,7 @@ table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
 `AlertResourceTableDesktop` must route their date/resource group bands through
 `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
 of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
-consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+consistent with Infrastructure, Workloads, and Storage tables.
 Alert history table shells must also rely on the shared `TableCard` frame and
 the shared `Table` primitive for horizontal overflow rather than adding
 alert-local bordered or `overflow-x-auto` wrappers inside the history section.
@@ -2194,8 +3382,10 @@ Metric enablement is an explicit On/Off interaction in row, global-default,
 mobile, and bulk editors. Enabled numeric inputs accept positive trigger values
 only and user-facing copy must not expose the persisted disable sentinel.
 Internally, the canonical `<= 0` read rule remains intact for legacy data, while
-new Off actions write `-1`, so existing configuration and the API contract
-continue to round-trip without making `0` a second customer-facing disable path.
+new Off actions stage `-1` (saved as trigger `0` on global defaults, which the
+backend otherwise resets to factory), so existing configuration and the API
+contract continue to round-trip without making `0` a second customer-facing
+disable path.
 Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
@@ -2342,6 +3532,22 @@ derived alert read-model and Last 24 Hours stat refresh for
 shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview action behavior should extend that shared acknowledgement hook
 instead of putting acknowledge mutations back into render shells.
+Overview ages and bands read the shared clock. `AlertOverviewAlertCard.tsx`
+passes its own `useRelativeTimeNow` reading as `now` to
+`formatAlertOverviewStartedAgo` and `getMetricAlertPresentation`, and the Last
+24 Hours count in `useAlertOverviewState.ts` reads the same clock, so all three
+measure from the wall clock. The hook no longer exposes a minute `tick`: read
+as "now", that tick measured a card mounted between ticks from up to a minute
+earlier, so an alert raised 70 seconds ago read "this minute", an alert
+raised since the last tick stayed out of the 24h count until the next one, a
+reading already past the 10-minute stale cut-off led the card as live, and the
+stale flip and 24h drop landed up to a minute late. A mounted card now turns stale,
+and an alert leaves the 24h count, within one 30-second tick with no data
+change. The delivery diagnoses refresh is a server read and keeps its own
+minute interval rather than following the 30-second clock.
+`AlertOverviewAlertCard.clock.test.tsx` pins the mid-tick mount, the stale flip
+and the 24h drop under fake timers, and `useAlertOverviewState.test.tsx` pins
+the diagnoses cadence.
 Render-heavy alert overview ownership now routes through
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
@@ -2354,6 +3560,53 @@ mapping. Acknowledged cards keep their canonical badge and omit that redundant
 line; held delivery states that can surprise an operator use the attention
 tone, while cooldown, quiet-hours, monitor-only, and successful/pending states
 remain neutral.
+The card's resource link resolves the owning platform page from alert
+metadata, never from message wording alone. Provider incidents land on
+canonical `vm`, `storage`, `network`, and `agent` resource types rather than a
+platform-prefixed type, so the card reads the platform from an explicit
+`platformType`, then the incident's `incidentProvider`, then the resource's
+`resourceSources`, all through `resolvePlatformTypeFromSources` in
+`frontend-modern/src/utils/sourcePlatforms.ts`: a vCenter alarm whose message
+is only the alarm's name links to the vSphere overview, a TrueNAS pool
+incident to TrueNAS, and a PBS incident that Pulse itself raised (provider
+`pulse`) to Proxmox by its `pbs` source. The resolved platform maps to its
+page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` and the `routing/resourceLinks.ts`
+path builders, and the same canonical platform id goes to the Monitoring
+policy menu, so the link and the named inventory owner cannot disagree. Only
+an alert whose metadata names no platform falls back to its resource type
+(`agent`, `docker-*`, `app-container`, `k8s-*`, `truenas-*`, `vmware-*`)
+and finally the message; agent alerts open `/standalone/machines`, because no
+`/machines` route exists. A resource-id prefix or substring and the
+message may pick the page only when the alert names no resource type at all,
+because Proxmox guest ids embed the user's cluster and node names and messages
+name the guest: VM alerts on node `docker-01`, in a cluster named `agent`, or
+for a guest named `vmware-test` still link to Proxmox and name Proxmox as their
+owner. Metric alerts put a display label in `resourceType` (`vSphere VM`,
+`Kubernetes Pod`), so the unified metric and capacity evaluators
+(`internal/alerts/unified_eval.go`, `internal/alerts/capacity_forecast.go`)
+stamp the canonical `platformType` beside it, and connection-degraded alerts
+(`internal/alerts/connection.go`) stamp it from the connection type; the card
+reads that ahead of every fallback. The menu's owner copy comes from
+`frontend-modern/src/utils/resourceMonitoringPolicy.ts`, where an explicit
+platform outranks the resource-type guess and the agent-removal copy is kept
+to the agent's own machine: libvirt VMs and Unraid arrays in resource drawers
+get the neutral source-system copy. Host-agent alerts
+(`internal/alerts/host.go`) stamp `platformType` `agent`, and only the
+machine's own alerts keep `resourceType` `agent`: filesystem,
+disk-temperature and SMART alerts carry `agent-disk`, RAID and Unraid array
+alerts `agent-storage`, and custom-sensor alerts `agent-sensor`, because the
+menu writes policy to their child resource id, never to the machine. Each
+child type keeps `agent` among its `CanonicalResourceTypeKeys`, and
+configuration re-evaluation treats agent policy as final for host-agent
+alerts (TrueNAS systems and vSphere hosts keep their platform policy), so the
+storage and guest switches cannot resolve a SMART, RAID or sensor alert that
+the next agent report would re-raise. A metric alert held between its clear
+and trigger thresholds still refreshes `resourceType` and `platformType` from
+its producer while its value, message and last-seen time stay at the last
+breach, so a restored alert that is still firing or held picks up the current
+classification at its next evaluation; one that resolves on that evaluation
+keeps the stored classification in its resolved record. Menu sentences open
+with the owner label capitalised.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the
@@ -2364,6 +3617,14 @@ incidents and current coverage across monitored resources, and must not imply
 that the overview itself owns installation-wide alert activation controls.
 The exported English fallback in `alertOverviewPresentation.ts`, localized
 message catalog, and header metadata proof must remain textually aligned.
+
+The Schedule tab's header title is "Delivery Schedule" (`ALERTS_PAGE_SCHEDULE_TITLE`,
+`alerts.page.schedule.title`; de "Zustellplan", es "Programacion de entregas").
+The page sets how alerts are delivered (quiet hours, cooldown, grouping,
+delivery channels, recovery and escalation); it was titled "Maintenance
+Schedule", which promised maintenance windows, a separate per-resource
+feature this page does not hold (`alertOverviewPresentation.test.ts`,
+`i18n.test.ts`).
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on
@@ -2410,21 +3671,22 @@ issue sequential route writes. That reset removes all three query parameters
 in one navigation and clears any transient chart-bucket selection, so a
 search-only result set remains visibly resettable and an older URL write
 cannot resurrect another filter.
-That same history surface now also owns the canonical resource-incident
-handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
-must treat the selected incident resource as a unified-resource consumer,
-linking back into canonical infrastructure/resource detail first and then into
-shared workloads, storage, and recovery surfaces through
-`frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
-as a dead-end investigation card or rebuilding provider-local route strings for
-platforms such as TrueNAS.
-That same alert handoff must now stay on the shared resolved-resource link
-builder. `AlertResourceIncidentsPanel.tsx` must resolve its chip set through
-`buildResolvedResourceSurfaceLinks(...)`, which owns exact unified-resource
-handoffs plus the infrastructure fallback when alert history still references a
-resource ID before the backing unified record has hydrated. Future incident-link
-work must not reintroduce local infrastructure-link assembly, local dedupe, or
-provider-local route strings inside the alert feature shell.
+That same history surface also owns the resource-incident panel, and the panel
+links nowhere. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+names the selected resource through the unified-resource lookup it is given
+(`getResource`, falling back to the history state's lookup) and
+`getPreferredInfrastructureDisplayName`, and shows the resource name the
+selected history row carried while no unified record matches. It imports nothing from
+`frontend-modern/src/routing/resourceLinks.ts`, and it offers no resource
+cross-jump links: investigation continues in place through the incident
+timeline cards or hands off to Pulse Assistant through
+`IncidentAssistantHandoffButton`, as the retired cross-jump chip note above
+describes. Future incident-link work
+must not reintroduce a chip set, local infrastructure-link assembly, or
+provider-local route strings inside the alert feature shell;
+`frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` pins the panel
+free of `buildResolvedResourceSurfaceLinks`, `buildResourceSurfaceLinksForResource`,
+and `buildInfrastructureResourceLink`.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through
@@ -2567,7 +3829,8 @@ legacy alert timestamp.
 Suppression is bounded and reasoned, leaves the default active queue, and
 remains inspectable. Expiry or explicit unsuppression returns the record to its
 detector-owned state; it never resolves it. Only fresh sufficient recovery
-evidence may enter resolving, and only detector recovery may resolve.
+evidence may enter resolving, and only detector recovery, or a handover
+recorded as `ownership_transferred` with its closing evidence, may resolve.
 
 Per-alert snooze is the customer-facing bounded suppression contract, not a
 page-local timer. `SnoozeAlert` writes the same canonical operational record,
@@ -2636,6 +3899,76 @@ whose marker is newer than the running binary is never rewritten. Regression
 ownership is `internal/alerts/alert_identity_migration_test.go`,
 `internal/monitoring/monitor_alert_override_migration_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
+
+### Alert config snapshots are owned copies
+
+`Manager.GetConfig()` returns `AlertConfig.Clone()`, a typed deep copy that
+shares no map, slice or pointer with the live config (custom rule filter
+values are copied as decoded JSON values). Callers encode, persist
+and edit that snapshot outside `m.mu`: the GET config handler, alert
+activation, the identity migration, backup evaluation and diagnostics. It used
+to be a shallow copy, so `SaveAlertConfig` normalizing it in place, or
+`UpdateConfig` re-normalizing the overrides of a re-applied snapshot, wrote the
+live maps while evaluation or another encoder read them, and Go aborted Pulse
+with a concurrent map write. `SaveAlertConfig` also clones before normalizing,
+because a config just handed to `UpdateConfig` is the live config. Persistence
+keeps an explicit `0` type-level delay as no delay on save and load, matching
+`NormalizeTimeThresholds`. It used to store and load it as the 5-second factory
+delay, which the noisy-gauge rule stretches to 300 seconds for memory and
+temperature, and the shared map write was what made the running manager agree.
+Pulse saves never wrote a `0`, so only a newly sent or hand-edited `0` changes
+meaning. `internal/alerts/config/clone_test.go`
+fills every field and fails when a new reference field is not copied.
+Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
+`internal/config/persistence_alert_ownership_test.go`.
+
+### Alert evaluation owns the thresholds it normalizes
+
+Host, guest and Docker container evaluation copy what they read from
+`m.config` while holding `m.mu`, and only then fill in defaults.
+`CheckHost` and `CheckGuest` clone a per-disk
+override's `Disk` threshold before `ensureHysteresisThreshold` sets a missing
+`Clear` to the trigger minus 5. They used to normalize the live override's
+pointer after unlocking, so a `GetConfig()` clone under the read lock raced
+the write, and the saved override changed to whatever the last poll filled in.
+The live override now keeps the clear it was saved with, and the config API
+returns that value. Docker container evaluation resolves its thresholds from
+cloned `DockerDefaults` plus the override under the same lock, and reads the
+restart-loop and memory-limit settings under the lock. It used to point into
+`m.config.DockerDefaults` with no lock while `UpdateConfig` replaced
+`m.config`. The test-only `getThresholdForMetricFromConfig`, which normalized
+in place, is gone. `internal/alerts/alerts_test.go`
+`TestAlertEvaluationLeavesTheLiveConfigToTheLock` runs host, guest and Docker
+evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
+`-race`.
+
+### Config-save reevaluation judges a filesystem alert by its own threshold
+
+`UpdateConfig` re-judges every active alert, and a filesystem usage alert's
+threshold resolves through the same per-filesystem helper its evaluator uses.
+`hostDiskUsageThresholdNoLock` resolves an agent filesystem
+(`agent:<host>/disk:<label>`): its own override, then the `DiskFillByType`
+threshold for a hardware type inferred from the device while the host's disk
+alerting is on, then the host's disk threshold. `guestDiskUsageThresholdNoLock`
+resolves a guest filesystem (`<guestID>-disk-<key>`): its `guest-disk:`
+override, then the guest's disk threshold. `CheckHost` and `CheckGuest` call
+them under the read lock, and `resolveHostAlertThresholdsNoLock` and
+`resolveGuestAlertThresholdsNoLock` call them for reevaluation. Both return an
+override or per-type threshold as an owned copy. A guest filesystem alert
+resolves its guest's threshold, override and identity-based custom rules by the
+canonical `instance:node:vmid` guest ID that `parseGuestAlertIdentity` reads
+from its resource ID. Custom rules that filter on live metrics still see no
+readings there, as for every reevaluated guest alert. Reevaluation used to
+judge agent filesystems by the host threshold, and guest filesystems without
+their `guest-disk:` override or the guest's own override, because the
+filesystem's resource ID names no guest. Any settings save resolved an alert a
+per-disk threshold of 70 raised at 80 under a default of 90, notifying
+recovery, and the next poll raised it again as a new alert.
+`internal/alerts/threshold_resolution_shared_test.go`
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` covers an agent
+filesystem override, an NVMe fill threshold, a guest filesystem override and a
+guest override: an unchanged save must keep the alert, and a save lifting the
+trigger above the reading must resolve it.
 
 ### Versioned alert-intent policy
 
@@ -2812,11 +4145,19 @@ windows separately: completed attempts remain for seven days while
 dead-letter attempts can remain for 30 days. It requests the bounded maximum
 of 200 rows, displays an absolute semantic timestamp for timeline correlation
 with relative time as secondary hover context, and says that test sends skip
-the queue. An unreadable log renders as unavailable rather than empty. The
-card sits directly below delivery health and recovery controls on the
-Notifications route; a degraded Overview warning links to that route so the
-diagnostic evidence and safe retry/dismiss actions are reachable from the
-warning. The same card interleaves alert-owned
+the queue. An unreadable log renders as unavailable rather than empty. While
+delivery needs attention the card sits directly below delivery health and
+recovery controls on the Notifications route; a degraded Overview warning
+links to that route so the diagnostic evidence and safe retry/dismiss actions
+are reachable from the warning. Otherwise the route answers "where do my
+alerts go" first: webhooks (named by the services they reach), then email and
+Apprise, then this card. A switched-off email or Apprise destination renders
+one line saying what turning it on does plus a "Show settings" control that
+reveals the form without enabling it or marking the page changed. A new
+webhook opens on the service choice rather than the generic JSON form.
+`useNotificationDeliveryHealth` updates the health snapshot and its
+availability in one batch so the attention state never reads a half-updated
+pair and remounts the warning mid-refresh. The same card interleaves alert-owned
 `notification_suppressed` and `notification_deferred` evidence from
 `GET /api/alerts/events` with those attempts, ordered by the recorded event or
 attempt time. Held rows name the affected resource, alert type, and
@@ -2832,6 +4173,147 @@ notification truth: the delivery log card must not resolve, suppress, or
 re-evaluate alerts, and it does not alter the `AlertConfig.enabled` versus
 `activationState` ownership boundary above.
 
+### Overview states paused delivery once and keeps rows scannable
+
+The Alerts overview is where a notification lands, so it answers "what is
+broken now" before configuration. When notification delivery is gated off,
+`OverviewTab` renders the shared `AlertDeliveryPausedCard` once, driven by
+`useAlertDeliveryPausedReason` (the same activation reading the destinations
+tab uses), with overview wording and a link to the Notifications route. While
+that banner is shown, per-alert delivery lines for the global holds
+`notifications_inactive` and `notifications_disabled` are suppressed; every
+alert-specific hold (cooldown, quiet hours, rate limit, flapping, suppression
+window, monitor-only) still renders on its row. With detection switched off
+the banner must not claim Pulse is still detecting alerts. Active alerts
+render as compact rows: severity on the left edge, icon and badge, the alert
+type, the start time as a locale-aware relative age on the overview's minute
+clock, Acknowledge, Snooze and Investigate visible, and Timeline plus
+resource monitoring policy behind a More disclosure that also closes an open
+timeline. A one-line summary beside the heading counts open alerts by
+severity and the triggered-in-24h total; threshold override counts are
+configuration and do not appear on the overview. None of this changes alert
+lifecycle, acknowledgement, snooze, or delivery evaluation.
+
+### Phone alert rows keep one action row
+
+Below the `sm` breakpoint (640px) an active-alert row on the overview shows
+Acknowledge (or its reversal), Snooze (or Unsnooze) and More on one row; the
+Investigate split button moves into the More disclosure beside Timeline and
+the resource monitoring policy. From `sm` up the row is unchanged. Four
+actions had wrapped onto two rows under every alert, so a 375px phone showed
+about three alerts per screen (average row 208px on the mock estate). Snooze
+stays on the row at every width, so its dialog is never remounted when a
+phone rotates across `sm`; only Investigate moves, by the shared
+`useBreakpoint()` width, and renders once. The Acknowledged and Snoozed
+badges and the snoozed-until line stay on the row. More names its region
+through `aria-controls` only while that region is rendered. This is
+presentation only: acknowledgement, snooze, investigation and policy
+handlers are unchanged.
+
+### A guest alert's name opens that guest
+
+On the overview, a VM or container alert whose platform page is Proxmox or
+vSphere links its resource name to that page with `?resource=` set to the
+alert's own resource id. The shared workloads table resolves that id
+(including a Proxmox source id such as `<cluster>-<node>-<vmid>`) through
+the resource registry, opens the guest's drawer and reveals it, so a
+notification reaches the affected guest in one tap instead of the top of a
+page with every guest on it. Other alerts (hosts, Docker
+containers, Kubernetes, TrueNAS, Pulse system alerts) keep their platform
+page link, because their pages do not read `?resource=`; Proxmox storage
+alerts open their pool (below). So do orphaned
+backup alerts (`backup-subject:...`), whose ids name no resource the
+registry can open. A guest's per-filesystem alert (`<guest>-disk-<key>`,
+marked by `mountpoint` or `diskIndex` metadata) names no registry resource
+either, so `CheckGuest` in `internal/alerts/guest.go` stamps its owning
+guest as `guestResourceId` metadata: the same guest ID the guest's own
+alerts are raised under, on the canonical-spec and legacy `checkMetric`
+paths alike (`TestGuestFilesystemAlertsNameOwningGuest`). The card links a
+filesystem alert to `?resource=<guestResourceId>`, opening the guest whose
+filesystem filled; a filesystem alert without that key (raised before the
+stamp) keeps the platform page link and never falls back to its own id.
+The platform used for the monitoring policy menu is still read from the
+page path alone.
+
+### A Proxmox storage alert's name opens its pool
+
+A storage alert (`resourceType` `storage`) whose platform page is Proxmox
+links its name to `/proxmox/storage?resource=`, so a full or degraded pool
+opens on Storage instead of the top of the Proxmox overview. ZFS pool-state,
+pool-error and device alerts are raised under
+`<storage>/zfs-pool:<pool>[/device:<device>]` ids, which the resource
+registry cannot open, so `checkZFSPoolHealth` in `internal/alerts/storage.go`
+stamps the owning storage as `storageResourceId` metadata
+(`TestZFSAlertsNameTheirStorage`); the card prefers that key, then the
+alert's own id. An unstamped composite id (raised before the stamp, or a
+pool-error alert whose counters have not grown since) opens Storage without
+naming a pool and never passes the composite id. TrueNAS and vSphere storage
+alerts keep their platform page, which does not read `?resource=`.
+
+### Thresholds lead with each group's default limits
+
+The Thresholds page answers "what will alert me, and at what limits" before
+any group is opened. Every collapsed threshold group whose table edits global
+defaults states them in its header through
+`getAlertThresholdsDefaultsSummary` in
+`frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`. The helper
+reads the same column list and defaults object the group's resource table
+edits (each section hoists its columns into one module constant), and drops
+every metric `isAlertResourceMetricOff` reports, so the header can never show
+a limit the engine is not evaluating. Docker's restart loop (count within its
+window) and memory-limit warn/critical are stated as whole rules with their
+effective values: an unset value is the factory value, and a rule or level at
+0 reads "off", as the engine evaluates it. Backup age is
+summarized by its warning and critical days only, because fresh and stale
+hours colour the dashboard and never alert. A group switched off as a whole
+shows its Disabled badge and no defaults line. The CPU averaging line counts
+every configured profile override, including ones only the API sets. CPU averaging is tuning, not the page's
+answer. It is one collapsed disclosure stating the effective window and the
+number of platform overrides, with the same per-profile selects inside, each
+a compact shared `FormSelect` with its profile name as a visible label. Docker
+and Machines list their resource groups before Docker-only rules and the
+SMART card. Threshold values, inheritance, metric evaluation windows and
+persistence are unchanged.
+
+### Off is 0 for Docker and PMG count thresholds, and per-row edits exist only where an override stores them
+
+Docker's restart-loop and memory-limit thresholds and every PMG threshold are
+plain ints in `DockerThresholdConfig` and `PMGThresholdConfig`, and 0 is Off:
+the PMG checks already skipped a level at 0, and the Docker restart-loop check
+now turns off when its count or window is 0 while the memory-limit check
+evaluates warning and critical as independent levels. The settings Off toggle
+sends -1, so `NormalizeDockerDefaults` and `NormalizePMGDefaults` store any
+negative value as 0 instead of the factory value they used to substitute, which
+reverted every Off on save. To keep a value an older `alerts.json` or an import
+predates from reading as Off, `AlertConfig` and both threshold types decode
+omitted keys as `ThresholdCountUnset`, and the normalizers (also run by
+`ConfigPersistence` on load and save) replace that marker with the factory
+value before the config is used or written. A PMG quarantine growth level needs
+both its percentage and its minimum growth; either at 0 turns that level off,
+because passing one alone made the canonical spec invalid and skipped the whole
+quarantine check.
+
+A Docker container override re-enables state alerts over a disabled Docker
+default only when it carries its own powered-off severity, the same rule
+`applyThresholdOverride` applies to every other resource. `DisableConnectivity`
+is a plain bool, so an override saved for a CPU threshold alone used to turn
+that container's state alerts back on.
+
+The frontend mirrors the backend instead of second-guessing it. Backup and
+snapshot ages keep a critical of 0 Off, both in the editor's sanitizers
+(`useThresholdsRecoveryDefaultsState`) and in the saved payload
+(`normalizeAgeWarningCriticalPair`); only snapshot sizes raise a 0 critical to
+the warning size, as the backend does. Per-resource rows offer only metrics `ThresholdConfig` stores:
+`alertResourceSupportsMetric` gives Docker containers CPU and memory, and PMG
+servers nothing, and the PMG section has no bulk edit, because restart,
+memory-limit and PMG thresholds exist only as defaults and the backend dropped
+per-container and per-server edits of them on save.
+
+Not covered here: AI Patrol's threshold adapter (`internal/ai/alert_threshold_adapter.go`)
+still maps an Off alert threshold to its factory value, so Patrol keeps flagging
+a metric whose alerts are off; honouring Off there is a Patrol product decision,
+because a zero Patrol level would flag every reading.
+
 ### External watchdog is Pulse-availability evidence, not notification delivery
 
 The Alerts destinations surface owns the operator contract for an external
@@ -2842,6 +4324,30 @@ ping URL must never return to the browser after save; the configured state uses
 an explicit replacement placeholder and removal action. The watchdog remains
 active independently of alert activation, snooze, quiet hours, and notification
 delivery pause because those policies must not disable observation of Pulse.
+Its Refresh and Show/Hide actions are the shared outline `Button` (xs and
+`settingsAction` sizes), not a copied border shell, so they match the other
+destination controls and keep a 44px touch target on phones.
+Last success and Monitor progress are ages, so they read the frontend-primitives
+shared relative-time clock and keep moving while the panel stays open, and the
+panel re-reads `GET /api/alerts/deadman/status` in the background every 30
+seconds. A moving age over a status read once at mount would claim the
+heartbeat stopped while Pulse kept pinging every minute, and a status that is
+never re-read kept its read-time age through a real stall, which is the one
+case this panel exists to show. A background re-read leaves the Refresh control
+alone, and a failed one keeps the last status and marks it unavailable. The
+status read has no timeout, so reads carry a sequence number and a read's
+outcome applies only when it is newer than the last read that settled: a
+success shows its status and clears the unavailable mark, a failure sets it. A
+slow or hung read can therefore neither overwrite a newer outcome nor block
+later reads, and reads slower than the poll still land in order. While the
+panel's poll runs, the next background read goes out at the first poll once the
+newest read has been pending at least 29 seconds (one second of slack absorbs
+timer jitter), and a Refresh is released by its own read, by any newer read that
+settles, or by the first poll at which it has been pending that long, so a hung
+Refresh frees within about two intervals of the click.
+The delivery log's relative hover time on each row reads the same clock: a
+logged attempt's time never changes, so its age is correct over a log that is
+only re-read on demand.
 
 Watchdog transport and monitoring progress remain notifications- and
 monitoring-owned respectively. Alerts owns the system-alert projection:
@@ -3012,11 +4518,9 @@ populated inventory and checks incident access on desktop and the 390px mobile
 rail. Enabled acknowledgement controls prove access only, not persisted
 acknowledgement or external notification receipt.
 
-The explicit issue explanation journey is qualified separately from provider
-reasoning and real remediation in
-`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
-proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
-response does not establish a useful customer outcome or model qualification.
+Issue explanation follows the [customer-journey qualification boundary](../../../../qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md#real-outcome-qualification-still-required),
+which separates scripted interaction proof from provider reasoning, remediation
+and repeatable customer outcomes.
 
 ### Delivery health requests have latest-started ownership
 
@@ -3142,6 +4646,30 @@ and unified alert synchronisation, including absence of duplicate parent alerts.
 
 ### Alert history clear/read ordering
 
+History read failure is not an empty result. The existing History tab announces
+an error and offers an explicit read-only retry. Pending or failed reads expose
+neither the frequency chart nor severity totals, and failure suppresses the
+ordinary empty-result claim. Same-range saved entries remain available with an
+incomplete/out-of-date warning, alongside live alerts. A snapshot loaded for
+another range is retained internally but excluded from that range's rows;
+switching range is not deletion. Search, severity and range remain URL-owned.
+
+Only the latest request may settle rows, failure or loading. An explicit retry
+admits one pending logical read; existing API transport policy is unchanged.
+Organisation replacement clears the saved snapshot and read error; retired
+reads and clears cannot change the replacement view. Disposal prevents another
+retry or a late completion from modifying view state. An already-dispatched
+clear is not cancelled, and deletion/retention, active alerts, acknowledgement
+and notification delivery are unchanged.
+
+`useAlertHistoryState.test.tsx` and `HistoryTab.loadFailure.test.tsx` exercise
+initial failure, retry, pending/accepted empty results, same-range retention,
+range isolation with live alerts, obsolete replies, context replacement and
+disposal. The parent-bound browser receipt exercises the real existing tab,
+hook, API adapter and stylesheet at desktop and phone widths with synthetic
+HTTP failures and deferred replies. These are source presentation/ownership
+controls, not installed backend recovery or destination delivery.
+
 A successful history clear invalidates reads started before its completion and
 settles their loading state, so delayed responses cannot repopulate deleted
 history rows. Failed clearing leaves the pending read valid; later range
@@ -3221,9 +4749,26 @@ Unknown values still fall back to all. The email adapter round-trip matrix and
 webhook edit/save regression cover issue #2069 without altering delivery filters
 or sending provider notifications. Component proof is not installed delivery.
 
-Formatting-only follow-up retains this warning-level contract. The production-component
-browser matrix was rerun after formatting at desktop and narrow widths, including
-all/critical/warning save/reload, cancel, and warning webhook creation.
+### SMTP rate-limit preference persistence
+
+The existing SMTP editor's rate limit is included by
+`alertDestinationsModel.buildEmailConfigPayload` on every destination save.
+Unrelated email edits and switching email off must preserve the loaded limit;
+an explicitly edited limit must reach the existing Notifications API unchanged.
+Zero remains the backend's default-limit sentinel, not an omitted or unlimited
+value. Missing saved limits still use the existing UI default of 60 per minute.
+SMTP masks, TLS settings, recipients, tags and severity preferences are unchanged.
+This repairs a missing UI-to-API field, not the schema or transport policy.
+Revealing switched-off email settings permits pointer and keyboard editing without
+enabling email. The status toggle remains off and Send test email stays disabled.
+
+`emailRateLimit.persistence.test.tsx` connects the actual SMTP editor, destination
+mutation owner, payload builder and email API to synthetic wire assertions.
+The two payload-shape suites retain strict key checks including `rateLimit`.
+`browser-tests/email-rate-limit.cjs` checks save and readback on desktop and phone,
+including unrelated edits, disabled email and legacy zero. These fixtures do not
+send notifications or establish native SMTP throughput, release availability or
+the cause of an existing delivery failure.
 
 ### Pulse Mobile push destination without an upsell
 
@@ -3288,3 +4833,283 @@ initial loading and current-request ownership; the production Notifications
 tab browser fixture verifies the connected read/retry states at desktop and
 phone widths. These are synthetic frontend controls, not recipient delivery
 or containing-release acceptance.
+
+### Resource drawers read open alerts from the active-alert map
+
+`getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts` is the
+canonical lookup from one unified resource to its open alerts in the websocket
+`activeAlerts` map. It matches the alert keys the backend writes for that
+resource (unified id, canonical primary and superseded ids, Proxmox source id,
+metrics target, and for agent and Docker hosts `agent:<id>` and
+`docker:<host source id>` plus the component alerts nested under them) and
+orders them most severe first. A Docker container answers to the key the
+engine writes for it, `docker:<host source id>/<container id>` (or
+`docker:<host source id>/name:<name>` without an ID, per
+`DockerContainerResourceID`), so its drawer lists its own alerts; until
+2026-10-14 the container drawer matched none of them.
+`getOwnAlertsForUnifiedResource` returns only the exact-key alerts, without
+the nested component alerts, and is what drawer charts use for dashed
+triggers: a host's Needs attention lists its containers, but a container's
+memory trigger is not the host's. Those rows use `getAlertAttentionCopy`, so a
+latched or recovering alert, whose message keeps its breach-time value, reads
+as "Memory 70% now, recovering" beside a chart showing 70%. The
+Machines/Infrastructure and Docker host
+drawers build their "Needs attention" rows from it; resources no longer embed
+an alert list, so no drawer can silently read an always-empty copy.
+`getUnifiedResourceAlertStyles` computes row highlighting from that same set,
+so the Docker hosts and Machines table rows tint for exactly the unacknowledged
+alerts their drawers list. Docker host rows previously matched the row id and
+display name against `getAlertStyles`; Docker alerts are keyed
+`docker:<host source id>` and carry the hostname as their node, so a host whose
+display name differs from its hostname was never highlighted, and Machines rows
+had no alert highlighting at all. `getAlertStyles` keeps its
+id-plus-node-name matching for the platform tables whose alerts are keyed that
+way.
+
+### SMART temperature continuity and pending-only policy intervals
+
+Disk temperature activation/grace and recovery require continuous accepted
+observations. Empty SMART inventory, one disk omission, standby, non-positive
+readings, explicit missing/unavailable/unsupported collection and reporting-lease
+expiry interrupt pending/recovery timing without changing an open alert, its
+acknowledgement or lifecycle events. Positive legacy readings without temperature
+provenance remain accepted; an expired last-known positive value is not live
+health. Canonical and shadow reducers plus explicit intent grace are interrupted
+together. A non-empty inventory still resolves a departed disk only after three
+consecutive omissions; empty/expired inventory breaks that confirmation sequence.
+
+Configuration saves reset pending-only runs when global agent policy, host or
+inherited node/guest overrides, or the applicable disk-type threshold disables
+evaluation, even if no report arrives before re-enablement. Existing known-type
+default normalisation is unchanged; the zero-type save control uses a custom
+type whose zero threshold the normaliser preserves. Only live pending
+identity/link/type context is retained; unrelated saves preserve a known enabled
+run and explicit overrides retain precedence over type defaults. Restored intent
+without that context restarts conservatively on a save rather than inventing
+continuous enablement. Cleared intent grace is checkpointed. Existing active-alert
+per-type/save/offline/removal resolution remains unchanged.
+
+`metric_observation_continuity_test.go` and `host_unraid_lifecycle_test.go` cover
+valid/legacy/provenance controls, missing/rejected/expiry gaps on both timing
+edges, explicit grace, acknowledgement/event preservation, host isolation,
+configuration intervals, override precedence and departure. These deterministic
+source tests do not establish installed temperatures or native guest recovery.
+
+### SMART risk inventory gaps and disabled rules
+
+Agent `disk-health` and `disk-wearout` alerts follow the SMART inventory, not
+filesystem usage cleanup. Empty inventory, standby and unobserved risk fields
+hold the existing occurrence and acknowledgement without recovery/refiring.
+Departure requires three consecutive non-empty reports omitting the disk;
+listing it again, an empty inventory or reporting-lease expiry restarts that
+confirmation. Both risk families on the same disk count once per report.
+Filesystem absence still resolves usage on its first missing report. Temperature
+pending/grace/recovery interruption and departure semantics remain unchanged.
+
+Disabling every recorded cause releases that risk alert without a reading,
+both on a configuration save and on an empty report. Partially enabled causes,
+missing legacy cause metadata and unknown codes remain conservative. Re-enabling
+cannot raise an alert from absent evidence; fresh bad evidence uses the existing
+stateful refire/cooldown history policy. Node linking retains existing node ownership, including when the
+agent's SMART inventory is empty; host removal and policy disablement release
+agent risk state and stale absence counts. Counts are ephemeral and restart
+conservatively after a process restart.
+
+`TestHostSMARTRisk*` in `host_unraid_lifecycle_test.go` exercises actual `CheckHost`, expiry, configuration
+save, firing/recovery callbacks and event history with synthetic telemetry.
+It covers both families sharing a disk, interruption/reconfirmation, partial
+rule disablement, re-enablement, legacy/unknown causes, filesystem and host
+isolation, removal and node-link ownership. These are source lifecycle controls,
+not collector, smartctl, installed notification or native disk-recovery proof.
+
+### Storage observation gaps restart confirmation and timing
+
+An absent or `unknown` storage connectivity status interrupts activation,
+recovery confirmations and pending offline intent grace without resolving an
+existing outage or changing its acknowledgement. Capacity is independently
+observable while connectivity is unknown. Missing/unconfirmed-zero capacity,
+negative usage and offline/unavailable storage interrupt capacity activation,
+and intent grace timing; they do not supply healthy capacity evidence.
+Capacity recovery retains its existing immediate measured-clear behaviour,
+not the recovery stability window used by memory and temperature gauges.
+A confirmed empty store still supplies a genuine zero-usage recovery reading.
+Fresh observations must satisfy the existing full confirmation/delay after a
+gap. Interruption is scoped to the storage's canonical identity and applied to
+both live and shadow reducers; interrupted intent is checkpointed for restart.
+
+`TestStorageConnectivityObservationGaps` and
+`TestStorageConnectivityGapRestartsIntentGrace` exercise the real storage
+entry point, acknowledged occurrence retention, neighbour isolation, fresh
+reconfirmation and empty intent checkpoint. Storage routes in
+`TestMetricObservationGapRestartsActivation` covers capacity gaps and explicit
+intent grace; `TestStorageCapacityGapHoldsOccurrence` verifies retained,
+acknowledged capacity incidents and genuine immediate empty-store recovery. Existing restart, empty-capacity and predictive-capacity controls
+remain required. These source controls are not native storage recovery or
+installed destination-delivery evidence.
+
+`TestStorageConnectivityGapWebhook` also exercises the production Monitor
+callbacks, ordinary notification queue and guest-local HTTP receiver: the gap
+and first fresh healthy poll send no recovery; confirmed recovery sends one
+resolved receipt with the original occurrence identity, and the queue drains
+without failed/DLQ work. This is synthetic callback/receiver acceptance, not a
+native appliance or external webhook-provider result.
+
+### Composed host filesystem threshold ownership
+
+The shared filesystem resolver preserves the explicit host or linked-resource
+Disk override ahead of per-hardware-type defaults, for both host reports and
+configuration-save reevaluation. A filesystem-specific override still takes
+precedence. Disabling that filesystem releases its canonical usage metric and
+pending intent, retaining the reviewed agent/node ownership semantics.
+`TestHostDiskOverrideBeatsDiskFillByType` checks agent and inherited overrides
+through a configuration save and the next report without losing the occurrence;
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` retains per-filesystem
+and per-type controls. This is source composition, not installed delivery proof.
+
+### Shared disk-temperature composition and pending ownership
+
+Host temperature evaluation retains the upstream shared SMART/Unraid reading and
+per-type threshold judgement, including Unraid-only disks and competing readings
+on one device. It also retains reviewed observation-gap interruption and pending
+host/link/type context for configuration saves. A live Unraid-only row is not an
+observation gap merely because SMART is empty; absent or uncollected rows still
+restart confirmation. `TestUnraidOnlyTemperatureRetainsPendingContinuity` checks
+continuous, spun-down, omitted and type-off intervals under both grace paths;
+existing SMART pending, override, departure and upstream Unraid controls remain.
+
+### Applied configuration input ownership
+
+`Manager.UpdateConfig` clones the supplied configuration before normalisation
+and retention. Callers keep ownership of its JSON-shaped maps, slices and
+threshold pointers, just as they own `GetConfig` snapshots. Subsequent edits
+do not alter running policy until explicitly reapplied; normalisation cannot
+rewrite an input concurrently encoded for persistence or a response. The
+existing typed clone's non-JSON custom filter-value limitation is unchanged.
+`ApplyConfigUpdate` already decodes an owned configuration under the manager
+lock and keeps its atomic partial-update semantics.
+
+`config_validation_test.go` requires unchanged caller inputs, normalised
+live thresholds, isolated edits, ordinary guest CPU evaluation, explicit
+resubmission and concurrent response encoding/update under the race detector.
+Existing snapshot, persistence, partial-update and threshold tests remain
+required. This is source ownership acceptance, not installed notification or
+guest-agent recovery evidence.
+
+### TrueNAS disk heat policy for Patrol and Assistant
+
+`Manager.TrueNASDiskTemperatureThreshold(resourceID, diskType)` resolves the
+`truenas-disk` tiers of `effectiveAlertPolicyNoLock`: the disk's canonical or
+identity-resolved override, then TrueNAS Disks defaults, then disk-type policy.
+A disabled disk/default or non-positive trigger leaves no heat policy.
+Global/platform alert switches silence alert evaluation without changing this
+policy, matching existing agent-disk semantics. Callers receive a copy; config
+normalisation, saved Off/custom/inherited values and alert severity are unchanged.
+`IsTrueNASDiskResource` uses the evaluator's classification, including merged
+agent/TrueNAS disks. Patrol/Assistant do not walk those disks to a synthetic
+TrueNAS system agent and accidentally apply an unrelated host override.
+Retained temperature readings remain unjudged, not affirmative recovery.
+
+Verification: `TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts`
+and `TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` in
+`internal/alerts/threshold_resolution_shared_test.go` cover tier, identity,
+Off/disabled, untyped, clone and nil-manager compatibility.
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` cover adapter, Patrol triage,
+verification and Assistant context while preserving agent-host overrides.
+Frontend table/drawer tiers use the Web resolver described below; these
+backend tests do not establish browser or native appliance acceptance.
+
+### TrueNAS disk display reconciliation (8 October 2026)
+
+The TrueNAS storage table and inline resource drawer resolve temperature by
+the disk resource's own `temperature` override, then `truenasDiskDefaults`,
+then the per-type disk policy. Explicit zero/negative thresholds or a disabled
+disk/TrueNAS default leave readings visible but unjudged. Host `diskTemperature`
+overrides and the agent alerts switch do not control API-only TrueNAS disks.
+The shared agent disk resolver and Proxmox `pulse-relaxed` guest resolution
+remain unchanged. Existing Off-save normalization and inherited TrueNAS
+threshold editors on main are retained, not replaced by the older PR stack.
+
+Verification: `src/utils/__tests__/metricThresholds.test.ts`,
+`src/features/truenas/__tests__/TrueNASStorageTopologyTable.test.tsx` and the
+production table/drawer fixture `browser-tests/truenas-disk-thresholds.cjs`.
+The containing backend also resolves the disk-specific tiers for Patrol.
+Frontend checks do not establish native appliance or notification recovery.
+
+### Existing SMTP form exposes only persisted settings
+
+The Email destination editor follows the public `EmailConfig`: SMTP connection,
+credentials, From/recipients, security, rate limit, tags and minimum severity.
+Reply-to, max retries and retry delay are not offered or fabricated by the UI;
+the save path never accepted them. `UIEmailConfig` extends that public type
+with concrete normalized password/rate-limit values, and the advanced form
+explains that Pulse manages retries. Existing server retry behaviour is unchanged.
+
+`EmailProviderSelect.supported-settings.test.tsx` requires absence of all three
+ineffective controls, default/payload parity and supported edits/reloads when
+email is on or off. Existing component and destination-state tests retain
+provider, mask, routing and off-state behaviour;
+`src/utils/__tests__/alertEmailPresentation.test.ts` covers the retry explanation.
+Browser proof uses the production email panel, destination state, API and CSS
+with synthetic local endpoints. It is not native SMTP delivery or a release.
+
+### Notification recovery belongs to its mounted view
+
+Overview and Notifications retire their delivery-health/recovery owner on
+unmount. Late health success, failure and loading completion cannot update
+that owner. Late Retry/Dismiss completion cannot publish a global toast,
+change its feedback or start health/activity readbacks after the view retires.
+A callback scheduled before retirement is checked again before invocation;
+already-started activity failures cannot restore retired feedback. Calls to
+retired health/action/clear handlers do nothing, including no confirmation.
+
+An already-dispatched mutation or read is not cancelled, undone or declared
+failed by navigation. Active views retain the existing confirmation,
+acknowledgement, read ordering and persistent failure feedback. A replacement
+view owns its independent read and any deliberately confirmed action; source
+checks do not establish notification delivery or installed queue recovery.
+
+`useNotificationDeliveryHealth.lifecycle.test.tsx` covers pending reads and
+both actions, callback scheduling/completion and retired entry points.
+`useAlertDestinationsTabState.test.tsx` connects both actions to the real
+Notifications owner, proving a late result cannot notify or start readbacks
+in its replacement while the replacement's own action still works. Browser
+controls use the actual Overview/Notifications components, API adapters,
+toast and CSS with synthetic local endpoints at desktop/phone widths.
+
+### Mounted held readings follow the shared clock (10 October 2026)
+
+Node, guest and Mail Gateway drawer attention, and the Proxmox node temperature
+hover, age an unchanged metric evaluation on the existing shared clock. The
+metric presentation requires an explicit clock; drawer copy reads an accessor
+only for usable live status, leaving non-metric rows unchanged. The ten-minute
+stale boundary, evaluated breach date, legacy fallback, clear rule and operator
+memory basis remain independent. This does not infer collection or recovery.
+Mounted drawer controls and lazy-copy tests cover this boundary.
+
+
+### Guest filesystem settings do not assert current readings (12 October 2026)
+
+The existing Proxmox Guest Filesystems settings rows use
+`getWorkloadGuestDiskRead` for the same provider read/power-state admission as
+Workloads. A `prev-` read reason labels retained usage **Last known**; an
+unavailable read or explicitly stopped VM withdraws used bytes and percentage,
+without deleting mount identity, saved overrides or threshold controls. Native
+`runtimeStatus` takes precedence over a canonical resource held online by
+another source. Independent LXC platform storage does not inherit VM-only
+read reasons. A new accepted reading clears the explanation, including zero.
+
+The shared desktop row and phone card display the optional `readingMessage`
+as wrapping text beside the reading, not hover-only or truncated guidance.
+Missing filesystem samples keep saved settings editable with an explicit
+unavailable label. Existing numeric serialization, identity, persistence,
+active-alert linkage, edit-time row stabilisation and threshold evaluation
+remain unchanged. This presentation does not change collection, issue guest
+commands, prove thaw/writes/liveness, or establish installed/released recovery.
+
+Verification: `useThresholdsGuestData.test.ts` covers every fixed read reason,
+power/read replacement, LXC and source independence, unknown-reason privacy and
+saved-override retention. `ResourceTable.test.tsx` covers visible/reactive text
+in both layouts. `browser-tests/guest-filesystem-thresholds.cjs` connects the
+production hook, table and editors on desktop Chromium and phone WebKit,
+including scoped refusal text, custom settings and same-VMID/mount separation.

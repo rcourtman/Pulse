@@ -7,6 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import { triggerPatrolRun } from '@/api/patrol';
 import { t } from '@/i18n';
 import type { Alert } from '@/types/api';
+import { isPulseSystemAlert } from '@/utils/alertScope';
 import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -28,6 +29,14 @@ interface InvestigateAlertButtonProps {
    * single-purpose regardless.
    */
   patrolOption?: boolean;
+  /**
+   * The alert's display name (for example "Container Health"). The icon
+   * variant names the alert and its resource with it, because a table repeats
+   * the button on every row and a shared name tells the rows apart for no one.
+   */
+  subjectLabel?: string;
+  /** When the alert started, as the host shows it; tells repeated alerts apart. */
+  subjectTime?: string;
 }
 
 /**
@@ -54,7 +63,10 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   }
 
   const showPatrolOption = () =>
-    props.patrolOption === true && !isLocked() && !!(props.alert.resourceId || '').trim();
+    props.patrolOption === true &&
+    !isLocked() &&
+    !isPulseSystemAlert(props.alert) &&
+    !!(props.alert.resourceId || '').trim();
   const usesPatrolPrimary = () => showPatrolOption() && props.variant !== 'icon';
   const buttonTitle = () =>
     isLocked()
@@ -62,6 +74,16 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       : usesPatrolPrimary()
         ? t('alerts.assistant.patrol.title')
         : t('alerts.assistant.unlockedTitle');
+
+  const iconLabel = () => {
+    const resourceName = props.alert.resourceName?.trim();
+    if (isLocked() || !resourceName) return buttonTitle();
+    const alertType = props.subjectLabel?.trim() || props.alert.type;
+    const startedAt = props.subjectTime?.trim();
+    return startedAt
+      ? t('alerts.assistant.iconLabelAt', { alertType, resourceName, startedAt })
+      : t('alerts.assistant.iconLabel', { alertType, resourceName });
+  };
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -97,7 +119,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
 
   const startPatrolInvestigation = async () => {
     const resourceId = (props.alert.resourceId || '').trim();
-    if (!resourceId) {
+    if (isPulseSystemAlert(props.alert) || !resourceId) {
       notificationStore.warning(t('alerts.assistant.patrol.noResource'));
       return;
     }
@@ -220,6 +242,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
         title={buttonTitle()}
+        aria-label={iconLabel()}
         aria-disabled={isLocked()}
       >
         <svg

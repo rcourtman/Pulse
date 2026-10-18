@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -181,8 +182,10 @@ func (m *Monitor) checkConnectionAlerts() {
 	if lister == nil || m.alertManager == nil {
 		return
 	}
+	// The lister serves the mock connection ledger while mock mode is on.
+	scope := m.mockModeFence.begin()
 	for _, snap := range lister() {
-		m.alertManager.CheckConnection(snap)
+		scope.run(func() { m.alertManager.CheckConnection(snap) })
 	}
 }
 
@@ -413,7 +416,7 @@ func (m *Monitor) materializeImportedAlertTimeline(alert *alerts.Alert, imported
 		}
 	}
 
-	m.incidentStore.EnsureAlertOccurrence(alert, resolvedAt)
+	m.incidentStore.MaterializeAlertOccurrence(alert, resolvedAt)
 	firedAt := alert.StartTime
 	if firedAt.IsZero() {
 		firedAt = importedAt
@@ -468,17 +471,43 @@ func (m *Monitor) scheduleAlertProjectionCatchUp() {
 	if m == nil {
 		return
 	}
+	m.alertProjectionMu.Lock()
+	if m.alertProjectionStopped {
+		m.alertProjectionMu.Unlock()
+		return
+	}
+	if m.alertProjectionCtx == nil {
+		m.alertProjectionCtx, m.alertProjectionCancel = context.WithCancel(context.Background())
+	}
+	ctx := m.alertProjectionCtx
+	// Add and closing admission share a lock: shutdown must never race a new
+	// Add against Wait on an empty group, including attachment before Start.
 	m.alertProjectionWG.Add(1)
+	m.alertProjectionMu.Unlock()
 	go func() {
 		defer m.alertProjectionWG.Done()
 		defer recoverFromPanic("alertProjectionCatchUp")
-		m.replayAlertLifecycleProjections()
-		m.reconcileActiveAlertTimelines()
+		m.replayAlertLifecycleProjections(ctx)
+		m.reconcileActiveAlertTimelines(ctx)
 	}()
 }
 
-func (m *Monitor) replayAlertLifecycleProjections() {
-	if m == nil || m.alertManager == nil {
+func (m *Monitor) stopAlertProjectionCatchUp() {
+	m.alertProjectionMu.Lock()
+	m.alertProjectionStopped = true
+	if m.alertProjectionCancel != nil {
+		m.alertProjectionCancel()
+	}
+	m.alertProjectionMu.Unlock()
+	// An admitted canonical write cannot be interrupted safely. Start stays
+	// live until it finishes; the existing tenant deletion budget then retains
+	// the runtime and its data if that writer is blocked, rather than removing
+	// its directory underneath it.
+	m.alertProjectionWG.Wait()
+}
+
+func (m *Monitor) replayAlertLifecycleProjections(ctx context.Context) {
+	if m == nil || m.alertManager == nil || ctx.Err() != nil {
 		return
 	}
 	// Serialize passes instead of skipping: a second trigger waits for the
@@ -486,6 +515,9 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	// that need replay-complete semantics can rely on a finished call.
 	m.alertProjectionReplayMu.Lock()
 	defer m.alertProjectionReplayMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 
 	m.mu.RLock()
 	_, hasRecorder := m.resourceStore.(canonicalResourceChangeRecorder)
@@ -501,6 +533,12 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	maxApplied := afterID
 	visited := 0
 	err := m.alertManager.ReplayLifecycleEvents(afterID, func(eventID int64, event alerts.LifecycleEvent) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// Apply the whole occurrence (including imported acknowledgement and
+		// resolution) before advancing its watermark, even if shutdown arrives
+		// during a canonical write. Cancellation only stops the next event.
 		m.handleAlertLifecycleEvent(event)
 		if eventID > maxApplied {
 			maxApplied = eventID
@@ -511,12 +549,16 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 		}
 		return nil
 	})
-	if err != nil {
+	cancelled := err != nil && errors.Is(err, ctx.Err())
+	if err != nil && !cancelled {
 		log.Error().Err(err).Msg("failed to replay canonical alert lifecycle projections")
 		return
 	}
 	if advance && maxApplied > afterID {
 		m.alertManager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, maxApplied)
+	}
+	if cancelled {
+		return // The next runtime resumes the unapplied tail, not the full log.
 	}
 	if visited > 0 {
 		log.Info().
@@ -527,17 +569,23 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	}
 }
 
-func (m *Monitor) reconcileActiveAlertTimelines() {
-	if m == nil || m.alertManager == nil || m.incidentStore == nil {
+func (m *Monitor) reconcileActiveAlertTimelines(ctx context.Context) {
+	if m == nil || m.alertManager == nil || m.incidentStore == nil || ctx.Err() != nil {
 		return
 	}
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	for i := range activeAlerts {
+		if ctx.Err() != nil {
+			return
+		}
 		alert := &activeAlerts[i]
 		page, err := m.incidentStore.QueryIncidents(memory.IncidentQuery{AlertIdentifier: alert.ID, StartedAt: alert.StartTime, Limit: 1})
 		if err != nil {
 			log.Warn().Err(err).Msg("Skipping alert timeline reconciliation because canonical history is unavailable")
 			continue
+		}
+		if ctx.Err() != nil {
+			return
 		}
 		var timeline *memory.Incident
 		if len(page.Incidents) > 0 {
@@ -576,7 +624,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		return
 	}
 
-	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, unifiedresources.AlertTimelineChange{
+	timelineChange := unifiedresources.AlertTimelineChange{
 		AlertIdentifier: alert.ID,
 		AlertStartedAt:  alert.StartTime,
 		AlertType:       alert.Type,
@@ -585,7 +633,12 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		AlertValue:      alert.Value,
 		AlertThreshold:  alert.Threshold,
 		AlertMetadata:   alert.Metadata,
-	})
+	}
+	if summary := alert.Resolution.Summary(); summary != "" {
+		timelineChange.ResolutionReason = string(alert.Resolution.Reason)
+		timelineChange.ResolutionSummary = summary
+	}
+	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, timelineChange)
 	if change == nil {
 		return
 	}
@@ -623,6 +676,10 @@ func (m *Monitor) broadcastStateUpdate() {
 func (m *Monitor) checkMockAlerts() {
 	defer recoverFromPanic("checkMockAlerts")
 
+	// Passes overlap and can still be reading the fixture when the monitor
+	// leaves mock mode, so every evaluation below runs under the scope taken
+	// before the mode check and stops once SetMockMode ends its epoch.
+	scope := m.mockModeFence.begin()
 	log.Debug().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
 		log.Debug().Msg("mock mode not enabled, skipping mock alert check")
@@ -630,7 +687,8 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Get mock state
-	state := mock.CurrentFixtureGraph().State
+	graph, fixtureRevision := mock.CurrentFixtureGraphWithRevision()
+	state := graph.State
 
 	log.Debug().
 		Int("vms", len(state.VMs)).
@@ -656,7 +714,7 @@ func (m *Monitor) checkMockAlerts() {
 	log.Debug().
 		Int("trackedNodes", len(existingNodes)).
 		Msg("Collecting resources for alert cleanup in mock mode")
-	m.alertManager.CleanupAlertsForNodes(existingNodes)
+	scope.run(func() { m.alertManager.CleanupAlertsForNodes(existingNodes) })
 
 	m.checkBackupAlerts(context.Background())
 
@@ -673,7 +731,7 @@ func (m *Monitor) checkMockAlerts() {
 				Msg("Reached guest check limit for this cycle")
 			break
 		}
-		m.alertManager.CheckGuest(vm, "mock")
+		scope.run(func() { m.alertManager.CheckGuest(vm, "mock") })
 		guestsChecked++
 	}
 
@@ -682,13 +740,23 @@ func (m *Monitor) checkMockAlerts() {
 		if guestsChecked >= maxGuestsPerCycle {
 			break
 		}
-		m.alertManager.CheckGuest(container, "mock")
+		scope.run(func() { m.alertManager.CheckGuest(container, "mock") })
 		guestsChecked++
 	}
 
+	// Check alerts for host agents. Live agents are evaluated as each report
+	// lands, and mock mode discards reports and keeps fixture agents out of
+	// the monitor state the host health sweep reads, so without this pass no
+	// agent CPU, memory, disk, temperature or offline alert can open against
+	// mock data. Agents go before nodes so a linked node hands its CPU, memory
+	// and disk alerts to its agent on the first tick, as node-link
+	// deduplication does in production.
+	log.Debug().Int("hostCount", len(state.Hosts)).Msg("checking host agent alerts")
+	m.evaluateMockHostAgents(scope, state.Hosts, state.Nodes, fixtureRevision)
+
 	// Check alerts for each node
 	for _, node := range state.Nodes {
-		m.alertManager.CheckNode(node)
+		scope.run(func() { m.alertManager.CheckNode(node) })
 	}
 
 	// Check alerts for storage
@@ -698,19 +766,28 @@ func (m *Monitor) checkMockAlerts() {
 			Str("name", storage.Name).
 			Float64("usage", storage.Usage).
 			Msg("Checking storage for alerts")
-		m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
+		trend := m.storageCapacityTrend(storage, time.Now())
+		scope.run(func() { m.alertManager.CheckStorageWithCapacityTrend(storage, trend) })
 	}
+
+	// Check alerts for physical disks. Live disks are evaluated by the
+	// physical disk poller, which only polls configured Proxmox instances, and
+	// the fixture deliberately keeps a FAILED cohort and worn SSDs, so without
+	// this pass the estate shows failing disks with no disk-health or
+	// disk-wearout alert.
+	log.Debug().Int("diskCount", len(state.PhysicalDisks)).Msg("checking physical disk alerts")
+	m.checkMockPhysicalDiskAlerts(scope, state.PhysicalDisks, state.Nodes, state.Hosts)
 
 	// Check alerts for PBS instances
 	log.Debug().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
 	for _, pbsInst := range state.PBSInstances {
-		m.alertManager.CheckPBS(pbsInst)
+		scope.run(func() { m.alertManager.CheckPBS(pbsInst) })
 	}
 
 	// Check alerts for PMG instances
 	log.Debug().Int("pmgCount", len(state.PMGInstances)).Msg("checking PMG alerts")
 	for _, pmgInst := range state.PMGInstances {
-		m.alertManager.CheckPMG(pmgInst)
+		scope.run(func() { m.alertManager.CheckPMG(pmgInst) })
 	}
 
 	// Check alerts for Docker hosts (container state/health/metrics/updates and
@@ -718,13 +795,137 @@ func (m *Monitor) checkMockAlerts() {
 	// so skipping this loop leaves the docker alert lifecycle unexercisable
 	// against mock data.
 	log.Debug().Int("dockerHostCount", len(state.DockerHosts)).Msg("checking docker alerts")
-	for _, dockerHost := range state.DockerHosts {
-		m.checkMockDockerHostAlerts(dockerHost)
-	}
+	m.evaluateMockDockerHosts(scope, state.DockerHosts, fixtureRevision)
 
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
 	// mock state without needing to grab the alert manager lock again.
-	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+	scope.run(func() {
+		mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+	})
+}
+
+// evaluateMockHostAgents evaluates every fixture agent and remembers the set.
+// A runtime mock config change rebuilds the estate, so an agent can leave it
+// between passes; it then goes through HandleHostRemoved, as a deleted live
+// agent does, or its alerts and node link would outlive it.
+func (m *Monitor) evaluateMockHostAgents(scope mockModeScope, hosts []models.Host, nodes []models.Node, fixtureRevision uint64) {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	// Both the mode epoch and structural revision must still match.
+	if !scope.current() || !m.acceptMockFixturePassLocked(fixtureRevision) {
+		return
+	}
+
+	current := make(map[string]models.Host, len(hosts))
+	for _, host := range hosts {
+		if host.ID != "" {
+			current[host.ID] = host
+		}
+	}
+	for id, host := range m.mockHostAgents {
+		if _, ok := current[id]; ok {
+			continue
+		}
+		if !scope.run(func() { m.alertManager.HandleHostRemoved(host) }) {
+			// Leaving mock mode refused the removal; keep the agent so
+			// forgetMockFixtureHosts still removes it.
+			current[id] = host
+		}
+	}
+	for _, host := range hosts {
+		scope.run(func() { m.checkMockHostAlerts(host, nodes) })
+	}
+	m.mockHostAgents = current
+}
+
+// evaluateMockDockerHosts is the Docker counterpart of evaluateMockHostAgents,
+// under the same lock and mode check. Nested Docker-in-LXC hosts are named
+// after their guest's VMID, so a runtime mock config change can drop a host
+// from the estate; it then goes through HandleDockerHostRemoved, as a deleted
+// live host does. pruneStaleDockerAlerts clears the same alerts, but only when
+// something reads state, so an unwatched stack would keep them active.
+func (m *Monitor) evaluateMockDockerHosts(scope mockModeScope, hosts []models.DockerHost, fixtureRevision uint64) {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	// Both the mode epoch and structural revision must still match.
+	if !scope.current() || !m.acceptMockFixturePassLocked(fixtureRevision) {
+		return
+	}
+
+	current := make(map[string]models.DockerHost, len(hosts))
+	for _, host := range hosts {
+		if host.ID != "" {
+			current[host.ID] = host
+		}
+	}
+	for id, host := range m.mockDockerHosts {
+		if _, ok := current[id]; !ok {
+			if !scope.run(func() { m.alertManager.HandleDockerHostRemoved(host) }) {
+				// Keep refused departures for the mode switch to remove.
+				current[id] = host
+			}
+		}
+	}
+	for _, host := range hosts {
+		scope.run(func() { m.checkMockDockerHostAlerts(host) })
+	}
+	m.mockDockerHosts = current
+}
+
+// acceptMockFixturePassLocked reports whether a mock alert pass may update the
+// tracked fixture hosts. A pass that took its snapshot before the monitor left
+// mock mode must not evaluate fixtures after forgetMockFixtureHosts ran. Ticks
+// start passes concurrently, so one that took its snapshot before an estate
+// rebuild can also reach this lock after a newer pass; applying it would
+// remove the new estate's hosts and re-evaluate retired ones. The fixture
+// revision only advances on such rebuilds, so an older revision is rejected.
+// Callers hold mockHostAgentsMu.
+func (m *Monitor) acceptMockFixturePassLocked(fixtureRevision uint64) bool {
+	if !mock.IsMockEnabled() || fixtureRevision < m.mockFixtureRevision {
+		return false
+	}
+	m.mockFixtureRevision = fixtureRevision
+	return true
+}
+
+// forgetMockFixtureHosts removes the fixture agents and Docker hosts when the
+// monitor leaves mock mode. ClearActiveAlerts drops their alerts but not the
+// agents' node links, and a leftover link would keep suppressing CPU, memory
+// and disk alerts on any node that later carries the linked fixture node's ID.
+// The removal also clears anything a pass already in flight
+// recreated; mock mode is off before this runs, so no later pass can evaluate
+// them again while it stays off. Disabling advanced the fixture revision, and
+// recording it here keeps a pass paused across a disable and re-enable from
+// evaluating the old estate once mock mode is back on.
+func (m *Monitor) forgetMockFixtureHosts() {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	if _, revision := mock.CurrentFixtureGraphWithRevision(); revision > m.mockFixtureRevision {
+		m.mockFixtureRevision = revision
+	}
+	for _, host := range m.mockHostAgents {
+		m.alertManager.HandleHostRemoved(host)
+	}
+	m.mockHostAgents = nil
+	for _, host := range m.mockDockerHosts {
+		m.alertManager.HandleDockerHostRemoved(host)
+	}
+	m.mockDockerHosts = nil
+}
+
+// checkMockHostAlerts applies the live host-agent boundary to a fixture. An
+// offline fixture has no fresh telemetry, so it goes through the host
+// connectivity lifecycle that evaluateHostAgents uses for a lapsed report.
+// CheckHost treats its input as a fresh report and would mark the host online.
+func (m *Monitor) checkMockHostAlerts(host models.Host, nodes []models.Node) {
+	if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+		m.alertManager.HandleHostOfflineWithCorrelation(host, sharedSystemAlertCorrelationForHost(host, nodes))
+		return
+	}
+	m.alertManager.CheckHost(host)
 }
 
 // checkMockDockerHostAlerts preserves the same evidence boundary as live
@@ -738,4 +939,39 @@ func (m *Monitor) checkMockDockerHostAlerts(host models.DockerHost) {
 		return
 	}
 	m.alertManager.CheckDockerHost(host)
+}
+
+// checkMockPhysicalDiskAlerts applies the physical disk poller's alert
+// boundary to fixture disks. The poller only evaluates disks on nodes it
+// reached, so a disk on a node that is not online keeps whatever alert it
+// had, and a device matched by the linked agent's --disk-exclude patterns is
+// evaluated as healthy. The poller's wait for host-agent links to settle after
+// a restart does not apply: fixture links and exclusions are complete from the
+// first pass.
+func (m *Monitor) checkMockPhysicalDiskAlerts(scope mockModeScope, disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) {
+	type nodeKey struct{ instance, name string }
+
+	excludeByHost := make(map[string][]string, len(hosts))
+	for _, host := range hosts {
+		if len(host.DiskExclude) > 0 {
+			excludeByHost[host.ID] = host.DiskExclude
+		}
+	}
+	onlineNodes := make(map[nodeKey]bool, len(nodes))
+	excludeByNode := make(map[nodeKey][]string)
+	for _, node := range nodes {
+		key := nodeKey{instance: node.Instance, name: node.Name}
+		onlineNodes[key] = node.Status == "online"
+		if patterns := excludeByHost[node.LinkedAgentID]; node.LinkedAgentID != "" && len(patterns) > 0 {
+			excludeByNode[key] = patterns
+		}
+	}
+
+	for _, disk := range disks {
+		key := nodeKey{instance: disk.Instance, name: disk.Node}
+		if !onlineNodes[key] {
+			continue
+		}
+		scope.run(func() { m.checkPhysicalDiskAlerts(disk.Instance, disk, excludeByNode[key]) })
+	}
 }

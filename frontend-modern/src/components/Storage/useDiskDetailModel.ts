@@ -3,6 +3,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import {
   getPhysicalDiskCollectionMessages,
   extractPhysicalDiskPresentationData,
+  getPhysicalDiskTemperatureThresholds,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
 import {
@@ -16,6 +17,8 @@ import { resolvePhysicalDiskHistoryResourceId } from './diskResourceUtils';
 
 type UseDiskDetailModelOptions = {
   disk: Accessor<Resource>;
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: Accessor<string[] | undefined>;
 };
 
 export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
@@ -23,11 +26,15 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const { getDiskTemperatureThresholds } = useAlertsActivation();
 
   const diskData = createMemo<PhysicalDiskPresentationData>(() =>
-    extractPhysicalDiskPresentationData(options.disk()),
+    extractPhysicalDiskPresentationData(
+      options.disk(),
+      getDiskTemperatureThresholds,
+      options.alertResourceIds?.(),
+    ),
   );
   const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));
   const attributeCards = createMemo(() =>
-    getDiskDetailAttributeCards(diskData(), getDiskTemperatureThresholds(diskData().type)),
+    getDiskDetailAttributeCards(diskData(), getPhysicalDiskTemperatureThresholds(diskData())),
   );
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
   const healthPresentation = createMemo(() => getDiskDetailHealthPresentation(diskData()));

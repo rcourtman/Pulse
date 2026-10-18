@@ -4,7 +4,9 @@ import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
+import type { Alert, Incident } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   formatIncidentEvidenceTime,
@@ -29,8 +31,10 @@ import {
   getAlertResourceIncidentToggleButtonClass,
   getAlertResourceIncidentToggleLabel,
   getAlertResourceIncidentTruncatedEventsLabel,
+  normalizeAlertIncidentStatus,
 } from '@/utils/alertIncidentPresentation';
 
+import { getMetricAlertPresentation } from './metricAlertPresentation';
 import { filterIncidentEvents, summarizeIncidentEvents } from './types';
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -44,6 +48,9 @@ interface AlertResourceIncidentsPanelProps {
 }
 
 export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelProps) {
+  // The live reading turns stale when evaluations stop, so it rechecks on the
+  // shared clock rather than only when the alert changes.
+  const now = useRelativeTimeNow();
   return (
     <Show when={props.state.resourceIncidentPanel()}>
       {(selection) => {
@@ -53,6 +60,20 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
         const hasError = () => props.state.resourceIncidentError()[resourceId];
         const lookupResource = () => props.getResource ?? props.state.getResource;
         const resource = () => lookupResource()?.(resourceId);
+        // An open occurrence's message is the breach that opened it. A
+        // threshold alert can stay open below its trigger, so describe the
+        // open occurrence from its live alert; closed ones keep their copy.
+        // An occurrence is its alert id plus its start, as the incident store
+        // keys it, so a cached row never takes a later recurrence's reading.
+        const liveAlertFor = (incident: Incident): Alert | undefined => {
+          if (normalizeAlertIncidentStatus(incident.status) !== 'open') return undefined;
+          const openedAt = Date.parse(incident.openedAt);
+          if (!Number.isFinite(openedAt)) return undefined;
+          return Object.values(props.state.activeAlerts?.() ?? {}).find(
+            (alert) =>
+              alert?.id === incident.alertIdentifier && Date.parse(alert.startTime) === openedAt,
+          );
+        };
         const resourceDisplayName = () => {
           const current = resource();
           if (current) {
@@ -155,6 +176,10 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                         filteredEvents().length > 0
                           ? filteredEvents()[filteredEvents().length - 1]
                           : undefined;
+                      const livePresentation = () => {
+                        const alert = liveAlertFor(incident);
+                        return alert ? getMetricAlertPresentation(alert, now()) : null;
+                      };
                       const filteredLabel = () =>
                         filteredEvents().length !== events.length
                           ? `${filteredEvents().length}/${events.length}`
@@ -192,8 +217,24 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                               {INCIDENT_HISTORY_PARTIAL}
                             </p>
                           </Show>
-                          <Show when={incident.message}>
-                            <p class={getAlertIncidentTimelineOutputClass()}>{incident.message}</p>
+                          <Show
+                            when={livePresentation()}
+                            fallback={
+                              <Show when={incident.message}>
+                                <p class={getAlertIncidentTimelineOutputClass()}>
+                                  {incident.message}
+                                </p>
+                              </Show>
+                            }
+                          >
+                            {(live) => (
+                              <p
+                                class={getAlertIncidentTimelineOutputClass()}
+                                title={live().lastBreach}
+                              >
+                                {live().summary}. {live().detail}
+                              </p>
+                            )}
                           </Show>
                           <Show when={incident.acknowledged && incident.ackUser}>
                             <p class={getAlertIncidentTimelineOutputClass()}>

@@ -1137,7 +1137,7 @@ func appendVMwareAlarmsAndHealthIncidents(entityType, managedObjectID, overallSt
 			continue
 		}
 		nativeID := firstNonEmptyTrimmed(alarm.Alarm, alarm.Name, managedObjectID)
-		summary := vmwareAlarmIncidentSummary(entityType, managedObjectID, alarm)
+		summary := vmwareAlarmIncidentSummary(alarm)
 		startedAt := alarm.TriggeredAt
 		incidents = append(incidents, unifiedresources.ResourceIncident{
 			Provider:  "vmware",
@@ -1157,7 +1157,7 @@ func appendVMwareAlarmsAndHealthIncidents(entityType, managedObjectID, overallSt
 				Code:     "vmware_health_state",
 				Severity: severity,
 				Source:   string(unifiedresources.SourceVMware),
-				Summary:  vmwareOverallStatusSummary(entityType, overallStatus),
+				Summary:  vmwareOverallStatusSummary(overallStatus),
 			})
 		}
 	}
@@ -1175,44 +1175,26 @@ func vmwareRiskLevel(status string) (storagehealth.RiskLevel, bool) {
 	}
 }
 
-func vmwareAlarmIncidentSummary(entityType, managedObjectID string, alarm InventoryAlarm) string {
-	entityLabel := vmwareEntityLabel(entityType)
-	alarmName := firstNonEmptyTrimmed(alarm.Name, alarm.Alarm)
-	status := strings.ToLower(strings.TrimSpace(alarm.OverallStatus))
-	if alarmName == "" {
-		alarmName = "VMware alarm"
+// An incident summary is the alert message and the reason a row shows in
+// vSphere's Health column, beside the resource's name and a severity badge.
+// So it says only what vCenter flagged: the alarm's own name ("Network packet
+// loss above threshold"), not the managed object ID (network-302) or the
+// alarm colour, which the name and severity already carry.
+func vmwareAlarmIncidentSummary(alarm InventoryAlarm) string {
+	if alarmName := firstNonEmptyTrimmed(alarm.Name, alarm.Alarm); alarmName != "" {
+		return alarmName
 	}
-	if status == "" {
-		status = "active"
-	}
-	if ref := strings.TrimSpace(managedObjectID); ref != "" {
-		return fmt.Sprintf("%s %s has VMware alarm %s (%s)", entityLabel, ref, alarmName, status)
-	}
-	return fmt.Sprintf("%s has VMware alarm %s (%s)", entityLabel, alarmName, status)
+	return "vCenter alarm"
 }
 
-func vmwareOverallStatusSummary(entityType, overallStatus string) string {
-	entityLabel := vmwareEntityLabel(entityType)
+// Without a triggered alarm, vCenter's overall status colour is all there is:
+// vCenter admins know its yellow and red.
+func vmwareOverallStatusSummary(overallStatus string) string {
 	status := strings.ToLower(strings.TrimSpace(overallStatus))
 	if status == "" {
 		status = "degraded"
 	}
-	return fmt.Sprintf("%s has VMware overall status %s", entityLabel, status)
-}
-
-func vmwareEntityLabel(entityType string) string {
-	switch strings.ToLower(strings.TrimSpace(entityType)) {
-	case "host":
-		return "Host"
-	case "vm":
-		return "VM"
-	case "datastore":
-		return "Datastore"
-	case "network":
-		return "Network"
-	default:
-		return "Resource"
-	}
+	return "vCenter health is " + status
 }
 
 func vmwareAlarmSummary(alarms []InventoryAlarm) string {

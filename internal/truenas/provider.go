@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 const (
@@ -394,39 +396,29 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 		return nil, fmt.Errorf("truenas provider has no cached snapshot")
 	}
 
-	identifiers := make([]string, 0, len(snapshot.Disks))
-	metricIDsByIdentifier := make(map[string]string, len(snapshot.Disks)*3)
-	for _, disk := range snapshot.Disks {
-		metricID := trueNASDiskMetricResourceID(disk)
-		if metricID == "" {
-			continue
-		}
-		if name := strings.TrimSpace(disk.Name); name != "" {
-			identifiers = append(identifiers, name)
-		}
-		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
-			if _, exists := metricIDsByIdentifier[key]; !exists {
-				metricIDsByIdentifier[key] = metricID
-			}
-		}
-	}
-	identifiers = dedupeStrings(identifiers)
+	diskScope := systemSourceID(p.connectionID, snapshot.System.Hostname)
+	identifiers, metricIDsByIdentifier := trueNASDiskHistoryIdentities(diskScope, snapshot.Disks)
 	if len(identifiers) == 0 {
 		return nil, nil
 	}
 
 	nativeHistory, err := historyFetcher.DiskTemperatureHistory(ctx, identifiers, duration)
-	if err != nil {
+	if len(nativeHistory) == 0 {
 		return nil, err
 	}
-	if len(nativeHistory) == 0 {
-		return nil, nil
+	// Inventory may change while the RPC is in flight. Never attach an old
+	// disk's series to a replacement occupying the same native device name.
+	currentSnapshot := p.Snapshot()
+	if currentSnapshot == nil {
+		return nil, err
 	}
+	currentDiskScope := systemSourceID(p.connectionID, currentSnapshot.System.Hostname)
+	_, currentMetricIDs := trueNASDiskHistoryIdentities(currentDiskScope, currentSnapshot.Disks)
 
 	historyByMetricID := make(map[string][]TimeSeriesPoint, len(nativeHistory))
 	for identifier, points := range nativeHistory {
 		metricID := metricIDsByIdentifier[strings.TrimSpace(identifier)]
-		if metricID == "" || len(points) == 0 {
+		if metricID == "" || currentMetricIDs[strings.TrimSpace(identifier)] != metricID || len(points) == 0 {
 			continue
 		}
 		copied := make([]TimeSeriesPoint, len(points))
@@ -434,9 +426,35 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 		historyByMetricID[metricID] = copied
 	}
 	if len(historyByMetricID) == 0 {
-		return nil, nil
+		return nil, err
 	}
-	return historyByMetricID, nil
+	return historyByMetricID, err
+}
+
+func trueNASDiskHistoryIdentities(diskScope string, disks []Disk) ([]string, map[string]string) {
+	identifiers := make([]string, 0, len(disks))
+	metricIDs := make(map[string]string, len(disks)*3)
+	counts := make(map[string]int, len(disks))
+	for _, disk := range disks {
+		counts[trueNASDiskMetricResourceID(diskScope, disk)]++
+	}
+	for _, disk := range disks {
+		metricID := trueNASDiskMetricResourceID(diskScope, disk)
+		if metricID == "" || counts[metricID] != 1 {
+			continue
+		}
+		if name := strings.TrimSpace(disk.Name); name != "" {
+			identifiers = append(identifiers, name)
+		}
+		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
+			if existing, exists := metricIDs[key]; exists && existing != metricID {
+				metricIDs[key] = "" // ambiguous aliases stay unusable
+			} else if !exists {
+				metricIDs[key] = metricID
+			}
+		}
+	}
+	return dedupeStrings(identifiers), metricIDs
 }
 
 // Close releases resources held by the active fetcher, if supported.
@@ -590,6 +608,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 		risk := unifiedresources.StorageRiskFromAssessment(assessment)
 		incidents := incidentAssignments.Pools[strings.TrimSpace(pool.Name)]
 		zfsPool := zfsPoolFromPool(pool)
+		poolStatus := statusFromPool(pool)
 		poolSourceID := scopedPoolSourceID(systemSourceID, pool.Name)
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               poolSourceID,
@@ -598,14 +617,19 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      pool.Name,
-				Status:    unifiedresources.IncidentsStatus(statusFromPool(pool), incidents),
+				Status:    unifiedresources.IncidentsStatus(poolStatus, incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
-					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
+					Disk: poolDiskMetric(pool),
 				},
+				// TrueNAS has no disabled state for an imported pool, so
+				// Enabled is always true; Active follows whether the pool is
+				// usable now.
 				Storage: &unifiedresources.StorageMeta{
 					Type:              "zfs-pool",
+					Enabled:           true,
+					Active:            poolStatus != unifiedresources.StatusOffline,
 					IsZFS:             true,
 					Platform:          "truenas",
 					Topology:          "pool",
@@ -654,6 +678,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				},
 				Storage: &unifiedresources.StorageMeta{
 					Type:       "zfs-dataset",
+					Enabled:    true,
+					Active:     dataset.Mounted && !dataset.Locked,
 					IsZFS:      true,
 					Platform:   "truenas",
 					Topology:   "dataset",
@@ -802,18 +828,22 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 		diskIdentity := unifiedresources.ResourceIdentity{
 			Hostnames: []string{snapshot.System.Hostname},
 		}
-		if disk.Serial != "" {
+		// A placeholder serial ("UNKNOWN", a QEMU default such as
+		// drive-scsi1) is shared by unrelated disks, so it must not key the
+		// canonical disk or disks on different appliances would merge.
+		hasHardwareSerial := diskinventory.IsUsableHardwareID(disk.Serial)
+		if hasHardwareSerial {
 			diskIdentity.MachineID = disk.Serial
 		}
 		parentSourceID := systemSourceID
 		if pool := strings.TrimSpace(disk.Pool); pool != "" {
 			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
 		}
-		// Disks with a serial mint identity-keyed canonical IDs that do not
-		// depend on the source ID, so only serial-less disks re-key when the
+		// Disks with a usable serial mint identity-keyed canonical IDs that
+		// do not depend on the source ID, so only the rest re-key when the
 		// system scope moves to the connection.
 		var diskSupersededIDs []string
-		if disk.Serial == "" {
+		if !hasHardwareSerial {
 			diskSupersededIDs = supersededChildIDs(unifiedresources.ResourceTypePhysicalDisk, scopedDiskSourceID(legacySystemSourceID, disk.Name))
 		}
 		records = append(records, unifiedresources.IngestRecord{
@@ -1953,10 +1983,9 @@ func zfsPoolRecommendation(assessment storagehealth.Assessment) string {
 
 func assessDisk(disk Disk) storagehealth.Assessment {
 	sampleAssessment := storagehealth.AssessSample(storagehealth.Sample{
-		Model:       strings.TrimSpace(disk.Model),
-		Health:      healthForAssessment(disk),
-		Temperature: disk.Temperature,
-		Wearout:     -1,
+		Model:   strings.TrimSpace(disk.Model),
+		Health:  healthForAssessment(disk),
+		Wearout: -1,
 	})
 
 	stateUpper := normalizedDiskStatus(disk)
@@ -2075,10 +2104,27 @@ func aggregatePoolUsage(pools []Pool) (int64, int64) {
 	var total int64
 	var used int64
 	for _, pool := range pools {
+		// A known boot pool or one available data pool is not the complete
+		// host's storage usage. Keep per-pool readings, but omit the host
+		// aggregate if any pool is unknown or the byte sum would overflow.
+		if !poolUsageKnown(pool) || total > math.MaxInt64-pool.TotalBytes {
+			return 0, 0
+		}
 		total += pool.TotalBytes
 		used += pool.UsedBytes
 	}
 	return total, used
+}
+
+func poolUsageKnown(pool Pool) bool {
+	return pool.TotalBytes > 0 && pool.UsedBytes >= 0 && pool.UsedBytes <= pool.TotalBytes
+}
+
+func poolDiskMetric(pool Pool) *unifiedresources.MetricValue {
+	if !poolUsageKnown(pool) {
+		return nil
+	}
+	return diskMetric(pool.TotalBytes, pool.UsedBytes)
 }
 
 // systemSourceID keys an API-added TrueNAS system by the configured
@@ -2967,14 +3013,20 @@ func trueNASSystemMetricResourceID(connectionID string, system SystemInfo) strin
 }
 
 func trueNASDiskHistoryLookupKeys(disk Disk) []string {
-	return dedupeStrings([]string{
-		strings.TrimSpace(disk.Name),
-		strings.TrimSpace(disk.ID),
-		strings.TrimSpace(disk.Serial),
-	})
+	keys := []string{strings.TrimSpace(disk.Name), strings.TrimSpace(disk.ID)}
+	// A placeholder serial names no one disk, so it must not route another
+	// disk's native history to this one.
+	if diskinventory.IsUsableHardwareID(disk.Serial) {
+		keys = append(keys, strings.TrimSpace(disk.Serial))
+	}
+	return dedupeStrings(keys)
 }
 
-func trueNASDiskMetricResourceID(disk Disk) string {
+// trueNASDiskMetricResourceID is the key native disk history is filed under.
+// It must equal the metrics target the registry resolves for the disk, which
+// falls back to the disk's source ID when the serial is missing or a
+// placeholder, or the chart looks up a key nothing was filed under.
+func trueNASDiskMetricResourceID(systemSourceID string, disk Disk) string {
 	devPath := ""
 	if name := strings.TrimSpace(disk.Name); name != "" {
 		devPath = "/dev/" + name
@@ -2985,11 +3037,7 @@ func trueNASDiskMetricResourceID(disk Disk) string {
 		DiskType:  strings.TrimSpace(disk.Transport),
 		SizeBytes: disk.SizeBytes,
 	}
-	fallback := strings.TrimSpace(disk.ID)
-	if fallback == "" {
-		fallback = strings.TrimSpace(disk.Name)
-	}
-	return unifiedresources.PhysicalDiskMetaMetricID(meta, fallback)
+	return unifiedresources.PhysicalDiskMetaMetricID(meta, scopedDiskSourceID(systemSourceID, disk.Name))
 }
 
 func parentPoolFromDataset(datasetName string) string {

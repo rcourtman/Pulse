@@ -1,6 +1,7 @@
 import { Accessor, createMemo, createSignal } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { StorageRecord } from '@/features/storageBackups/models';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import {
   buildStoragePoolDetailConfigRows,
   buildStoragePoolDetailTopologyRows,
@@ -13,6 +14,7 @@ import type { Resource } from '@/types/resource';
 type UseStoragePoolDetailModelOptions = {
   record: Accessor<StorageRecord>;
   physicalDisks: Accessor<Resource[]>;
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
 };
 
 export const useStoragePoolDetailModel = (options: UseStoragePoolDetailModelOptions) => {
@@ -22,7 +24,11 @@ export const useStoragePoolDetailModel = (options: UseStoragePoolDetailModelOpti
   const configRows = createMemo(() => buildStoragePoolDetailConfigRows(options.record()));
   const zfsSummary = createMemo(() => buildStoragePoolDetailZfsSummary(options.record()));
   const linkedDisks = createMemo(() =>
-    getStoragePoolLinkedDisks(options.record(), options.physicalDisks()),
+    getStoragePoolLinkedDisks(
+      options.record(),
+      options.physicalDisks(),
+      options.getDiskAlertResourceIds,
+    ),
   );
   const topologyRows = createMemo(() =>
     buildStoragePoolDetailTopologyRows(options.record(), linkedDisks()),

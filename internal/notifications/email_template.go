@@ -66,15 +66,28 @@ func patrolFindingCategory(alert *alerts.Alert) string {
 	return titleCase(strings.TrimSpace(category))
 }
 
-// EmailTemplate generates a professional HTML email template for alerts
-func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody, textBody string) {
+// EmailTemplate generates a professional HTML email template for alerts.
+// With a public URL, each alert links to its page in Pulse.
+func EmailTemplate(alertList []*alerts.Alert, isSingle bool, publicURL string) (subject, htmlBody, textBody string) {
 	if isSingle && len(alertList) == 1 {
-		return singleAlertTemplate(alertList[0])
+		return singleAlertTemplate(alertList[0], publicURL)
 	}
-	return groupedAlertTemplate(alertList)
+	return groupedAlertTemplate(alertList, publicURL)
 }
 
-func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody string) {
+// emailFooterLinks is the closing line of an alert email: a link into Pulse
+// when a public URL is configured, the old pointer to the dashboard without.
+func emailFooterLinks(link, label string) (footerHTML, footerText string) {
+	if link == "" {
+		return "<p>View alerts and configure settings in your Pulse dashboard</p>",
+			"View alerts and configure settings in your Pulse dashboard."
+	}
+	return fmt.Sprintf(`<p><a href="%s">%s</a></p>`, html.EscapeString(link), html.EscapeString(label)),
+		label + ": " + link
+}
+
+func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBody, textBody string) {
+	footerHTML, footerText := emailFooterLinks(alertLinkURL(publicURL, alert), "View this alert in Pulse")
 	level := alerts.NormalizeAlertLevel(alert.Level)
 	levelColor := "#3b82f6"
 	levelBg := "#eff6ff"
@@ -90,7 +103,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	alertType := alertTypeDisplay(alert.Type)
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
-		titleCase(string(level)), alertType, alert.ResourceName)
+		titleCase(string(level)), boundEmailSubjectLabel(emailSubjectLabel(alertType)), emailSubjectIdentities([]*alerts.Alert{alert}))
 
 	escapedLevel := html.EscapeString(string(level))
 	escapedResourceName := html.EscapeString(alert.ResourceName)
@@ -200,7 +213,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
         </div>
         <div class="footer">
             <p>This is an automated notification from Pulse Monitoring</p>
-            <p>View alerts and configure settings in your Pulse dashboard</p>
+            %s
         </div>
     </div>
 </body>
@@ -216,6 +229,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		escapedInstance,
 		escapedStarted,
 		escapedDuration,
+		footerHTML,
 	)
 
 	if isPatrolFindingAlert(alert) {
@@ -234,7 +248,7 @@ Details:
 - Duration: %s
 
 This is an automated notification from Pulse Monitoring.
-View alerts and configure settings in your Pulse dashboard.`,
+%s`,
 			strings.ToUpper(string(level)),
 			alert.ResourceName,
 			alert.ResourceName,
@@ -245,6 +259,7 @@ View alerts and configure settings in your Pulse dashboard.`,
 			alert.Instance,
 			formatAlertStartTime(alert.StartTime),
 			formatDuration(time.Since(alert.StartTime)),
+			footerText,
 		)
 		return subject, htmlBody, textBody
 	}
@@ -265,7 +280,7 @@ Details:
 - Duration: %s
 
 This is an automated notification from Pulse Monitoring.
-View alerts and configure settings in your Pulse dashboard.`,
+%s`,
 		strings.ToUpper(string(level)),
 		alert.ResourceName,
 		alert.ResourceName,
@@ -278,12 +293,14 @@ View alerts and configure settings in your Pulse dashboard.`,
 		alert.Instance,
 		formatAlertStartTime(alert.StartTime),
 		formatDuration(time.Since(alert.StartTime)),
+		footerText,
 	)
 
 	return subject, htmlBody, textBody
 }
 
-func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBody string) {
+func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject, htmlBody, textBody string) {
+	footerHTML, footerText := emailFooterLinks(alertsPageURL(publicURL, alertList, false), "Open these alerts in Pulse")
 	critical := 0
 	warning := 0
 	info := 0
@@ -316,6 +333,9 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		severityParts = append(severityParts, fmt.Sprintf("%d Info", info))
 	}
 	subject = fmt.Sprintf("[Pulse Alert] %s alert%s", strings.Join(severityParts, ", "), pluralize(len(alertList)))
+	if identities := emailSubjectIdentities(alertList); identities != "" {
+		subject += ": " + identities
+	}
 
 	// Build alert rows
 	var alertRows strings.Builder
@@ -330,6 +350,10 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		}
 
 		escapedResourceName := html.EscapeString(alert.ResourceName)
+		nameHTML := escapedResourceName
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			nameHTML = fmt.Sprintf(`<a href="%s" style="color: #1a1a1a;">%s</a>`, html.EscapeString(link), escapedResourceName)
+		}
 		escapedType := html.EscapeString(alert.Type)
 		escapedNode := html.EscapeString(alertNodeDisplay(alert))
 		escapedLevel := html.EscapeString(string(level))
@@ -371,7 +395,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                     </td>
                 </tr>`,
 			levelColor,
-			escapedResourceName,
+			nameHTML,
 			escapedDetail,
 			levelColor, escapedLevel,
 			value,
@@ -474,11 +498,11 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
         </div>
         <div class="footer">
             <p>This is an automated notification from Pulse Monitoring</p>
-            <p>View alerts and configure settings in your Pulse dashboard</p>
+            %s
         </div>
     </div>
 </body>
-</html>`, valueHeading, alertRows.String())
+</html>`, valueHeading, alertRows.String(), footerHTML)
 
 	// Plain text version
 	var textBuilder strings.Builder
@@ -505,11 +529,14 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		}
 		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alertNodeDisplay(alert), formatDuration(time.Since(alert.StartTime))))
 		textBuilder.WriteString(fmt.Sprintf("   Message: %s\n", alert.Message))
+		if link := alertLinkURL(publicURL, alert); link != "" {
+			textBuilder.WriteString("   View in Pulse: " + link + "\n")
+		}
 	}
 
 	textBuilder.WriteString("\n─────────────────────────────────────────────────────────────\n")
 	textBuilder.WriteString("This is an automated notification from Pulse Monitoring.\n")
-	textBuilder.WriteString("Configure alert settings in the Pulse dashboard.")
+	textBuilder.WriteString(footerText)
 
 	textBody = textBuilder.String()
 	return subject, htmlBody, textBody

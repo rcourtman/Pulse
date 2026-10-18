@@ -59,7 +59,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
       expect([...guests].sort(desc).map((g) => g.id)).toEqual(['high', 'low']);
     });
 
-    it('treats null memory as 0 via the `a.memory ? ... : 0` ternary false arm', () => {
+    it('keeps missing memory after current memory', () => {
       const guests = [
         makeGuest(1, {
           id: 'null-mem',
@@ -69,34 +69,74 @@ describe('workloadSelectors (branch coverage 2)', () => {
         makeGuest(2, {
           id: 'big-mem',
           name: 'big-mem',
-          memory: { total: 100, used: 80, free: 20, usage: 0.8 },
+          memory: {
+            total: 100,
+            used: 80,
+            free: 20,
+            usage: 80,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
       const asc = createWorkloadSortComparator('memory', 'asc')!;
-      // null-mem -> 0 < 0.8
-      expect([...guests].sort(asc).map((g) => g.id)).toEqual(['null-mem', 'big-mem']);
+      // Missing is not a measured zero.
+      expect([...guests].sort(asc).map((g) => g.id)).toEqual(['big-mem', 'null-mem']);
     });
 
-    it('coerces memory.usage of 0 to 0 via the `|| 0` fallback and tiebreaks equals', () => {
+    it('preserves current zero and the existing equal-value tiebreak', () => {
       const guests = [
         makeGuest(1, {
           id: 'b',
           name: 'beta',
-          memory: { total: 100, used: 0, free: 100, usage: 0 },
+          memory: {
+            total: 100,
+            used: 0,
+            free: 100,
+            usage: 0,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'a',
           name: 'alpha',
-          memory: { total: 100, used: 0, free: 100, usage: 0 },
+          memory: {
+            total: 100,
+            used: 0,
+            free: 100,
+            usage: 0,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(3, {
           id: 'c',
           name: 'gamma',
-          memory: { total: 100, used: 50, free: 50, usage: 0.5 },
+          memory: {
+            total: 100,
+            used: 50,
+            free: 50,
+            usage: 50,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
       const asc = createWorkloadSortComparator('memory', 'asc')!;
-      // a,b both 0 -> equal numeric -> tiebreak (alpha<beta); c=0.5 last
+      // Measured zero retains the existing name tiebreak.
       expect([...guests].sort(asc).map((g) => g.id)).toEqual(['a', 'b', 'c']);
     });
 

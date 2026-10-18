@@ -264,7 +264,7 @@ func (r *restrictedRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 }
 
 // NewRestrictedOutboundHTTPClient returns an HTTP client that validates redirects and pins direct outbound dials
-// to the permitted resolved IPs for the requested host, trying each in resolution order until one connects.
+// to the permitted resolved IPs for the requested host with bounded, staggered fallback.
 func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutboundHTTPOptions) *http.Client {
 	transport := cloneRestrictedTransport(opts)
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -278,25 +278,7 @@ func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutbo
 			return nil, err
 		}
 
-		// Try every permitted IP from the validating resolution, not just the
-		// first: "localhost" commonly resolves to ::1 ahead of 127.0.0.1, and a
-		// service bound only to one loopback family (e.g. Ollama on 127.0.0.1)
-		// would otherwise be unreachable even though curl and browsers connect
-		// fine. Each candidate was validated above, so rebinding protection is
-		// unchanged.
-		dialer := net.Dialer{Timeout: 10 * time.Second}
-		var dialErr error
-		for _, permittedIP := range permittedIPs {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
-			if err == nil {
-				return conn, nil
-			}
-			dialErr = err
-			if ctx.Err() != nil {
-				break
-			}
-		}
-		return nil, dialErr
+		return DialPinnedIPs(ctx, network, port, permittedIPs, 10*time.Second)
 	}
 
 	client := &http.Client{

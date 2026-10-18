@@ -13,16 +13,16 @@ import (
 func TestMergeHostAgentSMARTIntoDisks_EmptyInputs(t *testing.T) {
 	// All combinations of empty inputs should return disks unchanged
 	disks := []models.PhysicalDisk{{ID: "d1"}}
-	if got := mergeHostAgentSMARTIntoDisks(nil, nil, nil); got != nil {
+	if got := mergeHostAgentSMARTIntoDisks(nil, nil, nil, nil); got != nil {
 		t.Error("nil disks should return nil")
 	}
-	if got := mergeHostAgentSMARTIntoDisks(disks, nil, nil); len(got) != 1 {
+	if got := mergeHostAgentSMARTIntoDisks(disks, nil, nil, nil); len(got) != 1 {
 		t.Error("nil nodes/hosts should return disks unchanged")
 	}
-	if got := mergeHostAgentSMARTIntoDisks(disks, []models.Node{}, nil); len(got) != 1 {
+	if got := mergeHostAgentSMARTIntoDisks(disks, []models.Node{}, nil, nil); len(got) != 1 {
 		t.Error("empty nodes should return disks unchanged")
 	}
-	if got := mergeHostAgentSMARTIntoDisks(disks, []models.Node{{Name: "n1"}}, nil); len(got) != 1 {
+	if got := mergeHostAgentSMARTIntoDisks(disks, []models.Node{{Name: "n1"}}, nil, nil); len(got) != 1 {
 		t.Error("nil hosts should return disks unchanged")
 	}
 }
@@ -44,7 +44,7 @@ func TestMergeHostAgentSMARTIntoDisks_MatchByWWN(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 42 {
 		t.Errorf("expected temp 42 via WWN match, got %d", result[0].Temperature)
 	}
@@ -67,7 +67,7 @@ func TestMergeHostAgentSMARTIntoDisks_MatchBySerial(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 38 {
 		t.Errorf("expected temp 38 via serial match (case-insensitive), got %d", result[0].Temperature)
 	}
@@ -90,7 +90,7 @@ func TestMergeHostAgentSMARTIntoDisks_MatchByDevPath(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 35 {
 		t.Errorf("expected temp 35 via device path match (strip /dev/), got %d", result[0].Temperature)
 	}
@@ -113,7 +113,7 @@ func TestMergeHostAgentSMARTIntoDisks_SkipsStandby(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 0 {
 		t.Error("standby disk should not have its temperature merged")
 	}
@@ -139,7 +139,7 @@ func TestMergeHostAgentSMARTIntoDisks_MergesSMARTAttributes(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].SmartAttributes == nil {
 		t.Fatal("SMART attributes should be merged")
 	}
@@ -174,7 +174,7 @@ func TestMergeHostAgentSMARTIntoDisks_DerivesWearoutFromSMARTAttributes(t *testi
 		},
 	}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Wearout != 94 {
 		t.Fatalf("expected wearout derived from PercentageUsed, got %d", result[0].Wearout)
 	}
@@ -208,7 +208,7 @@ func TestMergeHostAgentSMARTIntoDisks_SMARTFailureAndWearoutOverrideCoarsePVEVal
 		},
 	}}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Health != "FAILED" {
 		t.Fatalf("SMART failure was suppressed by PVE health: %+v", result[0])
 	}
@@ -227,7 +227,7 @@ func TestMergeHostAgentSMARTIntoDisks_DoesNotReplaceFailureWithPassed(t *testing
 		},
 	}}
 
-	if got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)[0].Health; got != "FAILED" {
+	if got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)[0].Health; got != "FAILED" {
 		t.Fatalf("PASSED replaced an existing failure: %q", got)
 	}
 }
@@ -266,7 +266,7 @@ func TestMergeHostAgentSMARTIntoDisks_DuplicateIdentityRequiresUniqueTopology(t 
 		},
 	}}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 47 || result[0].Health != "PASSED" {
 		t.Fatalf("topology-specific SMART evidence was not selected: %+v", result[0])
 	}
@@ -274,7 +274,7 @@ func TestMergeHostAgentSMARTIntoDisks_DuplicateIdentityRequiresUniqueTopology(t 
 	disks[0].Controller = ""
 	disks[0].Target = ""
 	disks[0].DevPath = "/dev/unknown"
-	result = mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result = mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 0 || result[0].Health != "UNKNOWN" {
 		t.Fatalf("ambiguous SMART identity was guessed: %+v", result[0])
 	}
@@ -298,7 +298,7 @@ func TestMergeHostAgentSMARTIntoDisks_FillsMissingHealthFromHostSMART(t *testing
 		},
 	}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Health != "FAILED" {
 		t.Fatalf("expected host SMART health to fill unknown disk health, got %q", result[0].Health)
 	}
@@ -321,7 +321,7 @@ func TestMergeHostAgentSMARTIntoDisks_NoAgentLink(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 0 {
 		t.Error("unlinked nodes should not get host agent temperatures")
 	}
@@ -344,7 +344,7 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingTemp(t *testing.T) {
 			},
 		},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Temperature != 50 {
 		t.Errorf("existing temperature should be preserved, got %d", result[0].Temperature)
 	}
@@ -360,7 +360,7 @@ func TestMergeHostAgentSMARTIntoDisks_OriginalUnchanged(t *testing.T) {
 			SMART: []models.HostDiskSMART{{Serial: "SER1", Temperature: 42}},
 		}},
 	}
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if disks[0].Temperature != 0 {
 		t.Error("original disk slice should not be mutated")
 	}

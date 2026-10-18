@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   For,
   Show,
@@ -15,12 +16,12 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
+import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS } from '@/components/shared/summaryInteractionA11y';
@@ -216,6 +217,7 @@ export const ProxmoxNodesTable: Component<{
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
+  const now = useRelativeTimeNow();
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => {
     const measuredWidth = props.layoutWidth?.();
@@ -223,7 +225,17 @@ export const ProxmoxNodesTable: Component<{
       ? getProxmoxHostTableLayoutModeForContainer(measuredWidth)
       : getWorkloadTableLayoutMode(breakpoint.width());
   });
-  const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
+  const singleClusterName = createMemo(() => {
+    const labels = new Set(props.nodes.map((node) => getResourceClusterLabel(node)));
+    if (labels.size !== 1) return null;
+    const [label] = [...labels];
+    return label && label !== '—' && props.topology?.standalone === 0 ? label : null;
+  });
+  const visibleColumns = createMemo(() =>
+    getProxmoxHostVisibleColumnsForLayout(layoutMode(), {
+      singleCluster: singleClusterName() !== null,
+    }),
+  );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
@@ -247,12 +259,13 @@ export const ProxmoxNodesTable: Component<{
     nodePreview.toggle();
   };
 
-  // Use the same canonical history reader the workloads table uses; cache
-  // keys collide so the two readers dedupe their fetches.
+  // Use the same canonical history reader the workloads table uses. This
+  // table draws node rows only, so it polls the infrastructure summary and
+  // leaves the guest history to the workloads table below.
   const metricHistory = useWorkloadTableMetricHistory({
     enabled: isSparklineMode,
     range: () => props.metricHistoryRange?.() ?? '1h',
-    selectedNode: () => '',
+    series: 'nodes',
   });
 
   return (
@@ -295,25 +308,41 @@ export const ProxmoxNodesTable: Component<{
           actions={
             <span class="inline-flex items-center gap-2">
               <Show
-                when={
-                  inventoryCountsVisible() &&
-                  props.topology &&
-                  !props.search?.()?.trim() &&
-                  (props.topology.clusters > 0 || props.topology.standalone > 0)
+                when={singleClusterName()}
+                fallback={
+                  <Show
+                    when={
+                      inventoryCountsVisible() &&
+                      props.topology &&
+                      !props.search?.()?.trim() &&
+                      (props.topology.clusters > 0 || props.topology.standalone > 0)
+                    }
+                  >
+                    <span class="text-[10px] font-medium text-muted">
+                      <Show when={props.topology!.clusters > 0}>
+                        {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
+                        {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
+                      </Show>
+                      <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
+                        {' / '}
+                      </Show>
+                      <Show when={props.topology!.standalone > 0}>
+                        {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
+                      </Show>
+                    </span>
+                  </Show>
                 }
               >
-                <span class="text-[10px] font-medium text-muted">
-                  <Show when={props.topology!.clusters > 0}>
-                    {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
-                    {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
-                  </Show>
-                  <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
-                    {' / '}
-                  </Show>
-                  <Show when={props.topology!.standalone > 0}>
-                    {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
-                  </Show>
-                </span>
+                {/* The hidden Cluster column's value lives here, so it stays
+                    visible while searching and when inventory counts are off. */}
+                {(name) => (
+                  <span
+                    class="text-[10px] font-medium text-muted"
+                    data-testid="proxmox-single-cluster-label"
+                  >
+                    Cluster {name()}
+                  </span>
+                )}
               </Show>
             </span>
           }
@@ -425,6 +454,26 @@ export const ProxmoxNodesTable: Component<{
                 const alertResourceIds = () => hostOverrideIdCandidates(node);
                 const temperatureThresholds = () =>
                   alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
+                // The node's own temperature alert holds after the reading dips
+                // under its trigger; the cell keeps the alert's tone and says why
+                // instead of reading green beside a warning row.
+                const temperatureAlert = createMemo(() =>
+                  getAlertsForResource(alertResourceIds(), activeAlerts, alertsEnabled()).find(
+                    (alert) => alert.type === 'temperature',
+                  ),
+                );
+                const temperatureAlertSeverity = () => {
+                  const alert = temperatureAlert();
+                  if (!alert || alert.acknowledged) return null;
+                  return alert.level === 'critical' ? 'critical' : 'warning';
+                };
+                const temperatureAlertTitle = () => {
+                  const alert = temperatureAlert();
+                  const presentation = alert ? getMetricAlertPresentation(alert, now()) : null;
+                  return presentation
+                    ? `${presentation.summary}. ${presentation.detail}`
+                    : alert?.message;
+                };
                 const cpuThresholds = () =>
                   alertsActivation.getMetricThresholds('node', 'cpu', alertResourceIds());
                 const memoryThresholds = () =>
@@ -703,6 +752,8 @@ export const ProxmoxNodesTable: Component<{
                             <TemperatureGauge
                               value={temperature() as number}
                               thresholds={temperatureThresholds()}
+                              alertSeverity={temperatureAlertSeverity()}
+                              title={temperatureAlertTitle()}
                             />
                           </Show>
                         </TableCell>
@@ -772,14 +823,15 @@ export const ProxmoxNodesTable: Component<{
                               alertsEnabled(),
                               node.name,
                             )}
+                            // Without the node-name match: the node's own alerts,
+                            // not its guests', drive its trend cards.
+                            ownAlerts={getAlertsForResource(
+                              alertResourceIds(),
+                              activeAlerts,
+                              alertsEnabled(),
+                            )}
                             disks={normalizeDiskArray(node.agent?.disks)}
                             temperatureThresholds={temperatureThresholds()}
-                            discoveryTarget={(() => {
-                              const config = toDiscoveryConfig(node);
-                              return config
-                                ? { agentId: config.agentId, hostname: config.hostname }
-                                : undefined;
-                            })()}
                           />
                         </InlineDetailTableRow>
                       )}

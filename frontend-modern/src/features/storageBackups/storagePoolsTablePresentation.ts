@@ -13,6 +13,11 @@ export type StoragePoolsTableRowModel = {
   expanded: boolean;
   parentNodeOnline: boolean;
   rowClass: string;
+  // Reason the row is highlighted; shown in the State cell so the colour is
+  // never unexplained. Null when the row carries no open alert.
+  alertHeadline: string | null;
+  alertHeadlineCompact: string | null;
+  alertHeadlineClass: string;
   alertDataAttrs: {
     'data-row-id': string;
     'data-alert-state': string;
@@ -45,8 +50,9 @@ export const buildStoragePoolsTableRowModel = (
   const nodeLabel = getStorageRecordNodeLabel(record).trim().toLowerCase();
   const nodeStatus = nodeLabel ? options.nodeOnlineByLabel.get(nodeLabel) : undefined;
   const parentNodeOnline = nodeStatus === undefined ? true : nodeStatus;
+  const alertState = options.getRecordAlertState(record.id);
   const rowAlertPresentation = getStorageRowAlertPresentation({
-    alertState: options.getRecordAlertState(record.id),
+    alertState,
     parentNodeOnline,
     isExpanded: expanded,
     isResourceHighlighted: options.highlightedRecordId === record.id,
@@ -56,6 +62,18 @@ export const buildStoragePoolsTableRowModel = (
     expanded,
     parentNodeOnline,
     rowClass: rowAlertPresentation.rowClass,
+    alertHeadline:
+      rowAlertPresentation.dataAlertState === 'unacknowledged'
+        ? (alertState.headline ?? null)
+        : null,
+    alertHeadlineCompact:
+      rowAlertPresentation.dataAlertState === 'unacknowledged'
+        ? (alertState.headlineCompact ?? alertState.headline ?? null)
+        : null,
+    alertHeadlineClass:
+      alertState.severity === 'critical'
+        ? 'text-red-700 dark:text-red-300 font-medium'
+        : 'text-amber-700 dark:text-amber-300 font-medium',
     alertDataAttrs: {
       'data-row-id': record.id,
       'data-alert-state': rowAlertPresentation.dataAlertState,

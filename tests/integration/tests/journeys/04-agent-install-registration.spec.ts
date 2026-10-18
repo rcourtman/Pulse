@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  ensureAuthenticated,
+  ensureSessionAuthenticated,
   apiRequest,
   getMockMode,
   setMockMode,
@@ -20,8 +20,10 @@ import {
  * This satisfies L12 score-4 criteria: "Agent install → registration →
  * host visible in UI/API."
  *
- * The test simulates agent registration via the report API. Session-based
- * (browser) auth bypasses the scope check, so no API token is needed.
+ * The test simulates agent registration via the report API using the browser's
+ * cookie session and CSRF token. Do not bind the fixture's primary API token to
+ * this host: deletion revokes a host's dedicated token, so it cannot also be
+ * the credential used to verify removal. Token scope/revocation has its own tests.
  * For full agent binary install tests in LXC sandbox, set
  * PULSE_E2E_AGENT_BINARY to skip simulation and use a real agent.
  */
@@ -207,7 +209,7 @@ test.describe("Journey: Agent Install → Registration → Host Visible", () => 
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
-      await ensureAuthenticated(page);
+      await ensureSessionAuthenticated(page);
       if ((await getMockMode(page)).enabled) {
         await setMockMode(page, false);
       }
@@ -229,7 +231,7 @@ test.describe("Journey: Agent Install → Registration → Host Visible", () => 
     );
     test.setTimeout(120_000);
 
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
 
     try {
       const report = buildHostReport();
@@ -351,7 +353,10 @@ test.describe("Journey: Agent Install → Registration → Host Visible", () => 
       ).toBeTruthy();
 
       const stateRes = await apiRequest(page, "/api/state");
-      expect(stateRes.ok()).toBeTruthy();
+      expect(
+        stateRes.ok(),
+        `Post-deletion state request failed: ${stateRes.status()}`,
+      ).toBeTruthy();
       const state = (await stateRes.json()) as Record<string, unknown>;
       expect(
         findRegisteredAgentResource(state),

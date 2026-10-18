@@ -3,7 +3,9 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -94,21 +96,32 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 	result.ExecutionPhase = agentexec.DockerContainerPhaseMutate
 	result.MutationStarted = true
 	verb := strings.TrimSuffix(req.Operation, "_container")
-	if err := m.mutate(ctx, req.Runtime, verb, req.ContainerID); err != nil {
-		result.Error = "container lifecycle mutation did not complete"
-		return result
+	mutationErr := m.mutate(ctx, req.Runtime, verb, req.ContainerID)
+	if mutationErr != nil {
+		// A lost acknowledgement does not prove that the daemon did nothing.
+		// Reconcile using reads under the original deadline, without retrying
+		// the mutation or claiming its execution was acknowledged.
+		result.Error = dockerLifecycleMutationError(mutationErr)
+		if ctx.Err() != nil {
+			return result
+		}
+	} else {
+		result.MutationCompleted = true
 	}
-	result.MutationCompleted = true
 	result.ExecutionPhase = agentexec.DockerContainerPhaseVerify
 	after, err := m.inspect(ctx, req.Runtime, req.ContainerID)
 	result.After = after
 	if err != nil {
-		result.Error = "container postcondition inspect unavailable"
+		if mutationErr == nil {
+			result.Error = "container postcondition inspect unavailable"
+		}
 		return result
 	}
 	result.ReadbackRan = true
 	if dockerLifecyclePostcondition(req, before, after) {
-		result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
+		if result.MutationCompleted {
+			result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
+		}
 		return result
 	}
 	if dockerLifecycleHealthPending(req, before, after) {
@@ -120,18 +133,36 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 			}
 			after, err = m.inspect(verifyCtx, req.Runtime, req.ContainerID)
 			if err != nil {
-				result.Error = "container postcondition inspect unavailable"
+				if mutationErr == nil {
+					result.Error = "container postcondition inspect unavailable"
+				}
 				return result
 			}
 			result.After = after
 			if dockerLifecyclePostcondition(req, before, after) {
-				result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
+				if result.MutationCompleted {
+					result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
+				}
 				return result
 			}
 		}
 	}
-	result.Error = "container postcondition contradicted the requested state"
+	if mutationErr == nil {
+		result.Error = "container postcondition did not reach the requested state"
+	}
 	return result
+}
+
+func dockerLifecycleMutationError(err error) string {
+	var timeout net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
+		return "container lifecycle mutation acknowledgement timed out"
+	case errors.Is(err, context.Canceled):
+		return "container lifecycle mutation acknowledgement canceled"
+	default:
+		return "container lifecycle mutation acknowledgement unavailable"
+	}
 }
 
 func (m *localDockerLifecycleManager) Preflight(ctx context.Context, req agentexec.DockerContainerLifecyclePayload) (bool, string) {

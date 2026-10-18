@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,8 +18,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,6 +40,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/alerting"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
@@ -44,6 +48,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -57,11 +62,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
@@ -118,6 +125,35 @@ func TestAgentConfigFetchAuditCapacityContract(t *testing.T) {
 	}
 	if successes != 2 || failures != 1 || len(handler.configFetchAudits.last) != maxAgentConfigFetchAudits {
 		t.Fatalf("capacity audit contract: successes=%d failures=%d remembered=%d", successes, failures, len(handler.configFetchAudits.last))
+	}
+}
+
+// The deploy enrollment response hands the agent its runtime credential and
+// nothing that names its identity. An agent identity invented here once bound
+// the command channel to an ID the agent abandons after its first report.
+func TestContractDeployEnrollResponseCarriesNoAgentIdentity(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
+	attachAPITokenRecord(req, rec)
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("enroll status = %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	keys := make([]string, 0, len(resp))
+	for key := range resp {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if want := []string{"reportInterval", "runtimeToken", "runtimeTokenId"}; !reflect.DeepEqual(keys, want) {
+		t.Fatalf("enroll response keys = %v, want %v", keys, want)
 	}
 }
 
@@ -313,7 +349,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		"isDirectLoopbackRequest(req)",
 		"op == configTransferExport",
 		"getAPITokenRecordFromRequest(req)",
-		"ensureAdminSession(r.config, w, req)",
+		"ensureOrgAdminSession(r.config, w, req)",
 		"config.ScopeSettingsRead",
 		"config.ScopeSettingsWrite",
 	} {
@@ -1007,97 +1043,6 @@ func TestContract_MockAvailabilityTargetsUseSavedTargetPayloads(t *testing.T) {
 	}
 	if !response.Success || response.LatencyMillis <= 0 || response.Error != "" {
 		t.Fatalf("mock MQTT saved-test response must be successful with latency and no error: %+v", response)
-	}
-}
-
-func TestContract_MockDiscoveryEndpointsUseCanonicalPayloads(t *testing.T) {
-	previousMock := mock.IsMockEnabled()
-	if err := mock.SetEnabled(true); err != nil {
-		t.Fatalf("enable mock mode: %v", err)
-	}
-	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
-
-	handlers := NewDiscoveryHandlers(nil, nil)
-	listReq := httptest.NewRequest(http.MethodGet, "/api/discovery", nil)
-	listRec := httptest.NewRecorder()
-	handlers.HandleListDiscoveries(listRec, listReq)
-	if listRec.Code != http.StatusOK {
-		t.Fatalf("/api/discovery status = %d, body=%s", listRec.Code, listRec.Body.String())
-	}
-
-	var listBody struct {
-		Discoveries []map[string]any `json:"discoveries"`
-		Total       int              `json:"total"`
-	}
-	if err := json.NewDecoder(listRec.Body).Decode(&listBody); err != nil {
-		t.Fatalf("decode discovery list: %v", err)
-	}
-	if listBody.Total == 0 || len(listBody.Discoveries) == 0 {
-		t.Fatal("expected mock discovery list to expose canonical discovery summaries")
-	}
-
-	var dockerDetail map[string]any
-	for _, summary := range listBody.Discoveries {
-		if summary["resource_type"] != "docker" {
-			continue
-		}
-		resourceType, _ := summary["resource_type"].(string)
-		targetID, _ := summary["target_id"].(string)
-		resourceID, _ := summary["resource_id"].(string)
-		if resourceType == "" || targetID == "" || resourceID == "" {
-			t.Fatalf("mock discovery summary lost canonical identity: %#v", summary)
-		}
-
-		detailReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/discovery/%s/%s/%s", resourceType, targetID, resourceID), nil)
-		detailRec := httptest.NewRecorder()
-		handlers.HandleGetDiscovery(detailRec, detailReq)
-		if detailRec.Code != http.StatusOK {
-			t.Fatalf("discovery detail status = %d, body=%s", detailRec.Code, detailRec.Body.String())
-		}
-
-		var detail map[string]any
-		if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
-			t.Fatalf("decode discovery detail: %v", err)
-		}
-		proposal, hasProposal := detail["suggested_availability_probe"].(map[string]any)
-		if discoveryContractValueEmpty(detail["suggested_url"]) ||
-			!hasProposal ||
-			discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
-			continue
-		}
-		dockerDetail = detail
-		break
-	}
-	if dockerDetail == nil {
-		t.Fatalf("expected mock discovery summaries to include Docker workload URL context and an evidence-bound availability proposal: %#v", listBody.Discoveries)
-	}
-	for _, key := range []string{"service_name", "service_version", "config_paths", "ports", "suggested_url", "cli_access_version"} {
-		value, ok := dockerDetail[key]
-		if !ok || discoveryContractValueEmpty(value) {
-			t.Fatalf("mock discovery detail missing %s: %#v", key, dockerDetail)
-		}
-	}
-	proposal, ok := dockerDetail["suggested_availability_probe"].(map[string]any)
-	if !ok || discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
-		t.Fatalf("mock discovery detail missing evidence-bound availability proposal: %#v", dockerDetail)
-	}
-	if _, ok := dockerDetail["raw_command_output"]; ok {
-		t.Fatalf("mock discovery detail exposed raw command output: %#v", dockerDetail)
-	}
-}
-
-func discoveryContractValueEmpty(value any) bool {
-	switch typed := value.(type) {
-	case nil:
-		return true
-	case string:
-		return strings.TrimSpace(typed) == ""
-	case []any:
-		return len(typed) == 0
-	case float64:
-		return typed == 0
-	default:
-		return false
 	}
 }
 
@@ -2386,8 +2331,6 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{
 			"status":"warning",
 			"ready":true,
@@ -2581,8 +2524,6 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"ollama_keep_alive":"",
 		"configured_providers":["openai"],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -2844,46 +2785,6 @@ func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 			vmwarePool.Used,
 			vmwarePool.Avail,
 		)
-	}
-}
-
-func TestContract_StorageSummaryChartsStayAggregateOnly(t *testing.T) {
-	monitor, state, metricsHistory := newTestMonitor(t)
-	now := time.Now().UTC().Truncate(time.Second)
-	state.Storage = []models.Storage{
-		{ID: "store-1", Name: "Store One"},
-		{ID: "store-2", Name: "Store Two"},
-	}
-	metricsHistory.AddStorageMetric("store-1", "used", 400, now)
-	metricsHistory.AddStorageMetric("store-1", "avail", 600, now)
-	metricsHistory.AddStorageMetric("store-1", "total", 1000, now)
-	metricsHistory.AddStorageMetric("store-2", "used", 100, now)
-	metricsHistory.AddStorageMetric("store-2", "avail", 900, now)
-	metricsHistory.AddStorageMetric("store-2", "total", 1000, now)
-	syncTestResourceStore(t, monitor, state)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/storage-summary?range=24h", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleStorageSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded StorageSummaryTrendResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal storage summary response: %v", err)
-	}
-	if len(decoded.Capacity) != 1 {
-		t.Fatalf("expected one aggregate capacity point, got %+v", decoded.Capacity)
-	}
-	if decoded.Capacity[0].Value != 25 {
-		t.Fatalf("expected aggregate capacity of 25%%, got %+v", decoded.Capacity[0])
-	}
-	if decoded.Stats.PointCounts.Total != 1 || decoded.Stats.PointCounts.Storage != 1 {
-		t.Fatalf("expected aggregate-only point counts, got %+v", decoded.Stats.PointCounts)
 	}
 }
 
@@ -3501,136 +3402,6 @@ func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *t
 	if workloadDecoded.GuestTypes[resourceID] != "vm" {
 		t.Fatalf("expected vm guest type for %q, got %q", resourceID, workloadDecoded.GuestTypes[resourceID])
 	}
-
-	summaryReq := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=1h", nil)
-	summaryRec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(summaryRec, summaryReq)
-
-	if summaryRec.Code != http.StatusOK {
-		t.Fatalf("expected workloads summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
-	}
-
-	var summaryDecoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(summaryRec.Body.Bytes(), &summaryDecoded); err != nil {
-		t.Fatalf("unmarshal workloads summary response: %v", err)
-	}
-	if summaryDecoded.GuestCounts.Total != 1 || summaryDecoded.GuestCounts.Running != 1 {
-		t.Fatalf("expected stable provider-backed guest counts, got %+v", summaryDecoded.GuestCounts)
-	}
-	if len(summaryDecoded.TopContributors.CPU) == 0 {
-		t.Fatal("expected provider-backed cpu top contributor")
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID != resourceID {
-		t.Fatalf("expected workloads summary contributor id %q, got %+v", resourceID, summaryDecoded.TopContributors.CPU[0])
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID == metricID {
-		t.Fatalf("expected workloads summary contributor id to avoid raw metrics target %q", metricID)
-	}
-}
-
-func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testing.T) {
-	store := newTestMetricsStore(t)
-	monitor, state, _ := newTestMonitor(t)
-	setTestUnexportedField(t, monitor, "metricsStore", store)
-
-	state.Nodes = []models.Node{{
-		ID:       "node-contract-1",
-		Name:     "node-contract-1",
-		Instance: "pve1",
-		Status:   "online",
-	}}
-	state.VMs = []models.VM{{
-		ID:         "vm-contract-1",
-		VMID:       101,
-		Name:       "vm-contract-1",
-		Node:       "node-contract-1",
-		Instance:   "pve1",
-		Status:     "running",
-		CPU:        0.75,
-		Memory:     models.Memory{Usage: 42.0},
-		Disk:       models.Disk{Usage: 55.0},
-		NetworkIn:  128,
-		NetworkOut: 256,
-	}}
-	syncTestResourceStore(t, monitor, state)
-
-	readState := monitor.GetUnifiedReadStateOrSnapshot()
-	vms := readState.VMs()
-	if len(vms) != 1 {
-		t.Fatalf("expected 1 vm view, got %d", len(vms))
-	}
-	sourceID := strings.TrimSpace(vms[0].SourceID())
-	if sourceID == "" {
-		t.Fatal("expected vm source ID")
-	}
-
-	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	samples := mixedCadenceLongRangeMetricSamples(now)
-	seed := make([]metrics.WriteMetric, 0, len(samples)*5)
-	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
-		for _, metricType := range []string{"cpu", "memory", "disk"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        percentValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-		for _, metricType := range []string{"netin", "netout"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        rateValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-	}
-	for _, sample := range samples {
-		appendMetric(sample.timestamp, sample.percentValue, sample.rateValue)
-	}
-	store.WriteBatchSync(seed)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=7d", nil)
-	rec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal workloads summary charts response: %v", err)
-	}
-
-	if len(decoded.CPU.P50) == 0 {
-		t.Fatal("expected normalized workload summary p50 series")
-	}
-	if len(decoded.CPU.P50) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p50 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
-	}
-	if len(decoded.CPU.P95) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p95 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
-	}
-	if decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp != now.UnixMilli() {
-		t.Fatalf("expected latest workload summary timestamp %d, got %d", now.UnixMilli(), decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp)
-	}
-
-	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
-	recentCount := 0
-	for _, point := range decoded.CPU.P50 {
-		if point.Timestamp >= recentWindowStart {
-			recentCount++
-		}
-	}
-	if recentCount > 20 {
-		t.Fatalf("expected day-proportional summary buckets, got %d recent p50 points", recentCount)
-	}
 }
 
 func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.T) {
@@ -3650,22 +3421,16 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 		`var workloadChartsBatchWG sync.WaitGroup`,
 		`workloadChartsBatchWG.Add(4)`,
 		`podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)`,
-		`var workloadsSummaryBatchWG sync.WaitGroup`,
-		`workloadsSummaryBatchWG.Add(4)`,
-		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)`,
-		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)`,
-		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)`,
+		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, guestSparklineMetricOrder...)`,
+		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, guestSparklineMetricOrder...)`,
+		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)`,
 		`summaryChartsCacheTTL = 5 * time.Second`,
 		`infrastructureChartsCacheKey(req *http.Request, timeRange string, requestedMetricNames []string) string`,
 		`cachedInfrastructureChartsPayload`,
 		`cacheInfrastructureChartsPayload`,
-		`workloadsSummaryChartsCacheKey`,
-		`cachedWorkloadsSummaryChartsPayload`,
-		`cacheWorkloadsSummaryChartsPayload`,
 		`chartPayloadCacheMaxEntries = 64`,
 		`chartPayloadCacheMaxBytes   = 16 << 20`,
 		`chartPayloads              boundedChartPayloadCache`,
-		`type workloadSummaryMetricBucket struct`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -3720,6 +3485,97 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 				fine[fineIndex].Value,
 			)
 		}
+	}
+}
+
+// Non-default organisations poll against a detached config copy (#1619). A
+// system-settings save updates the server's base config and pushes saved PBS
+// and PMG intervals into each live tenant monitor as runtime overrides, but
+// the copy that configapi hands that org's connections list (m.GetConfig())
+// keeps the old values. Connection freshness must scale by the cadence the
+// monitor polls at, or Settings > Infrastructure rows read stale for part of
+// every slower cycle.
+func TestContract_ConnectionFreshnessFollowsSavedPollingIntervalsInTenantMonitors(t *testing.T) {
+	setMockModeForTest(t, false)
+
+	cases := []struct {
+		name       string
+		configured time.Duration
+		saved      time.Duration
+		wantState  ConnectionState
+	}{
+		{
+			name:       "raised interval keeps an on-schedule poll active",
+			configured: time.Minute,
+			saved:      5 * time.Minute,
+			wantState:  ConnectionStateActive,
+		},
+		{
+			name:       "lowered interval judges the same poll stale",
+			configured: 5 * time.Minute,
+			saved:      time.Minute,
+			wantState:  ConnectionStateStale,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			base := &config.Config{
+				DataPath:           tempDir,
+				ConfigPath:         tempDir,
+				PVEPollingInterval: 10 * time.Second,
+				PBSPollingInterval: tc.configured,
+				PMGPollingInterval: tc.configured,
+			}
+			tenant, err := monitoring.New(base.DeepCopy())
+			if err != nil {
+				t.Fatalf("new tenant monitor: %v", err)
+			}
+			t.Cleanup(tenant.Stop)
+
+			tokenVal := "tenant-polling-token"
+			base.APITokens = []config.APITokenRecord{
+				{ID: "token1", Hash: authpkg.HashAPIToken(tokenVal), Name: "Test Token"},
+			}
+			handler := newTestSystemSettingsHandler(base, config.NewConfigPersistence(tempDir), tenant, func() {}, func() error { return nil })
+			seconds := int(tc.saved / time.Second)
+			body, _ := json.Marshal(map[string]any{"pbsPollingInterval": seconds, "pmgPollingInterval": seconds})
+			req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+			req.Header.Set("X-API-Token", tokenVal)
+			rec := httptest.NewRecorder()
+			handler.HandleUpdateSystemSettings(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("save status = %d, body: %s", rec.Code, rec.Body.String())
+			}
+
+			cfg := tenant.GetConfig()
+			if base.PBSPollingInterval != tc.saved || cfg.PBSPollingInterval != tc.configured {
+				t.Fatalf("PBS interval base = %v, tenant copy = %v; want the save to reach only the base (%v) and the copy to keep %v",
+					base.PBSPollingInterval, cfg.PBSPollingInterval, tc.saved, tc.configured)
+			}
+
+			now := time.Now()
+			lastSuccess := now.Add(-4 * time.Minute)
+			inputs := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, tenant, aggregatorRuntimeSources{orgID: "tenant-a"})
+			inputs.now = now
+			inputs.pbsInstances = []config.PBSInstance{{Name: "backup", Host: "https://pbs.lab.local:8007"}}
+			inputs.pmgInstances = []config.PMGInstance{{Name: "mail", Host: "https://pmg.lab.local:8006"}}
+			inputs.instanceHealth = map[string]monitoring.InstanceHealth{
+				"pbs::backup": {PollStatus: monitoring.InstancePollStatus{LastSuccess: &lastSuccess}},
+				"pmg::mail":   {PollStatus: monitoring.InstancePollStatus{LastSuccess: &lastSuccess}},
+			}
+
+			states := map[ConnectionType]ConnectionState{}
+			for _, conn := range buildConnections(inputs) {
+				states[conn.Type] = conn.State
+			}
+			for _, connType := range []ConnectionType{ConnectionTypePBS, ConnectionTypePMG} {
+				if got := states[connType]; got != tc.wantState {
+					t.Errorf("%s state = %q, want %q for a 4m-old poll after saving %v (tenant copy still %v)",
+						connType, got, tc.wantState, tc.saved, tc.configured)
+				}
+			}
+		})
 	}
 }
 
@@ -4416,6 +4272,80 @@ func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
 	}
 }
 
+// A SAML provider configured by hand, with the IdP's SSO URL and its PEM
+// signing certificate pasted inline or named by IDPCertFile, verifies the
+// IdP's signatures with that certificate exactly as a provider configured from
+// IdP metadata does: at default settings the ACS accepts the IdP's signed
+// answer to an SP-initiated login and reads the user from it, the IdP's signed
+// answer to an SP-initiated logout completes that logout, and a Response
+// signed by any other key is refused. Manual
+// metadata used to hold the certificate as a PEM block where crewjam/saml
+// base64-decodes DER, so every signature check for these providers failed
+// before reaching the key.
+func TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	impostor := newSAMLManualCertTestIdP(t)
+	certFile := filepath.Join(t.TempDir(), "idp-signing.pem")
+	if err := os.WriteFile(certFile, idp.certPEM, 0o600); err != nil {
+		t.Fatalf("write IdP certificate file: %v", err)
+	}
+	manual := func(inline, file string) *config.SAMLProviderConfig {
+		return &config.SAMLProviderConfig{
+			IDPSSOURL:      "https://idp.example.com/sso",
+			IDPSLOURL:      "https://idp.example.com/slo",
+			IDPEntityID:    samlManualCertTestIdPEntityID,
+			IDPCertificate: inline,
+			IDPCertFile:    file,
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  *config.SAMLProviderConfig
+	}{
+		{name: "IdP metadata", cfg: &config.SAMLProviderConfig{IDPMetadataXML: idp.metadataXML()}},
+		{name: "manual inline certificate", cfg: manual(string(idp.certPEM), "")},
+		{name: "manual certificate file", cfg: manual("", certFile)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service, err := NewSAMLService(context.Background(), "okta", tc.cfg, "https://pulse.example.com")
+			if err != nil {
+				t.Fatalf("NewSAMLService: %v", err)
+			}
+			browserKey := sessionHash("login-token")
+			startLogin := func() string {
+				t.Helper()
+				redirectURL, err := service.MakeAuthRequest("/", browserKey)
+				if err != nil {
+					t.Fatalf("MakeAuthRequest: %v", err)
+				}
+				return samlTestAuthnRequestID(t, redirectURL)
+			}
+
+			result, _, err := service.ProcessResponse(idp.acsPostAnswering(t, service, startLogin()), browserKey)
+			if err != nil {
+				t.Fatalf("ACS refused the configured IdP's signed Response: %s", samlRejectionDetail(err))
+			}
+			if result.Username != "alice" {
+				t.Fatalf("ACS read username %q from the Response, want alice", result.Username)
+			}
+			if _, _, err := service.ProcessResponse(impostor.acsPostAnswering(t, service, startLogin()), browserKey); err == nil {
+				t.Fatal("ACS accepted a Response signed by a key the provider was not given")
+			}
+
+			useSAMLTestAuthStores(t)
+			router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+			router.samlManager.services["okta"] = service
+			requestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "alice"))
+			rec := deliverSAMLTestLogoutResponse(router, idp.slo.redirectQuery(t, requestID), "")
+			if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/?logout=success" {
+				t.Fatalf("SLO refused the configured IdP's signed LogoutResponse: status=%d location=%q body=%q",
+					rec.Code, rec.Header().Get("Location"), rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)
@@ -4838,8 +4768,6 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -4856,7 +4784,6 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 	aiCfg.Model = "quickstart:minimax-2.5m"
 	aiCfg.ChatModel = "quickstart:minimax-2.5m"
 	aiCfg.PatrolModel = "quickstart:minimax-2.5m"
-	aiCfg.DiscoveryModel = "quickstart:minimax-2.5m"
 	aiCfg.AutoFixModel = "quickstart:minimax-2.5m"
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
@@ -4909,8 +4836,6 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -4985,8 +4910,6 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -5013,6 +4936,361 @@ func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
 	const want = "Resource ID,Instance,Node,Pool,VMID,VM Name,Status,CPU Cores,Memory Allocated Bytes,Disk Allocated Bytes,Disk Used Bytes,Disk Status Reason\n"
 	if got := rec.Body.String(); got != want {
 		t.Fatalf("unexpected VM inventory CSV header row:\nwant %q\ngot  %q", want, got)
+	}
+}
+
+// reportAlertResourceIDs lists a report request's alert rows by resource ID,
+// sorted, so a test can state exactly which alerts a report attributes to
+// its subject.
+func reportAlertResourceIDs(req reporting.MetricReportRequest) []string {
+	ids := make([]string, 0, len(req.Alerts))
+	for _, alert := range req.Alerts {
+		ids = append(ids, alert.ResourceID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Every Proxmox node and standalone Pulse agent is an `agent` resource in v6,
+// and the Reports picker requests it as one. Its report must carry the
+// machine's own alerts, matched through the identities its unified resource
+// carries: the linked node's source ID, the agent's "agent:<host>" alerts and
+// their component children. Guests, storage pools and same-named nodes in
+// another cluster are not the machine.
+func TestContract_AgentReportAttachesTheMachinesOwnAlerts(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-24 * time.Hour)
+	machineID := "agent-west-a"
+	memoryTotal, diskTotal := int64(64<<30), int64(1<<40)
+	storageTotal, storageUsed := int64(2<<40), int64(1<<40)
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{
+			{
+				ID:      machineID,
+				Type:    unifiedresources.ResourceTypeAgent,
+				Name:    "West Production A",
+				Status:  unifiedresources.StatusOnline,
+				Uptime:  86400,
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+				Identity: unifiedresources.ResourceIdentity{
+					IPAddresses: []string{"192.0.2.10"},
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Memory: &unifiedresources.MetricValue{Total: &memoryTotal},
+					Disk:   &unifiedresources.MetricValue{Total: &diskTotal},
+				},
+				Proxmox: &unifiedresources.ProxmoxData{
+					SourceID:      "cluster-a-pve1",
+					NodeName:      "pve1",
+					Instance:      "cluster-a",
+					HostURL:       "https://pve1.example:8006",
+					PVEVersion:    "8.2.4",
+					KernelVersion: "6.8.12-1-pve",
+					ClusterName:   "cluster-a",
+					CPUInfo:       &unifiedresources.CPUInfo{Model: "Xeon E5-2680", Cores: 16, Sockets: 2},
+				},
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "host-pve1",
+					OSName:    "Debian GNU/Linux",
+					OSVersion: "12",
+				},
+			},
+			{
+				ID:       "storage-west-a-zfs",
+				Type:     unifiedresources.ResourceTypeStorage,
+				Name:     "local-zfs",
+				Status:   unifiedresources.StatusOnline,
+				ParentID: &machineID,
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{Total: &storageTotal, Used: &storageUsed, Percent: 50},
+				},
+				Storage: &unifiedresources.StorageMeta{Type: "zfspool", Content: "images"},
+				Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+			},
+			{
+				ID:           "physical-disk-west-a-nvme0",
+				Type:         unifiedresources.ResourceTypePhysicalDisk,
+				ParentID:     &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/nvme0n1", Model: "Samsung 990", DiskType: "nvme", Health: "PASSED", Temperature: 41},
+			},
+			{
+				// A disk in standby keeps its last-known temperature, which a
+				// report must not tabulate as measured.
+				ID:       "physical-disk-west-a-sdb",
+				Type:     unifiedresources.ResourceTypePhysicalDisk,
+				ParentID: &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+					DevPath: "/dev/sdb", DiskType: "hdd", Health: "PASSED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Temperature: diskinventory.FieldStatus{State: diskinventory.FieldUnavailable, Reason: "standby"},
+					},
+				},
+			},
+			{
+				ID:       "vm-west-a-101",
+				Type:     unifiedresources.ResourceTypeVM,
+				ParentID: &machineID,
+			},
+		},
+		ActiveAlerts: []models.Alert{
+			// The node's own alert, keyed by the Proxmox source ID.
+			{ID: "node-cpu", Type: "cpu", Level: "critical", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent's own alert and a filesystem it reports.
+			{ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "agent-disk", Type: "disk", Level: "warning", ResourceID: "agent:host-pve1/disk:/", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent raises its Unraid array alert under its own identity,
+			// so it belongs to the machine as well as to the array's report.
+			{ID: "agent-array", Type: "unraid-array", Level: "warning", ResourceID: "agent:host-pve1/storage:unraid-array", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// A provider incident keyed by the unified ID.
+			{ID: "incident", Type: "resource-incident", Level: "warning", ResourceID: machineID, StartTime: now.Add(-time.Hour)},
+			// Not the machine: a guest, a storage pool, a same-named node in
+			// another cluster, and an agent whose host ID shares a prefix.
+			{ID: "guest", Type: "powered-off", Level: "warning", ResourceID: "cluster-a-pve1-101", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "pool", Type: "zfs-pool-errors", Level: "warning", ResourceID: "cluster-a-pve1-local-zfs/zfs-pool:local-zfs", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-cluster", Type: "cpu", Level: "critical", ResourceID: "cluster-b-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-agent", Type: "memory", Level: "critical", ResourceID: "agent:host-pve10", Node: "pve10", StartTime: now.Add(-time.Hour)},
+		},
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert:        models.Alert{ID: "node-temp", Type: "temperature", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-3 * time.Hour)},
+				ResolvedTime: now.Add(-2 * time.Hour),
+			},
+			{
+				Alert:        models.Alert{ID: "node-old", Type: "cpu", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-50 * time.Hour)},
+				ResolvedTime: now.Add(-48 * time.Hour),
+			},
+		},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, start, now)
+
+	wantAlerts := []string{"agent-west-a", "agent:host-pve1", "agent:host-pve1/disk:/", "agent:host-pve1/storage:unraid-array", "cluster-a-pve1", "cluster-a-pve1"}
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, wantAlerts) {
+		t.Fatalf("agent report alerts = %v, want %v", got, wantAlerts)
+	}
+	for _, alert := range req.Alerts {
+		if alert.Type == "temperature" && (alert.ResolvedTime == nil || !alert.Recovered()) {
+			t.Fatalf("node alert resolved inside the window must read as a recovery, got %+v", alert)
+		}
+	}
+
+	res := req.Resource
+	if res == nil {
+		t.Fatal("agent report carries no resource details")
+	}
+	if res.Name != "West Production A" || res.Host != "https://pve1.example:8006" || res.PVEVersion != "8.2.4" ||
+		res.KernelVersion != "6.8.12-1-pve" || res.CPUModel != "Xeon E5-2680" || res.CPUCores != 16 || res.CPUSockets != 2 ||
+		res.MemoryTotal != memoryTotal || res.DiskTotal != diskTotal || res.Uptime != 86400 ||
+		res.OSName != "Debian GNU/Linux" || res.OSVersion != "12" || res.ClusterName != "cluster-a" ||
+		!reflect.DeepEqual(res.IPAddresses, []string{"192.0.2.10"}) {
+		t.Fatalf("agent report resource details = %+v", res)
+	}
+	if len(req.Storage) != 1 || req.Storage[0].Name != "local-zfs" || req.Storage[0].Type != "zfspool" || req.Storage[0].UsagePerc != 50 {
+		t.Fatalf("agent report storage = %+v", req.Storage)
+	}
+	// Disk rows share the node report's builder: only a collected temperature
+	// is tabulated, coloured by the disk temperature alert thresholds.
+	if len(req.Disks) != 2 {
+		t.Fatalf("agent report disks = %+v", req.Disks)
+	}
+	nvme, standby := req.Disks[0], req.Disks[1]
+	if nvme.Device != "/dev/nvme0n1" || nvme.Health != "PASSED" || nvme.Temperature != 41 ||
+		nvme.TemperatureCritical <= 0 || nvme.TemperatureWarning <= 0 || nvme.TemperatureWarning > nvme.TemperatureCritical {
+		t.Fatalf("collected disk row = %+v", nvme)
+	}
+	if standby.Device != "/dev/sdb" || standby.Temperature != 0 {
+		t.Fatalf("a retained disk temperature must not be reported as measured, got %+v", standby)
+	}
+}
+
+// A node alert that moved to the machine's Pulse agent and the agent's own
+// alert for that metric both belong to the machine's report, and the report
+// verdict counts the condition once.
+func TestContract_AgentReportCountsAMovedNodeAlertOnce(t *testing.T) {
+	now := time.Now()
+	machineID := "agent-west-a"
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{{
+			ID:      machineID,
+			Type:    unifiedresources.ResourceTypeAgent,
+			Name:    "West Production A",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1", NodeName: "pve1"},
+			Agent:   &unifiedresources.AgentData{AgentID: "host-pve1"},
+		}},
+		ActiveAlerts: []models.Alert{{
+			ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1",
+			Message: "Agent memory at 94%", StartTime: now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID: "node-memory", Type: "memory", Level: "warning", ResourceID: "cluster-a-pve1",
+				Message: "Node memory at 95%", StartTime: now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-pve1",
+					SuccessorName:       "pve1 (Host Agent)",
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, []string{"agent:host-pve1", "cluster-a-pve1"}) {
+		t.Fatalf("agent report alerts = %v", got)
+	}
+	narrative, err := reporting.HeuristicNarrator{}.Narrate(context.Background(), reporting.NarrativeInput{Alerts: req.Alerts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrative.HealthStatus != "WARNING" || narrative.HealthMessage != "1 warning detected - review recommended" {
+		t.Fatalf("moved node alert and its successor must count once, got %q / %q", narrative.HealthStatus, narrative.HealthMessage)
+	}
+}
+
+// Report types without a dedicated enricher still list the alerts raised on
+// their subject: the unified ID, the metrics-target ID, and the IDs each
+// alert producer builds for a Docker runtime, a container or a storage pool's
+// ZFS components. Workloads under a runtime stay with their own reports.
+func TestContract_UnenrichedReportTypesAttachTheSubjectsAlerts(t *testing.T) {
+	now := time.Now()
+	resources := []unifiedresources.Resource{
+		{
+			// Docker runtimes are agent-typed internally and travel as
+			// docker-host.
+			ID:      "agent-docker-1",
+			Type:    unifiedresources.ResourceTypeAgent,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "app-container-web",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "web",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ContainerID: "web-1"},
+		},
+		{
+			// A container reported without an ID is referenced by its name.
+			ID:      "app-container-sidecar",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "sidecar",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "storage-zfs",
+			Type:    unifiedresources.ResourceTypeStorage,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+		},
+		{
+			ID:   "k8s-cluster-prod",
+			Type: unifiedresources.ResourceTypeK8sCluster,
+		},
+		{
+			ID:            "pmg-eu",
+			Type:          unifiedresources.ResourceTypePMG,
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "agent", ResourceID: "pmg-main"},
+		},
+		{
+			ID:      "docker-service-web",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ServiceID: "svc-1"},
+		},
+		{
+			// A service without an ID is named by the adapter's resource
+			// name, which the producer falls back to.
+			ID:      "docker-service-api",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Name:    "api",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			// A Pulse agent reports the Unraid array as storage keyed by
+			// its own source ID, which is the metrics target.
+			ID:            "storage-unraid",
+			Type:          unifiedresources.ResourceTypeStorage,
+			Sources:       []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "storage", ResourceID: "host-1/storage:unraid-array"},
+		},
+		{
+			ID:           "physical-disk-sda",
+			Type:         unifiedresources.ResourceTypePhysicalDisk,
+			Sources:      []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox:      &unifiedresources.ProxmoxData{Instance: "cluster-a", NodeName: "pve1"},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sda", Serial: "SER-B"},
+		},
+	}
+	active := func(resourceID string) models.Alert {
+		return models.Alert{ID: resourceID + "-alert", Type: "status", Level: "warning", ResourceID: resourceID, StartTime: now.Add(-time.Hour)}
+	}
+	// Proxmox disk alerts reference the device path, which a replacement disk
+	// in the same slot takes over, and record the serial of the disk they
+	// were raised on.
+	diskRef := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("cluster-a", "pve1", "/dev/sda")
+	diskAlert := func(id, serial string) models.Alert {
+		alert := active(diskRef)
+		alert.ID, alert.Type, alert.Message = unifiedresources.ProxmoxPhysicalDiskAlertIdentifiers(diskRef)[0], "disk-health", id
+		alert.Metadata = map[string]interface{}{"disk_serial": serial}
+		return alert
+	}
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: resources,
+		ActiveAlerts: []models.Alert{
+			active(alerts.DockerHostResourceID("docker-host-1")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")),
+			active("cluster-a-pve1-local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2"),
+			active("cluster-a-pve1-local-zfs2"),
+			active("k8s-cluster-prod"),
+			active("pmg-main"),
+			active(alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")),
+			active(alerts.DockerServiceResourceID("docker-host-1", "", "api")),
+			active("agent:host-1/storage:unraid-array"),
+			diskAlert("disk-health-replacement", "SER-B"),
+			diskAlert("disk-health-predecessor", "SER-A"),
+		},
+	}
+
+	for _, tc := range []struct {
+		resourceType string
+		resourceID   string
+		want         []string
+	}{
+		{"docker-host", "agent-docker-1", []string{alerts.DockerHostResourceID("docker-host-1")}},
+		{"app-container", "app-container-web", []string{alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")}},
+		{"app-container", "app-container-sidecar", []string{alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")}},
+		{"storage", "storage-zfs", []string{
+			"cluster-a-pve1-local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2",
+		}},
+		{"k8s", "k8s-cluster-prod", []string{"k8s-cluster-prod"}},
+		{"pmg", "pmg-eu", []string{"pmg-main"}},
+		{"app-container", "docker-service-web", []string{alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")}},
+		{"app-container", "docker-service-api", []string{alerts.DockerServiceResourceID("docker-host-1", "", "api")}},
+		{"storage", "storage-unraid", []string{"agent:host-1/storage:unraid-array"}},
+		{"disk", "physical-disk-sda", []string{diskRef}},
+	} {
+		req := reporting.MetricReportRequest{ResourceType: tc.resourceType, ResourceID: tc.resourceID}
+		NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+		if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s report alerts = %v, want %v", tc.resourceType, got, tc.want)
+		}
+		// Only the alert naming the replacement disk's serial is its own;
+		// its predecessor's alert on the same path stays off its report.
+		if tc.resourceType == "disk" && req.Alerts[0].Message != "disk-health-replacement" {
+			t.Fatalf("disk report alert = %+v", req.Alerts[0])
+		}
 	}
 }
 
@@ -5047,6 +5325,7 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"title":"Performance Reports",
 			"description":"Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.",
 			"singleResourceEndpoint":"/api/admin/reports/generate",
+			"singleResourceMethod":"POST",
 			"multiResourceEndpoint":"/api/admin/reports/generate-multi",
 			"singleFilenamePrefix":"report",
 			"singleFilenameSubject":"resource_id",
@@ -5170,7 +5449,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/reporting?resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
@@ -5193,6 +5472,291 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
 		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
 	}
+
+	post := httptest.NewRequest(
+		http.MethodPost,
+		"/api/reporting",
+		strings.NewReader(`{"resourceType":"node","resourceId":"node-1","metricType":" cpu ","title":" Node report "}`),
+	)
+	rec = httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, post)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected POST 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if engine.lastReq.ResourceID != "node-1" || engine.lastReq.Format != definition.DefaultFormat ||
+		engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
+		t.Fatalf("expected POST body to carry the same canonical fields as GET, got %+v", engine.lastReq)
+	}
+}
+
+type recordingReportEngine struct {
+	*reporting.ReportEngine
+	requests []reporting.MetricReportRequest
+}
+
+func (e *recordingReportEngine) Generate(req reporting.MetricReportRequest) ([]byte, string, error) {
+	e.requests = append(e.requests, req)
+	return e.ReportEngine.Generate(req)
+}
+
+type countingReportNarrator struct{ calls atomic.Int32 }
+
+func (n *countingReportNarrator) Narrate(context.Context, reporting.NarrativeInput) (reporting.Narrative, error) {
+	n.calls.Add(1)
+	return reporting.Narrative{Source: reporting.NarrativeSourceAI, HealthStatus: "HEALTHY", HealthMessage: "narrated"}, nil
+}
+
+// A PDF single-resource report may be narrated by the tenant's Pulse
+// Assistant, a paid provider call recorded in the cost ledger. GET passes the
+// demo-mode guard and the CSRF check, and SameSite=Lax session cookies ride
+// cross-site top-level GET navigations, so only POST, the settings UI
+// transport, may reach the AI narrator. GET still returns the report, with
+// the deterministic summary and a note in place of the "Configure Pulse
+// Assistant" tip.
+func TestContract_SingleReportAINarrationRequiresPOST(t *testing.T) {
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	engine := &recordingReportEngine{ReportEngine: reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	// The narrator resolver stands for GetAIService, which can construct a
+	// tenant AI service; GET must use only the existing-service findings path.
+	narrator := &countingReportNarrator{}
+	var narratorResolves, findingsResolves atomic.Int32
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
+	handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+		narratorResolves.Add(1)
+		return narrator, nil, nil
+	})
+	handler.SetExistingFindingsResolver(func(context.Context) reporting.FindingsProvider {
+		findingsResolves.Add(1)
+		return nil
+	})
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		return rec
+	}
+	const query = "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1"
+
+	rec := generate(httptest.NewRequest(http.MethodGet, query, nil))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("GET report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET report called the AI narrator %d times, want 0", got)
+	}
+	narrative, err := engine.NarrativeFor(engine.requests[len(engine.requests)-1])
+	if err != nil {
+		t.Fatalf("GET report narrative: %v", err)
+	}
+	if narrative.Source != reporting.NarrativeSourceHeuristic || narrative.Disclaimer != reportGETNarrativeNote {
+		t.Fatalf("GET report narrative = source %q disclaimer %q, want the deterministic summary with the GET note", narrative.Source, narrative.Disclaimer)
+	}
+
+	for _, method := range []string{http.MethodHead, http.MethodPut, http.MethodDelete} {
+		rec := generate(httptest.NewRequest(method, query, nil))
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, POST" {
+			t.Fatalf("%s report: status %d, Allow %q, want 405 with Allow GET, POST", method, rec.Code, rec.Header().Get("Allow"))
+		}
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE called the AI narrator %d times, want 0", got)
+	}
+	if got := narratorResolves.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE resolved the AI service %d times, want 0", got)
+	}
+	if got := findingsResolves.Load(); got != 1 {
+		t.Fatalf("GET looked up existing Patrol findings %d times, want 1", got)
+	}
+
+	rec = generate(httptest.NewRequest(
+		http.MethodPost,
+		"/api/admin/reports/generate",
+		strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`),
+	))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("POST report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 1 {
+		t.Fatalf("POST report called the AI narrator %d times, want 1", got)
+	}
+	if got := narratorResolves.Load(); got != 1 {
+		t.Fatalf("POST report resolved the AI service %d times, want 1", got)
+	}
+}
+
+// The router's real resolvers: a GET report for a tenant whose AI service is
+// not running must not construct one, because construction can list provider
+// models and start background discovery. POST resolves it as before.
+func TestContract_SingleReportGETDoesNotConstructTenantAIService(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	router := &Router{
+		aiSettingsHandler: NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil),
+		reportingHandlers: newReportingHandlersWithInventoryForTest(t, "tenant-1", "node-1"),
+	}
+	router.wireReportingAIResolvers()
+	t.Cleanup(router.aiSettingsHandler.StopServices)
+	tenantServices := func() int {
+		router.aiSettingsHandler.aiServicesMu.RLock()
+		defer router.aiSettingsHandler.aiServicesMu.RUnlock()
+		return len(router.aiSettingsHandler.aiServices)
+	}
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.reportingHandlers.HandleGenerateReport(rec, req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-1")))
+		return rec
+	}
+
+	rec := generate(httptest.NewRequest(http.MethodGet, "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 0 {
+		t.Fatalf("GET report constructed %d tenant AI services, want 0", got)
+	}
+	if _, ok := engine.lastReq.Narrator.(getReportNarrator); !ok || engine.lastReq.FindingsProvider != nil {
+		t.Fatalf("GET report narrator %T, findings %v; want the deterministic narrator and no findings without a running service", engine.lastReq.Narrator, engine.lastReq.FindingsProvider)
+	}
+
+	rec = generate(httptest.NewRequest(http.MethodPost, "/api/admin/reports/generate", strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 1 {
+		t.Fatalf("POST report resolved %d tenant AI services, want 1", got)
+	}
+}
+
+// Normalization keeps a disk's last-known temperature when the current
+// observation did not collect one (a disk in standby, a host agent past its
+// reporting lease). Reports present their disk tables as measured, so the
+// performance report and the reporting runtime snapshot leave that value out.
+func TestContract_ReportsOmitRetainedDiskTemperatures(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath string, temperature int, collection diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: "hdd", Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: collection},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-standby", "/dev/sda", 61, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		disk("disk-silent", "/dev/sdb", 57, diskinventory.Unavailable("smartctl", "host agent stopped reporting")),
+		disk("disk-live", "/dev/sdc", 38, diskinventory.Available("smartctl")),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	want := map[string]int{"/dev/sda": 0, "/dev/sdb": 0, "/dev/sdc": 38}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	reported := map[string]int{}
+	for _, d := range engine.lastReq.Disks {
+		reported[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(reported, want) {
+		t.Fatalf("performance report disk temperatures = %v, want %v", reported, want)
+	}
+
+	snapshot, ok := handler.getRuntimeStateSnapshot(context.Background(), "default")
+	if !ok {
+		t.Fatal("expected runtime snapshot to be available")
+	}
+	snapshotted := map[string]int{}
+	for _, d := range snapshot.Disks {
+		snapshotted[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(snapshotted, want) {
+		t.Fatalf("reporting runtime snapshot disk temperatures = %v, want %v", snapshotted, want)
+	}
+}
+
+// Report disk tables colour a reading by the disk's alert disk temperature
+// thresholds (the tenant's per-type policy), not a fixed 50/60C: amber from the
+// clear value, red from the trigger, as the Physical Disks Temp column does.
+func TestContract_ReportsCarryDiskTemperatureAlertThresholds(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath, diskType string, temperature int) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: diskType, Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-nvme", "/dev/nvme0n1", "nvme", 63),
+		disk("disk-sata", "/dev/sda", "sata", 56),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	thresholdsByDevice := func() map[string][2]float64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		got := map[string][2]float64{}
+		for _, d := range engine.lastReq.Disks {
+			got[d.Device] = [2]float64{d.TemperatureWarning, d.TemperatureCritical}
+		}
+		return got
+	}
+
+	// No alert manager: the factory per-type policy.
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {65, 70}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("factory report disk thresholds = %v, want %v", got, want)
+	}
+
+	manager := alerts.NewManager()
+	cfg := manager.GetConfig()
+	cfg.DiskTempByType["nvme"] = alerts.HysteresisThreshold{Trigger: 75, Clear: 70}
+	manager.UpdateConfig(cfg)
+	setUnexportedField(t, monitor, "alertManager", manager)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {70, 75}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("configured report disk thresholds = %v, want %v", got, want)
+	}
+
+	cfg = manager.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	manager.UpdateConfig(cfg)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {0, 0}, "/dev/sda": {0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("report disk thresholds with disk temperature alerting off = %v, want %v", got, want)
+	}
 }
 
 func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
@@ -5214,7 +5778,7 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
 
 	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME", "Provider Default")
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
 		ReportBranding: &config.ReportBrandSettings{DisplayName: "Client One"},
 	}})
@@ -5237,6 +5801,67 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	}
 	if got := engine.lastReq.Branding.EffectiveBrand(); got == nil || got.DisplayName != "Client One" {
 		t.Fatalf("effective brand should prefer workspace override, got %+v", got)
+	}
+}
+
+// A node alert that moved to its linked Pulse agent closed without
+// recovering. The report request must keep that resolution and each alert's
+// resource, so the report neither calls the node healthy nor counts the
+// condition twice beside the agent's own alert.
+func TestContract_ReportingAlertsCarryHandoverResolution(t *testing.T) {
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	snapshot := reportingEnrichmentSnapshot{
+		Nodes: []models.Node{{ID: "pve1-node", Name: "pve1"}},
+		ActiveAlerts: []models.Alert{{
+			ID:         "agent:host-1-memory",
+			Type:       "memory",
+			Level:      "warning",
+			ResourceID: "agent:host-1",
+			Node:       "pve1",
+			Message:    "Agent memory at 94%",
+			StartTime:  now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID:         "pve1-node-memory",
+				Type:       "memory",
+				Level:      "warning",
+				ResourceID: "pve1-node",
+				Node:       "pve1",
+				Message:    "Node memory at 95%",
+				StartTime:  now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-1",
+					SuccessorName:       "pve1 (Host Agent)",
+					Summary:             summary,
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+	req := reporting.MetricReportRequest{ResourceType: "node", ResourceID: "pve1-node"}
+	NewReportingHandlers(nil, nil).enrichNodeReport(&req, snapshot, now.Add(-24*time.Hour), now)
+
+	if len(req.Alerts) != 2 {
+		t.Fatalf("expected the agent alert and the moved node alert, got %+v", req.Alerts)
+	}
+	active, moved := req.Alerts[0], req.Alerts[1]
+	if active.ResourceID != "agent:host-1" || active.ResolvedTime != nil || active.Resolution != nil {
+		t.Fatalf("active alert row = %+v", active)
+	}
+	if moved.ResourceID != "pve1-node" || moved.ResolvedTime == nil || moved.Recovered() {
+		t.Fatalf("moved alert must stay resolved-but-not-recovered, got %+v", moved)
+	}
+	want := reporting.AlertResolution{
+		Reason:              reporting.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent:host-1",
+		SuccessorName:       "pve1 (Host Agent)",
+		Summary:             summary,
+	}
+	if moved.Resolution == nil || *moved.Resolution != want {
+		t.Fatalf("resolution = %+v, want %+v", moved.Resolution, want)
 	}
 }
 
@@ -5315,7 +5940,7 @@ func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default", "node-1")
 	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -5554,8 +6179,6 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -8995,6 +9618,11 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/discover/"},
 			{method: http.MethodHead, path: "/api/discover"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
+			{method: http.MethodGet, path: "/debug/pprof"},
+			{method: http.MethodGet, path: "/debug/pprof/"},
+			{method: http.MethodGet, path: "/debug/pprof/heap"},
+			{method: http.MethodPost, path: "/debug/pprof/symbol"},
+			{method: http.MethodOptions, path: "/debug/pprof/trace"},
 		}
 
 		for _, tc := range testCases {
@@ -9043,6 +9671,208 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The public demo signs every visitor in as the configured admin, so admin
+// routes accept a demo session and the demo guard is the only thing between it
+// and a write. Websocket handshake headers must not carry a write past that
+// guard, while a genuine handshake from the same session must still connect.
+func TestContract_DemoModeUpgradeHeadersDoNotExemptWrites(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+	if err := monitor.SetMockMode(true); err != nil {
+		t.Fatalf("set monitor mock mode: %v", err)
+	}
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	router := NewRouter(cfg, monitor, nil, hub, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	csrfToken := ""
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+		if cookie.Name == CookieNameCSRF {
+			csrfToken = cookie.Value
+		}
+	}
+	if csrfToken == "" {
+		t.Fatal("expected CSRF cookie after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	send := func(method, path, body string, headers map[string]string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	if status, body := send(http.MethodGet, "/api/system/mock-mode", "", nil); status != http.StatusOK {
+		t.Fatalf("demo session read of admin route status = %d, want %d: %s", status, http.StatusOK, body)
+	}
+
+	status, body := send(http.MethodPost, "/api/system/mock-mode", `{"enabled":false}`, map[string]string{
+		"Content-Type":          "application/json",
+		"X-CSRF-Token":          csrfToken,
+		"Connection":            "Upgrade",
+		"Upgrade":               "websocket",
+		"Sec-WebSocket-Version": "13",
+		"Sec-WebSocket-Key":     "dGhlIHNhbXBsZSBub25jZQ==",
+	})
+	if status != http.StatusForbidden || !strings.Contains(body, "Demo mode enabled") {
+		t.Fatalf("demo write with websocket upgrade headers status = %d, want %d demo block: %s", status, http.StatusForbidden, body)
+	}
+	if !mock.IsMockEnabled() {
+		t.Fatal("demo write with websocket upgrade headers switched mock mode off")
+	}
+
+	wsHeaders := wsHeadersForHTTP(t, server.URL)
+	wsHeaders.Set("Cookie", sessionCookies)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL)+"/ws", wsHeaders)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("demo session websocket handshake failed: %v (status %d)", err, status)
+	}
+	defer conn.Close()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("demo session websocket handshake status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
+	}
+}
+
+// The pprof routes are gated only on admin auth and session logins skip token
+// scopes, so the public demo's shared login reaches them like any admin. The
+// demo guard must answer every pprof path with 404 for that session, whatever
+// the method, while the handlers below it stay registered.
+func TestContract_DemoModeHidesPprofFromDemoAdminSession(t *testing.T) {
+	t.Setenv("PULSE_PPROF_DISABLED", "")
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+	belowDemoGuard := newIPv4HTTPServer(t, router.mux)
+	t.Cleanup(belowDemoGuard.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+	}
+	if len(cookiePairs) == 0 {
+		t.Fatal("expected session cookies after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	send := func(baseURL, method, path string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, baseURL+path, nil)
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	status, body := send(belowDemoGuard.URL, http.MethodGet, "/debug/pprof/cmdline")
+	if status != http.StatusOK || body == "" {
+		t.Fatalf("demo session below the demo guard: pprof cmdline status = %d, want %d with a body", status, http.StatusOK)
+	}
+
+	paths := []string{
+		"/debug/pprof",
+		"/debug/pprof/",
+		"/debug/pprof/heap?gc=1",
+		"/debug/pprof/goroutine?debug=2",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile?seconds=1",
+		"/debug/pprof/symbol",
+		"/debug/pprof/trace?seconds=1",
+	}
+	methods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}
+	for _, path := range paths {
+		for _, method := range methods {
+			if status, _ := send(server.URL, method, path); status != http.StatusNotFound {
+				t.Errorf("demo session %s %s status = %d, want %d", method, path, status, http.StatusNotFound)
+			}
+		}
+	}
 }
 
 func TestContract_ReleaseDemoFixtureRuntimeGuardrailsRemainCanonical(t *testing.T) {
@@ -10166,6 +10996,67 @@ func TestContract_UpdatePlanManualFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ProRuntimeSwitchJSONSnapshot(t *testing.T) {
+	inPlace, err := json.Marshal(updates.ProRuntimeSwitch{
+		Available:      true,
+		CurrentVersion: "6.5.0",
+		Version:        "6.5.0",
+		InstallInPlace: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal in-place switch: %v", err)
+	}
+	assertJSONSnapshot(t, inPlace, `{
+		"available":true,
+		"currentVersion":"6.5.0",
+		"version":"6.5.0",
+		"installInPlace":true
+	}`)
+
+	refused, err := json.Marshal(updates.ProRuntimeSwitch{
+		Reason:         updates.ProRuntimeSwitchReasonNotEligible,
+		CurrentVersion: "6.5.0",
+	})
+	if err != nil {
+		t.Fatalf("marshal refused switch: %v", err)
+	}
+	assertJSONSnapshot(t, refused, `{
+		"available":false,
+		"reason":"not_eligible",
+		"currentVersion":"6.5.0",
+		"installInPlace":false
+	}`)
+
+	docker, err := json.Marshal(updates.ProRuntimeSwitch{
+		Available:      true,
+		CurrentVersion: "6.5.0",
+		Version:        "6.5.0",
+		Docker: &updates.DockerUpdateCommands{
+			Version:            "v6.5.0",
+			Image:              "registry.example/pulse-pro",
+			ImageDigest:        "sha256:abc",
+			ComposePullCommand: "PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose pull",
+			ComposeUpCommand:   "PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose up -d",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal docker switch: %v", err)
+	}
+	assertJSONSnapshot(t, docker, `{
+		"available":true,
+		"currentVersion":"6.5.0",
+		"version":"6.5.0",
+		"installInPlace":false,
+		"docker":{
+			"version":"v6.5.0",
+			"image":"registry.example/pulse-pro",
+			"imageDigest":"sha256:abc",
+			"composePullCommand":"PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose pull",
+			"composeUpCommand":"PULSE_IMAGE='registry.example/pulse-pro@sha256:abc' docker compose up -d"
+		}
+	}`)
+}
+
 func TestContract_EmptyUpdatePlanJSONSnapshot(t *testing.T) {
 	payload := updates.EmptyUpdatePlan()
 
@@ -10617,64 +11508,6 @@ func TestContract_CachedDiscoveryResponseJSONSnapshot(t *testing.T) {
 
 	if !reflect.DeepEqual(gotValue, wantValue) {
 		t.Fatalf("cached discovery response mismatch\nwant: %s\ngot:  %s", want, string(got))
-	}
-}
-
-func TestContract_DiscoveryCommandScanRoutesRequireSettingsWrite(t *testing.T) {
-	monitoringToken := "discovery-command-monitoring-token-123.12345678"
-	settingsToken := "discovery-command-settings-token-123.12345678"
-	monitoringRecord := newTokenRecord(t, monitoringToken, []string{config.ScopeMonitoringWrite}, nil)
-	settingsRecord := newTokenRecord(t, settingsToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, monitoringRecord, settingsRecord)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	paths := []string{
-		"/api/discovery/run",
-		"/api/discovery/agent/host-1/resource-1",
-		"/api/discovery/vm/host-1/resource-1",
-	}
-
-	for _, path := range paths {
-		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		req.Header.Set("X-API-Token", monitoringToken)
-		rec := httptest.NewRecorder()
-		router.Handler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected monitoring:write token to be forbidden for command-scan route %s, got %d", path, rec.Code)
-		}
-		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-			t.Fatalf("expected command-scan route %s to require %q, got %q", path, config.ScopeSettingsWrite, rec.Body.String())
-		}
-
-		req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		req.Header.Set("X-API-Token", settingsToken)
-		rec = httptest.NewRecorder()
-		router.Handler().ServeHTTP(rec, req)
-		if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-			t.Fatalf("expected settings:write token to pass route scope for command-scan route %s, got %d: %s", path, rec.Code, rec.Body.String())
-		}
-	}
-}
-
-func TestContract_WorkloadDiscoveryTriggerLeavesHostnameForServiceResolution(t *testing.T) {
-	source, err := os.ReadFile(filepath.Clean("discovery_handlers.go"))
-	if err != nil {
-		t.Fatalf("read discovery handlers: %v", err)
-	}
-	text := string(source)
-
-	for _, required := range []string{
-		"Hostname:     reqBody.Hostname",
-		"resourceType == servicediscovery.ResourceTypeAgent",
-		"req.Hostname = targetID",
-		"Workloads should resolve their own display name from state",
-	} {
-		if !strings.Contains(text, required) {
-			t.Fatalf("discovery trigger lost workload hostname contract marker %q", required)
-		}
-	}
-	if strings.Contains(text, "if req.Hostname == \"\" {\n\t\treq.Hostname = targetID") {
-		t.Fatal("discovery trigger must not use the route target as a generic workload hostname fallback")
 	}
 }
 
@@ -12514,6 +13347,129 @@ func TestContract_MetricsHistoryAgentTemperatureLiveFallback(t *testing.T) {
 	}
 }
 
+// Normalization may keep a disk temperature it did not collect this time: a
+// host agent past its reporting lease, or a disk in standby. The history
+// endpoint must not return that retained value as a live point at "now", and
+// mock mode must not grow a synthetic series that ends on it. A collected
+// temperature still answers an empty range with a live point.
+func TestContract_MetricsHistoryDiskLivePointOnlyForCollectedTemperature(t *testing.T) {
+	state := models.NewState()
+	lastReport := time.Now().Add(-time.Hour)
+	state.UpsertHost(models.Host{
+		ID: "agent-silent", Hostname: "silent", Status: "online", IntervalSeconds: 30, LastSeen: lastReport,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdb", Serial: "WD-SILENT-LIVE", Type: "sata", Health: "PASSED", Temperature: 41,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+		}}},
+	})
+	if _, changed := state.ExpireHostTelemetry("agent-silent", lastReport); !changed {
+		t.Fatal("the silent agent's lease expiry did not mark its SMART readings")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	var resources []unifiedresources.Resource
+	for _, resource := range unifiedresources.NewMonitorAdapter(registry).GetAll() {
+		if resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			resources = append(resources, resource)
+		}
+	}
+	if len(resources) != 1 || resources[0].PhysicalDisk.Temperature != 41 {
+		t.Fatalf("silent agent disk resources = %+v, want one disk retaining 41", resources)
+	}
+	staticDisk := func(serial string, temperature int, status diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID:   "physical-disk:" + serial,
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Serial:      serial,
+				Temperature: temperature,
+				Collection:  &diskinventory.CollectionStatus{Temperature: status},
+			},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "disk", ResourceID: serial},
+		}
+	}
+	resources = append(resources,
+		staticDisk("WD-STANDBY-LIVE", 38, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		staticDisk("WD-AWAKE-LIVE", 36, diskinventory.Available("smartctl")),
+		staticDisk("WD-ASLEEP-LIVE", 0, diskinventory.Unavailable("smartctl", "disk is in standby")),
+	)
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(staticPhysicalDiskResourceStore{resources: resources})
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", query, rec.Code, rec.Body.String())
+		}
+		var single metricsHistoryResponse
+		var all struct {
+			Metrics map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+			t.Fatalf("%s: decode: %v", query, err)
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+			t.Fatalf("%s: decode metrics: %v", query, err)
+		}
+		return single, all.Metrics
+	}
+
+	for _, serial := range []string{"WD-SILENT-LIVE", "WD-STANDBY-LIVE"} {
+		resp, _ := history("resourceId=" + serial + "&metric=smart_temp&range=5m")
+		if resp.Source == "live" || len(resp.Points) != 0 {
+			t.Fatalf("%s: retained temperature served as current: source=%q points=%+v", serial, resp.Source, resp.Points)
+		}
+		if _, all := history("resourceId=" + serial + "&range=5m"); all["smart_temp"] != nil {
+			t.Fatalf("%s: retained temperature served in the all-metrics response: %s", serial, all["smart_temp"])
+		}
+	}
+	resp, _ := history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=5m")
+	if resp.Source != "live" || len(resp.Points) != 1 || resp.Points[0].Value != 36 {
+		t.Fatalf("collected temperature not served as a live point: source=%q points=%+v", resp.Source, resp.Points)
+	}
+
+	// Mock mode pads a sparse stored series out to now from the disk's current
+	// temperature. A retained temperature is not current, so the stored
+	// samples stay as they are.
+	// Without a current reading (retained, absent, or no such disk) there is
+	// nothing to pad with, so the last stored sample is not extended either.
+	setMockModeForTest(t, true)
+	now := time.Now()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-50*time.Minute))
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-40*time.Minute))
+	}
+	store.Flush()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		resp, _ = history("resourceId=" + serial + "&metric=smart_temp&range=1h")
+		if resp.Source != "store" || len(resp.Points) != 2 {
+			t.Fatalf("%s: mock mode padded stored temperature history to now without a current reading: source=%q points=%d", serial, resp.Source, len(resp.Points))
+		}
+	}
+	// With nothing stored, mock mode must not seed its synthetic series from a
+	// retained temperature either. (The monitor's generic demo series for the
+	// disk ID is not derived from the disk's reading.)
+	resp, _ = history("resourceId=WD-SILENT-LIVE&metric=smart_temp&range=1h")
+	if resp.Source == "mock_synthetic" {
+		t.Fatalf("mock mode synthesized history from a silent agent's retained temperature: points=%+v", resp.Points)
+	}
+	resp, _ = history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=1h")
+	if resp.Source != "mock_synthetic" || len(resp.Points) < 2 || resp.Points[len(resp.Points)-1].Value != 36 {
+		t.Fatalf("mock mode stopped synthesizing a collected temperature: source=%q points=%+v", resp.Source, resp.Points)
+	}
+}
+
 func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T) {
 	mh := monitoring.NewMetricsHistory(1000, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -12562,6 +13518,223 @@ func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T
 	}
 	if len(resp.Points) != 3 {
 		t.Fatalf("expected 3 cpu points, got %d", len(resp.Points))
+	}
+}
+
+// A live point claims a reading taken now, while snapshot rows keep a silent
+// source's last readings as context. An empty range therefore answers with a
+// live point only while the source behind the row still reports: an agent
+// inside its lease, a node the poller sees online, a guest or Docker host
+// whose registry sighting is current. Power state and health are not a lapse:
+// a stopped guest and a degraded Docker host keep their live point.
+func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
+	// Complete store setup before capturing current-report times. Slow setup
+	// must not age a live fixture past the existing reporting lease.
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	now := time.Now()
+	lapsed := now.Add(-time.Hour)
+	state := models.NewState()
+
+	state.UpsertHost(models.Host{
+		ID: "agent-silent", Hostname: "silent", Status: "online", IntervalSeconds: 30, LastSeen: lapsed,
+		CPUUsage: 55, Memory: models.Memory{Total: 100, Used: 40, Usage: 40},
+		Disks:   []models.Disk{{Mountpoint: "/", Total: 100, Used: 70, Usage: 70}},
+		Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 61}},
+	})
+	if expired, changed := state.ExpireHostTelemetry("agent-silent", lapsed); !changed || expired.Status != "offline" {
+		t.Fatalf("lease expiry did not mark the silent agent offline: %+v", expired)
+	}
+	if hosts := state.GetHosts(); len(hosts) != 1 || hosts[0].CPUUsage != 55 {
+		t.Fatalf("lease expiry should keep the last telemetry as context, got %+v", hosts)
+	}
+	state.UpsertHost(models.Host{
+		ID: "agent-reporting", Hostname: "reporting", Status: "online", IntervalSeconds: 30, LastSeen: now,
+		CPUUsage: 12, Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 48}},
+	})
+
+	nodeMemory := models.Memory{Total: 100, Used: 45, Usage: 45}
+	state.UpdateNodesForInstance("pve", []models.Node{
+		// The PVE grace policy keeps an unreachable node's memory and disk.
+		{ID: "pve-unreachable", Name: "unreachable", Instance: "pve", Type: "node", Status: "offline", ConnectionHealth: "error", Memory: nodeMemory, LastSeen: lapsed},
+		// The cluster reports this member offline on a fresh poll.
+		{ID: "pve-down", Name: "down", Instance: "pve", Type: "node", Status: "offline", ConnectionHealth: "error", Memory: nodeMemory, LastSeen: now},
+		// A member the cluster lists online that this poll did not observe.
+		{ID: "pve-unobserved", Name: "unobserved", Instance: "pve", Type: "node", Status: "unknown", ConnectionHealth: "degraded", Memory: nodeMemory, LastSeen: now},
+		{ID: "pve-online", Name: "online", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.2, Memory: nodeMemory, LastSeen: now},
+		// Nodes merged with a linked host agent: one agent past its lease,
+		// one reporting a degraded array.
+		{ID: "pve-merged", Name: "merged", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.35, Memory: nodeMemory, LastSeen: now, LinkedAgentID: "agent-merged"},
+		{ID: "pve-raid", Name: "raid", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.45, Memory: nodeMemory, LastSeen: now, LinkedAgentID: "agent-raid"},
+	})
+	state.UpsertHost(models.Host{
+		ID: "agent-merged", Hostname: "merged", Status: "online", IntervalSeconds: 30, LastSeen: lapsed, LinkedNodeID: "pve-merged",
+		CPUUsage: 77, Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 66}},
+	})
+	if _, changed := state.ExpireHostTelemetry("agent-merged", lapsed); !changed {
+		t.Fatal("lease expiry did not mark the linked agent offline")
+	}
+	state.UpsertHost(models.Host{
+		ID: "agent-raid", Hostname: "raid", Status: "online", IntervalSeconds: 30, LastSeen: now, LinkedNodeID: "pve-raid", CPUUsage: 45,
+		RAID: []models.HostRAIDArray{{Device: "/dev/md2", Level: "raid1", State: "degraded", TotalDevices: 2, ActiveDevices: 1, WorkingDevices: 1, FailedDevices: 1}},
+	})
+	state.UpdateVMsForInstance("pve", []models.VM{
+		{ID: "pve:unreachable:101", VMID: 101, Name: "kept", Node: "unreachable", Instance: "pve", Type: "qemu", Status: "running", CPU: 0.3, LastSeen: lapsed},
+		{ID: "pve:online:102", VMID: 102, Name: "running", Node: "online", Instance: "pve", Type: "qemu", Status: "running", CPU: 0.4, LastSeen: now},
+		{ID: "pve:online:103", VMID: 103, Name: "stopped", Node: "online", Instance: "pve", Type: "qemu", Status: "stopped", LastSeen: now},
+	})
+	state.UpdateContainersForInstance("pve", []models.Container{
+		{ID: "pve:unreachable:201", VMID: 201, Name: "kept-ct", Node: "unreachable", Instance: "pve", Type: "lxc", Status: "running", CPU: 0.25, LastSeen: lapsed},
+		{ID: "pve:online:202", VMID: 202, Name: "running-ct", Node: "online", Instance: "pve", Type: "lxc", Status: "running", CPU: 0.15, LastSeen: now},
+	})
+
+	dockerHost := func(id string, status string, interval int, lastSeen time.Time, cpu float64, containerMemory float64) models.DockerHost {
+		return models.DockerHost{
+			ID: id, AgentID: id + "-agent", Hostname: id, Status: status, IntervalSeconds: interval, LastSeen: lastSeen, CPUs: 4, CPUUsage: cpu,
+			Containers: []models.DockerContainer{{ID: id + "-app", Name: id + "-app", State: "running", Status: "Up", MemoryPercent: containerMemory}},
+		}
+	}
+	// evaluateDockerAgents marks a host offline once its report is overdue.
+	// The silent host is past the registry's stale window too; the overdue
+	// one is past its own lease but not yet stale.
+	state.UpsertDockerHost(dockerHost("docker-silent", "online", 30, lapsed, 20, 6))
+	state.UpsertDockerHost(dockerHost("docker-overdue", "online", 10, now.Add(-time.Minute), 22, 7))
+	for _, id := range []string{"docker-silent", "docker-overdue"} {
+		if !state.SetDockerHostStatus(id, "offline") {
+			t.Fatalf("%s: offline transition not applied", id)
+		}
+	}
+	state.UpsertDockerHost(dockerHost("docker-degraded", "degraded", 30, now, 33, 9))
+	state.UpsertDockerHost(dockerHost("docker-reporting", "online", 30, now, 21, 8))
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	// Preserve the source's own verdict through the stale pass (#2634): a
+	// poller-expired node stays offline, not warning. A reporting degraded
+	// array is warning, an unobserved member is unknown, and a live node stays
+	// online after its linked agent's lease expires. None of those verdicts
+	// turns a retained metric into a newly observed reading.
+	nodeStatus := make(map[string]string)
+	for _, node := range monitor.NodesSnapshot() {
+		nodeStatus[node.ID] = node.Status
+	}
+	if nodeStatus["pve-unreachable"] != "offline" || nodeStatus["pve-down"] != "offline" || nodeStatus["pve-unobserved"] != "unknown" ||
+		nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" {
+		t.Fatalf("node statuses = %v, want expired/down nodes offline, unobserved unknown, degraded array warning and live merged node online", nodeStatus)
+	}
+
+	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?range=5m&"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", query, rec.Code, rec.Body.String())
+		}
+		var single metricsHistoryResponse
+		var all struct {
+			Metrics map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+			t.Fatalf("%s: decode: %v", query, err)
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+			t.Fatalf("%s: decode metrics: %v", query, err)
+		}
+		return single, all.Metrics
+	}
+
+	for _, tc := range []struct{ resourceType, resourceID, metric string }{
+		{"agent", "agent-silent", "cpu"},
+		{"agent", "agent-silent", "temperature"},
+		{"node", "pve-unreachable", "memory"},
+		{"node", "pve-down", "memory"},
+		{"node", "pve-unobserved", "memory"},
+		{"agent", "pve-unreachable", "memory"},
+		{"vm", "pve:unreachable:101", "cpu"},
+		{"system-container", "pve:unreachable:201", "cpu"},
+		{"docker-host", "docker-silent", "cpu"},
+		{"docker-host", "docker-overdue", "cpu"},
+		{"app-container", "docker-silent-app", "memory"},
+		{"app-container", "docker-overdue-app", "memory"},
+	} {
+		target := "resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID
+		if resp, _ := history(target + "&metric=" + tc.metric); resp.Source == "live" || len(resp.Points) != 0 {
+			t.Fatalf("%s %s: retained %s served as current: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
+		}
+		if _, all := history(target); len(all) != 0 {
+			t.Fatalf("%s %s: retained readings served as current: %v", tc.resourceType, tc.resourceID, all)
+		}
+	}
+
+	// The linked agent's retained sensor reading is not served; its node has
+	// no temperature of its own to stand in.
+	if resp, _ := history("resourceType=agent&resourceId=agent-merged&metric=temperature"); resp.Source == "live" || len(resp.Points) != 0 {
+		t.Fatalf("linked agent's retained temperature served as current: source=%q points=%+v", resp.Source, resp.Points)
+	}
+	if _, all := history("resourceType=agent&resourceId=agent-merged"); all["temperature"] != nil || all["cpu"] == nil {
+		t.Fatalf("linked agent all-metrics live points = %v, want the node's readings without the agent's temperature", all)
+	}
+
+	for _, tc := range []struct {
+		resourceType, resourceID, metric string
+		want                             float64
+	}{
+		{"agent", "agent-reporting", "cpu", 12},
+		// The poll keeps the linked node's readings current after the agent
+		// falls silent.
+		{"agent", "agent-merged", "cpu", 35},
+		{"node", "pve-raid", "cpu", 45},
+		{"agent", "agent-raid", "cpu", 45},
+		{"agent", "agent-reporting", "temperature", 48},
+		{"node", "pve-online", "cpu", 20},
+		{"vm", "pve:online:102", "cpu", 40},
+		{"vm", "pve:online:103", "cpu", 0},
+		{"system-container", "pve:online:202", "cpu", 15},
+		{"docker-host", "docker-reporting", "cpu", 21},
+		{"docker-host", "docker-degraded", "cpu", 33},
+		{"app-container", "docker-reporting-app", "memory", 8},
+		{"app-container", "docker-degraded-app", "memory", 9},
+	} {
+		resp, _ := history("resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID + "&metric=" + tc.metric)
+		if resp.Source != "live" || len(resp.Points) != 1 || math.Abs(resp.Points[0].Value-tc.want) > 0.001 {
+			t.Fatalf("%s %s: current %s not served as a live point: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
+		}
+	}
+}
+
+// A row lapses only when it records a reading source and every one it records
+// is stale; one current reading source keeps it reporting. A sighting never
+// delivered (unknown) is no evidence of a lapse, and availability probes and
+// PBS sightings supply no readings either way.
+func TestContract_MetricsHistoryLiveReadingSightingsLapsed(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sightings map[unifiedresources.DataSource]string
+		want      bool
+	}{
+		{"no sightings", nil, false},
+		{"availability probe only", map[unifiedresources.DataSource]string{unifiedresources.SourceAvailability: "stale"}, false},
+		{"current PBS sighting supplies no readings", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourcePBS: "online"}, true},
+		{"provider stale", map[unifiedresources.DataSource]string{unifiedresources.SourceVMware: "stale"}, true},
+		{"every source stale", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourceAgent: "stale"}, true},
+		{"one source current", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourceAgent: "online"}, false},
+		{"never delivered", map[unifiedresources.DataSource]string{unifiedresources.SourceTrueNAS: "unknown"}, false},
+	} {
+		got := readingSightingsLapsed(func(source unifiedresources.DataSource) (unifiedresources.SourceStatus, bool) {
+			status, ok := tc.sightings[source]
+			return unifiedresources.SourceStatus{Status: status}, ok
+		})
+		if got != tc.want {
+			t.Fatalf("%s: lapsed = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 
@@ -13717,6 +14890,163 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 	}
 }
 
+// POST /api/resources/{id}/report-merge keeps its response shape, and on a
+// pair an operator linked it replaces the link: the store no longer holds it
+// and the resource list shows both sides again.
+func TestContract_ResourceReportMergeReplacesOperatorLink(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=vm,agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID string
+	for _, resource := range list() {
+		switch resource.Type {
+		case unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case unifiedresources.ResourceTypeAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture did not list a separate VM and agent: %+v", list())
+	}
+
+	linkRec := httptest.NewRecorder()
+	h.HandleLink(linkRec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/link", strings.NewReader(`{"targetId":"`+agentID+`"}`)))
+	if linkRec.Code != http.StatusOK {
+		t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
+	}
+	if linked := list(); len(linked) != 1 {
+		t.Fatalf("link listed %d resources, want one", len(linked))
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode report-merge: %v", err)
+	}
+	if len(resp) != 3 || resp["status"] != "ok" || resp["message"] != "Merge reported" {
+		t.Fatalf("report-merge response = %#v, want status, message and exclusions", resp)
+	}
+	if exclusions, ok := resp["exclusions"].(float64); !ok || exclusions < 1 {
+		t.Fatalf("report-merge exclusions = %#v, want a positive count", resp["exclusions"])
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if links, err := store.GetLinks(); err != nil || len(links) != 0 {
+		t.Fatalf("report-merge left links %+v (err %v)", links, err)
+	}
+	if split := list(); len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM and the agent apart", len(split))
+	}
+}
+
+// A source-filtered report-merge undoes the links that join the members
+// carrying the named source, not every link along the way to it: a Docker
+// host linked into an agent linked into a VM leaves the VM and the agent
+// merged when only the Docker source is named.
+func TestContract_ResourceReportMergeSourceFilterKeepsLinksOfUnreportedMembers(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate:  now,
+		VMs:         []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:       []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "docker-box", Hostname: "dock-box", MachineID: "0011223344556677", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID, dockerID string
+	for _, resource := range list() {
+		switch {
+		case resource.Type == unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case resource.Docker != nil:
+			dockerID = resource.ID
+		case resource.Agent != nil:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" || dockerID == "" {
+		t.Fatalf("fixture did not list a separate VM, agent and Docker host: %+v", list())
+	}
+	link := func(fromID, targetID string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleLink(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+fromID+"/link", strings.NewReader(`{"targetId":"`+targetID+`"}`)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("link status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	// Links apply in store order: the agent takes in the Docker host, then the
+	// VM takes in the agent.
+	link(agentID, dockerID)
+	link(vmID, agentID)
+	if chained := list(); len(chained) != 1 {
+		t.Fatalf("links listed %d resources, want the chain folded into one: %+v", len(chained), chained)
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{"sources":["docker"]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	links, err := store.GetLinks()
+	if err != nil || len(links) != 1 {
+		t.Fatalf("report-merge of the Docker source left links %+v (err %v), want only the VM and agent link", links, err)
+	}
+	if (links[0].ResourceA != vmID || links[0].ResourceB != agentID) && (links[0].ResourceA != agentID || links[0].ResourceB != vmID) {
+		t.Fatalf("report-merge kept link %+v, want the VM and agent link", links[0])
+	}
+	split := list()
+	if len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM with its agent and the Docker host apart: %+v", len(split), split)
+	}
+	for _, resource := range split {
+		docker := slices.Contains(resource.Sources, unifiedresources.SourceDocker)
+		if docker != (len(resource.Sources) == 1) {
+			t.Fatalf("report-merge listed %s with sources %v, want the Docker host alone and the VM without Docker", resource.ID, resource.Sources)
+		}
+	}
+}
+
 func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	now := time.Date(2026, 3, 17, 10, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
@@ -14299,6 +15629,182 @@ func TestContract_ResourceListUsesTenantStateProviderAtStartup(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
+}
+
+// The resources API rebuilds its registry from a monitor's unified seed, so it
+// judges source freshness by the thresholds that seed's registry judged it by,
+// for the default monitor and a tenant monitor alike. A Proxmox estate polled
+// every two minutes, read ninety seconds after its last poll, lists as the
+// websocket broadcast shows it: every node online on a current poll, with the
+// node's own readings over those of an agent silent for seventy-five seconds.
+// With the registry defaults the API called each poll stale (warning), and
+// both views showed the silent agent's readings on a node whose agent keeps
+// its own row. A monitor without a resource store builds its view with the
+// defaults, which call the ninety-second polls stale, and both views then
+// follow the defaults: no row takes a reading from a source its own sighting
+// calls stale over a live one.
+func TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast(t *testing.T) {
+	now := time.Now().UTC()
+	polledMonitor := func(t *testing.T, withStore bool) *monitoring.Monitor {
+		t.Helper()
+		monitor, state, _ := newTestMonitor(t)
+		setUnexportedField(t, monitor, "config", &config.Config{PVEPollingInterval: 2 * time.Minute})
+		polled := now.Add(-90 * time.Second)
+		agentSilent := now.Add(-75 * time.Second)
+		state.UpdateNodesForInstance("homelab", []models.Node{
+			{
+				ID: "homelab-pve1", Name: "pve1", Instance: "homelab", Status: "online",
+				LinkedAgentID: "host-pve1", CPU: 0.12,
+				Memory:   models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+				Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: polled,
+			},
+		})
+		state.UpsertHost(models.Host{
+			ID: "host-pve1", MachineID: "machine-pve1", Hostname: "pve1", LinkedNodeID: "homelab-pve1",
+			Status: "online", CPUUsage: 80,
+			Memory:   models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+			LastSeen: agentSilent, IntervalSeconds: 30,
+		})
+		state.UpsertHost(models.Host{
+			ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3",
+			Status: "online", CPUUsage: 70,
+			Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+			LastSeen: agentSilent, IntervalSeconds: 30,
+		})
+		if withStore {
+			adapter := unifiedresources.NewMonitorAdapter(nil)
+			monitor.SetResourceStore(adapter)
+			adapter.PopulateFromSnapshot(state.GetSnapshot())
+		}
+		return monitor
+	}
+
+	type nodeRow struct {
+		status      string
+		cpu, memory float64
+	}
+	nodeNames := map[string]bool{"pve1": true, "pve2": true, "pve3": true}
+	broadcastRows := func(t *testing.T, monitor *monitoring.Monitor) map[string]nodeRow {
+		t.Helper()
+		rows := make(map[string]nodeRow)
+		for _, resource := range monitor.BuildBroadcastFrontendState().Resources {
+			if !nodeNames[resource.Name] {
+				continue
+			}
+			if _, dup := rows[resource.Name]; dup {
+				t.Fatalf("broadcast shows node %s twice", resource.Name)
+			}
+			row := nodeRow{status: resource.Status}
+			if row.status == "degraded" {
+				// The broadcast spells a host's warning status as degraded.
+				row.status = string(unifiedresources.StatusWarning)
+			}
+			if resource.CPU != nil {
+				row.cpu = resource.CPU.Current
+			}
+			if resource.Memory != nil {
+				row.memory = resource.Memory.Current
+			}
+			rows[resource.Name] = row
+		}
+		return rows
+	}
+	// listedRows also returns each row's Proxmox sighting, which the
+	// broadcast payload does not carry.
+	listedRows := func(t *testing.T, h *ResourceHandlers, orgID string) (map[string]nodeRow, map[string]string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+		if orgID != "" {
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		}
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var response ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		rows := make(map[string]nodeRow)
+		sightings := make(map[string]string)
+		for _, resource := range response.Data {
+			if !nodeNames[resource.Name] {
+				continue
+			}
+			if _, dup := rows[resource.Name]; dup {
+				t.Fatalf("resources API lists node %s twice", resource.Name)
+			}
+			row := nodeRow{status: string(resource.Status)}
+			if resource.Metrics != nil && resource.Metrics.CPU != nil {
+				row.cpu = resource.Metrics.CPU.Percent
+			}
+			if resource.Metrics != nil && resource.Metrics.Memory != nil {
+				row.memory = resource.Metrics.Memory.Percent
+			}
+			rows[resource.Name] = row
+			sightings[resource.Name] = resource.SourceStatus[unifiedresources.SourceProxmox].Status
+		}
+		return rows, sightings
+	}
+	current := map[string]nodeRow{
+		"pve1": {status: "online", cpu: 12, memory: 25},
+		"pve2": {status: "online", cpu: 30, memory: 50},
+		"pve3": {status: "online", cpu: 20, memory: 12.5},
+	}
+	check := func(t *testing.T, monitor *monitoring.Monitor, h *ResourceHandlers, orgID string, want map[string]nodeRow, wantSighting string) {
+		t.Helper()
+		broadcast := broadcastRows(t, monitor)
+		if !reflect.DeepEqual(broadcast, want) {
+			t.Fatalf("broadcast node rows = %+v, want %+v", broadcast, want)
+		}
+		listed, sightings := listedRows(t, h, orgID)
+		for name, sighting := range sightings {
+			if sighting != wantSighting {
+				t.Errorf("resources API %s Proxmox sighting = %q, want %q", name, sighting, wantSighting)
+			}
+		}
+		if !reflect.DeepEqual(listed, broadcast) {
+			t.Fatalf("resources API node rows = %+v, want the broadcast's %+v", listed, broadcast)
+		}
+	}
+
+	t.Run("default monitor", func(t *testing.T) {
+		monitor := polledMonitor(t, true)
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(monitor)
+		check(t, monitor, h, "", current, "online")
+	})
+	t.Run("tenant monitor", func(t *testing.T) {
+		tenant := polledMonitor(t, true)
+		defaultMonitor, _, _ := newTestMonitor(t)
+		mtm := &monitoring.MultiTenantMonitor{}
+		setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenant})
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(defaultMonitor)
+		h.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, defaultMonitor))
+		check(t, tenant, h, "acme", current, "online")
+	})
+	t.Run("monitor without a resource store", func(t *testing.T) {
+		monitor := polledMonitor(t, false)
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(monitor)
+		check(t, monitor, h, "", map[string]nodeRow{
+			"pve1": {status: "warning", cpu: 80, memory: 75},
+			"pve2": {status: "warning", cpu: 30, memory: 50},
+			"pve3": {status: "warning", cpu: 70, memory: 62.5},
+		}, "stale")
+	})
 }
 
 func TestContract_ResourceCapabilitiesJSONSnapshot(t *testing.T) {
@@ -16608,6 +18114,84 @@ func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
 	}
 }
 
+// An agent on a Proxmox cluster node reports SMART data for the node's disks,
+// and the registry stamps each disk with the owning node's identity so it
+// stays discoverable in the Proxmox workspace. A disk is not a cluster member:
+// projecting it as one folded its health into the node row, so a disk with a
+// SMART warning rendered an actively reporting node as Stale whenever the
+// agent's report was newer than the last Proxmox poll.
+func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	polledAt := time.Now().UTC().Add(-10 * time.Second)
+	reportedAt := polledAt.Add(6 * time.Second)
+	reallocatedSectors := int64(3)
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:               "nexus-aurora",
+			NodeIdentity:     "nexus-aurora",
+			Name:             "aurora",
+			Instance:         "nexus",
+			ClusterName:      "Nexus",
+			IsClusterMember:  true,
+			Host:             "https://192.0.2.5:8006",
+			Type:             "node",
+			Status:           "online",
+			ConnectionHealth: "healthy",
+			LastSeen:         polledAt,
+			LinkedAgentID:    "host-aurora",
+		}},
+		Hosts: []models.Host{{
+			ID:           "host-aurora",
+			Hostname:     "aurora",
+			Status:       "online",
+			LastSeen:     reportedAt,
+			LinkedNodeID: "nexus-aurora",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{
+					Device:      "/dev/nvme0n1",
+					Model:       "WD_BLACK SN7100 4TB",
+					Serial:      "SN7100-AURORA",
+					Type:        "nvme",
+					Temperature: 41,
+					Health:      "PASSED",
+					Attributes:  &models.SMARTAttributes{ReallocatedSectors: &reallocatedSectors},
+				}},
+			},
+		}},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	disks := adapter.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+	if len(disks) != 1 || disks[0].Status != unifiedresources.StatusWarning ||
+		disks[0].Proxmox == nil || !disks[0].Proxmox.IsClusterMember {
+		t.Fatalf("precondition: want one warning disk owned by a cluster node, got %+v", disks)
+	}
+
+	systems := buildConnectionSystems([]Connection{
+		{ID: "pve:nexus", Type: ConnectionTypePVE, Name: "nexus", Address: "https://192.0.2.5:8006", State: ConnectionStateActive, Enabled: true},
+		{ID: "agent:host-aurora", Type: ConnectionTypeAgent, Name: "aurora", Address: "aurora", State: ConnectionStateActive, Enabled: true, LastSeen: &reportedAt},
+	}, monitor)
+	if len(systems) != 1 || len(systems[0].Members) != 1 {
+		t.Fatalf("want one cluster system with one member, got %+v", systems)
+	}
+	member := systems[0].Members[0]
+	if member.State != ConnectionStateActive {
+		t.Fatalf("member state = %q, want %q: disk health leaked into node liveness (%+v)", member.State, ConnectionStateActive, member)
+	}
+	for _, alias := range member.HostAliases {
+		if alias == "wd_black sn7100 4tb" {
+			t.Fatalf("member host aliases include the disk model: %+v", member.HostAliases)
+		}
+	}
+}
+
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
 		ID:          "agent:host-1",
@@ -17484,12 +19068,10 @@ func TestContract_UpdateFunnelTelemetryStaysContentFree(t *testing.T) {
 	}
 }
 
-// TestContract_ExecutorPostCompletionCallback pins the seam the SSE
-// bridge depends on. The executor must expose SetOnActionCompleted
-// and the action_audit hot path must dispatch the callback for every
-// terminal-state record (success, runtime fail, plan-drift refusal,
-// remediation-lock refusal). Removing or in-lining the callback
-// breaks the bridge silently.
+// TestContract_ExecutorPostCompletionCallback pins the executor-side
+// seam the API layer attaches the agent SSE bridge to. The Assistant
+// executor no longer dispatches action audits itself (typed actions
+// plan through Pulse Actions), so this pins only that the seam exists.
 func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	executor, err := os.ReadFile("../ai/tools/executor.go")
 	if err != nil {
@@ -17498,29 +19080,6 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	executorSrc := string(executor)
 	if !strings.Contains(executorSrc, "func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord))") {
 		t.Error("executor must expose SetOnActionCompleted so the API layer can bridge action completion into the agent SSE stream")
-	}
-
-	audit, err := os.ReadFile("../ai/tools/action_audit.go")
-	if err != nil {
-		t.Fatalf("read action_audit.go: %v", err)
-	}
-	auditSrc := string(audit)
-	if !strings.Contains(auditSrc, "func (e *PulseToolExecutor) publishActionCompleted(record unifiedresources.ActionAuditRecord)") {
-		t.Error("action_audit.go must define publishActionCompleted helper so terminal-state writers route through one bridge point")
-	}
-	if !strings.Contains(auditSrc, "go cb(record)") {
-		t.Error("post-completion callback must run on its own goroutine to keep the dispatch hot path off any consumer's slowness")
-	}
-	// Pin the terminal persistence sites and the shared completion publisher.
-	terminalSites := []string{
-		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, "plan drift refused")`,
-		`e.actionAuditStore.RecordActionExecutionResult(completed, event)`,
-		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, remediationLockLifecycleMessage(refusal))`,
-	}
-	for _, site := range terminalSites {
-		if !strings.Contains(auditSrc, site) {
-			t.Errorf("action_audit.go must call publishActionCompleted at every terminal-state site; missing block:\n%s", site)
-		}
 	}
 }
 
@@ -18519,7 +20078,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`AssistantAlertProvider              = tools.AlertProvider`,
 		`AssistantFindingsProvider           = tools.FindingsProvider`,
-		`AssistantDiscoveryProvider          = tools.DiscoveryProvider`,
 		`AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider`,
 		`func (s *Service) ExecuteAssistantTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error)`,
 		`Msg("Executing Assistant registry tool directly")`,
@@ -18550,7 +20108,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`SetAlertProvider(provider chat.AssistantAlertProvider)`,
 		`SetFindingsProvider(provider chat.AssistantFindingsProvider)`,
-		`SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)`,
 		`SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)`,
 	} {
 		if !strings.Contains(apiHandler, fragment) {
@@ -18576,7 +20133,7 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	settingsHandler := string(settingsHandlerSource)
 	for _, fragment := range []string{
 		`Used by Router to update Assistant tool visibility without restarting AI chat.`,
-		`Update Assistant control settings if control level or protected guests changed.`,
+		`Update Assistant control settings if the control level changed.`,
 		`This updates tool visibility without restarting AI chat.`,
 	} {
 		if !strings.Contains(settingsHandler, fragment) {
@@ -18601,7 +20158,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`ai.NewFindingsToolAdapter(findingsStore)`,
 		`tools.NewAlertManagerToolAdapter(alertManager)`,
-		`tools.NewDiscoveryToolAdapter(adapter)`,
 		`NewAssistantAgentProfileManager(persistence, licenseSvc)`,
 		`AI chat Assistant tool providers wired`,
 		`Wire control settings change callback to update Assistant tool visibility`,
@@ -18729,8 +20285,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 		`func NewAlertManagerToolAdapter(manager AlertManager) *AlertManagerToolAdapter`,
 		`type RecoveryPointsToolAdapter struct`,
 		`func NewRecoveryPointsToolAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsToolAdapter`,
-		`type DiscoveryToolAdapter struct`,
-		`func NewDiscoveryToolAdapter(source DiscoverySource) *DiscoveryToolAdapter`,
 	} {
 		if !strings.Contains(toolAdapters, fragment) {
 			t.Errorf("Assistant runtime adapters must be named for the native tool registry; missing %s", fragment)
@@ -20297,7 +21851,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	assistantRegistryToolFiles := []string{
 		filepath.Join("..", "ai", "tools", "tools_alerts.go"),
 		filepath.Join("..", "ai", "tools", "tools_control.go"),
-		filepath.Join("..", "ai", "tools", "tools_discovery.go"),
 		filepath.Join("..", "ai", "tools", "tools_docker.go"),
 		filepath.Join("..", "ai", "tools", "tools_file.go"),
 		filepath.Join("..", "ai", "tools", "tools_kubernetes.go"),
@@ -20323,9 +21876,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	for _, fragment := range []string{
 		`Name: agentcapabilities.PulseAlertsToolName`,
 		`Name:        agentcapabilities.PulseControlToolName`,
-		`Name:        agentcapabilities.PulseDiscoveryToolName`,
 		`Name:        agentcapabilities.PulseDockerToolName`,
-		`Name: agentcapabilities.PulseFileEditToolName`,
 		`Name:        agentcapabilities.PulseKubernetesToolName`,
 		`Name: agentcapabilities.PulseKnowledgeToolName`,
 		`Name: agentcapabilities.PulseMetricsToolName`,
@@ -20754,14 +22305,6 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 		operatorStateField.Tag.Get("json") != "operatorState,omitempty" {
 		t.Error("operatorState must be an omitempty pointer so absent entries surface as a missing field")
 	}
-	discoveryReadinessField, ok := contextType.FieldByName("DiscoveryReadiness")
-	if !ok {
-		t.Fatal("AgentResourceContext must carry DiscoveryReadiness")
-	}
-	if discoveryReadinessField.Type != reflect.TypeOf((*AgentResourceDiscoveryReadiness)(nil)) ||
-		discoveryReadinessField.Tag.Get("json") != "discoveryReadiness,omitempty" {
-		t.Error("discoveryReadiness must be an omitempty pointer to the shared resource readiness projection")
-	}
 	pendingApprovalsField, ok := contextType.FieldByName("PendingApprovals")
 	if !ok {
 		t.Fatal("AgentResourceContext must carry PendingApprovals")
@@ -20971,8 +22514,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 	routerSrc := string(router)
 
 	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
-		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
-		t.Error("agent fleet diagnostics route must remain admin settings:read only")
+		!strings.Contains(routerSrc, `RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
+		t.Error("agent fleet diagnostics route must remain org admin settings:read only")
 	}
 	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, now)") ||
 		!strings.Contains(handlerSrc, "applyAgentFleetActionRunnerState(&diagnostics") {
@@ -22014,14 +23557,17 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "ResourceOperatorStateProviderFunc(") {
 		t.Error("router.go must use the ai.ResourceOperatorStateProviderFunc adapter so the closure satisfies the provider interface")
 	}
-	if !strings.Contains(src, "IsInMaintenanceAt(now)") {
-		t.Error("router.go must gate the projection on state.IsInMaintenanceAt so a stale window does not return as active")
+	if !strings.Contains(src, "unifiedresources.ActiveMaintenanceCoverageAt(now, canonicalID, own, ancestorIDs,") {
+		t.Error("router.go must project maintenance through unifiedresources.ActiveMaintenanceCoverageAt, the active-occurrence and descendant-scope rule alert intent shares, so a stale window does not return as active")
+	}
+	if strings.Contains(src, "*state.MaintenanceStartAt") || strings.Contains(src, "*state.MaintenanceEndAt") {
+		t.Error("router.go must not dereference the one-shot maintenance fields; a recurring window leaves them nil")
 	}
 	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
 		t.Error("router.go must read state from the unified store's canonical accessor")
 	}
-	if !strings.Contains(src, "GetByReference(resourceRef)") {
-		t.Error("router.go must resolve non-canonical finding resource references (Patrol guest rows carry node-scoped source IDs) through the registry before reporting no operator state")
+	if !strings.Contains(src, "resolver.ResolveCanonicalResourceID(resourceRef)") {
+		t.Error("router.go must resolve finding resource references (Patrol guest rows carry node-scoped source IDs; retained findings keep link-folded IDs) through the monitor's published resolver before reading operator state")
 	}
 	if !strings.Contains(src, "IntentionallyOffline: state.IntentionallyOffline") {
 		t.Error("router.go must propagate state.IntentionallyOffline through the projection so the findings runtime sees it")
@@ -22263,6 +23809,44 @@ func TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg(t *testing.T) {
 	}
 	if res := checker.CheckAccess(nil, "admin", "default"); !res.Allowed {
 		t.Fatal("authenticated users must retain default-org access")
+	}
+}
+
+// TestContract_OrgBoundTokenCannotReachInstanceAdministration pins the token
+// side of the instance/org split: a token bound to a tenant organization
+// resolves to that organization and keeps the org routes its scope covers,
+// but instance routes refuse it whatever its scope.
+func TestContract_OrgBoundTokenCannotReachInstanceAdministration(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+
+	rawToken := "org-bound-instance-admin-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
+	record.OrgID = "org-a"
+	cfg := newTestConfigWithTokens(t, record)
+	if err := config.NewMultiTenantPersistence(cfg.DataPath).SaveOrganization(&models.Organization{ID: "org-a", DisplayName: "Org A"}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+	router := newMultiTenantRouter(t, cfg)
+
+	serve := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := serve(http.MethodPost, "/api/system/settings/update", `{"discoveryEnabled":true}`); rec.Code != http.StatusForbidden {
+		t.Fatalf("system settings update status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodGet, "/api/security/tokens", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("token list status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodGet, "/api/security/tokens/relay-mobile", ""); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("org-bound relay mobile route status = %d, want 405 from its handler: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -24452,6 +26036,91 @@ func TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion(t *testing.
 	}
 }
 
+// The report acknowledgement names the command identity only as the identity
+// the token's binding admits: equal to agentId when present, and absent for a
+// token bound elsewhere, without agent:exec, or one command admission refuses
+// outright (a collector role, more than one organization), which agents read
+// as "keep the identity you have".
+func TestContract_UnifiedAgentReportAckNamesCommandIdentityOnlyWhenTheBindingAdmitsIt(t *testing.T) {
+	cases := []struct {
+		name     string
+		scopes   []string
+		metadata map[string]string
+		orgs     []string
+		wantName bool
+	}{
+		{
+			name:     "unbound install token",
+			scopes:   []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+			wantName: true,
+		},
+		{
+			name:   "bound to another identity",
+			scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{
+				"issued_via": agentInstallIssuedViaConfig, "install_type": "host",
+				"bound_agent_id": "configured-id", "bound_hostname": "contract-host",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+		},
+		{
+			name:     "no agent:exec",
+			scopes:   []string{config.ScopeAgentReport},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+		},
+		{
+			name:   "monitoring collector",
+			scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{
+				"issued_via": agentInstallIssuedViaConfig, "install_type": "host",
+				agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindMonitoringCollector,
+			},
+		},
+		{
+			name:     "bound to two organizations",
+			scopes:   []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+			orgs:     []string{"default", "tenant-b"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			record := newTokenRecord(t, "contract-command-identity-token.12345678", tc.scopes, tc.metadata)
+			record.OrgIDs = tc.orgs
+			cfg := newTestConfigWithTokens(t, record)
+			handler, _ := newUnifiedAgentHandlers(t, cfg)
+
+			body, err := json.Marshal(agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "configured-id", Version: "6.5.0"},
+				Host:      agentshost.HostInfo{ID: "machine-contract", MachineID: "machine-contract", Hostname: "contract-host", Platform: "linux"},
+				Timestamp: time.Now().UTC(),
+			})
+			if err != nil {
+				t.Fatalf("marshal report: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+			attachAPITokenRecord(req, &cfg.APITokens[0])
+			rec := httptest.NewRecorder()
+			handler.HandleReport(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+			}
+			var ack map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &ack); err != nil {
+				t.Fatalf("decode ack: %v", err)
+			}
+			named, present := ack["commandAgentId"]
+			if present != tc.wantName {
+				t.Fatalf("commandAgentId present = %v (%v), want %v", present, named, tc.wantName)
+			}
+			if present && named != ack["agentId"] {
+				t.Fatalf("commandAgentId = %v, want it equal to agentId %v", named, ack["agentId"])
+			}
+		})
+	}
+}
+
 // App bootstrap requires presentation defaults for every authenticated role.
 // Pin both sides of the privilege boundary: the narrow runtime projection is
 // readable by a viewer, while the complete system settings payload remains
@@ -24847,12 +26516,14 @@ func orgScopedSessionRequest(t *testing.T, user string, org *models.Organization
 }
 
 // A provider opening a client workspace lands in that client's organization as
-// its owner. ensureAdminSession has always let an org manager through the
-// org-bound settings routes, but the security status snapshot reported every
-// settings capability as false for any org-scoped session, so the settings
-// navigation hid Infrastructure and Reporting and the owner had no way to
-// connect a single system. Those org-bound capabilities must follow the route
-// rule, while instance administration stays closed to org-scoped sessions.
+// its owner. ensureOrgAdminSession lets an org manager through the org-bound
+// settings routes, but the security status snapshot reported every settings
+// capability as false for any org-scoped session, so the settings navigation
+// hid Infrastructure and Reporting and the owner had no way to connect a
+// single system or build its reports. Those org-bound capabilities must follow
+// the route rule, while instance administration stays closed to org-scoped
+// sessions. Reporting is org-bound because every report reads only the request
+// organization's inventory and metrics store.
 func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 	prev := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
@@ -24883,8 +26554,8 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 		{name: "outsider", user: "u_outsider", manager: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ensureAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
-				t.Fatalf("precondition: ensureAdminSession = %v, want %v", got, tc.manager)
+			if got := ensureOrgAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
+				t.Fatalf("precondition: ensureOrgAdminSession = %v, want %v", got, tc.manager)
 			}
 
 			caps := router.securityStatusSettingsCapabilitiesFromSnapshot(
@@ -24925,7 +26596,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 
 // With a real RBAC authorizer, reporting also needs read:nodes. An org owner
 // the authorizer refuses must not be offered the reporting surface, because
-// RequirePermission refuses the route before ensureAdminSession runs.
+// RequirePermission refuses the route before any session check runs.
 func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 	cfg := platformAdminConfig(t, "admin")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -24939,7 +26610,7 @@ func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 		t.Fatal("reportingRead advertised although the authorizer refuses read:nodes")
 	}
 	if !caps.InfrastructureRead {
-		t.Fatal("infrastructureRead must still follow ensureAdminSession for the org owner")
+		t.Fatal("infrastructureRead must still follow ensureOrgAdminSession for the org owner")
 	}
 }
 
@@ -25359,4 +27030,395 @@ func TestRouterPlatformConnectionAlertsFollowRuntime(t *testing.T) {
 		t.Fatal("recovery omitted actual observation time")
 	}
 	t.Log("real TrueNAS inventory recovery reaches the ledger and clears only after monitor confirmations")
+}
+
+func TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	bootstrap := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+	h.persistence = config.NewConfigPersistence(h.config.DataPath)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
+	attachAPITokenRecord(req, bootstrap)
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("enroll status = %d: %s", rr.Code, rr.Body.String())
+	}
+	var enrolledResp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &enrolledResp); err != nil {
+		t.Fatalf("decode enroll: %v", err)
+	}
+	runtimeToken, _ := enrolledResp["runtimeToken"].(string)
+	runtimeTokenID, _ := enrolledResp["runtimeTokenId"].(string)
+	if runtimeToken == "" || runtimeTokenID == "" {
+		t.Fatalf("enrollment returned no runtime token: %v", enrolledResp)
+	}
+	enrolled := reportIdentityToken(t, h.config, runtimeTokenID)
+	if enrolled.HasScope(config.ScopeAgentExec) || enrolled.Metadata["bound_agent_id"] != "" {
+		t.Fatalf("precondition: enrolled token = %+v, want hostname-bound without agent:exec", enrolled)
+	}
+
+	router := newReportIdentityRouter(t, h.config)
+	if code := postCollectorReduction(t, router, runtimeToken, reportIdentityMachineID, "pve-node2"); code != http.StatusForbidden {
+		t.Fatalf("reduction before any report = %d, want 403: the token names no agent yet", code)
+	}
+
+	ack := postReportIdentityReport(t, router, runtimeToken,
+		reportIdentityReport(reportIdentityMachineID, reportIdentityMachineID, "pve-node2"))
+	if ack != reportIdentityMachineID {
+		t.Fatalf("acknowledged agentId = %q, want %q", ack, reportIdentityMachineID)
+	}
+
+	bound := reportIdentityToken(t, h.config, runtimeTokenID)
+	if got := bound.Metadata["bound_agent_id"]; got != ack {
+		t.Fatalf("bound_agent_id after the first report = %q, want the acknowledged %q", got, ack)
+	}
+	if got := bound.Metadata["bound_hostname"]; got != "pve-node2" {
+		t.Fatalf("bound_hostname = %q, want it untouched", got)
+	}
+	if got := bound.Metadata[agentExecBindingVersionKey]; got != agentExecBindingVersion {
+		t.Fatalf("binding version = %q, want %q", got, agentExecBindingVersion)
+	}
+	if got := bound.Metadata[agentbinding.DeployIdentityKey]; got != agentbinding.DeployIdentityAgent {
+		t.Fatalf("deploy identity marker = %q, want it untouched", got)
+	}
+	if !slices.Equal(bound.Scopes, enrolled.Scopes) {
+		t.Fatalf("scopes after the report = %v, want unchanged %v", bound.Scopes, enrolled.Scopes)
+	}
+	if got := bound.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != enrolled.Metadata[agenttokens.RuntimeRoleMetadataKey] {
+		t.Fatalf("runtime role after the report = %q, want unchanged %q", got, enrolled.Metadata[agenttokens.RuntimeRoleMetadataKey])
+	}
+	persisted, err := config.NewConfigPersistence(h.config.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted tokens: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].Metadata["bound_agent_id"] != ack {
+		t.Fatalf("persisted tokens = %+v, want the runtime token bound to %s", persisted, ack)
+	}
+	if _, ok := router.admitAgentExecToken(runtimeToken, ack, "pve-node2"); ok {
+		t.Fatal("recording the agent identity granted command execution to a token without agent:exec")
+	}
+
+	if code := postCollectorReduction(t, router, runtimeToken, ack, "pve-node2"); code != http.StatusNoContent {
+		t.Fatalf("reduction with the acknowledged identity = %d, want 204", code)
+	}
+	reduced := reportIdentityToken(t, h.config, runtimeTokenID)
+	if got := reduced.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != agenttokens.CredentialKindMonitoringCollector {
+		t.Fatalf("runtime role after reduction = %q, want %q", got, agenttokens.CredentialKindMonitoringCollector)
+	}
+}
+
+func TestContract_PMGUncollectedDatasetsRemainAbsent(t *testing.T) {
+	source := models.PMGInstance{ID: "pmg-scope", Name: "gateway", Status: "online", ConnectionHealth: "healthy", Nodes: []models.PMGNodeStatus{{Name: "one", Status: "online"}}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{source}})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+	router := &Router{monitor: monitor}
+	rec := httptest.NewRecorder()
+	router.handleListPMGInstances(rec, httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-scope", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp PMGInstancesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("data=%+v", resp.Data)
+	}
+	got := resp.Data[0]
+	if got.Status != "online" || got.ConnectionHealth != "healthy" || got.MailStats != nil || got.Quarantine != nil || len(got.Nodes) != 1 || got.Nodes[0].QueueStatus != nil || len(got.MailCount) != 0 || len(got.DomainStats) != 0 {
+		t.Fatalf("missing dataset became zero/healthy data: %+v", got)
+	}
+}
+
+func TestContract_PMGFalseScopeIsExplicitOnWire(t *testing.T) {
+	node := configapi.NodeResponse{ID: "pmg-0", Type: "pmg", Name: "gateway"}
+	raw, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"monitorMailStats", "monitorQueues", "monitorQuarantine", "monitorDomainStats"} {
+		value, exists := payload[key]
+		if !exists || string(value) != "false" {
+			t.Fatalf("saved opt-out omitted/changed %s: %s", key, raw)
+		}
+	}
+}
+
+func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
+	for _, entitled := range []bool{false, true} {
+		tmp := t.TempDir()
+		persistence := config.NewConfigPersistence(tmp)
+		cfg := config.NewDefaultAIConfig()
+		cfg.ControlLevel = config.ControlLevelAutonomous
+		if err := persistence.SaveAIConfig(*cfg); err != nil {
+			t.Fatal(err)
+		}
+		handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+		handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: entitled})
+		rec := httptest.NewRecorder()
+		handler.HandleGetAISettings(rec, newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if string(payload["control_level"]) != `"controlled"` {
+			t.Fatalf("interactive control_level %s", payload["control_level"])
+		}
+		if _, ok := payload["protected_guests"]; ok {
+			t.Fatalf("the retired protected_guests field must not be projected: %s", payload["protected_guests"])
+		}
+	}
+}
+
+// A failed support probe must not direct an operator to remove the trust
+// boundary which rejected it. These are diagnostic errors, not native faults.
+func TestContract_DiagnosticsTLSRecoveryPreservesTrust(t *testing.T) {
+	for _, message := range []string{
+		"x509: certificate signed by unknown authority",
+		"x509: certificate has expired or is not yet valid",
+		"x509: certificate is valid for pve.local, not 192.0.2.10",
+		"certificate fingerprint mismatch: expected fixture-old, got fixture-new",
+	} {
+		t.Run(message, func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(errors.New(message), "probe failed")
+			if failure.kind != "tls_certificate_mismatch" {
+				t.Fatalf("TLS kind = %q", failure.kind)
+			}
+			for _, want := range []string{"independently verify", "hostname", "expiry", "trusted chain", "only after", "Do not disable"} {
+				if !strings.Contains(failure.troubleshooting, want) {
+					t.Errorf("TLS recovery omits %q: %s", want, failure.troubleshooting)
+				}
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSDeadlineIsNotCertificateEvidence(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("TLS certificate endpoint: %w", context.DeadlineExceeded),
+		fmt.Errorf("TLS certificate endpoint: %w", context.Canceled),
+		errors.New(`Get "https://certificate.example:8006/api2/json/nodes": net/http: TLS handshake timeout`),
+		errors.New("tls: handshake timeout"),
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(err, "probe stopped")
+			wantKind := "connection_timeout"
+			if errors.Is(err, context.Canceled) {
+				wantKind = "connection_failed"
+			}
+			if failure.kind != wantKind {
+				t.Fatalf("kind = %q, want %q; guidance = %q", failure.kind, wantKind, failure.troubleshooting)
+			}
+			if strings.Contains(failure.troubleshooting, "fingerprint") || strings.Contains(failure.troubleshooting, "disable verification") {
+				t.Fatalf("stopped handshake was treated as trust evidence: %s", failure.troubleshooting)
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSTypedTimeout(t *testing.T) {
+	for _, err := range []error{
+		&url.Error{Op: "Get", URL: "https://certificate.example:8006", Err: &net.DNSError{Err: "fixture stalled", Name: "certificate.example", IsTimeout: true}},
+		&net.OpError{Op: "dial", Net: "tcp", Err: fmt.Errorf("certificate endpoint: %w", os.ErrDeadlineExceeded)},
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(err, "probe failed")
+			if failure.kind != "connection_timeout" || strings.Contains(failure.troubleshooting, "fingerprint") {
+				t.Fatalf("typed timeout lost to endpoint text: %+v", failure)
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSGuidanceSurvivesSerialization(t *testing.T) {
+	for _, message := range []string{
+		"certificate fingerprint mismatch: expected fixture-old, got fixture-new",
+		`Get "https://certificate.example:8007/api2/json/version": net/http: TLS handshake timeout`,
+		"connection timed out",
+	} {
+		t.Run(message, func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(errors.New(message), "probe failed")
+			diag := EmptyDiagnosticsInfo()
+			diag.Nodes = []NodeDiagnostic{{ID: "pve-fixture"}}
+			diag.PBS = []PBSDiagnostic{{ID: "pbs-fixture"}}
+			applyNodeDiagnosticFailure(&diag.Nodes[0], failure)
+			applyPBSDiagnosticFailure(&diag.PBS[0], failure)
+			applyPBSConnectionDiagnostic(&diag.PBS[0], Connection{State: ConnectionStateUnreachable,
+				StateReason: "poll failed", LastError: &ConnectionError{Message: message}})
+			rec := httptest.NewRecorder()
+			writeDiagnosticsResponse(rec, diag, time.Time{})
+			var payload DiagnosticsInfo
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Nodes[0].ErrorKind != failure.kind || payload.PBS[0].ErrorKind != failure.kind || payload.PBS[0].Probe.ErrorKind != failure.kind {
+				t.Fatal("serialized PVE, PBS scheduler and PBS probe diagnoses disagree")
+			}
+			if payload.Nodes[0].Troubleshooting != failure.troubleshooting || payload.PBS[0].Troubleshooting != failure.troubleshooting || payload.PBS[0].Probe.Troubleshooting != failure.troubleshooting {
+				t.Fatal("safe guidance was lost between diagnostics and support JSON")
+			}
+			if payload.Nodes[0].Connected || payload.PBS[0].Connected || payload.PBS[0].Probe.Connected || payload.PBS[0].State != ConnectionStateUnreachable || payload.PBS[0].LastError.Message != message {
+				t.Fatal("diagnostic guidance changed the observed connection failure")
+			}
+		})
+	}
+}
+
+func TestChartServiceInitializationIsConcurrentAndRouterScoped(t *testing.T) {
+	const requests = 64
+	router := &Router{}
+	start := make(chan struct{})
+	services := make(chan *chartapi.Service, requests)
+	for range requests {
+		go func() {
+			<-start
+			services <- router.ensureChartService()
+		}()
+	}
+	close(start)
+
+	var shared *chartapi.Service
+	for range requests {
+		service := <-services
+		if service == nil {
+			t.Fatal("chart service was not initialized")
+		}
+		if shared == nil {
+			shared = service
+		} else if service != shared {
+			t.Fatal("concurrent requests received different chart services")
+		}
+	}
+	if router.ensureChartService() != shared {
+		t.Fatal("later requests replaced the chart service")
+	}
+	if (&Router{}).ensureChartService() == shared {
+		t.Fatal("different routers shared a chart service")
+	}
+}
+
+// Login, status and middleware reads of the SSO configuration run on every
+// request goroutine while an administrator edits providers, and the legacy
+// OIDC_* provider is re-applied on every read. Run under -race.
+func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
+	t.Setenv("OIDC_ENABLED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "https://issuer.example.com")
+	t.Setenv("OIDC_CLIENT_ID", "pulse-env")
+
+	router, _ := setupTestRouter(t)
+	router.ensureSSOConfig()
+
+	const (
+		readers = 4
+		writers = 4
+		rounds  = 6
+	)
+
+	stop := make(chan struct{})
+	var readersWG sync.WaitGroup
+	for range readers {
+		readersWG.Add(1)
+		go func() {
+			defer readersWG.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				// /api/security/status and the CSRF middleware.
+				_ = router.ensureSSOConfig().GetEnabledProviders()
+				// OIDC and SAML login handlers.
+				if provider := router.getSSOProvider(config.LegacyOIDCProviderID); provider == nil || provider.OIDC == nil || provider.OIDC.ClientID != "pulse-env" {
+					t.Error("environment OIDC provider missing during concurrent edits")
+					return
+				}
+				w := httptest.NewRecorder()
+				router.handleListSSOProviders(w, httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil))
+				if w.Code != http.StatusOK {
+					t.Errorf("list providers: status %d", w.Code)
+					return
+				}
+			}
+		}()
+	}
+
+	create := func(id string) int {
+		body, _ := json.Marshal(config.SSOProvider{
+			ID:   id,
+			Name: "Provider " + id,
+			Type: config.SSOProviderTypeOIDC,
+			OIDC: &config.OIDCProviderConfig{
+				IssuerURL: "https://issuer.example.com",
+				ClientID:  id,
+			},
+		})
+		w := httptest.NewRecorder()
+		router.handleCreateSSOProvider(w, httptest.NewRequest(http.MethodPost, "/api/security/sso/providers", bytes.NewReader(body)))
+		return w.Code
+	}
+	remove := func(id string) int {
+		w := httptest.NewRecorder()
+		router.handleSSOProvider(w, httptest.NewRequest(http.MethodDelete, "/api/security/sso/providers/"+id, nil))
+		return w.Code
+	}
+
+	var writersWG sync.WaitGroup
+	for i := range writers {
+		writersWG.Add(1)
+		go func() {
+			defer writersWG.Done()
+			for j := range rounds {
+				id := fmt.Sprintf("race-%d-%d", i, j)
+				if code := create(id); code != http.StatusCreated {
+					t.Errorf("create %s: status %d", id, code)
+					return
+				}
+				if code := remove(id); code != http.StatusNoContent {
+					t.Errorf("delete %s: status %d", id, code)
+					return
+				}
+			}
+			if id := fmt.Sprintf("keep-%d", i); create(id) != http.StatusCreated {
+				t.Errorf("create %s failed", id)
+			}
+		}()
+	}
+	writersWG.Wait()
+	close(stop)
+	readersWG.Wait()
+
+	providerIDs := func(cfg *config.SSOConfig) []string {
+		ids := make([]string, 0, len(cfg.Providers))
+		for _, provider := range cfg.Providers {
+			ids = append(ids, provider.ID)
+		}
+		sort.Strings(ids)
+		return ids
+	}
+
+	want := []string{"keep-0", "keep-1", "keep-2", "keep-3", config.LegacyOIDCProviderID}
+	sort.Strings(want)
+	if got := providerIDs(router.ensureSSOConfig()); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("published providers = %v, want %v", got, want)
+	}
+
+	persisted, err := router.persistence.LoadSSOConfig()
+	if err != nil {
+		t.Fatalf("load persisted SSO config: %v", err)
+	}
+	if got := providerIDs(persisted); fmt.Sprint(got) != fmt.Sprint(want[:writers]) {
+		t.Fatalf("persisted providers = %v, want %v", got, want[:writers])
+	}
 }

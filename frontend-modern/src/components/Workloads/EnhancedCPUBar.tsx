@@ -63,6 +63,15 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
             <div class="text-[9px] text-slate-400 mb-1.5 truncate max-w-[200px]">{props.model}</div>
           </Show>
 
+          {/* The bar's "(18)" beside the percentage is this count: logical
+              CPUs on a host, configured vCPUs on a guest. */}
+          <Show when={props.cores}>
+            <div class="flex justify-between gap-3 py-0.5">
+              <span class="text-slate-400">CPUs</span>
+              <span class="font-medium text-base-content">{props.cores}</span>
+            </div>
+          </Show>
+
           <div class="flex justify-between gap-3 py-0.5">
             <span class="text-slate-400">Usage</span>
             <span class={`font-medium ${presentation().tooltipUsageClass}`}>

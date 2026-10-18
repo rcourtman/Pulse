@@ -1,12 +1,246 @@
 package installtests
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+// The native CI runner is checked without host-manager access. These controls
+// exercise its exact recipe, admission, signature/archive and recovery wiring;
+// the hosted runner still supplies the actual systemd/real-Pulse verdict.
+func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_systemd.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("native updater harness controls: %v\n%s", err, out)
+	}
+	results, err := nativeHarnessControlResults(string(out))
+	if err != nil {
+		t.Fatalf("incomplete native-harness result inventory: %v\n%s", err, out)
+	}
+	// The Linux server's ELF staging cannot execute on a macOS agent runner.
+	// Its connected check must pass on both Linux architectures; macOS skips
+	// only that check, never the portable signing/admission/recovery oracles.
+	for _, name := range []string{
+		"test_prepare_owns_generated_signer_mode_before_first_real_signature",
+		"test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode",
+		"test_real_verifier_accepts_fixture_and_refuses_tampering",
+		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
+		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
+		"test_runtime_readback_rejects_post_comparison_drift",
+		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
+	} {
+		if results[name] != "ok" {
+			t.Fatalf("required portable native-harness control %s did not pass:\n%s", name, out)
+		}
+	}
+	const connected = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
+	verdict := "ok"
+	if runtime.GOOS != "linux" {
+		verdict = "skipped 'Linux server ELF execution; portable controls remain required on macOS'"
+	}
+	if results[connected] != verdict {
+		t.Fatalf("required Linux connected control has wrong platform verdict:\n%s", out)
+	}
+}
+
+// unittest writes its result to stderr while the native recipe prints phase
+// markers to stdout. CombinedOutput can put those markers between the method
+// header and its verdict. Require a complete, unique verdict rather than a
+// single adjacent header/"ok" string; do not mistake a phase for completion.
+func nativeHarnessControlResults(output string) (map[string]string, error) {
+	results := make(map[string]string)
+	current := ""
+	for _, line := range strings.Split(output, "\n") {
+		if name, tail, found := strings.Cut(line, " (__main__.NativeContracts."); found && strings.HasPrefix(name, "test_") {
+			if current != "" {
+				return nil, fmt.Errorf("missing verdict for %s", current)
+			}
+			if _, duplicate := results[name]; duplicate {
+				return nil, fmt.Errorf("duplicate result for %s", name)
+			}
+			verdict, exact := strings.CutPrefix(tail, name+") ... ")
+			if !exact {
+				return nil, fmt.Errorf("mismatched method identity for %s", name)
+			}
+			current = name
+			line = verdict
+		}
+		if current != "" && (line == "ok" || strings.HasPrefix(line, "skipped ")) {
+			results[current] = line
+			current = ""
+		}
+	}
+	if current != "" {
+		return nil, fmt.Errorf("missing verdict for %s", current)
+	}
+	return results, nil
+}
+
+func TestAutoUpdateNativeControlResultsRetainInterleavedPhaseVerdicts(t *testing.T) {
+	const header = "test_fixture (__main__.NativeContracts.test_fixture) ... "
+	for _, verdict := range []string{"ok", "skipped 'Linux-only fixture'"} {
+		for _, phases := range []string{"", "NATIVE_UPDATER_PHASE=forward\nNATIVE_UPDATER_PHASE=manual-reverse\n"} {
+			out := header + phases + verdict + "\n\nRan 1 test\n\nOK\n"
+			results, err := nativeHarnessControlResults(out)
+			if err != nil || len(results) != 1 || results["test_fixture"] != verdict {
+				t.Fatalf("lost exact verdict %q with phase output %q: %v, %v", verdict, phases, results, err)
+			}
+		}
+	}
+	for _, out := range []string{
+		header + "NATIVE_UPDATER_PHASE=forward\n\nOK\n",
+		header + "ok\n" + header + "ok\n",
+		header + "NATIVE_UPDATER_PHASE=forward\n" + "test_next (__main__.NativeContracts.test_next) ... ok\n",
+		"test_fixture (__main__.NativeContracts.test_other) ... ok\n",
+	} {
+		if _, err := nativeHarnessControlResults(out); err == nil {
+			t.Fatalf("accepted incomplete/duplicate/mismatched method results: %q", out)
+		}
+	}
+}
+
+// The standalone helper passes an explicit name to the installer. Exercise
+// that producer and its real entry/handoff, not just installer discovery.
+func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v",
+		"ServiceDiscovery.test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"ServiceDiscovery.test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"ServiceDiscovery.test_only_silent_exit_one_is_admitted_as_absence",
+		"ServiceDiscovery.test_blank_line_output_is_not_a_silent_failed_inventory",
+		"ServiceDiscovery.test_automatic_helper_preserves_exact_names_and_explicit_instances",
+		"ServiceDiscovery.test_automatic_helper_cannot_short_read_the_installer_handoff",
+		"ServiceDiscovery.test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list",
+		"ServiceDiscovery.test_automatic_helper_timeout_stops_before_service_observation",
+		// A fresh host has no Pulse unit files and systemd then exits 1 with no output; the
+		// updater's own discovery must read that as absence, not as a failed inventory.
+		"ServiceDiscovery.test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"ServiceDiscovery.test_real_systemctl_on_a_host_without_pulse_units_selects_the_default")
+	cmd.Env = append(os.Environ(),
+		"PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended service discovery/installer handoff controls: %v\n%s", err, out)
+	}
+}
+
+// Service-state admission is independent of the signed/metadata transaction
+// matrix below; no native service or published input is used by this fixture.
+func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateServiceState")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
+	}
+	// Keep the collector controls part of actual package acceptance, not just
+	// an optional Python check. A green fixture with these methods removed
+	// would otherwise silently lose early-failure and final-line coverage.
+	required := []string{
+		"test_success_cannot_claim_unverified_running_executable",
+		"test_rollback_keeps_backup_until_restored_running_executable_matches",
+		"test_early_collector_failure_survives_later_success_and_drains_installer",
+		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
+	}
+	for _, name := range required {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
+// Keep the full real-sink matrix mandatory, but give it its own existing-size
+// bound rather than exhausting the service-state suite's manager deadlines.
+func TestAutoUpdateLogSinkFailures(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateLogSinks")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended real-log sink controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
+		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_failure_drains_installer_and_preserves_recovery",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required real-log sink control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
+// A real owned process retains its old executable after its disk path changes.
+// This tests Linux process identity, not a native systemd/application journey.
+func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux /proc executable identity; portable transaction controls remain required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "RunningExecutable")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("running executable identity controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_actual_process_not_replaced_disk_path_is_checked",
+		"test_complete_stable_main_pid_tuple_is_required",
+		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required running executable control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
+func extractAutoUpdateServiceFunctions(t *testing.T) string {
+	t.Helper()
+	var functions []string
+	for _, name := range []string{"read_update_service_state", "start_update_service_if_stopped", "stop_update_service_for_rollback", "wait_for_service_active", "ensure_service_restarted"} {
+		functions = append(functions, extractAutoUpdateFunction(t, name))
+	}
+	// These pure-shell controls have simulated service state and script
+	// executables, not a managed process. The registered Python controls
+	// exercise real owned /proc entries and fail-closed transaction wiring;
+	// containing source CI separately checks actual systemd/Pulse processes.
+	functions = append(functions, "verify_update_running_executable() { return 0; }")
+	return strings.Join(functions, "\n")
+}
 
 // TestIsPrereleaseTagRecognizesPrereleases asserts that any semver tag with
 // a hyphen after the patch component is flagged as a prerelease. This is the
@@ -121,6 +355,9 @@ INSTALL_DIR="/tmp/pulse-nonexistent-test-install"
 log() { echo "[$1] $2"; }
 detect_service_name() { echo pulse; }
 get_current_version() { echo v5.1.27; }
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() { return 0; }
 # If any of these get called, the guard has failed.
 curl() { echo "FAIL: curl invoked during refused update"; exit 99; }
@@ -237,6 +474,7 @@ curl() {
   cat <<'EOF'
 {
   "tag_name": "v5.1.28",
+  "draft": false,
   "prerelease": false,
   "name": "Pulse v5.1.28"
 }
@@ -376,14 +614,14 @@ func TestInstalledBinaryIsPulseProGuard(t *testing.T) {
 		})
 	}
 
-	t.Run("missing binary is not flagged", func(t *testing.T) {
-		script := fn + "\nINSTALL_DIR=" + t.TempDir() + "\nif installed_binary_is_pulse_pro; then echo pro; else echo community; fi\n"
+	t.Run("missing binary is unknown", func(t *testing.T) {
+		script := fn + "\nINSTALL_DIR=" + t.TempDir() + "\nif installed_binary_is_pulse_pro; then echo pro; else echo STATUS=$?; fi\n"
 		out, err := exec.Command("bash", "-c", script).CombinedOutput()
 		if err != nil {
 			t.Fatalf("bash: %v\n%s", err, out)
 		}
-		if got := strings.TrimSpace(string(out)); got != "community" {
-			t.Fatalf("missing binary should not be flagged as Pro, got %q", got)
+		if got := strings.TrimSpace(string(out)); got != "STATUS=2" {
+			t.Fatalf("missing binary must not establish community edition, got %q", got)
 		}
 	})
 }
@@ -427,7 +665,7 @@ curl() {
   if [[ -n "$out" ]]; then
     case "$out" in
       *.sig.*) printf 'dummy-signature\n' > "$out" ;;
-      *) printf '#!/usr/bin/env bash\nexit 1\n' > "$out" ;;
+      *) printf '#!/usr/bin/env bash\necho inactive > "${PULSE_INSTALL_DIR}/service-state"\nexit 1\n' > "$out" ;;
     esac
   fi
   return 0
@@ -436,10 +674,15 @@ curl() {
 # Service is running at the was-active capture, then down (the installer
 # stopped it before failing) until an explicit start/restart.
 IS_ACTIVE_CALLS=0
+printf 'active\n' > "$INSTALL_DIR/service-state"
 SERVICE_UP="no"
 STARTS=0
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
   case "$1" in
+    show) printf 'LoadState=loaded\nActiveState=%s\n' "$(cat "$INSTALL_DIR/service-state")"; return 0 ;;
     is-active)
       ((IS_ACTIVE_CALLS += 1))
       if (( IS_ACTIVE_CALLS == 1 )); then return 0; fi
@@ -448,15 +691,16 @@ systemctl() {
     start|restart)
       ((STARTS += 1))
       SERVICE_UP="yes"
+      printf 'active\n' > "$INSTALL_DIR/service-state"
       return 0
       ;;
+    stop) SERVICE_UP="no"; printf 'inactive\n' > "$INSTALL_DIR/service-state"; return 0 ;;
   esac
   return 1
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then
   echo "RESULT:succeeded"
@@ -491,8 +735,12 @@ func TestEnsureServiceRestartedHonorsPriorServiceState(t *testing.T) {
 set -uo pipefail
 SERVICE_UP="no"
 STARTS=0
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
   case "$1" in
+    show) printf 'LoadState=loaded\n'; if [[ "$SERVICE_UP" == yes ]]; then echo ActiveState=active; else echo ActiveState=inactive; fi; return 0 ;;
     is-active) [[ "$SERVICE_UP" == "yes" ]] && return 0 || return 1 ;;
     start|restart) ((STARTS += 1)); SERVICE_UP="yes"; return 0 ;;
   esac
@@ -500,8 +748,7 @@ systemctl() {
 }
 sleep() { :; }
 log() { echo "[$1] ${*:2}"; }
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ensure_service_restarted pulse false || echo "INACTIVE_PATH_FAILED"
 echo "STARTS_AFTER_INACTIVE:$STARTS"
 ensure_service_restarted pulse true || echo "ACTIVE_PATH_FAILED"
@@ -578,14 +825,16 @@ INSTALLER
 }
 
 # Pulse was running and stays running, so perform_update succeeds.
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
-  if [[ "$1" == "is-active" ]]; then return 0; fi
+  if [[ "$1" == show ]]; then printf 'LoadState=loaded\nActiveState=active\n'; fi
   return 0
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
 echo "LEAKED:$(trap -p RETURN)"
@@ -608,5 +857,469 @@ echo "AFTER_CALLER"
 	}
 	if strings.Contains(got, "unbound variable") {
 		t.Fatalf("perform_update leaked its RETURN trap; a later function return aborted under set -u:\n%s", got)
+	}
+}
+
+// Exercise the complete sourced updater in its real conditional-call context.
+// Only downloads and systemd are replaced; file copies, comparisons, renames,
+// executable version reads and SSH signature verification are real and local.
+func TestAutoUpdateBackupTransaction(t *testing.T) {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen unavailable for signed offline installer fixture")
+	}
+	type scenario struct {
+		name, fault, outcome, layout            string
+		noVersion, retained, success, preflight bool
+	}
+	cases := []scenario{
+		{name: "backup_directory_failure", fault: "backup_dir", preflight: true},
+		{name: "binary_snapshot_failure", fault: "backup_binary", preflight: true},
+		{name: "version_snapshot_failure", fault: "backup_version", preflight: true},
+		{name: "corrupt_snapshot", fault: "backup_corrupt", preflight: true},
+		{name: "installer_file_failure", fault: "installer_tmp", preflight: true},
+		{name: "signature_file_failure", fault: "signature_tmp", preflight: true},
+		{name: "missing_binary", fault: "no_binary", preflight: true},
+		{name: "symlink_binary", fault: "binary_symlink", preflight: true},
+		{name: "symlink_version", fault: "version_symlink", preflight: true},
+		{name: "installer_download_failure", fault: "download_installer", preflight: true},
+		{name: "signature_download_failure", fault: "download_signature", preflight: true},
+		{name: "invalid_signature", fault: "invalid_signature", preflight: true},
+		{name: "installer_failure", outcome: "failure"},
+		{name: "wrong_version", outcome: "mismatch"},
+		{name: "failed_version_probe", outcome: "probe_failure"},
+		{name: "empty_version_probe", outcome: "probe_empty"},
+		{name: "unrecognised_version_brand", outcome: "probe_unknown"},
+		{name: "different_edition", outcome: "probe_pro"},
+		{name: "nonexecutable_replacement", outcome: "probe_nonexec"},
+		{name: "missing_replacement", outcome: "probe_missing"},
+		{name: "version_on_later_line", outcome: "probe_later_line"},
+		{name: "invalid_version_suffix", outcome: "probe_trailing"},
+		{name: "valid_build_details", outcome: "probe_details", success: true},
+		{name: "valid_unprefixed_version", outcome: "probe_unprefixed", success: true},
+		{name: "original_version_absent", outcome: "failure", noVersion: true},
+		{name: "extended_metadata", fault: "xattrs", outcome: "failure"},
+		{name: "legacy_layout_migration", outcome: "failure", layout: "legacy"},
+		{name: "both_binary_paths", outcome: "failure", layout: "both"},
+		{name: "new_destination_symlink", outcome: "symlink"},
+		{name: "rollback_stop_failure", fault: "stop", outcome: "failure", retained: true},
+		{name: "rollback_allocation_failure", fault: "restore_tmp", outcome: "failure", retained: true},
+		{name: "rollback_copy_failure", fault: "restore_copy", outcome: "failure", retained: true},
+		{name: "corrupt_rollback_copy", fault: "restore_corrupt", outcome: "failure", retained: true},
+		{name: "rollback_rename_failure", fault: "restore_rename", outcome: "failure", retained: true},
+		{name: "rollback_rename_noop", fault: "restore_noop", outcome: "failure", retained: true},
+		{name: "rollback_nonregular_destination", fault: "restore_noop", outcome: "fifo", retained: true},
+		{name: "rollback_destination_changed", fault: "restore_changed", outcome: "failure", retained: true},
+		{name: "version_restore_failure", fault: "version_rename", outcome: "failure", retained: true},
+		{name: "new_destination_directory", outcome: "directory", retained: true},
+		{name: "successful_update", success: true},
+	}
+	t.Run("new_service_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "", "service_failure", "", "true", false, false, false, false)
+	})
+	for _, tc := range cases {
+		for _, active := range []string{"true", "false"} {
+			t.Run(tc.name+"/prior_active_"+active, func(t *testing.T) {
+				runAutoUpdateTransactionScenario(t, tc.fault, tc.outcome, tc.layout, active, tc.noVersion, tc.preflight, tc.retained, tc.success)
+			})
+		}
+	}
+	t.Run("restored_service_start_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "restart", "failure", "", "true", false, false, true, false)
+	})
+	t.Run("restored_service_liveness_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "restart_liveness", "failure", "", "true", false, false, true, false)
+	})
+}
+
+func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, active string, noVersion, preflight, retained, success bool) {
+	t.Helper()
+	if fault == "xattrs" {
+		if _, err := exec.LookPath("python3"); err != nil {
+			t.Skip("python3 unavailable for extended metadata fixture")
+		}
+	}
+	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := `
+set -euo pipefail
+source "$UPDATER_UNDER_TEST"
+# This signed transaction matrix simulates the manager. Running-process
+# identity is exercised by the real owned-process Python controls, not here.
+verify_update_running_executable() { return 0; }
+INSTALL_DIR="$FIXTURE_DIR/install"
+CONFIG_DIR="$FIXTURE_DIR/config"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR" "$FIXTURE_DIR/tmp" "$FIXTURE_DIR/original"
+printf 'operator settings unchanged\n' > "$CONFIG_DIR/system.json"
+printf 'local identity unchanged\n' > "$CONFIG_DIR/agent-id"
+printf 'victim unchanged\n' > "$FIXTURE_DIR/victim"
+printf '#!/usr/bin/env bash\nprintf "Pulse v6.4.5\\n"\n' > "$FIXTURE_DIR/original/pulse-bin"
+printf '#!/usr/bin/env bash\nprintf "Pulse v6.4.4\\n"\n' > "$FIXTURE_DIR/original/pulse-legacy"
+printf 'v6.4.5\n' > "$FIXTURE_DIR/original/VERSION"
+chmod 751 "$FIXTURE_DIR/original/pulse-bin" "$FIXTURE_DIR/original/pulse-legacy"
+chmod 640 "$FIXTURE_DIR/original/VERSION"
+case "$LAYOUT" in
+ legacy) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/pulse" ;;
+ both) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; cp -p "$FIXTURE_DIR/original/pulse-legacy" "$INSTALL_DIR/pulse" ;;
+ *) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse" ;;
+esac
+if [[ "$NO_VERSION" == false ]]; then cp -p "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION"; fi
+case "$FAULT" in
+ no_binary) rm -f "$INSTALL_DIR/bin/pulse" ;;
+ binary_symlink) mv "$INSTALL_DIR/bin/pulse" "$FIXTURE_DIR/original/linked-binary"; ln -s "$FIXTURE_DIR/original/linked-binary" "$INSTALL_DIR/bin/pulse" ;;
+ version_symlink) rm "$INSTALL_DIR/VERSION"; ln -s "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION" ;;
+esac
+if [[ "$FAULT" == xattrs ]]; then
+ if python3 - "$INSTALL_DIR" <<'METADATA'
+import errno, os, sys
+try:
+    for name in ('bin/pulse', 'VERSION'):
+        os.setxattr(os.path.join(sys.argv[1], name), 'user.pulse-updater-test', b'original extended metadata')
+except AttributeError:
+    sys.exit(77)
+except OSError as exc:
+    if exc.errno in (errno.ENOTSUP, errno.EOPNOTSUPP):
+        sys.exit(77)
+    raise
+METADATA
+ then :
+ else
+  metadata_status=$?
+  if [[ "$metadata_status" == 77 ]]; then echo TRANSACTION_METADATA_UNAVAILABLE; exit 0; fi
+  exit "$metadata_status"
+ fi
+fi
+printf '%s\n' "$PRIOR_ACTIVE" > "$FIXTURE_DIR/active"
+export FIXTURE_DIR OUTCOME FAULT
+cat > "$FIXTURE_DIR/installer" <<'INSTALLER'
+set -euo pipefail
+printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
+printf 'false\n' > "$FIXTURE_DIR/active"
+[[ "$FAULT" != stop ]] || printf 'true\n' > "$FIXTURE_DIR/active"
+mkdir -p "$PULSE_INSTALL_DIR/bin"
+new_version=v6.5.0
+[[ "$OUTCOME" != mismatch ]] || new_version=v6.4.6
+printf '#!/usr/bin/env bash\nprintf "Pulse %s\\n"\n' "$new_version" > "$PULSE_INSTALL_DIR/bin/pulse"
+chmod 700 "$PULSE_INSTALL_DIR/bin/pulse"
+if [[ -f "$PULSE_INSTALL_DIR/pulse" ]]; then printf 'changed legacy binary\n' > "$PULSE_INSTALL_DIR/pulse"; fi
+printf '%s\n' "$new_version" > "$PULSE_INSTALL_DIR/VERSION"
+chmod 600 "$PULSE_INSTALL_DIR/VERSION"
+# Keep the target VERSION sidecar even when the signed installer leaves an
+# unusable executable. The real post-install probe must trigger full rollback.
+case "$OUTCOME" in
+ probe_failure) printf '#!/bin/bash\necho "Pulse v6.5.0"; exit 1\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_empty) printf '#!/bin/bash\nexit 0\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unknown) printf '#!/bin/bash\necho "Other v6.5.0 private-detail"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_pro) printf '#!/bin/bash\necho "Pulse Pro v6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_nonexec) chmod 600 "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_missing) rm "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_later_line) printf '#!/bin/bash\nprintf "Other\\nPulse v6.5.0\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_trailing) printf '#!/bin/bash\necho "Pulse v6.5.0-other!"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_details) printf '#!/bin/bash\nprintf "Pulse v6.5.0\\nBuilt: yesterday\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unprefixed) printf '#!/bin/bash\necho "Pulse 6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+esac
+if [[ "$OUTCOME" == symlink ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ ln -s "$FIXTURE_DIR/victim" "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+if [[ "$OUTCOME" == directory ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkdir "$PULSE_INSTALL_DIR/bin/pulse"
+ printf 'unexpected directory\n' > "$PULSE_INSTALL_DIR/bin/pulse/keep"
+fi
+if [[ "$OUTCOME" == fifo ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkfifo "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+case "$OUTCOME" in failure|symlink|directory|fifo) exit 23 ;; esac
+exit 0
+INSTALLER
+command ssh-keygen -q -t ed25519 -N '' -f "$FIXTURE_DIR/fixture-key"
+PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$FIXTURE_DIR/fixture-key.pub")
+command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXTURE_DIR/installer" >/dev/null 2>&1
+[[ -s "$FIXTURE_DIR/installer.sig" ]]
+[[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
+log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+detect_service_name() { printf 'pulse\n'; }
+sleep() { :; }
+file_mode() { command stat -c '%a' "$1" 2>/dev/null || command stat -f '%Lp' "$1"; }
+# Keep real crypto but place all temporary files inside this disposable fixture.
+mktemp() {
+ local -a args=("$@")
+ local template="${args[${#args[@]}-1]}" result
+ case "$template:$FAULT" in
+  /tmp/pulse-backup.*:backup_dir|/tmp/pulse-update-installer.XXXXXX:installer_tmp|/tmp/pulse-update-installer.sig.*:signature_tmp|*.rollback.*:restore_tmp) return 1 ;;
+ esac
+ if [[ "$template" == /tmp/* ]]; then args[${#args[@]}-1]="$FIXTURE_DIR/tmp/${template##*/}"; fi
+ result=$(command mktemp "${args[@]}") || return
+ if [[ "$template" == /tmp/pulse-backup.* ]]; then printf '%s\n' "$result" > "$FIXTURE_DIR/backup-path"; fi
+ printf '%s\n' "$result"
+}
+# Record/clean the parent's timestamp backup as well, for the negative control.
+date() { printf 'transaction-%s\n' "${FIXTURE_DIR##*/}"; }
+mkdir() {
+ if [[ "${*: -1}" == /tmp/pulse-backup-* ]]; then printf '%s\n' "${*: -1}" > "$FIXTURE_DIR/backup-path"; fi
+ command mkdir "$@"
+}
+cp() {
+ local src="${@: -2:1}" dest="${@: -1}"
+ if [[ "$dest" == *pulse-backup* ]]; then
+  case "$FAULT:${src##*/}" in backup_binary:pulse|backup_version:VERSION) return 1 ;; esac
+  command cp "$@" || return
+  if [[ "$FAULT" == backup_corrupt ]]; then
+   [[ -d "$dest" ]] && dest="$dest/${src##*/}"
+   printf 'corrupt\n' > "$dest"
+  fi
+ elif [[ "$src" == *pulse-backup*/* ]]; then
+  [[ "$FAULT" != restore_copy ]] || return 1
+  command cp "$@" || return
+  [[ "$FAULT" != restore_corrupt ]] || printf 'corrupt\n' > "$dest"
+ else
+  command cp "$@"
+ fi
+}
+mv() {
+ local dest="${*: -1}"
+ if [[ "$FAULT" == restore_rename && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then return 1; fi
+ if [[ "$FAULT" == restore_noop && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then return 0; fi
+ if [[ "$FAULT" == version_rename && "$dest" == "$INSTALL_DIR/VERSION" ]]; then return 1; fi
+ command mv "$@" || return
+ if [[ "$FAULT" == restore_changed && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then printf 'changed\n' > "$dest"; fi
+}
+curl() {
+ local out="" url="" arg
+ while (( $# )); do
+  arg="$1"; shift
+  case "$arg" in -o) out="$1"; shift ;; https://*) url="$arg" ;; esac
+ done
+ printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
+ if [[ "$url" == *.sshsig ]]; then
+  [[ "$FAULT" != download_signature ]] || return 1
+  command cp "$FIXTURE_DIR/installer.sig" "$out"
+ else
+  [[ "$FAULT" != download_installer ]] || return 1
+  command cp "$FIXTURE_DIR/installer" "$out"
+ fi
+}
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
+systemctl() {
+ case "$1" in
+  show) printf 'LoadState=loaded\n'; if [[ "$(cat "$FIXTURE_DIR/active")" == true ]]; then echo ActiveState=active; else echo ActiveState=inactive; fi ;;
+  is-active) [[ "$(cat "$FIXTURE_DIR/active")" == true ]] ;;
+  stop)
+   printf 'stop\n' >> "$FIXTURE_DIR/service-operations"
+   [[ "$FAULT" != stop ]] || return 1
+   printf 'false\n' > "$FIXTURE_DIR/active"
+   ;;
+  start|restart)
+   printf '%s:%s\n' "$1" "$(get_current_version)" >> "$FIXTURE_DIR/service-operations"
+   [[ "$FAULT" != restart ]] || return 1
+   if [[ "$OUTCOME" == service_failure && "$(get_current_version)" != v6.4.5 ]]; then return 1; fi
+   [[ "$FAULT" == restart_liveness ]] || printf 'true\n' > "$FIXTURE_DIR/active"
+   ;;
+  *) return 1 ;;
+ esac
+}
+cleanup_fixture() {
+ if [[ -f "$FIXTURE_DIR/backup-path" ]]; then
+  local old_backup; old_backup=$(cat "$FIXTURE_DIR/backup-path")
+  case "$old_backup" in /tmp/pulse-backup-transaction-*) command rm -rf -- "$old_backup" ;; esac
+ fi
+}
+trap cleanup_fixture EXIT
+result=failure
+if perform_update v6.5.0; then result=success; fi
+[[ "$result" == "$EXPECTED_RESULT" ]] || { echo "unexpected result: $result"; exit 1; }
+[[ -z "$(trap -p RETURN)" ]] || { echo 'leaked RETURN trap'; exit 1; }
+caller() { :; }; caller
+[[ "$(cat "$CONFIG_DIR/system.json")" == 'operator settings unchanged' ]]
+[[ "$(cat "$CONFIG_DIR/agent-id")" == 'local identity unchanged' ]]
+[[ "$(cat "$FIXTURE_DIR/victim")" == 'victim unchanged' ]]
+if [[ "$PREFLIGHT" == true ]]; then
+ [[ ! -f "$FIXTURE_DIR/installer-executed" ]] || { echo 'installer executed without a usable backup/admission'; exit 1; }
+ [[ ! -s "$FIXTURE_DIR/service-operations" ]] || { echo 'service mutated on rejected preflight'; exit 1; }
+ [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
+else
+ [[ -f "$FIXTURE_DIR/installer-executed" ]]
+fi
+backup=""; [[ ! -f "$FIXTURE_DIR/backup-path" ]] || backup=$(cat "$FIXTURE_DIR/backup-path")
+if [[ "$RETAINED" == true ]]; then
+ [[ -d "$backup" ]] || { echo 'rollback backup lost after failed recovery'; exit 1; }
+ [[ "$(file_mode "$backup")" == 700 ]]
+ cmp "$FIXTURE_DIR/original/pulse-bin" "$backup/pulse-bin"
+ cmp "$FIXTURE_DIR/original/VERSION" "$backup/VERSION"
+else
+ [[ -z "$backup" || ! -e "$backup" ]] || { echo 'unneeded backup leaked'; exit 1; }
+fi
+# Incomplete file restoration must not activate an unverified executable.
+case "$FAULT" in restore_tmp|restore_copy|restore_corrupt|restore_rename|restore_noop|restore_changed|version_rename|stop)
+ if [[ -f "$FIXTURE_DIR/service-operations" ]]; then
+  ! grep -Eq '^(start|restart):' "$FIXTURE_DIR/service-operations"
+ fi
+ ;;
+esac
+if [[ "$PREFLIGHT" != true && "$RETAINED" != true && "$EXPECTED_RESULT" != success ]]; then
+ case "$LAYOUT" in
+  legacy) [[ ! -e "$INSTALL_DIR/bin/pulse" ]]; cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/pulse" ;;
+  both) cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; cmp "$FIXTURE_DIR/original/pulse-legacy" "$INSTALL_DIR/pulse" ;;
+  *) cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; [[ ! -e "$INSTALL_DIR/pulse" ]] ;;
+ esac
+ if [[ "$NO_VERSION" == true ]]; then
+  [[ ! -e "$INSTALL_DIR/VERSION" ]]
+ else
+  cmp "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION"
+  [[ "$(file_mode "$INSTALL_DIR/VERSION")" == 640 ]]
+ fi
+ [[ "$(get_current_version)" == v6.4.5 ]]
+ binary="$INSTALL_DIR/bin/pulse"; [[ "$LAYOUT" != legacy ]] || binary="$INSTALL_DIR/pulse"
+ [[ "$(file_mode "$binary")" == 751 ]]
+ [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
+fi
+if [[ "$EXPECTED_RESULT" == success ]]; then [[ "$(get_current_version)" == v6.5.0 ]]; fi
+if [[ "$FAULT" == xattrs ]]; then
+ python3 - "$INSTALL_DIR" <<'METADATA'
+import os, sys
+for name in ('bin/pulse', 'VERSION'):
+    assert os.getxattr(os.path.join(sys.argv[1], name), 'user.pulse-updater-test') == b'original extended metadata'
+METADATA
+fi
+printf 'TRANSACTION_ASSERTIONS_PASSED\n'
+`
+	cmd := exec.Command("bash", "-c", script)
+	boolString := func(v bool) string {
+		if v {
+			return "true"
+		}
+		return "false"
+	}
+	want := "failure"
+	if success {
+		want = "success"
+	}
+	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
+		"FAULT="+fault, "OUTCOME="+outcome, "LAYOUT="+layout, "PRIOR_ACTIVE="+active,
+		"NO_VERSION="+boolString(noVersion), "PREFLIGHT="+boolString(preflight),
+		"RETAINED="+boolString(retained), "EXPECTED_RESULT="+want)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("complete updater transaction: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), "TRANSACTION_METADATA_UNAVAILABLE") {
+		t.Skip("extended metadata unsupported by fixture filesystem")
+	}
+	if !strings.Contains(string(out), "TRANSACTION_ASSERTIONS_PASSED") {
+		t.Fatalf("transaction assertions did not finish:\n%s", out)
+	}
+	if !preflight {
+		installerExit := "0"
+		switch outcome {
+		case "failure", "symlink", "directory", "fifo":
+			installerExit = "23"
+		}
+		observed := "(installer exit: " + installerExit + "; log collector exit: 0)"
+		if !strings.Contains(string(out), observed) {
+			t.Fatalf("missing observed pipeline exits %q after signed installer execution:\n%s", observed, out)
+		}
+	}
+}
+
+// Stable admission is object-bound, not a line-oriented tag/flag accumulator.
+// Each fixture runs the real selector with local transport stubs only.
+func TestAutoUpdateReleaseMetadataAdmission(t *testing.T) {
+	const stable = `{"tag_name":"v6.5.0","draft":false,"prerelease":false}`
+	cases := []struct {
+		name, list, latest, want string
+		listExit, calls          int
+	}{
+		{"compact list", `[{"tag_name":"v6.4.5","draft":false,"prerelease":false},` + stable + `]`, `{}`, "v6.5.0", 0, 1},
+		{"reordered fields", `[{"prerelease":false,"draft":false,"tag_name":"v6.5.0"}]`, `{}`, "v6.5.0", 0, 1},
+		{"no sibling maturity borrowing", "[\n{\n\"draft\":true,\n\"prerelease\":false,\n\"tag_name\":\"v9.9.9\"\n},\n{\n\"prerelease\":false,\n\"draft\":false,\n\"tag_name\":\"v6.5.0\"\n}\n]", `{}`, "v6.5.0", 0, 1},
+		{"confirmed latest fallback", `[]`, stable, "v6.5.0", 0, 2},
+		{"missing draft", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"prerelease\":false\n}", "", 0, 2},
+		{"missing prerelease", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"draft\":false\n}", "", 0, 2},
+		{"draft latest", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"draft\":true,\n\"prerelease\":false\n}", "", 0, 2},
+		{"string flags", `[{"tag_name":"v9.9.9","draft":"false","prerelease":"false"}]`, `{}`, "", 0, 2},
+		{"nested flags", `[{"tag_name":"v9.9.9","status":{"draft":false,"prerelease":false}}]`, `{}`, "", 0, 2},
+		{"body is not release metadata", `[{"body":{"tag_name":"v9.9.9","draft":false,"prerelease":false}}]`, `{}`, "", 0, 2},
+		{"wrong list shape", stable, `{}`, "", 0, 2},
+		{"wrong latest shape", `[]`, `[` + stable + `]`, "", 0, 2},
+		{"non-object entry", `[` + stable + `,false]`, `{}`, "", 0, 2},
+		{"truncated list", `[` + stable + `,`, `{}`, "", 0, 2},
+		{"concatenated documents", `[` + stable + `] []`, `{}`, "", 0, 2},
+		{"partial transport output", `[` + stable + `]`, `{}`, "", 22, 2},
+		{"transport failure with confirmed fallback", `[` + stable + `]`, stable, "v6.5.0", 22, 2},
+		{"redirect is not maturity", `[]`, "Location: https://github.com/rcourtman/Pulse/releases/tag/v9.9.9\r\n", "", 0, 2},
+		{"multiline tag", `[{"tag_name":"unknown\nv9.9.9","draft":false,"prerelease":false}]`, `{}`, "", 0, 2},
+		{"preview and chart tags", `[{"tag_name":"v9.9.9-rc.1","draft":false,"prerelease":false},{"tag_name":"helm-chart-9.9.9","draft":false,"prerelease":false}]`, `{}`, "", 0, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, data := range map[string]string{"list": tc.list, "latest": tc.latest} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			script := `set -euo pipefail
+GITHUB_REPO=rcourtman/Pulse
+log() { printf '%s\n' "$*" >&2; }
+curl() {
+  printf '%s\n' "$*" >> "$FIXTURE_DIR/calls"
+  local url="${!#}"
+  case "$url" in
+    */releases?per_page=30) cat "$FIXTURE_DIR/list"; return "$LIST_EXIT" ;;
+    */releases/latest) cat "$FIXTURE_DIR/latest" ;;
+    *) echo "UNEXPECTED_TRANSPORT" >&2; return 99 ;;
+  esac
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + "\n" +
+				extractAutoUpdateFunction(t, "version_greater_than") + "\n" +
+				extractAutoUpdateFunction(t, "pick_highest_stable_tag") + "\n" +
+				extractAutoUpdateFunction(t, "get_latest_stable_version") + `
+get_latest_stable_version
+`
+			cmd := exec.Command("bash", "-c", script)
+			listExit := "0"
+			if tc.listExit != 0 {
+				listExit = "22"
+			}
+			cmd.Env = append(os.Environ(), "FIXTURE_DIR="+dir, "LIST_EXIT="+listExit)
+			out, err := cmd.CombinedOutput()
+			if err != nil || strings.TrimSpace(string(out)) != tc.want {
+				t.Fatalf("release selection: %v; got %q, want %q", err, out, tc.want)
+			}
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+			if len(lines) != tc.calls {
+				t.Fatalf("transport calls: got %d, want %d: %s", len(lines), tc.calls, calls)
+			}
+			for _, line := range lines {
+				if !strings.HasPrefix(line, "--disable --fail --silent --show-error --connect-timeout 5 --max-time 20 --proto =https https://api.github.com/repos/rcourtman/Pulse/") {
+					t.Fatalf("unbounded or ambient-config transport: %s", line)
+				}
+			}
+		})
+	}
+}
+
+func TestAutoUpdateReleaseMetadataRequiresParserBeforeTransport(t *testing.T) {
+	script := `set -euo pipefail
+command() { if [[ "$*" == '-v jq' ]]; then return 1; fi; builtin command "$@"; }
+log() { printf '%s\n' "$*" >&2; }
+curl() { echo UNEXPECTED_TRANSPORT; return 99; }
+` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
+result=$(get_latest_stable_version)
+[[ -z "$result" ]] && echo PARSER_REFUSED
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "PARSER_REFUSED") || strings.Contains(string(out), "UNEXPECTED_TRANSPORT") {
+		t.Fatalf("missing parser must stop before discovery: %v\n%s", err, out)
 	}
 }

@@ -75,7 +75,9 @@ export interface AIChatContext {
   handoffActions?: AIChatHandoffAction[];
   handoffMetadata?: AIChatHandoffMetadata;
   preferredWorkflowPromptName?: string;
-  // Per-request execution mode override; false keeps scoped handoffs approval-required.
+  // Drawer-only: false marks a scoped handoff so the drawer discloses the
+  // approval-required posture. Never sent; /api/ai/chat sets that posture
+  // server-side for every request.
   autonomousMode?: boolean;
 }
 

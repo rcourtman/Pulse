@@ -7,7 +7,11 @@ import {
   mergeStorageAlertRowState,
   type StorageAlertRowState,
 } from '@/features/storageBackups/storageAlertState';
-import { getAlertStyles } from '@/utils/alerts';
+import { getAlertStyles, getAlertsForResource } from '@/utils/alerts';
+import {
+  describeStorageAlertHeadline,
+  pickStorageHeadlineAlert,
+} from '@/features/storageBackups/storageRowAlertPresentation';
 
 type UseStorageAlertStateOptions = {
   records: Accessor<StorageRecord[]>;
@@ -41,7 +45,16 @@ export const useStorageAlertState = (options: UseStorageAlertStateOptions) => {
           hasAcknowledgedOnlyAlert: styles.hasAcknowledgedOnlyAlert,
         });
       }
-      byRecordId[record.id] = merged;
+      const headlineAlert = pickStorageHeadlineAlert(
+        getAlertsForResource(candidateIds, activeAlerts, enabled),
+      );
+      byRecordId[record.id] = {
+        ...merged,
+        headline: headlineAlert ? describeStorageAlertHeadline(headlineAlert) : null,
+        headlineCompact: headlineAlert
+          ? describeStorageAlertHeadline(headlineAlert, { compact: true })
+          : null,
+      };
     }
 
     return byRecordId;

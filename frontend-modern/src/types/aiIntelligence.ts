@@ -109,14 +109,6 @@ export interface ResourceCorrelation {
   description: string;
 }
 
-export interface CorrelationsResponse {
-  correlations: ResourceCorrelation[];
-  count: number;
-  message?: string;
-  license_required?: boolean;
-  upgrade_url?: string;
-}
-
 export interface IntelligenceSummary {
   timestamp: string;
   overall_health: IntelligenceHealthScore;

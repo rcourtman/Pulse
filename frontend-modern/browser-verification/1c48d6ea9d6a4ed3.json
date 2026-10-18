@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1fe65245e823a62b84f84f09997744ca1e61953b",
+  "changed_paths": ["frontend-modern/src/utils/workloadGuestPresentation.ts"],
+  "content_sha256": {
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "ad087616ec03f0d5f18471f5eaedf5c6493fd1c008aae2362b97637dd7045cbb"
+  },
+  "routes": [
+    "/browser-tests/guest-reading-help.html — production workload row and full GuestDrawer on synthetic readings",
+    "/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis — actual shipped markdown renderer and asset"
+  ],
+  "states": [
+    "Permission-denied filesystem reads with no current usage; retained prev-permission-denied values remain last known and lack measured utilization bars",
+    "New synthetic same-guest reading removes denial guidance and restores its measured bar; unrelated missing-agent guidance unchanged",
+    "Intentionally scoped access, effective account/token rights, unavailable versus unhealthy and backup precautions in shipped help"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone touch open the same guest details",
+    "Read wrapped error guidance and accessible row status without live diagnostics, access changes or external requests",
+    "Follow existing reading-help link with keyboard or touch and view the Permissions section",
+    "Inspect seven desktop/phone/narrow captures; no drawer or document horizontal overflow in checked guest states"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-09T10:50:45.951Z",
+  "browser_evidence": "pulse-worker-browser tmp/guest-permission-proof/run.cjs; saved browser-command exit 0, matching final hashes/result and completed browser/server close; Playwright 1.56.1, Chromium 141.0.7390.37 and WebKit 26.0; seven final captures inspected. Outer exec session separately returned 143, initiator unknown; retained, not diagnosed or hidden. Component/help-browser acceptance only, not independent host cleanup, full-app/native collection or release acceptance."
+}

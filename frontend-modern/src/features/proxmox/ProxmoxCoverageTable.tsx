@@ -27,7 +27,6 @@ import {
   type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
-import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
@@ -42,6 +41,7 @@ import {
   getCoverageColumnWidthStyle,
   getCoverageLayoutForContainer,
   isCoverageEvidenceColumnVisible,
+  selectCoverageRestoreEvidence,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
 import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
@@ -53,7 +53,7 @@ const COVERAGE_EMPTY_LABEL = 'None';
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
-  'No PBS snapshot or PVE backup file. Guest snapshots alone do not prove independent recovery.';
+  'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.';
 
 function CoverageAgeFallback(props: { unknown?: boolean; emptyTitle: string; compact?: boolean }) {
   const title = () =>
@@ -129,11 +129,11 @@ const evidenceQualityLabel = (value: string): string => {
 
 const postureExplanation = (row: WorkloadCoverageRow): string => {
   if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
-  if (row.posture === 'checking') return 'Pulse is checking provider protection evidence.';
+  if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
-    return 'This backup target has no current canonical workload identity, so Pulse does not evaluate workload protection for it.';
+    return 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
   }
-  return 'Pulse does not have enough provider evidence to determine protection.';
+  return 'Pulse cannot tell yet whether this guest is backed up.';
 };
 
 // "Workload coverage" table: one row per workload answering "does this have a
@@ -155,12 +155,8 @@ export function ProxmoxCoverageTable(props: {
   onSort: (key: CoverageSortKey) => void;
   expandedKeys: ReadonlySet<string>;
   onToggleExpand: (key: string) => void;
-  // Source columns auto-hide when no workload anywhere has that data (e.g. a
-  // PBS-only fleet drops the PVE files and Snapshots columns), matching how the
-  // source-detail tables already drop their conditional columns.
-  showPbsColumn: boolean;
-  showArchiveColumn: boolean;
-  showSnapshotColumn: boolean;
+  // The task column auto-hides when no workload has task history. Per-source
+  // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
   showTaskColumn: boolean;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
@@ -171,9 +167,6 @@ export function ProxmoxCoverageTable(props: {
   });
   const visibleColumns = createMemo(() =>
     getCoverageColumns(layoutMode(), {
-      pbs: props.showPbsColumn,
-      archive: props.showArchiveColumn,
-      snapshot: props.showSnapshotColumn,
       task: props.showTaskColumn,
     }),
   );
@@ -184,9 +177,6 @@ export function ProxmoxCoverageTable(props: {
   // ages were short enough for the usual gutters; compact ages use that space.
   const ageCellClass = (kind: 'text' | 'numeric-value') =>
     `${layoutMode() === 'compact' ? `px-0.5 py-1 ${kind === 'numeric-value' ? 'text-right' : ''}` : getPlatformTableCellClassForKind(kind)} text-base-content`;
-  const pbsSource = getProxmoxBackupSourcePresentation('pbs');
-  const archiveSource = getProxmoxBackupSourcePresentation('archive');
-  const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
   // Polling rebuilds recovery-model objects. Preserve logical row identity so
   // Solid does not replace the focused toggle (or the browser's scroll anchor).
   const [stableRows, setStableRows] = createStore<WorkloadCoverageRow[]>([]);
@@ -279,47 +269,6 @@ export function ProxmoxCoverageTable(props: {
                 align="right"
                 headClass={getPlatformTableHeadClassForKind('numeric-value')}
               />
-              <Show when={columnVisible('pbs')}>
-                <SortableHead
-                  label={
-                    layoutMode() === 'compact' || layoutMode() === 'expanded'
-                      ? 'PBS'
-                      : 'PBS snapshot'
-                  }
-                  sortKey="pbs"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-              <Show when={columnVisible('archive')}>
-                <SortableHead
-                  label={layoutMode() === 'compact' ? 'PVE' : 'PVE file'}
-                  sortKey="archive"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-              <Show when={columnVisible('snapshot')}>
-                <SortableHead
-                  label={
-                    layoutMode() === 'compact' || layoutMode() === 'expanded'
-                      ? 'Guest'
-                      : 'Guest snapshot'
-                  }
-                  sortKey="snapshot"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
               <Show when={columnVisible('task')}>
                 <SortableHead
                   label={layoutMode() === 'compact' ? 'Job' : 'Task'}
@@ -347,10 +296,7 @@ export function ProxmoxCoverageTable(props: {
               <For each={tableWindow.visibleItems()}>
                 {(row) => {
                   const isExpanded = () => props.expandedKeys.has(row.key);
-                  const evidence = () =>
-                    [...row.artifacts]
-                      .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
-                      .slice(0, 8);
+                  const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
                     <>
@@ -404,7 +350,7 @@ export function ProxmoxCoverageTable(props: {
                               fallback={<span class="text-muted">—</span>}
                             >
                               {(node) => (
-                                <span class="inline-block max-w-full truncate" title={node()}>
+                                <span class="block truncate" title={node()}>
                                   {node()}
                                 </span>
                               )}
@@ -457,59 +403,6 @@ export function ProxmoxCoverageTable(props: {
                             )}
                           </Show>
                         </TableCell>
-                        <Show when={columnVisible('pbs')}>
-                          <TableCell class={ageCellClass('text')}>
-                            <Show
-                              when={row.latestPBS}
-                              fallback={
-                                <CoverageAgeFallback
-                                  unknown={row.ageUnknown?.pbs}
-                                  compact={layoutMode() === 'compact'}
-                                  emptyTitle={pbsSource.coverageFallbackLabel}
-                                />
-                              }
-                            >
-                              {(artifact) => (
-                                <ProxmoxBackupAgeText
-                                  artifact={artifact()}
-                                  compact={layoutMode() === 'compact'}
-                                />
-                              )}
-                            </Show>
-                          </TableCell>
-                        </Show>
-                        <Show when={columnVisible('archive')}>
-                          <TableCell class={ageCellClass('text')}>
-                            <Show
-                              when={row.latestArchive}
-                              fallback={
-                                <CoverageAgeFallback
-                                  unknown={row.ageUnknown?.archive}
-                                  compact={layoutMode() === 'compact'}
-                                  emptyTitle={archiveSource.coverageFallbackLabel}
-                                />
-                              }
-                            >
-                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                            </Show>
-                          </TableCell>
-                        </Show>
-                        <Show when={columnVisible('snapshot')}>
-                          <TableCell class={ageCellClass('text')}>
-                            <Show
-                              when={row.latestSnapshot}
-                              fallback={
-                                <CoverageAgeFallback
-                                  unknown={row.ageUnknown?.snapshot}
-                                  compact={layoutMode() === 'compact'}
-                                  emptyTitle={snapshotSource.coverageFallbackLabel}
-                                />
-                              }
-                            >
-                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                            </Show>
-                          </TableCell>
-                        </Show>
                         <Show when={columnVisible('task')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -693,10 +586,7 @@ export function ProxmoxCoverageTable(props: {
                                           <TableCell
                                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                           >
-                                            <span
-                                              class="inline-block max-w-[18rem] truncate"
-                                              title={artifact.location}
-                                            >
+                                            <span class="block truncate" title={artifact.location}>
                                               {artifact.location}
                                             </span>
                                           </TableCell>
@@ -741,7 +631,7 @@ export function ProxmoxCoverageTable(props: {
                                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                           >
                                             <span
-                                              class="inline-block max-w-[24rem] truncate"
+                                              class="block truncate"
                                               title={artifact.detailTitle ?? artifact.detail}
                                             >
                                               {artifact.detail || '—'}

@@ -44,10 +44,10 @@ End-to-end Playwright tests that validate critical user flows against a running 
 - `tests/16-dev-runtime-recovery.spec.ts` — managed browser runtime proof:
   - Attaches Playwright to the canonical `5173` browser entrypoint
   - Restarts the managed backend and proves the browser shell recovers through the proxy
-- `tests/17-recovery-layout.spec.ts` — desktop Recovery layout regression guard:
-  - Mocks a realistic Recovery dataset with human-readable subject labels
-  - Proves the focused history table fits the desktop wrapper without horizontal overflow
-  - Proves the `Outcome` column stays visible at the right edge
+- `tests/17-proxmox-backups-layout.spec.ts` — desktop Proxmox Backups layout guard:
+  - Needs the mock-mode dataset and skips against a real-mode runtime (`npm run mock:on` first)
+  - Proves picking an activity day keeps `/proxmox/backups` and shows an `N of M backups` count
+  - Proves a one-year range keeps the page inside the horizontal viewport and the PBS servers table's trailing column inside its wrapper
 - `tests/18-patrol-runtime-state.spec.ts` — Patrol runtime-state browser guard:
   - Mocks a blocked Patrol runtime with stale healthy summary payloads
   - Proves the real `/ai` route shows Patrol as paused and suppresses stale healthy summary copy
@@ -181,7 +181,7 @@ Equivalent direct proof command from the integration harness:
 cd tests/integration
 PULSE_E2E_USE_HOT_DEV=1 \
 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
-npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.ts tests/18-patrol-runtime-state.spec.ts --project=chromium
+npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-proxmox-backups-layout.spec.ts tests/18-patrol-runtime-state.spec.ts --project=chromium
 ```
 
 This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses the repo-root managed runtime wrappers as the control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly. Those wrappers are backed by `scripts/hot-dev-bg.sh`, but the wrapper surface is the canonical operator contract.

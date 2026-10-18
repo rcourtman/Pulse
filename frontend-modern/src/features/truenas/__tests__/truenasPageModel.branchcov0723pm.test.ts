@@ -230,18 +230,18 @@ describe('truenasPageModel branchcov0723pm', () => {
     // Each operand of the `||` chain must be the resolving label for both
     // sides at least once. Equal timestamps force the label tiebreak.
 
-    it('resolves both labels via display.subjectLabel (itemLabel absent)', () => {
+    it('resolves both labels via display.itemLabel', () => {
       const z = makeRecoveryPoint({
         id: 'z-id',
         kind: 'snapshot',
         mode: 'snapshot',
-        display: { subjectLabel: 'zzz' },
+        display: { itemLabel: 'zzz' },
       });
       const a = makeRecoveryPoint({
         id: 'a-id',
         kind: 'snapshot',
         mode: 'snapshot',
-        display: { subjectLabel: 'aaa' },
+        display: { itemLabel: 'aaa' },
       });
       expect(sortTrueNASProtectionPoints([z, a]).map((p) => p.id)).toEqual(['a-id', 'z-id']);
     });
@@ -261,49 +261,33 @@ describe('truenasPageModel branchcov0723pm', () => {
       });
       expect(sortTrueNASProtectionPoints([z, a]).map((p) => p.id)).toEqual(['a-id', 'z-id']);
     });
-
-    it('resolves both labels via subjectRef.name (display and itemRef absent)', () => {
-      const z = makeRecoveryPoint({
-        id: 'z-id',
-        kind: 'snapshot',
-        mode: 'snapshot',
-        subjectRef: { type: 'truenas-dataset', name: 'zzz' },
-      });
-      const a = makeRecoveryPoint({
-        id: 'a-id',
-        kind: 'snapshot',
-        mode: 'snapshot',
-        subjectRef: { type: 'truenas-dataset', name: 'aaa' },
-      });
-      expect(sortTrueNASProtectionPoints([z, a]).map((p) => p.id)).toEqual(['a-id', 'z-id']);
-    });
   });
 
-  describe('trueNASProtectionSearchTokens subjectRef optional-chaining arms (via filterTrueNASProtectionPoints)', () => {
-    it('matches by subjectRef namespace, uid, id, and name when subjectRef is fully populated', () => {
+  describe('trueNASProtectionSearchTokens itemRef optional-chaining arms (via filterTrueNASProtectionPoints)', () => {
+    it('matches by itemRef namespace, uid, id, and name when itemRef is fully populated', () => {
       const point = makeRecoveryPoint({
         id: 'p',
         kind: 'snapshot',
         mode: 'snapshot',
-        subjectRef: {
+        itemRef: {
           type: 'truenas-dataset',
-          namespace: 'subj-ns-token',
-          name: 'subj-name-token',
-          uid: 'subj-uid-token',
-          id: 'subj-id-token',
+          namespace: 'item-ns-token',
+          name: 'item-name-token',
+          uid: 'item-uid-token',
+          id: 'item-id-token',
         },
       });
       expect(
-        filterTrueNASProtectionPoints([point], 'subj-ns-token', 'all').map((p) => p.id),
+        filterTrueNASProtectionPoints([point], 'item-ns-token', 'all').map((p) => p.id),
       ).toEqual(['p']);
       expect(
-        filterTrueNASProtectionPoints([point], 'subj-uid-token', 'all').map((p) => p.id),
+        filterTrueNASProtectionPoints([point], 'item-uid-token', 'all').map((p) => p.id),
       ).toEqual(['p']);
       expect(
-        filterTrueNASProtectionPoints([point], 'subj-id-token', 'all').map((p) => p.id),
+        filterTrueNASProtectionPoints([point], 'item-id-token', 'all').map((p) => p.id),
       ).toEqual(['p']);
       expect(
-        filterTrueNASProtectionPoints([point], 'subj-name-token', 'all').map((p) => p.id),
+        filterTrueNASProtectionPoints([point], 'item-name-token', 'all').map((p) => p.id),
       ).toEqual(['p']);
     });
   });

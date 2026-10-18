@@ -14,6 +14,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
+import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -25,6 +26,7 @@ import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   compareAgentVersions,
@@ -56,23 +58,29 @@ import {
   type PlatformResourceStatusFilter,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS } from '@/features/storageBackups/diskTemperaturePresentation';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { notificationStore } from '@/stores/notifications';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  RAID_LAST_KNOWN_DEVICE_BADGE_CLASS,
   getRaidDeviceBadgeClass,
+  getRaidLastKnownDeviceLabel,
   getRaidStateTextClass,
   getRaidStateVariant,
 } from '@/utils/raidPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPreferredResourceIP } from '@/utils/resourceIdentity';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { formatTemperature } from '@/utils/temperature';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -98,6 +106,7 @@ import {
   getAgentMachineTemperatureTitle,
   getAgentMachineThermalPressurePresentation,
   getNextAgentMachineSortState,
+  isAgentMachineTemperatureLastKnown,
   sortAgentMachines,
   type AgentMachineColumn,
   type AgentMachineColumnId,
@@ -180,6 +189,8 @@ const AgentMachineMetricTooltip: Component<{
 
 const AgentMachineTemperatureCell: Component<{
   celsius: number | undefined;
+  /** The value is a retained reading, not a current one. */
+  lastKnown?: boolean;
   metric: AgentMachineTemperatureMetric;
   sections: AgentMachineTemperatureDetailSection[];
   thresholds?: MetricDisplayThresholds | null;
@@ -219,7 +230,26 @@ const AgentMachineTemperatureCell: Component<{
           }
         >
           {(value) => (
-            <TemperatureGauge value={value()} metric={props.metric} thresholds={props.thresholds} />
+            <Show
+              when={!props.lastKnown}
+              fallback={
+                // A retained reading takes no threshold colour; its detail
+                // rows say it is last known.
+                <span
+                  class={`text-xs whitespace-nowrap ${PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}`}
+                  data-temperature-reading="last-known"
+                >
+                  {formatTemperature(value())}
+                  <span class="sr-only">, last known</span>
+                </span>
+              }
+            >
+              <TemperatureGauge
+                value={value()}
+                metric={props.metric}
+                thresholds={props.thresholds}
+              />
+            </Show>
           )}
         </Show>
       }
@@ -566,8 +596,16 @@ const AgentMachineDiskIOCell: Component<{
 const AgentMachineRaidCell: Component<{
   arrays: AgentMachineRaidArrayDetail[];
   summary: string;
+  /** Why the array states are retained rather than current. */
+  lastKnownReason?: string;
 }> = (props) => {
   const hasDetails = () => props.arrays.length > 0;
+  // A silent agent's arrays are its last report: keep the states as evidence
+  // without live status colour or rebuild progress.
+  const lastKnownTitle = () => {
+    const reason = props.lastKnownReason?.trim();
+    return reason ? `Last known reading, not current: ${reason}` : undefined;
+  };
   const shownArrays = () => props.arrays.slice(0, 6);
   const hiddenArrayCount = () => Math.max(0, props.arrays.length - shownArrays().length);
   const triggerLabel = () => props.summary || '—';
@@ -583,23 +621,33 @@ const AgentMachineRaidCell: Component<{
       triggerClass="inline-flex max-w-full justify-start"
       tooltipClass="min-w-[250px] max-w-[380px] space-y-2"
       enabled={hasDetails()}
-      ariaLabel={hasDetails() ? `RAID details: ${triggerLabel()}` : 'RAID unavailable'}
-      title={triggerLabel()}
+      ariaLabel={
+        hasDetails()
+          ? `RAID details: ${triggerLabel()}${lastKnownTitle() ? ', last known' : ''}`
+          : 'RAID unavailable'
+      }
+      title={lastKnownTitle() ? `${triggerLabel()}. ${lastKnownTitle()}` : triggerLabel()}
       maxWidth={400}
       trigger={
         <span
           class="max-w-full truncate text-[11px] font-medium"
           classList={{
-            'text-base-content': hasDetails(),
-            'text-muted': !hasDetails(),
+            'text-base-content': hasDetails() && !lastKnownTitle(),
+            'text-muted': !hasDetails() || Boolean(lastKnownTitle()),
           }}
+          data-raid-reading={lastKnownTitle() ? 'last-known' : 'current'}
         >
           {triggerLabel()}
+          <Show when={hasDetails() && lastKnownTitle()}>
+            <span class="sr-only">, last known</span>
+          </Show>
         </span>
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">RAID Arrays</div>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+          {lastKnownTitle() ? 'RAID Arrays (last known)' : 'RAID Arrays'}
+        </div>
         <div class="max-h-[300px] space-y-2 overflow-y-auto pr-1">
           <For each={shownArrays()}>
             {(array, index) => {
@@ -624,9 +672,20 @@ const AgentMachineRaidCell: Component<{
                         </Show>
                       </div>
                     </div>
-                    <div class="flex shrink-0 items-center gap-1.5" title={stateLabel(array.state)}>
-                      <StatusDot variant={getRaidStateVariant(array.state)} size="xs" ariaHidden />
-                      <span class={`text-[10px] font-medium ${getRaidStateTextClass(array.state)}`}>
+                    <div
+                      class="flex shrink-0 items-center gap-1.5"
+                      title={lastKnownTitle() ?? stateLabel(array.state)}
+                    >
+                      <StatusDot
+                        variant={lastKnownTitle() ? 'muted' : getRaidStateVariant(array.state)}
+                        size="xs"
+                        ariaHidden
+                      />
+                      <span
+                        class={`text-[10px] font-medium ${
+                          lastKnownTitle() ? 'text-muted' : getRaidStateTextClass(array.state)
+                        }`}
+                      >
                         {stateLabel(array.state)}
                       </span>
                     </div>
@@ -649,7 +708,13 @@ const AgentMachineRaidCell: Component<{
                     <Show when={array.failedDevices > 0}>
                       <span>
                         Failed{' '}
-                        <span class="font-mono text-red-600 dark:text-red-400">
+                        <span
+                          class="font-mono"
+                          classList={{
+                            'text-red-600 dark:text-red-400': !lastKnownTitle(),
+                            'text-base-content': Boolean(lastKnownTitle()),
+                          }}
+                        >
                           {array.failedDevices}
                         </span>
                       </span>
@@ -657,23 +722,32 @@ const AgentMachineRaidCell: Component<{
                   </div>
 
                   <Show when={rebuilding()}>
-                    <div class="mt-1.5">
-                      <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
-                        <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
-                        <span class="font-mono text-base-content">
-                          {Math.round(rebuildPercent())}%
-                        </span>
+                    <Show
+                      when={!lastKnownTitle()}
+                      fallback={
+                        <div class="mt-1.5 text-[9px] text-muted">
+                          Rebuild was at {Math.round(rebuildPercent())}%
+                        </div>
+                      }
+                    >
+                      <div class="mt-1.5">
+                        <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
+                          <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
+                          <span class="font-mono text-base-content">
+                            {Math.round(rebuildPercent())}%
+                          </span>
+                        </div>
+                        <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
+                          <div
+                            class="h-full rounded-full bg-amber-500"
+                            style={{ width: rebuildWidth(rebuildPercent()) }}
+                          />
+                        </div>
+                        <Show when={array.rebuildSpeed}>
+                          {(speed) => <div class="mt-0.5 text-[9px] text-muted">{speed()}</div>}
+                        </Show>
                       </div>
-                      <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
-                        <div
-                          class="h-full rounded-full bg-amber-500"
-                          style={{ width: rebuildWidth(rebuildPercent()) }}
-                        />
-                      </div>
-                      <Show when={array.rebuildSpeed}>
-                        {(speed) => <div class="mt-0.5 text-[9px] text-muted">{speed()}</div>}
-                      </Show>
-                    </div>
+                    </Show>
                   </Show>
 
                   <Show when={devices().length > 0}>
@@ -681,10 +755,14 @@ const AgentMachineRaidCell: Component<{
                       <For each={devices().slice(0, 12)}>
                         {(device) => (
                           <span
-                            class={`inline-flex max-w-full items-center truncate rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                            class={`inline-flex max-w-full items-center truncate rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${
+                              lastKnownTitle()
+                                ? RAID_LAST_KNOWN_DEVICE_BADGE_CLASS
+                                : getRaidDeviceBadgeClass(device)
+                            }`}
                             title={`slot ${device.slot} - ${device.state}`}
                           >
-                            {device.device}
+                            {lastKnownTitle() ? getRaidLastKnownDeviceLabel(device) : device.device}
                           </span>
                         )}
                       </For>
@@ -1011,8 +1089,17 @@ const filterAgentMachineResources = (
   resources: Resource[],
   search: string,
   status: PlatformResourceStatusFilter,
+  nowMs: number,
 ): Resource[] =>
-  filterPlatformResources(resources, '', status).filter((machine) =>
+  filterPlatformResources(resources, '', status, (machine) => {
+    // Health is the row's current presentation, not its last reported status.
+    // Never write this derived classification back into the canonical resource.
+    const variant = getStandaloneResourceStatusIndicator(machine, nowMs).variant;
+    if (variant === 'success') return 'online';
+    if (variant === 'warning') return 'degraded';
+    if (variant === 'danger') return 'offline';
+    return 'unknown';
+  }).filter((machine) =>
     matchesAgentMachineSearch(machine, search, systemLabelFor, agentVersionFor),
   );
 
@@ -1174,6 +1261,9 @@ export const AgentsMachinesTable: Component<{
   onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  // A machine that stops reporting keeps the same last-seen time, which is
+  // exactly when its age must keep moving, so row ages read the shared clock.
+  const now = useRelativeTimeNow();
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
   >({});
@@ -1183,7 +1273,8 @@ export const AgentsMachinesTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterAgentMachineResources,
+    filter: (resources, search, status) =>
+      filterAgentMachineResources(resources, search, status, now()),
     externalSearch: props.externalSearch,
     onExternalSearchChange: props.onExternalSearchChange,
     externalStatus: props.externalStatus,
@@ -1196,6 +1287,7 @@ export const AgentsMachinesTable: Component<{
     }
     tableState.resetFilters();
   };
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -1482,11 +1574,11 @@ export const AgentsMachinesTable: Component<{
                     const agentStaleTitle = () => {
                       const last = asTrimmedString(machine.agent?.lastReportAt);
                       const when = last
-                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last)}.`
+                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last, { now: now() })}.`
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
-                    const indicator = () => getStandaloneResourceStatusIndicator(machine);
+                    const indicator = () => getStandaloneResourceStatusIndicator(machine, now());
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const telemetryFallback = () =>
                       canRenderMetrics()
@@ -1534,7 +1626,7 @@ export const AgentsMachinesTable: Component<{
                         ? availabilityFor(machine)?.lastChecked
                         : machine.lastSeen;
                     const lastSeenLabel = () =>
-                      formatPlatformTableRelativeTimeValue(lastSeenValue());
+                      formatPlatformTableRelativeTimeValue(lastSeenValue(), { now: now() });
                     const machineSubtitle = () =>
                       machineRowSubtitleFor(
                         name(),
@@ -1558,6 +1650,7 @@ export const AgentsMachinesTable: Component<{
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureLastKnown = () => isAgentMachineTemperatureLastKnown(machine);
                     const temperatureMetric = () => getAgentMachineTemperatureMetric(machine);
                     const temperatureThresholds = () =>
                       temperatureMetric() === 'diskTemperature'
@@ -1577,6 +1670,22 @@ export const AgentsMachinesTable: Component<{
                       getAgentMachineThermalPressurePresentation(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
+                    // Tint the row for the open alerts its drawer lists, so a
+                    // machine over a threshold stands out without opening it.
+                    const machineAlertStyles = createMemo(() =>
+                      getUnifiedResourceAlertStyles(
+                        machine,
+                        activeAlerts,
+                        alertsActivation.detectionEnabled(),
+                      ),
+                    );
+                    const machineAlertBg = () => {
+                      const s = machineAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
+                    };
                     const agentMetadataId = () => agentMetadataIdFor(machine);
                     const agentRemovalId = () => agentRemovalIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
@@ -1587,7 +1696,9 @@ export const AgentsMachinesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                            isExpanded() ? '' : machineAlertBg()
+                          }`}
                           data-agents-machine-row={machine.id}
                           onClick={toggleDetails}
                         >
@@ -1607,8 +1718,8 @@ export const AgentsMachinesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={machine.status || 'unknown'}
-                                ariaHidden
+                                title={indicator().label}
+                                ariaLabel={indicator().label}
                               />
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}
@@ -1756,7 +1867,9 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
                             >
                               {formatPlatformTableUptimeValue(
-                                machine.uptime ?? machine.agent?.uptimeSeconds,
+                                canRenderMetrics()
+                                  ? (machine.uptime ?? machine.agent?.uptimeSeconds)
+                                  : undefined,
                               )}
                             </TableCell>
                           </Show>
@@ -1764,14 +1877,20 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
                             >
-                              <AgentMachineTemperatureCell
-                                celsius={temperature()}
-                                metric={temperatureMetric()}
-                                sections={temperatureSections()}
-                                thresholds={temperatureThresholds()}
-                                title={temperatureTitle()}
-                                thermalPressure={thermalPressure()}
-                              />
+                              <Show
+                                when={canRenderMetrics()}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                <AgentMachineTemperatureCell
+                                  celsius={temperature()}
+                                  lastKnown={temperatureLastKnown()}
+                                  metric={temperatureMetric()}
+                                  sections={temperatureSections()}
+                                  thresholds={temperatureThresholds()}
+                                  title={temperatureTitle()}
+                                  thermalPressure={thermalPressure()}
+                                />
+                              </Show>
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('lastSeen')}>
@@ -1796,7 +1915,13 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('raid')} text-base-content`}
                             >
-                              <AgentMachineRaidCell arrays={raidArrays()} summary={raidSummary()} />
+                              <AgentMachineRaidCell
+                                arrays={raidArrays()}
+                                summary={raidSummary()}
+                                lastKnownReason={
+                                  agentStale() ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined
+                                }
+                              />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('arch')}>

@@ -3,7 +3,10 @@ import {
   GPU_METRICS_HISTORY_GROUPS,
   HOST_METRICS_HISTORY_GROUPS,
 } from '@/components/shared/hostMetricsHistoryModel';
-import type { GuestDrawerHistoryTarget } from '@/components/Workloads/guestDrawerModel';
+import type {
+  GuestDrawerHistoryDeferredMetric,
+  GuestDrawerHistoryTarget,
+} from '@/components/Workloads/guestDrawerModel';
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
   type GuestDrawerHistoryGroupConfig,
@@ -11,7 +14,13 @@ import {
 import type { HostGPUSensor } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent, getMemoryPercent } from '@/types/resource';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  isPhysicalDiskTemperatureCurrent,
+} from '@/features/storageBackups/diskTemperaturePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -152,14 +161,119 @@ export const getResourceMetricsHistoryTarget = (
 export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
   getResourceMetricsHistoryTarget(resource) !== null;
 
+const isProxmoxGuest = (resource: Resource): boolean =>
+  (resource.type === 'vm' || resource.type === 'system-container') &&
+  (resource.platformType === 'proxmox-pve' ||
+    resource.platformScopes?.includes('proxmox-pve') === true);
+
+// The guest kind decides whether a Proxmox listing reading counts cache, the
+// same distinction the Workloads drawer makes.
+const memoryReading = (resource: Resource) =>
+  getMemoryObservationPresentation(
+    resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
+    resource.memory?.observation,
+    isProxmoxGuest(resource),
+    {
+      guestKind:
+        resource.type === 'vm'
+          ? 'vm'
+          : resource.type === 'system-container'
+            ? 'container'
+            : undefined,
+    },
+  );
+
+const guestDiskReading = (resource: Resource) => {
+  if (!isProxmoxGuest(resource)) return null;
+  // A linked source can keep the canonical resource online while Proxmox
+  // reports the VM stopped. Judge filesystem carriers by the native state,
+  // using the same read admission as Workloads and Alerts, not Last seen.
+  const status = (asTrimmedString(resource.proxmox?.runtimeStatus) || resource.status)
+    .trim()
+    .toLowerCase();
+  return getWorkloadGuestDiskRead(
+    {
+      status: status === 'offline' ? 'stopped' : status,
+      diskStatusReason: resource.proxmox?.diskStatusReason,
+      // Match the Workloads projection: the linked agent owns filesystem
+      // readings only when Proxmox supplied no filesystem list. Its own
+      // reporting lease then qualifies them, not the unrelated QGA failure.
+      disksFromAgent: resource.proxmox?.disks == null && resource.agent?.disks != null,
+      agentStale: resource.agent?.stale === true,
+    },
+    resource.type === 'vm',
+  );
+};
+
+// A physical disk's reading and its collection state both live on
+// physicalDisk, so read them only together: websocket rows carry no top-level
+// temperature for a disk, which only the REST mapper copies across. The
+// reading may be a last known one kept while the current observation could
+// not collect it, such as a disk in standby or a host agent past its
+// reporting lease, and is then never current.
+const resourceTemperature = (resource: Resource): number | undefined =>
+  resource.physicalDisk ? resource.physicalDisk.temperature : resource.temperature;
+
+const isResourceTemperatureCurrent = (resource: Resource): boolean =>
+  isPhysicalDiskTemperatureCurrent(resource.physicalDisk?.collection);
+
+export const getResourceMetricsHistoryDeferredMetrics = (
+  resource: Resource,
+): Record<string, GuestDrawerHistoryDeferredMetric> => {
+  const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
+  const memory = memoryReading(resource);
+  if (memory && memory.state !== 'current') {
+    metrics.memory = {
+      lastKnownValue:
+        memory.state === 'unavailable' ? undefined : finiteMetric(getMemoryPercent(resource)),
+      ...(memory.state === 'unknown' ? { valueLabel: 'freshness unknown' as const } : {}),
+      message: memory.message,
+    };
+  }
+  const disk = guestDiskReading(resource);
+  if (disk && disk.state !== 'current') {
+    metrics.disk = {
+      lastKnownValue:
+        disk.state === 'last-known' && resource.disk
+          ? finiteMetric(getDiskPercent(resource))
+          : undefined,
+      message: disk.message,
+    };
+  }
+  if (!isResourceTemperatureCurrent(resource)) {
+    const temperature = resourceTemperature(resource);
+    const retained = getPhysicalDiskTemperaturePresentation({
+      temperature: temperature ?? 0,
+      collection: resource.physicalDisk?.collection,
+    });
+    if (retained?.title) {
+      metrics.smart_temp = {
+        lastKnownValue: temperature,
+        message: `${retained.title}.`,
+      };
+    }
+  }
+  return metrics;
+};
+
 export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
-  const diskPercent = resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined;
-  const temperature = finiteMetric(resource.temperature);
+  const disk = guestDiskReading(resource);
+  const diskPercent =
+    resource.disk && (!disk || disk.state === 'current')
+      ? finiteMetric(getDiskPercent(resource))
+      : undefined;
+  const temperature = isResourceTemperatureCurrent(resource)
+    ? finiteMetric(resourceTemperature(resource))
+    : undefined;
+  const memory = memoryReading(resource);
   return {
     cpu: finiteMetric(resource.cpu?.current),
-    memory: resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
+    memory:
+      resource.memory && (!memory || memory.state === 'current')
+        ? finiteMetric(getMemoryPercent(resource))
+        : undefined,
     disk: diskPercent,
     usage: diskPercent,
     netin: finiteMetric(resource.network?.rxBytes),

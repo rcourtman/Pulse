@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "cb5ffc2efe2b7d821f59eb26406d0616cf62e23d",
+  "verified_at": "2026-10-07T14:53:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "c7a603bb6741502acb0972bd9be241de089bf8106e88042ab6a16a8f4932ef48",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts": "6e7e9dd5a6e49c12aa90431bbad3650272798a9f216630fcc02392887d73a262"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history > Open work)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent tree (cb5ffc2efe) and this tree, each on a private DEMO_MODE mock stack with a fresh data dir; same Playwright script against both.",
+    "Header recency line from getPatrolRecencyPresentation: clean full run 'Last check: 4m ago \u00b7 checked 1377 resources'; targeted-only run '... \u00b7 checked 3 resources'; full run with 2 errors '... \u00b7 checked 40 resources'. No 'verified' wording in any state.",
+    "Findings empty state through getPatrolVerificationPresentation (findings, runs and overall_health stubbed via page.route): clean full run + grade A -> 'No current issues / Checked 1377 resources.'; targeted-only run -> 'Check needed / Run Patrol to check everything and refresh open work.'; full run with errors -> 'Check needed'; grade A with a 'Recent Patrol errors' coverage factor after a clean full run -> 'Check needed' (pre-existing behaviour, filed separately).",
+    "Parent and this tree produced identical recency and empty-state text in all 8 scenario x viewport cases; no horizontal overflow; no console errors.",
+    "Dist proof: 187 files each side; 93 byte-identical, 93 differ only in chunk-hash references, index CSS drops exactly one rule (.bg-emerald-50/60, used only by the deleted assessment shell); check-bundle-size.mjs passes."
+  ],
+  "interactions": [
+    "Demo sign-in, navigate to /patrol, read the header recency line, open the Activity tab, expand 'Finding options and history', read the Open work empty state; desktop mouse and phone touch contexts.",
+    "Screenshots of the header and empty state captured and inspected at both widths."
+  ]
+}

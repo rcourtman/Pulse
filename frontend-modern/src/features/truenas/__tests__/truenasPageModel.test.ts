@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RecoveryPoint } from '@/types/recovery';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
+import { resolveTrueNASDiskTemperatureDisplayThresholds } from '@/utils/metricThresholds';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
@@ -19,6 +21,8 @@ import {
   filterTrueNASVMs,
   getTrueNASPageTabSpecs,
   getTrueNASResourceDisplayStatus,
+  getTrueNASStorageDotStatus,
+  getTrueNASStorageIssue,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
   mapTrueNASProtectionKind,
@@ -629,6 +633,141 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASStorageStatus(healthyByState)).toBe('healthy');
   });
 
+  it('flags a disk whose current reading reaches its alert trigger', () => {
+    // Disk risk carries no heat, so a hot disk stays `online`; the page judges
+    // it by the alert disk temperature thresholds, as Physical Disks does.
+    const resolveFactory = (disk: Pick<Resource, 'id' | 'physicalDisk'>) =>
+      resolveTrueNASDiskTemperatureDisplayThresholds(null, disk.physicalDisk?.diskType, disk.id);
+    const hotDisk = makeResource({
+      id: 'disk-hot',
+      type: 'physical_disk',
+      name: 'sda',
+      status: 'online',
+      physicalDisk: {
+        devPath: '/dev/sda',
+        serial: 'serial-hot',
+        diskType: 'sata',
+        health: 'UNKNOWN',
+        temperature: 56,
+      },
+    });
+    expect(mapTrueNASStorageStatus(hotDisk, resolveFactory)).toBe('attention');
+    expect(getTrueNASStorageIssue(hotDisk, resolveFactory)).toEqual({
+      status: 'attention',
+      label: 'Attention',
+      reasons: ['Disk temperature is 56°C, at or above its 55°C alert threshold.'],
+    });
+    // A cool sibling that sorts first by name: heat moves the hot disk ahead
+    // of it, and the status filter splits them.
+    const coolDisk = makeResource({
+      ...hotDisk,
+      id: 'disk-cool',
+      name: 'ada0',
+      physicalDisk: { ...hotDisk.physicalDisk!, serial: 'serial-cool', temperature: 40 },
+    });
+    const rows = buildTrueNASStorageTopologyRows([coolDisk, hotDisk], resolveFactory);
+    expect(rows.map((row) => row.id)).toEqual(['disk:disk-hot', 'disk:disk-cool']);
+    expect(buildTrueNASStorageTopologyRows([coolDisk, hotDisk]).map((row) => row.id)).toEqual([
+      'disk:disk-cool',
+      'disk:disk-hot',
+    ]);
+    expect(
+      filterTrueNASStorageTopologyRows(rows, '', 'attention', resolveFactory).map((row) => row.id),
+    ).toEqual(['disk:disk-hot']);
+    expect(
+      filterTrueNASStorageTopologyRows(rows, '', 'healthy', resolveFactory).map((row) => row.id),
+    ).toEqual(['disk:disk-cool']);
+
+    // Native TrueNAS alert text leads, and the heat reason stays listed.
+    const hotWithIncident = makeResource({
+      ...hotDisk,
+      incidents: [{ code: 'truenas_smart', severity: 'info', summary: 'SMART test scheduled' }],
+    });
+    expect(getTrueNASStorageIssue(hotWithIncident, resolveFactory)?.reasons).toEqual([
+      'SMART test scheduled',
+      'Disk temperature is 56°C, at or above its 55°C alert threshold.',
+    ]);
+
+    // An NVMe at 63C is under its 70C trigger.
+    const warmNVMe = makeResource({
+      ...hotDisk,
+      id: 'disk-nvme',
+      physicalDisk: { ...hotDisk.physicalDisk!, diskType: 'nvme', temperature: 63 },
+    });
+    expect(mapTrueNASStorageStatus(warmNVMe, resolveFactory)).toBe('healthy');
+    // A trigger the user raised, alerting switched off, and a retained reading
+    // are never heat.
+    expect(mapTrueNASStorageStatus(hotDisk, () => ({ warning: 55, critical: 60 }))).toBe('healthy');
+    expect(mapTrueNASStorageStatus(hotDisk, () => null)).toBe('healthy');
+    const retained = makeResource({
+      ...hotDisk,
+      physicalDisk: {
+        ...hotDisk.physicalDisk!,
+        collection: { temperature: { state: 'unavailable', source: 'truenas', reason: 'stale' } },
+      },
+    });
+    expect(mapTrueNASStorageStatus(retained, resolveFactory)).toBe('healthy');
+  });
+
+  it('judges disk heat by the override and TrueNAS-wide value its alert uses', () => {
+    const config = {
+      enabled: true,
+      guestDefaults: {},
+      nodeDefaults: {},
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { nvme: { trigger: 70, clear: 65 }, sata: { trigger: 55, clear: 50 } },
+      storageDefault: { trigger: 85, clear: 80 },
+      overrides: { 'disk-raised': { temperature: { trigger: 75, clear: 70 } } },
+    } as AlertConfig;
+    const resolveWith = (cfg: AlertConfig) => (disk: Pick<Resource, 'id' | 'physicalDisk'>) =>
+      resolveTrueNASDiskTemperatureDisplayThresholds(cfg, disk.physicalDisk?.diskType, disk.id);
+    const nvmeDisk = (id: string, temperature: number) =>
+      makeResource({
+        id,
+        type: 'physical_disk',
+        name: id,
+        status: 'online',
+        physicalDisk: {
+          devPath: `/dev/${id}`,
+          serial: `serial-${id}`,
+          diskType: 'nvme',
+          health: 'UNKNOWN',
+          temperature,
+        },
+      });
+
+    // At 72C an NVMe is past its 70C type trigger, but the disk whose own
+    // override raised its alert to 75C will not alert, so it is not heat.
+    const plain = nvmeDisk('disk-plain', 72);
+    const raised = nvmeDisk('disk-raised', 72);
+    expect(mapTrueNASStorageStatus(plain, resolveWith(config))).toBe('attention');
+    expect(mapTrueNASStorageStatus(raised, resolveWith(config))).toBe('healthy');
+    expect(getTrueNASStorageIssue(raised, resolveWith(config))).toBeNull();
+    expect(
+      getTrueNASStorageIssue(nvmeDisk('disk-raised', 76), resolveWith(config))?.reasons,
+    ).toEqual(['Disk temperature is 76°C, at or above its 75°C alert threshold.']);
+
+    // A TrueNAS-wide 62C applies to every disk without its own override.
+    const trueNASWide = {
+      ...config,
+      truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+    } as AlertConfig;
+    const warm = nvmeDisk('disk-warm', 64);
+    expect(mapTrueNASStorageStatus(warm, resolveWith(config))).toBe('healthy');
+    expect(getTrueNASStorageIssue(warm, resolveWith(trueNASWide))?.reasons).toEqual([
+      'Disk temperature is 64°C, at or above its 62°C alert threshold.',
+    ]);
+    expect(mapTrueNASStorageStatus(raised, resolveWith(trueNASWide))).toBe('healthy');
+    // Switched off TrueNAS-wide, no disk without an override is heat.
+    const trueNASOff = {
+      ...config,
+      truenasDiskDefaults: { temperature: { trigger: 0, clear: 0 } },
+    } as AlertConfig;
+    expect(mapTrueNASStorageStatus(plain, resolveWith(trueNASOff))).toBe('healthy');
+    expect(getTrueNASStorageDotStatus(plain, resolveWith(trueNASOff))).toBe('online');
+    expect(getTrueNASStorageDotStatus(plain, resolveWith(config))).toBe('warning');
+  });
+
   it('renders expected receive-side replication readonly posture as healthy', () => {
     const replicatedDataset = makeResource({
       id: 'dataset-replica',
@@ -643,6 +782,200 @@ describe('truenasPageModel', () => {
     const row = buildTrueNASStorageTopologyRows([replicatedDataset])[0];
     expect(row?.kind).toBe('dataset');
     expect(row && mapTrueNASStorageStatus(row.resource)).toBe('healthy');
+  });
+
+  it('explains non-healthy storage with TrueNAS alert text first and stays silent when healthy', () => {
+    const healthyPool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    expect(getTrueNASStorageIssue(healthyPool)).toBeNull();
+
+    const poolRisk = {
+      level: 'warning',
+      reasons: [
+        { code: 'zfs_pool_state', severity: 'warning', summary: 'ZFS pool archive is DEGRADED' },
+      ],
+    };
+    // A pool carries its own alert plus the disk alerts the provider copies onto it.
+    const degradedPool = makeResource({
+      id: 'pool-archive',
+      type: 'storage',
+      name: 'archive',
+      status: 'warning',
+      incidents: [
+        {
+          code: 'truenas_volume_status',
+          severity: 'warning',
+          summary: 'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+      ],
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED', risk: poolRisk },
+    });
+    expect(getTrueNASStorageIssue(degradedPool)).toEqual({
+      status: 'attention',
+      label: 'Attention',
+      reasons: [
+        'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        'Device /dev/sdc has SMART test failures.',
+      ],
+    });
+
+    // Without a TrueNAS alert, Pulse's own risk summary explains the row.
+    const riskOnlyPool = makeResource({
+      id: 'pool-risk',
+      type: 'storage',
+      name: 'archive',
+      status: 'warning',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED', risk: poolRisk },
+    });
+    expect(getTrueNASStorageIssue(riskOnlyPool)?.reasons).toEqual(['ZFS pool archive is DEGRADED']);
+
+    const failingDisk = makeResource({
+      id: 'disk-sdc',
+      type: 'physical_disk',
+      name: 'sdc',
+      status: 'warning',
+      incidents: [
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device  /dev/sdc has SMART test failures',
+        },
+      ],
+      physicalDisk: {
+        devPath: '/dev/sdc',
+        health: 'DEGRADED',
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'truenas_disk_state',
+              severity: 'warning',
+              summary: 'TrueNAS disk sdc is DEGRADED',
+            },
+          ],
+        },
+      },
+    });
+    // The repeat differs only in spacing and its full stop, so it folds in, and
+    // the derived disk-state summary waits behind the native alert.
+    expect(getTrueNASStorageIssue(failingDisk)?.reasons).toEqual([
+      'Device /dev/sdc has SMART test failures.',
+    ]);
+
+    const readOnlyDataset = makeResource({
+      id: 'dataset-cold',
+      type: 'storage',
+      name: 'archive/cold',
+      status: 'warning',
+      tags: ['truenas', 'dataset', 'zfs', 'state:readonly'],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(readOnlyDataset)?.reasons).toEqual(['Dataset is read-only']);
+
+    // The provider raises its own incident for a locked dataset, which wins
+    // over the state tag instead of being repeated by it.
+    const lockedDataset = makeResource({
+      id: 'dataset-vault',
+      type: 'storage',
+      name: 'vault/secrets',
+      status: 'offline',
+      tags: ['truenas', 'dataset', 'zfs', 'state:locked'],
+      incidents: [
+        {
+          code: 'zfs_dataset_locked',
+          severity: 'warning',
+          summary: 'ZFS dataset vault/secrets is locked and unavailable',
+        },
+      ],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(lockedDataset)).toEqual({
+      status: 'offline',
+      label: 'Offline',
+      reasons: ['ZFS dataset vault/secrets is locked and unavailable'],
+    });
+    const lockedWithoutIncident = makeResource({
+      id: 'dataset-vault-tag',
+      type: 'storage',
+      name: 'vault/keys',
+      status: 'offline',
+      tags: ['truenas', 'dataset', 'zfs', 'state:locked'],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(lockedWithoutIncident)?.reasons).toEqual(['Dataset is locked']);
+
+    const bareDegradedPool = makeResource({
+      id: 'pool-bare',
+      type: 'storage',
+      name: 'bare',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'degraded' },
+    });
+    expect(getTrueNASStorageIssue(bareDegradedPool)?.reasons).toEqual(['Pool state DEGRADED']);
+
+    // Stale TrueNAS data is the cause even when the pool also has other news.
+    const staleConnectionPool = makeResource({
+      id: 'pool-stale',
+      type: 'storage',
+      name: 'stale',
+      storage: {
+        topology: 'pool',
+        platform: 'truenas',
+        zfsPoolState: 'ONLINE',
+        risk: {
+          level: 'info',
+          reasons: [
+            {
+              code: 'zfs_scan_running',
+              severity: 'info',
+              summary: 'ZFS pool stale scrub is running',
+            },
+          ],
+        },
+      },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+    expect(getTrueNASStorageIssue(staleConnectionPool)?.reasons).toEqual([
+      'TrueNAS has not updated this recently',
+      'ZFS pool stale scrub is running',
+    ]);
+
+    const unknownDisk = makeResource({
+      id: 'disk-unknown',
+      type: 'physical_disk',
+      name: 'ada0',
+      status: 'unknown',
+      physicalDisk: { devPath: '/dev/ada0', health: 'UNKNOWN' },
+    });
+    expect(getTrueNASStorageIssue(unknownDisk)).toEqual({
+      status: 'unknown',
+      label: 'Unknown',
+      reasons: ['TrueNAS has not reported a state for this'],
+    });
+
+    const silentOfflinePool = makeResource({
+      id: 'pool-gone',
+      type: 'storage',
+      name: 'gone',
+      status: 'offline',
+      storage: { topology: 'pool', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(silentOfflinePool)?.reasons).toEqual([
+      'Offline, and TrueNAS gave no reason',
+    ]);
   });
 
   it('filters apps using native TrueNAS app.query metadata', () => {

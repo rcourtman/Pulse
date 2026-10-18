@@ -1,12 +1,13 @@
 package api
 
 import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestQuickSecuritySetupForcePreservesSystemSettings(t *testing.T) {
@@ -20,7 +21,7 @@ func TestQuickSecuritySetupForcePreservesSystemSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := strings.Repeat("ab", 32)
-	record, err := config.NewAPITokenRecord(token, "synthetic", []string{config.ScopeSettingsWrite})
+	record, err := config.NewAPITokenRecord(token, "synthetic", []string{config.ScopeWildcard})
 	if err != nil {
 		t.Fatal(err)
 	}

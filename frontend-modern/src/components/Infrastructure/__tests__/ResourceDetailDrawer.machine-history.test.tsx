@@ -3,10 +3,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createStore, reconcile } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
+
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
 
 const expandPlatformDetails = (): void => {
-  const details = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
+  // Platform context sits inside the Overview's one Details disclosure.
+  const details = screen.getByTestId('resource-technical-details') as HTMLDetailsElement;
   details.open = true;
   fireEvent(details, new Event('toggle'));
 };
@@ -46,25 +52,6 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   ),
 }));
 
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: (props: {
-    resourceType: string;
-    agentId?: string;
-    resourceId: string;
-    hostname: string;
-    showManualRunAction?: boolean;
-  }) => (
-    <div
-      data-testid="machine-discovery"
-      data-resource-type={props.resourceType}
-      data-agent-id={props.agentId}
-      data-resource-id={props.resourceId}
-      data-hostname={props.hostname}
-      data-manual-run={String(props.showManualRunAction === true)}
-    />
-  ),
-}));
-
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: (props: { mode?: string }) => (
     <div data-testid="stacked-disk-bar" data-mode={props.mode} />
@@ -91,8 +78,103 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('ResourceDetailDrawer machine inventory', () => {
+  const gib = 1024 ** 3;
+  it('states one facts line and keeps the inventory under a closed Details', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-facts',
+          memory: { current: 50, total: 16 * gib, used: 8 * gib },
+          disk: { current: 25, total: 200 * gib, used: 50 * gib },
+          agent: { agentId: 'agent-facts', cpuCount: 8 } as Resource['agent'],
+        })}
+      />
+    ));
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('resource-drawer-exceptions')).toBeNull();
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('8 logical CPUs');
+    expect(facts).toHaveTextContent('8.00 GB of 16.0 GB RAM');
+    expect(facts).toHaveTextContent('50.0 GB of 200 GB disk');
+    const details = screen.getByTestId('resource-technical-details') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(within(details).getByTestId('resource-runtime-context-section')).toBeInTheDocument();
+  });
+
+  it('lifts an offline machine in front and states its sizes, not stale used amounts', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-offline',
+          status: 'offline',
+          lastSeen: Date.now() - 14 * 60_000,
+          memory: { current: 50, total: 16 * gib, used: 8 * gib },
+        })}
+      />
+    ));
+    const lifted = screen.getByTestId('resource-drawer-exceptions');
+    expect(within(lifted).getByText('Observed state')).toBeInTheDocument();
+    expect(within(lifted).getByText(/^Offline · last seen/)).toBeInTheDocument();
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('16.0 GB RAM');
+    expect(facts).not.toHaveTextContent('of 16.0 GB');
+  });
+
+  it('keeps a passing check under Details for a machine but in front for an endpoint', () => {
+    const passing = {
+      available: true,
+      aggregateState: 'healthy',
+      pollIntervalSeconds: 30,
+      lastChecked: new Date(Date.now() - 10_000).toISOString(),
+    } as Resource['availability'];
+    const machine = render(() => (
+      <ResourceDetailDrawer resource={resource({ id: 'agent-checked', availability: passing })} />
+    ));
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent(
+      'availability checks passing',
+    );
+    const details = screen.getByTestId('resource-technical-details');
+    expect(details.contains(screen.getByTestId('availability-probe-status'))).toBe(true);
+    machine.unmount();
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'endpoint-a',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          availability: passing,
+        })}
+      />
+    ));
+    // The check is the endpoint's whole reading, so it never folds away.
+    const card = screen.getByTestId('availability-probe-status');
+    expect(card.closest('details')).toBeNull();
+  });
+
+  it('states sizes only while the memory reading is retained rather than current', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-retained',
+          memory: {
+            current: 50,
+            total: 16 * gib,
+            used: 8 * gib,
+            observation: { state: 'last-known', source: 'agent' },
+          },
+        })}
+      />
+    ));
+    const facts = screen.getByTestId('resource-drawer-facts');
+    expect(facts).toHaveTextContent('16.0 GB RAM');
+    expect(facts).not.toHaveTextContent('of 16.0 GB');
+  });
+});
+
 describe('ResourceDetailDrawer machine metrics history', () => {
-  it('adds a metrics history tab for Pulse Agent machines', async () => {
+  it('charts metrics history on Overview for Pulse Agent machines, with no History tab', async () => {
     render(() => (
       <ResourceDetailDrawer
         resource={resource({
@@ -104,8 +186,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'agent');
     expect(history).toHaveAttribute('data-resource-id', 'agent-mac-mini');
@@ -127,6 +208,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     ));
 
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('machine-history')).not.toBeInTheDocument();
   });
 
   it('renders storage history with the capacity catalog instead of workload metrics', async () => {
@@ -140,8 +222,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
         })}
       />
     ));
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'storage');
@@ -162,8 +242,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'disk');
     expect(history).toHaveAttribute('data-groups', 'disk-activity,disk-io,disk-thermal');
@@ -182,8 +260,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'docker-host');
     expect(history).toHaveAttribute('data-groups', 'utilization,network,disk-io,thermals');
@@ -191,38 +267,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       'data-metrics',
       'cpu,memory,disk,netin,netout,diskread,diskwrite,temperature',
     );
-  });
-
-  it('adds a first-class discovery tab for Pulse Agent machines', async () => {
-    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    render(() => (
-      <ResourceDetailDrawer
-        resource={resource({
-          id: 'agent-mac-mini',
-          displayName: 'Mac Mini',
-          discoveryTarget: {
-            resourceType: 'agent',
-            agentId: 'agent-mac-mini',
-            resourceId: 'agent-mac-mini',
-            hostname: 'richard-mac-mini.local',
-          },
-        })}
-      />
-    ));
-
-    expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
-
-    const discovery = screen.getByTestId('machine-discovery');
-    expect(discovery).toHaveAttribute('data-resource-type', 'agent');
-    expect(discovery).toHaveAttribute('data-agent-id', 'agent-mac-mini');
-    expect(discovery).toHaveAttribute('data-resource-id', 'agent-mac-mini');
-    expect(discovery).toHaveAttribute('data-hostname', 'richard-mac-mini.local');
-    expect(discovery).toHaveAttribute('data-manual-run', 'true');
   });
 
   it('keeps agent machine facts behind the shared nested detail disclosures', () => {
@@ -267,7 +311,10 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    // Provider host facts wait inside the closed Overview Details disclosure.
+    expect(
+      screen.getByTestId('resource-host-details-section').closest('details'),
+    ).not.toHaveAttribute('open');
     expandPlatformDetails();
     const machineSection = screen.getByTestId('resource-host-details-section');
     expect(within(machineSection).getByText('Machine')).toBeInTheDocument();
@@ -307,7 +354,10 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.queryByTestId('resource-host-details-section')).toBeNull();
+    // Provider host facts wait inside the closed Overview Details disclosure.
+    expect(
+      screen.getByTestId('resource-host-details-section').closest('details'),
+    ).not.toHaveAttribute('open');
     expandPlatformDetails();
     const hostSection = screen.getByTestId('resource-host-details-section');
     expect(within(hostSection).getByText('Host')).toBeInTheDocument();
@@ -316,7 +366,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     expect(within(hostSection).queryByText('Hardware')).toBeNull();
   });
 
-  it('keeps the selected History tab across a snapshot refresh that briefly drops the metrics target', async () => {
+  it('withdraws and restores the Overview charts when a snapshot briefly drops the metrics target', async () => {
     const initial = resource({
       id: 'pbs-1',
       type: 'pbs',
@@ -325,18 +375,16 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     });
     const [pbs, setPbs] = createStore<Resource>(initial);
     render(() => <ResourceDetailDrawer resource={pbs} />);
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
     expect(screen.getByTestId('machine-history')).toHaveAttribute(
       'data-resource-id',
       'agent-pbs-1',
     );
 
-    // A snapshot refresh arrives without the merged metrics target. The drawer
-    // must not silently discard the user's History selection: it should show
-    // the in-tab notice and recover when the target returns on the next poll.
+    // A snapshot refresh arrives without the merged metrics target. Overview
+    // stays selected without charts, and they return when the target does.
     setPbs(reconcile({ ...initial, metricsTarget: undefined }, { merge: false }));
-    expect(screen.getByText('Metrics history is unavailable.')).toBeInTheDocument();
+    expect(screen.queryByTestId('machine-history')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
 
     setPbs(
       reconcile(

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "base_sha": "ce3262f4230aedc10acbd38dfb0482e6f0bbb298",
+  "verified_at": "2026-10-06T08:14:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "575efffccfc2285e11d497eaae3de3a7dd0dbbb1ba4c02a6d4adbc296b02ab2e",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "7316bb3852c75bb135025ba245e7a55d3014b9b5581d7fe0410b4fb9be6cdea7",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "0fac403071fbf75093e0d32425863c599471c7424ecb89f6d7ca91f3ea8930ae",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "6f59b8f00077029fd2a19298bb72ec7654c06b0600533ed91d84592d63278b18",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "717decd0b40532f47653d17cd13fe119acf4559aeb831a0b7515773259829807",
+    "frontend-modern/src/index.css": "4884f5bed3239c2e06ddd2415a0b0c63eedd1ada8bee84d9e1d3ff534c65fe74"
+  },
+  "routes": [
+    "/docker/containers",
+    "/kubernetes/configuration"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 430,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 650,
+      "height": 1000
+    },
+    {
+      "width": 700,
+      "height": 1000
+    },
+    {
+      "width": 767,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Docker containers header sweep 390-1920 against main: main clipped the Restarts header at 600 (47px, RES...) and 800 (70px); the change has no clipped header at any width and no column's cell clips grew",
+    "Below a 720px table Restarts moves to the row drawer as it already did on phones; at 800 it returns with 78px and its header whole",
+    "A running, healthy container with 7 restarts (API response edited): at 600 its State cell reads 7 restarts in amber (95px, not clipped); at 1440 State reads Healthy and the Restarts column shows the count",
+    "Kubernetes Configuration at 600/650/700/767: main clipped the Lifecycle / trust header to LIFECYCLE / ...; the change shows its compact Status label through the tablet band, with no header clip, and the full label from md widths up",
+    "Re-checked after rebasing onto main with the Docker drawer health change (#2534): no clipped headers at 600/800/1440, the 7 restarts State warning at 600, the Kubernetes Lifecycle header at 700, and the drawer Running / Health check Failing rows unchanged"
+  ],
+  "interactions": [
+    "Measured header and cell clips on main (reverse-applied patch) and on the change",
+    "Served an edited /api/resources response with the websocket held"
+  ]
+}

@@ -344,7 +344,7 @@ export const Login: Component<LoginProps> = (props) => {
     <Show
       when={!loadingAuth()}
       fallback={
-        <div class="min-h-screen flex items-center justify-center bg-base">
+        <div class="min-h-screen flex items-center justify-center">
           <div class="text-center">
             <LoadingSpinner size="lg" tone="info" label="Checking authentication" class="mb-4" />
             <p class="text-muted">Checking authentication...</p>
@@ -379,7 +379,7 @@ export const Login: Component<LoginProps> = (props) => {
       >
         <Suspense
           fallback={
-            <div class="min-h-screen flex items-center justify-center bg-base">
+            <div class="min-h-screen flex items-center justify-center">
               <div class="text-center">
                 <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
                 <p class="text-muted">Loading setup...</p>
@@ -438,7 +438,7 @@ const LoginForm: Component<{
   } = props;
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-base py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={demoModeEnabled}>

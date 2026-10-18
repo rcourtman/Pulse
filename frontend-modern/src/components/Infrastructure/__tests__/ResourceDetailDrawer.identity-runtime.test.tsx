@@ -6,7 +6,7 @@ import {
   ResourceDetailDrawer,
   getSpecializedTabAvailabilityMessage,
 } from '@/components/Infrastructure/ResourceDetailDrawer';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -32,6 +32,7 @@ const reconnectSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
+    activeAlerts: {},
     state: wsState,
     connected: () => true,
     initialDataReceived: () => true,
@@ -39,10 +40,6 @@ vi.mock('@/contexts/appRuntime', () => ({
     reconnect: reconnectSpy,
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/api/resources', () => ({
@@ -127,7 +124,6 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
 });
 
 afterEach(() => {
@@ -214,71 +210,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(queryByText('K8s')).toBeNull();
   });
 
-  it('keeps discovery as secondary overview context instead of a peer tab', async () => {
-    const { getByRole, getByText, getByTestId, queryByRole, queryByTestId, queryByText } = render(
-      () => <ResourceDetailDrawer resource={baseResource({})} />,
-    );
-
-    expect(queryByRole('button', { name: 'Analysis' })).toBeNull();
-    expect(queryByText('Access')).toBeNull();
-    fireEvent.click(getByRole('tab', { name: 'Manage' }));
-    expect(getByText('Access')).toBeInTheDocument();
-    expect(queryByText('Analysis')).toBeNull();
-    expect(queryByText('Host analysis via host-1')).toBeNull();
-    expect(
-      queryByText('Supporting metadata only. The web interface path above stays primary.'),
-    ).toBeNull();
-    expect(queryByTestId('discovery-tab')).toBeNull();
-    expect(
-      getByTestId('resource-access-section').querySelector(
-        '.mt-3.rounded.border.border-border.bg-surface.p-2\\.5',
-      ),
-    ).toBeNull();
-
-    expect(getByRole('button', { name: 'Show access' })).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
-    expect(getByText('Analysis')).toBeInTheDocument();
-    expect(getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Open analysis' }));
-
-    await waitFor(() => {
-      expect(queryByTestId('discovery-tab')).toBeInTheDocument();
-    });
-  });
-
-  it('keeps discovery analysis and tabs absent when Discovery is disabled', () => {
-    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    const { getByRole, queryByRole, queryByTestId, queryByText } = render(() => (
-      <ResourceDetailDrawer
-        resource={baseResource({
-          discoveryTarget: {
-            resourceType: 'agent',
-            agentId: 'resource-1',
-            resourceId: 'resource-1',
-          },
-          discoveryReadiness: {
-            state: 'missing',
-            source: 'service-discovery',
-            reason: 'Discovery has not run for this resource.',
-          },
-        })}
-      />
-    ));
-
-    expect(queryByRole('tab', { name: 'Discovery' })).toBeNull();
-    fireEvent.click(getByRole('tab', { name: 'Manage' }));
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
-    expect(queryByText('Analysis')).toBeNull();
-    expect(queryByText('Not discovered')).toBeNull();
-    expect(queryByText('Discovery has not run for this resource.')).toBeNull();
-    expect(queryByTestId('discovery-tab')).toBeNull();
-  });
-
   it('uses terse availability notices for specialized tabs', () => {
     expect(getSpecializedTabAvailabilityMessage('mail')).toBe('PMG resources only.');
     expect(getSpecializedTabAvailabilityMessage('namespaces')).toBe('Kubernetes clusters only.');
@@ -353,7 +284,50 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Network')).toBeInTheDocument();
     expect(getByText('Disks')).toBeInTheDocument();
     expect(getByText('eth0')).toBeInTheDocument();
+    expect(getByTestId('disks-card-total')).not.toHaveTextContent('Last known');
   });
+
+  // A Proxmox node keeps its row online while its linked agent is silent.
+  it.each(['offline', 'online'] as const)(
+    "shows a silent agent's retained disk usage and sensors as last known on a %s row",
+    async (status) => {
+      const GiB = 1024 * 1024 * 1024;
+      const resource = baseResource({
+        status,
+        platformData: { sources: ['agent'] },
+        agent: {
+          agentId: 'agent-1',
+          agentVersion: '1.2.3',
+          hostname: 'host-1',
+          platform: 'linux',
+          stale: true,
+          disks: [
+            { mountpoint: '/', total: 100 * GiB, used: 93 * GiB },
+            { mountpoint: '/data', total: 100 * GiB, used: 41 * GiB },
+          ],
+          sensors: { temperatureCelsius: { cpu_package: 45 } },
+        },
+      });
+
+      const { getByRole, getByTestId, getByText, queryAllByTestId } = render(() => (
+        <ResourceDetailDrawer resource={resource} />
+      ));
+      fireEvent.click(getByRole('button', { name: 'Show details' }));
+
+      await waitFor(() => {
+        expect(getByTestId('disks-card-total')).toBeInTheDocument();
+      });
+      expect(getByTestId('disks-card-total')).toHaveTextContent('Last known 67% · 134 GB / 200 GB');
+      const root = getByText('Last known 93%');
+      expect(root).toHaveClass('text-muted');
+      expect(root.closest('[title]')).toHaveAttribute(
+        'title',
+        'Last known reading, not current: host agent stopped reporting',
+      );
+      expect(queryAllByTestId('disks-card-mount-bar')).toHaveLength(0);
+      expect(getByText('45°C (last known)')).toBeInTheDocument();
+    },
+  );
 
   it('shows PVE API network inventory when no linked agent supplies interfaces', async () => {
     const resource = baseResource({
@@ -691,7 +665,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
     expect(queryByText('Mode')).toBeNull();
     expect(queryByText('Platform ID')).toBeNull();
-    expect(queryByText('Details')).toBeNull();
+    // Routine inventory waits under the Overview's Details disclosure.
+    expect(getByTestId('resource-technical-details').tagName).toBe('DETAILS');
     expect(queryByText('Show details')).toBeNull();
   });
 
@@ -798,7 +773,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Primary ID').parentElement?.textContent).toContain('node:homelab-delly');
   });
 
-  it('shows canonical metrics target identity for docker-backed host resources', () => {
+  it('shows the canonical metrics target once, as the Primary ID', () => {
     const resource = baseResource({
       id: 'hash-docker-resource',
       type: 'docker-host',
@@ -823,12 +798,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { container, getByText, getAllByText } = render(() => (
+    const { container, getByText, getAllByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Metrics Target')).toBeInTheDocument();
-    expect(getAllByText('docker-host:docker-host-1').length).toBeGreaterThan(1);
+    // The metrics target is the Primary ID, so neither its row nor an alias
+    // repeats it.
+    expect(queryByText('Metrics Target')).toBeNull();
+    expect(getAllByText('docker-host:docker-host-1')).toHaveLength(1);
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
     expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
@@ -858,8 +835,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const inlineAliases = inlineRender.getByText('Aliases');
     expect(inlineAliases).toBeInTheDocument();
     expect(inlineAliases.closest('summary')).toBeNull();
-    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
+    // Few aliases need no collapse of their own: their only enclosing
+    // disclosure is the Overview's Details section.
+    expect(inlineAliases.closest('details')).toBe(
+      inlineRender.getByTestId('resource-technical-details'),
+    );
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
+    // A long alias wraps inside the drawer cell instead of spilling past it.
+    expect(inlineRender.getByText('agent-inline-1')).toHaveClass('max-w-full', 'wrap-anywhere');
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 
     const overflowResource = baseResource({
@@ -961,10 +944,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    // Platform context sits inside the Overview's Details, opened by render().
     await waitFor(() => expect(getByTestId('resource-platform-details')).toBeInTheDocument());
-    const platformDetails = getByTestId('resource-platform-details') as HTMLDetailsElement;
-    platformDetails.open = true;
-    fireEvent(platformDetails, new Event('toggle'));
     await waitFor(() => expect(getByText('Context')).toBeInTheDocument());
 
     expect(queryByText('Analysis')).toBeNull();

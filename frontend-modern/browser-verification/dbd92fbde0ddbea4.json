@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "8df5051192a0a700e8a5971323e880da1505d26e",
+  "verified_at": "2026-10-06T11:03:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f784a485d8925db8eac72a1234ea0f03468b279cd74aa7904a66e1e836f9a029",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "86ba35349175f67d52758c912418a1bb0f660840a9e242f5ee76869aa44d55cf",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "48bda28675f902522977cf460643e9b29901005ec74778bfad4815baacc2d2fb",
+    "frontend-modern/src/utils/memoryObservation.ts": "ad5bc5a735065d5ec3f9ba6dacb4bd64758b1bdcd8efeae9affd864d4eeb7093"
+  },
+  "routes": [
+    "/browser-tests/guest-row-memory-provenance.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual production GuestRow, StackedMemoryBar, MetricMiniSparkline and GuestDrawer with source index.css in the existing offline Vite source preview. Synthetic selected memory and recorded History; no full App or production-build browser claim. Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 desktop light/dark and WebKit26.0 phone dark/narrow light.",
+    "All twelve final captures inspected: Last known/Prior is visible beneath retained bars, Freshness unknown/Unknown beneath unannotated-memory sparklines, Unavailable/N/A beside preserved historical points. All memory freshness cues fit 1365, 390 and 320px cells and expose full allowlisted source and original UTC in sr-only text.",
+    "Retained values never use a current accessible label. Invalid/unannotated provenance is unknown; an unavailable numeric carrier cannot fill a bar or produce a current numeric value. Measured zero stays zero; a current independent Pulse Agent observation withdraws only the memory cue despite disk deferral.",
+    "The original observation source/time remains after Last seen/running/backup-completion snapshot changes. Stored chart path and mounted row identity remain unchanged; host-capacity value retains last-known context.",
+    "In the existing backup-lock phone identity layout, the inline LOCK: BACKUP badge still crowds the guest name in the initial bar-state captures. This is inherited identity compression, not improved or accepted as readable here; memory cues remain readable. No native QGA, freeze/thaw, filesystem writes/liveness, installed/release, reporter or physical-device acceptance."
+  ],
+  "interactions": [
+    "Real metric-display and memory-basis selects switch bars/sparklines and guest/host values. Same-identity memory transitions preserve History while changing only truthful status/current-value presentation.",
+    "Desktop Tab navigation and Enter, and the first phone touch, open the real guest drawer. Its source/time qualification agrees with the row, and existing independent-thaw safety copy stays. Real drawer collapse works.",
+    "Desktop pointer History lens retains last-known context and restores the bar on leave; phone cues need no hover. No new focus stop or live announcement added.",
+    "Only a synthetic local GET /api/ai/intelligence/anomalies was requested; all external or guest operations are rejected. No page errors/horizontal overflow. All four browser contexts closed, browser/server closure recorded, compiler stop requested; total elapsed49705ms."
+  ]
+}

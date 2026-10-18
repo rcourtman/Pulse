@@ -73,7 +73,8 @@ func safeAppriseError(operation string, err error) error {
 	// Inspect wrapped redirect refusals too; unknown reasons stay withheld.
 	for cause := err; cause != nil; cause = errors.Unwrap(cause) {
 		switch cause.Error() {
-		case "URL userinfo is not allowed", "base URL must not include query or fragment",
+		case notificationRedirectOriginMessage,
+			"URL userinfo is not allowed", "base URL must not include query or fragment",
 			"URL host is required", "URL hostname is required", "base URL path must be host-local",
 			"webhook URL userinfo is not allowed", "webhook URL missing hostname",
 			"webhook URLs pointing to unspecified addresses are not allowed",

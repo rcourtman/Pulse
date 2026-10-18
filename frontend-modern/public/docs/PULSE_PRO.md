@@ -181,9 +181,9 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 | Mode | Behavior | Plan |
 |---|---|---|
 | **Watch only** | Detect issues only. No investigation or fix execution. | Community / legacy Relay payload |
-| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
-| **Auto-fix safe issues** | Runs approved safe fixes and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
-| **Policy autopilot** | Runs eligible policy-approved fixes without approval when explicitly enabled. | Pro / hosted Cloud |
+| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Safe auto-fix** | Runs approved safe fixes and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
+| **Autopilot** | Runs eligible policy-approved fixes without approval when explicitly enabled. | Pro / hosted Cloud |
 
 ## What You Get (By Plan)
 

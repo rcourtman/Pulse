@@ -61,6 +61,90 @@ type State struct {
 	// are discarded as decisive evidence. Internal evidence only: never
 	// serialized and never part of snapshots.
 	pbsGuestConfirmations map[string]map[PBSGuestConfirmation]struct{}
+
+	// nodeAgentSplits holds back node<->agent links the operator split
+	// (SetNodeAgentSplitDecider); nil holds none back.
+	nodeAgentSplits NodeAgentSplitDecider
+}
+
+// NodeAgentSplitDecider reports whether the operator split a Proxmox node
+// from a host agent's machine (unlink or report-merge in the resources API,
+// recorded in the resource store and decided by
+// unifiedresources.MonitorAdapter). State holds such a link back on both
+// sides, so nothing that reads a node's linked agent or an agent's linked
+// node treats the pair as one machine: the agent's SMART inventory as the
+// node's disk fallback, its disk-exclude patterns on the node, guest
+// discovery, agent deployment, service discovery and the node and agent's
+// alert correlation.
+// State calls it with its lock held, so it must not call State.
+type NodeAgentSplitDecider interface {
+	ProxmoxNodeAgentSplit(node Node, host Host) bool
+}
+
+// SetNodeAgentSplitDecider installs the operator's split decisions and
+// holds back the links they split now; every later link write reads them
+// too. A held-back link returns when monitoring next infers it after the
+// decider stops splitting the pair. A manual link (the agents API's node
+// link) split afterwards ends on the agent's next report that finds the
+// split confirmed in the resource store, which records the agent's link as
+// automatic again.
+func (s *State) SetNodeAgentSplitDecider(d NodeAgentSplitDecider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nodeAgentSplits = d
+	holdBackSplitNodeLinks(d, s.Hosts, s.Nodes)
+}
+
+// NodeAgentLinkSplit reports whether the operator split the node with
+// nodeID from host's agent, so a link between them is held back.
+func (s *State) NodeAgentLinkSplit(nodeID string, host Host) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, nodeID, host)
+}
+
+func nodeAgentLinkSplitLocked(d NodeAgentSplitDecider, nodes []Node, nodeID string, host Host) bool {
+	nodeID = strings.TrimSpace(nodeID)
+	if d == nil || nodeID == "" || strings.TrimSpace(host.ID) == "" {
+		return false
+	}
+	for i := range nodes {
+		if nodes[i].ID == nodeID {
+			return d.ProxmoxNodeAgentSplit(nodes[i], host)
+		}
+	}
+	return false
+}
+
+// holdBackSplitNodeLinks clears both sides of every node<->agent link the
+// operator split.
+func holdBackSplitNodeLinks(d NodeAgentSplitDecider, hosts []Host, nodes []Node) {
+	if d == nil {
+		return
+	}
+	hostByID := make(map[string]Host, len(hosts))
+	for _, host := range hosts {
+		hostByID[host.ID] = host
+	}
+	for i := range nodes {
+		holdBackSplitNodeLink(d, &nodes[i], hostByID)
+	}
+	for i := range hosts {
+		if nodeAgentLinkSplitLocked(d, nodes, hosts[i].LinkedNodeID, hosts[i]) {
+			hosts[i].LinkedNodeID = ""
+		}
+	}
+}
+
+// holdBackSplitNodeLink clears node's linked agent if the operator split
+// the node from it.
+func holdBackSplitNodeLink(d NodeAgentSplitDecider, node *Node, hostByID map[string]Host) {
+	if d == nil || node.LinkedAgentID == "" {
+		return
+	}
+	if host, ok := hostByID[node.LinkedAgentID]; ok && d.ProxmoxNodeAgentSplit(*node, host) {
+		node.LinkedAgentID = ""
+	}
 }
 
 // PBSGuestConfirmation identifies one PBS snapshot as seen through a PVE
@@ -107,15 +191,85 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert.
+	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, so readers never report its resource as healthy.
+	Resolution *AlertResolution `json:"resolution,omitempty"`
+}
+
+// AlertResolution is the state projection of the alert engine's
+// AlertResolution: why an alert closed without its condition clearing.
+type AlertResolution struct {
+	Reason              string `json:"reason"`
+	SuccessorResourceID string `json:"successorResourceId,omitempty"`
+	SuccessorName       string `json:"successorName,omitempty"`
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: ...".
+	Summary string `json:"summary,omitempty"`
 }
 
 // ResolvedAlert represents a recently resolved alert
 type ResolvedAlert struct {
 	Alert
 	ResolvedTime time.Time `json:"resolvedTime"`
+}
+
+// Metric alert phases. A threshold alert stays open after its reading drops
+// below the trigger: it holds until the reading reaches the recovery level,
+// then must stay there for the recovery delay before it clears.
+const (
+	MetricAlertPhaseBreaching  = "breaching"
+	MetricAlertPhaseLatched    = "latched"
+	MetricAlertPhaseRecovering = "recovering"
+)
+
+// MetricAlertStatus describes the reading Pulse is evaluating now for an open
+// threshold alert and why the alert is still open. The alert's Value, Message
+// and LastSeen keep describing the last reading that met the trigger, which
+// can be minutes or days old while the alert holds, so surfaces lead with
+// this instead. It is volatile: rebuilt on every evaluation, never persisted.
+type MetricAlertStatus struct {
+	Phase string `json:"phase"`
+	// Value is the value compared with the rule. For a rolling-average rule
+	// that is the average; RawValue then carries the latest sample.
+	Value                   float64   `json:"value"`
+	RawValue                *float64  `json:"rawValue,omitempty"`
+	EvaluationWindowSeconds int       `json:"evaluationWindowSeconds,omitempty"`
+	Unit                    string    `json:"unit,omitempty"`
+	ObservedAt              time.Time `json:"observedAt"`
+	// Trigger opens the alert at or above this value; Recovery is the level
+	// the value must be at or below for RecoveryDelaySeconds to clear it.
+	Trigger              float64 `json:"trigger"`
+	Recovery             float64 `json:"recovery"`
+	RecoveryDelaySeconds int     `json:"recoveryDelaySeconds,omitempty"`
+	// Recovery progress, present only in the recovering phase.
+	RecoveryStartedAt      *time.Time `json:"recoveryStartedAt,omitempty"`
+	RecoveryElapsedSeconds int        `json:"recoveryElapsedSeconds,omitempty"`
+	// LastBreachAt dates the alert's Value: the latest evaluated reading that
+	// met the trigger, not the newer observation of a hold or recovery run.
+	// State/websocket alerts omit LastSeen; zero means the date is unknown.
+	LastBreachAt time.Time `json:"lastBreachAt,omitzero"`
+}
+
+// Clone returns a deep copy.
+func (s *MetricAlertStatus) Clone() *MetricAlertStatus {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	if s.RawValue != nil {
+		raw := *s.RawValue
+		clone.RawValue = &raw
+	}
+	if s.RecoveryStartedAt != nil {
+		startedAt := *s.RecoveryStartedAt
+		clone.RecoveryStartedAt = &startedAt
+	}
+	return &clone
 }
 
 // Node represents a Proxmox VE node
@@ -195,6 +349,8 @@ type VM struct {
 	Disk               Disk                    `json:"disk"`
 	Disks              []Disk                  `json:"disks,omitempty"`
 	DiskStatusReason   string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	DiskObservation    GuestDiskObservation    `json:"-"`                          // Source-owned carry-forward evidence, not the latest poll time.
+	GuestAgentEvidence GuestAgentEvidence      `json:"-"`                          // Original eligibility evidence, independent of retained identity.
 	GuestAgentStatus   string                  `json:"guestAgentStatus,omitempty"` // QEMU guest-agent runtime status
 	GuestAgentExpected bool                    `json:"guestAgentExpected,omitempty"`
 	IPAddresses        []string                `json:"ipAddresses,omitempty"`
@@ -2700,7 +2856,16 @@ type PhysicalDisk struct {
 	IO                     *DiskIO                         `json:"io,omitempty"`
 	Collection             *diskinventory.CollectionStatus `json:"collection,omitempty"`
 	ExpectedUpdateInterval time.Duration                   `json:"-"` // Collector schedule, independent of general node polling
-	LastChecked            time.Time                       `json:"lastChecked"`
+	// AgentSMARTReported marks a disk a linked host agent lists in its SMART
+	// report, so the agent's CheckHost owns its temperature alert. Internal
+	// poll evidence, set by the PVE disk poller's agent SMART merge.
+	AgentSMARTReported bool `json:"-"`
+	// AgentSMARTSplit marks a disk the operator split from the disk a linked
+	// host agent's SMART row describes, so the PVE disk poller pairs neither
+	// that row nor an earlier poll's record, which held its readings, with
+	// it. Internal poll evidence, set by the same merge.
+	AgentSMARTSplit bool      `json:"-"`
+	LastChecked     time.Time `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance
@@ -3155,6 +3320,23 @@ func (i GuestNetworkInterface) NormalizeCollections() GuestNetworkInterface {
 		i.Addresses = []string{}
 	}
 	return i
+}
+
+// GuestDiskObservation keeps a QEMU filesystem reading's original source time
+// through internal snapshots. DiskStatusReason owns current/retained display
+// state; a linked Pulse agent remains a separate source. This is not wire data.
+type GuestDiskObservation struct {
+	Source     string
+	ObservedAt time.Time
+}
+
+// GuestAgentEvidence bounds fallback query eligibility when VM status is
+// unavailable. Explicit distinguishes an observed lack of evidence from a
+// legacy snapshot; an ordinary VM poll must not renew retained metadata.
+// This is internal coordination, not agent input or public wire data.
+type GuestAgentEvidence struct {
+	Explicit   bool
+	ObservedAt time.Time
 }
 
 // Disk represents disk usage
@@ -3875,7 +4057,7 @@ func preferNodeForMerge(existing Node, candidate Node) Node {
 	return existing
 }
 
-func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
+func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node, splits NodeAgentSplitDecider) {
 	// Explicit operator intent is pinned to the selected provider ID, never
 	// transferred by hostname to a replacement provider identity.
 	for _, host := range hosts {
@@ -3891,6 +4073,9 @@ func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
 			}
 		}
 	}
+	// A split recorded after a manual link is the newer decision (the
+	// agents API's link removes an older split before it records intent).
+	holdBackSplitNodeLinks(splits, hosts, nodes)
 	linkedNodeByHostID := make(map[string]string)
 	multipleNodeLinksByHostID := make(map[string]struct{})
 	for _, node := range nodes {
@@ -3989,10 +4174,20 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		linkedHostToKey[hostID] = key
 	}
+	// A split recorded since another instance's poll is read here, before that
+	// instance's retained link can steer where this poll's nodes fold.
+	var retainedHostByID map[string]Host
+	if s.nodeAgentSplits != nil && len(s.Hosts) > 0 {
+		retainedHostByID = make(map[string]Host, len(s.Hosts))
+		for _, host := range s.Hosts {
+			retainedHostByID[host.ID] = host
+		}
+	}
 	for _, node := range s.Nodes {
 		if node.Instance == instanceName {
 			continue
 		}
+		holdBackSplitNodeLink(s.nodeAgentSplits, &node, retainedHostByID)
 
 		key := nodeLogicalKey(node)
 		if key == "" {
@@ -4037,7 +4232,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
 	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
-	hostHostnameByID := make(map[string]string)                 // hostAgentID -> normalized full hostname
+	hostByID := make(map[string]Host)                           // hostAgentID -> host
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
 		if name == "" || hostID == "" {
@@ -4072,7 +4267,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
-			hostHostnameByID[host.ID] = strings.TrimSpace(strings.ToLower(host.Hostname))
+			hostByID[host.ID] = host
 			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -4095,16 +4290,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// Preserve legitimate split views when the same agent strongly bridges
 	// both endpoints through an exact IP or a full (dotted) hostname.
 	hostStronglyCorroboratesNode := func(hostID string, node Node) bool {
-		endpoint := extractHostEndpoint(node.Host)
-		if endpoint == "" {
-			return false
-		}
-		if ip := normalizeIPAddress(endpoint); ip != "" {
-			_, ok := hostIPsByID[hostID][ip]
-			return ok
-		}
-		hostname := hostHostnameByID[hostID]
-		return strings.Contains(endpoint, ".") && endpoint == hostname
+		host, ok := hostByID[hostID]
+		return ok && hostReportsNodeEndpoint(host, node)
 	}
 	sharedAgentProvesNodePair := func(hostID string, existing, candidate Node) bool {
 		if nodeCrossViewMergeProven(existing, candidate) {
@@ -4247,6 +4434,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			}
 		}
 
+		// A split agent is no evidence of this node's identity either, so
+		// hold the link back before the merge key reads it.
+		holdBackSplitNodeLink(s.nodeAgentSplits, &node, hostByID)
 		primaryKey := nodeLogicalKey(node)
 		targetKey := resolveNodeMergeKey(primaryKey, node, nodeMap, nodeAliasToKey, ambiguousNodeAliases)
 		if node.LinkedAgentID != "" {
@@ -4274,6 +4464,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			if existing, ok := nodeMap[targetKey]; ok {
 				if validHostAgentIDs[existing.LinkedAgentID] {
 					node.LinkedAgentID = existing.LinkedAgentID
+					holdBackSplitNodeLink(s.nodeAgentSplits, &node, hostByID)
 				}
 			}
 		}
@@ -4298,7 +4489,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		return newNodes[i].Name < newNodes[j].Name
 	})
 
-	reconcileHostNodeLinksLocked(s.Hosts, newNodes)
+	reconcileHostNodeLinksLocked(s.Hosts, newNodes, s.nodeAgentSplits)
 
 	s.Nodes = newNodes
 	s.LastUpdate = time.Now()
@@ -5087,6 +5278,20 @@ func (s *State) RemoveStaleDockerHosts(cutoff time.Time) []DockerHost {
 	return cloneDockerHosts(removed)
 }
 
+// GetDockerHost returns one detached source record. Identity resolution belongs
+// to the caller; an exact source ID lookup must not clone every peer inventory.
+func (s *State) GetDockerHost(hostID string) (DockerHost, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, host := range s.DockerHosts {
+		if host.ID == hostID {
+			return cloneDockerHost(host), true
+		}
+	}
+	return DockerHost{}, false
+}
+
 // GetDockerHosts returns a copy of docker hosts.
 func (s *State) GetDockerHosts() []DockerHost {
 	s.mu.RLock()
@@ -5372,10 +5577,22 @@ func (s *State) UpsertHost(host Host) {
 	defer s.mu.Unlock()
 
 	host = cloneHost(host)
+	if nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, host.LinkedNodeID, host) {
+		host.LinkedNodeID = ""
+	}
 	for i, node := range s.Nodes {
+		if host.ID == "" || node.LinkedAgentID != host.ID {
+			continue
+		}
+		// An operator split holds the link back on both sides, whatever the
+		// host's intent.
+		split := nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, node.ID, host)
+		if split && node.ID == host.LinkedNodeID {
+			host.LinkedNodeID = ""
+		}
 		// Legacy one-way links have unknown intent; an unmarked host update
 		// cannot authorise their removal (SMART fallback also uses these links).
-		if host.NodeLinkSource != "" && host.ID != "" && node.LinkedAgentID == host.ID && node.ID != host.LinkedNodeID {
+		if split || (host.NodeLinkSource != "" && node.ID != host.LinkedNodeID) {
 			s.Nodes[i].LinkedAgentID = ""
 		}
 	}
@@ -5398,6 +5615,65 @@ func (s *State) UpsertHost(host Host) {
 	})
 
 	s.LastUpdate = time.Now()
+}
+
+// GetHost returns one detached source record under the same lock and clone
+// policy as GetHosts, without copying unrelated sensors or workload inventory.
+func (s *State) GetHost(hostID string) (Host, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, host := range s.Hosts {
+		if host.ID == hostID {
+			return cloneHost(host), true
+		}
+	}
+	return Host{}, false
+}
+
+// NodeSplitFromAgent reports whether the operator split the node with this
+// connection and name from the host agent with this ID. It reads the state in
+// place, so readers that ask once per container do not copy the records. A
+// node or agent not in state is not split.
+func (s *State) NodeSplitFromAgent(instance, name, agentID string) bool {
+	instance = strings.ToLower(strings.TrimSpace(instance))
+	name = strings.ToLower(strings.TrimSpace(name))
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.nodeAgentSplits == nil {
+		return false
+	}
+	var host *Host
+	for i := range s.Hosts {
+		if s.Hosts[i].ID == agentID {
+			host = &s.Hosts[i]
+			break
+		}
+	}
+	if host == nil {
+		return false
+	}
+	for i := range s.Nodes {
+		node := &s.Nodes[i]
+		if strings.ToLower(strings.TrimSpace(node.Instance)) == instance &&
+			strings.ToLower(strings.TrimSpace(node.Name)) == name {
+			return s.nodeAgentSplits.ProxmoxNodeAgentSplit(*node, *host)
+		}
+	}
+	return false
+}
+
+// GetNode returns one detached Proxmox node record.
+func (s *State) GetNode(nodeID string) (Node, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, node := range s.Nodes {
+		if node.ID == nodeID {
+			return cloneNode(node), true
+		}
+	}
+	return Node{}, false
 }
 
 // GetHosts returns a copy of all generic hosts.
@@ -5439,12 +5715,18 @@ func (s *State) ClearAllHosts() int {
 
 // LinkNodeToHostAgent updates a PVE node to link to its host agent.
 // This is called when a host agent registers and matches a known PVE node by hostname.
+// A node the operator split from the agent keeps no link to it.
 func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, node := range s.Nodes {
 		if node.ID == nodeID {
+			for _, host := range s.Hosts {
+				if host.ID == hostAgentID && nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, nodeID, host) {
+					return true
+				}
+			}
 			s.Nodes[i].LinkedAgentID = hostAgentID
 			s.LastUpdate = time.Now()
 			return true
@@ -5606,13 +5888,22 @@ func (s *State) SetHostStatus(hostID, status string) bool {
 // ExpireHostTelemetry marks a host offline and clears transient operation
 // claims that cannot remain authoritative after the reporting lease expires.
 // Static topology and health counters remain available as last-known context.
-func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
+// SMART temperature and I/O readings stay as last-known values, but their
+// collection state says they are no longer collected.
+//
+// lastSeen is the report time the caller judged stale. A host that has
+// reported since then is left untouched and nothing is returned, so a report
+// accepted between that judgement and this call is never expired.
+func (s *State) ExpireHostTelemetry(hostID string, lastSeen time.Time) (Host, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, host := range s.Hosts {
 		if host.ID != hostID {
 			continue
+		}
+		if !host.LastSeen.Equal(lastSeen) {
+			return Host{}, false
 		}
 		changed := host.Status != "offline"
 		host.Status = "offline"
@@ -5630,6 +5921,11 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 			host.Unraid.SyncProgress = 0
 			changed = true
 		}
+		for idx := range host.Sensors.SMART {
+			if expireHostSMARTReadings(&host.Sensors.SMART[idx]) {
+				changed = true
+			}
+		}
 		s.Hosts[i] = host
 		if changed {
 			s.LastUpdate = time.Now()
@@ -5637,6 +5933,42 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 		return cloneHost(host), changed
 	}
 	return Host{}, false
+}
+
+// HostAgentStoppedReportingReason is the collection-state reason recorded on
+// readings a host agent supplied once its reporting lease has expired.
+const HostAgentStoppedReportingReason = "host agent stopped reporting"
+
+// expireHostSMARTReadings marks the temperature and I/O counters of one SMART
+// row as no longer collected, keeping their values as last-known evidence.
+// Reports from agents that predate collection provenance carry no state, so a
+// present reading is treated as collected. It reports whether anything changed.
+func expireHostSMARTReadings(disk *HostDiskSMART) bool {
+	collection := diskinventory.CloneStatus(disk.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	temperature := expireCollectedReading(&collection.Temperature, disk.Temperature > 0)
+	io := expireCollectedReading(&collection.IO, disk.IO != nil)
+	if !temperature && !io {
+		return false
+	}
+	disk.Collection = collection
+	return true
+}
+
+func expireCollectedReading(status *diskinventory.FieldStatus, hasValue bool) bool {
+	switch status.State {
+	case diskinventory.FieldAvailable:
+	case "":
+		if !hasValue {
+			return false
+		}
+	default:
+		return false
+	}
+	*status = diskinventory.Unavailable(status.Source, HostAgentStoppedReportingReason)
+	return true
 }
 
 // TouchHost updates the last seen timestamp for a host.

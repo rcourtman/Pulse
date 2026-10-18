@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
@@ -41,8 +42,11 @@ import {
 // so it lives here on the Backups page, not buried on the platform Storage tab
 // where the rows read as generic "PVE" storage. One row per datastore, labelled
 // by its server; a server with no datastore data still gets a reachability row.
-// Host CPU/memory/uptime ride along on each of the server's rows: PBS hosts
-// left the v5 nodes table in the v6 IA, so this is where their health lives.
+// PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
+// lives. Host status, version, CPU, memory and uptime show once, on the server's
+// first datastore row; its later rows keep the server name (muted), toggle and
+// web link but leave those host cells empty, so two datastores never read as
+// two identical servers.
 
 interface BackupServerRow {
   key: string;
@@ -58,6 +62,8 @@ interface BackupServerRow {
   uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
   backupCount: number;
+  // A later datastore row of the server on the row above: host cells stay empty.
+  continuesServer: boolean;
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
@@ -387,12 +393,19 @@ export function buildBackupServerRows(
     // Unwrap reactive source DTOs before cloning; never clone their proxies.
     const resourceSnapshot = () => structuredClone(unwrap(server));
     if (datastores.length === 0) {
-      rows.push({ key: server.id, ...host, resource: resourceSnapshot(), backupCount: 0 });
+      rows.push({
+        key: server.id,
+        ...host,
+        resource: resourceSnapshot(),
+        backupCount: 0,
+        continuesServer: false,
+      });
       continue;
     }
-    for (const datastore of datastores) {
+    for (const [index, datastore] of datastores.entries()) {
       rows.push({
         key: `${server.id}:${datastore.name}`,
+        continuesServer: index > 0,
         ...host,
         resource: resourceSnapshot(),
         // Row stores reconcile independently from the nested PBS snapshot. Do
@@ -528,7 +541,9 @@ export function ProxmoxBackupServersTable(props: {
                         })}
                       >
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
+                          class={`${getPlatformTableCellClassForKind('name')} truncate ${
+                            row.continuesServer ? 'text-muted' : 'text-base-content font-medium'
+                          }`}
                           title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}
                         >
                           <div class="flex min-w-0 items-center gap-1">
@@ -538,68 +553,77 @@ export function ProxmoxBackupServersTable(props: {
                               controlsId={detailRowId()}
                               onToggle={() => detail.toggle(rowIdentity)}
                             />
-                            <div class="min-w-0 truncate" title={row.serverName}>
-                              {row.serverName}
-                            </div>
+                            <ResourceNameWithWebInterfaceLink
+                              name={row.serverName}
+                              url={row.resource.customUrl}
+                              class="min-w-0 flex-1"
+                              nameClass="block min-w-0 flex-1 truncate"
+                            />
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
-                          <div class="flex items-center gap-2">
-                            <Show when={layoutMode() !== 'compact'}>
-                              <StatusDot
-                                size="sm"
-                                variant={row.online ? 'success' : 'danger'}
+                          <Show when={!row.continuesServer}>
+                            <div class="flex items-center gap-2">
+                              <Show when={layoutMode() !== 'compact'}>
+                                <StatusDot
+                                  size="sm"
+                                  variant={row.online ? 'success' : 'danger'}
+                                  title={row.connectionLabel}
+                                  ariaHidden
+                                />
+                              </Show>
+                              <span
+                                class="truncate text-[11px] text-base-content"
                                 title={row.connectionLabel}
-                                ariaHidden
-                              />
-                            </Show>
-                            <span
-                              class="truncate text-[11px] text-base-content"
-                              title={row.connectionLabel}
-                            >
-                              {row.connectionLabel}
-                            </span>
-                          </div>
+                              >
+                                {row.connectionLabel}
+                              </span>
+                            </div>
+                          </Show>
                         </TableCell>
                         <Show when={columnVisible('version')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-muted truncate text-[11px]`}
                           >
-                            {row.version || '—'}
+                            <Show when={!row.continuesServer}>{row.version || '—'}</Show>
                           </TableCell>
                         </Show>
                         <Show when={columnVisible('cpu')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <Show
-                              when={row.online && row.cpuPercent !== undefined}
-                              fallback={<span class="text-muted">—</span>}
-                            >
-                              <PlatformTablePercentValue value={row.cpuPercent} />
+                            <Show when={!row.continuesServer}>
+                              <Show
+                                when={row.online && row.cpuPercent !== undefined}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                <PlatformTablePercentValue value={row.cpuPercent} />
+                              </Show>
                             </Show>
                           </TableCell>
                         </Show>
                         <Show when={columnVisible('memory')}>
                           <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
-                            <Show
-                              when={row.online && row.memoryPercent !== undefined}
-                              fallback={<span class="text-muted">—</span>}
-                            >
-                              <span
-                                class="text-base-content"
-                                title={
-                                  row.memoryTotal
-                                    ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
-                                    : undefined
-                                }
+                            <Show when={!row.continuesServer}>
+                              <Show
+                                when={row.online && row.memoryPercent !== undefined}
+                                fallback={<span class="text-muted">—</span>}
                               >
-                                <PlatformTablePercentValue value={row.memoryPercent} />
-                              </span>
-                              <Show when={row.memoryTotal && layoutMode() === 'full'}>
-                                <span class="ml-1 text-[10px] text-muted tabular-nums">
-                                  {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                                <span
+                                  class="text-base-content"
+                                  title={
+                                    row.memoryTotal
+                                      ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
+                                      : undefined
+                                  }
+                                >
+                                  <PlatformTablePercentValue value={row.memoryPercent} />
                                 </span>
+                                <Show when={row.memoryTotal && layoutMode() === 'full'}>
+                                  <span class="ml-1 text-[10px] text-muted tabular-nums">
+                                    {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                                  </span>
+                                </Show>
                               </Show>
                             </Show>
                           </TableCell>
@@ -608,11 +632,13 @@ export function ProxmoxBackupServersTable(props: {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
-                            <Show
-                              when={row.online && (row.uptimeSeconds ?? 0) > 0}
-                              fallback={<span class="text-muted">—</span>}
-                            >
-                              {formatPlatformTableUptimeValue(row.uptimeSeconds)}
+                            <Show when={!row.continuesServer}>
+                              <Show
+                                when={row.online && (row.uptimeSeconds ?? 0) > 0}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                {formatPlatformTableUptimeValue(row.uptimeSeconds)}
+                              </Show>
                             </Show>
                           </TableCell>
                         </Show>

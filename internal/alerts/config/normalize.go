@@ -67,23 +67,30 @@ func NormalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, me
 	return normalized
 }
 
+// normalizeThresholdCount resolves a Docker or PMG count threshold, where 0 is
+// Off. A value the decoded JSON did not carry takes the factory value. Any
+// other negative value is Off: the settings Off toggle sends -1, and this
+// normalizer used to turn it back into the factory value.
+func normalizeThresholdCount(value, factory int) int {
+	switch {
+	case value == ThresholdCountUnset:
+		return factory
+	case value < 0:
+		return 0
+	default:
+		return value
+	}
+}
+
 func NormalizeDockerDefaults(config *AlertConfig) {
 	config.DockerDefaults.CPU = NormalizeDockerThreshold(config.DockerDefaults.CPU, 80, "docker.cpu")
 	config.DockerDefaults.Memory = NormalizeDockerThreshold(config.DockerDefaults.Memory, 85, "docker.memory")
 	config.DockerDefaults.Disk = NormalizeDockerThreshold(config.DockerDefaults.Disk, 85, "docker.disk")
 
-	if config.DockerDefaults.RestartCount <= 0 {
-		config.DockerDefaults.RestartCount = 3
-	}
-	if config.DockerDefaults.RestartWindow <= 0 {
-		config.DockerDefaults.RestartWindow = 300
-	}
-	if config.DockerDefaults.MemoryWarnPct <= 0 {
-		config.DockerDefaults.MemoryWarnPct = 90
-	}
-	if config.DockerDefaults.MemoryCriticalPct <= 0 {
-		config.DockerDefaults.MemoryCriticalPct = 95
-	}
+	config.DockerDefaults.RestartCount = normalizeThresholdCount(config.DockerDefaults.RestartCount, 3)
+	config.DockerDefaults.RestartWindow = normalizeThresholdCount(config.DockerDefaults.RestartWindow, 300)
+	config.DockerDefaults.MemoryWarnPct = normalizeThresholdCount(config.DockerDefaults.MemoryWarnPct, 90)
+	config.DockerDefaults.MemoryCriticalPct = normalizeThresholdCount(config.DockerDefaults.MemoryCriticalPct, 95)
 	if config.DockerDefaults.ServiceWarnGapPct <= 0 {
 		config.DockerDefaults.ServiceWarnGapPct = 10
 	}
@@ -107,81 +114,33 @@ func NormalizeDockerDefaults(config *AlertConfig) {
 	}
 }
 
+// NormalizePMGDefaults fills unset PMG thresholds with their factory values.
+// Each threshold is Off at 0, as the PMG checks read it.
 func NormalizePMGDefaults(config *AlertConfig) {
-	if config.PMGDefaults.QueueTotalWarning <= 0 {
-		config.PMGDefaults.QueueTotalWarning = 500
-	}
-	if config.PMGDefaults.QueueTotalCritical <= 0 {
-		config.PMGDefaults.QueueTotalCritical = 1000
-	}
-	if config.PMGDefaults.OldestMessageWarnMins <= 0 {
-		config.PMGDefaults.OldestMessageWarnMins = 30
-	}
-	if config.PMGDefaults.OldestMessageCritMins <= 0 {
-		config.PMGDefaults.OldestMessageCritMins = 60
-	}
-	if config.PMGDefaults.DeferredQueueWarn <= 0 {
-		config.PMGDefaults.DeferredQueueWarn = 200
-	}
-	if config.PMGDefaults.DeferredQueueCritical <= 0 {
-		config.PMGDefaults.DeferredQueueCritical = 500
-	}
-	if config.PMGDefaults.HoldQueueWarn <= 0 {
-		config.PMGDefaults.HoldQueueWarn = 100
-	}
-	if config.PMGDefaults.HoldQueueCritical <= 0 {
-		config.PMGDefaults.HoldQueueCritical = 300
-	}
-	if config.PMGDefaults.QuarantineSpamWarn <= 0 {
-		config.PMGDefaults.QuarantineSpamWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineSpamCritical <= 0 {
-		config.PMGDefaults.QuarantineSpamCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineVirusWarn <= 0 {
-		config.PMGDefaults.QuarantineVirusWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineVirusCritical <= 0 {
-		config.PMGDefaults.QuarantineVirusCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnPct = 25
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnMin = 250
-	}
-	if config.PMGDefaults.QuarantineGrowthCritPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritPct = 50
-	}
-	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritMin = 500
-	}
+	d := &config.PMGDefaults
+	d.QueueTotalWarning = normalizeThresholdCount(d.QueueTotalWarning, 500)
+	d.QueueTotalCritical = normalizeThresholdCount(d.QueueTotalCritical, 1000)
+	d.OldestMessageWarnMins = normalizeThresholdCount(d.OldestMessageWarnMins, 30)
+	d.OldestMessageCritMins = normalizeThresholdCount(d.OldestMessageCritMins, 60)
+	d.DeferredQueueWarn = normalizeThresholdCount(d.DeferredQueueWarn, 200)
+	d.DeferredQueueCritical = normalizeThresholdCount(d.DeferredQueueCritical, 500)
+	d.HoldQueueWarn = normalizeThresholdCount(d.HoldQueueWarn, 100)
+	d.HoldQueueCritical = normalizeThresholdCount(d.HoldQueueCritical, 300)
+	d.QuarantineSpamWarn = normalizeThresholdCount(d.QuarantineSpamWarn, 2000)
+	d.QuarantineSpamCritical = normalizeThresholdCount(d.QuarantineSpamCritical, 5000)
+	d.QuarantineVirusWarn = normalizeThresholdCount(d.QuarantineVirusWarn, 2000)
+	d.QuarantineVirusCritical = normalizeThresholdCount(d.QuarantineVirusCritical, 5000)
+	d.QuarantineGrowthWarnPct = normalizeThresholdCount(d.QuarantineGrowthWarnPct, 25)
+	d.QuarantineGrowthWarnMin = normalizeThresholdCount(d.QuarantineGrowthWarnMin, 250)
+	d.QuarantineGrowthCritPct = normalizeThresholdCount(d.QuarantineGrowthCritPct, 50)
+	d.QuarantineGrowthCritMin = normalizeThresholdCount(d.QuarantineGrowthCritMin, 500)
 }
 
 // NormalizePBSDefaults ensures PBS server threshold defaults exist.
 // Trigger=0 is allowed and means "disable alerting for this metric".
 func NormalizePBSDefaults(config *AlertConfig) {
-	if config.PBSDefaults.CPU == nil || config.PBSDefaults.CPU.Trigger < 0 {
-		config.PBSDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.PBSDefaults.CPU.Trigger == 0 {
-		config.PBSDefaults.CPU.Clear = 0
-	} else if config.PBSDefaults.CPU.Clear <= 0 {
-		config.PBSDefaults.CPU.Clear = config.PBSDefaults.CPU.Trigger - 5
-		if config.PBSDefaults.CPU.Clear <= 0 {
-			config.PBSDefaults.CPU.Clear = 75
-		}
-	}
-
-	if config.PBSDefaults.Memory == nil || config.PBSDefaults.Memory.Trigger < 0 {
-		config.PBSDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.PBSDefaults.Memory.Trigger == 0 {
-		config.PBSDefaults.Memory.Clear = 0
-	} else if config.PBSDefaults.Memory.Clear <= 0 {
-		config.PBSDefaults.Memory.Clear = config.PBSDefaults.Memory.Trigger - 5
-		if config.PBSDefaults.Memory.Clear <= 0 {
-			config.PBSDefaults.Memory.Clear = 80
-		}
-	}
+	config.PBSDefaults.CPU = normalizeThresholdPointer(config.PBSDefaults.CPU, 80, 75, "pbs.cpu")
+	config.PBSDefaults.Memory = normalizeThresholdPointer(config.PBSDefaults.Memory, 85, 80, "pbs.memory")
 }
 
 func NormalizeSnapshotDefaults(config *AlertConfig) {
@@ -290,61 +249,14 @@ func NormalizeBackupDefaults(config *AlertConfig) {
 }
 
 func NormalizeNodeDefaults(config *AlertConfig) {
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
-		config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.NodeDefaults.Temperature.Trigger == 0 {
-		config.NodeDefaults.Temperature.Clear = 0
-	} else if config.NodeDefaults.Temperature.Clear <= 0 {
-		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
-		if config.NodeDefaults.Temperature.Clear <= 0 {
-			config.NodeDefaults.Temperature.Clear = 75
-		}
-	}
+	config.NodeDefaults.Temperature = normalizeThresholdPointer(config.NodeDefaults.Temperature, 80, 75, "node.temperature")
 }
 
 func NormalizeAgentDefaults(config *AlertConfig) {
-	if config.AgentDefaults.CPU == nil || config.AgentDefaults.CPU.Trigger < 0 {
-		config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.AgentDefaults.CPU.Trigger == 0 {
-		config.AgentDefaults.CPU.Clear = 0
-	} else if config.AgentDefaults.CPU.Clear <= 0 {
-		config.AgentDefaults.CPU.Clear = config.AgentDefaults.CPU.Trigger - 5
-		if config.AgentDefaults.CPU.Clear <= 0 {
-			config.AgentDefaults.CPU.Clear = 75
-		}
-	}
-	if config.AgentDefaults.Memory == nil || config.AgentDefaults.Memory.Trigger < 0 {
-		config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.AgentDefaults.Memory.Trigger == 0 {
-		config.AgentDefaults.Memory.Clear = 0
-	} else if config.AgentDefaults.Memory.Clear <= 0 {
-		config.AgentDefaults.Memory.Clear = config.AgentDefaults.Memory.Trigger - 5
-		if config.AgentDefaults.Memory.Clear <= 0 {
-			config.AgentDefaults.Memory.Clear = 80
-		}
-	}
-	if config.AgentDefaults.Disk == nil || config.AgentDefaults.Disk.Trigger < 0 {
-		config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.AgentDefaults.Disk.Trigger == 0 {
-		config.AgentDefaults.Disk.Clear = 0
-	} else if config.AgentDefaults.Disk.Clear <= 0 {
-		config.AgentDefaults.Disk.Clear = config.AgentDefaults.Disk.Trigger - 5
-		if config.AgentDefaults.Disk.Clear <= 0 {
-			config.AgentDefaults.Disk.Clear = 85
-		}
-	}
-
-	if config.AgentDefaults.DiskTemperature == nil || config.AgentDefaults.DiskTemperature.Trigger < 0 {
-		config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 55, Clear: 50}
-	} else if config.AgentDefaults.DiskTemperature.Trigger == 0 {
-		config.AgentDefaults.DiskTemperature.Clear = 0
-	} else if config.AgentDefaults.DiskTemperature.Clear <= 0 {
-		config.AgentDefaults.DiskTemperature.Clear = config.AgentDefaults.DiskTemperature.Trigger - 5
-		if config.AgentDefaults.DiskTemperature.Clear <= 0 {
-			config.AgentDefaults.DiskTemperature.Clear = 50
-		}
-	}
-	EnsureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
+	config.AgentDefaults.CPU = normalizeThresholdPointer(config.AgentDefaults.CPU, 80, 75, "agent.cpu")
+	config.AgentDefaults.Memory = normalizeThresholdPointer(config.AgentDefaults.Memory, 85, 80, "agent.memory")
+	config.AgentDefaults.Disk = normalizeThresholdPointer(config.AgentDefaults.Disk, 90, 85, "agent.disk")
+	config.AgentDefaults.DiskTemperature = normalizeThresholdPointer(config.AgentDefaults.DiskTemperature, 55, 50, "agent.diskTemperature")
 	normalizeSMARTDefaults(&config.AgentDefaults)
 
 	NormalizeDiskFillByType(config)
@@ -396,6 +308,12 @@ func smartIntPtr(value int) *int { return &value }
 
 func smartInt64Ptr(value int64) *int64 { return &value }
 
+// normalizeThresholdPointer is the canonical hysteresis normalizer. A missing
+// or negative threshold takes the factory default, a zero trigger means off,
+// and a positive trigger always keeps a clear below it: a missing clear sits
+// 5 points under the trigger, floored at 0 for triggers of 5 or less, never
+// the factory clear (which would sit above a low trigger), and a clear at or
+// above the trigger is repaired.
 func normalizeThresholdPointer(
 	current *HysteresisThreshold,
 	defaultTrigger float64,
@@ -420,6 +338,12 @@ func normalizeThresholdPointer(
 	return &normalized
 }
 
+// NormalizeHysteresisThreshold exposes normalizeThresholdPointer for other
+// packages (e.g., config persistence).
+func NormalizeHysteresisThreshold(current *HysteresisThreshold, defaultTrigger, defaultClear float64, metricName string) *HysteresisThreshold {
+	return normalizeThresholdPointer(current, defaultTrigger, defaultClear, metricName)
+}
+
 func NormalizeKubernetesDefaults(config *AlertConfig) {
 	config.KubernetesDefaults.CPU = normalizeThresholdPointer(config.KubernetesDefaults.CPU, 80, 75, "kubernetes.cpu")
 	config.KubernetesDefaults.Memory = normalizeThresholdPointer(config.KubernetesDefaults.Memory, 85, 80, "kubernetes.memory")
@@ -442,8 +366,34 @@ func NormalizeTrueNASDefaults(config *AlertConfig) {
 	config.TrueNASDefaults.NetworkIn = normalizeThresholdPointer(config.TrueNASDefaults.NetworkIn, 0, 0, "truenas.networkIn")
 	config.TrueNASDefaults.NetworkOut = normalizeThresholdPointer(config.TrueNASDefaults.NetworkOut, 0, 0, "truenas.networkOut")
 
-	config.TrueNASDiskDefaults.Temperature = normalizeThresholdPointer(config.TrueNASDiskDefaults.Temperature, 55, 50, "truenas.disk.temperature")
+	config.TrueNASDiskDefaults.Temperature = normalizeTrueNASDiskTemperature(config.TrueNASDiskDefaults.Temperature, config.TrueNASDiskTemperatureByType)
+	config.TrueNASDiskTemperatureByType = true
 }
+
+// normalizeTrueNASDiskTemperature keeps the TrueNAS Disks temperature default
+// unset unless the user chose one. Unset, each TrueNAS disk follows the disk
+// temperature policy for its type. Before that, the factory default was a
+// flat 55/50 and the thresholds page wrote it back on every save, so in a
+// config written before (byType false) a stored 55/50 marks a value nobody
+// chose and is migrated to unset. Any other value is the user's TrueNAS-wide
+// choice and is kept, 0 meaning off. Once byType is set, 55 is a choice too.
+func normalizeTrueNASDiskTemperature(current *HysteresisThreshold, byType bool) *HysteresisThreshold {
+	if current == nil || current.Trigger < 0 {
+		return nil
+	}
+	if !byType && current.Trigger == legacyTrueNASDiskTemperatureTrigger &&
+		(current.Clear == legacyTrueNASDiskTemperatureClear || current.Clear <= 0) {
+		return nil
+	}
+	return normalizeThresholdPointer(current, 0, 0, "truenas.disk.temperature")
+}
+
+// The flat TrueNAS disk temperature factory default before TrueNAS disks
+// followed the disk temperature policy.
+const (
+	legacyTrueNASDiskTemperatureTrigger = 55
+	legacyTrueNASDiskTemperatureClear   = 50
+)
 
 func NormalizeVMwareDefaults(config *AlertConfig) {
 	config.VMwareDefaults.CPU = normalizeThresholdPointer(config.VMwareDefaults.CPU, 80, 75, "vmware.cpu")
@@ -468,8 +418,8 @@ func diskFillByTypeDefaults() map[string]HysteresisThreshold {
 
 // NormalizeDiskFillByType ensures AlertConfig.DiskFillByType is seeded with
 // lowercase nvme/sata/hdd defaults when nil, lowercases any existing keys,
-// and resets non-positive trigger or clear values to the default for that
-// key. Operator-customized positive values are preserved.
+// and resets a non-positive trigger to the default for that key. A positive
+// trigger is preserved and its clear follows normalizeThresholdPointer.
 func NormalizeDiskFillByType(config *AlertConfig) {
 	defaults := diskFillByTypeDefaults()
 	if config.DiskFillByType == nil {
@@ -496,16 +446,14 @@ func NormalizeDiskFillByType(config *AlertConfig) {
 		}
 	}
 
-	// Ensure all canonical keys are present and have positive trigger/clear values.
+	// Ensure all canonical keys are present with a positive trigger.
 	for key, defaultVal := range defaults {
 		current, ok := config.DiskFillByType[key]
-		if !ok {
+		if !ok || current.Trigger <= 0 {
 			config.DiskFillByType[key] = defaultVal
 			continue
 		}
-		if current.Trigger <= 0 || current.Clear <= 0 {
-			config.DiskFillByType[key] = defaultVal
-		}
+		config.DiskFillByType[key] = *normalizeThresholdPointer(&current, defaultVal.Trigger, defaultVal.Clear, "diskFillByType."+key)
 	}
 }
 
@@ -521,8 +469,8 @@ func diskTempByTypeDefaults() map[string]HysteresisThreshold {
 
 // NormalizeDiskTempByType ensures AlertConfig.DiskTempByType is seeded with
 // lowercase nvme/sas/sata defaults when nil, lowercases any existing keys,
-// and resets non-positive trigger or clear values to the default for that key.
-// Operator-customized positive values are preserved.
+// and resets a non-positive trigger to the default for that key. A positive
+// trigger is preserved and its clear follows normalizeThresholdPointer.
 func NormalizeDiskTempByType(config *AlertConfig) {
 	defaults := diskTempByTypeDefaults()
 	if config.DiskTempByType == nil {
@@ -550,13 +498,11 @@ func NormalizeDiskTempByType(config *AlertConfig) {
 
 	for key, defaultVal := range defaults {
 		current, ok := config.DiskTempByType[key]
-		if !ok {
+		if !ok || current.Trigger <= 0 {
 			config.DiskTempByType[key] = defaultVal
 			continue
 		}
-		if current.Trigger <= 0 || current.Clear <= 0 {
-			config.DiskTempByType[key] = defaultVal
-		}
+		config.DiskTempByType[key] = *normalizeThresholdPointer(&current, defaultVal.Trigger, defaultVal.Clear, "diskTempByType."+key)
 	}
 }
 
@@ -612,6 +558,10 @@ func NormalizeTimeThresholds(config *AlertConfig) {
 	ensureDelay("truenas-pool")
 	ensureDelay("truenas-dataset")
 	ensureDelay("truenas-disk")
+	// Proxmox disk temperature alerts: the factory stability window for a
+	// noisy gauge applies to this type's unchanged default, as it does to
+	// agent and TrueNAS disk temperatures.
+	ensureDelay("proxmox-disk")
 	ensureDelay("vmware-host")
 	ensureDelay("vmware-vm")
 	ensureDelay("vmware-datastore")
@@ -644,6 +594,10 @@ func ValidateHysteresisThresholds(config *AlertConfig) {
 	EnsureValidHysteresis(config.VMwareDefaults.Memory, "vmware.memory")
 	EnsureValidHysteresis(config.VMwareDefaults.Disk, "vmware.disk")
 	EnsureValidHysteresis(config.VMwareDefaults.Usage, "vmware.usage")
+	EnsureValidHysteresis(config.AgentDefaults.CPU, "agent.cpu")
+	EnsureValidHysteresis(config.AgentDefaults.Memory, "agent.memory")
+	EnsureValidHysteresis(config.AgentDefaults.Disk, "agent.disk")
+	EnsureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
 }
 
 func ValidateQuietHoursTimezone(config *AlertConfig) {

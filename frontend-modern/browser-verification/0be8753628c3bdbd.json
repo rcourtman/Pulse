@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "02e4ce2bcc20ca98cf8b403f84719f3ed0eee61f",
+  "verified_at": "2026-10-10T11:26:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "ec5bf20105a99d0b233e6af040bcd8dea661a9dd9a081c7e136ed83a5bf05c4b",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "4d3c14b64d9714ef0c8610218252fe3fbabf202b6b55d1d23c24fe213085d684",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "3cdab2d8d2a8f4e3f810e1d5fd6fa3e5043f13cacec259509b90f8c69b9d092a"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite builds of the tree before and after this change, each on origin/main with the page-owned-state change in place, served by vite preview and proxied to one shared private mock-estate Pulse backend on pulse-dev (50 Proxmox nodes with 929 guests, 7 vSphere hosts with 18 VMs). Real useWorkloadsState, WorkloadsFilter, WorkloadsSurface, GuestRow and production CSS; mock data, not a live estate or authenticated production acceptance.",
+    "Three rounds per build and viewport, four before and three after for Proxmox desktop, all on the same backend: WebSocket connected with frames, no console errors, and the same guest rows, columns, table headers, filter-bar controls, node buttons, group counts and API request sets on both builds. Two Proxmox desktop rounds hit Playwright 30 s action timeouts under host load and one round's login returned a backend 500; those three are excluded.",
+    "Eight before and after screenshots (Proxmox and vSphere at both widths) inspected side by side: identical layout apart from the mock's live values.",
+    "Unminified production builds of both trees differ in exactly 3 of 189 files (Proxmox, Vmware, useWorkloadsState chunks) and the diff is only the removed options and the collapsed enabled branches."
+  ],
+  "interactions": [
+    "search with no match then cleared: filtered-empty state and restored rows match on both builds",
+    "Proxmox: Show guests on a node scopes the table to that node and Show all nodes clears it; matches on both builds",
+    "first guest row click opens its inline detail row on both builds",
+    "load and steady-state API requests (union per round) are the same set on both builds",
+    "not exercised in a browser: two nodes whose instance and node names join to one string; that attribution is pinned by WorkloadsSurface.performance.contract.test.tsx and its negative control"
+  ]
+}

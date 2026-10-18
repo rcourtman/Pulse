@@ -25,7 +25,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
@@ -33,7 +32,6 @@ import (
 	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -261,18 +259,10 @@ type Service struct {
 	patrolAutopilotPolicy    func() unifiedresources.PatrolAutopilotServerPolicy
 	patrolObjectiveStore     *PatrolObjectiveStore
 	patrolService            *PatrolService        // Background AI monitoring service
+	thresholdProvider        ThresholdProvider     // User-configured alert thresholds; nil means factory defaults
 	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
 	incidentStore            *memory.IncidentStore // Alert-scoped investigation memory; not the canonical durable resource history
 	chatService              ChatServiceProvider   // Chat service for investigation orchestrator
-
-	// Infrastructure discovery service - detects apps running on hosts
-	infraDiscoveryService *infradiscovery.Service
-
-	// AI-powered deep discovery store - detailed service analysis with commands
-	discoveryStore *servicediscovery.Store
-
-	// AI-powered deep discovery service - runs commands and AI analysis
-	discoveryService *servicediscovery.Service
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
 	alertTriggeredAnalyzer aicontracts.AlertAnalyzer
@@ -346,7 +336,6 @@ func (a *alertFindingRecorderAdapter) RecordAlertFinding(f *aicontracts.AlertAna
 func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) *Service {
 	// Initialize knowledge store
 	var knowledgeStore *knowledge.Store
-	var discoveryStore *servicediscovery.Store
 	costStore := cost.NewStore(cost.DefaultMaxDays)
 	objectiveStore := NewInMemoryPatrolObjectiveStore()
 	if persistence != nil {
@@ -357,11 +346,6 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		}
 		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
 			log.Warn().Err(err).Msg("failed to initialize AI usage cost store")
-		}
-		// Initialize discovery store for deep infrastructure discovery
-		discoveryStore, err = servicediscovery.NewStore(persistence.DataDir())
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to initialize discovery store")
 		}
 		objectiveStore, err = NewPatrolObjectiveStore(persistence.DataDir())
 		if err != nil {
@@ -376,7 +360,6 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		agentServer:          agentServer,
 		policy:               agentexec.DefaultPolicy(),
 		knowledgeStore:       knowledgeStore,
-		discoveryStore:       discoveryStore,
 		costStore:            costStore,
 		patrolObjectiveStore: objectiveStore,
 		limits: executionLimits{
@@ -544,32 +527,17 @@ func (s *Service) CheckBudget(useCase string) error {
 }
 
 // SetReadState injects a unified read-state provider for context enrichment.
-// This is forwarded to PatrolService and DiscoveryService when available.
+// This is forwarded to PatrolService when available.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.readState = rs
-	cfg := s.cfg
 
 	s.initPatrolServiceLocked()
-	s.initInfraDiscoveryServiceLocked()
 
 	if s.patrolService != nil {
 		s.patrolService.SetReadState(rs)
 	}
-	if s.discoveryService != nil {
-		s.discoveryService.SetReadState(rs)
-	}
-	if s.infraDiscoveryService != nil {
-		s.infraDiscoveryService.SetReadState(rs)
-	}
-
-	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
-	// and SetReadState may be called after SetStateProvider (which sets up
-	// the discoveryStore). Try to create the service if both are now available.
-	s.initDiscoveryServiceLocked()
-	s.mu.Unlock()
-
-	s.updateInfraDiscoverySettings(cfg)
 }
 
 // initPatrolServiceLocked creates the patrol service once any canonical patrol
@@ -584,14 +552,14 @@ func (s *Service) initPatrolServiceLocked() {
 
 	s.patrolService = NewPatrolService(s, s.stateProvider)
 	s.patrolService.SetObjectiveStore(s.patrolObjectiveStore)
+	if s.thresholdProvider != nil {
+		s.patrolService.SetThresholdProvider(s.thresholdProvider)
+	}
 	if s.knowledgeStore != nil {
 		s.patrolService.SetKnowledgeStore(s.knowledgeStore)
 	}
 	if s.incidentStore != nil {
 		s.patrolService.SetIncidentStore(s.incidentStore)
-	}
-	if s.discoveryStore != nil {
-		s.patrolService.SetDiscoveryStore(s.discoveryStore)
 	}
 	if s.readState != nil {
 		s.patrolService.SetReadState(s.readState)
@@ -601,103 +569,15 @@ func (s *Service) initPatrolServiceLocked() {
 	}
 }
 
-// initInfraDiscoveryServiceLocked creates the lightweight infrastructure
-// discovery service when the canonical runtime dependencies are available.
-// Must be called while holding s.mu.
-func (s *Service) initInfraDiscoveryServiceLocked() {
-	if s.infraDiscoveryService != nil || s.knowledgeStore == nil {
-		return
-	}
-
-	discoveryCfg := infradiscovery.DefaultConfig()
-	if s.cfg != nil {
-		if interval := s.cfg.GetDiscoveryInterval(); interval > 0 {
-			discoveryCfg.Interval = interval
-		}
-		discoveryCfg.AIAnalysisTimeout = s.cfg.GetDiscoveryAIAnalysisTimeout()
-	}
-
-	s.infraDiscoveryService = infradiscovery.NewService(
-		s.knowledgeStore,
-		discoveryCfg,
-	)
-	s.infraDiscoveryService.SetAIAnalyzer(s)
-	if s.readState != nil {
-		s.infraDiscoveryService.SetReadState(s.readState)
-	}
-}
-
-// initDiscoveryServiceLocked creates the deep discovery service if all
-// dependencies are available. Must be called while holding s.mu.
-func (s *Service) initDiscoveryServiceLocked() {
-	if s.discoveryService != nil || s.readState == nil || s.discoveryStore == nil {
-		return
-	}
-
-	// Create a command executor adapter over the organization-scoped server view.
-	var cmdExecutor servicediscovery.CommandExecutor
-	if s.agentServer != nil {
-		cmdExecutor = newDiscoveryCommandAdapter(s.agentServer)
-	}
-
-	// Create deep scanner
-	scanner := servicediscovery.NewDeepScanner(cmdExecutor)
-
-	// Create the discovery service with config-driven settings
-	discoveryCfg := servicediscovery.DefaultConfig()
-	commandScanningEnabled := false
-	backgroundScanningEnabled := false
-	if s.cfg != nil {
-		discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
-		commandScanningEnabled = s.cfg.Enabled && s.cfg.IsDiscoveryEnabled() && s.provider != nil
-		backgroundScanningEnabled = commandScanningEnabled && !BackgroundAutomationDisabledForDev()
-		discoveryCfg.CommandScanning = commandScanningEnabled
-		discoveryCfg.AIAnalysisTimeout = s.cfg.GetDiscoveryAIAnalysisTimeout()
-	}
-
-	s.discoveryService = servicediscovery.NewService(
-		s.discoveryStore,
-		scanner,
-		discoveryCfg,
-	)
-	s.discoveryService.SetAIAnalyzer(s)
-	s.discoveryService.SetReadState(s.readState)
-
-	// Start background discovery if enabled and interval is set
-	if backgroundScanningEnabled && s.cfg.GetDiscoveryInterval() > 0 {
-		s.discoveryService.Start(context.Background())
-		log.Info().
-			Dur("interval", s.cfg.GetDiscoveryInterval()).
-			Msg("AI-powered deep discovery service started with automatic scanning")
-	} else if commandScanningEnabled && BackgroundAutomationDisabledForDev() {
-		log.Info().
-			Str("env", DevDisableBackgroundAIEnv).
-			Msg("AI-powered deep discovery service initialized; automatic scanning disabled for dev")
-	} else if commandScanningEnabled {
-		log.Info().Msg("AI-powered deep discovery service initialized (manual command scanning mode)")
-	} else {
-		log.Info().Msg("AI-powered deep discovery service initialized with command scanning disabled")
-	}
-}
-
 // SetStateProvider sets the state provider for infrastructure context
 func (s *Service) SetStateProvider(sp StateProvider) {
 	s.mu.Lock()
 	s.stateProvider = sp
-	cfg := s.cfg
 
 	s.initPatrolServiceLocked()
 	if s.patrolService != nil {
 		s.patrolService.SetStateProvider(sp)
 	}
-
-	// Initialize infrastructure discovery service if not already done.
-	// This uses AI to detect applications running in Docker containers and is
-	// governed by the canonical discovery settings in AIConfig.
-	s.initInfraDiscoveryServiceLocked()
-
-	// Attempt lazy init — discovery service requires ReadState + discoveryStore.
-	s.initDiscoveryServiceLocked()
 
 	// Initialize alert-triggered analyzer if not already done (requires enterprise factory)
 	if s.alertTriggeredAnalyzer == nil && s.alertAnalyzerFactory != nil && s.patrolService != nil {
@@ -708,8 +588,6 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		s.alertTriggeredAnalyzer = s.alertAnalyzerFactory(deps)
 	}
 	s.mu.Unlock()
-
-	s.updateInfraDiscoverySettings(cfg)
 }
 
 // GetStateProvider returns the state provider for infrastructure context
@@ -831,9 +709,10 @@ func (s *Service) ClearCostHistory() error {
 // SetPatrolThresholdProvider sets the threshold provider for patrol
 // This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
 func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
-	s.mu.RLock()
+	s.mu.Lock()
+	s.thresholdProvider = provider
 	patrol := s.patrolService
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	if patrol != nil {
 		patrol.SetThresholdProvider(provider)
@@ -911,93 +790,6 @@ func (s *Service) SetIncidentStore(store *memory.IncidentStore) {
 	}
 }
 
-// SetDiscoveryStore sets the discovery store for infrastructure context
-func (s *Service) SetDiscoveryStore(store *servicediscovery.Store) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.discoveryStore = store
-
-	if s.patrolService != nil {
-		s.patrolService.SetDiscoveryStore(store)
-	}
-	log.Info().Msg("AI Service: Discovery store set for infrastructure context")
-
-	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
-	// and SetDiscoveryStore may be called after SetReadState.
-	s.initDiscoveryServiceLocked()
-}
-
-// GetDiscoveryStore returns the discovery store
-func (s *Service) GetDiscoveryStore() *servicediscovery.Store {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.discoveryStore
-}
-
-// GetDiscoveryService returns the discovery service for triggering scans
-func (s *Service) GetDiscoveryService() *servicediscovery.Service {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.discoveryService
-}
-
-// updateInfraDiscoverySettings updates the lightweight infrastructure discovery
-// service based on config changes.
-func (s *Service) updateInfraDiscoverySettings(cfg *config.AIConfig) {
-	if s.infraDiscoveryService == nil || cfg == nil {
-		return
-	}
-
-	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
-	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
-	interval := cfg.GetDiscoveryInterval()
-	s.infraDiscoveryService.SetAIAnalysisTimeout(cfg.GetDiscoveryAIAnalysisTimeout())
-
-	if backgroundEnabled && interval > 0 {
-		s.infraDiscoveryService.SetInterval(interval)
-		s.infraDiscoveryService.Start(context.Background())
-		log.Info().
-			Bool("enabled", enabled).
-			Dur("interval", interval).
-			Msg("Infrastructure discovery service updated: automatic scanning enabled")
-	} else {
-		s.infraDiscoveryService.Stop()
-		log.Info().
-			Bool("enabled", enabled).
-			Msg("Infrastructure discovery service updated: manual mode (background scanning stopped)")
-	}
-}
-
-// updateDiscoverySettings updates the discovery service based on config changes
-// Note: caller must NOT hold s.mu lock
-func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
-	if s.discoveryService == nil || cfg == nil {
-		return
-	}
-
-	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
-	backgroundEnabled := enabled && !BackgroundAutomationDisabledForDev()
-	interval := cfg.GetDiscoveryInterval()
-	s.discoveryService.SetCommandScanningEnabled(enabled)
-	s.discoveryService.SetAIAnalysisTimeout(cfg.GetDiscoveryAIAnalysisTimeout())
-
-	if backgroundEnabled && interval > 0 {
-		// Update interval and ensure service is running
-		s.discoveryService.SetInterval(interval)
-		s.discoveryService.Start(context.Background())
-		log.Info().
-			Bool("enabled", enabled).
-			Dur("interval", interval).
-			Msg("Discovery service updated: automatic scanning enabled")
-	} else {
-		// Stop background scanning (manual mode)
-		s.discoveryService.Stop()
-		log.Info().
-			Bool("enabled", enabled).
-			Msg("Discovery service updated: manual mode (background scanning stopped)")
-	}
-}
-
 // SetPatternDetector sets the pattern detector for failure prediction
 func (s *Service) SetPatternDetector(detector *PatternDetector) {
 	s.mu.RLock()
@@ -1048,19 +840,36 @@ func (s *Service) HasLicenseFeature(feature string) bool {
 	return checker.HasFeature(feature)
 }
 
+// PatrolInvestigationLicensed reports a positive licence answer for Patrol
+// investigation. Unlike HasLicenseFeature it treats a missing checker as not
+// licensed, so the Pro default mode never applies before the licence is known.
+func (s *Service) PatrolInvestigationLicensed() bool {
+	s.mu.RLock()
+	checker := s.licenseChecker
+	s.mu.RUnlock()
+	return checker != nil && checker.HasFeature(FeatureAIAutoFix)
+}
+
 const minCommunityPatrolInterval = 1 * time.Hour
 
 // GetEffectivePatrolAutonomyLevel returns the autonomy level that should be enforced at runtime
 // for the current license state.
 //
 // Community tier is locked to "monitor" (findings-only). Higher levels imply investigation and
-// are gated behind ai_autofix (Pro/Cloud).
+// are gated behind ai_autofix (Pro/Cloud). A licensed install that never chose a mode runs
+// "approval" (Ask first), so the investigation it pays for is on by default.
 func (s *Service) GetEffectivePatrolAutonomyLevel() string {
 	cfg := s.GetConfig()
 	if cfg == nil {
 		return config.PatrolAutonomyMonitor
 	}
 	if !s.HasLicenseFeature(FeatureAIAutoFix) {
+		return config.PatrolAutonomyMonitor
+	}
+	if !cfg.PatrolAutonomyLevelChosen() {
+		if s.PatrolInvestigationLicensed() {
+			return config.PatrolAutonomyApproval
+		}
 		return config.PatrolAutonomyMonitor
 	}
 	s.mu.RLock()
@@ -1334,8 +1143,6 @@ func (s *Service) Stop() {
 	s.mu.Lock()
 	store := s.resourceExportStore
 	incidentStore := s.incidentStore
-	infraDiscovery := s.infraDiscoveryService
-	discoveryService := s.discoveryService
 	costStore := s.costStore
 	s.resourceExportStore = nil
 	s.resourceExportStoreOrgID = ""
@@ -1343,13 +1150,6 @@ func (s *Service) Stop() {
 
 	if incidentStore != nil {
 		incidentStore.SetResourceTimelineStore(nil)
-	}
-
-	if infraDiscovery != nil {
-		infraDiscovery.Stop()
-	}
-	if discoveryService != nil {
-		discoveryService.Stop()
 	}
 
 	if costStore != nil {
@@ -1768,12 +1568,7 @@ func (s *Service) LoadConfig() error {
 	s.cfg = cfg
 	s.provider = providerClient
 	s.providerInitErr = providerInitErr
-	s.initInfraDiscoveryServiceLocked()
-	s.initDiscoveryServiceLocked()
 	s.mu.Unlock()
-
-	s.updateInfraDiscoverySettings(cfg)
-	s.updateDiscoverySettings(cfg)
 
 	return nil
 }
@@ -3700,92 +3495,6 @@ func (s *Service) GetKnowledgeStore() *knowledge.Store {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.knowledgeStore
-}
-
-// AnalyzeForDiscovery implements the infradiscovery.AIAnalyzer interface.
-// It sends a prompt to the AI using the discovery model (optimized for cost).
-// Dynamically creates a provider matching the discovery model to avoid using a
-// stale or mismatched global provider (e.g., when the user selects a different
-// model per-session in chat). Discovery uses the selected route only: provider
-// failures fail closed instead of silently trying another configured provider.
-func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
-	s.mu.RLock()
-	cfg := s.cfg
-	costStore := s.costStore
-	defaultProvider := s.provider
-	s.mu.RUnlock()
-
-	if cfg == nil || !cfg.Enabled {
-		return "", fmt.Errorf("AI is not enabled")
-	}
-
-	if err := s.enforceBudget("discovery"); err != nil {
-		return "", err
-	}
-
-	// Get the discovery model (defaults to main model from settings)
-	model := cfg.GetDiscoveryModel()
-
-	// Build simple message for discovery (no tools needed)
-	messages := []providers.Message{
-		{
-			Role:    "user",
-			Content: prompt,
-		},
-	}
-
-	// Dynamically create a provider for the discovery model.
-	// This ensures we use the correct provider even if s.provider was created
-	// for a different model (e.g., user changed settings or uses per-session override).
-	var provider providers.Provider
-	if model != "" {
-		var providerErr error
-		provider, providerErr = providers.NewForModel(cfg, model)
-		if providerErr != nil {
-			return "", fmt.Errorf("discovery provider for selected model %q is not configured: %w", model, providerErr)
-		}
-	} else {
-		provider = defaultProvider
-	}
-
-	if provider == nil {
-		return "", fmt.Errorf("AI provider not configured")
-	}
-
-	const discoveryResponseTokenBudget = 8192
-
-	// Make the API call
-	discoveryReq := providers.ChatRequest{
-		Messages:  messages,
-		Model:     model,
-		MaxTokens: discoveryResponseTokenBudget, // Discovery responses need room for structured JSON
-	}
-	if sanitizer := s.requestSanitizerForModel(model); sanitizer != nil {
-		discoveryReq = sanitizer(discoveryReq)
-	}
-	resp, err := provider.Chat(ctx, discoveryReq)
-	if err != nil {
-		return "", fmt.Errorf("discovery analysis failed on selected provider route: %w", err)
-	}
-
-	// Track cost if cost store is available
-	if costStore != nil {
-		providerName := provider.Name()
-		if providerName == "" {
-			providerName, _ = config.ParseModelString(model)
-		}
-		costStore.Record(cost.UsageEvent{
-			Provider:                 providerName,
-			RequestModel:             model,
-			UseCase:                  "discovery",
-			InputTokens:              resp.InputTokens,
-			OutputTokens:             resp.OutputTokens,
-			CacheCreationInputTokens: resp.CacheCreationInputTokens,
-			CacheReadInputTokens:     resp.CacheReadInputTokens,
-		})
-	}
-
-	return resp.Content, nil
 }
 
 // fetchURL fetches content from a URL with size limits and timeout

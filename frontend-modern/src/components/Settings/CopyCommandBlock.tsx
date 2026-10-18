@@ -11,7 +11,7 @@ interface CopyCommandBlockProps {
 
 const DEFAULT_CONTAINER_CLASS = 'relative group';
 const DEFAULT_CODE_CLASS =
-  'block rounded-md border border-border bg-base p-3 font-mono text-sm text-base-content';
+  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-base-content';
 
 export function CopyCommandBlock(props: CopyCommandBlockProps) {
   const handleCopy = () => {

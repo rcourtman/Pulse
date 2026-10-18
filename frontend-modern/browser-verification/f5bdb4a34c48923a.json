@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "737b6c27e17cdd8234030c357e0866b6dfb6c730",
+  "verified_at": "2026-10-06T00:41:27.254Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "23c58ab753541d158d20fa1dd4e2bbeafb5a5374d456898931f52b31494b57e6",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "9dce4c868a2c2e3898e582ab58e072c7ff48968e95f9aeabee17ada9129f1659",
+    "frontend-modern/src/index.css": "5cbd2ebb37fb3b50926200da17e391fb3bc8a8e2a987b151c2c80f48b38526df"
+  },
+  "routes": [
+    "/browser-tests/combined-controls.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Production FormSelect default/compact, FilterButtonGroup segmented and CopyCommandBlock with the merged stylesheet; light/dark desktop Chromium and phone-emulated WebKit. Carets visible, wells match the page backdrop, selected segments match the surface; values/labels retained. Forced-colors Chromium uses the native select appearance and no background image.",
+    "Production BackupTransferDialogs export/import: inherited warning colours, inline underlined /docs/MIGRATION links, safe new-tab attributes and keyboard focus. Export authentication-choice well has its page background; disabled actions and Escape dismissal remain. No export/import/guide destination page is executed.",
+    "Production AlertDeadManDestinationSection: synthetic healthy, delivery_failed and disabled states; page-background status well and surface disabled pill. Show/Hide keeps URL masked when hidden; stored URL is not exposed. Refresh loading disables the shared button. Phone Show/Refresh controls are at least 44px high.",
+    "All 16 animation-settled final captures inspected; no horizontal body overflow, page errors, off-origin/mutating requests or export/import operations. Muted Card paints the existing alternate surface; dark surface and alternate tokens intentionally share the same colour."
+  ],
+  "interactions": [
+    "Changed both select values and keyboard-activated a segmented option, retaining reactive values and aria-pressed.",
+    "Keyboard-activated Show/Hide and Refresh; read-only intercepted GET status transitions, loading disabled control, stored URL presentation and local Remove state (no save/ping).",
+    "Opened both backup dialogs, focused the migration warning links, checked exact destinations/noopener/noreferrer, and dismissed with Escape."
+  ],
+  "evidence": {
+    "script": "frontend-modern/browser-tests/combined-controls.cjs",
+    "fixture": "frontend-modern/browser-tests/combined-controls.tsx",
+    "playwright_version": "1.56.1",
+    "browsers": [
+      "chromium 141.0.7390.37",
+      "webkit 26.0"
+    ],
+    "capture_count": 16,
+    "scope": "Production components/CSS in an offline fixture; no actual watchdog, backup, migration, installation or physical-phone acceptance. Guide-link destination/attributes/focus, not destination contents."
+  }
+}

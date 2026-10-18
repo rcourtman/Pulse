@@ -4,10 +4,9 @@ import type { WorkloadGuest } from '@/types/workloads';
 import {
   buildGuestParentNodeMap,
   buildNodeByInstance,
-  getDiscoveryHostIdForWorkload,
   getWorkloadContainerHostId,
-  getDiscoveryResourceIdForWorkload,
   getKubernetesContextKey,
+  getWorkloadAlertPolicyTags,
   getWorkloadDockerHostId,
   workloadNodeScopeId,
 } from '@/components/Workloads/workloadTopology';
@@ -60,7 +59,7 @@ const makeNode = (id: string, instance: string, name: string): Node => ({
 
 describe('workloadTopology', () => {
   describe('buildNodeByInstance and buildGuestParentNodeMap', () => {
-    it('maps nodes by id and legacy instance-name key without overriding first legacy key', () => {
+    it('maps unique native IDs without aliasing duplicate instance/node tuples', () => {
       const nodeA = makeNode('cluster-a-node-a', 'cluster-a', 'node-a');
       const nodeAAlt = makeNode('custom-node-id', 'cluster-a', 'node-a');
       const nodeB = makeNode('cluster-b-node-b', 'cluster-b', 'node-b');
@@ -73,7 +72,7 @@ describe('workloadTopology', () => {
       expect(map['cluster-b-node-b']).toBe(nodeB);
     });
 
-    it('builds guest parent node mapping using id lookup first, then composite fallback', () => {
+    it('maps each supplied guest ID to its current provider parent', () => {
       const nodeA = makeNode('cluster-a-node-a', 'cluster-a', 'node-a');
       const nodeB = makeNode('cluster-b-node-b', 'cluster-b', 'node-b');
       const nodeMap = buildNodeByInstance([nodeA, nodeB]);
@@ -108,16 +107,16 @@ describe('workloadTopology', () => {
         nodeMap,
       );
 
-      expect(mapping['cluster-a:node-a:101']).toBe(nodeA);
-      expect(mapping['cluster-b:node-b:102']).toBe(nodeB);
-      expect(mapping['cluster-c:node-c:103']).toBeUndefined();
+      expect(mapping[guestWithIdLookup.id]).toBe(nodeA);
+      expect(mapping[guestWithFallback.id]).toBe(nodeB);
+      expect(mapping[guestWithoutParent.id]).toBeUndefined();
     });
   });
 
   describe('workload identity helpers', () => {
-    it('builds node scope as instance-node with trimming', () => {
+    it('builds an encoded instance/node scope with trimming', () => {
       const guest = makeGuest(1, { instance: ' cluster-a ', node: ' node-a ' });
-      expect(workloadNodeScopeId(guest)).toBe('cluster-a-node-a');
+      expect(workloadNodeScopeId(guest)).toBe('node|cluster-a|node-a');
     });
 
     it('returns first non-empty kubernetes context candidate', () => {
@@ -131,8 +130,8 @@ describe('workloadTopology', () => {
     });
   });
 
-  describe('workload discovery/action IDs', () => {
-    it('keeps Docker action hosts explicit and uses broader host fallback for discovery', () => {
+  describe('workload action IDs', () => {
+    it('keeps Docker action hosts explicit and uses broader host fallback for container hosts', () => {
       const dockerWithHostId = makeGuest(1, {
         type: 'app-container',
         workloadType: 'app-container',
@@ -173,70 +172,55 @@ describe('workloadTopology', () => {
       expect(getWorkloadContainerHostId(truenasApp)).toBe('truenas-main');
       expect(getWorkloadContainerHostId(appContainerWithHostLabel)).toBe('tower.local');
     });
+  });
 
-    it('maps discovery host and resource IDs for app-container, pod, and vm', () => {
-      const docker = makeGuest(1, {
-        id: 'app-container:docker-host-1:container-abc123',
+  describe('alert policy tags', () => {
+    it('passes only Proxmox guest tags to the threshold resolver', () => {
+      const tags = ['batch', 'pulse-relaxed'];
+      const proxmoxVm = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'proxmox-pve',
+        tags,
+      });
+      const proxmoxLxc = makeGuest(2, {
+        type: 'lxc',
+        workloadType: 'system-container',
+        platformScopes: ['proxmox-pve', 'agent'],
+        tags,
+      });
+      const legacyVm = makeGuest(3, { type: 'vm', workloadType: 'vm', tags });
+      const vsphereVm = makeGuest(4, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'vmware-vsphere',
+        tags,
+      });
+      const appContainer = makeGuest(5, {
         type: 'app-container',
         workloadType: 'app-container',
         platformType: 'docker',
-        dockerHostId: 'docker-host-1',
-        containerId: 'container-abc123',
+        tags,
       });
-      const truenas = makeGuest(2, {
-        id: 'app-container:truenas-main:nextcloud',
-        type: 'app-container',
-        workloadType: 'app-container',
-        platformType: 'truenas',
-        dockerHostId: '',
-        node: 'truenas-main',
-        instance: 'truenas-main',
-      });
-      const truenasWithExplicitDiscovery = makeGuest(2, {
-        id: 'app-container:truenas-main:nextcloud',
-        type: 'app-container',
-        workloadType: 'app-container',
-        platformType: 'truenas',
-        dockerHostId: '',
-        discoveryTarget: {
-          resourceType: 'app-container',
-          agentId: 'truenas-helper',
-          resourceId: 'nextcloud',
-        },
-      });
-      const k8s = makeGuest(3, {
-        id: 'k8s:cluster-a:pod:pod-uid-1',
-        type: 'pod',
-        workloadType: 'pod',
-        kubernetesAgentId: 'k8s-agent-1',
-        instance: 'cluster-a',
-        node: 'worker-a',
-      });
-      const vm = makeGuest(3, {
-        id: 'vm-resource-hash',
-        vmid: 103,
+
+      expect(getWorkloadAlertPolicyTags(proxmoxVm)).toEqual(tags);
+      expect(getWorkloadAlertPolicyTags(proxmoxLxc)).toEqual(tags);
+      expect(getWorkloadAlertPolicyTags(legacyVm)).toEqual(tags);
+      // The alert engine never reads Pulse control tags from these.
+      expect(getWorkloadAlertPolicyTags(vsphereVm)).toEqual([]);
+      expect(getWorkloadAlertPolicyTags(appContainer)).toEqual([]);
+    });
+
+    it('splits a legacy raw tag string', () => {
+      const guest = makeGuest(6, {
         type: 'vm',
         workloadType: 'vm',
-        node: 'pve1',
-        discoveryTarget: {
-          resourceType: 'vm',
-          agentId: 'agent-pve1',
-          resourceId: '103',
-        },
+        tags: 'batch;pulse-relaxed' as unknown as string[],
       });
-
-      expect(getDiscoveryHostIdForWorkload(docker)).toBe('docker-host-1');
-      expect(getDiscoveryResourceIdForWorkload(docker)).toBe('container-abc123');
-      expect(getDiscoveryHostIdForWorkload(truenas)).toBe('');
-      expect(getDiscoveryResourceIdForWorkload(truenas)).toBe('');
-      expect(getDiscoveryHostIdForWorkload(truenasWithExplicitDiscovery)).toBe('truenas-helper');
-      expect(getDiscoveryResourceIdForWorkload(truenasWithExplicitDiscovery)).toBe('nextcloud');
-
-      expect(getDiscoveryHostIdForWorkload(k8s)).toBe('k8s-agent-1');
-      expect(getDiscoveryResourceIdForWorkload(k8s)).toBe('pod-uid-1');
-
-      expect(getDiscoveryHostIdForWorkload(vm)).toBe('agent-pve1');
-      expect(getDiscoveryResourceIdForWorkload(vm)).toBe('103');
+      expect(getWorkloadAlertPolicyTags(guest)).toEqual(['batch', 'pulse-relaxed']);
+      expect(getWorkloadAlertPolicyTags(makeGuest(7, { type: 'vm', tags: null as never }))).toEqual(
+        [],
+      );
     });
   });
 });

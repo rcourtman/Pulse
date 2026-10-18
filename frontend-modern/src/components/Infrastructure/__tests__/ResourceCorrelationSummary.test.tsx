@@ -1,9 +1,58 @@
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourceCorrelationSummary } from '../ResourceCorrelationSummary';
 
 describe('ResourceCorrelationSummary', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('ages relationship and correlation last-seen labels on the shared clock', async () => {
+    const start = Date.parse('2026-10-16T22:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const minuteAgo = new Date(start - 60_000).toISOString();
+    render(() => (
+      <ResourceCorrelationSummary
+        relationships={[
+          {
+            sourceId: 'node:pve-1',
+            targetId: 'vm-child',
+            type: 'runs_on',
+            confidence: 1,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: minuteAgo,
+            lastSeenAt: minuteAgo,
+          },
+        ]}
+        correlations={[
+          {
+            source_id: 'storage-1',
+            source_name: 'Storage 1',
+            source_type: 'storage',
+            target_id: 'host-1',
+            target_name: 'Host 1',
+            target_type: 'vm',
+            event_pattern: 'disk_full -> restart',
+            occurrences: 2,
+            avg_delay: 125000000000,
+            confidence: 0.875,
+            last_seen: minuteAgo,
+            description: 'Disk pressure often precedes restarts',
+          },
+        ]}
+        showLastSeen
+      />
+    ));
+
+    expect(screen.getAllByText(/last seen 1m ago/)).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(screen.queryAllByText(/last seen 1m ago/)).toHaveLength(0);
+    expect(screen.getAllByText(/last seen 2h ago/)).toHaveLength(2);
+  });
+
   it('renders learned correlations with canonical labels and totals', () => {
     render(() => (
       <ResourceCorrelationSummary

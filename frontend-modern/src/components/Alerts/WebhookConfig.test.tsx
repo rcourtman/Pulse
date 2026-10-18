@@ -110,9 +110,9 @@ describe('WebhookConfig', () => {
   let onTestMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 
   beforeEach(() => {
-    onAddMock = vi.fn();
-    onUpdateMock = vi.fn();
-    onDeleteMock = vi.fn();
+    onAddMock = vi.fn().mockResolvedValue(true);
+    onUpdateMock = vi.fn().mockResolvedValue(true);
+    onDeleteMock = vi.fn().mockResolvedValue(true);
     onTestMock = vi.fn();
     getWebhookTemplatesMock.mockReset();
     getWebhookTemplatesMock.mockResolvedValue(mockTemplates);
@@ -345,7 +345,7 @@ describe('WebhookConfig', () => {
     );
   });
 
-  it('"Enable All" calls onUpdate for each webhook with enabled=true', () => {
+  it('"Enable All" awaits onUpdate for each webhook with enabled=true', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', enabled: false }),
       makeWebhook({ id: 'wh-2', enabled: false }),
@@ -363,7 +363,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Enable All'));
 
-    expect(onUpdateMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onUpdateMock).toHaveBeenCalledTimes(2));
     expect(onUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wh-1', enabled: true }),
     );
@@ -372,7 +372,7 @@ describe('WebhookConfig', () => {
     );
   });
 
-  it('"Disable All" calls onUpdate for each webhook with enabled=false', () => {
+  it('"Disable All" awaits onUpdate for each webhook with enabled=false', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', enabled: true }),
       makeWebhook({ id: 'wh-2', enabled: true }),
@@ -390,7 +390,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Disable All'));
 
-    expect(onUpdateMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onUpdateMock).toHaveBeenCalledTimes(2));
     expect(onUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wh-1', enabled: false }),
     );
@@ -630,7 +630,7 @@ describe('WebhookConfig', () => {
     expect(onAddMock).not.toHaveBeenCalled();
   });
 
-  it('resets form and closes panel after adding a webhook', () => {
+  it('resets form and closes panel after adding a webhook', async () => {
     render(() => (
       <WebhookConfig
         webhooks={[]}
@@ -651,8 +651,8 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Add Webhook'));
 
-    // Form should close, "+ Add Webhook" should reappear
-    expect(screen.getByText('+ Add Webhook')).toBeInTheDocument();
+    // Form closes only after the owner acknowledges the save.
+    await waitFor(() => expect(screen.getByText('+ Add Webhook')).toBeInTheDocument());
     expect(screen.queryByText('Service Type')).not.toBeInTheDocument();
   });
 
@@ -786,7 +786,7 @@ describe('WebhookConfig', () => {
 
   // --- Service selection ---
 
-  it('toggles service dropdown when service type button is clicked', async () => {
+  it('opens a new webhook on the service choice and toggles it from the service button', async () => {
     render(() => (
       <WebhookConfig
         webhooks={[]}
@@ -799,18 +799,18 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('+ Add Webhook'));
 
-    // Default service is Generic
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
-
+    // Adding starts on the service choice, not the generic JSON form.
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
     });
-
-    // Service options should appear
-    expect(screen.getByText('Discord')).toBeInTheDocument();
     expect(screen.getByText('Slack')).toBeInTheDocument();
     expect(screen.getByText('Pushover')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Generic →/));
+    expect(screen.queryByText('Discord')).toBeNull();
+
+    fireEvent.click(screen.getByText(/Generic →/));
+    expect(screen.getByText('Discord')).toBeInTheDocument();
   });
 
   it('applies template settings when selecting a service', async () => {
@@ -833,8 +833,7 @@ describe('WebhookConfig', () => {
     });
 
     // Open service dropdown
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
@@ -877,8 +876,7 @@ describe('WebhookConfig', () => {
       expect(screen.getByPlaceholderText('Generic Webhook')).toBeInTheDocument();
     });
 
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
@@ -912,8 +910,7 @@ describe('WebhookConfig', () => {
     });
 
     // Open service dropdown and select Discord
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
@@ -983,8 +980,7 @@ describe('WebhookConfig', () => {
     expect(screen.getByText(/Custom payload template/)).toBeInTheDocument();
 
     // Switch to Discord
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
@@ -1301,7 +1297,7 @@ describe('WebhookConfig', () => {
       expect(screen.getByPlaceholderText('Generic Webhook')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText(/Generic →/));
+    // The service choice is already open on a new webhook.
     await waitFor(() => {
       expect(screen.getByText('Pushover')).toBeInTheDocument();
     });
@@ -1328,7 +1324,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Delete'));
 
-    // The handler checks `webhook.id && props.onDelete(webhook.id)` — empty string is falsy
+    // Empty identities cannot dispatch a delete.
     expect(onDeleteMock).not.toHaveBeenCalled();
   });
 
@@ -1437,8 +1433,7 @@ describe('WebhookConfig', () => {
     });
 
     // Switch to Discord to show mention field
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();
@@ -1578,8 +1573,7 @@ describe('WebhookConfig', () => {
     fireEvent.input(urlInput, { target: { value: 'https://test.com/hook' } });
 
     // Switch to Discord
-    const serviceBtn = screen.getByText(/Generic →/);
-    fireEvent.click(serviceBtn);
+    // The service choice is already open on a new webhook.
 
     await waitFor(() => {
       expect(screen.getByText('Discord')).toBeInTheDocument();

@@ -205,9 +205,27 @@ EOF
   assert_contains "default verify proof runs from integration harness" "${output}" "cwd=${ROOT_DIR}/tests/integration"
   assert_contains "default verify proof runs through the dedicated Playwright harness" "${output}" "args=./scripts/run-playwright.mjs"
   assert_contains "default verify proof includes dev runtime recovery spec" "${output}" "tests/16-dev-runtime-recovery.spec.ts"
-  assert_contains "default verify proof includes recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "default verify proof includes Proxmox backups layout spec" "${output}" "tests/17-proxmox-backups-layout.spec.ts"
   assert_contains "default verify proof includes patrol runtime-state spec" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
+
+  # Playwright treats each spec path as a filter and runs whatever still
+  # matches, so a retired spec drops out of dev:verify without failing it.
+  local verify_cwd verify_args arg checked_specs=0 missing_specs=""
+  verify_cwd="$(printf '%s\n' "${output}" | sed -n 's/^cwd=//p')"
+  verify_args="$(printf '%s\n' "${output}" | sed -n 's/^args=//p')"
+  for arg in ${verify_args}; do
+    [[ "${arg}" == *.spec.ts ]] || continue
+    checked_specs=$((checked_specs + 1))
+    [[ -f "${verify_cwd}/${arg}" ]] || missing_specs+=" ${arg}"
+  done
+  if (( checked_specs > 0 )) && [[ -z "${missing_specs}" ]]; then
+    echo "[PASS] default verify proof names only specs that exist"
+  else
+    echo "[FAIL] default verify proof names only specs that exist" >&2
+    echo "Missing under ${verify_cwd}:${missing_specs:- no spec arguments found}" >&2
+    ((failures++))
+  fi
 }
 
 test_managed_wrapper_defaults_to_local_only_runtime() {
@@ -747,6 +765,39 @@ PY
   assert_contains "go.mod drops legacy docker module" "${output}" "go.mod:uses_legacy_docker=False"
 }
 
+test_managed_go_patch_graph_has_reviewed_floors_and_checksums() {
+  # These are graph admission controls, not a compatibility verdict. Actual
+  # metrics wire/Kubernetes/runtime builds must use this committed graph.
+  GO_MOD_PATH="${GO_MOD}" GO_SUM_PATH="${GO_SUM}" python3 - <<'PY_GRAPH'
+import os
+import re
+from pathlib import Path
+
+mod = Path(os.environ["GO_MOD_PATH"]).read_text(encoding="utf-8")
+sums = Path(os.environ["GO_SUM_PATH"]).read_text(encoding="ascii").splitlines()
+floors = {
+    "github.com/klauspost/compress": (1, 20, 1),
+    "k8s.io/api": (0, 37, 1),
+    "k8s.io/apimachinery": (0, 37, 1),
+    "k8s.io/client-go": (0, 37, 1),
+}
+kubernetes = set()
+for name, floor in floors.items():
+    matches = re.findall(r"(?m)^\s*" + re.escape(name) + r" (v\d+\.\d+\.\d+)\s*$", mod)
+    assert len(matches) == 1, f"missing/ambiguous stable direct module: {name}"
+    version = matches[0]
+    assert tuple(map(int, version[1:].split("."))) >= floor, f"module below reviewed patch floor: {name}"
+    for suffix in ("", "/go.mod"):
+        prefix = f"{name} {version}{suffix} h1:"
+        records = [line for line in sums if line.startswith(prefix)]
+        assert len(records) == 1 and re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9+/]{43}=", records[0]), f"missing/ambiguous module checksum: {name}{suffix}"
+    if name.startswith("k8s.io/"):
+        kubernetes.add(version)
+assert len(kubernetes) == 1, "Kubernetes API/apimachinery/client-go must move together"
+print("managed Go patch floors, aligned Kubernetes graph and checksum records pass")
+PY_GRAPH
+}
+
 test_frontend_vite_dependency_optimizer_matches_build_target() {
   local output
   output="$(
@@ -1156,7 +1207,8 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
   assert_contains "integration readme documents owner-process recovery proof" "${output}" "kills the supervised"
   assert_contains "integration readme names the owner process" "${output}" "owner process"
-  assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "integration readme documents Proxmox backups layout proof" "${output}" "tests/17-proxmox-backups-layout.spec.ts"
+  assert_not_contains "integration readme drops the retired recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
   assert_contains "integration readme documents patrol runtime-state proof" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_contains "integration readme documents explicit browser override precedence" "${output}" "PLAYWRIGHT_BASE_URL"
   assert_contains "integration readme documents backend base split" "${output}" "backend-oriented base"
@@ -1676,6 +1728,7 @@ main() {
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_dev_runtime_dependency_manifests_are_governed
+  test_managed_go_patch_graph_has_reviewed_floors_and_checksums
   test_frontend_vite_dependency_optimizer_matches_build_target
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch

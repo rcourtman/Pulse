@@ -14,6 +14,22 @@ export function useSystemLogsPanelState() {
   let logContainer: HTMLDivElement | undefined;
   let eventSource: EventSource | null = null;
   let disposed = false;
+  let renderFrame: number | null = null;
+  // A bounded ring also caps pending work when a background tab stops frames.
+  // Receiving a line never clones the visible buffer or forces layout.
+  let pendingLogs: string[] = [];
+  let pendingCount = 0;
+  let pendingNext = 0;
+
+  const resetPending = () => {
+    pendingLogs = [];
+    pendingCount = 0;
+    pendingNext = 0;
+    if (renderFrame !== null) {
+      cancelAnimationFrame(renderFrame);
+      renderFrame = null;
+    }
+  };
 
   const setLogContainer = (element: HTMLDivElement | undefined) => {
     logContainer = element;
@@ -23,6 +39,21 @@ export function useSystemLogsPanelState() {
     if (logContainer) {
       logContainer.scrollTop = logContainer.scrollHeight;
     }
+  };
+
+  const flushPendingLogs = () => {
+    if (disposed || pendingCount === 0) return;
+    const incoming = Array.from(
+      { length: pendingCount },
+      (_, index) => pendingLogs[(pendingNext - pendingCount + MAX_LOGS + index) % MAX_LOGS],
+    );
+    resetPending();
+    setLogs((prev) => [
+      ...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)),
+      ...incoming,
+    ]);
+    // Solid updates the rows synchronously; measure after the single publish.
+    scrollToBottom();
   };
 
   const fetchLevel = async () => {
@@ -42,15 +73,15 @@ export function useSystemLogsPanelState() {
     eventSource.onmessage = (event) => {
       if (disposed || isPaused()) return;
 
-      setLogs((prev) => {
-        const next = [...prev, event.data];
-        if (next.length > MAX_LOGS) {
-          return next.slice(next.length - MAX_LOGS);
-        }
-        return next;
-      });
-
-      scrollToBottom();
+      pendingLogs[pendingNext] = event.data;
+      pendingNext = (pendingNext + 1) % MAX_LOGS;
+      pendingCount = Math.min(pendingCount + 1, MAX_LOGS);
+      if (renderFrame === null) {
+        renderFrame = requestAnimationFrame(() => {
+          renderFrame = null;
+          flushPendingLogs();
+        });
+      }
     };
 
     eventSource.onerror = () => {
@@ -78,10 +109,13 @@ export function useSystemLogsPanelState() {
   };
 
   const togglePaused = () => {
+    // Lines accepted before Pause belong in the view; paused arrivals do not.
+    if (!isPaused()) flushPendingLogs();
     setIsPaused((prev) => !prev);
   };
 
   const clearLogs = () => {
+    resetPending();
     setLogs([]);
   };
 
@@ -96,6 +130,7 @@ export function useSystemLogsPanelState() {
 
   onCleanup(() => {
     disposed = true;
+    resetPending();
     if (eventSource) {
       eventSource.close();
       eventSource = null;

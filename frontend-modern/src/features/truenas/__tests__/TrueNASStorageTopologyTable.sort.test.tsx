@@ -172,6 +172,73 @@ describe('TrueNASStorageTopologyTable user sorting', () => {
     ]);
   });
 
+  it('sorts Health by severity rank rather than label text', () => {
+    const resources: Resource[] = [
+      makeStorageResource({
+        id: 'pool-alpha',
+        name: 'alpha',
+        displayName: 'alpha',
+        storage: { topology: 'pool', platform: 'truenas', path: 'alpha' },
+      }),
+      makeStorageResource({
+        id: 'dataset-healthy',
+        name: 'alpha/healthy',
+        displayName: 'alpha/healthy',
+        storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/alpha/healthy' },
+      }),
+      makeStorageResource({
+        id: 'dataset-offline',
+        name: 'alpha/offline',
+        displayName: 'alpha/offline',
+        status: 'offline',
+        storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/alpha/offline' },
+      }),
+      makeStorageResource({
+        id: 'dataset-warning',
+        name: 'alpha/warning',
+        displayName: 'alpha/warning',
+        status: 'warning',
+        storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/alpha/warning' },
+      }),
+    ];
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+
+    // Alphabetical labels would put Healthy before Offline. Severity puts
+    // Attention first, then Offline, with healthy rows last.
+    fireEvent.click(screen.getByRole('columnheader', { name: /Health/ }));
+    expect(screen.getByRole('columnheader', { name: /Health/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    expect(visibleRowOrder(container)).toEqual([
+      'pool:pool-alpha',
+      'dataset:dataset-warning',
+      'dataset:dataset-offline',
+      'dataset:dataset-healthy',
+    ]);
+
+    fireEvent.click(screen.getByRole('columnheader', { name: /Health/ }));
+    expect(screen.getByRole('columnheader', { name: /Health/ })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+    expect(visibleRowOrder(container)).toEqual([
+      'pool:pool-alpha',
+      'dataset:dataset-healthy',
+      'dataset:dataset-offline',
+      'dataset:dataset-warning',
+    ]);
+  });
+
   it('persists the chosen sort across a remount', () => {
     const first = renderTable();
     fireEvent.click(headerFor('Resource'));

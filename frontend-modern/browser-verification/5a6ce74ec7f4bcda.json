@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "b4ea3761e83e8b6cc2e50c7afdd0e6f5367116b6",
+  "verified_at": "2026-10-05T23:06:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/shared/ExternalTextLink.tsx",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "966ef9b08d0cc3b162e8a9a0978379cc4fd834d46090630428d176681bc8cf42",
+    "frontend-modern/src/components/shared/ExternalTextLink.tsx": "91a539a03b2846767f2bfd650bae40d336750cbf8abb8b377842617fd46d24be",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "73c23af492449c5d3eb09308162fb9169aaeffe70f067b226caa8296181f3beb"
+  },
+  "routes": [
+    "/settings/system-recovery",
+    "/alerts/destinations"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Settings > Recovery > Create Backup and Restore Backup dialogs: the migration guide link inside the amber and yellow warnings is an ExternalTextLink (inlineInherit) that keeps the callout colour (rgb(180,83,9) / rgb(161,98,7) light, rgb(252,211,77) / rgb(253,224,71) dark), stays inline and underlined, and opens in a new tab with noopener; pixel-identical to main on desktop",
+    "Alerts > Destinations > External watchdog: Refresh and Show/Hide are shared outline Buttons; on desktop they match main (26px and 38px); on a 390px phone they become 44px touch targets (main: 26px and 38px)",
+    "Shared template audit: no findings remain in BackupTransferDialogs.tsx or AlertDeadManDestinationSection.tsx"
+  ],
+  "interactions": [
+    "Opened both backup dialogs and the destinations page on main (reverse-applied patch) and on the change, light and dark at 1440 and at 390"
+  ]
+}

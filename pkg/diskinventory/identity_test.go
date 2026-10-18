@@ -42,6 +42,11 @@ func TestPreferredIDRejectsPlaceholderHardwareIdentity(t *testing.T) {
 		"DEFAULT-SERIAL",
 		"0000-0000-0000",
 		"FFFF:FFFF",
+		"0x0000000000000000",
+		"naa.0000000000000000",
+		"wwn-0x0000000000000000",
+		"0xffffffffffffffff",
+		"0x",
 	} {
 		if IsUsableHardwareID(placeholder) {
 			t.Fatalf("placeholder %q was treated as usable hardware identity", placeholder)
@@ -50,8 +55,62 @@ func TestPreferredIDRejectsPlaceholderHardwareIdentity(t *testing.T) {
 			t.Fatalf("placeholder %q produced ID %q, want scoped fallback", placeholder, got)
 		}
 	}
-	if !IsUsableHardwareID("ZR5DLAYJ") || !IsUsableHardwareID("naa.5000c500abcdef01") {
+	if !IsUsableHardwareID("ZR5DLAYJ") || !IsUsableHardwareID("naa.5000c500abcdef01") ||
+		!IsUsableHardwareID("0x5000c500abcdef01") {
 		t.Fatal("real disk serial/WWN was rejected")
+	}
+}
+
+// QEMU gives a virtual disk without a configured serial one built from its
+// drive ID or a per-VM counter. Observed: a Proxmox VM's virtio-scsi disk
+// reports udev ID_SERIAL_SHORT=drive-scsi0 and a libvirt VM's
+// drive-scsi0-0-0-0, which Proxmox's disks/list passes through as the serial.
+func TestIsUsableHardwareIDRejectsQEMUDefaultDiskSerials(t *testing.T) {
+	for _, serial := range []string{
+		"drive-scsi0",
+		"drive-scsi12",
+		"DRIVE-SCSI0",
+		"drive-scsi0-0-0-0",
+		"drive-scsi1-0-2",
+		"scsi0-hd0",
+		"scsi1-hd3",
+		"none0",
+		"none12",
+		"QM00001",
+		"qm00005",
+	} {
+		if IsUsableHardwareID(serial) {
+			t.Errorf("QEMU default serial %q was treated as usable hardware identity", serial)
+		}
+		if got := PreferredID(serial, "", "pve1", "/dev/sda", "", ""); got != "pve1:sda" {
+			t.Errorf("QEMU default serial %q produced ID %q, want scoped fallback pve1:sda", serial, got)
+		}
+		if HardwareIdentityMatch(serial, "", serial, "") {
+			t.Errorf("QEMU default serial %q matched itself as hardware identity", serial)
+		}
+	}
+
+	// Anything outside those exact shapes stays usable, including real
+	// serials that share a prefix with them. ATA disks never surface their
+	// drive ID, so only SCSI drive IDs are rejected.
+	for _, serial := range []string{
+		"DRIVE-ASSET123",
+		"drive-sata0",
+		"drive-scsi0a",
+		"drive-scsi0-0-0-0-0",
+		"drive-scsi",
+		"scsi0-cd0",
+		"ide0-hd0",
+		"none0a",
+		"nonesuch1",
+		"QM0001",
+		"QM000001",
+		"QM00001A",
+		"QMX0001",
+	} {
+		if !IsUsableHardwareID(serial) {
+			t.Errorf("serial %q outside QEMU's default grammar was rejected", serial)
+		}
 	}
 }
 
@@ -86,6 +145,32 @@ func TestHardwareIdentityMatch(t *testing.T) {
 			aWWN: "eui.0025385b91501234",
 			bWWN: "0025385b91501234",
 			want: true,
+		},
+		{
+			// internal/hostagent formatWWN spells smartctl's NAA 5 triple
+			// with unpadded fields; PVE reports udev's ID_WWN.
+			name: "agent naa-oui-id wwn matches pve 0x wwn",
+			aWWN: "5-c50-a1b2c3d4",
+			bWWN: "0x5000c500a1b2c3d4",
+			want: true,
+		},
+		{
+			name: "agent naa-oui-id wwn of another disk stays distinct",
+			aWWN: "5-c50-a1b2c3d5",
+			bWWN: "0x5000c500a1b2c3d4",
+			want: false,
+		},
+		{
+			name:    "serial shaped like the field form is not re-padded",
+			aSerial: "5-c50-a1b2c3d4",
+			bWWN:    "0x5000c500a1b2c3d4",
+			want:    false,
+		},
+		{
+			name: "field form wider than NAA 5 is not re-padded",
+			aWWN: "5-c50-123456789abc",
+			bWWN: "0x5000c50123456789abc",
+			want: false,
 		},
 		{
 			name:    "truncated udev wwn never matches full sibling identifier",

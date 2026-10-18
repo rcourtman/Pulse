@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -56,6 +57,7 @@ func (a *AlertManagerAdapter) GetRecentlyResolved(minutes int) []ResolvedAlertIn
 				AlertInfo:    convertAlertFromModels(&resolved.Alert),
 				ResolvedTime: resolved.ResolvedTime,
 				Duration:     formatDuration(resolved.ResolvedTime.Sub(resolved.StartTime)),
+				Resolution:   resolvedAlertResolution(resolved.Resolution),
 			}
 			result = append(result, info)
 		}
@@ -98,6 +100,7 @@ func (a *AlertManagerAdapter) GetAlertHistory(resourceID string, limit int) []Re
 				AlertInfo:    convertAlertFromModels(&resolved.Alert),
 				ResolvedTime: resolved.ResolvedTime,
 				Duration:     formatDuration(resolved.ResolvedTime.Sub(resolved.StartTime)),
+				Resolution:   resolvedAlertResolution(resolved.Resolution),
 			}
 			result = append(result, info)
 			if len(result) >= limit {
@@ -244,4 +247,13 @@ func formatDuration(d time.Duration) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+// resolvedAlertResolution is the one-line account of a close that was not a
+// recovery, empty for an ordinary resolve.
+func resolvedAlertResolution(resolution *models.AlertResolution) string {
+	if resolution == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolution.Summary)
 }

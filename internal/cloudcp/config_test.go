@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -458,6 +459,9 @@ func setProviderHostedMSPEnv(t *testing.T) {
 	t.Setenv("CP_BASE_URL", "https://msp.example.com")
 	t.Setenv("CP_ENV", "development")
 	t.Setenv("CP_CONTROL_PLANE_MODE", "provider_hosted_msp")
+	t.Setenv("CP_DATA_DIR", t.TempDir())
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", "")
+	t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", "")
 	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
 	t.Setenv("STRIPE_API_KEY", "")
@@ -794,8 +798,91 @@ func TestLoadConfig_PulseHostedMSPDoesNotRequireLeaseSigningBinding(t *testing.T
 	}
 }
 
-func TestLoadConfig_ProviderHostedMSPRequiresLicenseFileInProduction(t *testing.T) {
+// Both deliberate skip and failed best-effort issuance leave the path blank.
+// Production may evaluate, but local configuration must not grant paid caps.
+func TestLoadConfig_ProviderHostedMSPUnlicensedProduction(t *testing.T) {
+	for _, plan := range []string{"", "msp_eval", "msp_starter", "msp_growth", "msp_scale"} {
+		t.Run("plan="+plan, func(t *testing.T) {
+			setProviderHostedMSPEnv(t)
+			t.Setenv("CP_ENV", "production")
+			t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", plan)
+			cfg, err := LoadConfig()
+			if plan != "" && plan != "msp_eval" {
+				if err == nil || !strings.Contains(err.Error(), "must be msp_eval without a signed provider MSP license") {
+					t.Fatalf("unsigned production plan %q: cfg=%v err=%v", plan, cfg != nil, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			limit, known := pkglicensing.WorkspaceLimitForPlan(cfg.ProviderMSPPlanVersion)
+			if cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval || cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceEnvFallback || !known || limit != 2 || cfg.ProviderMSPLicenseKey != "" {
+				t.Fatalf("unlicensed plan=%q source=%q limit=%d known=%v signed=%v", cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource, limit, known, cfg.ProviderMSPLicenseKey != "")
+			}
+		})
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPExplicitInvalidLicenseIsNotEvaluation(t *testing.T) {
+	for _, tc := range []struct{ name, content, want string }{
+		{"empty", "", "is empty"},
+		{"whitespace", " \n", "is empty"},
+		{"truncated", "eyJhbGciOiJFZERTQSJ9.", "validate CP_PROVIDER_MSP_LICENSE_FILE"},
+		{"oversized", strings.Repeat("x", maxProviderMSPLicenseFileBytes+1), "exceeds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setProviderHostedMSPEnv(t)
+			t.Setenv("CP_ENV", "production")
+			path := filepath.Join(t.TempDir(), "explicit.jwt")
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", path)
+			if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("explicit %s licence must refuse, got %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// A refresh persists a licence and restarts the daemon without changing the
+// operator's read-only Compose secret. This must also work after blank-path
+// evaluation, including keeping the portal up on an authentic lapsed licence.
+func TestLoadConfig_ProviderHostedMSPRenewalWithoutHostLicense(t *testing.T) {
+	for _, lapsed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("lapsed=%t", lapsed), func(t *testing.T) {
+			setProviderHostedMSPEnv(t)
+			t.Setenv("CP_ENV", "production")
+			issuer := newProviderMSPTestIssuer(t)
+			expires := time.Now().Add(24 * time.Hour)
+			if lapsed {
+				expires = time.Now().Add(-60 * 24 * time.Hour)
+			}
+			writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(os.Getenv("CP_DATA_DIR")),
+				issuer.sign(t, "lic_msp_renewed", "msp_growth", expires, trialSigningEnvPublicKey(t)))
+			cfg, err := LoadConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.ProviderMSPPlanVersion != "msp_growth" || cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceRenewedLicense || cfg.ProviderMSPLicenseLapsed(time.Now()) != lapsed {
+				t.Fatalf("renewed plan=%q source=%q lapsed=%v", cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource, cfg.ProviderMSPLicenseLapsed(time.Now()))
+			}
+		})
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPInvalidRenewalWithoutHostLicenseRefuses(t *testing.T) {
 	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(os.Getenv("CP_DATA_DIR")), "truncated")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "read renewed provider MSP license") {
+		t.Fatalf("unusable persisted renewal must not silently become evaluation: %v", err)
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPRequiresLicenseFileInProduction(t *testing.T) {
+	setPulseHostedMSPEnv(t)
 	t.Setenv("CP_ENV", "production")
 
 	_, err := LoadConfig()

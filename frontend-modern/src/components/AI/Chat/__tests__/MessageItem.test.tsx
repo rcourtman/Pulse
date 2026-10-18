@@ -137,7 +137,7 @@ describe('MessageItem', () => {
       'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
   });
 
@@ -677,6 +677,27 @@ describe('MessageItem', () => {
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
       expect(container.querySelector('.animate-bounce')).toBeInTheDocument();
       expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+    });
+
+    it('staggers the first-token dots with classes the production CSP allows', () => {
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const dots = Array.from(container.querySelectorAll('.animate-bounce'));
+      expect(dots).toHaveLength(3);
+      expect(dots.map((dot) => dot.getAttribute('style'))).toEqual([null, null, null]);
+      expect(dots[1]).toHaveClass('[animation-delay:120ms]');
+      expect(dots[2]).toHaveClass('[animation-delay:240ms]');
     });
 
     it('shows workflow progress inline before content arrives', () => {

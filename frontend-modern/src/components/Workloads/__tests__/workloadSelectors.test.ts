@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import {
   computeWorkloadIOEmphasis,
@@ -8,7 +8,6 @@ import {
   getDiskUsagePercent,
   getWorkloadGroupKey,
   getWorkloadGroupLabel,
-  buildWorkloadSummaryGroupScopeMap,
   groupWorkloads,
   selectVisibleWorkloadInventory,
 } from '@/components/Workloads/workloadSelectors';
@@ -189,6 +188,32 @@ describe('workloadSelectors', () => {
       expect(filterByStatus('degraded')).toEqual([guests[0].id]);
       expect(filterByStatus('running')).toEqual([guests[1].id]);
       expect(computeWorkloadStats(guests).degraded).toBe(1);
+    });
+
+    it('counts a running guest with an open alert as needing attention, not a stopped one', () => {
+      const guests = [
+        makeGuest(1, { status: 'running', hasOpenAlert: true }),
+        makeGuest(2, { status: 'running' }),
+        makeGuest(3, { status: 'stopped', hasOpenAlert: true }),
+      ];
+
+      const filterByStatus = (statusMode: 'running' | 'degraded' | 'stopped') =>
+        filterWorkloads({
+          guests,
+          viewMode: 'all',
+          statusMode,
+          searchTerm: '',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((guest) => guest.id);
+
+      // A powered-off alert on a stopped guest keeps it under Stopped; the
+      // Attention chip is for running guests that need a look.
+      expect(filterByStatus('degraded')).toEqual([guests[0].id]);
+      expect(filterByStatus('running')).toEqual([guests[1].id]);
+      expect(filterByStatus('stopped')).toEqual([guests[2].id]);
+      expect(computeWorkloadStats(guests)).toMatchObject({ running: 1, degraded: 1, stopped: 1 });
     });
 
     it('ignores availability probes that are not proven to describe the guest', () => {
@@ -738,8 +763,8 @@ describe('workloadSelectors', () => {
       const comparator = createWorkloadSortComparator('name', 'asc');
       const grouped = groupWorkloads(guests, 'grouped', comparator);
 
-      expect(Object.keys(grouped).sort()).toEqual(['app-container:edge', 'cluster-a-node-a']);
-      expect(grouped['cluster-a-node-a'].map((g) => g.id)).toEqual(['vm-a', 'vm-b']);
+      expect(Object.keys(grouped).sort()).toEqual(['app-container:edge', 'node|cluster-a|node-a']);
+      expect(grouped['node|cluster-a|node-a'].map((g) => g.id)).toEqual(['vm-a', 'vm-b']);
     });
   });
 
@@ -873,6 +898,41 @@ describe('workloadSelectors', () => {
   });
 
   describe('getWorkloadGroupKey', () => {
+    it('keeps vSphere parent groups stable while display metadata changes', () => {
+      const guest = makeGuest(1, {
+        workloadType: 'vm',
+        platformScopes: ['vmware-vsphere'],
+        parentResourceId: 'host-vcenter-a:esxi-01',
+        node: 'esxi-01',
+        instance: '',
+      });
+      const key = getWorkloadGroupKey(guest);
+      const enriched = {
+        ...guest,
+        node: 'esxi-01.lab',
+        instance: 'Production Cluster',
+        clusterName: 'Production Cluster',
+      };
+      expect(getWorkloadGroupKey(enriched)).toBe(key);
+      expect(getWorkloadGroupLabel(key, [enriched])).toEqual({
+        name: 'esxi-01.lab',
+        type: 'Production Cluster',
+      });
+    });
+
+    it('keeps equal vSphere labels on different canonical parents separate', () => {
+      const guest = makeGuest(1, {
+        workloadType: 'vm',
+        platformScopes: ['vmware-vsphere'],
+        parentResourceId: 'host-vcenter-a:esxi-01',
+        node: 'esxi-01',
+        instance: 'Production Cluster',
+      });
+      expect(
+        getWorkloadGroupKey({ ...guest, parentResourceId: 'host-vcenter-b:esxi-01' }),
+      ).not.toBe(getWorkloadGroupKey(guest));
+    });
+
     it('uses instance-node for vm/lxc, and type:context for app-container/pod', () => {
       const vm = makeGuest(1, {
         type: 'vm',
@@ -895,7 +955,7 @@ describe('workloadSelectors', () => {
         instance: 'cluster-z',
       });
 
-      expect(getWorkloadGroupKey(vm)).toBe('inst-a-node-a');
+      expect(getWorkloadGroupKey(vm)).toBe('node|inst-a|node-a');
       expect(getWorkloadGroupKey(docker)).toBe('app-container:docker-edge');
       expect(getWorkloadGroupKey(k8s)).toBe('pod:worker-2');
     });
@@ -920,38 +980,12 @@ describe('workloadSelectors', () => {
         type: 'LXC',
       });
     });
-
-    it('passes group identity badges into summary group scope labels', () => {
-      const guests = [
-        makeGuest(1, {
-          id: 'container-1',
-          name: 'frigate',
-          type: 'app-container',
-          workloadType: 'app-container',
-          contextLabel: 'frigate-host',
-        }),
-      ];
-
-      const scopes = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-        groupLabelBadges: {
-          'app-container:frigate-host': { label: 'LXC' },
-        },
-      });
-
-      expect(scopes.get('app-container:frigate-host')?.label).toBe(
-        'frigate-host · LXC (1 workload)',
-      );
-    });
   });
 
   describe('workloadNodeScopeId', () => {
-    it('builds node scope as instance-node with trimming', () => {
+    it('builds an encoded instance/node scope with trimming', () => {
       const guest = makeGuest(1, { instance: ' cluster-a ', node: ' node-a ' });
-      expect(workloadNodeScopeId(guest)).toBe('cluster-a-node-a');
+      expect(workloadNodeScopeId(guest)).toBe('node|cluster-a|node-a');
     });
   });
 
@@ -967,5 +1001,302 @@ describe('workloadSelectors', () => {
         diskIO: { median: 3.5, mad: 3.5, max: 7, p97: 7, p99: 7, count: 2 },
       });
     });
+
+    it('reports zeroed stats when there are no workloads', () => {
+      const empty = { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+      expect(computeWorkloadIOEmphasis([])).toEqual({ network: empty, diskIO: empty });
+    });
+
+    it('takes the median absolute deviation and upper percentile for an odd sample', () => {
+      const guests = [2, 4, 6, 8, 100].map((networkIn, i) =>
+        makeGuest(i + 1, { networkIn, networkOut: 0 }),
+      );
+
+      // deviations from 6 are 4,2,0,2,94, so the MAD is 2; p97 and p99 land on
+      // index ceil(p * 5) - 1 = 4.
+      expect(computeWorkloadIOEmphasis(guests).network).toEqual({
+        median: 6,
+        mad: 2,
+        max: 100,
+        p97: 100,
+        p99: 100,
+        count: 5,
+      });
+    });
+
+    it('selects the 97th and 99th percentile samples from a large distribution', () => {
+      const guests = Array.from({ length: 100 }, (_, i) =>
+        makeGuest(i + 1, { networkIn: i + 1, networkOut: 0 }),
+      );
+
+      expect(computeWorkloadIOEmphasis(guests).network).toMatchObject({
+        median: 50.5,
+        max: 100,
+        p97: 97,
+        p99: 99,
+        count: 100,
+      });
+    });
+
+    it('drops non-finite throughput samples from the distribution', () => {
+      const guests = [
+        makeGuest(1, { networkIn: Number.NaN, networkOut: 0, diskRead: 0, diskWrite: 0 }),
+        makeGuest(2, {
+          networkIn: Number.POSITIVE_INFINITY,
+          networkOut: 0,
+          diskRead: 0,
+          diskWrite: 0,
+        }),
+        makeGuest(3, { networkIn: 10, networkOut: 0, diskRead: 0, diskWrite: 0 }),
+      ];
+
+      expect(computeWorkloadIOEmphasis(guests).network).toEqual({
+        median: 10,
+        mad: 0,
+        max: 10,
+        p97: 10,
+        p99: 10,
+        count: 1,
+      });
+    });
+  });
+});
+
+describe('current guest disk selection', () => {
+  const diskGuest = (id: number, usage: number, overrides: Partial<WorkloadGuest> = {}) =>
+    makeGuest(id, {
+      type: 'qemu',
+      workloadType: 'vm',
+      status: 'running',
+      disk: { total: 100, used: usage, free: 100 - usage, usage },
+      ...overrides,
+    });
+  const select = (guests: WorkloadGuest[], searchTerm: string) =>
+    filterWorkloads({
+      guests,
+      searchTerm,
+      viewMode: 'all',
+      statusMode: 'all',
+      selectedNode: null,
+      selectedHostHint: null,
+      selectedKubernetesContext: null,
+    });
+
+  it.each(['prev-vm-locked', 'prev-agent-timeout', 'permission-denied', 'agent-cooldown'])(
+    'excludes %s numbers from disk sorting and numeric search without hiding inventory',
+    (diskStatusReason) => {
+      const guest = diskGuest(1, 95, { diskStatusReason });
+      expect(getDiskUsagePercent(guest)).toBeNull();
+      expect(select([guest], 'disk>90')).toEqual([]);
+      expect(select([guest], 'name:workload-1')).toEqual([guest]);
+      expect(select([guest], '')).toEqual([guest]);
+    },
+  );
+
+  it.each(['asc', 'desc'] as const)(
+    'keeps unavailable and retained readings after all current readings when sorting %s',
+    (direction) => {
+      const current = [diskGuest(1, 0), diskGuest(2, 40), diskGuest(3, 95)];
+      const unknown = [
+        diskGuest(4, 99, { diskStatusReason: 'prev-vm-locked' }),
+        diskGuest(5, 1, { diskStatusReason: 'agent-timeout' }),
+        diskGuest(6, 0, { disk: undefined as unknown as WorkloadGuest['disk'] }),
+      ];
+      const input = [unknown[0], current[1], unknown[2], current[2], unknown[1], current[0]];
+      const sorted = [...input].sort(createWorkloadSortComparator('disk', direction)!);
+      expect(sorted.slice(0, 3)).toEqual(direction === 'asc' ? current : [...current].reverse());
+      expect(new Set(sorted.slice(3))).toEqual(new Set(unknown));
+      expect(input[0]).toBe(unknown[0]);
+    },
+  );
+
+  it('restores filtering and sorting only when the same guest gets a current reading', () => {
+    const retained = diskGuest(1, 95, { diskStatusReason: 'prev-vm-locked' });
+    const peer = diskGuest(2, 40);
+    const current = { ...retained, diskStatusReason: undefined };
+    expect(select([retained, peer], 'disk>90')).toEqual([]);
+    expect([retained, peer].sort(createWorkloadSortComparator('disk', 'desc')!)).toEqual([
+      peer,
+      retained,
+    ]);
+    expect(select([current, peer], 'disk>90')).toEqual([current]);
+    expect([current, peer].sort(createWorkloadSortComparator('disk', 'desc')!)).toEqual([
+      current,
+      peer,
+    ]);
+    expect('diskStatusReason' in retained && retained.diskStatusReason).toBe('prev-vm-locked');
+  });
+
+  it('follows linked-agent filesystem freshness rather than the failed Proxmox read', () => {
+    const linked = diskGuest(1, 95, { disksFromAgent: true, diskStatusReason: 'agent-error' });
+    expect(getDiskUsagePercent(linked)).toBe(95);
+    expect(select([linked], 'disk>90')).toEqual([linked]);
+    const stale = { ...linked, agentStale: true };
+    expect(getDiskUsagePercent(stale)).toBeNull();
+    expect(select([stale], 'disk>90')).toEqual([]);
+    const stopped = { ...linked, status: 'stopped' };
+    expect(getDiskUsagePercent(stopped)).toBeNull();
+    expect(select([stopped], 'disk>90')).toEqual([]);
+    const platform = diskGuest(2, 95, { agentStale: true });
+    expect(getDiskUsagePercent(platform)).toBe(95);
+    expect(select([platform], 'disk>90')).toEqual([platform]);
+  });
+
+  it('does not invent zero from unavailable telemetry or a negative sentinel', () => {
+    const unavailable = diskGuest(1, 0, {
+      telemetryAvailability: {
+        cpu: true,
+        memory: true,
+        disk: false,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      },
+    });
+    const sentinel = diskGuest(2, -1);
+    for (const guest of [unavailable, sentinel]) {
+      expect(getDiskUsagePercent(guest)).toBeNull();
+      expect(select([guest], 'disk=0')).toEqual([]);
+    }
+    const zero = diskGuest(3, 0);
+    expect(getDiskUsagePercent(zero)).toBe(0);
+    expect(select([zero], 'disk=0')).toEqual([zero]);
+  });
+
+  it('recognises legacy qemu types and does not apply Proxmox refusal to LXC disk readings', () => {
+    const vm = diskGuest(1, 95, { workloadType: undefined, diskStatusReason: 'prev-vm-locked' });
+    const lxc = diskGuest(2, 95, {
+      type: 'lxc',
+      workloadType: 'system-container',
+      diskStatusReason: 'permission-denied',
+    });
+    expect(getDiskUsagePercent(vm)).toBeNull();
+    expect(select([vm], 'disk>90')).toEqual([]);
+    expect(getDiskUsagePercent(lxc)).toBe(95);
+    expect(select([lxc], 'disk>90')).toEqual([lxc]);
+  });
+});
+
+describe('memory selection preserves displayed observation provenance', () => {
+  const guest = (id: string, usage: number, state = 'current'): WorkloadGuest =>
+    makeGuest(1, {
+      id,
+      name: id,
+      type: 'qemu',
+      workloadType: 'vm',
+      memory: {
+        total: 100,
+        used: usage,
+        free: 100 - usage,
+        usage,
+        observation: { state, source: 'guest-agent-meminfo', observedAt: '2026-10-08T00:00:00Z' },
+      },
+    });
+  const inventory = () => {
+    const unknown = guest('unknown', 99);
+    unknown.memory.observation = undefined;
+    const missing = guest('missing', 0);
+    missing.memory = undefined as unknown as WorkloadGuest['memory'];
+    return [
+      guest('retained', 99, 'last-known'),
+      unknown,
+      guest('current-high', 90),
+      guest('unavailable', 0, 'unavailable'),
+      missing,
+      guest('current-zero', 0),
+      guest('current-low', 10),
+    ];
+  };
+
+  it.each(['asc', 'desc'] as const)(
+    'keeps only current readings before retained and missing memory in %s order',
+    (direction) => {
+      const compare = createWorkloadSortComparator('memory', direction)!;
+      expect(
+        inventory()
+          .sort(compare)
+          .map((row) => row.id),
+      ).toEqual([
+        ...(direction === 'asc'
+          ? ['current-zero', 'current-low', 'current-high']
+          : ['current-high', 'current-low', 'current-zero']),
+        'missing',
+        'retained',
+        'unavailable',
+        'unknown',
+      ]);
+    },
+  );
+
+  it('qualifies host-share values before invoking the page-owned comparison', () => {
+    const memoryValue = vi.fn((row: WorkloadGuest) => (row.id === 'current-high' ? 5 : 50));
+    const compare = createWorkloadSortComparator('memory', 'desc', { memoryValue })!;
+    expect(
+      inventory()
+        .sort(compare)
+        .map((row) => row.id),
+    ).toEqual([
+      'current-low',
+      'current-zero',
+      'current-high',
+      'missing',
+      'retained',
+      'unavailable',
+      'unknown',
+    ]);
+    expect(
+      memoryValue.mock.calls.every(([row]) => row.memory.observation?.state === 'current'),
+    ).toBe(true);
+  });
+
+  it.each([undefined, null, NaN, Infinity, -1])(
+    'keeps a missing or invalid host-share value (%s) last in either direction',
+    (value) => {
+      const rows = [guest('zero', 0), guest('missing-host', 75), guest('high', 90)];
+      const memoryValue = (row: WorkloadGuest) =>
+        row.id === 'missing-host' ? value : row.memory.usage;
+      for (const direction of ['asc', 'desc'] as const) {
+        const compare = createWorkloadSortComparator('memory', direction, { memoryValue })!;
+        expect([...rows].sort(compare).map((row) => row.id)).toEqual([
+          ...(direction === 'asc' ? ['zero', 'high'] : ['high', 'zero']),
+          'missing-host',
+        ]);
+      }
+    },
+  );
+
+  it('keeps current memory independent of QEMU disk-read deferral', () => {
+    const value = {
+      ...guest('current', 90),
+      diskStatusReason: 'prev-vm-locked',
+      lock: 'backup',
+    };
+    const compare = createWorkloadSortComparator('memory', 'desc')!;
+    expect([guest('low', 10), value].sort(compare).map((row) => row.id)).toEqual([
+      'current',
+      'low',
+    ]);
+  });
+
+  it('updates numeric membership on same-identity source replacement without losing inventory access', () => {
+    const rows = inventory();
+    const filter = (searchTerm: string) =>
+      filterWorkloads({
+        guests: rows,
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm,
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      }).map((row) => row.id);
+    expect(filter('memory>85')).toEqual(['current-high']);
+    expect(filter('memory=0')).toEqual(['current-zero']);
+    expect(filter('name:retained')).toEqual(['retained']);
+    expect(filter('memory>85 OR name:retained')).toEqual(['retained', 'current-high']);
+    rows[0] = { ...rows[0], lastSeen: '2026-10-09T15:00:00Z' };
+    expect(filter('memory>85')).toEqual(['current-high']);
+    rows[0] = guest('retained', 99);
+    expect(filter('memory>85')).toEqual(['retained', 'current-high']);
   });
 });

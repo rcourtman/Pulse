@@ -7,16 +7,16 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, Suspense } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
-import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
+import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { getWorkloadMetadataId } from '@/utils/workloads';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
-import { getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
+import { getGuestDrawerAlertAttention, getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -60,60 +60,36 @@ vi.mock('@/stores/license', () => ({
   maxHistoryDays: () => 90,
 }));
 
-vi.mock('../Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: (props: {
-    resourceType: string;
-    agentId?: string;
-    resourceId: string;
-    hostname: string;
-    showManualRunAction?: boolean;
-  }) => (
-    <div data-testid="discovery-tab">
-      <span data-testid="disc-resource-type">{props.resourceType}</span>
-      <span data-testid="disc-agent-id">{props.agentId}</span>
-      <span data-testid="disc-resource-id">{props.resourceId}</span>
-      <span data-testid="disc-manual-run-action">{String(props.showManualRunAction)}</span>
-    </div>
+// Records whether the guest's physical disks may read, without their own
+// resource query; GuestPhysicalDisks.test covers what they render.
+vi.mock('./GuestPhysicalDisks', () => ({
+  GuestPhysicalDisks: (props: { historyEnabled?: boolean }) => (
+    <div
+      data-testid="guest-physical-disks-stub"
+      data-history-enabled={String(props.historyEnabled)}
+    />
   ),
 }));
-
-const discoveryApiMocks = vi.hoisted(() => ({
-  getDiscovery: vi.fn(
-    async (..._args: unknown[]): Promise<import('@/types/discovery').ResourceDiscovery | null> =>
-      null,
-  ),
-}));
-
-vi.mock('@/api/discovery', async () => {
-  const actual = await vi.importActual<typeof import('@/api/discovery')>('@/api/discovery');
-  return {
-    ...actual,
-    getDiscovery: discoveryApiMocks.getDiscovery,
-  };
-});
-
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
     metadataKind: string;
     metadataId: string;
     targetLabel: string;
-    suggestedUrl?: string;
-    suggestedUrlReasonText?: string;
-    suggestedUrlDiagnostic?: string;
   }) => (
     <div data-testid="web-interface-url-field">
       <span data-testid="url-kind">{props.metadataKind}</span>
       <span data-testid="url-id">{props.metadataId}</span>
       <span data-testid="url-label">{props.targetLabel}</span>
-      <span data-testid="url-suggested">{props.suggestedUrl ?? ''}</span>
-      <span data-testid="url-suggested-reason">{props.suggestedUrlReasonText ?? ''}</span>
-      <span data-testid="url-suggested-diagnostic">{props.suggestedUrlDiagnostic ?? ''}</span>
     </div>
   ),
 }));
 
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
+// Overview loads its charts lazily; warm the module so a cold transform does
+// not outlast the tests' waits.
+import './GuestDrawerHistory';
+import { GUEST_DRAWER_HISTORY_POLL_MS } from './guestDrawerHistoryQuery';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -141,6 +117,7 @@ function makeGuest(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
     instance: 'inst1',
     status: 'running',
     type: 'qemu',
+    metricsTarget: { resourceType: 'vm', resourceId: 'inst1:node1:100' },
     cpu: 0.25,
     cpus: 4,
     memory: { total: 4294967296, used: 2147483648, free: 2147483648, usage: 0.5 },
@@ -170,15 +147,9 @@ function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): W
   });
 }
 
-function getDiscoveryPanel(): HTMLElement {
-  const panel = screen.getByTestId('discovery-tab').closest('[style*="overflow-anchor"]');
-  if (!(panel instanceof HTMLElement)) {
-    throw new Error('Discovery tab panel not found');
-  }
-  return panel;
-}
-
-const technicalDetails = () => within(screen.getByTestId('guest-technical-details'));
+// Filesystems and lifted warning rows render outside Details; the render
+// helper opens Details, so read the whole Overview.
+const technicalDetails = () => within(screen.getByTestId('guest-drawer-overview'));
 
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
@@ -188,9 +159,7 @@ const makeHistoryPoints = (base: number) => [
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
-  discoveryApiMocks.getDiscovery.mockReset().mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'vm',
     resourceId: 'inst1:node1:100',
@@ -220,6 +189,113 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps the shared memory provenance policy in the full guest drawer after live replacement', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      source: 'store',
+      metrics: {},
+    });
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        memory: {
+          total: 100,
+          used: 0,
+          free: 100,
+          usage: 0,
+          observation: {
+            state: 'last-known',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-10-04T12:00:00Z',
+          },
+        },
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
+    const chart = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+      '0.0%last known',
+    );
+    expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
+    setGuest({ ...guest(), lastSeen: '2026-10-05T00:00:00Z' });
+    expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      '2026-10-04 12:00:00 UTC',
+    );
+    setGuest({
+      ...guest(),
+      memory: {
+        ...guest().memory,
+        observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T13:00:00Z' },
+      },
+    });
+    expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
+    expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent('0.0%current');
+    expect(chart.querySelector('[data-history-deferred="memory"]')).toBeNull();
+    expect(chart.querySelector('path[data-history-series]')).toBeNull();
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps stored History gaps through live guest recovery without another read', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const points = makeHistoryPoints(10);
+    const payload = {
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      source: 'store',
+      metrics: { cpu: points, memory: [points[0], points[2]] },
+    };
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(payload);
+    const [guest, setGuest] = createSignal(
+      makeGuest({ lock: 'backup', diskStatusReason: 'prev-vm-locked' }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    const chart = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(1);
+    expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
+    expect(chart.querySelector('[data-history-gaps]')).toHaveTextContent(
+      'Missing observations: Memory.',
+    );
+    setGuest({
+      ...guest(),
+      lock: '',
+      diskStatusReason: '',
+      memory: {
+        ...guest().memory,
+        usage: 99,
+        observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T12:00:00Z' },
+      },
+    });
+    expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
+    expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
+    expect(chart).not.toHaveTextContent('99.0%');
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
+    expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      maxPoints: 240,
+    });
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      ...payload,
+      metrics: { cpu: points, memory: points },
+    });
+    await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);
+    await waitFor(() => expect(chart.querySelector('[data-history-gaps]')).toBeNull());
+    expect(chart.querySelectorAll('path[data-history-series]')).toHaveLength(2);
+    expect(chart.querySelector('[data-history-observation="memory"]')).toBeNull();
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the backup precaution visible across drawer tabs without starting a guest check', async () => {
     const [guest, setGuest] = createSignal(
       makeGuest({
@@ -240,7 +316,7 @@ describe('GuestDrawer', () => {
     expect(
       within(precaution()).getByRole('link', { name: 'Backup safety guidance' }),
     ).toHaveAttribute('href', '/docs/VM_DISK_MONITORING');
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(precaution()).toBeVisible();
     setGuest({
       ...guest(),
@@ -253,7 +329,6 @@ describe('GuestDrawer', () => {
     expect(precaution()).toBeVisible();
     setGuest({ ...guest(), guestAgentStatus: 'available', diskStatusReason: '' });
     expect(screen.queryByTestId('guest-read-precaution')).not.toBeInTheDocument();
-    expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
   });
 
   it('keeps malformed and future backup times unknown through same-guest replacement', () => {
@@ -262,12 +337,12 @@ describe('GuestDrawer', () => {
     const details = technicalDetails();
     expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
     expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
-    expect(details.queryByText('Today')).not.toBeInTheDocument();
+    expect(details.queryByText('1 hour ago')).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
     expect(details.getByText(/timestamp is in the future/)).toBeVisible();
     expect(details.getByText('Running · not completed yet')).toBeVisible();
     setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
-    expect(details.getByText('Today')).toBeVisible();
+    expect(details.getByText('1 hour ago')).toBeVisible();
     expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: 0 });
     expect(details.getByText('No completed backup found')).toBeVisible();
@@ -291,7 +366,7 @@ describe('GuestDrawer', () => {
       }),
     );
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() =>
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
     );
@@ -309,14 +384,22 @@ describe('GuestDrawer', () => {
     );
     expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
     setGuest({ ...guest(), diskStatusReason: '', disk: { total: 100, used: 75, usage: 75 } });
-    expect(history.querySelector('[data-history-last-known]')).toBeNull();
-    expect(history.querySelector('[data-history-deferred]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred="disk"]')).toBeNull();
     expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
       'Disk75.0%current',
     );
-    expect(history.querySelector('path')).toBeNull();
-    // Existing drawer target recomputation follows each guest snapshot.
-    // This presentation repair does not change that request ownership.
+    // Fresh disk evidence cannot qualify the independent legacy memory value.
+    expect(history.querySelector('[data-history-current="memory"]')).toBeNull();
+    expect(history.querySelector('[data-history-unknown="memory"]')).toHaveTextContent(
+      'freshness unknown',
+    );
+    expect(history.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      'Not a current measurement.',
+    );
+    expect(history.querySelector('path[data-history-series]')).toBeNull();
+    // Same target/range snapshots retain the chart and original History read.
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
     for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
       expect(request).toMatchObject({
         resourceType: 'vm',
@@ -326,10 +409,51 @@ describe('GuestDrawer', () => {
     }
   });
 
-  it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
-    expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
-    expect(guestDrawerSource).not.toContain(
-      'animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full',
+  it("judges a linked agent's disk metric in History by that agent, not the Proxmox reason", async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      metrics: {},
+      source: 'store',
+    });
+    // Proxmox has no guest filesystems, so the agent's filesystems and disk
+    // metric fill in while Proxmox still reports its own agent-not-running.
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        disk: { total: 100, used: 40, free: 60, usage: 40 },
+        disks: [{ total: 100, used: 40, free: 60, usage: 40, mountpoint: '/' }],
+        disksFromAgent: true,
+        diskStatusReason: 'agent-not-running',
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    const history = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk40.0%current',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toBeNull();
+
+    setGuest({ ...guest(), agentStale: true });
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+      'Disk40.0%last known',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'The Pulse Agent in this guest stopped reporting.',
+    );
+
+    setGuest({ ...guest(), status: 'stopped' });
+    expect(history.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest filesystem stats unavailable while the VM is stopped.',
     );
   });
 
@@ -376,7 +500,7 @@ describe('GuestDrawer', () => {
     expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
   });
 
-  it('reconciles a guest-allocation memory alert with the host-relative row value', () => {
+  it('explains guest-allocation alerts without translating them from another memory sample', () => {
     solidRender(() => (
       <GuestDrawer
         guest={makeGuest({
@@ -409,9 +533,53 @@ describe('GuestDrawer', () => {
       />
     ));
 
+    expect(screen.getByText('VM memory at 86.6%')).toBeInTheDocument();
     expect(
-      screen.getByText('VM memory at 86.6% (guest allocation · 16% of host capacity)'),
+      screen.getByText('Alert percentages use guest allocation. The table row uses host capacity.'),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-attention-section')).not.toHaveTextContent(
+      '16% of host capacity',
+    );
+  });
+
+  it('leads with the live reading when an open alert holds below its trigger', () => {
+    solidRender(() => (
+      <GuestDrawer
+        guest={makeGuest()}
+        alerts={[
+          {
+            id: 'alert-memory-holding',
+            type: 'memory',
+            level: 'warning',
+            resourceId: 'inst1-node1-100',
+            resourceName: 'test-vm',
+            node: 'node1',
+            instance: 'inst1',
+            message: 'VM memory at 91.0%',
+            value: 91,
+            threshold: 90,
+            startTime: new Date().toISOString(),
+            acknowledged: false,
+            metricStatus: {
+              phase: 'latched',
+              value: 87,
+              unit: '%',
+              observedAt: new Date().toISOString(),
+              trigger: 90,
+              recovery: 85,
+              recoveryDelaySeconds: 300,
+            },
+          },
+        ]}
+        onClose={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Memory 87% now, back under the 90% alert level')).toBeInTheDocument();
+    expect(
+      screen.getByText('Stays open until it reaches 85% or lower and stays there for 5 minutes.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('VM memory at 91.0%')).not.toBeInTheDocument();
   });
 
   it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
@@ -437,375 +605,27 @@ describe('GuestDrawer', () => {
   // ── Tabs ──
 
   describe('tab switching', () => {
-    it('renders Overview and Discovery tabs', () => {
+    it('renders Overview and Manage tabs, with the charts on Overview instead of a History tab', () => {
       render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
       expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-    });
-
-    it('hides Discovery when the workload has no canonical discovery target', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            type: 'app-container',
-            workloadType: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            node: 'truenas-main',
-            instance: 'truenas-main',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.queryByText('Discovery')).toBeNull();
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
-
-    it('hides every discovery surface and skips discovery reads when Discovery is disabled', () => {
-      syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-        typeof syncAIRuntimeSettings
-      >[0]);
-
-      render(() => (
-        <GuestDrawer
-          guest={makeGuestWithDiscoveryTarget({
-            discoveryReadiness: {
-              state: 'missing',
-              source: 'service-discovery',
-              reason: 'Discovery has not run for this resource.',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-
+      expect(screen.getByRole('tab', { name: 'Manage' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
       expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
-      expect(screen.queryByText('Not discovered')).toBeNull();
-      expect(screen.queryByText('Discovery has not run for this resource.')).toBeNull();
-      expect(screen.queryByText('Identified Service')).toBeNull();
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-      expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
     });
 
-    it('starts on the Overview tab (discovery content hidden)', () => {
+    it('starts on the Overview tab', () => {
       const { container } = solidRender(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
+      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
     });
 
-    it('renders the Identified Service overview card when a populated discovery record exists', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
-        id: 'vm:node1:100',
-        resource_type: 'vm',
-        resource_id: '100',
-        target_id: 'node1',
-        service_name: 'Homepage Dashboard',
-        service_type: 'homepage',
-        service_version: '0.9.0',
-        category: 'web_server',
-        confidence: 0.95,
-        cli_access: 'docker exec -it homepage /bin/sh',
-        ports: [],
-        facts: [],
-        config_paths: ['/opt/homepage/config'],
-        data_paths: [],
-        log_paths: [],
-        updated_at: '2026-05-18T09:49:19.049058+01:00',
-        suggested_url: 'http://192.0.2.10:3000',
-        suggested_url_source_code: 'web_port_inference',
-        suggested_url_source_detail: 'detected 3000/tcp',
-      } as unknown as import('@/types/discovery').ResourceDiscovery);
-
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Identified Service')).toBeInTheDocument();
-      });
-      expect(screen.getByText('Homepage Dashboard · web_server')).toBeInTheDocument();
-      expect(screen.getByText('0.9.0')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Source')).toBeInTheDocument();
-      expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
-      expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
-      expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
-    });
-
-    describe('discovery identity ownership', () => {
-      const service = (name: string) =>
-        ({
-          id: `vm:node1:${name}`,
-          resource_type: 'vm',
-          resource_id: '100',
-          target_id: 'node1',
-          service_name: name,
-          service_type: 'dashboard',
-          confidence: 0.95,
-          suggested_url: `http://${name}.example.test`,
-          ports: [],
-          facts: [],
-        }) as unknown as import('@/types/discovery').ResourceDiscovery;
-
-      it('reuses the lookup and mounted panel across 100 same-target snapshots', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        const panel = screen.getByTestId('discovery-tab');
-        for (let tick = 0; tick < 100; tick++)
-          setGuest({ ...guest(), name: `renamed-${tick}`, cpu: tick / 1000 });
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(1);
-        expect(screen.getByTestId('discovery-tab')).toBe(panel);
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
-      });
-
-      it('withdraws the prior service and URL while a replacement target loads or fails', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        const originalPanel = screen.getByTestId('discovery-tab');
-        let rejectRead!: (error: Error) => void;
-        discoveryApiMocks.getDiscovery.mockImplementationOnce(
-          () =>
-            new Promise((_resolve, reject) => {
-              rejectRead = reject;
-            }),
-        );
-        setGuest({
-          ...guest(),
-          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
-        });
-        await waitFor(() => expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(2));
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-        expect(screen.queryByText('original')).toBeNull();
-        expect(screen.getByTestId('discovery-tab')).not.toBe(originalPanel);
-        rejectRead(new Error('temporary outage'));
-        await waitFor(() =>
-          expect(screen.getByText(/Service details could not be loaded/)).toBeInTheDocument(),
-        );
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-      });
-
-      it('ignores a late lookup from the old target and restores only the active target', async () => {
-        let finishOld!: (value: import('@/types/discovery').ResourceDiscovery) => void;
-        discoveryApiMocks.getDiscovery.mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              finishOld = resolve;
-            }),
-        );
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('replacement'));
-        setGuest({
-          ...guest(),
-          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
-        });
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement'),
-        );
-        finishOld(service('original'));
-        await Promise.resolve();
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement');
-        expect(screen.queryByText('original')).toBeNull();
-      });
-
-      it.each([401, 403])(
-        'withdraws a denied service on HTTP %s and does not resurrect it during retry or remount',
-        async (status) => {
-          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
-            Object.assign(new Error('do not display raw response'), { status }),
-          );
-          const guest = makeGuestWithDiscoveryTarget();
-          const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          await waitFor(() =>
-            expect(
-              screen.getByRole('button', { name: 'Retry service details' }),
-            ).toBeInTheDocument(),
-          );
-          discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-          fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
-          await waitFor(() =>
-            expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-          );
-          // A remount uses this target's cached result, then observes a final denial.
-          view.unmount();
-          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
-            Object.assign(new Error('do not display raw response'), { status }),
-          );
-          const denied = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          await waitFor(() =>
-            expect(
-              screen.getByRole('button', { name: 'Retry service details' }),
-            ).toBeInTheDocument(),
-          );
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-          expect(screen.queryByText(/do not display raw response/)).toBeNull();
-          denied.unmount();
-          let finish!: (value: import('@/types/discovery').ResourceDiscovery) => void;
-          discoveryApiMocks.getDiscovery.mockImplementationOnce(
-            () =>
-              new Promise((resolve) => {
-                finish = resolve;
-              }),
-          );
-          render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-          finish(service('recovered'));
-          await waitFor(() =>
-            expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
-          );
-        },
-      );
-
-      it('labels same-target transient retention and permits a fresh retry without raw error text', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const guest = makeGuestWithDiscoveryTarget();
-        const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        view.unmount();
-        discoveryApiMocks.getDiscovery.mockRejectedValueOnce(new Error('private diagnostic'));
-        render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByText(/Showing previously loaded service details/)).toBeInTheDocument(),
-        );
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
-        expect(screen.queryByText(/private diagnostic/)).toBeNull();
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('recovered'));
-        fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
-        );
-        expect(screen.queryByText(/Showing previously loaded/)).toBeNull();
-      });
-
-      it('resets tabs, range and disclosures only when canonical guest identity changes', async () => {
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-        const range = screen.getByLabelText('History range');
-        fireEvent.change(range, { target: { value: '7d' } });
-        setGuest({ ...guest(), name: 'renamed', cpu: 0.5 });
-        expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        expect(screen.getByLabelText('History range')).toBe(range);
-        expect(range).toHaveValue('7d');
-        setGuest(
-          makeGuestWithDiscoveryTarget({ id: 'inst1-node1-200', vmid: 200, name: 'new-guest' }),
-        );
-        expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        const details = screen.getByTestId('guest-technical-details');
-        expect(details).not.toHaveAttribute('open');
-        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-        expect(screen.getByLabelText('History range')).toHaveValue('24h');
-      });
-    });
-
-    it('hides the Identified Service card when the discovery record is null or empty', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-      await waitFor(() => {
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Identified Service')).toBeNull();
-    });
-
-    it('hides low-signal placeholder discovery from the Overview card and URL field', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
-        id: 'system-container:pve4:152',
-        resource_type: 'system-container',
-        resource_id: '152',
-        target_id: 'pve4',
-        service_name: '',
-        service_type: 'service',
-        service_version: '',
-        category: 'unknown',
-        confidence: 0,
-        cli_access: 'pct exec 152 -- /bin/bash',
-        ports: [],
-        facts: [
-          {
-            category: 'service',
-            key: 'status',
-            value: 'online',
-            source: 'metadata',
-            confidence: 1,
-            discovered_at: '2026-05-19T00:00:00Z',
-          },
-          {
-            category: 'config',
-            key: 'config_availability',
-            value: 'missing_node_config',
-            source: 'all_commands',
-            confidence: 1,
-            discovered_at: '2026-05-19T00:00:00Z',
-          },
-        ],
-        config_paths: [],
-        data_paths: [],
-        log_paths: [],
-        updated_at: '2026-05-18T09:49:19.049058+01:00',
-        suggested_url_diagnostic: 'no host or IP candidate available',
-      } as unknown as import('@/types/discovery').ResourceDiscovery);
-
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Identified Service')).toBeNull();
-      expect(screen.getByTestId('url-suggested-diagnostic')).toHaveTextContent('');
-    });
-
-    it('keeps the passive discovery lookup out of the parent Suspense fallback', () => {
-      discoveryApiMocks.getDiscovery.mockImplementationOnce(
-        () => new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),
-      );
-
-      render(() => (
-        <Suspense fallback={<div data-testid="parent-suspense-fallback">Loading page</div>}>
-          <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
-        </Suspense>
-      ));
-
-      expect(screen.queryByTestId('parent-suspense-fallback')).toBeNull();
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-    });
-
-    it('switches to Discovery tab on click', async () => {
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
-      ));
-      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
-      expect(panels[0]).toHaveClass('hidden');
-      expect(getDiscoveryPanel()).not.toHaveClass('hidden');
-    });
-
-    it('renders persistent metric charts on the History tab', async () => {
+    it('renders the metric charts on the Overview tab', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      expect(screen.queryByTestId('guest-history-group-chart')).toBeNull();
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
 
       await waitFor(() => {
         expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
@@ -828,6 +648,36 @@ describe('GuestDrawer', () => {
       expect(screen.queryByText('Open related infrastructure')).toBeNull();
     });
 
+    it('adds one min-max band per series whose buckets spread, and none for flat ones', async () => {
+      const points = makeHistoryPoints(10);
+      chartsApiMocks.getMetricsHistory.mockResolvedValue({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+        start: 1,
+        end: 3,
+        source: 'store',
+        metrics: {
+          cpu: [points[0], { ...points[1], max: 95 }, points[2]],
+          memory: makeHistoryPoints(20),
+          disk: makeHistoryPoints(30),
+        },
+      });
+      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      await waitFor(() =>
+        expect(
+          screen
+            .getAllByTestId('guest-history-group-chart')[0]
+            .querySelector('path[data-history-band="cpu"]'),
+        ).not.toBeNull(),
+      );
+      const charts = screen.getAllByTestId('guest-history-group-chart');
+      expect(charts[0].querySelectorAll('path[data-history-band]')).toHaveLength(1);
+      expect(charts[0].querySelectorAll('path[data-history-series]')).toHaveLength(3);
+      expect(charts[1].querySelectorAll('path[data-history-band]')).toHaveLength(0);
+    });
+
     it('shows current readings without fabricating history points', async () => {
       chartsApiMocks.getMetricsHistory.mockResolvedValue({
         resourceType: 'vm',
@@ -840,13 +690,16 @@ describe('GuestDrawer', () => {
       });
       render(() => <GuestDrawer guest={makeGuest({ cpu: 0.25 })} onClose={vi.fn()} />);
 
-      await fireEvent.click(screen.getByText('History'));
-      await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      await waitFor(() =>
+        expect(screen.getAllByTestId('guest-history-group-chart')[0]).toHaveTextContent(
+          'No stored history in this range',
+        ),
+      );
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       expect(utilizationChart).toHaveTextContent('CPU25.0%current');
-      expect(utilizationChart).toHaveTextContent('No stored history in this range');
-      expect(utilizationChart.querySelector('path')).toBeNull();
+      expect(utilizationChart.querySelector('path[data-history-series]')).toBeNull();
     });
 
     it('renders unavailable current disk usage as a dash', async () => {
@@ -868,7 +721,7 @@ describe('GuestDrawer', () => {
         />
       ));
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
       await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -879,11 +732,11 @@ describe('GuestDrawer', () => {
     it('updates grouped metric header values on History chart hover', async () => {
       render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
 
-      await fireEvent.click(screen.getByText('History'));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
 
-      await waitFor(() => {
-        expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled();
-      });
+      await waitFor(() =>
+        expect(screen.getAllByTestId('guest-history-group-chart')[0]).toHaveTextContent('40.0%'),
+      );
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
       const plot = within(utilizationChart).getByTestId('guest-history-plot');
       plot.getBoundingClientRect = () =>
@@ -918,21 +771,40 @@ describe('GuestDrawer', () => {
 
       await fireEvent.pointerLeave(plot);
 
-      expect(within(utilizationChart).queryByTestId('guest-history-hover-time')).toBeNull();
+      expect(within(utilizationChart).getByTestId('guest-history-hover-time')).toHaveTextContent(
+        'Latest stored',
+      );
       expect(utilizationChart).toHaveTextContent('20.0%');
       expect(utilizationChart).toHaveTextContent('30.0%');
       expect(utilizationChart).toHaveTextContent('40.0%');
+    });
+
+    it('pauses the physical disk charts while Manage hides Overview', async () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ agentVersion: '6.2.0', agentKind: 'pulse' })}
+          onClose={vi.fn()}
+        />
+      ));
+      // The drawer remembers its last tab, so start from Overview explicitly.
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      const disks = await screen.findByTestId('guest-physical-disks-stub');
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'false');
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      expect(disks).toHaveAttribute('data-history-enabled', 'true');
     });
 
     it('switches back to Overview tab', async () => {
       const { container } = render(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
-      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
       await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
+      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
-      expect(getDiscoveryPanel()).toHaveClass('hidden');
+      expect(panels[1]).toHaveClass('hidden');
     });
   });
 
@@ -1055,7 +927,7 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
       expect(technicalDetails().getByText('Node agent assigned')).toHaveAttribute(
         'title',
-        'Discovery and governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
+        'Governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
       );
       expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });
@@ -1207,17 +1079,17 @@ describe('GuestDrawer', () => {
       vi.setSystemTime(new Date('2026-03-02T12:00:00Z'));
     });
 
-    it('shows "Today" for a backup from today', () => {
+    it('shows elapsed hours for a recent backup', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
       expect(screen.getByText('Last completed backup')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Today')).toBeInTheDocument();
+      expect(technicalDetails().getByText('2 hours ago')).toBeInTheDocument();
     });
 
-    it('shows "Yesterday" for a 1-day-old backup', () => {
+    it('shows elapsed days for a 1-day-old backup', () => {
       const yesterday = new Date('2026-03-01T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: yesterday })} onClose={vi.fn()} />);
-      expect(technicalDetails().getByText('Yesterday')).toBeInTheDocument();
+      expect(technicalDetails().getByText('1d ago')).toBeInTheDocument();
     });
 
     it('shows "Xd ago" for older backups', () => {
@@ -1250,7 +1122,7 @@ describe('GuestDrawer', () => {
     it('applies green color for recent backups', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      const ageCell = technicalDetails().getByText('Today').closest('td');
+      const ageCell = technicalDetails().getByText('2 hours ago').closest('td');
       expect(ageCell).toHaveClass('text-emerald-700');
     });
 
@@ -1276,7 +1148,7 @@ describe('GuestDrawer', () => {
 
     it.each([
       ['2026-02-20T12:00:00Z', '10d ago', 'text-amber-700'],
-      ['2026-03-02T10:00:00Z', 'Today', 'text-emerald-700'],
+      ['2026-03-02T10:00:00Z', '2 hours ago', 'text-emerald-700'],
     ])('preserves completed backup age and tone during a new backup (%s)', (date, age, tone) => {
       solidRender(() => (
         <GuestDrawer
@@ -1304,7 +1176,9 @@ describe('GuestDrawer', () => {
       expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
       setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
       expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
-      expect(technicalDetails().getByText('Today').closest('td')).toHaveClass('text-emerald-700');
+      expect(technicalDetails().getByText('2 hours ago').closest('td')).toHaveClass(
+        'text-emerald-700',
+      );
       expect(container.querySelector('[data-testid="guest-technical-details"]')).toBe(drawer);
     });
 
@@ -1315,39 +1189,113 @@ describe('GuestDrawer', () => {
     });
   });
 
+  // ── Facts strip ──
+
+  describe('Facts strip', () => {
+    it('states the amounts the chart percentages are of', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            cpus: 4,
+            memory: {
+              total: 4 * GiB,
+              used: GiB,
+              free: 3 * GiB,
+              usage: 25,
+              observation: {
+                state: 'current',
+                source: 'status-mem',
+                observedAt: new Date().toISOString(),
+              },
+            },
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const facts = screen.getByTestId('guest-drawer-facts');
+      expect(facts).toHaveTextContent('4 vCPU');
+      expect(facts).toHaveTextContent(/1\.00 GB of 4\.00 GB RAM/);
+      expect(facts).toHaveTextContent(/25\.0 GB of 100 GB disk/);
+    });
+
+    it('states only the memory size for a retained reading, not a used amount', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            memory: {
+              total: 4 * GiB,
+              used: GiB,
+              free: 3 * GiB,
+              usage: 25,
+              observation: { state: 'last-known', source: 'guest-agent-meminfo' },
+            },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const facts = screen.getByTestId('guest-drawer-facts');
+      expect(facts).toHaveTextContent('4.00 GB RAM');
+      expect(facts).not.toHaveTextContent(/of 4\.00 GB RAM/);
+    });
+
+    it('shows no memory amount when the memory reading is withdrawn', () => {
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            memory: { total: 100, used: 0, free: 100, usage: 0, usageUnavailable: true },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('RAM');
+    });
+  });
+
   // ── Tags card ──
 
   describe('Tags card', () => {
+    const tagChips = () =>
+      Array.from(
+        screen.getByTestId('guest-drawer-facts').querySelectorAll('span.rounded-full'),
+      ).map((chip) => chip.textContent);
+
     it('renders tags from an array', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ['production', 'web'] })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Tags')).toBeInTheDocument();
-      expect(technicalDetails().getByText('production, web')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['production', 'web']);
     });
 
     it('renders tags from a comma-separated string', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: 'db,critical' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('db, critical')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['db', 'critical']);
     });
 
     it('trims whitespace from tags', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ tags: ' spaced , padded ' as any })} onClose={vi.fn()} />
       ));
-      expect(technicalDetails().getByText('spaced, padded')).toBeInTheDocument();
+      expect(tagChips()).toEqual(['spaced', 'padded']);
     });
 
-    it('hides Tags card when tags is null', () => {
+    it('renders no tag chips when tags is null', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: null })} onClose={vi.fn()} />);
       expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
 
-    it('hides Tags card when tags is empty array', () => {
+    it('renders no tag chips when tags is empty array', () => {
       render(() => <GuestDrawer guest={makeGuest({ tags: [] })} onClose={vi.fn()} />);
-      expect(screen.queryByText('Tags')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('guest-drawer-facts')?.querySelectorAll('span.rounded-full') ?? [],
+      ).toHaveLength(0);
     });
   });
 
@@ -1448,13 +1396,164 @@ describe('GuestDrawer', () => {
     });
   });
 
+  // ── In-guest Pulse Agent readings ──
+
+  describe('In-guest Pulse Agent readings', () => {
+    // Proxmox read no guest filesystems, so these rows came from the agent.
+    const makeAgentGuest = (overrides: Partial<WorkloadGuest> = {}) =>
+      makeGuest({
+        agentVersion: '6.4.5',
+        agentKind: 'pulse',
+        disksFromAgent: true,
+        diskStatusReason: 'agent-not-running',
+        disks: [{ total: 100, used: 75, free: 25, usage: 75, mountpoint: '/' }],
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.1.5'], rxBytes: 1024 }],
+        agentRaid: [
+          {
+            device: '/dev/md1',
+            name: 'data',
+            level: 'raid5',
+            state: 'clean, degraded, recovering',
+            totalDevices: 3,
+            activeDevices: 2,
+            workingDevices: 3,
+            failedDevices: 1,
+            spareDevices: 0,
+            devices: [{ device: 'sdd1', state: 'faulty', slot: 1 }],
+            rebuildPercent: 42,
+            rebuildSpeed: '118M/sec',
+          },
+        ],
+        ...overrides,
+      });
+
+    it("reads a silent in-guest agent's RAID, network and filesystems as last known", () => {
+      render(() => <GuestDrawer guest={makeAgentGuest({ agentStale: true })} onClose={vi.fn()} />);
+
+      expect(technicalDetails().getByText('Pulse 6.4.5 · stopped reporting')).toHaveAttribute(
+        'title',
+        'Pulse Agent 6.4.5 has stopped reporting. Its readings here are its last report.',
+      );
+      expect(
+        technicalDetails().getByText(
+          'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+        ),
+      ).toBeInTheDocument();
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+      expect(
+        technicalDetails().queryByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toBeNull();
+      expect(
+        technicalDetails().getByText(
+          'Using last known interface details. The Pulse Agent in this guest stopped reporting.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        technicalDetails()
+          .getByText(/^192\.168\.1\.5/)
+          .closest('td'),
+      ).toHaveClass('text-muted');
+      // Proxmox's guest-read reason does not describe rows the agent supplied.
+      expect(technicalDetails().queryByText(/qemu-guest-agent/)).toBeNull();
+
+      const array = screen.getByTestId('raid-card-array');
+      expect(array).toHaveAttribute('data-raid-reading', 'last-known');
+      expect(within(array).getByTestId('raid-card-state')).toHaveAttribute(
+        'title',
+        'Last known reading, not current: host agent stopped reporting',
+      );
+      expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
+        'Rebuild was at 42%',
+      );
+    });
+
+    it('keeps a live in-guest agent current when Proxmox has no guest reads', () => {
+      render(() => <GuestDrawer guest={makeAgentGuest()} onClose={vi.fn()} />);
+
+      expect(technicalDetails().getByText('Pulse 6.4.5')).toBeInTheDocument();
+      expect(
+        technicalDetails().getByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toHaveAttribute('aria-valuenow', '75');
+      expect(technicalDetails().queryByText(/Last known|qemu-guest-agent/)).toBeNull();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+      expect(screen.getByTestId('raid-card-rebuild')).toHaveTextContent('Rebuild: 42% · 118M/sec');
+    });
+
+    it("keeps Proxmox's own guest filesystems current under a silent agent", () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeAgentGuest({
+            agentStale: true,
+            disksFromAgent: undefined,
+            diskStatusReason: undefined,
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      expect(
+        technicalDetails().getByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toHaveAttribute('aria-valuenow', '75');
+      expect(technicalDetails().queryByText(/Using last known disk stats/)).toBeNull();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+    });
+
+    // Proxmox gives vm-stopped only for a guest with allocated disk, so the
+    // guest's own stopped status must hold the rows too.
+    it.each([
+      ['with the Proxmox reason', 'vm-stopped'],
+      ['without a Proxmox reason', undefined],
+    ])(
+      "reads a stopped guest's agent filesystems as unavailable before the lease lapses, %s",
+      (_label, diskStatusReason) => {
+        render(() => (
+          <GuestDrawer
+            guest={makeAgentGuest({ status: 'stopped', diskStatusReason })}
+            onClose={vi.fn()}
+          />
+        ));
+
+        expect(
+          technicalDetails().getByText(
+            'Guest filesystem stats unavailable while the VM is stopped.',
+          ),
+        ).toBeInTheDocument();
+        expect(technicalDetails().getByText(/^Usage unavailable/)).toBeInTheDocument();
+        expect(
+          technicalDetails().queryByRole('progressbar', { name: 'Filesystem / utilization' }),
+        ).toBeNull();
+      },
+    );
+
+    it('follows the agent between silent and reporting while the drawer stays open', () => {
+      const [guest, setGuest] = createSignal(makeAgentGuest());
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+
+      setGuest({ ...guest(), agentStale: true });
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+      expect(technicalDetails().getByText('Pulse 6.4.5 · stopped reporting')).toBeInTheDocument();
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+
+      setGuest({ ...guest(), agentStale: undefined });
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+      expect(technicalDetails().queryByText(/stopped reporting|Last known/)).toBeNull();
+    });
+  });
+
   // ── WebInterfaceUrlField ──
 
   describe('WebInterfaceUrlField', () => {
-    it('passes canonical metadataId using shared workload identity', () => {
+    it('keeps the guest metadata key separate from canonical row identity', () => {
       render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: 'my-guest-id' })),
+        getWorkloadMetadataId(makeGuest({ id: 'my-guest-id' })),
       );
     });
 
@@ -1477,16 +1576,14 @@ describe('GuestDrawer', () => {
       );
     });
 
-    it('builds canonical id from instance:node:vmid when id is empty', () => {
+    it('does not invent a resource identity for a guest with no ID', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })),
-      );
+      expect(screen.queryByTestId('url-id')).not.toBeInTheDocument();
     });
 
     it('labels app-container guests as "container"', () => {
@@ -1522,139 +1619,80 @@ describe('GuestDrawer', () => {
     });
   });
 
-  // ── Discovery tab integration ──
-
-  describe('DiscoveryTab integration', () => {
-    it('passes correct resourceType and agentId for VM', () => {
+  describe('header web interface action', () => {
+    it('opens the saved URL from the header without collapsing the drawer', () => {
+      const onClose = vi.fn();
       render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            type: 'qemu',
-            node: 'pve1',
-            vmid: 101,
-            discoveryTarget: {
-              resourceType: 'vm',
-              agentId: 'agent-pve1',
-              resourceId: '101',
-            },
-          })}
-          onClose={vi.fn()}
-        />
+        <GuestDrawer guest={makeGuest()} customUrl="https://auth.home.example" onClose={onClose} />
       ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve1');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
-      expect(screen.getByTestId('disc-manual-run-action').textContent).toBe('true');
+
+      const open = screen.getByRole('link', { name: 'Open web interface for test-vm' });
+      expect(open).toHaveAttribute('href', 'https://auth.home.example');
+      expect(open).toHaveAttribute('target', '_blank');
+      expect(open).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(open).toHaveTextContent('Open');
+      expect(open.className).toContain('min-h-11');
+
+      fireEvent.click(open);
+      expect(onClose).not.toHaveBeenCalled();
     });
 
-    it('does not infer a Proxmox workload discovery target from the node name', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
+    it.each([undefined, '   '])(
+      'renders no header action without a saved URL (%j)',
+      (customUrl) => {
+        render(() => <GuestDrawer guest={makeGuest()} customUrl={customUrl} onClose={vi.fn()} />);
 
-    it('passes correct resourceType and agentId for app-container', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'docker',
-            dockerHostId: 'dh-1',
-            containerId: 'container-abc-runtime-id',
-            id: 'app-container-synthetic-hash',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
-      // Discovery routes by the Docker-native containerId, not the canonical
-      // synthetic workload id, so the agent can resolve `docker exec <id>`.
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc-runtime-id');
-    });
+        expect(
+          screen.queryByRole('link', { name: 'Open web interface for test-vm' }),
+        ).not.toBeInTheDocument();
+      },
+    );
 
-    it('does not render DiscoveryTab for TrueNAS app-containers without explicit discovery support', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            node: 'truenas-main',
-            instance: 'truenas-main',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
+    it('never turns an unsafe saved URL into a header link', () => {
+      const unsafeUrl = 'data:text/html,<script>alert(1)</script>';
+      render(() => <GuestDrawer guest={makeGuest()} customUrl={unsafeUrl} onClose={vi.fn()} />);
 
-    it('honors explicit canonical discovery targets for API-backed app-containers', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            discoveryTarget: {
-              resourceType: 'app-container',
-              agentId: 'truenas-helper',
-              resourceId: 'nextcloud',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('truenas-helper');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('nextcloud');
-    });
-
-    it('passes canonical pod resourceType for pod workloads', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            workloadType: 'pod',
-            kubernetesAgentId: 'k8s-agent-1',
-            id: 'k8s:ctx:pod:my-pod',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('pod');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('k8s-agent-1');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('my-pod');
-    });
-
-    it('passes system-container as resourceType for LXC', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            type: 'lxc',
-            node: 'pve2',
-            vmid: 200,
-            discoveryTarget: {
-              resourceType: 'system-container',
-              agentId: 'agent-pve2',
-              resourceId: '200',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('system-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve2');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('200');
+      expect(
+        screen.queryByRole('link', { name: 'Open web interface for test-vm' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Invalid web interface URL' })).toBeInTheDocument();
     });
   });
+});
+
+it('forwards the mounted guest clock without changing the evaluated breach or clear rule', () => {
+  const at = '2026-10-10T12:00:00Z';
+  const alert = {
+    id: 'held-cpu',
+    resourceId: 'inst1-node1-100',
+    resourceName: 'test-vm',
+    node: 'node1',
+    instance: 'inst1',
+    type: 'cpu',
+    message: 'Old breach',
+    level: 'warning',
+    value: 92,
+    threshold: 80,
+    startTime: at,
+    acknowledged: false,
+    metricStatus: {
+      phase: 'latched',
+      value: 72,
+      unit: '%',
+      observedAt: at,
+      lastBreachAt: '2026-10-10T11:40:00Z',
+      trigger: 80,
+      recovery: 70,
+    },
+  } as Alert;
+  const now = vi.fn(() => Date.parse(at) + 11 * 60_000);
+  const copy = getGuestDrawerAlertAttention(
+    alert,
+    { guest: makeGuest(), memoryDisplayBasis: 'guest' },
+    now,
+  );
+  expect(copy.message).toBe('Last reading: CPU 72%, 11 mins ago');
+  expect(copy.detail).toBe('Stays open until it reaches 70% or lower.');
+  expect(copy.title).toContain('Last reading at or above 80%: 92%, 31 mins ago');
+  expect(now).toHaveBeenCalledOnce();
 });

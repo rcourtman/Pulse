@@ -1,8 +1,9 @@
 import { type Component, For, Show, createMemo } from 'solid-js';
 import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
-  getResourceChangeKindPresentation,
+  getResourceChangePresentation,
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
   formatResourceChangeHeadline,
@@ -23,6 +24,7 @@ interface ResourceChangeSummaryProps {
 }
 
 export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (props) => {
+  const now = useRelativeTimeNow();
   const sortedChanges = createMemo(() => sortResourceChangesByObservedAt(props.changes ?? []));
   const maxChanges = () => props.maxChanges ?? sortedChanges().length;
   const visibleChanges = createMemo(() => sortedChanges().slice(0, maxChanges()));
@@ -83,7 +85,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
               const shouldShowReason = reason.length > 0 && reason !== headline;
               const resourceHref = buildResourceHref(change.resourceId);
               const relatedResources = (change.relatedResources ?? []).slice(0, 3);
-              const kindPresentation = getResourceChangeKindPresentation(change.kind);
+              const kindPresentation = getResourceChangePresentation(change);
               const sourceTypePresentation = getResourceChangeSourceTypePresentation(
                 change.sourceType,
               );
@@ -92,7 +94,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                 : null;
 
               return (
-                <li class={`rounded-md border border-border-subtle bg-base ${itemPadding()}`}>
+                <li class={`rounded-md border border-border-subtle bg-page ${itemPadding()}`}>
                   <div class={`flex flex-wrap items-start justify-between ${gapSize()}`}>
                     <div class="min-w-0">
                       <p class={headlineText()}>{headline}</p>
@@ -112,6 +114,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                         {formatRelativeTime(change.observedAt, {
                           compact: true,
                           emptyText: 'just now',
+                          now: now(),
                         })}
                       </p>
                       <Show when={change.actor}>

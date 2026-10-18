@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "base_sha": "3af37a88625701f6dad057fc8889d09a61dffd24",
+  "verified_at": "2026-10-05T11:01:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesScopeText.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx": "b66c8c5c705b9478d98ba2bfd51ff199c07619ecf40516d7f276a13c5409a825",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "bc3e01de166d4467e7b547a72958091c465768ef552ae31118969d6b4d6c36fd",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "b1b184557d03331d8d2ef19d9ab8af9d083013ac3b839fde719bd5d5e4d12d9e",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "95cca80263abaf11c0025f1c0bf7a2ccc4421acb9a0d2c611096602353ea75d5",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "814ce1c8358cdde955da9707498d491bc3081dded52e86405edd9517e3f71f65",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "6a0c1e57cddf59acaf0f0a21690fde5db75f08a9fddd4ac957086b5d7ac307c9",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "487541b013886c3f371762a585443ae790d6ec7c72531ac7991ec1a5c76b73a5",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "5ed2a52f1a7e5c27a96d2df832d4b80ef210873c84051eb396d4f9cf31f42f51",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "91293a32d6cb195a07d39f472c9a7e204bd96de709c65d82728e30d74aac77a9",
+    "frontend-modern/src/features/kubernetes/KubernetesScopeText.tsx": "50a0468caf73eb7658bbc90e26cd5b48702af7a441e384ab70fde5a6a0daf557",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "48ccb976014015513b1aa52391da969604c541d2f27a20d8efac098d24890f15",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx": "b0c87e0386b0d4f7440a7859a106d73daf611867bfd88418e1c6ed7cf8456ae9",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "9cf09fca38e4c64616e1cd4ee578c6c03bddb810498abdd974e0450a68aa81b1",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "843a1efe473f4092a1ee508bd1634bc51fdcce395e2fe7dd41998ba1c7aebf8b",
+    "frontend-modern/src/index.css": "ce8f3f0d5a8da290fad1545eedca6a46d4211b4e98239fb1a8e4773cf063e4b2"
+  },
+  "routes": [
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events"
+  ],
+  "viewports": [
+    {
+      "width": 360,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 1100
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 520,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 650,
+      "height": 1000
+    },
+    {
+      "width": 700,
+      "height": 1000
+    },
+    {
+      "width": 767,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 820,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 1100,
+      "height": 1000
+    },
+    {
+      "width": 1300,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Clip sweep (scrollWidth over clientWidth on every cell, every Kubernetes tab, 600 to 1440 wide, screen-reader text excluded): clipped cells fall from 566 to 356 against main with no column worse at any width; Deployment, Resource and Namespace clips on Workloads and Configuration go from 25 to 0, Scope from 136 to 7, Age from 22 to 1",
+    "Workloads at 700: every deployment and namespace reads in full (main showed ingress-nginx-cont... and monitori...); columns are Deployment, Namespace, Updated, Ready, Available, Age with Ready reading 2/2; at 1300 and 1440 Cluster and Desired return and Ready reads 2",
+    "Configuration at 700: ConfigMap, Secret and RBAC names read in full (main cut them to checkout-api-runti... and payments-worker-...), Scope shows the namespace (apps, monitoring, services, Cluster) instead of Production EU/ser, and long Lifecycle and Data shape values end in an ellipsis inside their own cell where main spilled 1 subject - Service past the card edge",
+    "Row text alignment on every Kubernetes tab at 700 and 1440: each row's cell text sits on one line (0px spread); main's Scope and Data shape spans sat about 4px above the row",
+    "All 205 block truncate summary spans are the only content of their cell and sit in fixed-layout tables",
+    "Phone at 390: Deployments Age reads 18h ago (main showed 18h a...), Ready keeps 2/2; Configuration shows the namespace scope and ellipsizes Data inside the cell; at 360 Age stays hidden as before",
+    "Scope cell exposes the full cluster/namespace scope to assistive technology through a screen-reader span and keeps it on the title"
+  ],
+  "interactions": [
+    "Ran the clip sweep on main (reverse-applied patch) and on the change across seven widths",
+    "Tuned tablet-band widths live by injecting --platform-table-band-width at 600, 650, 700 and 767",
+    "Measured row text alignment and block-span containment in the live DOM",
+    "Captured before/after table screenshots at 700 and 390 for Workloads and Configuration"
+  ]
+}

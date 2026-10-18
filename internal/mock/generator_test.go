@@ -272,6 +272,55 @@ func TestBuildFixtureStateLinksAllNodesToHostAgents(t *testing.T) {
 	}
 }
 
+// A node and its linked agent carry one CPU reading under the agent's real
+// keys, taken from the series that seeds the agent's history, so the node
+// drawer's headline continues the line drawn beneath it.
+func TestFixtureNodeAndLinkedAgentShareOnePrimaryCPUTemperature(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 7
+	cfg.GenericHostCount = 2
+	cfg.RandomMetrics = true
+
+	data := buildFixtureState(cfg)
+	check := func(stage string, at time.Time, sampled bool) {
+		t.Helper()
+		hostsByID := make(map[string]models.Host, len(data.Hosts))
+		for _, host := range data.Hosts {
+			hostsByID[host.ID] = host
+			if _, legacy := host.Sensors.TemperatureCelsius["cpu.package"]; legacy {
+				t.Fatalf("%s: host %s carries a second package reading under cpu.package", stage, host.ID)
+			}
+		}
+		compared := 0
+		for _, node := range data.Nodes {
+			nodeReading := models.PrimaryCPUTemperatureCelsius(node.Temperature)
+			if nodeReading == nil || node.Status != "online" {
+				continue
+			}
+			host, ok := hostsByID[node.LinkedAgentID]
+			if !ok || host.Status == "offline" {
+				continue
+			}
+			hostReading := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
+			if hostReading == nil || *hostReading != *nodeReading {
+				t.Fatalf("%s: node %s reads %v but its agent %s reads %v", stage, node.ID, *nodeReading, host.ID, hostReading)
+			}
+			if want := SampleMetric("agent", host.ID, "temperature", at); sampled && *nodeReading != want {
+				t.Fatalf("%s: node %s reads %v, want the agent series sample %v", stage, node.ID, *nodeReading, want)
+			}
+			compared++
+		}
+		if compared == 0 {
+			t.Fatalf("%s: no online node with a CPU reading to compare", stage)
+		}
+	}
+	check("build", time.Time{}, false)
+
+	refreshAt := time.Now().Add(time.Minute)
+	updateFixtureStateMetricsAt(&data, cfg, refreshAt)
+	check("refresh", refreshAt, true)
+}
+
 func TestBuildFixtureStatePopulatesHostIORates(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 6
@@ -475,6 +524,144 @@ func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 		if len(host.Sensors.TemperatureCelsius) == 0 {
 			t.Fatalf("kubernetes node host %s missing temperature sensors", host.Hostname)
 		}
+	}
+}
+
+// newMockKubernetesTestCluster builds ready, schedulable nodes with a fixed
+// number of running pods each, so placement does not depend on the random
+// readiness the fixture generator rolls.
+func newMockKubernetesTestCluster(nodeCount, podsPerNode int) models.KubernetesCluster {
+	cluster := models.KubernetesCluster{ID: "usage-test", Name: "usage-test", Status: "online"}
+	for n := 0; n < nodeCount; n++ {
+		nodeName := fmt.Sprintf("usage-test-%d", n)
+		cluster.Nodes = append(cluster.Nodes, models.KubernetesNode{
+			UID:                 nodeName + "-uid",
+			Name:                nodeName,
+			Ready:               true,
+			CapacityCPU:         8,
+			AllocCPU:            8,
+			CapacityMemoryBytes: 32 << 30,
+			AllocMemoryBytes:    32 << 30,
+		})
+		for p := 0; p < podsPerNode; p++ {
+			cluster.Pods = append(cluster.Pods, models.KubernetesPod{
+				UID:       fmt.Sprintf("%s-pod-%d-uid", nodeName, p),
+				Name:      fmt.Sprintf("%s-pod-%d", nodeName, p),
+				Namespace: "apps",
+				NodeName:  nodeName,
+				Phase:     "Running",
+				OwnerKind: "Deployment",
+			})
+		}
+	}
+	return cluster
+}
+
+func TestMockKubernetesDenseNodesStayBelowAllocatableMemory(t *testing.T) {
+	cluster := newMockKubernetesTestCluster(3, 13)
+	data := models.StateSnapshot{KubernetesClusters: []models.KubernetesCluster{cluster}}
+	for _, node := range cluster.Nodes {
+		data.Hosts = append(data.Hosts, models.Host{ID: "host-" + node.Name, Hostname: node.Name, Status: "online"})
+	}
+
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for tick := 0; tick < 40; tick++ {
+		initializeMockKubernetesClusterUsage(&data.KubernetesClusters[0], start.Add(time.Duration(tick)*15*time.Second), false)
+		// The mock tick re-derives each linked host's memory from its node.
+		syncMockKubernetesNodeHosts(&data)
+
+		podMemory := make(map[string]float64, len(cluster.Nodes))
+		for _, pod := range data.KubernetesClusters[0].Pods {
+			podMemory[pod.NodeName] += pod.UsageMemoryPercent
+		}
+		for _, node := range data.KubernetesClusters[0].Nodes {
+			if node.UsageMemoryBytes >= node.AllocMemoryBytes || node.UsageMemoryPercent >= 100 {
+				t.Fatalf("tick %d: node %s with 13 running pods is pinned at allocatable memory (%.1f%%)", tick, node.Name, node.UsageMemoryPercent)
+			}
+			// Steady-state shares stay under the ceiling, which clips to it
+			// exactly; a total at the ceiling means it bound without a transient.
+			if podMemory[node.Name] >= mockKubernetesNodePodMemoryCeiling*100-0.01 {
+				t.Fatalf("tick %d: node %s pods hold %.2f%%, the ceiling bound in steady state", tick, node.Name, podMemory[node.Name])
+			}
+		}
+		for _, host := range data.Hosts {
+			if host.Memory.Usage >= 100 {
+				t.Fatalf("tick %d: linked host %s memory = %.1f%%, want the node's unsaturated reading", tick, host.Hostname, host.Memory.Usage)
+			}
+		}
+	}
+}
+
+func TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode(t *testing.T) {
+	cluster := newMockKubernetesTestCluster(3, 8)
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for tick := 0; tick < 40; tick++ {
+		initializeMockKubernetesClusterUsage(&cluster, start.Add(time.Duration(tick)*15*time.Second), false)
+	}
+
+	// Two nodes fail: their sixteen pods move to the survivor carrying
+	// readings sized for nodes that each ran a third as many pods.
+	cluster.Nodes[0].Ready = false
+	cluster.Nodes[1].Ready = false
+	initializeMockKubernetesClusterUsage(&cluster, start.Add(40*15*time.Second), false)
+
+	survivor := cluster.Nodes[2]
+	running := 0
+	for _, pod := range cluster.Pods {
+		if pod.NodeName == survivor.Name {
+			running++
+		}
+	}
+	if running != 24 {
+		t.Fatalf("survivor runs %d pods after the failures, want all 24", running)
+	}
+	// Pods hold at most the ceiling and system overhead tops out at 26%.
+	if limit := (mockKubernetesNodePodMemoryCeiling + 0.26) * 100; survivor.UsageMemoryPercent > limit+1e-9 {
+		t.Fatalf("survivor memory = %.1f%% right after rescheduling, want at most %.1f%%", survivor.UsageMemoryPercent, limit)
+	}
+}
+
+func TestMockKubernetesPodMemoryShareKeepsNodeWithinBudget(t *testing.T) {
+	for pods := 0; pods <= 64; pods++ {
+		share := mockKubernetesPodMemoryShare(pods)
+		if share <= 0 || share > 1 {
+			t.Fatalf("share(%d) = %f, want (0, 1]", pods, share)
+		}
+		if committed := float64(pods) * share; committed > mockKubernetesNodePodMemoryBudget+1e-9 {
+			t.Fatalf("%d pods commit %.2f single-pod footprints, want at most %.2f", pods, committed, mockKubernetesNodePodMemoryBudget)
+		}
+	}
+}
+
+func TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling(t *testing.T) {
+	// A five-minute cadence lets smoothing track each target closely, so the
+	// pod reaches its real peaks.
+	setMockUpdateInterval(5 * time.Minute)
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	// The heaviest footprint: the highest base and burst seeds on a
+	// Guaranteed StatefulSet pod.
+	uid, best := "", uint64(0)
+	for i := 0; i < 2000; i++ {
+		candidate := fmt.Sprintf("lone-pod-%d", i)
+		weight := mockStableHash64(candidate, "mem-base")%20 + mockStableHash64(candidate, "mem-burst")%36
+		if uid == "" || weight > best {
+			uid, best = candidate, weight
+		}
+	}
+	cluster := newMockKubernetesTestCluster(1, 1)
+	cluster.Pods[0].UID = uid
+	cluster.Pods[0].OwnerKind = "StatefulSet"
+	cluster.Pods[0].QoSClass = "Guaranteed"
+
+	start := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+	peak := 0.0
+	for tick := 0; tick < 288; tick++ {
+		initializeMockKubernetesClusterUsage(&cluster, start.Add(time.Duration(tick)*5*time.Minute), false)
+		peak = math.Max(peak, cluster.Pods[0].UsageMemoryPercent)
+	}
+	if peak >= mockKubernetesNodePodMemoryCeiling*100-0.01 {
+		t.Fatalf("lone pod %s peaked at %.2f%%: the ceiling clipped a steady-state reading", uid, peak)
 	}
 }
 
@@ -1320,5 +1507,165 @@ func TestBuildFixtureStateMergesSharedPBSStorageLikeThePoller(t *testing.T) {
 	}
 	if len(seen) == 0 {
 		t.Fatal("expected shared PBS storage in the fixture")
+	}
+}
+
+// Mock guests report where their memory reading came from, the way a live
+// estate does, so the UI qualifies mock readings instead of treating every
+// guest as unannotated ("Freshness unknown").
+func TestGeneratedGuestMemoryProvenanceMatchesPowerStateAndOS(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.StoppedPercent = 0.3
+	now := time.Now()
+
+	sources := map[string]int{}
+	for i := 0; i < 300; i++ {
+		vm := generateVM("node-01", "mock-cluster", 1000+i, cfg)
+		obs := vm.Memory.Observation
+		if vm.Status != "running" {
+			if obs.State != "unavailable" || obs.Source != "powered-off" {
+				t.Fatalf("stopped VM observation = %+v, want unavailable powered-off", obs)
+			}
+			continue
+		}
+		sources[obs.Source]++
+		if obs.State != "current" || obs.ObservedAt.IsZero() || obs.ObservedAt.After(now.Add(time.Minute)) {
+			t.Fatalf("running VM observation = %+v, want a current reading observed now", obs)
+		}
+		switch obs.Source {
+		case "status-mem":
+			// Proxmox's value carries no used | cache | free split.
+			if vm.Memory.Cache != 0 {
+				t.Fatalf("cache-inclusive VM reported a measured cache split: %+v", vm.Memory)
+			}
+		case "guest-agent-meminfo":
+			// The QEMU guest agent reads Linux /proc/meminfo only.
+			if strings.Contains(strings.ToLower(vm.OSName), "windows") {
+				t.Fatalf("Windows VM %q claims Linux meminfo provenance", vm.OSName)
+			}
+		case "agent":
+		default:
+			t.Fatalf("running VM has unexpected memory source %q", obs.Source)
+		}
+	}
+	if sources["status-mem"] == 0 || sources["guest-agent-meminfo"] == 0 || sources["agent"] == 0 {
+		t.Fatalf("expected cache-inclusive, guest-agent and Pulse-agent VMs in the estate, got %v", sources)
+	}
+
+	sources = map[string]int{}
+	for i := 0; i < 300; i++ {
+		ct := generateContainer("node-01", "mock-cluster", 2000+i, cfg)
+		obs := ct.Memory.Observation
+		if ct.Status != "running" {
+			if obs.State != "unavailable" || obs.Source != "powered-off" {
+				t.Fatalf("stopped container observation = %+v, want unavailable powered-off", obs)
+			}
+			continue
+		}
+		sources[obs.Source]++
+		if obs.State != "current" || obs.ObservedAt.IsZero() {
+			t.Fatalf("running container observation = %+v, want a current reading", obs)
+		}
+		if obs.Source != "cluster-resources" && obs.Source != "agent" {
+			t.Fatalf("running container has unexpected memory source %q", obs.Source)
+		}
+	}
+	if sources["cluster-resources"] == 0 || sources["agent"] == 0 {
+		t.Fatalf("expected cgroup and Pulse-agent containers in the estate, got %v", sources)
+	}
+}
+
+func TestMockGuestMemoryObservationFollowsScenarioPowerState(t *testing.T) {
+	cases := []struct {
+		name    string
+		before  models.MemoryObservation
+		running bool
+		want    models.MemoryObservation
+	}{
+		{
+			name:    "forced stopped loses its reading",
+			before:  models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: time.Now()},
+			running: false,
+			want:    models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+		},
+		{
+			name:    "forced running after generation gets a current source",
+			before:  models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+			running: true,
+			want:    models.MemoryObservation{State: "current", Source: "agent"},
+		},
+		{
+			name:    "a running guest keeps its own source",
+			before:  models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: time.Now()},
+			running: true,
+			want:    models.MemoryObservation{State: "current", Source: "status-mem"},
+		},
+		{
+			name:    "a retained reading on a running guest is kept",
+			before:  models.MemoryObservation{State: "last-known", Source: "status-mem", ObservedAt: time.Now().Add(-time.Hour)},
+			running: true,
+			want:    models.MemoryObservation{State: "last-known", Source: "status-mem"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mem := models.Memory{Observation: tc.before}
+			mockSettleGuestMemoryObservation(&mem, tc.running, "agent")
+			got := mem.Observation
+			if got.State != tc.want.State || got.Source != tc.want.Source {
+				t.Fatalf("observation = %+v, want state %q source %q", got, tc.want.State, tc.want.Source)
+			}
+			if tc.want.State == "current" && got.ObservedAt.IsZero() {
+				t.Fatalf("a current observation needs its observation time: %+v", got)
+			}
+		})
+	}
+}
+
+func TestFixtureRefreshMovesCurrentGuestMemoryObservationTime(t *testing.T) {
+	for _, randomMetrics := range []bool{true, false} {
+		name := "random metrics"
+		if !randomMetrics {
+			name = "static metrics"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.RandomMetrics = randomMetrics
+			stale := time.Now().Add(-time.Hour)
+			refreshAt := time.Now().Truncate(time.Second)
+
+			data := &models.StateSnapshot{
+				VMs: []models.VM{
+					{ID: "vm-current", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: stale},
+					}},
+					{ID: "vm-retained", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "last-known", Source: "status-mem", ObservedAt: stale},
+					}},
+					{ID: "vm-stopped", Node: "node-01", Status: "stopped", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+					}},
+				},
+				Containers: []models.Container{
+					{ID: "ct-current", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: stale},
+					}},
+				},
+			}
+			updateFixtureStateMetricsAt(data, cfg, refreshAt)
+
+			if got := data.VMs[0].Memory.Observation; !got.ObservedAt.Equal(refreshAt) || got.Source != "status-mem" {
+				t.Fatalf("current VM observation = %+v, want source kept and time %v", got, refreshAt)
+			}
+			if got := data.VMs[1].Memory.Observation; !got.ObservedAt.Equal(stale) || got.State != "last-known" {
+				t.Fatalf("a retained observation keeps its own state and time, got %+v", got)
+			}
+			if got := data.VMs[2].Memory.Observation; !got.ObservedAt.IsZero() || got.Source != "powered-off" {
+				t.Fatalf("a stopped guest has no observation time to move, got %+v", got)
+			}
+			if got := data.Containers[0].Memory.Observation; !got.ObservedAt.Equal(refreshAt) || got.Source != "cluster-resources" {
+				t.Fatalf("current container observation = %+v, want source kept and time %v", got, refreshAt)
+			}
+		})
 	}
 }

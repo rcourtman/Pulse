@@ -263,9 +263,45 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('AgentProfilesPanel V6 agent ID handling', () => {
+  it('ages held Last Seen without refetching profiles or changing the selected assignment', async () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    mockResources = [makeAgentResource({ lastSeen: start - 60_000 })];
+    render(() => <AgentProfilesPanel />);
+    await vi.advanceTimersByTimeAsync(0);
+    const agent = screen.getByText('Agent One');
+    const row = agent.closest('tr')!;
+    const profile = within(row).getByRole('combobox');
+    profile.focus();
+    expect(row).toHaveTextContent('1 min ago');
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(row).toHaveTextContent('2 hours ago');
+    expect(row).toHaveTextContent('Online');
+    expect(profile).toHaveFocus();
+    expect(profile).toHaveValue('');
+    expect(screen.getByText('Agent One').closest('tr')).toBe(row);
+    expect(listProfilesMock).toHaveBeenCalledTimes(1);
+    expect(listAssignmentsMock).toHaveBeenCalledTimes(1);
+    expect(assignProfileMock).not.toHaveBeenCalled();
+    expect(mockResources[0].lastSeen).toBe(start - 60_000);
+  });
+
+  it('keeps an unreported Last Seen as Never across clock ticks', async () => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-11T11:00:00Z') });
+    mockResources = [makeAgentResource({ lastSeen: 0 })];
+    render(() => <AgentProfilesPanel />);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('Never')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(screen.getByText('Never')).toBeInTheDocument();
+    expect(listProfilesMock).toHaveBeenCalledTimes(1);
+    expect(assignProfileMock).not.toHaveBeenCalled();
+  });
+
   it('relies on shared commercial posture bootstrap instead of local posture loads', () => {
     expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
     expect(agentProfilesPanelStateSource).not.toContain('canOfferCommercialTrial');

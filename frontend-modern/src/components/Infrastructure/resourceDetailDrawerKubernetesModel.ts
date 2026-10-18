@@ -147,8 +147,14 @@ const dangerWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'dan
 // Kubernetes reports controller timestamps as RFC 3339 strings. The table row
 // only has room for an age, so the expansion carries the absolute time first
 // and the age after it: "Oct 2, 2026, 09:13 PM (1h ago)". The value wraps
-// because a phone-width detail cell is too narrow for both on one line.
-const timestampRow = (label: string, timestamp?: string | null): DetailRow | null => {
+// because a phone-width detail cell is too narrow for both on one line. The
+// age is measured from `now`, which an open drawer passes from the shared
+// relative-time clock so the age keeps moving while the drawer stays open.
+const timestampRow = (
+  label: string,
+  timestamp: string | null | undefined,
+  now: number | undefined,
+): DetailRow | null => {
   const raw = asString(timestamp);
   if (!raw) return null;
   const absolute = formatPlatformTableDateTimeValue(raw, {
@@ -156,7 +162,7 @@ const timestampRow = (label: string, timestamp?: string | null): DetailRow | nul
     dateTimeFormat: { year: 'numeric' },
   });
   if (!absolute) return makeRow(label, raw, { wrap: true });
-  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '' });
+  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '', now });
   return makeRow(label, relative ? `${absolute} (${relative})` : absolute, { wrap: true });
 };
 
@@ -173,7 +179,7 @@ type ControllerRows = { label: string; rows: Array<DetailRow | null> };
 
 // Each kind leads with what its narrow table row drops: the Detail column
 // (service name, timestamps) below the large layout and Target on a phone.
-const controllerRows = (resource: Resource): ControllerRows | null => {
+const controllerRows = (resource: Resource, now: number | undefined): ControllerRows | null => {
   const k = resource.kubernetes;
   if (!k) return null;
   switch (resource.type) {
@@ -218,8 +224,8 @@ const controllerRows = (resource: Resource): ControllerRows | null => {
       return {
         label: 'Job',
         rows: [
-          timestampRow('Started', k.startTime),
-          timestampRow('Completed', k.completionTime),
+          timestampRow('Started', k.startTime, now),
+          timestampRow('Completed', k.completionTime, now),
           makeRow(
             'Duration',
             formatPlatformTableDurationValue(elapsedSeconds(k.startTime, k.completionTime), {
@@ -237,8 +243,8 @@ const controllerRows = (resource: Resource): ControllerRows | null => {
         label: 'CronJob',
         rows: [
           makeRow('Schedule', k.schedule, { valueClass: 'font-mono' }),
-          timestampRow('Last run', k.lastScheduleTime),
-          timestampRow('Last success', k.lastSuccessfulTime),
+          timestampRow('Last run', k.lastScheduleTime, now),
+          timestampRow('Last success', k.lastSuccessfulTime, now),
           makeRow('Suspended', k.suspend === true ? 'Yes' : null, { tone: 'warning' }),
           countRow('Active', k.active),
         ],
@@ -253,8 +259,11 @@ const controllerRows = (resource: Resource): ControllerRows | null => {
 // controllers table hides Scope and Detail below its large layout and Target
 // on a phone, so without this a Job's completion time or a CronJob's last
 // success is unreachable from a narrow row.
-export const buildKubernetesControllerSection = (resource: Resource): DetailSection | null => {
-  const controller = controllerRows(resource);
+export const buildKubernetesControllerSection = (
+  resource: Resource,
+  now?: number,
+): DetailSection | null => {
+  const controller = controllerRows(resource, now);
   if (!controller) return null;
   const rows = compactRows([
     ...controller.rows,

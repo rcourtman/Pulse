@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "92d946d057ddeefcae4d247a87e88f2245abca4a",
+  "verified_at": "2026-10-06T12:36:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx",
+    "frontend-modern/src/components/shared/TemperatureGauge.tsx",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/temperature.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts": "3c6f6f01df4a13b9fb3084b398be093473b63cdb71bbc01db1dbf41531e15edd",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "667a9b9e6fd4385a23b950f18be16fb71cbd6eccc2a4aafb57d2c4532b3af6f1",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "5adf11bfc948cae2cca66fde5e2132c66bbb01388efdbc23cbf022b449ae3b0c",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "a922c4c26813a676be12e06376bdb40df2aca8bfe5fc850b76009a504dada663",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "2a4e15e781a6158e253b6b934198d7aed71275416eb12c07ade68d5fa80c0332",
+    "frontend-modern/src/components/shared/TemperatureGauge.tsx": "612172a594698216b8a5fe247e5fa7361946056e02eaba9e71cfe827d0dc5023",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "2c875f102207c36d21d2868fa6bf05be7a5ae3e1cfb0351f54c2e89d448259bc",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "c979737f3825f12da80b25f50083b15960f7217525905c01d27edc4b26e1fbc3",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "b3ebf1259281b7d590c4cbd0eee9ed54ad060ed0e6fd1d80f740d44c95cd3107",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts": "ad5c973c1fbe64a94ad98d8f89d2ac3e51dacad1b1d06af82f77d0d32462ea16",
+    "frontend-modern/src/types/api.ts": "0db85005fb024e72434e35fdb7eb9ce13d70361569563579365a877fac714f79",
+    "frontend-modern/src/utils/temperature.ts": "3381a7948f19ae52bf0c72d6fc011ded3691aeac9fdbc9d795dc298af68c4690"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from this change (sidecar backend on 7721, Vite on 5241); pve2's CPU temperature driven through 88, 78 and 72 degrees C by a local-only, uncommitted mock overlay",
+    "Breaching (88C, trigger 80/clear 75): node drawer Needs attention reads 'Temperature 88°C, above the 80°C alert level' with 'Clears once it drops to 75°C or lower and stays there for 5 minutes.'",
+    "Held (78C): drawer reads 'Temperature 78°C now, back under the 80°C alert level' / 'Stays open until it reaches 75°C or lower and stays there for 5 minutes.'; legacy alert message still 'Node temperature at 88.0°C' in the API; TEMP cell amber with the same explanation as hover text",
+    "Recovering (72C, below the 75C warning colour): drawer reads 'Temperature 72°C now, recovering' / 'Clears after 5 minutes at 75°C or lower, 1 minute so far.'; TEMP cell 72°C stays amber (text-amber-600) while 68°C on the next node is green",
+    "Resolved after 5 minutes at 72C: alert closed with 'Resolved: Node temperature at 72.0°C', TEMP cell green with no hover text, Needs attention section gone",
+    "Narrow 375px: drawer attention copy wraps inside the card, TEMP column hidden as before",
+    "Guest drawer, Mail Gateway drawer, storage headline and Assistant handoff copy covered by component and model tests, not exercised live"
+  ],
+  "interactions": [
+    "Expanded the West Production B node row to open its inline drawer at desktop and phone widths",
+    "Read the TEMP cell colour class and title text through the DOM in each phase",
+    "Reloaded the page mid-recovery to confirm the cell and drawer render from fresh state",
+    "Resized between 1440x900 and 375x812"
+  ]
+}

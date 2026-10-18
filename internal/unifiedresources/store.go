@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -24,11 +25,27 @@ import (
 type ResourceStore interface {
 	AddLink(link ResourceLink) error
 	AddExclusion(exclusion ResourceExclusion) error
+	// TakeExclusion deletes the pair's exclusion, either way round, and
+	// returns the row it deleted (false when the pair has none), so a newer
+	// operator decision recorded outside this store (the agents API's node
+	// link) replaces it, and the caller holds exactly what it replaced.
+	TakeExclusion(resourceA, resourceB string) (ResourceExclusion, bool, error)
+	// RestoreExclusion records an exclusion that TakeExclusion took away,
+	// unless the pair has been decided since: it declines a pair that has an
+	// exclusion in either order or a link at or after this exclusion's time, and
+	// reports whether it recorded it. An older link row left alongside the
+	// exclusion (older data, canonical-ID succession) is superseded by it, as
+	// it was before the take.
+	RestoreExclusion(exclusion ResourceExclusion) (bool, error)
 	GetLinks() ([]ResourceLink, error)
 	GetExclusions() ([]ResourceExclusion, error)
 	// Identity pins keep canonical IDs for merged-source hosts stable across
 	// restarts. See ResourceIdentityPin.
 	UpsertResourceIdentityPins(pins []ResourceIdentityPin) error
+	// ReplaceResourceIdentityPins writes each pin as its row's whole
+	// content, clearing fields the pin leaves empty, where an upsert keeps
+	// them. Strong-key conflicts resolve as for an upsert.
+	ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error
 	ListResourceIdentityPins() ([]ResourceIdentityPin, error)
 	RecordChange(change ResourceChange) error
 	ResourceHistoryIDs(resourceID string) ([]string, error)
@@ -472,6 +489,12 @@ func (s *SQLiteResourceStore) initSchema() error {
 		metadata_json TEXT
 	);
 
+	-- One row per one-shot data migration that must not repeat on every start.
+	CREATE TABLE IF NOT EXISTS resource_store_migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS canonical_id_successions (
 		old_canonical_id TEXT PRIMARY KEY,
 		new_canonical_id TEXT NOT NULL,
@@ -629,6 +652,11 @@ func (s *SQLiteResourceStore) initSchema() error {
 	}
 	if err := s.migrateResourceOperatorStateSchema(); err != nil {
 		return err
+	}
+	if err := s.migrateRemediationLockCarry(); err != nil {
+		// A repair of earlier lock losses, not part of opening the store: keep
+		// the store usable and retry on the next start.
+		log.Printf("[WARN] unified_resources: remediation lock carry migration failed; it will retry on the next start: %v", err)
 	}
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
@@ -1194,7 +1222,29 @@ func (s *SQLiteResourceStore) AddLink(link ResourceLink) error {
 	a, b := normalizePair(link.ResourceA, link.ResourceB)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin resource link %q<->%q: %w", a, b, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	// A link replaces the pair's earlier decision (manual_link_decisions.go):
+	// its exclusion, and a link canonical-ID succession stored in the other
+	// order, which the upsert below would not replace.
+	if _, err := tx.Exec(`DELETE FROM resource_exclusions
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)`, a, b, b, a); err != nil {
+		return fmt.Errorf("clear resource exclusion %q<->%q replaced by link: %w", a, b, err)
+	}
+	if a != b {
+		if _, err := tx.Exec(`DELETE FROM resource_links WHERE resource_a = ? AND resource_b = ?`, b, a); err != nil {
+			return fmt.Errorf("clear reversed resource link %q<->%q: %w", b, a, err)
+		}
+	}
+	if _, err := tx.Exec(`
 		INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(resource_a, resource_b) DO UPDATE SET
@@ -1202,10 +1252,24 @@ func (s *SQLiteResourceStore) AddLink(link ResourceLink) error {
 			reason=excluded.reason,
 			created_by=excluded.created_by,
 			created_at=excluded.created_at
-	`, a, b, link.PrimaryID, link.Reason, link.CreatedBy, link.CreatedAt)
-	if err != nil {
+	`, a, b, link.PrimaryID, link.Reason, link.CreatedBy, link.CreatedAt); err != nil {
 		return fmt.Errorf("upsert resource link %q<->%q: %w", a, b, err)
 	}
+	// The link declares both IDs one resource, and only the ID the registry
+	// keeps is ever planned or dispatched against. Which side that is depends
+	// on resource types the store cannot see (a guest outlives an agent
+	// running inside it whichever way the link points), so a lock on any
+	// member of the linked component is written to every member, in the
+	// link's own transaction.
+	carried, err := shareRemediationLockAcrossLinksSQL(tx, []string{a, b}, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("share remediation lock across resource link %q<->%q: %w", a, b, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit resource link %q<->%q: %w", a, b, err)
+	}
+	committed = true
+	logCarriedLocks("a manual link", carried)
 	return nil
 }
 
@@ -1221,21 +1285,199 @@ func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
 	a, b := normalizePair(exclusion.ResourceA, exclusion.ResourceB)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	// Unlinking splits one resource into the members it joined. The lock the
+	// merged resource carried stays with each of them: it was the operator's on
+	// all of them, and only the surviving ID was ever able to hold it since.
+	carried, err := shareRemediationLockAcrossLinksSQL(tx, []string{a, b}, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("share remediation lock across resource link %q<->%q before unlinking: %w", a, b, err)
+	}
+	// An exclusion replaces the pair's earlier decision, so unlinking a linked
+	// pair splits it (manual_link_decisions.go): its links in either order,
+	// and an exclusion canonical-ID succession stored in the other order,
+	// which the upsert below would not replace.
+	if _, err := tx.Exec(`DELETE FROM resource_links
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)`, a, b, b, a); err != nil {
+		return fmt.Errorf("clear resource link %q<->%q replaced by exclusion: %w", a, b, err)
+	}
+	if a != b {
+		if _, err := tx.Exec(`DELETE FROM resource_exclusions WHERE resource_a = ? AND resource_b = ?`, b, a); err != nil {
+			return fmt.Errorf("clear reversed resource exclusion %q<->%q: %w", b, a, err)
+		}
+	}
+	if _, err := tx.Exec(`
 		INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(resource_a, resource_b) DO UPDATE SET
 			reason=excluded.reason,
 			created_by=excluded.created_by,
 			created_at=excluded.created_at
-	`, a, b, exclusion.Reason, exclusion.CreatedBy, exclusion.CreatedAt)
-	if err != nil {
+	`, a, b, exclusion.Reason, exclusion.CreatedBy, exclusion.CreatedAt); err != nil {
 		return fmt.Errorf("upsert resource exclusion %q<->%q: %w", a, b, err)
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed = true
+	logCarriedLocks("an unlink", carried)
 	return nil
 }
 
-func (s *SQLiteResourceStore) GetLinks() (links []ResourceLink, err error) {
+// GetLinks returns the links that are their pair's latest operator decision.
+func (s *SQLiteResourceStore) GetLinks() ([]ResourceLink, error) {
+	links, err := s.storedLinks()
+	if err != nil || len(links) == 0 {
+		return links, err
+	}
+	exclusions, err := s.storedExclusions()
+	if err != nil {
+		return nil, err
+	}
+	links, _ = effectiveManualPairDecisions(links, exclusions)
+	return links, nil
+}
+
+// TakeExclusion deletes the pair's exclusion in either order and returns the
+// row it deleted. The read and the delete share one transaction.
+func (s *SQLiteResourceStore) TakeExclusion(resourceA, resourceB string) (ResourceExclusion, bool, error) {
+	a, b := normalizePair(resourceA, resourceB)
+	if a == "" || b == "" {
+		return ResourceExclusion{}, false, fmt.Errorf("resource IDs required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ResourceExclusion{}, false, fmt.Errorf("begin take of resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	var taken ResourceExclusion
+	err = tx.QueryRow(`SELECT resource_a, resource_b, reason, created_by, created_at FROM resource_exclusions
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)
+		ORDER BY created_at DESC LIMIT 1`, a, b, b, a).
+		Scan(&taken.ResourceA, &taken.ResourceB, &taken.Reason, &taken.CreatedBy, &taken.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ResourceExclusion{}, false, nil
+	}
+	if err != nil {
+		return ResourceExclusion{}, false, fmt.Errorf("read resource exclusion %q<->%q: %w", a, b, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM resource_exclusions
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)`, a, b, b, a); err != nil {
+		return ResourceExclusion{}, false, fmt.Errorf("remove resource exclusion %q<->%q: %w", a, b, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ResourceExclusion{}, false, fmt.Errorf("commit take of resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed = true
+	taken.ResourceA = CanonicalResourceID(taken.ResourceA)
+	taken.ResourceB = CanonicalResourceID(taken.ResourceB)
+	return taken, true, nil
+}
+
+// RestoreExclusion records the exclusion, with its original time, reason and
+// author, unless the pair has an exclusion in either order or a link recorded
+// at or after the exclusion's time (an older link row is superseded by it).
+// The check and the insert share one transaction.
+func (s *SQLiteResourceStore) RestoreExclusion(exclusion ResourceExclusion) (bool, error) {
+	if exclusion.ResourceA == "" || exclusion.ResourceB == "" {
+		return false, fmt.Errorf("resource IDs required")
+	}
+	a, b := normalizePair(exclusion.ResourceA, exclusion.ResourceB)
+	if exclusion.CreatedAt.IsZero() {
+		exclusion.CreatedAt = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("begin restore of resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	var exclusions int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM resource_exclusions
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)`,
+		a, b, b, a).Scan(&exclusions); err != nil {
+		return false, fmt.Errorf("read exclusions of resource pair %q<->%q: %w", a, b, err)
+	}
+	if exclusions > 0 {
+		return false, nil
+	}
+	linkTimes, err := tx.Query(`SELECT created_at FROM resource_links
+		WHERE (resource_a = ? AND resource_b = ?) OR (resource_a = ? AND resource_b = ?)`, a, b, b, a)
+	if err != nil {
+		return false, fmt.Errorf("read links of resource pair %q<->%q: %w", a, b, err)
+	}
+	newerLink := false
+	for linkTimes.Next() {
+		var linkedAt time.Time
+		if err := linkTimes.Scan(&linkedAt); err != nil {
+			_ = linkTimes.Close()
+			return false, fmt.Errorf("scan link time of resource pair %q<->%q: %w", a, b, err)
+		}
+		if !linkedAt.Before(exclusion.CreatedAt) {
+			newerLink = true
+		}
+	}
+	if err := linkTimes.Err(); err != nil {
+		_ = linkTimes.Close()
+		return false, fmt.Errorf("iterate links of resource pair %q<->%q: %w", a, b, err)
+	}
+	if err := linkTimes.Close(); err != nil {
+		return false, fmt.Errorf("close links of resource pair %q<->%q: %w", a, b, err)
+	}
+	if newerLink {
+		return false, nil
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, a, b, exclusion.Reason, exclusion.CreatedBy, exclusion.CreatedAt); err != nil {
+		return false, fmt.Errorf("restore resource exclusion %q<->%q: %w", a, b, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit restore of resource exclusion %q<->%q: %w", a, b, err)
+	}
+	committed = true
+	return true, nil
+}
+
+// GetExclusions returns the exclusions that are their pair's latest operator
+// decision.
+func (s *SQLiteResourceStore) GetExclusions() ([]ResourceExclusion, error) {
+	exclusions, err := s.storedExclusions()
+	if err != nil || len(exclusions) == 0 {
+		return exclusions, err
+	}
+	links, err := s.storedLinks()
+	if err != nil {
+		return nil, err
+	}
+	_, exclusions = effectiveManualPairDecisions(links, exclusions)
+	return exclusions, nil
+}
+
+func (s *SQLiteResourceStore) storedLinks() (links []ResourceLink, err error) {
 	rows, err := s.db.Query(`SELECT resource_a, resource_b, primary_id, reason, created_by, created_at FROM resource_links`)
 	if err != nil {
 		return nil, fmt.Errorf("query resource links: %w", err)
@@ -1267,7 +1509,7 @@ func (s *SQLiteResourceStore) GetLinks() (links []ResourceLink, err error) {
 	return links, nil
 }
 
-func (s *SQLiteResourceStore) GetExclusions() (exclusions []ResourceExclusion, err error) {
+func (s *SQLiteResourceStore) storedExclusions() (exclusions []ResourceExclusion, err error) {
 	rows, err := s.db.Query(`SELECT resource_a, resource_b, reason, created_by, created_at FROM resource_exclusions`)
 	if err != nil {
 		return nil, fmt.Errorf("query resource exclusions: %w", err)
@@ -1521,8 +1763,38 @@ func (s *SQLiteResourceStore) Close() error {
 }
 
 func (s *SQLiteResourceStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return s.writeResourceIdentityPins(pins, false)
+}
+
+func (s *SQLiteResourceStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return s.writeResourceIdentityPins(pins, true)
+}
+
+// writeResourceIdentityPins upserts pins. An upsert keeps a stored field the
+// pin leaves empty; a replace writes the pin as the whole row.
+func (s *SQLiteResourceStore) writeResourceIdentityPins(pins []ResourceIdentityPin, replace bool) error {
 	if len(pins) == 0 {
 		return nil
+	}
+	write := `INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(canonical_id) DO UPDATE SET
+				resource_type = excluded.resource_type,
+				machine_id = COALESCE(excluded.machine_id, resource_identities.machine_id),
+				dmi_uuid = COALESCE(excluded.dmi_uuid, resource_identities.dmi_uuid),
+				cluster_name = COALESCE(NULLIF(excluded.cluster_name, ''), resource_identities.cluster_name),
+				primary_hostname = COALESCE(NULLIF(excluded.primary_hostname, ''), resource_identities.primary_hostname),
+				updated_at = CURRENT_TIMESTAMP`
+	if replace {
+		write = `INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(canonical_id) DO UPDATE SET
+				resource_type = excluded.resource_type,
+				machine_id = excluded.machine_id,
+				dmi_uuid = excluded.dmi_uuid,
+				cluster_name = excluded.cluster_name,
+				primary_hostname = excluded.primary_hostname,
+				updated_at = CURRENT_TIMESTAMP`
 	}
 
 	s.mu.Lock()
@@ -1560,15 +1832,7 @@ func (s *SQLiteResourceStore) UpsertResourceIdentityPins(pins []ResourceIdentity
 		); err != nil {
 			return fmt.Errorf("clear conflicting identity pins for %q: %w", pin.CanonicalID, err)
 		}
-		if _, err := tx.Exec(`INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
-			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(canonical_id) DO UPDATE SET
-				resource_type = excluded.resource_type,
-				machine_id = COALESCE(excluded.machine_id, resource_identities.machine_id),
-				dmi_uuid = COALESCE(excluded.dmi_uuid, resource_identities.dmi_uuid),
-				cluster_name = COALESCE(NULLIF(excluded.cluster_name, ''), resource_identities.cluster_name),
-				primary_hostname = COALESCE(NULLIF(excluded.primary_hostname, ''), resource_identities.primary_hostname),
-				updated_at = CURRENT_TIMESTAMP`,
+		if _, err := tx.Exec(write,
 			pin.CanonicalID,
 			string(pin.ResourceType),
 			nullIfEmptyArg(pin.MachineID),
@@ -3043,9 +3307,33 @@ func (s *SQLiteResourceStore) GetExportAudits(since time.Time, limit int) ([]Exp
 // canonical ID. Returns (zero, false, nil) on no entry; (state, true,
 // nil) on a hit; (zero, false, error) on a query failure. The found
 // signal is meaningful for the API GET path which returns 404 vs
-// returning the default no-state record.
+// returning the default no-state record. An ID that holds no row but that a
+// canonical-ID succession retired answers with the remediation block its
+// successor carries (followRetiredID), which is what a registry
+// generation still listing the retired ID needs while a rebuild is in flight.
 func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
-	return getResourceOperatorStateSQL(s.db, canonicalID)
+	state, found, err := getResourceOperatorStateSQL(s.db, canonicalID)
+	if err != nil || found {
+		return state, found, err
+	}
+	return s.retiredIDOperatorState(canonicalID)
+}
+
+// retiredIDOperatorState answers for an ID that held no row when it was first
+// read. The walk down its chain is several statements, and a succession that
+// commits between two of them can move the lock off an ID the walk already
+// passed onto one it has seen (a chain that loops back), so the ID's own row and
+// every hop are read in one transaction, which is one snapshot.
+func (s *SQLiteResourceStore) retiredIDOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ResourceOperatorState{}, false, fmt.Errorf("begin resource operator state read: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if state, found, err := getResourceOperatorStateSQL(tx, canonicalID); err != nil || found {
+		return state, found, err
+	}
+	return retiredIDRemediationLockSQL(tx, canonicalID)
 }
 
 type resourceOperatorStateQueryRower interface {
@@ -3413,6 +3701,14 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (m *MemoryStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return m.writeResourceIdentityPins(pins, false)
+}
+
+func (m *MemoryStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return m.writeResourceIdentityPins(pins, true)
+}
+
+func (m *MemoryStore) writeResourceIdentityPins(pins []ResourceIdentityPin, replace bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, pin := range pins {
@@ -3432,7 +3728,7 @@ func (m *MemoryStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) err
 				delete(m.identityPins, canonicalID)
 			}
 		}
-		if existing, ok := m.identityPins[pin.CanonicalID]; ok {
+		if existing, ok := m.identityPins[pin.CanonicalID]; ok && !replace {
 			if pin.MachineID == "" {
 				pin.MachineID = existing.MachineID
 			}
@@ -3483,7 +3779,21 @@ func (m *MemoryStore) AddLink(link ResourceLink) error {
 	link.ResourceA = CanonicalResourceID(link.ResourceA)
 	link.ResourceB = CanonicalResourceID(link.ResourceB)
 	link.PrimaryID = CanonicalResourceID(link.PrimaryID)
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = time.Now().UTC()
+	}
+	// A link replaces the pair's earlier decision, either way round
+	// (manual_link_decisions.go).
+	m.exclusions = slices.DeleteFunc(m.exclusions, func(exclusion ResourceExclusion) bool {
+		return sameManualPair(exclusion.ResourceA, exclusion.ResourceB, link.ResourceA, link.ResourceB)
+	})
+	m.links = slices.DeleteFunc(m.links, func(existing ResourceLink) bool {
+		return sameManualPair(existing.ResourceA, existing.ResourceB, link.ResourceA, link.ResourceB)
+	})
 	m.links = append(m.links, link)
+	// Every member of the linked component carries the block; see
+	// SQLiteResourceStore.AddLink.
+	m.shareRemediationLockAcrossLinksLocked([]string{link.ResourceA, link.ResourceB}, time.Now().UTC())
 	return nil
 }
 
@@ -3492,8 +3802,62 @@ func (m *MemoryStore) AddExclusion(exclusion ResourceExclusion) error {
 	defer m.mu.Unlock()
 	exclusion.ResourceA = CanonicalResourceID(exclusion.ResourceA)
 	exclusion.ResourceB = CanonicalResourceID(exclusion.ResourceB)
+	if exclusion.CreatedAt.IsZero() {
+		exclusion.CreatedAt = time.Now().UTC()
+	}
+	// The merged resource's lock stays with each member the unlink splits off;
+	// see SQLiteResourceStore.AddExclusion.
+	m.shareRemediationLockAcrossLinksLocked([]string{exclusion.ResourceA, exclusion.ResourceB}, time.Now().UTC())
+	// An exclusion replaces the pair's earlier decision, so unlinking a
+	// linked pair splits it (manual_link_decisions.go).
+	m.links = slices.DeleteFunc(m.links, func(link ResourceLink) bool {
+		return sameManualPair(link.ResourceA, link.ResourceB, exclusion.ResourceA, exclusion.ResourceB)
+	})
+	m.exclusions = slices.DeleteFunc(m.exclusions, func(existing ResourceExclusion) bool {
+		return sameManualPair(existing.ResourceA, existing.ResourceB, exclusion.ResourceA, exclusion.ResourceB)
+	})
 	m.exclusions = append(m.exclusions, exclusion)
 	return nil
+}
+
+func (m *MemoryStore) TakeExclusion(resourceA, resourceB string) (ResourceExclusion, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var taken ResourceExclusion
+	found := false
+	m.exclusions = slices.DeleteFunc(m.exclusions, func(existing ResourceExclusion) bool {
+		if !sameManualPair(existing.ResourceA, existing.ResourceB, resourceA, resourceB) {
+			return false
+		}
+		if !found || existing.CreatedAt.After(taken.CreatedAt) {
+			taken, found = existing, true
+		}
+		return true
+	})
+	return taken, found, nil
+}
+
+func (m *MemoryStore) RestoreExclusion(exclusion ResourceExclusion) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	exclusion.ResourceA = CanonicalResourceID(exclusion.ResourceA)
+	exclusion.ResourceB = CanonicalResourceID(exclusion.ResourceB)
+	if exclusion.ResourceA == "" || exclusion.ResourceB == "" {
+		return false, fmt.Errorf("resource IDs required")
+	}
+	if exclusion.CreatedAt.IsZero() {
+		exclusion.CreatedAt = time.Now().UTC()
+	}
+	if slices.ContainsFunc(m.links, func(link ResourceLink) bool {
+		return sameManualPair(link.ResourceA, link.ResourceB, exclusion.ResourceA, exclusion.ResourceB) &&
+			!link.CreatedAt.Before(exclusion.CreatedAt)
+	}) || slices.ContainsFunc(m.exclusions, func(existing ResourceExclusion) bool {
+		return sameManualPair(existing.ResourceA, existing.ResourceB, exclusion.ResourceA, exclusion.ResourceB)
+	}) {
+		return false, nil
+	}
+	m.exclusions = append(m.exclusions, exclusion)
+	return true, nil
 }
 
 func (m *MemoryStore) GetLinks() ([]ResourceLink, error) {
@@ -3501,6 +3865,7 @@ func (m *MemoryStore) GetLinks() ([]ResourceLink, error) {
 	defer m.mu.RUnlock()
 	out := make([]ResourceLink, len(m.links))
 	copy(out, m.links)
+	out, _ = effectiveManualPairDecisions(out, m.exclusions)
 	return out, nil
 }
 
@@ -3509,6 +3874,7 @@ func (m *MemoryStore) GetExclusions() ([]ResourceExclusion, error) {
 	defer m.mu.RUnlock()
 	out := make([]ResourceExclusion, len(m.exclusions))
 	copy(out, m.exclusions)
+	_, out = effectiveManualPairDecisions(m.links, out)
 	return out, nil
 }
 
@@ -3745,17 +4111,50 @@ func appendRecentChangeResourceCondition(conditions []string, args []any, canoni
 		args = append(args, id)
 	}
 	inClause := "(" + strings.Join(placeholders, ", ") + ")"
-	if !includeRelated {
-		return append(conditions, "canonical_id IN "+inClause), args
-	}
-	for _, id := range canonicalIDs {
-		args = append(args, id)
-	}
-	return append(conditions, `(canonical_id IN `+inClause+` OR EXISTS (
+	condition := "canonical_id IN " + inClause
+	if includeRelated {
+		for _, id := range canonicalIDs {
+			args = append(args, id)
+		}
+		condition = `(canonical_id IN ` + inClause + ` OR EXISTS (
 			SELECT 1
 			FROM json_each(CASE WHEN json_valid(resource_changes.related_resources) THEN resource_changes.related_resources ELSE '[]' END)
-			WHERE TRIM(json_each.value) IN `+inClause+`
-		))`), args
+			WHERE TRIM(json_each.value) IN ` + inClause + `
+		))`
+	}
+	if owned, ownedArgs := ownedAlertRowsCondition(canonicalIDs); owned != "" {
+		condition = "(" + condition + " OR " + owned + ")"
+		args = append(args, ownedArgs...)
+	}
+	return append(conditions, condition), args
+}
+
+// ownedAlertRowsCondition matches the lifecycle rows hardware ownership wrote
+// away from a PVE disk alert reference in the read's identity set. It filters
+// on the indexed alert identifier first, then on the reference each owned row
+// records, so a read by the reference returns exactly the rows journaled
+// under it before.
+func ownedAlertRowsCondition(canonicalIDs []string) (string, []any) {
+	metadata := "CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END"
+	var terms []string
+	var args []any
+	for _, id := range canonicalIDs {
+		identifiers := ProxmoxPhysicalDiskAlertIdentifiers(id)
+		if len(identifiers) == 0 {
+			continue
+		}
+		for _, identifier := range identifiers {
+			args = append(args, identifier)
+		}
+		args = append(args, id)
+		terms = append(terms, "(json_type("+metadata+", '$.alert_identifier') = 'text' AND "+resourceChangesAlertIdentifierExpr()+
+			" IN ("+strings.TrimSuffix(strings.Repeat("?, ", len(identifiers)), ", ")+") AND json_extract("+metadata+", '$."+
+			MetadataAlertResourceID+"') = ?)")
+	}
+	if len(terms) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(terms, " OR ") + ")", args
 }
 
 func changeMatchesResource(change ResourceChange, canonicalIDs []string, includeRelated bool) bool {
@@ -3769,6 +4168,9 @@ func changeMatchesResource(change ResourceChange, canonicalIDs []string, include
 		return false
 	}
 	if matches(change.ResourceID) {
+		return true
+	}
+	if ref := OwnedAlertReference(change); ref != "" && matches(ref) {
 		return true
 	}
 	if !includeRelated {
@@ -4305,7 +4707,9 @@ func (m *MemoryStore) GetExportAudits(since time.Time, limit int) ([]ExportAudit
 // canonical resource ID. The found bool distinguishes "no entry" (the
 // default no-state posture) from "explicit empty entry the operator
 // cleared" — both have the same effective behavior but the latter may
-// be surfaced differently on the audit timeline.
+// be surfaced differently on the audit timeline. An ID that holds no row but
+// that a canonical-ID succession retired answers as the SQLite store does, with
+// the remediation block its successor carries.
 func (m *MemoryStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
 	canonicalID = strings.TrimSpace(canonicalID)
 	if canonicalID == "" {
@@ -4315,9 +4719,26 @@ func (m *MemoryStore) GetResourceOperatorState(canonicalID string) (ResourceOper
 	defer m.mu.RUnlock()
 	state, ok := m.resourceOperatorState[canonicalID]
 	if !ok {
-		return ResourceOperatorState{}, false, nil
+		lock, carried := m.retiredIDRemediationLockLocked(canonicalID)
+		return lock, carried, nil
 	}
 	return state, true, nil
+}
+
+// retiredIDRemediationLockLocked is the read described at followRetiredID over
+// the in-memory succession record; callers hold m.mu.
+func (m *MemoryStore) retiredIDRemediationLockLocked(retiredID string) (ResourceOperatorState, bool) {
+	lock, carried, _ := followRetiredID(retiredID,
+		func(id string) (string, bool, error) {
+			successor, retired := m.canonicalSuccessions[id]
+			return successor, retired, nil
+		},
+		func(id string) (ResourceOperatorState, bool, error) {
+			state, found := m.resourceOperatorState[id]
+			return state, found, nil
+		},
+	)
+	return lock, carried
 }
 
 // SetResourceOperatorState upserts the supplied state, validating it

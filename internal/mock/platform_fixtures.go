@@ -119,37 +119,24 @@ func defaultTrueNASConnectionFixture(fixtures PlatformFixtures) TrueNASConnectio
 	}
 }
 
+// SupplementalRecords serves the fixture graph's provider-backed records while
+// mock mode is on and nothing once it is off. The router's mock adapters stay
+// registered for a moment after leaving mock mode, and a live refresh that
+// still reached them must not ingest and alert on fixture resources.
 func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
-	if IsMockEnabled() {
-		return CurrentFixtureGraph().SupplementalRecords(source)
-	}
-
-	platformFixtures := defaultPlatformFixtures()
-	now := time.Now().UTC()
-	switch normalizeSupplementalSource(source) {
-	case unifiedresources.SourceTrueNAS:
-		return truenas.FixtureRecords(platformFixtures.TrueNAS)
-	case unifiedresources.SourceVMware:
-		return vmware.FixtureRecords(platformFixtures.VMware)
-	case unifiedresources.SourceAvailability:
-		return availabilityFixtureRecords(defaultAvailabilityFixtures(now), now)
-	default:
+	if !IsMockEnabled() {
 		return nil
 	}
+	return CurrentFixtureGraph().SupplementalRecords(source)
 }
 
+// SupplementalChanges serves the fixture graph's provider activity while mock
+// mode is on and nothing once it is off, for the same reason.
 func SupplementalChanges(source unifiedresources.DataSource) []unifiedresources.ResourceChange {
-	if IsMockEnabled() {
-		return CurrentFixtureGraph().SupplementalChanges(source)
-	}
-
-	platformFixtures := defaultPlatformFixtures()
-	switch normalizeSupplementalSource(source) {
-	case unifiedresources.SourceVMware:
-		return vmware.FixtureActivityChanges(platformFixtures.VMware)
-	default:
+	if !IsMockEnabled() {
 		return nil
 	}
+	return CurrentFixtureGraph().SupplementalChanges(source)
 }
 
 func SupplementalOwnedSources() []unifiedresources.DataSource {
@@ -202,17 +189,41 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	return resources, freshness
 }
 
-func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, SupplementalOwnedSources()))
-
-	for _, source := range SupplementalOwnedSources() {
-		records := g.SupplementalRecords(source)
-		if len(records) == 0 {
-			continue
-		}
-		registry.IngestRecords(source, records)
+// UnifiedResourceSnapshotWithLinks returns the current mock world as unified
+// resources with the operator's manual links applied where the live monitor's
+// registry rebuild applies them: once the snapshot and every supplemental
+// record source are in, and before availability. A chain whose members arrive
+// as supplemental records is judged over the whole estate, so it settles on the
+// row the live view keeps, and an availability check that names the folded
+// resource by source resolves through the fold onto the primary. Folding the
+// finished list instead loses both. The registry has no store, so nothing the
+// fixtures ingest is persisted. Without links this is UnifiedResourceSnapshot;
+// with links it builds afresh on every call, so callers cache it per fixture
+// data version and link set, and its result is the caller's own.
+func UnifiedResourceSnapshotWithLinks(links []unifiedresources.ResourceLink) ([]unifiedresources.Resource, time.Time) {
+	if len(links) == 0 {
+		return UnifiedResourceSnapshot()
 	}
+	if !IsMockEnabled() {
+		return nil, time.Time{}
+	}
+	return CurrentFixtureGraph().unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+}
+
+func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
+	return g.unifiedResourceSnapshot(unifiedresources.NewRegistry(nil))
+}
+
+func (g FixtureGraph) unifiedResourceSnapshot(registry *unifiedresources.ResourceRegistry) ([]unifiedresources.Resource, time.Time) {
+	// The demo uses the live generation builder for source ordering, operator
+	// links, availability projection and the final freshness verdict.
+	owned := SupplementalOwnedSources()
+	records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+	for _, source := range owned {
+		records[source] = g.SupplementalRecords(source)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	adapter.PopulateSnapshotAndSupplemental(unifiedresources.SnapshotWithoutSources(g.State, owned), records)
 
 	freshness := g.State.LastUpdate
 	for _, candidate := range []time.Time{
@@ -228,15 +239,10 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 		}
 	}
 
-	resources := registry.List()
-	// Force one view-cache build before resolving targets: on a freshly
-	// ingested registry the caches are dirty and every MetricsTarget call
-	// would fall back to a scan over all source mappings, which at demo
-	// scale turns this loop quadratic.
-	registry.VMs()
+	resources, targets := adapter.GetAllWithMetricsTargets()
 	for i := range resources {
-		if target := registry.MetricsTarget(resources[i].ID); target != nil {
-			resources[i].MetricsTarget = target
+		if target, ok := targets[resources[i].ID]; ok {
+			resources[i].MetricsTarget = &target
 		}
 	}
 

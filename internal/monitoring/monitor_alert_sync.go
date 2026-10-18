@@ -71,8 +71,10 @@ func (m *Monitor) activeAlertsSnapshot() []models.Alert {
 			Acknowledged:    alert.Acknowledged,
 			AckTime:         alert.AckTime,
 			AckUser:         alert.AckUser,
-			// GetActiveAlerts returns deep clones, so the map is already private.
-			Metadata: alert.Metadata,
+			// GetActiveAlerts returns deep clones, so the map and the live
+			// metric status are already private.
+			Metadata:     alert.Metadata,
+			MetricStatus: alert.MetricStatus,
 		})
 	}
 	return modelAlerts
@@ -92,15 +94,44 @@ func (m *Monitor) recentlyResolvedAlertsSnapshot() []models.ResolvedAlert {
 	return m.alertManager.GetRecentlyResolved()
 }
 
-func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource) {
+// syncUnifiedResourceAlertsToState evaluates resources read under scope. A
+// mock-mode flip since that read refuses every remaining step, so a snapshot
+// of the mode the monitor left can neither open or resolve alerts nor rewrite
+// persisted identities and links in the mode it entered.
+func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource, scope mockModeScope) {
 	if m == nil || m.alertManager == nil {
 		return
 	}
 
+	// Alert intent resolves through the published registry with saved hosts
+	// overlaid, under the alert manager's lock. Build that overlay for the new
+	// generation here, outside the lock, so its lookups need not.
+	m.operatorIntentIdentity.Load().refresh()
+
 	// Resource publication can make persisted canonical policy resolvable for
 	// restored native-ID alerts that preceded the first observation at startup.
-	m.alertManager.ReconcileOperatorIntentState()
+	scope.run(func() { m.alertManager.ReconcileOperatorIntentState() })
+	scope.run(func() { m.migrateAlertIdentities(resources) })
+	scope.run(func() { m.migrateAvailabilityLinksToCanonicalIDs(resources) })
 
+	// Metrics go one resource per fenced call, as
+	// CheckUnifiedResourceMetricsWithCapacityTrends would iterate them, so a
+	// mode change waits for one resource's evaluation rather than the estate's.
+	capacityTrends := m.unifiedStorageCapacityTrends(resources, time.Now())
+	for _, resource := range resources {
+		input, ok := alerts.UnifiedResourceInputFromResource(resource)
+		if !ok {
+			continue
+		}
+		scope.run(func() { m.alertManager.CheckUnifiedResourceWithCapacityTrend(input, capacityTrends[input.ID]) })
+	}
+	scope.run(func() { m.alertManager.SyncUnifiedResourceIncidents(resources) })
+	m.syncAlertsToState()
+}
+
+// migrateAlertIdentities persists the alert identity migration that resources
+// make resolvable.
+func (m *Monitor) migrateAlertIdentities(resources []unifiedresources.Resource) {
 	config := m.alertManager.GetConfig()
 	migrationPlan := alerts.PlanAlertIdentityMigration(config, resources)
 	if migrationPlan.UnsupportedVersion {
@@ -134,12 +165,6 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 				Msg("persisted alert identity migration plan")
 		}
 	}
-
-	m.migrateAvailabilityLinksToCanonicalIDs(resources)
-
-	m.alertManager.CheckUnifiedResourceMetricsWithCapacityTrends(resources, m.unifiedStorageCapacityTrends(resources, time.Now()))
-	m.alertManager.SyncUnifiedResourceIncidents(resources)
-	m.syncAlertsToState()
 }
 
 // pruneStaleDockerAlerts removes docker alerts that reference hosts no longer present in state.
@@ -148,7 +173,11 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 		return false
 	}
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	// The inventory is the fixture read view in mock mode. A prune that read
+	// it must not remove Docker alerts the other mode raised after a switch.
+	// Only the hosts' IDs matter, so the view may predate the last metric ticks.
+	scope := m.mockModeFence.begin()
+	readState := m.currentModeStructureReadState()
 	if readState == nil {
 		return false
 	}
@@ -214,7 +243,9 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 			host.Hostname = hostID
 		}
 
-		m.alertManager.HandleDockerHostRemoved(host)
+		if !scope.run(func() { m.alertManager.HandleDockerHostRemoved(host) }) {
+			return cleared
+		}
 		processed[hostID] = struct{}{}
 		cleared = true
 	}

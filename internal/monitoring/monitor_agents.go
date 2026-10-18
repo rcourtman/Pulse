@@ -26,6 +26,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog"
@@ -517,14 +518,7 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 		continuity, hasContinuity = m.hostContinuityStore.Get(hostID)
 	}
 
-	host, present := models.Host{}, false
-	for _, candidate := range m.state.GetHosts() {
-		if candidate.ID == hostID {
-			host = candidate
-			present = true
-			break
-		}
-	}
+	host, present := m.hostByID(hostID)
 	if !present {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("hostID", hostID).Msg("host not present in state during removal")
@@ -986,7 +980,17 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 		return fmt.Errorf("node id is required")
 	}
 
+	restoreSplit, err := m.liftNodeAgentSplit(hostID, nodeID)
+	if err != nil {
+		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
+	}
 	if err := m.state.SetHostNodeLinkIntent(hostID, nodeID, m.persistNodeLinkIntents); err != nil {
+		if restoreErr := restoreSplit(); restoreErr != nil {
+			log.Error().Err(restoreErr).
+				Str("hostID", hostID).
+				Str("nodeID", nodeID).
+				Msg("Failed to restore the operator's split after the manual node link failed")
+		}
 		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
 	}
 
@@ -996,6 +1000,76 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 		Msg("Manually linked host agent to PVE node")
 
 	return nil
+}
+
+// nodeAgentSplitStore is the resource store holding the operator's
+// node<->agent splits (unifiedresources.MonitorAdapter).
+type nodeAgentSplitStore interface {
+	ProxmoxNodeAgentSplitConfirmed(node models.Node, host models.Host) (bool, error)
+	LiftProxmoxNodeAgentSplit(node models.Node, host models.Host) ([]unifiedresources.ResourceExclusion, error)
+	RestoreProxmoxNodeAgentSplit(removed []unifiedresources.ResourceExclusion) error
+}
+
+func (m *Monitor) nodeAgentSplitStore() nodeAgentSplitStore {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	store, _ := m.resourceStore.(nodeAgentSplitStore)
+	return store
+}
+
+// liftNodeAgentSplit removes an operator split between the node and the
+// agent (resources API unlink or report-merge) before a manual link is
+// recorded. The link is the newer decision, and the registry's rows and the
+// state's hold-back both read the split from the resource store, so leaving
+// it would keep the pair apart in both despite the link. The returned
+// restore records the split again, for a link that then fails to persist.
+func (m *Monitor) liftNodeAgentSplit(hostID, nodeID string) (restore func() error, err error) {
+	restore = func() error { return nil }
+	store := m.nodeAgentSplitStore()
+	if store == nil {
+		return restore, nil
+	}
+	host, hostFound := m.state.GetHost(hostID)
+	node, nodeFound := m.state.GetNode(nodeID)
+	if !hostFound || !nodeFound {
+		// SetHostNodeLinkIntent reports the missing record.
+		return restore, nil
+	}
+	removed, err := store.LiftProxmoxNodeAgentSplit(node, host)
+	if err != nil {
+		return restore, fmt.Errorf("lift the operator's split: %w", err)
+	}
+	if len(removed) > 0 {
+		log.Info().
+			Str("hostID", hostID).
+			Str("nodeID", nodeID).
+			Int("exclusionsRemoved", len(removed)).
+			Msg("Manual node link replaced the operator's split of the node and agent")
+	}
+	return func() error { return store.RestoreProxmoxNodeAgentSplit(removed) }, nil
+}
+
+// nodeAgentSplitConfirmed reports whether the resource store's latest
+// decisions split the node from host's agent; an unreadable store confirms
+// nothing.
+func (m *Monitor) nodeAgentSplitConfirmed(nodeID string, host models.Host) bool {
+	store := m.nodeAgentSplitStore()
+	if store == nil {
+		return false
+	}
+	node, ok := m.state.GetNode(nodeID)
+	if !ok {
+		return false
+	}
+	split, err := store.ProxmoxNodeAgentSplitConfirmed(node, host)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("hostID", host.ID).
+			Str("nodeID", nodeID).
+			Msg("Could not read the operator's node and agent split; keeping the manual node link")
+		return false
+	}
+	return split
 }
 
 // UnlinkHostAgent removes the link between a host agent and its PVE node.
@@ -1380,13 +1454,7 @@ func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
 	}
 	hostID = m.canonicalDockerHostID(hostID)
 
-	hosts := m.state.GetDockerHosts()
-	for _, host := range hosts {
-		if host.ID == hostID {
-			return host, true
-		}
-	}
-	return models.DockerHost{}, false
+	return m.state.GetDockerHost(hostID)
 }
 
 // GetDockerHosts returns a point-in-time snapshot of all Docker hosts Pulse knows about.
@@ -1442,14 +1510,16 @@ func (m *Monitor) resolveDockerHostView(hostID string) (*unifiedresources.Docker
 	return nil, "", false
 }
 
-func (m *Monitor) snapshotBackedUnifiedReadState() unifiedresources.ReadState {
+// Only report admission uses this temporary registry. Full publication and
+// consumer read paths keep the complete snapshot and canonical inventory.
+func (m *Monitor) snapshotBackedAgentLookupReadState() unifiedresources.ReadState {
 	if m == nil || m.state == nil {
 		return nil
 	}
 
 	registry := unifiedresources.NewRegistry(nil)
 	thresholds := m.resourceStaleThresholds()
-	registry.IngestSnapshotWithStaleThresholds(m.state.GetSnapshot(), thresholds)
+	registry.IngestSnapshotWithStaleThresholds(m.state.GetAgentLookupSnapshot(), thresholds)
 	return unifiedresources.NewMonitorAdapterWithStaleThresholds(registry, thresholds)
 }
 
@@ -1654,6 +1724,19 @@ func (m *Monitor) MatchHostConfigContinuity(agentID, tokenID string) (models.Hos
 	return models.Host{}, false
 }
 
+// persistedNodeLinkTarget is the node a report persists as the agent's link.
+// A manual link an operator split holds back in state keeps its node in the
+// persisted intent: only a split the store confirms ends it (ApplyHostReport).
+func persistedNodeLinkTarget(store *config.HostContinuityStore, host models.Host) string {
+	linkedNodeID := strings.TrimSpace(host.LinkedNodeID)
+	if linkedNodeID == "" && host.NodeLinkSource == "manual" && store != nil {
+		if prior, ok := store.Get(host.ID); ok && prior.NodeLinkSource == "manual" {
+			return prior.LinkedNodeID
+		}
+	}
+	return linkedNodeID
+}
+
 func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report, order hostReportOrder) {
 	if m == nil || m.hostContinuityStore == nil {
 		return
@@ -1670,7 +1753,7 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 		AgentVersion:         strings.TrimSpace(host.AgentVersion),
 		Platform:             strings.TrimSpace(host.Platform),
 		NodeLinkSource:       host.NodeLinkSource,
-		LinkedNodeID:         strings.TrimSpace(host.LinkedNodeID),
+		LinkedNodeID:         persistedNodeLinkTarget(m.hostContinuityStore, host),
 		LinkedVMID:           strings.TrimSpace(host.LinkedVMID),
 		LinkedContainerID:    strings.TrimSpace(host.LinkedContainerID),
 		IsLegacy:             host.IsLegacy,
@@ -1697,12 +1780,7 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 }
 
 func (m *Monitor) hostByID(hostID string) (models.Host, bool) {
-	for _, host := range m.state.GetHosts() {
-		if host.ID == hostID {
-			return host, true
-		}
-	}
-	return models.Host{}, false
+	return m.state.GetHost(hostID)
 }
 
 func (m *Monitor) applyRejectedHostReportLiveness(
@@ -2052,7 +2130,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}, nil
 	}
 
-	readState := m.snapshotBackedUnifiedReadState()
+	readState := m.snapshotBackedAgentLookupReadState()
 	var dockerHosts []*unifiedresources.DockerHostView
 	if readState != nil {
 		dockerHosts = readState.DockerHosts()
@@ -2107,7 +2185,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	defer unlockDockerReport()
 	receivedAt := time.Now()
 	previousState, _ := m.GetDockerHost(identifier)
-	readState = m.snapshotBackedUnifiedReadState()
+	readState = m.snapshotBackedAgentLookupReadState()
 	dockerHosts = nil
 	previous = nil
 	hasPrevious = false
@@ -3074,7 +3152,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		baseIdentifier = strings.TrimSpace(persisted.HostID)
 	}
 
-	readState := m.snapshotBackedUnifiedReadState()
+	readState := m.snapshotBackedAgentLookupReadState()
 	var existingHosts []*unifiedresources.HostView
 	if readState != nil {
 		existingHosts = readState.Hosts()
@@ -3263,7 +3341,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Identity resolution happens before taking the per-host lock. Refresh the
 	// shared read model after waiting so token inheritance and previous-state
 	// comparisons use the latest accepted report, not the pre-wait snapshot.
-	readState = m.snapshotBackedUnifiedReadState()
+	readState = m.snapshotBackedAgentLookupReadState()
 	existingHosts = nil
 	if readState != nil {
 		existingHosts = readState.Hosts()
@@ -3464,8 +3542,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	)
 	xcpngData := normalizeAgentXCPNGInventory(report.XCPNG, previousHostModel, observedAt)
 
+	previousHost, _ := m.hostByID(identifier)
 	agentUpdate := mergeAgentUpdateStatus(
-		previousHostAgentUpdate(m.state.GetHosts(), identifier),
+		cloneModelAgentUpdateStatus(previousHost.AgentUpdate),
 		convertAgentUpdateStatus(report.Agent.Update),
 		strings.TrimSpace(report.Agent.UpdatedFrom),
 		observedAt,
@@ -3593,6 +3672,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			prior = hostFromContinuityEntry(entry)
 		}
 	}
+	inferredNodeID, inferredVMID, inferredContainerID := linkedNodeID, linkedVMID, linkedContainerID
 	host.NodeLinkSource = "automatic"
 	if prior.NodeLinkSource == "manual" || prior.NodeLinkSource == "unlinked" ||
 		(prior.NodeLinkSource == "" && prior.LinkedNodeID != "") {
@@ -3600,9 +3680,36 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		linkedNodeID = prior.LinkedNodeID
 		linkedVMID, linkedContainerID = "", ""
 	}
+	// An operator split of the node a manual link names is the newer
+	// decision (the agents API's link removes an older split first), so it
+	// ends the manual intent, which persists with this report: the agent
+	// links as Pulse infers again, and the split holds that link back below.
+	// Kept, the intent would also reserve the node against other agents.
+	// The state may already hold the link back, so the node comes from the
+	// persisted intent, and only a split the store confirms ends it.
+	if host.NodeLinkSource == "manual" {
+		if linkedNodeID == "" && m.hostContinuityStore != nil {
+			if entry, ok := m.hostContinuityStore.Get(host.ID); ok && entry.NodeLinkSource == "manual" {
+				linkedNodeID = entry.LinkedNodeID
+			}
+		}
+		if linkedNodeID != "" && m.nodeAgentSplitConfirmed(linkedNodeID, host) {
+			host.NodeLinkSource = "automatic"
+			linkedNodeID, linkedVMID, linkedContainerID = inferredNodeID, inferredVMID, inferredContainerID
+			m.clearAgentLXCFilesystems(host.ID)
+		}
+	}
 	if linkedNodeID != "" && host.NodeLinkSource != "manual" && m.hostContinuityStore != nil &&
 		m.hostContinuityStore.NodeLinkReservedByOther(host.ID, linkedNodeID) {
 		linkedNodeID = ""
+	}
+	// The operator split this node from the agent (resources API unlink or
+	// report-merge): the agent's LXC filesystems and everything else that
+	// follows the link stay off the node, and what the agent already
+	// contributed to its containers goes with the link.
+	if linkedNodeID != "" && m.state.NodeAgentLinkSplit(linkedNodeID, host) {
+		linkedNodeID = ""
+		m.clearAgentLXCFilesystems(host.ID)
 	}
 	if linkedNodeID != "" {
 		host.LinkedNodeID = linkedNodeID
@@ -3673,6 +3780,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	m.state.UpsertHost(host)
+	// A split recorded since the check above is applied by the state under
+	// its own lock; what follows (the node's back link, the agent's LXC
+	// filesystems, its alert coverage and the persisted continuity) uses the
+	// link the state kept.
+	if host.LinkedNodeID != "" {
+		if stored, ok := m.state.GetHost(host.ID); ok && stored.LinkedNodeID != host.LinkedNodeID {
+			host.LinkedNodeID = stored.LinkedNodeID
+			m.clearAgentLXCFilesystems(host.ID)
+		}
+	}
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 	m.supersedeStaleHostAgentDuplicates(host, tokenRecord, existingHostModels)
 
@@ -3721,7 +3838,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if len(host.Disks) > 0 {
 		hostDiskPercent = host.Disks[0].Usage
 	}
-	hostTemperature := hostPrimaryTemperatureCelsius(host.Sensors)
+	hostTemperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
 	hostGPUUtilization, hostGPUMemory, hostGPUTemperature := hostGPUMetrics(host.Sensors)
 
 	if !shouldSkipNativeMockStateMetricWrites() {
@@ -3796,7 +3913,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	// Store cluster peer sensor data if present and evict stale entries
-	m.applyClusterSensors(report.ClusterSensors, observedAt)
+	m.applyClusterSensors(host.ID, report.ClusterSensors, observedAt)
 	// Availability results are ingested only once the host identity is
 	// committed, because ownership is checked against that host ID.
 	m.ApplyProbeAvailabilityResults(host.ID, probeAvailabilityResultsFromReport(report.AvailabilityResults))
@@ -3956,15 +4073,6 @@ func convertAgentPrivilegeStatus(value *agentshost.PrivilegeStatus) *models.Agen
 	}
 }
 
-func previousHostAgentUpdate(hosts []models.Host, identifier string) *models.AgentUpdateStatus {
-	for i := range hosts {
-		if hosts[i].ID == identifier {
-			return cloneModelAgentUpdateStatus(hosts[i].AgentUpdate)
-		}
-	}
-	return nil
-}
-
 func mergeAgentUpdateStatus(previous, reported *models.AgentUpdateStatus, updatedFrom string, observedAt time.Time) *models.AgentUpdateStatus {
 	if reported == nil {
 		reported = cloneModelAgentUpdateStatus(previous)
@@ -4010,31 +4118,6 @@ func cloneAgentStatusTime(value *time.Time) *time.Time {
 	return &copy
 }
 
-func hostPrimaryTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
-	if len(sensors.TemperatureCelsius) == 0 {
-		return nil
-	}
-	if value, ok := sensors.TemperatureCelsius["cpu_package"]; ok && value > 0 {
-		return &value
-	}
-
-	var best float64
-	found := false
-	for key, value := range sensors.TemperatureCelsius {
-		if value <= 0 || !strings.HasPrefix(strings.ToLower(key), "cpu") {
-			continue
-		}
-		if !found || value > best {
-			best = value
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
-}
-
 func hostGPUMetrics(sensors models.HostSensorSummary) (
 	utilizationPercent *float64,
 	memoryPercent *float64,
@@ -4069,49 +4152,23 @@ func hostGPUMetrics(sensors models.HostSensorSummary) (
 	return utilizationPercent, memoryPercent, temperatureCelsius
 }
 
-func nodePrimaryTemperatureCelsius(temperature *models.Temperature) *float64 {
-	if temperature == nil || !temperature.Available {
-		return nil
-	}
-	if temperature.CPUMax > 0 {
-		value := temperature.CPUMax
-		return &value
-	}
-	if temperature.CPUPackage > 0 {
-		value := temperature.CPUPackage
-		return &value
-	}
-
-	var best float64
-	found := false
-	for _, core := range temperature.Cores {
-		if core.Temp <= 0 {
-			continue
-		}
-		if !found || core.Temp > best {
-			best = core.Temp
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &best
-}
-
 func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 	if shouldSkipNativeMockStateMetricWrites() || m.metricsStore == nil {
 		return
 	}
 
+	smartMetricIDs := make(map[string]struct{}, len(host.Sensors.SMART))
 	for _, disk := range host.Sensors.SMART {
-		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)
 		if resourceID == "" {
 			continue
 		}
+		smartMetricIDs[resourceID] = struct{}{}
 
-		if disk.Temperature > 0 {
-			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+		// Chart the reading the disk shows: a row without its own carries the
+		// host's Unraid reading for the disk.
+		if temperature, collection := unifiedresources.HostSMARTDiskTemperature(host, disk); diskinventory.TemperatureCollected(temperature, collection) {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(temperature), now)
 		}
 
 		attrs := disk.Attributes
@@ -4148,6 +4205,50 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 		}
 		if attrs.UnsafeShutdowns != nil {
 			m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		}
+	}
+
+	m.writeHostUnraidDiskTemperatures(host, smartMetricIDs, now)
+}
+
+// writeHostUnraidDiskTemperatures charts the temperature of each disk only the
+// host's Unraid inventory reports, such as a member the agent's SMART
+// collection skips under --disk-exclude. smartMetricIDs holds the history keys
+// of the host's SMART rows. A disk under one of those keys is that row's to
+// chart, and the row already carries the Unraid reading when it has none of
+// its own. Unraid rows sharing a key are one disk in the registry, which keeps
+// the latest of their readings, so the last row with a reading decides that
+// key's sample.
+func (m *Monitor) writeHostUnraidDiskTemperatures(host models.Host, smartMetricIDs map[string]struct{}, now time.Time) {
+	if host.Unraid == nil {
+		return
+	}
+	type reading struct {
+		temperature int
+		collection  *diskinventory.CollectionStatus
+	}
+	var keys []string
+	readings := make(map[string]reading, len(host.Unraid.Disks))
+	for _, disk := range host.Unraid.Disks {
+		resourceID := unifiedresources.HostUnraidDiskMetricID(host, disk)
+		if resourceID == "" {
+			continue
+		}
+		if _, ok := smartMetricIDs[resourceID]; ok {
+			continue
+		}
+		temperature, collection := unifiedresources.HostUnraidDiskTemperature(host, disk)
+		if temperature <= 0 {
+			continue
+		}
+		if _, ok := readings[resourceID]; !ok {
+			keys = append(keys, resourceID)
+		}
+		readings[resourceID] = reading{temperature: temperature, collection: collection}
+	}
+	for _, resourceID := range keys {
+		if r := readings[resourceID]; diskinventory.TemperatureCollected(r.temperature, r.collection) {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(r.temperature), now)
 		}
 	}
 }
@@ -4251,23 +4352,33 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 		return ""
 	}
 
+	smartDevice := diskinventory.DeviceToken(io.Device)
 	smartMetricID := ""
+	smartRowID := ""
 	for _, disk := range host.Sensors.SMART {
-		if disk.Standby {
+		if !strings.EqualFold(diskinventory.DeviceToken(disk.Device), smartDevice) {
 			continue
 		}
-		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
-			candidate := unifiedresources.HostSMARTDiskSourceID(host, disk)
-			if smartMetricID != "" && smartMetricID != candidate {
-				// Multiple controller members share this kernel block path.
-				// The counter belongs to the aggregate device, not any member.
-				return ""
-			}
-			smartMetricID = candidate
+		// Multiple controller members share this kernel block path. The
+		// counter belongs to the aggregate device, not any member. Judge that
+		// on each row's own identity, standby rows included, since members
+		// never take the path's Unraid serial.
+		rowID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		if smartRowID != "" && smartRowID != rowID {
+			return ""
+		}
+		smartRowID = rowID
+		if !disk.Standby {
+			smartMetricID = unifiedresources.HostSMARTDiskMetricID(host, disk)
 		}
 	}
 	if smartMetricID != "" {
 		return smartMetricID
+	}
+	// A disk with no SMART reading to key it, spun down or unread, still
+	// carries the serial its Unraid row reports.
+	if unraidMetricID := unifiedresources.HostUnraidDeviceMetricID(host, device); unraidMetricID != "" {
+		return unraidMetricID
 	}
 
 	for _, pd := range proxmoxDisks {
@@ -4375,10 +4486,11 @@ func (m *Monitor) proxmoxPhysicalDiskMatchesForLinkedNode(linkedNodeID string) [
 	return matches
 }
 
-// applyClusterSensors stores temperature data collected from Proxmox cluster
-// siblings via SSH. Each entry is keyed by lowercase node name so that
-// getHostAgentTemperatureByID can use it as a fallback.
-func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, reportTime time.Time) {
+// applyClusterSensors stores temperature data a host agent collected from its
+// Proxmox cluster siblings via SSH, so that getHostAgentTemperatureForNode can use
+// it as a fallback. Entries are keyed by reporting agent and lowercase node
+// name: agents in different clusters can each report a sibling of the same name.
+func (m *Monitor) applyClusterSensors(reporterID string, entries []agentshost.ClusterNodeSensors, reportTime time.Time) {
 	// Fast path: nothing to add and cache is empty — skip lock
 	if len(entries) == 0 {
 		m.clusterSensorsMu.RLock()
@@ -4401,7 +4513,9 @@ func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, r
 			continue
 		}
 
-		m.clusterSensorsCache[nodeName] = clusterSensorsCacheEntry{
+		m.clusterSensorsCache[reporterID+"\x00"+nodeName] = clusterSensorsCacheEntry{
+			reporterID: reporterID,
+			nodeName:   nodeName,
 			sensors: models.HostSensorSummary{
 				TemperatureCelsius: cloneStringFloatMap(entry.Sensors.TemperatureCelsius),
 				FanRPM:             cloneStringFloatMap(entry.Sensors.FanRPM),
@@ -4552,25 +4666,12 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 		return "", "", ""
 	}
 
-	// Normalize hostname for comparison (lowercase, strip domain)
-	normalizedHostname := strings.ToLower(hostname)
-	shortHostname := normalizedHostname
-	if idx := strings.Index(normalizedHostname, "."); idx > 0 {
-		shortHostname = normalizedHostname[:idx]
-	}
-
+	// A short name may match its FQDN, but two different FQDNs are not the
+	// same machine. Collapsing both to the first label can erase a working
+	// guest link when an independent installation is added, or link a sole
+	// unrelated guest before that installation has been discovered.
 	matchHostname := func(name string) bool {
-		normalized := strings.ToLower(name)
-		if normalized == normalizedHostname || normalized == shortHostname {
-			return true
-		}
-		// Also check short version of the candidate
-		if idx := strings.Index(normalized, "."); idx > 0 {
-			if normalized[:idx] == shortHostname {
-				return true
-			}
-		}
-		return false
+		return unifiedresources.HostnamesEquivalent(hostname, name)
 	}
 
 	readState := m.GetUnifiedReadStateOrSnapshot()
@@ -4829,14 +4930,25 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 }
 
 // cleanupGuestMetadataCache removes stale guest metadata cache and limiter entries.
-// Entries older than 2x the cache TTL (10 minutes) are removed to prevent unbounded growth
-// when VMs are deleted or moved.
+// Idle entries older than 2x the cache TTL (10 minutes) are removed to prevent
+// unbounded growth when VMs are deleted or moved. A successful observation's age
+// is not cache activity: empty/failed metadata must not erase an active guest's
+// OS-info failure counter or known-unsupported command suppression.
 func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
 
+	// Serialize the activity check with touches and reservations. No caller holds
+	// the metadata lock while acquiring the limiter lock; this order also keeps
+	// in-flight ownership intact throughout a sweep.
+	m.guestMetadataLimiterMu.Lock()
+	defer m.guestMetadataLimiterMu.Unlock()
 	m.guestMetadataMu.Lock()
 	for key, entry := range m.guestMetadataCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
+		activityAt := m.guestMetadataLastAccess[key]
+		if entry.fetchedAt.After(activityAt) {
+			activityAt = entry.fetchedAt // Also supports legacy/seeded cache entries.
+		}
+		if m.guestMetadataInFlight[key] == nil && now.Sub(activityAt) > maxAge {
 			delete(m.guestMetadataCache, key)
 			log.Debug().
 				Str("key", key).
@@ -4846,11 +4958,14 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	}
 	m.guestMetadataMu.Unlock()
 
-	m.guestMetadataLimiterMu.Lock()
-	defer m.guestMetadataLimiterMu.Unlock()
+	for key, accessedAt := range m.guestMetadataLastAccess {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(accessedAt) > maxAge {
+			delete(m.guestMetadataLastAccess, key)
+		}
+	}
 	for key, nextAllowed := range m.guestMetadataLimiter {
 		// Keep near-term limiter state; remove long-idle keys.
-		if now.Sub(nextAllowed) > maxAge {
+		if m.guestMetadataInFlight[key] == nil && now.Sub(nextAllowed) > maxAge {
 			delete(m.guestMetadataLimiter, key)
 			log.Debug().
 				Str("key", key).
@@ -5071,7 +5186,15 @@ func hostAgentHealthWindow(interval int) time.Duration {
 // evaluateHostAgents updates health for host agents based on last report time.
 func (m *Monitor) evaluateHostAgents(now time.Time) {
 	hosts := m.state.GetHosts()
-	nodes := m.NodesSnapshot()
+	// Only an offline host that names a linked node asks which node it is
+	// linked to, and only for the node's identity, so the nodes are listed when
+	// the first one does, from the structure view: this runs on every monitor
+	// tick, and in mock mode a listing of the data-version view rebuilds the
+	// whole estate after each metric tick.
+	nodes := sync.OnceValue(m.structureNodes)
+	offlineCorrelation := func(host models.Host) *alerts.AlertCorrelation {
+		return sharedSystemAlertCorrelationForHostLazy(host, nodes)
+	}
 	liveHostIDs := make(map[string]struct{}, len(hosts))
 	resourceRefreshNeeded := false
 	for _, host := range hosts {
@@ -5114,7 +5237,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 					Bool("lastSeenZero", host.LastSeen.IsZero()).
 					Msg("Host agent appears offline")
 			}
-			if expiredHost, changed := m.state.ExpireHostTelemetry(host.ID); expiredHost.ID != "" {
+			if expiredHost, changed := m.state.ExpireHostTelemetry(host.ID, host.LastSeen); expiredHost.ID != "" {
 				hostCopy = expiredHost
 				resourceRefreshNeeded = resourceRefreshNeeded || changed
 			} else {
@@ -5123,7 +5246,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOfflineWithCorrelation(
 					hostCopy,
-					sharedSystemAlertCorrelationForHost(hostCopy, nodes),
+					offlineCorrelation(hostCopy),
 				)
 			}
 		}
@@ -5148,7 +5271,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 		if m.alertManager != nil {
 			m.alertManager.HandleHostOfflineWithCorrelation(
 				host,
-				sharedSystemAlertCorrelationForHost(host, nodes),
+				offlineCorrelation(host),
 			)
 		}
 	}
@@ -5156,6 +5279,15 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 	if resourceRefreshNeeded {
 		m.refreshUnifiedResourceStoreAfterAgentStateChange()
 	}
+}
+
+// sharedSystemAlertCorrelationForHostLazy is sharedSystemAlertCorrelationForHost
+// for a caller that lists the nodes only when the host names a linked node.
+func sharedSystemAlertCorrelationForHostLazy(host models.Host, nodes func() []models.Node) *alerts.AlertCorrelation {
+	if strings.TrimSpace(host.LinkedNodeID) == "" || strings.TrimSpace(host.ID) == "" {
+		return nil
+	}
+	return sharedSystemAlertCorrelationForHost(host, nodes())
 }
 
 func sharedSystemAlertCorrelationForHost(host models.Host, nodes []models.Node) *alerts.AlertCorrelation {

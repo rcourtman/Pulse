@@ -65,14 +65,14 @@ func TestBroadcastMessageLogsStructuredContextWhenQueueFull(t *testing.T) {
 	defer restore()
 
 	hub.BroadcastMessage(Message{
-		Type: "custom",
+		Type: "settingsUpdate",
 		Data: map[string]string{"status": "ok"},
 	})
 
 	entry := singleWebSocketLogEntry(t, buf.String())
 	assertWebSocketLogStringField(t, entry, "component", websocketHubComponent)
 	assertWebSocketLogStringField(t, entry, "action", "enqueue_broadcast_dropped")
-	assertWebSocketLogStringField(t, entry, "message_type", "custom")
+	assertWebSocketLogStringField(t, entry, "message_type", "settingsUpdate")
 	assertWebSocketLogStringField(t, entry, "channel", "broadcast")
 	assertWebSocketLogIntField(t, entry, "channel_depth", cap(hub.broadcast))
 	assertWebSocketLogIntField(t, entry, "channel_capacity", cap(hub.broadcast))

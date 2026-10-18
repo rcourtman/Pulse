@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"io"
 	"strings"
 	"testing"
 )
@@ -32,6 +33,33 @@ func buildZipBytes0723Am(t *testing.T, entries ...zipEntry0723Am) []byte {
 	}
 	if err := zw.Close(); err != nil {
 		t.Fatalf("close zip: %v", err)
+	}
+	return buf.Bytes()
+}
+
+type zeroReader0723Am struct{}
+
+func (zeroReader0723Am) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
+}
+
+// Keep the real extraction boundary without spending the race suite's budget
+// deflating 100 MiB of identical bytes. Other fixtures still cover Deflate.
+// Streaming the stored entry also avoids allocating a second full-size input.
+func buildStoredSizeZip0723Am(t *testing.T, name string, size int64) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store})
+	if err != nil {
+		t.Fatalf("create stored zip entry: %v", err)
+	}
+	if n, err := io.CopyN(w, zeroReader0723Am{}, size); err != nil || n != size {
+		t.Fatalf("write stored zip entry: wrote %d, want %d, error %v", n, size, err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close stored zip: %v", err)
 	}
 	return buf.Bytes()
 }
@@ -192,10 +220,7 @@ func TestBranchcov0723AmExtractFromZip(t *testing.T) {
 	})
 
 	t.Run("oversized_entry_returns_size_limit_error", func(t *testing.T) {
-		// Deflate compresses all-zero content to a few KB, so the archive stays
-		// small while the decompressed entry exceeds maxAgentBinarySize.
-		big := bytes.Repeat([]byte{0}, maxAgentBinarySize+1)
-		archive := buildZipBytes0723Am(t, zipEntry0723Am{name: "pulse-agent.exe", content: big})
+		archive := buildStoredSizeZip0723Am(t, "pulse-agent.exe", maxAgentBinarySize+1)
 		got, err := extractFromZip(archive, "pulse-agent.exe")
 		if err == nil {
 			t.Fatalf("expected size-limit error, got %d bytes", len(got))

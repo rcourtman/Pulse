@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "26bee50a8a43015b751ce936aec3327c8c862005",
+  "verified_at": "2026-10-07T12:11:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "9ed4f1bf64a63c54336636786e54c1b7edcceea5f663056aec827c3cd9904b29"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined content of PatrolAttentionWorkbench.tsx after merging origin/main (with 844e1dbb97, suppression-end labels that follow the review state) into this branch (relative-time clock for the open attention detail)",
+    "Private mock stack (backend :7741 built from the merged tree, Vite :5261 serving it) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled",
+    "Patrol inbox: opened the first attention item with an injected acknowledgement and a forced suppressed state; the lifecycle card read 'Acknowledged by admin 3m ago' with an 'End suppression' button (no 'Return to active attention'), and evidence/timeline ages 3m/5m/7m moved to 13m/15m/17m after ten held minutes, at 1440 and 390",
+    "No page errors at either viewport; Patrol and Alerts suites (100 files, 1588 tests) and tsc pass on the merged tree"
+  ],
+  "interactions": [
+    "Loaded /patrol, opened the first attention detail, held the stream and advanced the page clock ten one-minute steps, at both viewports"
+  ]
+}

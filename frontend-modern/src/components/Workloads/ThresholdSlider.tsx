@@ -33,9 +33,8 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         onInput={state.handleInput}
         onMouseDown={state.handleMouseDown}
         onWheel={state.handleInputWheel}
-        class={`absolute inset-0 w-full h-3.5 opacity-0 ${props.disabled ? 'cursor-not-allowed' : 'cursor-pointer'} z-20`}
+        class={`absolute inset-0 w-full h-3.5 opacity-0 ${props.disabled ? 'cursor-not-allowed' : 'cursor-pointer'} z-20 touch-none`}
         disabled={props.disabled}
-        style={{ 'touch-action': 'none' }}
         title={state.sliderTitle()}
       />
 

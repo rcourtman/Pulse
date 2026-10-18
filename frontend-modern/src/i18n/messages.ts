@@ -86,6 +86,8 @@ export const EN_MESSAGES = {
   'setup.security.error.setupFailed': 'Setup failed: {error}',
   'setup.security.error.telemetryDisableFailed':
     'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
+  'setup.security.error.telemetryLockedOn':
+    'Your admin account was created. Usage statistics stay on because this server sets PULSE_TELEMETRY=true. Set PULSE_TELEMETRY=false and restart Pulse to turn them off.',
   'setup.security.generatedPasswordHelp':
     'A secure 20-character password will be generated and shown on the next screen.',
   'setup.security.label.confirmPassword': 'Confirm password',
@@ -112,8 +114,7 @@ export const EN_MESSAGES = {
     'Pulse sends a small daily usage summary showing which releases are deployed and which features and platforms are in use, so development effort goes where Pulse is actually used. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, IP addresses, or anything you type. It is never sold, shared, or used for advertising, and it is not linked to a Pulse account or license. It is on by default. You choose on the next step and can change it at any time in Settings.',
   'setup.welcome.telemetryNotice.title': 'Usage statistics',
   'setup.wizard.ariaLabel': 'Pulse Setup Wizard',
-  'alerts.activation.label.enabled': 'Notifications enabled',
-  'alerts.activation.label.disabled': 'Notifications paused',
+  'alerts.activation.switchLabel': 'Send notifications',
   'alerts.activation.toast.activated':
     "Notifications enabled. You'll now receive notifications when issues are detected.",
   'alerts.activation.toast.activateFailed': 'Unable to enable notifications. Please try again.',
@@ -143,6 +144,9 @@ export const EN_MESSAGES = {
   'alerts.assistant.subject': '{level} {alertType} on {resourceName}',
   'alerts.assistant.title': 'Alert investigation attached',
   'alerts.assistant.unlockedTitle': 'Ask Pulse Assistant about this alert',
+  'alerts.assistant.iconLabel': 'Ask Pulse Assistant about {alertType} on {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Ask Pulse Assistant about {alertType} on {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explain with Assistant',
   'alerts.assistant.explain.menuHint': 'Use this alert as read-only context',
   'alerts.assistant.patrol.chevron': 'More alert actions',
@@ -156,13 +160,14 @@ export const EN_MESSAGES = {
   'alerts.nav.collapseSidebar': 'Collapse sidebar',
   'alerts.nav.expandSidebar': 'Expand sidebar',
   'alerts.nav.title': 'Alerts',
-  'alerts.nav.toggleAlerts': 'Toggle external notifications',
   'alerts.overview.action.acknowledge': 'Acknowledge',
   'alerts.overview.action.acknowledgeAll': 'Acknowledge all ({count})',
   'alerts.overview.action.acknowledging': 'Acknowledging...',
   'alerts.overview.action.cancel': 'Cancel',
   'alerts.overview.action.hideAcknowledged': 'Hide acknowledged',
   'alerts.overview.action.hideTimeline': 'Hide Timeline',
+  'alerts.overview.action.moreActions': 'More',
+  'alerts.overview.action.lessActions': 'Less',
   'alerts.overview.action.processing': 'Processing...',
   'alerts.overview.action.resume': 'Resume',
   'alerts.overview.action.showAcknowledged': 'Show acknowledged',
@@ -218,6 +223,23 @@ export const EN_MESSAGES = {
     'Toggle alerts on to resume monitoring and unlock configuration tabs',
   'alerts.overview.paused.title': 'Alerting is paused',
   'alerts.overview.section.activeAlerts': 'Active Alerts',
+  'alerts.overview.summary.warning': '{count} warning',
+  'alerts.overview.summary.critical': '{count} critical',
+  'alerts.delivery.paused.title': 'Notifications are paused',
+  'alerts.delivery.paused.action': 'Turn on delivery',
+  'alerts.delivery.paused.setupLink': 'Set up where alerts go',
+  'alerts.delivery.paused.reason.detectionOff':
+    'Alerts are switched off in the alert configuration.',
+  'alerts.delivery.paused.reason.snoozed': 'Notification delivery is snoozed.',
+  'alerts.delivery.paused.reason.notActivated': 'Notification delivery is turned off.',
+  'alerts.delivery.paused.consequence.destinations':
+    'Pulse is still detecting alerts, but none of them will be sent to the destinations below. Test messages bypass the pause, so a successful test does not mean live alerts are getting through.',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff':
+    'Pulse is not raising new alerts while they are switched off, and none of them will be sent to the destinations below. Test messages bypass the pause, so a successful test does not mean live alerts are getting through.',
+  'alerts.delivery.paused.consequence.overview':
+    'Pulse is still detecting the alerts below, but nobody is being notified about them.',
+  'alerts.delivery.paused.consequence.overviewDetectionOff':
+    'Pulse is not raising new alerts while they are switched off, so nobody is being notified.',
   'alerts.overview.snooze.description':
     'Pause notifications and escalation for this incident. Monitoring continues and resolution is still detected.',
   'alerts.overview.snooze.option.eightHours': 'For 8 hours',
@@ -245,7 +267,7 @@ export const EN_MESSAGES = {
   'alerts.page.overview.title': 'Alerts Overview',
   'alerts.page.schedule.description':
     'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
-  'alerts.page.schedule.title': 'Maintenance Schedule',
+  'alerts.page.schedule.title': 'Delivery Schedule',
   'alerts.page.thresholds.description':
     'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
   'alerts.page.thresholds.title': 'Alert Thresholds',
@@ -453,9 +475,6 @@ export const EN_MESSAGES = {
   'settings.header.systemAiAssistant.description':
     'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
   'settings.header.systemAiAssistant.title': 'Assistant',
-  'settings.header.systemAiDiscovery.description':
-    'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
-  'settings.header.systemAiDiscovery.title': 'Service Context',
   'settings.header.systemAiPatrol.description':
     'Set when Patrol runs, what starts it, and which model it uses.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -502,7 +521,6 @@ export const EN_MESSAGES = {
   'settings.nav.item.dataReports': 'Data & Reports',
   'settings.nav.item.diagnosticsHealth': 'Diagnostics & Health',
   'settings.nav.item.assistant': 'Assistant',
-  'settings.nav.item.discovery': 'Service Context',
   'settings.nav.item.general': 'General',
   'settings.nav.item.infrastructure': 'Infrastructure',
   'settings.nav.item.network': 'Network',
@@ -665,6 +683,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.security.error.passwordTooShort',
   'setup.security.error.setupFailed',
   'setup.security.error.telemetryDisableFailed',
+  'setup.security.error.telemetryLockedOn',
   'setup.security.generatedPasswordHelp',
   'setup.security.label.confirmPassword',
   'setup.security.label.password',
@@ -726,8 +745,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
 ] as const satisfies readonly I18nMessageKey[];
 
 export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
-  'alerts.activation.label.enabled',
-  'alerts.activation.label.disabled',
+  'alerts.activation.switchLabel',
   'alerts.activation.toast.activated',
   'alerts.activation.toast.activateFailed',
   'alerts.activation.toast.deactivated',
@@ -753,6 +771,8 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.assistant.subject',
   'alerts.assistant.title',
   'alerts.assistant.unlockedTitle',
+  'alerts.assistant.iconLabel',
+  'alerts.assistant.iconLabelAt',
   'alerts.assistant.explain.menuLabel',
   'alerts.assistant.explain.menuHint',
   'alerts.assistant.patrol.chevron',
@@ -766,13 +786,14 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.nav.collapseSidebar',
   'alerts.nav.expandSidebar',
   'alerts.nav.title',
-  'alerts.nav.toggleAlerts',
   'alerts.overview.action.acknowledge',
   'alerts.overview.action.acknowledgeAll',
   'alerts.overview.action.acknowledging',
   'alerts.overview.action.cancel',
   'alerts.overview.action.hideAcknowledged',
   'alerts.overview.action.hideTimeline',
+  'alerts.overview.action.moreActions',
+  'alerts.overview.action.lessActions',
   'alerts.overview.action.processing',
   'alerts.overview.action.resume',
   'alerts.overview.action.showAcknowledged',
@@ -823,6 +844,18 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.overview.paused.description',
   'alerts.overview.paused.title',
   'alerts.overview.section.activeAlerts',
+  'alerts.overview.summary.warning',
+  'alerts.overview.summary.critical',
+  'alerts.delivery.paused.title',
+  'alerts.delivery.paused.action',
+  'alerts.delivery.paused.setupLink',
+  'alerts.delivery.paused.reason.detectionOff',
+  'alerts.delivery.paused.reason.snoozed',
+  'alerts.delivery.paused.reason.notActivated',
+  'alerts.delivery.paused.consequence.destinations',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff',
+  'alerts.delivery.paused.consequence.overview',
+  'alerts.delivery.paused.consequence.overviewDetectionOff',
   'alerts.overview.snooze.description',
   'alerts.overview.snooze.option.eightHours',
   'alerts.overview.snooze.option.oneHour',

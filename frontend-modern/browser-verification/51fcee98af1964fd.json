@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "0ad41e4c9a309ce459dd717d16d343b46efcac8a",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "8b94c3d9409f46bedf812b00ff9f3156da9ace6885ec04456ea5fed59d842127",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "79e176dd5640190f6bf11d3a6bbddc63fcd18c37b19e4e7098163a95d542b0a5"
+  },
+  "routes": [
+    "/browser-tests/history-observation-gaps.html \u2014 production full GuestDrawer/History/client/CSS, not the full App route"
+  ],
+  "states": [
+    "Stored CPU is continuous while memory and disk miss intervening group times; preserve split segments and recovery singleton/zero readings.",
+    "Live recovery alone preserves stored gaps and chart identity without a read.",
+    "Transient 503 retains data/gaps; matching complete stored refresh restores actual contiguous lines; denied 403 withdraws all history."
+  ],
+  "interactions": [
+    "Trusted desktop click, Home/Arrow keyboard inspection and pointer at exact missing stored time.",
+    "Trusted WebKit 390/320 px native inspector touch, keyboard arrows and refresh/retry.",
+    "Trusted live-recovery action does not alter stored points, query budget or chart identity.",
+    "All eight captures visually inspected for gaps, isolated points, contiguous recovery, light/dark readability and 390/320 px wrapping."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "chromium-desktop-light",
+      "theme": "light"
+    },
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "chromium-desktop-dark",
+      "theme": "dark"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "webkit-phone-dark",
+      "theme": "dark"
+    },
+    {
+      "width": 320,
+      "height": 844,
+      "browser": "webkit-narrow-light",
+      "theme": "light"
+    }
+  ],
+  "verified_at": "2026-10-04T22:39:45.443984Z",
+  "playwright_version": "1.56.1",
+  "checks": 32,
+  "screenshots_inspected": 8,
+  "script": "frontend-modern/browser-tests/history-observation-gaps.cjs",
+  "limits": "Production full GuestDrawer/History, client and CSS with synthetic local APIs. Not native guest/QGA/backup/thaw, installed recovery, physical-phone or release acceptance."
+}

@@ -1,4 +1,12 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  untrack,
+} from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
@@ -9,6 +17,7 @@ import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { logger } from '@/utils/logger';
+import { ALERT_HISTORY_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   getAlertAdministrationClearHistoryError,
   getAlertAdministrationClearHistoryConfirmation,
@@ -38,15 +47,16 @@ export interface UseAlertHistoryStateProps {
   activeAlerts: Accessor<Record<string, Alert>>;
   getResource: (resourceId: string) => Resource | undefined;
   allResources: () => Resource[];
+  /**
+   * Whether the live alert list has arrived. Saved history holds resolved
+   * alerts only, so a linked alert that is still firing is unknown until it
+   * does; without this, History would widen or report it missing too early.
+   */
+  activeAlertsSettled?: () => boolean;
 }
 
 const DEFAULT_TIME_FILTER: AlertHistoryRange = '7d';
 const DEFAULT_SEVERITY_FILTER: AlertSeverityFilter = 'all';
-const ALERT_HISTORY_QUERY_PARAMS = {
-  query: 'q',
-  period: 'period',
-  severity: 'severity',
-} as const;
 
 const parsePeriod = (raw: string | null | undefined): AlertHistoryRange =>
   raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : DEFAULT_TIME_FILTER;
@@ -102,8 +112,19 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
   };
 
+  // A notification links to one alert (`buildAlertHistoryAlertPath`): History
+  // narrows to that alert's occurrences until the operator shows all again.
+  const focusedAlertId: Accessor<string> = () =>
+    new URLSearchParams(location.search).get(ALERT_HISTORY_QUERY_PARAMS.alert)?.trim() ?? '';
+
+  const clearFocusedAlert = (): void => {
+    updateSearchParam((params) => params.delete(ALERT_HISTORY_QUERY_PARAMS.alert));
+  };
+
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
+  const [loadedHistoryRange, setLoadedHistoryRange] = createSignal<AlertHistoryRange | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [historyLoadError, setHistoryLoadError] = createSignal(false);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const resourceIncidentsState = useAlertResourceIncidentsState();
 
@@ -161,17 +182,28 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
 
   let fetchRequestId = 0;
+  let historyContextVersion = 0;
+  let disposed = false;
+  let requestedRange: AlertHistoryRange | null = null;
   const fetchHistory = async (range: AlertHistoryRange) => {
+    if (disposed) return;
     const requestId = ++fetchRequestId;
+    if (requestedRange !== range) setHistoryLoadError(false);
+    requestedRange = range;
     setLoading(true);
 
     try {
       const alertHistoryData = await AlertsAPI.getHistory(buildAlertHistoryParams(range));
       if (requestId === fetchRequestId) {
-        setAlertHistory(alertHistoryData);
+        batch(() => {
+          setAlertHistory(alertHistoryData);
+          setLoadedHistoryRange(range);
+          setHistoryLoadError(false);
+        });
       }
     } catch (error) {
       if (requestId === fetchRequestId) {
+        setHistoryLoadError(true);
         logger.error('Failed to load history:', error);
       }
     } finally {
@@ -179,6 +211,12 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
         setLoading(false);
       }
     }
+  };
+
+  // An explicit retry is a read, not history deletion or notification replay.
+  const retryHistory = () => {
+    if (loading() || disposed) return;
+    return fetchHistory(timeFilter());
   };
 
   let lastTimeFilterValue: string | null = null;
@@ -233,7 +271,11 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     void fetchHistory(timeFilter());
 
     const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      historyContextVersion++;
       setAlertHistory([]);
+      setLoadedHistoryRange(null);
+      setHistoryLoadError(false);
+      requestedRange = null;
       setSelectedBarIndex(null);
       resourceIncidentsState.resetResourceIncidentsState();
       resetState();
@@ -241,6 +283,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
 
     onCleanup(() => {
+      disposed = true;
       unsubscribeOrgSwitched();
       fetchRequestId++;
     });
@@ -259,21 +302,100 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const allHistoryData = createMemo<HistoryItem[]>(() => {
     return buildAlertHistoryItems({
       activeAlerts: props.activeAlerts() || {},
-      alertHistory: alertHistory(),
+      // A failed larger-range read must not label a smaller snapshot as complete.
+      // Keep the last snapshot for same-range retry, but never reuse it in another range.
+      alertHistory: loadedHistoryRange() === timeFilter() ? alertHistory() : [],
       getResource: props.getResource,
       allResources: props.allResources(),
     });
   });
 
+  const focusScopedItems = createMemo<HistoryItem[]>(() => {
+    const focus = focusedAlertId();
+    return focus ? allHistoryData().filter((item) => item.id === focus) : allHistoryData();
+  });
+
+  const historyReady = () =>
+    (props.activeAlertsSettled?.() ?? true) &&
+    !loading() &&
+    !historyLoadError() &&
+    loadedHistoryRange() === timeFilter();
+
+  // The linked alert may be older than the range on show: widen to all of
+  // history, deciding once per alert so a later range is the operator's.
+  let rangeCheckedFor = '';
+  createEffect(() => {
+    const focus = focusedAlertId();
+    if (!focus) {
+      rangeCheckedFor = '';
+      return;
+    }
+    if (!historyReady() || rangeCheckedFor === focus) return;
+    rangeCheckedFor = focus;
+    if (focusScopedItems().length > 0 || timeFilter() === 'all') return;
+    untrack(() => setTimeFilter('all'));
+  });
+
+  const focusedAlertMissing = (): boolean =>
+    focusedAlertId() !== '' &&
+    historyReady() &&
+    timeFilter() === 'all' &&
+    focusScopedItems().length === 0;
+
+  // Open the linked alert's latest occurrence once, preferring one still
+  // active. The table shows the shared expansion inline; the cards show a
+  // timeline only in their drawer, so they take a one-shot request that a
+  // remounted list cannot replay after the operator closed it.
+  const [focusedAlert, setFocusedAlert] = createSignal<HistoryItem | null>(null);
+  const [focusRequest, setFocusRequest] = createSignal<{
+    rowKey: string;
+    alert: HistoryItem;
+  } | null>(null);
+  const takeFocusRequest = () => {
+    const request = untrack(focusRequest);
+    if (request) setFocusRequest(null);
+    return request;
+  };
+  let openedFor = '';
+  createEffect(() => {
+    const focus = focusedAlertId();
+    if (!focus) {
+      openedFor = '';
+      untrack(() => {
+        setFocusedAlert(null);
+        setFocusRequest(null);
+      });
+      return;
+    }
+    if (openedFor === focus || !historyReady()) return;
+    const [latest] = [...focusScopedItems()]
+      .filter((item) => item.source === 'alert')
+      .sort(
+        (left, right) =>
+          Number(right.status === 'active') - Number(left.status === 'active') ||
+          Date.parse(right.startTime) - Date.parse(left.startTime),
+      );
+    if (!latest) return;
+    openedFor = focus;
+    const rowKey = getIncidentRowKey(latest);
+    untrack(() => {
+      if (!expandedIncidents().has(rowKey)) {
+        void toggleIncidentTimeline(rowKey, latest.id, latest.startTime);
+      }
+      setFocusedAlert(latest);
+      setFocusRequest({ rowKey, alert: latest });
+    });
+  });
+
   const severityAndSearchFilteredItems = createMemo(() => {
-    return filterAlertHistoryItems(allHistoryData(), severityFilter(), searchTerm());
+    return filterAlertHistoryItems(focusScopedItems(), severityFilter(), searchTerm());
   });
 
   // Chip-count source for the severity facet: the same predicate the list
   // filters with, so each chip shows the row count its selection renders
   // (before any chart bar drill-down, which narrows further and explicitly).
   const countForSeverity = (value: AlertSeverityFilter): number =>
-    filterAlertHistoryItems(allHistoryData(), value, searchTerm()).length;
+    filterAlertHistoryItems(focusScopedItems(), value, searchTerm()).length;
 
   const alertTrends = createMemo(() => {
     return buildAlertTrends(severityAndSearchFilteredItems(), timeFilter());
@@ -282,7 +404,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const alertData = createMemo(() => {
     return applyAlertHistoryWindow({
       filteredItems: severityAndSearchFilteredItems(),
-      timeFilter: timeFilter(),
+      // A linked alert shows every loaded occurrence: one still firing may
+      // have started before the range on show.
+      timeFilter: focusedAlertId() ? 'all' : timeFilter(),
       selectedBarIndex: selectedBarIndex(),
       trends: alertTrends(),
     });
@@ -307,23 +431,35 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   );
 
   const clearAlertHistory = async () => {
+    if (disposed) return;
     if (!confirm(getAlertAdministrationClearHistoryConfirmation())) {
       return;
     }
 
+    const contextVersion = historyContextVersion;
     try {
       await AlertsAPI.clearHistory();
+      if (disposed || contextVersion !== historyContextVersion) return;
       // Reads started before the clear completed may still contain deleted rows.
       fetchRequestId++;
       setLoading(false);
       setAlertHistory([]);
+      setLoadedHistoryRange(timeFilter());
+      setHistoryLoadError(false);
     } catch (error) {
+      if (disposed || contextVersion !== historyContextVersion) return;
       logger.error(getAlertAdministrationClearHistoryError(), error);
       notificationStore.error(getAlertAdministrationClearHistoryError());
     }
   };
 
   return {
+    focusedAlertId,
+    focusedAlertMissing,
+    clearFocusedAlert,
+    focusRequest,
+    takeFocusRequest,
+    focusedAlert,
     STORAGE_KEYS,
     timeFilter,
     setTimeFilter,
@@ -333,6 +469,8 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     setSearchTerm,
     alertHistory,
     loading,
+    historyLoadError,
+    retryHistory,
     selectedBarIndex,
     setSelectedBarIndex,
     resourceIncidentPanel: resourceIncidentsState.resourceIncidentPanel,
@@ -361,6 +499,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     // Exposed so the inline resource panel can resolve a display name without
     // threading the lookup down through the table and mobile list.
     getResource: props.getResource,
+    // Exposed so the resource panel can describe its open occurrence from the
+    // live alert instead of the message recorded when it opened.
+    activeAlerts: props.activeAlerts,
     formatAlertRowTime,
     formatAlertRowTimestamp,
     openResourceIncidentPanel: resourceIncidentsState.openResourceIncidentPanel,

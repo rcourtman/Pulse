@@ -225,11 +225,23 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
   });
 
   describe('memory field', () => {
-    it('reads usage when present and compares with `<`', () => {
+    it('reads a current percentage and compares with `<`', () => {
       expect(
         evaluateFilterStack(
-          makeGuest({ memory: { usage: 900, total: 1000, used: 900, free: 100 } }),
-          single(metric('memory', '<', 1000)),
+          makeGuest({
+            memory: {
+              usage: 90,
+              total: 1000,
+              used: 900,
+              free: 100,
+              observation: {
+                state: 'current',
+                source: 'status-mem',
+                observedAt: '2026-10-08T00:00:00Z',
+              },
+            },
+          }),
+          single(metric('memory', '<', 95)),
         ),
       ).toBe(true);
     });
@@ -245,14 +257,13 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
       ).toBe(true);
     });
 
-    it('returns 0 when disk is null (falsy short-circuit)', () => {
-      // null disk -> 0 ; 0 <= 0 true
+    it('does not substitute zero when disk is null', () => {
       expect(
         evaluateFilterStack(
           makeGuest({ disk: null as unknown as VM['disk'] }),
           single(metric('disk', '<=', 0)),
         ),
-      ).toBe(true);
+      ).toBe(false);
     });
   });
 

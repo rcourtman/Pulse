@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -26,9 +27,18 @@ type RecoveryHandlers struct {
 }
 
 func NewRecoveryHandlers(manager *recoverymanager.Manager) *RecoveryHandlers {
+	if manager == nil {
+		manager = newRecoveryReadManager(nil)
+	}
 	return &RecoveryHandlers{
 		manager: manager,
 	}
+}
+
+// Compose recovery reads once so HTTP and investigation consumers see the same
+// evidence. Demo mode uses the current canonical graph; real tenants use SQLite.
+func newRecoveryReadManager(persistence *config.MultiTenantPersistence) *recoverymanager.Manager {
+	return recoverymanager.NewWithPointSource(persistence, mock.RecoveryPointsSource{})
 }
 
 func (h *RecoveryHandlers) storeForOrg(orgID string) (*recoverystore.Store, error) {
@@ -228,31 +238,10 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 		Limit:             limit,
 	}
 
-	var (
-		points []recovery.RecoveryPoint
-		total  int
-	)
-
-	if mock.IsMockEnabled() {
-		all := mock.CurrentFixtureGraph().RecoveryPoints()
-		filtered := filterRecoveryPoints(all, opts)
-		total = len(filtered)
-		points = paginateRecoveryPoints(filtered, opts.Page, opts.Limit)
-	} else {
-		orgID := GetOrgID(r.Context())
-		store, err := h.storeForOrg(orgID)
-		if err != nil {
-			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-			return
-		}
-
-		p, t, err := store.ListPoints(r.Context(), opts)
-		if err != nil {
-			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-			return
-		}
-		points = p
-		total = t
+	points, total, err := h.manager.ListPointsForOrg(r.Context(), GetOrgID(r.Context()), opts)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
 	}
 
 	// Ensure normalized display data is present for UIs (works for both real and mock paths).
@@ -413,139 +402,7 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 }
 
 func filterRecoveryPoints(all []recovery.RecoveryPoint, opts recovery.ListPointsOptions) []recovery.RecoveryPoint {
-	if len(all) == 0 {
-		return nil
-	}
-
-	provider := strings.TrimSpace(string(opts.Provider))
-	kind := strings.TrimSpace(string(opts.Kind))
-	mode := strings.TrimSpace(string(opts.Mode))
-	outcome := strings.TrimSpace(string(opts.Outcome))
-	subjectRID := strings.TrimSpace(opts.SubjectResourceID)
-	rollupID := strings.TrimSpace(opts.RollupID)
-	cluster := strings.TrimSpace(opts.ClusterLabel)
-	node := strings.TrimSpace(opts.NodeHostLabel)
-	namespace := strings.TrimSpace(opts.NamespaceLabel)
-	itemType := recovery.NormalizeRecoveryItemType(opts.ItemType)
-	q := strings.ToLower(strings.TrimSpace(opts.Query))
-	workloadOnly := opts.WorkloadOnly
-	verification := strings.ToLower(strings.TrimSpace(opts.Verification))
-	if rollupID != "" && !strings.HasPrefix(rollupID, "res:") && !strings.HasPrefix(rollupID, "ext:") {
-		rollupID = "res:" + rollupID
-	}
-
-	out := make([]recovery.RecoveryPoint, 0, len(all))
-	for _, p := range all {
-		// Ensure display/index data exists for filtering parity with sqlite store.
-		if p.Display == nil {
-			idx := recovery.DeriveIndex(p)
-			p.Display = idx.ToDisplay()
-		}
-		disp := p.Display
-
-		if provider != "" && strings.TrimSpace(string(p.Provider)) != provider {
-			continue
-		}
-		if kind != "" && strings.TrimSpace(string(p.Kind)) != kind {
-			continue
-		}
-		if mode != "" && strings.TrimSpace(string(p.Mode)) != mode {
-			continue
-		}
-		if outcome != "" && strings.TrimSpace(string(p.Outcome)) != outcome {
-			continue
-		}
-		if rollupID != "" {
-			if strings.TrimSpace(recovery.SubjectKeyForPoint(p)) != rollupID {
-				continue
-			}
-		} else if subjectRID != "" && strings.TrimSpace(p.SubjectResourceID) != subjectRID {
-			continue
-		}
-		if opts.From != nil && !opts.From.IsZero() {
-			// Match store semantics: completed_at_ms IS NULL OR completed_at_ms >= from
-			if p.CompletedAt != nil && !p.CompletedAt.IsZero() && p.CompletedAt.Before(opts.From.UTC()) {
-				continue
-			}
-		}
-		if opts.To != nil && !opts.To.IsZero() {
-			// Match store semantics: completed_at_ms IS NULL OR completed_at_ms <= to
-			if p.CompletedAt != nil && !p.CompletedAt.IsZero() && p.CompletedAt.After(opts.To.UTC()) {
-				continue
-			}
-		}
-
-		if cluster != "" && strings.TrimSpace(getDisplayClusterLabel(p.Display)) != cluster {
-			continue
-		}
-		if node != "" && strings.TrimSpace(getDisplayNodeHostLabel(p.Display)) != node {
-			continue
-		}
-		if namespace != "" && strings.TrimSpace(getDisplayNamespaceLabel(p.Display)) != namespace {
-			continue
-		}
-		if itemType != "" && strings.TrimSpace(getDisplayItemType(p.Display)) != itemType {
-			continue
-		}
-		if workloadOnly && !(disp != nil && disp.IsWorkload) {
-			continue
-		}
-		if verification != "" {
-			v := p.Verified
-			switch verification {
-			case "verified":
-				if v == nil || !*v {
-					continue
-				}
-			case "unverified":
-				if v == nil || *v {
-					continue
-				}
-			case "unknown":
-				if v != nil {
-					continue
-				}
-			}
-		}
-		if q != "" {
-			// Best-effort match across normalized display fields.
-			var subjectLabel, subjectType, itemTypeLabel, clusterLabel, nodeLabel, nsLabel, entityID, repoLabel, detailSummary string
-			if disp != nil {
-				subjectLabel = disp.SubjectLabel
-				subjectType = disp.SubjectType
-				itemTypeLabel = disp.ItemType
-				clusterLabel = disp.ClusterLabel
-				nodeLabel = disp.NodeHostLabel
-				nsLabel = disp.NamespaceLabel
-				entityID = disp.EntityIDLabel
-				repoLabel = disp.RepositoryLabel
-				detailSummary = disp.DetailsSummary
-			}
-
-			hay := strings.ToLower(strings.Join([]string{
-				strings.TrimSpace(p.ID),
-				strings.TrimSpace(string(p.Provider)),
-				strings.TrimSpace(string(p.Kind)),
-				strings.TrimSpace(string(p.Mode)),
-				strings.TrimSpace(string(p.Outcome)),
-				strings.TrimSpace(subjectLabel),
-				strings.TrimSpace(subjectType),
-				strings.TrimSpace(itemTypeLabel),
-				strings.TrimSpace(clusterLabel),
-				strings.TrimSpace(nodeLabel),
-				strings.TrimSpace(nsLabel),
-				strings.TrimSpace(entityID),
-				strings.TrimSpace(repoLabel),
-				strings.TrimSpace(detailSummary),
-			}, " "))
-			if !strings.Contains(hay, q) {
-				continue
-			}
-		}
-
-		out = append(out, p)
-	}
-	return out
+	return recovery.FilterPoints(all, opts)
 }
 
 func getDisplayClusterLabel(d *recovery.RecoveryPointDisplay) string {
@@ -603,25 +460,6 @@ func normalizeRecoveryLimit(limit int) int {
 		return recoveryMaxPageLimit
 	}
 	return limit
-}
-
-func paginateRecoveryPoints(filtered []recovery.RecoveryPoint, page int, limit int) []recovery.RecoveryPoint {
-	if len(filtered) == 0 {
-		return []recovery.RecoveryPoint{}
-	}
-
-	normalizedLimit := normalizeRecoveryLimit(limit)
-	normalizedPage := normalizeRecoveryPage(page)
-
-	offset := (normalizedPage - 1) * normalizedLimit
-	if offset >= len(filtered) {
-		return []recovery.RecoveryPoint{}
-	}
-	end := offset + normalizedLimit
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	return filtered[offset:end]
 }
 
 func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Request) {

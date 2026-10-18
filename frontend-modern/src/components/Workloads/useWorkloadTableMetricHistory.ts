@@ -3,6 +3,7 @@ import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from
 import {
   ChartsAPI,
   type AllMetricsHistoryResponse,
+  type ChartData,
   type ResourceType,
   type SingleMetricHistoryResponse,
   type WorkloadChartsResponse,
@@ -12,13 +13,10 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
-import {
-  fetchInfrastructureSummaryAndCache,
-  type InfrastructureSummaryFetchResult,
-} from '@/utils/infrastructureSummaryCache';
-import { fetchWorkloadsSummaryAndCache } from '@/utils/workloadsSummaryCache';
+import { getWorkloadHistoryNodeId } from './workloadTopology';
 
 import {
+  buildInfrastructureHistoryChartMap,
   findChartDataForCandidates,
   getMetricSparklineSeriesFromChartData,
   getNodeChartKeyCandidates,
@@ -37,7 +35,14 @@ interface WorkloadTableMetricHistoryOptions {
   onDemand?: Accessor<boolean>;
   prefetchGuests?: Accessor<readonly WorkloadGuest[]>;
   range: Accessor<WorkloadTableMetricHistoryRange>;
-  selectedNode: Accessor<string | null | undefined>;
+  selectedNode?: Accessor<string | null | undefined>;
+  nodes?: Accessor<Node[]>;
+  // The rows this caller draws while `enabled`. Each estate-wide history is a
+  // polled summary read, so a reader polls only the one its rows consume:
+  // guest rows read the workloads summary, node rows the infrastructure
+  // summary. Readers do not share in-flight requests, so a second reader on
+  // the same page pays for its own reads.
+  series: 'guests' | 'nodes';
 }
 
 interface ActiveGuestHistoryQueryKey {
@@ -55,10 +60,7 @@ const EMPTY_WORKLOAD_CHARTS_RESPONSE: WorkloadChartsResponse = {
   stats: { oldestDataTimestamp: 0 },
 };
 
-const EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE: InfrastructureSummaryFetchResult = {
-  map: new Map(),
-  oldestDataTimestamp: null,
-};
+const EMPTY_INFRASTRUCTURE_CHART_MAP = new Map<string, ChartData>();
 
 const ROW_HISTORY_PREFETCH_CONCURRENCY = 4;
 const ROW_HISTORY_INITIAL_PREFETCH_COUNT = 6;
@@ -111,24 +113,25 @@ const buildActiveGuestHistoryCacheKey = (key: ActiveGuestHistoryQueryKey): strin
 export function useWorkloadTableMetricHistory(
   options: WorkloadTableMetricHistoryOptions,
 ): WorkloadMetricHistoryReader {
-  const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode()));
+  const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode?.()));
   const workloadHistoryScope = createMemo(() => {
-    if (!options.enabled()) return null;
-    return buildHistoryScope(options.range(), selectedNodeScope());
+    if (options.series !== 'guests' || !options.enabled()) return null;
+    return buildHistoryScope(
+      options.range(),
+      getWorkloadHistoryNodeId(selectedNodeScope(), options.nodes?.()),
+    );
   });
   const infrastructureHistoryScope = createMemo(() =>
-    options.enabled() ? buildHistoryScope(options.range()) : null,
+    options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null,
   );
 
   const workloadHistory = createNonSuspendingQuery<WorkloadChartsResponse, string>({
     source: workloadHistoryScope,
     fetcher: (scope, signal) => {
       const parsed = parseHistoryScope(scope);
-      return fetchWorkloadsSummaryAndCache(parsed.range, {
-        caller: 'WorkloadTableMetricHistory',
+      return ChartsAPI.getWorkloadCharts(parsed.range, signal, {
         maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
-        nodeId: parsed.nodeScope === '__all__' ? null : parsed.nodeScope,
-        signal,
+        nodeId: parsed.nodeScope === '__all__' ? undefined : parsed.nodeScope,
       });
     },
     initialValue: EMPTY_WORKLOAD_CHARTS_RESPONSE,
@@ -137,17 +140,15 @@ export function useWorkloadTableMetricHistory(
     retainPreviousValueOnSourceChange: false,
   });
 
-  const infrastructureHistory = createNonSuspendingQuery<InfrastructureSummaryFetchResult, string>({
+  const infrastructureHistory = createNonSuspendingQuery<Map<string, ChartData>, string>({
     source: infrastructureHistoryScope,
     fetcher: (scope, signal) => {
       const parsed = parseHistoryScope(scope);
-      return fetchInfrastructureSummaryAndCache(parsed.range, {
-        caller: 'WorkloadTableMetricHistory',
+      return ChartsAPI.getInfrastructureSummaryCharts(parsed.range, signal, {
         metrics: WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
-        signal,
-      });
+      }).then(buildInfrastructureHistoryChartMap);
     },
-    initialValue: EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE,
+    initialValue: EMPTY_INFRASTRUCTURE_CHART_MAP,
     cacheKey: (scope) => `workload-table-infra-history:${scope}`,
     pollMs: WORKLOAD_TABLE_HISTORY_POLL_MS,
     retainPreviousValueOnSourceChange: false,
@@ -334,7 +335,7 @@ export function useWorkloadTableMetricHistory(
 
   const getNodeMetricSeries = (node: Node, metric: WorkloadTableMetric) => {
     const chartData = findChartDataForCandidates(getNodeChartKeyCandidates(node), [
-      infrastructureHistory.value().map,
+      infrastructureHistory.value(),
     ]);
     return getMetricSparklineSeriesFromChartData(chartData, metric);
   };

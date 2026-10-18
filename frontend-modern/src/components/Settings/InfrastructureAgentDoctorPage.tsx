@@ -13,6 +13,7 @@ import {
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
 import { MonitoringAPI } from '@/api/monitoring';
 import { AgentDiagnosticsAPI } from '@/api/agentDiagnostics';
@@ -81,6 +82,7 @@ const formatLastSeen = (value?: number | string | null): string | undefined => {
 export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorPageProps> = (
   props,
 ) => {
+  const now = useRelativeTimeNow();
   const operations = useInfrastructureOperationsContext();
   const summary = createMemo(() => summarizeInfrastructureAgentDoctorTargets(props.targets));
   const anyTargetNeedsRepair = createMemo(() =>
@@ -515,6 +517,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                     formatRelativeTime(target.lastSeen ?? undefined, {
                       compact: true,
                       emptyText: '—',
+                      now: now(),
                     });
                   const command = () =>
                     target.connection && target.commandPlatform
@@ -654,7 +657,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                         }
                                         label="Copy safe-profile inspection command"
                                       />
-                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                         <code>
                                           {buildSafeCollectorInspectCommand({
                                             pulseUrl: operations.selectedAgentUrl(),
@@ -682,7 +685,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                         }
                                         label="Copy safe-profile apply command"
                                       />
-                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                         <code>
                                           {buildSafeCollectorApplyCommand({
                                             pulseUrl: operations.selectedAgentUrl(),
@@ -767,7 +770,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           onClick={() => void copyCommand(tokenFileCommand())}
                                           label="Copy private token-file command"
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{tokenFileCommand()}</code>
                                         </pre>
                                       </div>
@@ -782,7 +785,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           title="Copy one-time action-runner credential"
                                           label={`Copy action-runner credential for ${target.displayName}`}
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{reveal().token}</code>
                                         </pre>
                                       </div>
@@ -796,7 +799,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           onClick={() => void copyCommand(installCommand())}
                                           label="Copy action-runner installer command"
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{installCommand()}</code>
                                         </pre>
                                       </div>
@@ -914,7 +917,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                       title="Copy host-local agent repair command"
                                       label={`Copy ${target.needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target.displayName}`}
                                     />
-                                    <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                       <code>{command()}</code>
                                     </pre>
                                     <Show
@@ -941,9 +944,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     This agent was removed from Pulse, but the agent software may
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
-                                    not run commands remotely. For Unix commands that require a
-                                    token, run the command first, then paste the separately revealed
-                                    token at its silent prompt. Never insert it into the command.
+                                    not run commands remotely. Removal uses the host's saved
+                                    connection and credentials. Do not generate a new token.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (
@@ -964,7 +966,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             title="Copy host-local agent uninstall command"
                                             label={`Copy ${entry.label} uninstall command for ${target.displayName}`}
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                             <code>
                                               {operations.getPlatformUninstallCommand(
                                                 entry.platform,

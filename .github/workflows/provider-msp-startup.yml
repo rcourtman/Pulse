@@ -1,0 +1,81 @@
+name: Provider MSP startup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'internal/cloudcp/**'
+      - 'cmd/pulse-control-plane/**'
+      - 'pkg/licensing/**'
+      - 'deploy/provider-msp/**'
+      - 'scripts/installtests/provider_msp*'
+      - 'frontend-modern/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/provider-msp-startup.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'internal/cloudcp/**'
+      - 'cmd/pulse-control-plane/**'
+      - 'pkg/licensing/**'
+      - 'deploy/provider-msp/**'
+      - 'scripts/installtests/provider_msp*'
+      - 'frontend-modern/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/provider-msp-startup.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-msp-startup-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  startup:
+    name: Provider MSP production startup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify source identity
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+
+      - name: Build real embedded frontend
+        working-directory: frontend-modern
+        run: npm ci --no-audit && npm run build
+
+      # The test generates an ephemeral issuer, embeds only its public key in
+      # a release daemon and signs synthetic MSP fixtures. No project secrets,
+      # customer keys, provider account, edge ingress or publication is used.
+      - name: Prove mounted-secret startup, persistence and refusal
+        env:
+          PULSE_TEST_PROVIDER_MSP_STARTUP: compose
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout 12m ./scripts/installtests \
+            -run '^TestProviderMSPProductionStartup$' -v \
+            | tee "$RUNNER_TEMP/provider-msp-startup.log"
+          grep -q '^--- PASS: TestProviderMSPProductionStartup ' "$RUNNER_TEMP/provider-msp-startup.log"

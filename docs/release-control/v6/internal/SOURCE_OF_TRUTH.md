@@ -10,11 +10,11 @@ Evergreen control-plane governance now lives in
 `docs/release-control/CONTROL_PLANE.md`, and the active profile plus active
 target are machine-selected by `docs/release-control/control_plane.json`.
 
-Current lane scores, evidence references, coverage-gap discovery records,
+Current lane states, evidence references, coverage-gap discovery records,
 candidate-lane planning records, and typed operational decision records live
 only in `docs/release-control/v6/internal/status.json`.
 Lane completion state, residual-gap summaries, normalized follow-up tracking,
-and derived coverage scores also live only in
+and typed blocker references also live only in
 `docs/release-control/v6/internal/status.json`.
 Non-blocking same-lane residuals that are concrete enough to name directly
 live in `status.json.lane_followups`.
@@ -48,7 +48,7 @@ live in `status.json.readiness_assertions`.
 
 This file must not contain:
 
-1. hand-maintained lane score tables
+1. hand-maintained copies of lane state
 2. hand-maintained evidence lists
 3. ephemeral session recaps or task logs
 
@@ -80,7 +80,9 @@ This file must not contain:
     completion obligations.
 11. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
     Canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback
-    expectations for v6 and later release lines.
+    expectations for v6 and later release lines. Its Release Train section is the
+    single statement of release cadence, soak, versioning and promotion in this
+    repository; other documents defer to it rather than restating it.
 12. `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`
     Canonical v5 maintenance-only support policy, release-line rules, and GA
     notice requirements for the v6 cutover.
@@ -123,10 +125,14 @@ partial staging for hook-sensitive governance files under
 those checks still execute or structurally read the working-tree versions
 locally.
 
-For governed runtime changes, a staged subsystem contract only counts if its
-diff updates a substantive contract section such as `Purpose`,
-`Canonical Files`, `Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
-`Completion Obligations`, or `Current State`, rather than metadata alone.
+The development protocol owns contract-update policy. Subsystem contracts
+describe current responsibilities, boundaries and invariants. Update changed
+meaning at its owner and replace obsolete text. Keep task receipts in existing
+verification artifacts or delivery history. Contract neutral changes use the
+established explicit `Contract-Neutral` declaration carried from the local
+commit hook into CI, rather than artificial documentation or test diffs.
+Appropriate checks, browser verification, ownership, security and release gates
+still apply. See `CANONICAL_DEVELOPMENT_PROTOCOL.md`.
 
 All other documents are supporting references unless explicitly required for
 evidence.
@@ -381,7 +387,7 @@ Assertion design rules:
     Contract ratchets, proof-routing cleanup, registry tightening, and
     guardrail-only tests may strengthen confidence, but they must not be
     treated as substantive lane movement by themselves.
-    If `status.json` advances a lane's score, status, or completion state, the
+    If `status.json` advances a lane's status or completion state, the
     same slice should normally include an owned runtime or product-surface
     delta for that lane unless the remaining gap is explicitly governance-only.
 21. Large machine control files are canonical databases, not startup prompt
@@ -409,21 +415,19 @@ Assertion design rules:
     tiny commits just because each residue item can be named separately. Split
     only when there is a real risk boundary, concept boundary, or proof
     boundary.
-24. Lane scores, missing evidence items, and proof counts are signals, not the
-    work target.
+24. Evidence counts do not determine the work target.
     Use them to find the remaining runtime, product, ownership, or governance
     gap that still keeps the lane below floor.
-    Do not frame a slice as "get two more evidence items" or "raise the lane
-    score" unless the remaining gap is explicitly governance-only.
+    Do not frame a slice as "get two more evidence items" unless the remaining
+    gap is explicitly governance-only.
     For ordinary lane work, identify the real same-lane gap first, then add
     the proof that demonstrates the gap is actually closed.
 25. Worktrees are available for isolated mutating slices when explicit isolation
     is needed.
     A shared mutable checkout is fine for normal single-session work.
-    Use `worktree_base.py`, `worktree_claim.py`, and `worktree_finish.py` when
-    a slice requires its own isolated hooks, staged scope, and dirty state —
-    for example when a subagent needs to mutate independently and land back
-    cleanly.
+    Use the available Git worktree tools under the repository's branch policy,
+    then reserve the slice with the public work_claim.py command in the
+    checkout where the work will run.
 26. User-visible frontend work is incomplete until the current build has been
     exercised in-browser through the deepest changed interaction at desktop
     and narrow widths. The commit must carry a fresh, parent-bound browser
@@ -470,7 +474,7 @@ Assertion design rules:
     page-shell contract and still present inconsistent top-level framing,
     header chrome, or section treatment without explicit justification.
 13. Do not keep polishing strong lanes while weak lanes remain behind.
-14. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+14. Do not treat `status.json` lane completion as sufficient release approval by itself; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
 15. Do not promote v6 to stable or GA without an exercised prerelease, a real
     release-pipeline proof run, a recorded rollback target plus exact
     reinstall command, and a written v5 maintenance-only support policy.
@@ -489,9 +493,8 @@ Assertion design rules:
     Pair lane `status` and `completion.state` coherently: `complete` goes with
     `target-met`, `bounded-residual` goes with `partial`, and `open` must not
     be paired with `target-met`.
-    `partial` means measurable progress, so it must not sit at zero score.
-    `not-started` means zero score and `open`. `blocked` remains an `open`
-    lane below target rather than a residual or complete state.
+    `not-started` and `blocked` remain `open`, rather than residual or complete
+    states. `partial` describes evidenced work that is still incomplete.
     Blocked lanes must declare typed same-lane blocker references to unresolved
     readiness assertions, release gates, or open decisions.
     `completion.tracking` is only for bounded residuals; open or complete lanes
@@ -512,9 +515,9 @@ Assertion design rules:
     resources, canonical shared types, explicit subsystem ownership, or a
     modernized proof path, the lane is still below floor until that migration
     is made or the remaining gap is governed explicitly.
-20. Do not treat missing evidence count or a score delta as the task itself.
+20. Do not treat missing evidence counts as the task itself.
     If the real remaining gap is runtime, product, ownership, or behavior
-    coherence, fix that gap and let the score/evidence catch up as proof.
+    coherence, fix that gap and record evidence of the resulting behavior.
     Only treat evidence-count closure itself as the task when the remaining
     gap is explicitly governance-only.
 21. Do not run parallel mutating agents out of one dirty checkout and call
@@ -522,9 +525,9 @@ Assertion design rules:
     Claims reduce overlap, but they do not isolate hooks, formatters, staged
     reads, or unrelated dirt. Parallel mutation should use separate worktrees
     so each agent sees one slice's git state at a time.
-22. Do not publish a routine stable patch without a successful exact-SHA
-    `Release Dry Run` from the previous 24 hours. That run must prove the
-    current stable demo network/SSH/browser path without mutation, and the
+22. Do not publish a stable patch unless its exact-SHA publish run proves the
+    current stable demo network/SSH/browser path without mutation before the
+    publication boundary. A separate `Release Dry Run` is optional. The
     publish workflow must await demo deployment plus definitive verification;
     manual SSH deployment is not an acceptable release completion path.
 23. Do not authorize limited unattended Pulse Intelligence mutation until the
@@ -609,8 +612,9 @@ Assertion design rules:
     issue intended for v6 is fixed in the candidate, proven invalid with
     evidence, or conservatively superseded with the original problem resolved
     or explicitly narrowed.
-15. Routine stable patch releases after GA do not require a fabricated RC.
-    They may use the no-RC path only when the candidate descends from the latest
+15. The release train schedules no patch releases. When a stable patch is
+    published after GA it does not require a fabricated RC and may use the
+    no-RC path only when the candidate descends from the latest
     stable rollback target, no same-version RC exists, no governed high-risk
     auth/tenant, licensing/billing, persisted-data/migration, relay/mobile
     trust, or installer/update/rollback path changed, and the exact-SHA release
@@ -669,8 +673,8 @@ Assertion design rules:
     or other release surface. Broad, multi-platform, release-surface,
     migration, destructive-state, trust-boundary, cross-repo, and promotion-
     lineage validation remains on the governed RC path. Successful reporter
-    confirmation informs severity-based release scheduling but does not force
-    an immediate patch release.
+    confirmation does not force a release: the fix ships in the next candidate
+    the release train cuts from `main`, or sooner through an early cut.
 22. A published release candidate is a cohort checkpoint, not a per-fix delivery
     mechanism. After the first RC on a version line, at least 24 hours of public
     observation must elapse before another RC on that line is published.
@@ -912,20 +916,15 @@ For canonical subsystem work:
 13. If the current lane map no longer models a durable product surface cleanly,
     record that discovery in `status.json.coverage_gaps` with evidence and an
     intended promotion path instead of burying it in generic residual text.
-14. Treat lane completion, lane coverage, and coverage planning as separate
-    derived signals.
-    `status_audit.py --pretty` may derive a lane-completion score from
-    `current_score/target_score`, a lane-coverage score from unresolved
-    `coverage_gaps`, a coverage-planning score from unresolved
-    `coverage_gaps` that still lack explicit `candidate_lanes`, and a
-    conservative governed-surface score as the lower of completion and
-    coverage.
-    Those scores are decision aids, not proof that unknown work does not
-    exist.
+14. Keep declared lane completion, unresolved coverage gaps and proposed work
+    distinct. The audit exposes scope, demand evidence and ownership availability
+    without grading completion or deriving priority from proxy counts. Candidate
+    options use stable identifier order. Choose work from current user direction
+    and actual evidence, not the position of an option in the output.
 15. Treat active work claiming as its own live control surface.
     `status.json.work_claims` should hold only live lease-style claims, not a
     historical log, and `status_audit.py --pretty` should make active claims,
-    expired claims, claim conflicts, and the `available_candidate_lane_queue`
+    expired claims, claim conflicts, and the `available_candidate_lane_options`
     visible enough that agents can avoid overlapping picks.
     Use `scripts/release_control/work_claim.py` as the default reservation
     path rather than hand-editing claim objects when the system can reserve

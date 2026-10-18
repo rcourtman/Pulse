@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "82b27a9f2f3871a1e3b92ff7fbcf70dc95658c50",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "9f8bbdc28760e167e1f52537cade0956388e5c41bf9d5c90f86ae0e308350ba9",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "e968dad36946956eb8683f95ae89a71595641dc0284020e505c65f8c5628ffd7",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "93ae5685dcf589135fba9f7022e0a08d23c036dabfa1010cdc3daf5c167884b6",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "13ebe72458650223a69e6e3fe20058e4a87db840c1f479b4f07a0581827a96e8",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "1934d019b35526181bc2e88a40494a07ac2f4a606cc53a87ae2158e7454c043b"
+  },
+  "verified_at": "2026-10-08T09:24:19.639536Z",
+  "routes": [
+    "Synthetic production GuestRow/GuestDrawer filesystem fixture",
+    "Synthetic production GuestRow memory fixture",
+    "Production Docs renderer reached from the drawer guidance link"
+  ],
+  "states": [
+    "Retained versus unavailable filesystem data across all eight deferral reasons in bars and sparklines",
+    "Fresh data and CT exclusion without remount; lock clearance alone does not renew readings",
+    "Current, last-known, unavailable and legacy unknown memory with original timestamps and unchanged recorded History",
+    "Windows/Android missing-reading, disabled-agent and unknown-cause guidance"
+  ],
+  "interactions": [
+    "Real pointer/keyboard disclosure and phone touch open the production drawer once",
+    "Guest/host memory basis and bars/sparklines changes preserve freshness meaning",
+    "Keyboard/touch guidance navigation reaches the real shipped safety document",
+    "Same-guest density baseline preserves the existing lock badge; all 96 filesystem state checks and 30 memory checks passed"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium",
+    "Playwright 1.56.1 / WebKit"
+  ],
+  "limits": "Presentation fixtures only. No native QGA/collector/ISO, thaw, filesystem writes, monitoring restoration, complete application, physical phone, installation, publication or release acceptance. All 32 final-source captures inspected."
+}

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatResourceChangeHeadline,
   formatResourceChangeKind,
+  getResourceChangeAlertResolution,
   getResourceChangeKindPresentation,
+  getResourceChangePresentation,
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
   sortResourceChangesByObservedAt,
@@ -88,6 +90,59 @@ describe('resourceChangePresentation utils', () => {
       label: 'VMware adapter',
       plural: 'VMware adapters',
     });
+  });
+
+  it('presents an alert close that was not a recovery as a move', () => {
+    const summary =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    const moved = {
+      id: 'change-moved',
+      resourceId: 'node:pve1',
+      kind: 'alert_resolved' as const,
+      observedAt: '2026-10-06T15:00:00Z',
+      sourceType: 'heuristic' as const,
+      confidence: 'high' as const,
+      reason: summary,
+      metadata: { alert_resolution: 'moved_to_agent', alert_type: 'memory' },
+    };
+
+    expect(getResourceChangeAlertResolution(moved)).toBe('moved_to_agent');
+    expect(getResourceChangePresentation(moved)).toEqual({
+      label: 'Alert moved',
+      plural: 'Alerts moved',
+      className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
+    });
+    // The engine's account is the whole headline, never "Alert resolved: ...".
+    expect(formatResourceChangeHeadline(moved)).toBe(summary);
+    expect(formatResourceChangeHeadline({ ...moved, reason: undefined })).toBe(
+      'Alert moved: node:pve1',
+    );
+
+    // A reason code this build does not know still never reads as a recovery.
+    expect(
+      getResourceChangePresentation({
+        kind: 'alert_resolved',
+        metadata: { alert_resolution: 'some_future_reason' },
+      }).label,
+    ).toBe('Alert closed');
+
+    // Ordinary recoveries, and other kinds, keep their kind presentation.
+    const recovered = {
+      ...moved,
+      metadata: { alert_type: 'memory' },
+      reason: 'Node memory at 95%',
+    };
+    expect(getResourceChangeAlertResolution(recovered)).toBeUndefined();
+    expect(getResourceChangePresentation(recovered)).toEqual(
+      getResourceChangeKindPresentation('alert_resolved'),
+    );
+    expect(formatResourceChangeHeadline(recovered)).toBe('Alert resolved: Node memory at 95%');
+    expect(
+      getResourceChangePresentation({
+        kind: 'alert_fired',
+        metadata: { alert_resolution: 'moved_to_agent' },
+      }).label,
+    ).toBe('Alert fired');
   });
 
   it('formats shared confidence percentages', () => {

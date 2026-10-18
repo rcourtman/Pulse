@@ -15,6 +15,7 @@ import {
 import { API_TOKEN_CREATE_ANCHOR } from '@/routing/resourceLinks';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
 import type { APITokenRecord } from '@/types/api';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -30,6 +31,7 @@ const APITokenManagerDialogs = lazy(() =>
 );
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
+  const now = useRelativeTimeNow();
   const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
   const [tokenToEdit, setTokenToEdit] = createSignal<APITokenRecord | null>(null);
   const [editScopes, setEditScopes] = createSignal<string[]>([]);
@@ -384,7 +386,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <p class="mt-1 text-xs text-muted">Limited access tokens with defined scopes</p>
             </div>
             <div
-              class={`rounded-md border p-4 text-sm shadow-xs ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900/25 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
+              class={`rounded-md border p-4 text-sm shadow-xs ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${
@@ -440,7 +442,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <button
                 onClick={reopenTokenDialog}
                 disabled={!canManage()}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Show
               </button>
@@ -448,7 +450,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 onClick={() => {
                   dismissNewToken();
                 }}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Dismiss
               </button>
@@ -461,7 +463,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE
             }
           >
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900/25 shadow-xs dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-xs dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
               <div class="mb-2 font-semibold">Magic Kiosk Link</div>
               <p class="mb-3 text-xs text-blue-700 dark:text-blue-300">
                 Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for
@@ -546,7 +548,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       </div>
                       <div class="mt-1 text-xs text-base-content">
                         {token.lastUsedAt
-                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
                           : 'Never'}
                       </div>
                     </div>
@@ -564,7 +566,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     <div class="space-y-1">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Created</dt>
                       <dd class="text-base-content">
-                        {formatRelativeTime(new Date(token.createdAt).getTime())}
+                        {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                       </dd>
                     </div>
                   </dl>
@@ -608,7 +610,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 label: 'Created',
                 render: (token) => (
                   <span class="text-muted">
-                    {formatRelativeTime(new Date(token.createdAt).getTime())}
+                    {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                   </span>
                 ),
               },
@@ -618,7 +620,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 render: (token) => (
                   <span class="text-muted">
                     {token.lastUsedAt
-                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
                       : 'Never'}
                   </span>
                 ),

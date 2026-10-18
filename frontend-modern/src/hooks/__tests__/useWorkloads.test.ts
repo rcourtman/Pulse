@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import type { VM } from '@/types/api';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getDiskUsagePercent, getWorkloadGroupKey } from '@/components/Workloads/workloadSelectors';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
@@ -99,11 +101,12 @@ describe('useWorkloads', () => {
     },
   );
 
-  it('preserves linked-agent RAID arrays from the VM resource for guest detail', async () => {
+  it('preserves linked-agent RAID arrays and agent ID from the VM resource for guest detail', async () => {
     const [snapshot] = createSignal([
       {
         ...sampleResource,
         agent: {
+          agentId: 'host-guest-agent',
           agentVersion: '6.4.5',
           raid: [
             {
@@ -130,10 +133,60 @@ describe('useWorkloads', () => {
     try {
       await flushAsync();
       expect(result!.workloads()[0]?.canonicalResourceId).toBe(sampleResource.id);
+      // The guest drawer judges the agent's disks under this ID's overrides.
+      expect(result!.workloads()[0]?.agentId).toBe('host-guest-agent');
       expect(result!.workloads()[0]?.agentRaid).toMatchObject([
         { device: '/dev/md0', level: 'raid1', state: 'clean' },
       ]);
       expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('marks a silent linked agent and the guest filesystems it supplied', async () => {
+    const disk = (mountpoint: string) => ({
+      mountpoint,
+      type: 'ext4',
+      total: 100,
+      used: 40,
+      free: 60,
+      usage: 40,
+    });
+    const [snapshot] = createSignal([
+      // Proxmox read no guest filesystems, so the agent's own report fills in.
+      {
+        ...sampleResource,
+        id: 'vm-agent-disks',
+        vmid: 102,
+        sources: ['proxmox', 'agent'],
+        agent: { agentVersion: '6.4.5', stale: true, disks: [disk('/agent')] },
+      },
+      // Proxmox guest filesystems win over a live agent's.
+      {
+        ...sampleResource,
+        id: 'vm-platform-disks',
+        vmid: 103,
+        sources: ['proxmox', 'agent'],
+        proxmox: { disks: [disk('/platform')] },
+        agent: { agentVersion: '6.4.5', stale: false, disks: [disk('/agent')] },
+      },
+    ] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      const byId = (id: string) =>
+        result!.workloads().find((workload) => workload.canonicalResourceId === id);
+      expect(byId('vm-agent-disks')).toMatchObject({ agentStale: true, disksFromAgent: true });
+      expect(byId('vm-agent-disks')?.disks?.map((d) => d.mountpoint)).toEqual(['/agent']);
+      expect(byId('vm-platform-disks')?.agentStale).toBeUndefined();
+      expect(byId('vm-platform-disks')?.disksFromAgent).toBeUndefined();
+      expect(byId('vm-platform-disks')?.disks?.map((d) => d.mountpoint)).toEqual(['/platform']);
     } finally {
       dispose();
     }
@@ -271,6 +324,67 @@ describe('useWorkloads', () => {
       setSnapshot([buildVM('cluster-a', { guestAgentStatus: 'available' }, 0), other]);
       await flushAsync();
       expect(target().disk.usage).toBe(0);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not treat a stopped native VM facet as current disk telemetry when health stays online', async () => {
+    const other = {
+      ...sampleResource,
+      id: 'other-site',
+      instance: 'other',
+      disk: { current: 40, total: 100, used: 40 },
+    };
+    const snapshot = (runtimeStatus: string, diskStatusReason?: string) =>
+      [
+        {
+          ...sampleResource,
+          status: 'online',
+          disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
+          proxmox: {
+            vmid: 101,
+            nodeName: 'pve1',
+            instance: 'cluster-a',
+            runtimeStatus,
+            diskStatusReason,
+          },
+        },
+        other,
+      ] as any;
+    const [resources, setResources] = createSignal(snapshot('running'));
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: resources });
+    });
+    const target = () =>
+      result!.workloads().find((row) => row.canonicalResourceId === sampleResource.id)!;
+    try {
+      await flushAsync();
+      const otherRow = result!.workloads().find((row) => row.canonicalResourceId === 'other-site');
+      expect(otherRow).toBeDefined();
+      expect(getDiskUsagePercent(target())).toBe(20);
+      setResources(snapshot('stopped'));
+      await flushAsync();
+      expect(target()).toMatchObject({
+        status: 'stopped',
+        resourceStatus: 'online',
+        disk: { usage: 20 },
+      });
+      expect(getWorkloadGuestDiskRead(target(), true).state).toBe('unavailable');
+      expect(getDiskUsagePercent(target())).toBeNull();
+      setResources(snapshot('running', 'prev-agent-busy'));
+      await flushAsync();
+      expect(getDiskUsagePercent(target())).toBeNull();
+      setResources(snapshot('running'));
+      await flushAsync();
+      expect(getDiskUsagePercent(target())).toBe(20);
+      expect(result!.workloads().find((row) => row.canonicalResourceId === 'other-site')).toBe(
+        otherRow,
+      );
       expect(apiFetchJSONMock).not.toHaveBeenCalled();
     } finally {
       dispose();
@@ -488,6 +602,77 @@ describe('useWorkloads', () => {
 
     dispose();
   });
+
+  it.each(['api', 'snapshot'])(
+    'keeps selected memory provenance through %s without borrowing a raw facet',
+    async (transport) => {
+      const original = {
+        state: 'last-known',
+        source: 'guest-agent-meminfo',
+        observedAt: '2026-10-04T14:00:00Z',
+      };
+      const raw = { state: 'current', source: 'status-mem', observedAt: '2026-10-04T17:00:00Z' };
+      const resource = {
+        ...sampleResource,
+        proxmox: {
+          vmid: 101,
+          nodeName: 'pve1',
+          instance: 'cluster-a',
+          memory: { observation: raw },
+        },
+        metrics: {
+          ...sampleResource.metrics,
+          memory: { ...sampleResource.metrics.memory, observation: original },
+        },
+        memory: { current: 50, total: 4096, used: 2048, observation: original },
+      };
+      apiFetchJSONMock.mockResolvedValue({ data: [resource], meta: { totalPages: 1 } });
+      const [snapshot, setSnapshot] = createSignal([resource]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot as any } : {},
+        );
+      });
+      try {
+        await waitForWorkloadCount(() => result.workloads().length);
+        expect(result.workloads()[0].memory).toMatchObject({ usage: 50, observation: original });
+        const legacy = {
+          ...resource,
+          metrics: { ...resource.metrics, memory: sampleResource.metrics.memory },
+          memory: { current: 50, total: 4096, used: 2048 },
+        };
+        if (transport === 'snapshot') setSnapshot([legacy] as any);
+        else {
+          apiFetchJSONMock.mockResolvedValue({ data: [legacy], meta: { totalPages: 1 } });
+          await result.refetch();
+        }
+        await flushAsync();
+        expect(result.workloads()[0].memory).not.toHaveProperty('observation');
+        expect(result.workloads()[0].memory.usage).toBe(50);
+        const live = {
+          ...resource,
+          metrics: {
+            ...resource.metrics,
+            memory: { ...resource.metrics.memory, observation: raw },
+          },
+          memory: { ...resource.memory, observation: raw },
+        };
+        if (transport === 'snapshot') setSnapshot([live]);
+        else {
+          apiFetchJSONMock.mockResolvedValue({ data: [live], meta: { totalPages: 1 } });
+          await result.refetch();
+        }
+        await flushAsync();
+        expect(result.workloads()[0].memory).toMatchObject({ usage: 50, observation: raw });
+      } finally {
+        dispose();
+      }
+    },
+  );
 
   it('tracks canonical hybrid VM memory without substituting nested agent readings', async () => {
     // #1962: synthetic snapshots exercise Web reactivity, not poller recovery.
@@ -1217,6 +1402,46 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('flags a workload whose canonical health names an open alert, not backup age', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'alerting',
+          name: 'alerting',
+          health: { verdict: 'attention', reasons: [{ code: 'warning_alert', detail: 'memory' }] },
+        },
+        {
+          ...sampleResource,
+          id: 'stale-backup',
+          name: 'stale-backup',
+          vmid: 102,
+          health: { verdict: 'attention', reasons: [{ code: 'backup_stale' }] },
+        },
+        { ...sampleResource, id: 'quiet', name: 'quiet', vmid: 103 },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 3);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('alerting')?.hasOpenAlert).toBe(true);
+    expect(byName.get('stale-backup')?.hasOpenAlert).toBe(false);
+    expect(byName.get('quiet')?.hasOpenAlert).toBe(false);
+
+    dispose();
+  });
+
   it('uses the canonical Kubernetes cluster name for pod context labels', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [
@@ -1255,6 +1480,104 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('retains canonical vSphere parent grouping through snapshot enrichment', async () => {
+    const resource = {
+      ...sampleResource,
+      id: 'vm-warehouse-api',
+      name: 'warehouse-api',
+      sources: ['vmware'],
+      parentId: 'host-vcenter-a:esxi-01',
+      parentName: 'esxi-01',
+      vmid: 0,
+      node: undefined,
+      instance: undefined,
+      proxmox: undefined,
+    };
+    const [snapshot, setSnapshot] = createSignal([resource] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      const first = result!.workloads()[0]!;
+      expect(first.parentResourceId).toBe(resource.parentId);
+      expect(first.instance).toBe('');
+      const group = getWorkloadGroupKey(first);
+      setSnapshot([
+        {
+          ...resource,
+          vmware: {
+            runtimeHostName: 'esxi-01',
+            clusterName: 'Production Cluster',
+            connectionName: 'Lab vCenter',
+          },
+        },
+      ]);
+      await flushAsync();
+      const enriched = result!.workloads()[0]!;
+      expect(enriched.id).toBe(first.id);
+      expect(enriched.instance).toBe('Production Cluster');
+      expect(getWorkloadGroupKey(enriched)).toBe(group);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('never labels a vSphere or standalone Proxmox workload as its own cluster', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vmware-vm-etl',
+          name: 'etl-batch-01',
+          sources: ['vmware'],
+          parentName: 'esxi-01.lab.local',
+          proxmox: undefined,
+          vmware: {
+            managedObjectId: 'vm-206',
+            runtimeHostName: 'esxi-01.lab.local',
+            clusterName: 'Production Cluster',
+            connectionName: 'Lab vCenter',
+            powerState: 'poweredOn',
+          },
+        },
+        {
+          ...sampleResource,
+          id: 'pve-home-pve1-102',
+          name: 'standalone-vm',
+          vmid: 102,
+          instance: 'pve-home',
+          proxmox: {},
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 2);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('etl-batch-01')?.clusterName).toBe('Production Cluster');
+    expect(byName.get('etl-batch-01')?.contextLabel).toBe('esxi-01.lab.local (Production Cluster)');
+    expect(byName.get('etl-batch-01')?.instance).toBe('Production Cluster');
+    expect(byName.get('standalone-vm')?.clusterName).toBeUndefined();
+    expect(byName.get('standalone-vm')?.contextLabel).toBe('pve1 (pve-home)');
+    expect(byName.get('standalone-vm')?.instance).toBe('pve-home');
+
+    dispose();
+  });
+
   it('uses the shared cluster-name helper for proxmox workload labels', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [
@@ -1286,7 +1609,7 @@ describe('useWorkloads', () => {
     expect(result!.workloads()[0]?.clusterName).toBe('cluster-b');
     expect(result!.workloads()[0]?.contextLabel).toBe('pve1 (cluster-b)');
     expect(result!.workloads()[0]?.instance).toBe('cluster-b');
-    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe('vm-1');
 
     dispose();
   });
@@ -1365,7 +1688,7 @@ describe('useWorkloads', () => {
     await flushAsync();
     await waitForWorkloadCount(() => result!.workloads().length);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe(sampleResource.id);
 
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [
@@ -1386,13 +1709,13 @@ describe('useWorkloads', () => {
     await waitForWorkloadCount(() => result!.workloads().length);
 
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve2:202');
+    expect(result!.workloads()[0]?.id).toBe('cluster-b-pve2-202');
 
     eventBus.emit('org_switched', 'default');
     await flushAsync();
 
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe(sampleResource.id);
 
     dispose();
   });
@@ -1402,4 +1725,40 @@ describe('useWorkloads', () => {
     expect(useWorkloadsSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
   });
+});
+
+describe('resource-owned workload identity', () => {
+  it.each(['vm', 'system-container', 'pod'] as const)(
+    'preserves %s row identity when placement changes',
+    async (type) => {
+      const { useWorkloads, __resetWorkloadsCacheForTests } = await import('@/hooks/useWorkloads');
+      __resetWorkloadsCacheForTests();
+      const original = {
+        ...sampleResource,
+        id: 'stable-resource',
+        type,
+        proxmox: { instance: 'cluster-a', node: 'node-1', vmid: 101 },
+        kubernetes: { clusterId: 'cluster-a', podUid: 'native-pod-uid' },
+      };
+      const [snapshot, setSnapshot] = createSignal([original] as any);
+      let dispose = () => {};
+      let result: ReturnType<typeof useWorkloads> | undefined;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+      });
+      try {
+        await flushAsync();
+        expect(result!.workloads()[0]?.id).toBe(original.id);
+        setSnapshot([
+          { ...original, node: 'node-2', proxmox: { ...original.proxmox, node: 'node-2' } },
+        ]);
+        await flushAsync();
+        expect(result!.workloads()[0]?.id).toBe(original.id);
+        expect(result!.workloads()[0]?.canonicalResourceId).toBe(original.id);
+      } finally {
+        dispose();
+      }
+    },
+  );
 });

@@ -181,7 +181,6 @@ type Step struct {
 	HandoffContext   string
 	HandoffResources []StepHandoffResource
 	HandoffMetadata  StepHandoffMetadata
-	AutonomousMode   *bool // optional per-step autonomous override
 	Assertions       []Assertion
 	ApprovalDecision ApprovalDecision
 	ApprovalReason   string
@@ -358,9 +357,6 @@ func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *
 	}
 	if !stepHandoffMetadataEmpty(step.HandoffMetadata) {
 		reqBody["handoff_metadata"] = step.HandoffMetadata
-	}
-	if step.AutonomousMode != nil {
-		reqBody["autonomous_mode"] = *step.AutonomousMode
 	}
 
 	bodyBytes, _ := json.Marshal(reqBody)

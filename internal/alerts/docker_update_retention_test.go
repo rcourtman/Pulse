@@ -48,7 +48,7 @@ func TestDockerUpdateTrackingSurvivesDailyCleanup(t *testing.T) {
 				t.Fatal("failed check reset pending age")
 			}
 			// An affirmative clear remains effective.
-			container.UpdateStatus = &models.DockerContainerUpdateStatus{UpdateAvailable: false, LastChecked: time.Now()}
+			container.UpdateStatus = &models.DockerContainerUpdateStatus{UpdateAvailable: false, CurrentDigest: "sha256:new", LatestDigest: "sha256:new", LastChecked: time.Now()}
 			check()
 			if len(m.GetActiveAlerts()) != 0 || len(m.dockerUpdateFirstSeen) != 0 || len(m.dockerUpdateFirstSeenByIdentity) != 0 || len(m.dockerUpdateLastObserved) != 0 {
 				t.Fatal("affirmative clear did not retire update")

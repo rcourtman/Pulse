@@ -1,6 +1,4 @@
 export const RECOVERY_TIMELINE_LEGEND_ITEM_CLASS = 'flex items-center gap-1';
-export const RECOVERY_TIMELINE_RANGE_GROUP_CLASS =
-  'inline-flex rounded-sm border border-border bg-surface p-0.5 text-xs';
 
 export type RecoveryTimelineRangeDays = 7 | 30 | 90 | 365;
 
@@ -12,17 +10,6 @@ export interface RecoveryTimelineAxisTick {
 
 export function getRecoveryTimelineAxisLabelClass(selected: boolean): string {
   return selected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-muted';
-}
-
-export function getRecoveryTimelineBarMinWidthClass(
-  isMobile: boolean,
-  days: 7 | 30 | 90 | 365,
-): string {
-  if (isMobile) return '';
-  if (days === 7) return 'min-w-[28px]';
-  if (days === 30) return 'min-w-[14px]';
-  if (days === 365) return '';
-  return 'min-w-[8px]';
 }
 
 export function getRecoveryTimelineChartMinWidthPx(

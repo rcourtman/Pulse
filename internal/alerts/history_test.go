@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // newTestHistoryManager creates a HistoryManager using a temp directory
@@ -1057,4 +1059,63 @@ func TestSaveHistoryWithRetry_RestoresBackupOnFailure(t *testing.T) {
 	// or better, just test something else.
 
 	_ = hm
+}
+
+// The state snapshot, the websocket and the assistant read recently resolved
+// alerts through GetRecentlyResolved, so a handover must reach them as one
+// and not as a recovery.
+func TestRecentlyResolvedCarriesHandoverResolution(t *testing.T) {
+	manager := newUnifiedEvalParityManager(t)
+	manager.UpdateConfig(AlertConfig{
+		Enabled: true,
+		NodeDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		},
+	})
+	disableTestTimeThresholds(manager)
+	node := models.Node{
+		ID:       "pve-1",
+		Name:     "pve-1",
+		Instance: "test",
+		Status:   "online",
+		CPU:      0.95,
+		Memory:   models.Memory{Total: 8 << 30, Used: 7 << 30, Usage: 95},
+	}
+	manager.CheckNode(node)
+	release := func(metric string, resolution *AlertResolution) {
+		t.Helper()
+		spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), metric, nil)
+		if err != nil {
+			t.Fatalf("build %s spec: %v", metric, err)
+		}
+		manager.releaseCanonicalMetricAlert(spec, node.Name, node.Name, node.Instance, "node", 0, resolution)
+	}
+	release("memory", &AlertResolution{
+		Reason:              AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-pve-1",
+		SuccessorName:       "pve-1 (Host Agent)",
+	})
+	release("cpu", nil)
+
+	byType := map[string]models.ResolvedAlert{}
+	for _, resolved := range manager.GetRecentlyResolved() {
+		byType[resolved.Type] = resolved
+	}
+	moved, ok := byType["memory"]
+	if !ok {
+		t.Fatalf("recently resolved = %+v, want the moved memory alert", byType)
+	}
+	want := models.AlertResolution{
+		Reason:              "moved_to_agent",
+		SuccessorResourceID: "agent-pve-1",
+		SuccessorName:       "pve-1 (Host Agent)",
+		Summary:             "Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading.",
+	}
+	if moved.Resolution == nil || *moved.Resolution != want {
+		t.Fatalf("moved resolution = %+v, want %+v", moved.Resolution, want)
+	}
+	if recovered, ok := byType["cpu"]; !ok || recovered.Resolution != nil {
+		t.Fatalf("recovered cpu alert = %+v, want an ordinary resolve with no resolution", recovered)
+	}
 }

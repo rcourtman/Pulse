@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
+
 // URL-backed shared-toolbar filters: the workloads / services / configuration
 // tabs read search (q) and status from the URL so bookmarks capture -term
 // exclusions, mirroring the Docker containers table. These tests render the
@@ -14,6 +21,18 @@ const mockVersionInfo = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
+}));
+
+// The overview names nodes that are not Ready through the real nodes table.
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: [] }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({
+    detectionEnabled: () => true,
+    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
+  }),
 }));
 
 vi.mock('@/stores/updates', () => ({
@@ -118,7 +137,17 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     // node availability now reads as a warning-toned ready/total ratio on the
     // cluster row instead of a standalone summary region.
     expect(screen.queryByRole('region', { name: 'Kubernetes attention' })).not.toBeInTheDocument();
-    const clusterRow = screen.getAllByText('Cluster 1')[0].closest('tr');
+    // The node itself is named once, in the attention table above the clusters.
+    expect(screen.getByText('Nodes needing attention')).toBeInTheDocument();
+    expect(
+      document.querySelector(
+        '[data-kubernetes-nodes-needing-attention] [data-kubernetes-node-row]',
+      ),
+    ).not.toBeNull();
+    const clusterRow = screen
+      .getAllByText('Cluster 1')
+      .map((cell) => cell.closest('tr'))
+      .find((row) => !row?.hasAttribute('data-kubernetes-node-row'))!;
     expect(clusterRow).not.toBeNull();
     expect(clusterRow).toHaveTextContent('0/1');
     const degradedCount = clusterRow!.querySelector('.text-amber-700');
@@ -177,9 +206,9 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     renderSurfaceAt('/kubernetes/workloads?cluster=cluster-west');
 
     expect(screen.getByText('west-api')).toBeInTheDocument();
-    expect(screen.getByText('west-pod')).toBeInTheDocument();
+    expect(screen.getByText(kubernetesName('west-pod'))).toBeInTheDocument();
     expect(screen.queryByText('east-api')).not.toBeInTheDocument();
-    expect(screen.queryByText('east-pod')).not.toBeInTheDocument();
+    expect(screen.queryByText(kubernetesName('east-pod'))).not.toBeInTheDocument();
   });
 
   it('scopes the Overview workload inventory when a cluster name is selected', async () => {

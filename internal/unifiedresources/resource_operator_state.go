@@ -256,6 +256,43 @@ func (s ResourceOperatorState) BlocksRemediation() bool {
 	return s.NeverAutoRemediate || s.LifecycleState == LifecycleStateRetired
 }
 
+// RemediationLockCarriedBy attributes a row whose remediation lock was written
+// by an identity change (a manual link, a canonical-ID succession) rather than
+// by an operator edit, so the operator-state header does not credit a person
+// with a lock they never set on this ID.
+const RemediationLockCarriedBy = "system:identity-change"
+
+// CarryRemediationLock returns the state a surviving resource must hold once
+// an identity change has absorbed donor, and whether that differs from the
+// survivor's current state. A remediation lock is the operator's "never touch
+// this", so it follows the resource through a manual link fold or a
+// canonical-ID succession instead of belonging to whichever ID happened to be
+// keyed first: the lock is ORed onto the survivor, never lost to an unlocked
+// row that happens to win the key.
+//
+// Only the remediation block crosses, as NeverAutoRemediate. Retirement also
+// silences alerts and Patrol attention, which is a monitoring posture rather
+// than a safety property; copying it would mute a survivor the operator still
+// watches. Every other setting the survivor holds is returned untouched, and
+// a survivor with no row gets a row carrying the block alone. The result is
+// attributed to the identity change at `at`. An already-blocking survivor is
+// returned as it was.
+func CarryRemediationLock(survivorID string, survivor ResourceOperatorState, survivorFound bool, donor ResourceOperatorState, donorFound bool, at time.Time) (ResourceOperatorState, bool) {
+	if !donorFound || !donor.BlocksRemediation() {
+		return survivor, false
+	}
+	if survivorFound && survivor.BlocksRemediation() {
+		return survivor, false
+	}
+	if !survivorFound {
+		survivor = ResourceOperatorState{CanonicalID: survivorID}
+	}
+	survivor.NeverAutoRemediate = true
+	survivor.SetAt = at.UTC()
+	survivor.SetBy = RemediationLockCarriedBy
+	return NormalizeResourceOperatorState(survivor), true
+}
+
 // IsInMaintenanceAt reports whether `now` falls within the configured
 // maintenance window. Returns false when no window is configured, when only
 // one of start/end is set (treated as no window), or when end <= start.
@@ -298,6 +335,61 @@ func (s ResourceOperatorState) ActiveMaintenanceOccurrenceAt(now time.Time) (Mai
 		}
 	}
 	return MaintenanceWindowOccurrence{}, false
+}
+
+// MaintenanceCoverage is the active maintenance occurrence covering a
+// resource: its own window, or one inherited from an ancestor whose window is
+// scoped to resource_and_descendants. SourceID names the resource the window
+// is stored on.
+type MaintenanceCoverage struct {
+	Occurrence MaintenanceWindowOccurrence
+	Reason     string
+	Scope      MaintenanceScope
+	SourceID   string
+	Inherited  bool
+}
+
+// ActiveMaintenanceCoverageAt resolves the maintenance covering resourceID at
+// now, the one rule Alerts and Patrol share. own is the resource's own state
+// (nil when it has none); ancestorIDs is the live canonical parent chain,
+// nearest first, and read returns an ancestor's state (found=false when it
+// has none or cannot be read). Only an ancestor window scoped to
+// resource_and_descendants covers descendants. When several active windows
+// overlap, the one ending latest wins, so attention never resumes before the
+// last covering window closes.
+//
+// Coverage is maintenance only. Monitoring mode, lifecycle and remediation
+// locks stay exact-resource state and are never inherited.
+func ActiveMaintenanceCoverageAt(now time.Time, resourceID string, own *ResourceOperatorState, ancestorIDs []string, read func(canonicalID string) (ResourceOperatorState, bool)) (MaintenanceCoverage, bool) {
+	var coverage MaintenanceCoverage
+	covered := false
+	consider := func(candidate ResourceOperatorState, sourceID string, inherited bool) {
+		occurrence, active := candidate.ActiveMaintenanceOccurrenceAt(now)
+		if !active || (covered && !occurrence.EndAt.After(coverage.Occurrence.EndAt)) {
+			return
+		}
+		coverage = MaintenanceCoverage{
+			Occurrence: occurrence,
+			Reason:     candidate.MaintenanceReason,
+			Scope:      candidate.MaintenanceScope,
+			SourceID:   sourceID,
+			Inherited:  inherited,
+		}
+		covered = true
+	}
+	if own != nil {
+		consider(*own, resourceID, false)
+	}
+	if read != nil {
+		for _, ancestorID := range ancestorIDs {
+			ancestor, found := read(ancestorID)
+			if !found || ancestor.MaintenanceScope != MaintenanceScopeResourceAndDescendants {
+				continue
+			}
+			consider(ancestor, ancestorID, true)
+		}
+	}
+	return coverage, covered
 }
 
 // MaintenanceOccurrencesEndingBetween returns concrete occurrences whose end

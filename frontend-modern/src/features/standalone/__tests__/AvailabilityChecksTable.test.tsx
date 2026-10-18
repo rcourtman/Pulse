@@ -3,7 +3,17 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
+import { AvailabilityHistoryAPI } from '@/api/availabilityHistory';
 import { AvailabilityChecksTable, resolveAvailabilityChecksView } from '../AvailabilityChecksTable';
+
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
+vi.mock('@/api/availabilityHistory', () => ({
+  AvailabilityHistoryAPI: { batch: vi.fn(async () => ({ targets: [] })) },
+}));
 
 const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -84,15 +94,21 @@ describe('AvailabilityChecksTable', () => {
     const { container } = renderTable([availabilityResource()]);
     const headers = [...container.querySelectorAll('thead th')];
 
-    expect(headers).toHaveLength(8);
+    expect(headers).toHaveLength(9);
     expect(headers[0]).toHaveClass('platform-table-name-column', 'platform-table-mobile-w-30');
     expect(headers[1]).toHaveClass('platform-table-mobile-w-15');
     expect(headers[1]).not.toHaveClass('hidden');
     expect(headers[2]).toHaveClass('platform-table-mobile-w-25');
     expect(headers[2]).not.toHaveClass('hidden');
     expect(headers[3]).toHaveClass('platform-table-mobile-w-15');
-    expect(headers[4]).toHaveClass('platform-table-mobile-w-15');
-    expect(headers[4]).not.toHaveClass('hidden');
+    // Uptime 24h joins from lg up, beside the latest result.
+    expect(headers[4]).toHaveTextContent('Uptime 24h');
+    expect(headers[4]).toHaveClass('hidden', 'lg:table-cell');
+    expect(headers[5]).toHaveClass('platform-table-mobile-w-15');
+    expect(headers[5]).not.toHaveClass('hidden');
+    // Interval is configuration; only the widest tables carry it.
+    expect(headers[8]).toHaveTextContent('Interval');
+    expect(headers[8]).toHaveClass('hidden', '2xl:table-cell');
   });
 
   it('exposes complete availability details from the compact summary row', () => {
@@ -190,6 +206,50 @@ describe('AvailabilityChecksTable', () => {
     expect(screen.getByText('via host-gone')).toBeInTheDocument();
   });
 
+  it('keeps the result whole on one line beside a multi-location source', () => {
+    renderTable([
+      availabilityResource({
+        availability: {
+          targetId: 'mock-availability-frontend',
+          protocol: 'https',
+          address: 'frontend.demo.pulse.local',
+          enabled: true,
+          available: false,
+          lastChecked: 1_700_000_300_000,
+          reportingLocations: 2,
+          expectedLocations: 2,
+          locations: [
+            { locationId: 'pulse', kind: 'pulse' },
+            { locationId: 'agent:host-edge-01', kind: 'agent', probeAgentId: 'host-edge-01' },
+          ],
+        } as unknown as Resource['availability'],
+      }),
+    ]);
+
+    // Settings words the same fact the same way.
+    const source = screen.getByText('2/2 locations reporting');
+    // One line (rows are windowed at a single height): the source truncates
+    // while the result keeps its full width at the cell's right edge.
+    expect(source).toHaveClass('truncate');
+    const line = source.closest('div');
+    expect(line?.className).toContain('flex');
+    const result = line?.lastElementChild as HTMLElement;
+    expect(result).toHaveClass('shrink-0');
+    expect(result.textContent).not.toBe('');
+  });
+
+  it('gives the check name the room on phones by hiding method and target', () => {
+    renderTable([availabilityResource()]);
+    const headers = screen.getAllByRole('columnheader');
+    const method = headers.find((th) => th.textContent?.trim() === 'Method');
+    const target = headers.find((th) => th.textContent?.trim() === 'Target');
+    expect(method).toHaveClass('platform-table-phone-hidden');
+    expect(target).toHaveClass('platform-table-phone-hidden');
+    const row = screen.getByText('MQTT power meter').closest('tr')!;
+    expect(row.children[1]).toHaveClass('platform-table-phone-hidden');
+    expect(row.children[2]).toHaveClass('platform-table-phone-hidden');
+  });
+
   it('shows no source chip for locally executed checks', () => {
     renderTable([availabilityResource()]);
 
@@ -203,5 +263,72 @@ describe('AvailabilityChecksTable', () => {
       'href',
       '/settings/monitoring/availability?add=target&targetKind=service',
     );
+  });
+
+  it('shows 24h uptime from history and says what consecutive failures mean', async () => {
+    vi.mocked(AvailabilityHistoryAPI.batch).mockResolvedValueOnce({
+      targets: [
+        {
+          targetId: 'mock-availability-mqtt-meter',
+          summary: {
+            reachableSeconds: 85_000,
+            unreachableSeconds: 1_400,
+            indeterminateSeconds: 0,
+            unknownSeconds: 0,
+            coveragePercent: 100,
+            availabilityPercent: 98.4,
+          },
+        },
+      ],
+    } as never);
+
+    const { container } = renderTable([
+      availabilityResource({
+        availability: {
+          ...availabilityResource().availability!,
+          available: false,
+          consecutiveFailures: 3,
+          failureThreshold: 2,
+        },
+      }),
+    ]);
+
+    const uptime = await screen.findByText('98.4%');
+    expect(uptime).toHaveAttribute('data-availability-uptime');
+    expect(uptime.className).toContain('text-amber-700');
+    const failures = screen.getByText('3 in a row');
+    expect(failures).toHaveAttribute(
+      'title',
+      '3 failed checks in a row. It counts as offline after 2.',
+    );
+    expect(container.textContent).not.toContain('3/2');
+  });
+
+  it('shows no uptime figure when most of the window was inconclusive', async () => {
+    vi.mocked(AvailabilityHistoryAPI.batch).mockResolvedValueOnce({
+      targets: [
+        {
+          targetId: 'mock-availability-mqtt-meter',
+          summary: {
+            reachableSeconds: 60,
+            unreachableSeconds: 0,
+            indeterminateSeconds: 86_340,
+            unknownSeconds: 0,
+            coveragePercent: 100,
+            availabilityPercent: 100,
+          },
+        },
+      ],
+    } as never);
+
+    const { container } = renderTable([availabilityResource()]);
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-availability-uptime]')).toHaveAttribute(
+        'title',
+        'Most results in the last 24h were inconclusive, so there is no uptime figure',
+      ),
+    );
+    expect(container.querySelector('[data-availability-uptime]')).toHaveTextContent('—');
   });
 });

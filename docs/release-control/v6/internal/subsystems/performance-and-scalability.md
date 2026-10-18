@@ -15,6 +15,226 @@
 
 ## Purpose
 
+### Guest memory alerts do not translate unrelated samples (12 October 2026)
+
+When the Workloads row uses host-relative memory, its existing guest drawer
+explains that alert percentages use guest allocation while the row uses host
+capacity. The alert retains its own message, evaluated value, observation time,
+clear rule and hover evidence. The basis explanation is visible detail, not a
+percentage calculated from the guest's latest bytes and the host's latest
+capacity: even current values need not describe the alert's observation, and
+retained or unavailable values must not acquire authority from a poll refresh.
+
+Guest-relative rows and non-memory alerts keep their existing attention copy.
+The row's own memory calculations, observation qualification and accepted zero,
+collection and threshold evaluation remain unchanged. This does not establish
+native recovery, ordinary notification delivery or released availability.
+
+`guestDrawerAlertMemoryBasis.test.ts` covers current/retained/unavailable/unknown
+observations, independent host capacity and alert-owned evaluation phases.
+`GuestDrawerOverview.alertMemoryBasis.test.tsx` covers same-guest updates and
+basis selection in the mounted production attention panel; `GuestDrawer.test.tsx`
+retains the connected full-drawer regression. The desktop/phone production
+fixture `browser-tests/guest-alert-memory-basis.cjs` also exercises the row and
+native basis selector. Browser acceptance must be recorded separately; adding
+the fixture does not establish a passing browser run.
+
+
+### Workloads node attribution preserves instance/node boundaries
+
+Workloads uses an encoded instance/node tuple for UI node scopes, grouping and
+parent lookup. Concatenated legacy aliases may resolve existing bookmarks only
+when unique; neither a partial host hint nor an ambiguous alias may choose the
+first node. An unresolved bookmark remains a visible, removable text filter
+and uses filtered-empty copy, not an inventory-outage message. Supplied parent
+fields take precedence over inferred legacy guest-ID prefixes, whose positive VMID suffix must match the supplied VMID and which
+may fill missing fields but cannot contradict them. The state builds one node
+per canonical Proxmox agent resource and keeps that resource's own tuple, so a
+shared native ID cannot erase another tuple; it accepts no caller-supplied node
+snapshots. Ambiguous tuples or native-ID aliases do not provide parent
+evidence. Legacy fallback must also resolve the candidate's own tuple back to
+that same node; a unique native ID cannot restore an ambiguous tuple, even
+when the guest's instance or node fields are absent. Row status and host-relative memory use the validated row parent in grouped and flat modes;
+a group label is not authority to supply another row's parent. Unrelated
+platforms do not inherit Proxmox parent state from matching labels.
+
+UI scope tokens are not collector or metric IDs. The existing charts transport
+uses a uniquely resolved native node ID, or its bounded global summary when
+that parent cannot be resolved uniquely, retaining canonical per-resource chart
+ownership and existing polling/point limits. This presentation boundary changes
+no server ingestion, guest ID, alert identity, collector, native History or
+monitoring permissions. Node removal or ambiguous node inventory leaves the
+host-memory denominator unavailable, never zero or another node's capacity.
+
+Verification: `workloadTopology.attribution.test.ts` and
+`workloadTopology.scope.test.ts` cover collided scopes, parent ambiguity,
+source-field precedence, legacy hints and unrelated platforms.
+`workloadTopology.ambiguousParent.test.ts` discriminates complete and incomplete
+guest fields, both native aliases, VM/LXC types and both inventory orders;
+unique, consistent legacy fallbacks remain valid.
+`WorkloadsSurface.performance.contract.test.tsx` checks both snapshot orders of
+two canonical nodes whose instance and node names join to one string;
+`useWorkloadTableMetricHistory.test.tsx` checks the native-ID transport boundary. Parent-bound browser proof checks real
+Workloads grouping, row status, host-memory basis and removable bookmarks on
+desktop and phone. It does not establish server ingestion or native recovery.
+
+
+### Workloads disk decorations follow the selected filesystem source
+
+`GuestRow` passes the shared `getWorkloadGuestDiskRead` classification to the
+stacked disk primitive, not just its explanatory text. Last-known filesystem
+values keep their bytes, percentage and geometry in every bar mode, but use a
+neutral fill in the cell and tooltip and cannot assert a live anomaly. Tooltip
+headings and per-disk titles identify those values as last known; their mount
+names and numbers use theme-aware text. An explicitly unavailable reading
+withholds usage and anomaly even when numeric carriers remain, while known
+capacity may remain inspectable as unknown usage, never measured zero.
+
+Current QEMU readings and independent current linked-agent filesystems retain
+threshold colours and anomaly behaviour. A linked-agent lease loss makes its
+own filesystems last known; a Proxmox deferral cannot withdraw a current agent
+reading. Unannotated host/platform callers and measured current zero retain
+their behaviour. Status text alone is not a freshness classifier. Source-state
+replacement updates the mounted shell and open tooltip without collection,
+History changes, timers, alert-record changes or timestamp renewal.
+
+Verification: `GuestRow.test.tsx`, `StackedDiskBar.test.tsx` and
+`stackedDiskBarModel.branchcov0712b.test.ts` check the source boundary, every
+mode, retained geometry, unavailable numeric carriers, current/unannotated/zero
+controls and reactive replacement. The parent-bound browser receipt covers
+real canonical mapping and Workloads rendering, desktop/phone and light/dark
+with synthetic observations. These proofs establish presentation, not native
+guest recovery, ordinary QEMU-only polling or release availability.
+
+### Narrow Workloads identity during guest locks
+
+In narrow and phone layouts, the guest name and status occupy the first line;
+the unchanged backup evidence control moves below the name with a 24 px touch
+target (see Accessible Workloads backup evidence). The guest lock occupies a separate, wrapping line below
+that identity. It must not consume the name's
+horizontal space or spill into the adjacent metrics. The full lock remains
+visible; a long name keeps its full title and existing truncation. Wider layouts
+keep the inline lock. Disclosure, first-touch row activation and memory
+observation source/time are unchanged. This is presentation only: a backup lock
+or successful backup never proves guest recovery.
+
+`GuestRow.test.tsx` checks layout structure, lock updates and existing action
+ownership. `browser-tests/build-guest-row-lock-fixture.mjs` compiles the real row,
+stylesheet and drawer before bounded static browser execution. Use
+`node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`
+to read the exact parent row from Git; no manually supplied control is accepted.
+`browser-tests/guest-row-lock-identity.cjs` measures the rendered name/lock at 320 and 390 px in bars and sparklines, and exercises keyboard/first
+touch through the existing drawer, checks long-name bounds, and rejects the current
+parent with the same static fixture. No dev compiler or old terminated preview
+is replayed. Native recovery remains separate.
+
+### Workloads memory selection follows its displayed observation
+
+Memory sorting and numeric search use the same selected observation policy as
+Workloads row and drawer labels. Proxmox memory needs an explicit current state
+and usable original observation time. Last-known, unavailable, missing, future
+or unrecognised evidence cannot participate as current capacity; a reported
+current zero still can. Resource Last seen and QEMU disk-read deferrals cannot
+renew or withdraw independently observed memory. Valid unannotated unrelated
+platform readings retain their numeric behaviour.
+
+In either sort direction non-current or missing values follow all current
+readings, with the existing name/identity tiebreak. Host-capacity sorting first
+qualifies guest memory, then requires a finite non-negative comparison and a
+usable host total/used value; missing host capacity is not zero. Numeric search
+continues to compare guest usage percent, independently of the host display
+basis. Name search and OR conditions retain access to the whole inventory;
+same-identity source replacement updates selection without new collection.
+
+`workloadSelectors.test.ts`, its branch companion, `searchQuery.test.ts` and
+its branch companions, and `memoryObservation.test.ts` cover current/retained/
+unknown/invalid states, zero, original-time validity, host-share comparison,
+independent disk state and refresh membership. These are presentation/selection
+invariants, not native guest recovery, alert changes or release availability.
+
+**Memory freshness is preserved at the Workloads row boundary.**
+
+`GuestRow.tsx` qualifies selected memory once per reactive reading using the
+shared drawer policy. Non-current rows keep a visible/accessibility cue through
+bars, sparklines, the History lens and host-capacity mode. An unavailable
+numeric carrier is not a current value; retained History paths stay unchanged.
+Source-time qualification never uses Last seen or a filesystem deferral,
+and same-guest observation updates do not remount the row or request History.
+No collection, chart sampling, sorting, retention or alert threshold changes.
+
+`GuestRow.test.tsx` (memory observation provenance),
+`MetricMiniSparkline.test.tsx`, `memoryObservation.test.ts` and the existing
+drawer/History suites pin this boundary. The production browser fixture
+`browser-tests/guest-row-memory-provenance.cjs` checks touch/pointer/keyboard
+and narrow/desktop layouts with synthetic observations, not native recovery.
+
+
+Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
+
+### Guest drawer alert copy formats backend status only
+
+Guest drawer attention rows format `alert.metricStatus` through
+`getGuestDrawerAlertAttention` and the shared `getAlertAttentionCopy`. No
+threshold comparison, recovery timing or resource-metric lookup runs in the
+drawer, and the host-capacity memory comparison stays a suffix on that copy.
+
+### Drawer provenance stays local to snapshot presentation
+
+Guest and canonical resource drawer memory presentation share the same pure
+original-observation policy. Same-ID state replacement updates current versus
+retained/unknown fallback labels without remounting a chart, changing coordinates,
+adding reads or plotting live numbers as stored observations. The full
+`GuestDrawer.test.tsx` and `ResourceDetailDrawer.history.test.tsx` controls assert
+unchanged single-read budgets through retained-to-current replacement and zero
+preservation. This changes no estate collection, timing target or cache policy.
+
+### Bulk resource reads do not repeatedly derive canonical metadata
+
+Registry List and typed-view copies materialize identity/scopes/policy once
+per observed mutation, then detach those blocks. Separate dirtiness lets List
+avoid constructing an unused estate-sized typed view. Mutation-time invalidation
+includes incremental batch records and stale-source transitions; no timestamp,
+last-update or generation alone is used to declare a broadcast unchanged.
+`cloneResource` retains arbitrary-input refresh semantics. Full inventory,
+policy, observation time and health/alert evaluation remain unchanged.
+
+The independent pre-change List oracle checks every resource field and wire
+content, and paired one/one-thousand-resource controls expose repeated canonical
+allocation work without wall-clock thresholds. Include dirty reads and typed
+rebuilds when measuring: a cold generation must still derive metadata, and
+moving that work into the registry is not proof that total ingest or broadcast
+CPU improved. Native #2199 CPU/RSS, trailing refresh/duplicate ingest identity,
+owner-set grouping, broadcast conversion and the sawtooth remain separate.
+
+### Agent identity lookup cost follows identity-relevant inventory
+
+Report admission no longer clones/ingests twenty explicitly listed Kubernetes
+metadata collections that cannot supply a host facet. Clusters, nodes and
+workloads, every other source, canonical matching and fresh post-lock reads
+remain. No complete inventory, graph, alert or publication is pruned. Native
+point lookups retain an ID scan but clone just one selected record; peer sensor
+and container payloads no longer multiply the allocation cost of that read.
+
+The allocation controls compare zero/one-thousand metadata objects and one/
+seventeen hosts without wall-clock thresholds. The paired benchmark retains
+an executable copy of the old full-snapshot lookup in the same process, with
+identical fixtures and host-view reads, so lookup time/bytes/allocations can be
+compared without selecting a favourable rerun. This is a bounded source cost
+improvement, not attribution of the reporter's native CPU, RSS, sawtooth or
+remaining refresh/grouping/broadcast mechanisms.
+
+### Memory presentation does not collect or renew observations
+
+Guest-memory provenance is projected from the already-owned snapshot in the
+existing drawer. A same-guest provenance change updates the Overview/History
+label without refetching metrics History, resetting the drawer, creating chart
+points or running a diagnostic. Fixed source labels and the original known
+time replace fabricated current freshness; there is no new timer, collector or
+fleet-wide query. Connected hook and mounted sparse/provenance controls pin
+unchanged numeric selection, source isolation and no-extra-History-read
+behaviour. Browser comparisons are source/render acceptance, not native CPU,
+RSS, backup safety or installed relief measurements.
+
 ### Guest read-state display does not start another read
 
 The existing workload drawer's guest-read state and backup precaution derive
@@ -48,37 +268,6 @@ resource projection, rows, indicators and drawer replacement with synthetic API
 and canonical full/delta observations; those observations are not native backup
 or release proof.
 
-### Guest discovery evidence and UI state have exact owners
-
-The guest drawer's passive discovery lookup changes only when its explicit
-resource-type/agent/resource target changes, not on same-target metric or name
-snapshot refreshes. Retained/remount evidence is keyed by canonical guest and
-that target. A replacement target cannot display the predecessor's service,
-endpoint, URL suggestion or assurance suggestion while its own read is pending
-or failed. A successful absent-record read is empty; errors are not absence.
-The discovery detail reader preserves final HTTP401/403 on typed failures
-without reading the denied body, including agent-list/detail paths. Those
-failures withdraw cached evidence and show the fixed access message.
-A same-target transient failure may retain its own last successful details,
-but must visibly qualify them and provide an in-place retry without raw error
-text. This preserves the shared query's denial/cache-generation policy.
-
-A different canonical guest disposes its local tabs, range, forms, disclosures
-and outstanding read consumers. Same-ID updates stay mounted. Within that
-identity, a changed discovery target remounts only the existing Discovery tab,
-so late scan/notes completions cannot populate the successor's UI. Already
-sent server-side operations are not cancelled or retried by this boundary;
-saved operator URLs remain separate from derived suggestions.
-
-Verification: `discovery.test.ts` covers final status preservation on all
-three read paths and non-authoritative body claims. `GuestDrawer.test.tsx`
-covers replacement, source stability,
-late reads, HTTP401/403/cache withdrawal, transient retention/retry and
-canonical identity reset. `browser-tests/guest-discovery-identity.cjs` uses
-production drawer/DiscoveryTab/Manage/History, clients and CSS on desktop
-Chromium and touch WebKit. Its synthetic delayed scan is not a native command,
-QGA/thaw, fleet-performance, appliance identity or delivery proof.
-
 ### Workload projection preserves native guest-read evidence
 
 `useWorkloads` forwards the existing Proxmox disk-status reason, guest-agent
@@ -100,6 +289,18 @@ clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
 merges, row, Overview and History with synthetic inputs. This is no native
 QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
+Choosing a node's temperature source in `resourceStateAdapters.ts` reads one
+more field of the facet already in the canonical payload
+(`proxmox.temperatureDetails`), only when the existing record selection yields
+no usable reading, and keeps it only when it holds a CPU reading. That is one
+extra record mapping per such node per adapter call. It adds no resource read,
+merge pass, timer or subscription. `Node.cpuTemperature` copies the resource's
+existing top-level temperature scalar, one field read per adapter call.
+
+Mock CPU temperatures refresh on the existing tick: each online node with a CPU
+reading takes one `SampleMetric` and rebuilds its core list (copied, never
+mutated in place), and each agent host rewrites its CPU keys from the sample
+it already took. No new timer, pass or fixture-wide scan is added.
 
 ### Unavailable filesystem values share the existing disk model
 
@@ -126,8 +327,8 @@ proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
 
 ### Guest filesystem provenance preserves dense row geometry
 
-Visible retained/unavailable filesystem cues must fit the existing dense row
-rhythm, including canonical phone/narrow column weights, without adding a new
+Visible retained and fixable-read filesystem cues must fit the existing dense row
+rhythm (an unavailable setup-gap read adds no visible cue at all), including canonical phone/narrow column weights, without adding a new
 collector, history request, layout observer, focus target or event path. Keep
 compact copy on narrow rows and the full safe reason in assistive text and the
 existing drawer. Inline sparkline plots may shrink to preserve their numeric
@@ -169,25 +370,10 @@ ownership remain unchanged. Guest column regressions verify the sums and the
 production composed-table browser fixture checks identity and all configured
 metric tracks at narrow width; this is readability, not a throughput claim.
 
-
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
-The general identity matcher retains every confidence, reason, ordering and
-review flag. Top-level grouping requests only its existing high-confidence
-floor (0.90), so hostname-only and IP-only peer sets are not built when no
-eligible composite signal exists. High-confidence results are identical to
-filtering the full general matcher; machine ID, UUID and hostname+MAC still
-keep their existing precedence. Host/IP fallback still requires exactly one
-strictly better-priority owner. Equal/worse-priority peers are discarded before
-allocating/sorting fallback candidates, and a best-priority group has no possible
-attachment target. No identity, ambiguity, count, group ID or explanation rule
-changes, and no cached output hides live transitions.
-
-Independent pre-repair matching/grouping oracles, candidate-floor differential
-cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
-complete existing identity/topology suites protect these constraints. The
-residual synthetic broadcast profile identified discarded matching/grouping as
-the dominant cost; it is not a profile of the reporter's installed agent fleet.
+Broadcast performance work preserves the [unified grouping semantics and allocation bounds](unified-resources.md#bounded-confidencepriority-work-in-broadcast-grouping--issue-2199),
+including its source controls and qualification limits.
 
 ### Connected-dashboard snapshot ownership — issue #2199
 
@@ -205,6 +391,11 @@ errors and encoded identities with generic encoding; mutation tests protect
 retained buffers. Complete broadcast benchmarks include projection and delta
 queues rather than treating an ID-only or component allocation result as field
 CPU relief. Installed connected/closed-dashboard CPU remains separate evidence.
+
+Realtime normalization also keeps provider ownership source-authoritative.
+Flat storage instance/node fields may synthesize Proxmox facts only when the
+current sources permit it, with explicit ownership facets preserved. Full and
+delta merges apply the same bounded per-row rule without estate-wide lookup.
 
 The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
 
@@ -334,6 +525,15 @@ touch-end. `GuestRow.test.tsx` verifies its conditional lifecycle and
 non-activation; the production row/full-drawer touch fixture verifies first
 activation and unchanged identity independently of native collector acceptance.
 
+The guest row also creates one `createRowTextSelectionGuard()` from `Table` per
+row, so a drag that selects row text (a VMID, address or tag) does not open the
+guest drawer, while a press released in place still opens it on the first
+click. The guard keeps one press coordinate in a closure, binds its native
+mousedown listener only while a row action exists, and reads the selection only
+when the row is clicked: no document listener, timer, signal, metric derivation
+or History work is added per row. `GuestRow.test.tsx` covers the drag, the
+in-place click and chevron activation over a selection.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`
@@ -408,16 +608,6 @@ activation and unchanged identity independently of native collector acceptance.
 64. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
 65. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
 66. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
-67. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-68. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-69. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-70. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-71. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-72. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-73. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-74. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-75. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-76. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
 77. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 78. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
 79. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
@@ -438,10 +628,9 @@ activation and unchanged identity independently of native collector acceptance.
 94. `frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts`
 95. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
 96. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
-97. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 98. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
 99. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
-100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
+100. `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`
 101. `frontend-modern/src/routing/routePreload.ts`
 102. `frontend-modern/src/useAppRuntimeState.ts`
 103. `frontend-modern/src/utils/storageSummaryCache.ts`
@@ -480,18 +669,8 @@ at desktop and phone widths; this is presentation proof, not native collection
 or a measured fleet performance improvement.
 
 
-1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `unified-resources`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `unified-resources`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `unified-resources`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `frontend-primitives`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `frontend-primitives`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 13. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `frontend-primitives`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 14. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `frontend-primitives`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
@@ -515,7 +694,7 @@ or a measured fleet performance improvement.
     WebSocket startup, so a delayed or blocked first stream snapshot cannot
     hide server-owned platform scopes; auth-mode branches must not fork
     additional state probes or perform the same hydration twice.
-20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 17. `frontend-modern/src/utils/workloads.ts` shared with `unified-resources`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
 18. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
@@ -544,18 +723,25 @@ count times the number of shared storages.
 Demo Docker container names stay unique per host (numbered suffixes on reused
 profiles), so image "used by" lists and container rows never collapse two
 distinct containers into what reads as a duplicated row.
+Mock Kubernetes pods share their node's allocatable memory: each active pod's
+memory target is scaled by `mockKubernetesPodMemoryShare` over the active pods
+on its node, which keeps a node's pods at or below 58% of allocatable memory in
+steady state, and `capMockKubernetesNodePodMemory` clips them to 60% only while
+rescheduled pods' smoothed readings settle, so a dense node does not pin itself
+and its linked agent at 100%. The count and the clip are linear passes over the
+cluster's pods in each usage update, keyed by node name, with no per-pod scan
+of other pods or nodes.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
-canonicalizes and reconciles only changed resources plus the host-merge groups
-the delta could have altered: a group refreshes when a flagged id names one of
-its members (a flagged id absent from the incoming snapshot conservatively
-refreshes every group), and a tick that flags no member preserves the cached
-merged host row by object identity. Unchanged non-host display resources retain
-object identity.
-Same-hostname provider disambiguation must retain that locality: candidate
-rows are indexed by normalized host key, and machine, DMI, cluster, endpoint,
-and linked-agent comparisons may inspect only the matching key's bucket rather
-than rescan unrelated estate rows.
+canonicalizes and reconciles only changed and newly added resources. Each
+server row is one display row, because the server already coalesced host
+views for presentation, so unchanged display resources, host rows included,
+retain object identity and the browser runs no host-merge pass of its own.
+The hook's full merge (initial hydration and uncovered revision gaps) clones
+the connection store's rows once, because cache rows must not share nested
+arrays with rows the store reconciles in place; delta merges already clone each
+changed row that takes the full merge path, and fast-path rows clone only the
+patched subtrees.
 `frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
 monotonic resource revision with each reconciliation. The shared
 `useUnifiedResources` owner applies that revision to the process-wide canonical
@@ -604,7 +790,18 @@ the store with reference-stable untouched items so the per-tick deep walk of
 the whole projection is gone. Active alerts travel the same keyed transport
 (`activeAlertsDelta`, replacing the ~37KB whole-array re-ship whenever any
 alert changed) while their application stays immediate per the alerts
-subsystem boundary. These projection baselines are socket-owned: an oversized
+subsystem boundary. Each committed alert is reconciled in place against its
+copy in the keyed active-alert store, so a reader of an unchanged alert there,
+or of an unchanged nested value such as its live `metricStatus` or `metadata`,
+is not notified although every commit carries freshly parsed objects; omitted
+fields are deleted rather than shallow-merged. The `state.activeAlerts` array
+is still replaced on every alert commit. A pending acknowledgement hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active` (reusing a
+recovery already in flight, and fetching again if that one applies nothing)
+rather than waiting for an alert delta a quiet estate may never send. A local
+acknowledgement write that overlaps a recovery discards its response and
+fetches once more. These projection baselines are
+socket-owned: an oversized
 frame invalidates resources, connected infrastructure, and active alerts
 together, while REST recovery hydrates display state only. A later keyed delta
 without a socket baseline requests the throttled recovery path instead of
@@ -986,21 +1183,16 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather
    than replacing the old callback with persistence-backed router probes.
-   Infrastructure host-table health explanations follow the same hot-path
-   rule. `UnifiedResourceHostTableCard.tsx` may render compact issue labels
-   from the already-materialized resource incident and storage-risk fields, but
-   it must not introduce per-row API reads, broad resource scans, storage
-   topology recomputation, or layout-measuring work just to explain warning or
-   degraded rows. Infrastructure table source derivation follows the same
-   bounded-work rule: `unifiedResourceTableStateModel.ts` must read the
-   already-materialized top-level `resource.sources` array before legacy
-   `platformData.sources` hints, and must not reconstruct platform identity by
-   scanning sibling resources or making row-time API calls.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
    Platform-owned Workloads surfaces may force a platform scope, but that
    scope must be applied before deriving host, Kubernetes context/namespace,
    and container runtime facet options so embedded pages do not pay for or
    display unrelated platform options.
+   Net I/O and Disk I/O outlier statistics (median, MAD, p97, p99) are built
+   from guest throughput by `computeWorkloadIOEmphasis(...)` in
+   `workloadSelectors.ts`, which produces the stats that
+   `getOutlierEmphasis(...)` in `guestRowModel.tsx` reads; that math must not
+   move back behind a `Resource`-shaped infrastructure selector cast.
    Workloads source-health messaging must derive from the viewer-safe
    `/api/runtime/inventory-sources` projection through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
@@ -1019,11 +1211,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    mounted, report errors out of band, and must not rely on Solid
    `createResource` in a way that can bubble into the route-level Suspense
    fallback or the setup/welcome shell.
-   Workload row drawer expansion, local row focus, and summary group pinning
-   are local interaction state. Inbound Workloads deep links may hydrate
-   `resource` and `summaryGroup` into the focused row or group, but opening,
-   closing, or clearing an inline drawer must not write those params back to
-   route state, schedule router navigation, or trip the app-shell fallback.
+   Workload row drawer expansion and local row focus are local interaction
+   state. Inbound Workloads deep links may hydrate `resource` into the focused
+   row, but opening, closing, or clearing an inline drawer must not write that
+   param back to route state, schedule router navigation, or trip the
+   app-shell fallback. Workloads has no group focus, so it reads no
+   `summaryGroup` param: row expansion stopped writing it and no link builder
+   passes one, so its hydration was removed with the group pin.
    URL synchronization for Workloads stays limited to filter-owned scope in
    `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`.
    The Workloads page may show a bounded partial-inventory banner when a
@@ -1052,10 +1246,19 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Guest metric thresholds read the guest's alert policy tags through one
+    `getWorkloadAlertPolicyTags` memo per row and per drawer, beside the
+    existing scope and override-candidate memos, so `pulse-relaxed` bar
+    colouring adds no per-render tag parsing and no extra store reads.
     On coarse-pointer touch layouts, those cell details must not spawn floating
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability
     boundary rather than per-row viewport branches or listeners.
+    The shared `EnhancedCPUBar` hover panel names the CPU count that the bar
+    shows in parentheses beside the percentage ("22% (18)") as "CPUs": logical
+    CPUs on a host, configured vCPUs on a guest, so "Cores" would be wrong on
+    hyperthreaded hosts. It reads the `cores` prop the row already passes and
+    adds no per-row work.
     Ultra-narrow workload presentation belongs in the existing layout and
     column model: below 360 pixels it keeps five identity/health columns with a
     40-percent identity track. It must not add per-row measurement, viewport
@@ -1098,7 +1301,60 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     than converting missing evidence into "never backed up." Legacy workload
     rows without platform metadata retain the Proxmox-compatible behavior at
     the migration boundary.
+
+    A backup shield's hover card and dialog name the limit that coloured it
+    through `getWorkloadsGuestBackupAgeRule` (Fresh Hours decides amber for stale
+    and overdue alike; overdue also names Stale Hours), read from the same
+    configured thresholds the row already holds, so the row adds no request. The
+    dialog links to the Recovery thresholds (`ALERT_BACKUP_THRESHOLDS_PATH`).
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+    The selected resource owns its drawer tab and History range. Regrouping the
+    same resource under a new parent or node retains both even if its drawer
+    remounts. Closing or selecting another resource restores the default view.
+    History continues to consume the explicit backend-owned metrics target.
+    Legacy VM and system-container inputs without that target use the shared
+    native provider-key formatter for History. This compatibility fallback
+    follows the current node and never changes canonical selection identity.
+    Backend targets take precedence over every client-derived fallback.
+    The guest drawer header owns the saved web-interface launch action. It
+    reuses the shared `WebInterfaceLink` and drawer-header action class, so
+    phone and narrow rows keep hiding the adjacent row link for name legibility
+    while the saved service stays one tap from the expanded row. The action
+    renders only for a saved URL and adds no fetch, polling or per-row work.
+    `GuestDrawer.test.tsx` verifies its target, the unsafe-URL warning, and
+    that opening it does not collapse the drawer.
+    The workloads table header owns the bulk web-link editor. The trigger in
+    `WorkloadWebLinksAction.tsx` holds only the open flag and unsaved drafts
+    and lazy-loads `WorkloadWebLinksDialog.tsx`, whose state
+    (`useWorkloadWebLinksState.ts`) and derivations
+    (`workloadWebLinksModel.ts`) stay out of the WorkloadsSurface chunk and
+    run only while the panel is mounted. It edits the guests in the current
+    filtered view through the same guest metadata API and metadata-changed
+    event as the drawer field. `workloadGuestMetadataRecord.ts` is the single
+    lookup for a row's saved link in both the table and the editor. Panel rows
+    keep unchanged row objects across inventory ticks so an open editor never
+    remounts the input being typed in.
+    `WorkloadsSurface.performance.contract.test.tsx` pins that wiring.
+    The editor takes a source rather than guests: workload tables pass live
+    guests and metadata so the row model loads only with the panel, while the
+    Docker containers table passes ready rows and lazy-loads the trigger so
+    it does not merge into the chunk the Docker and workloads pages share.
+    Saves run one metadata write per changed link, then dispatch the
+    metadata-changed events together so whole-snapshot listeners coalesce
+    onto one in-flight refetch instead of refetching per link.
+    The drawer overview lazy-loads `GuestPhysicalDisks.tsx` under a local
+    `Suspense`, so the physical-disk presentation module
+    (`diskPresentation.ts`) loads with an open agent guest's drawer instead
+    of joining the WorkloadsSurface chunk.
+    `WorkloadsSurface.performance.contract.test.tsx` pins the dynamic import.
+    Prose and tests call the table chunk the Proxmox and vSphere pages share
+    the WorkloadsSurface chunk, but the build names it after its last module
+    in execution order, and `WorkloadsSurface.tsx` imports only the state's
+    type, so `frontend-modern/.bundlesize.json` tracks it as
+    `useWorkloadsState` with the same limit. A `MISSING` report only says the
+    name is absent, which a split or a removal also causes: when inspection
+    confirms the same shared chunk merely changed its name, rename the key
+    and leave its baseline alone.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
@@ -1146,7 +1402,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     max-disk derivations must skip sentinel rows rather than surface them as
     0% or negative percents.
 13. Extend workload guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts` rather than rebuilding workload-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
-14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes
+    A changed set of native metadata keys refreshes that cache after accepted
+    inventory publication. Metric-only updates do not refetch it. Superseded
+    responses cannot overwrite a newer refresh, confirmed edit or tenant scope.
+14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`. Every workload row and selection key is the exact unified `Resource.id`. Route-driven selection lets the shared focus bridge reveal its destination. Initial viewport measurement retains the selection window and still measures row and detail geometry. Scroll and resize events remain authoritative for subsequent window movement. Local row clicks preserve the existing viewport, and that preservation must not undo a route reveal. Historical references use the API contract's existing server resolver and never a client-reconstructed node or pod identity.
 15. Extend workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`, `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`, `frontend-modern/src/components/Workloads/workloadRouteModel.ts`, `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`, and `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts` and `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
     Workloads route host scopes must resolve through `frontend-modern/src/components/Workloads/workloadTopology.ts`: app-container scopes use the canonical Docker/runtime host id before host labels or node fallbacks, while VM and system-container scopes keep the instance-node key. Route `agent` filters and option catalogs must consume that shared scope so Infrastructure related-workload links cannot drift from Workloads filtering.
     Workloads route-state writes must preserve the owning platform/runtime
@@ -1244,7 +1503,7 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     appears; the column returns by itself when data arrives. The accessor
     reads the unfiltered guest set so narrowing the table by search or status
     never removes the column.
-18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`. In kiosk mode the shared `FilterBar` keeps that toolbar unmounted, so a wall display mounts none of the bar's search field, suggestion list, View popover or type-to-search listener; overview pages must not add their own kiosk check around it.
     Workload autocomplete must project from the same unfiltered guest inventory
     and the same search-candidate helper used by the workload predicate. The
     projection includes workload identity plus deduplicated node, Docker host,
@@ -1271,12 +1530,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Workload filter option semantics stay workload-owned, but FilterBar chip
     presentation is frontend-primitives-owned: status and runtime leading dots
     must use `filterChipStatusDot` rather than workload-local span factories.
-    WorkloadsFilter remains the shared interaction shell only; platform-owned
-    embedded Workloads surfaces must pass page-owned aria labels, search
-    placeholders, empty-search copy, status labels, and forced view-mode
-    context into route option derivation so Docker, Kubernetes, TrueNAS,
-    Proxmox, and VMware pages expose filters for the objects visible on that
-    page rather than generic mixed-workload labels.
+    WorkloadsFilter remains the shared interaction shell only. The Proxmox
+    and vSphere overviews, the pages that embed a Workloads surface, pass
+    their own aria label, search placeholder, empty-search copy, and status
+    option labels straight to their page-owned toolbar, and pass forced
+    platform (and, for vSphere, forced view-mode) context into the shared
+    workload state, so each page exposes filters for the objects visible on
+    that page rather than generic mixed-workload labels.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, summary-strategy selection, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`. Compact multi-disk rows default to same-height per-disk lanes so each filesystem has its own visible usage bar without implying the whole host disk state is one max or aggregate percentage; explicit `mode="stacked"` remains the capacity-contribution stack for callers that intentionally need that presentation, and explicit aggregate callers may choose total-capacity or worst-disk summaries when the owning table's operator job needs one compact risk signal, while tooltips continue to carry the full per-disk breakdown.
 21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
@@ -1364,13 +1624,16 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     `TableCardHeader` inside both the populated and filtered-empty table card.
     A platform page must not place a parallel floating title above its filters;
     the title/count band belongs to the same framed table surface as the rows.
-    `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
-    clicking a grouped host row while a guest drawer is open must clear the
-    selected guest and keep/focus the host summary group so the node drawer can
-    replace the guest drawer. Platform pages that render a dedicated host
-    table above an embedded Workloads table may disable the grouped host drawer
-    through the explicit Workloads surface option, but standalone Workloads
-    must keep the inline grouped-row drawer as the default.
+    `WorkloadPanel` renders only the guest drawer. Grouped host rows are
+    static dividers: no click handler, hover preview, group pin, or inline
+    node drawer. They keep `data-summary-group-id` so a click on a divider
+    does not clear an open guest drawer. Host details open from the platform
+    page's own hosts table (`ProxmoxNodesTable` mounts `NodeDrawer`;
+    `VsphereHostsTable` owns its detail row). The former
+    `groupNodeDrawerMode` option defaulted to an inline grouped-row drawer
+    that only the retired standalone Workloads page used; both production
+    mounts passed `disabled`, so the option, the inline `NodeDrawer` mount
+    and the Workloads group hover/pin scope were removed.
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the
@@ -1398,7 +1661,6 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     default filter-option labels must flow through the shared all-option
     presentation helper via the workload filter config model instead of the
     hot-path shell hard-coding local `All ...` strings.
-28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When
     `internal/api/router.go`, `internal/api/router_routes_cloud.go`, or
@@ -1416,11 +1678,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     other per-request version discovery on activation, legacy exchange, or
     grant-refresh traffic just to stamp authenticated install metadata.
 30. Keep retired dashboard summary-chart paths absent rather than replacing
-them with new hot-path fetches. Infrastructure summary cards must continue to
-hydrate through `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-and the canonical infrastructure-summary route owned by
-`internal/api/router_routes_monitoring.go` and `internal/api/router.go`; storage
-summary cards must use the storage summary cache owners. The authenticated
+them with new hot-path fetches. Node rows that draw infrastructure history
+must read the canonical infrastructure-summary route owned by
+`internal/api/router_routes_monitoring.go` and `internal/api/router.go`, today
+through `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`;
+the storage pool Growth column must read through the storage summary cache
+owners (`useStorageSummaryCharts.ts` and `storageSummaryCache.ts`). The authenticated
 root path in `frontend-modern/src/App.tsx` must not prewarm a deleted
 dashboard-specific overview, trend, or summary transport.
     The same hot path must keep mock/demo chart identity on the canonical
@@ -1505,10 +1768,9 @@ path. `frontend-modern/src/pages/Dashboard.tsx`,
 surfaces for KPI cards, problem-resource rows, or top-infrastructure
 identities. New summary cards must live on their owning product route and
 prove their data path there.
-32. Keep infrastructure and assistant consumers off deleted dashboard summary
-state. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-and globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`
-must read the live websocket snapshot or existing unified-resource cache
+32. Keep assistant and other globally mounted consumers off deleted dashboard
+summary state. Globally mounted helpers such as
+`frontend-modern/src/components/AI/Chat/index.tsx` must read the live websocket snapshot or existing unified-resource cache
 rather than forcing root navigation to pay for a replacement dashboard
 overview transport. When the assistant shell changes presentation,
 `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical
@@ -1583,18 +1845,46 @@ shell clickable behind another overlay.
     scoped table metric-history interaction that requested them. Platform
     landing should stay route-module warm and data-light until the selected
     platform page owns its normal resource/table query.
-    Platform pages that embed `WorkloadsSurface` reuse the canonical
-    workloads filter toolbar through the `showFilterToolbar` +
-    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
-    keeps `tableOnly` to hide the dashboard cards and summary strip but
-    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
-    `ColumnPicker`, status/type chips, and search-history primitives that
-    the global Workloads page renders, so platform operators get
-    dense-table search, sort, grouping, view, status, and column controls
-    on every embedded workloads tab without spawning a forked toolbar.
-    The platform scope flows through `forcedPlatform` as a typed page
-    input; `suppressPlatformFilter` drops the now-redundant Platform chip
-    from the rendered toolbar so the user never sees a removable lock.
+    Two platform pages embed `WorkloadsSurface`: the Proxmox and vSphere
+    Overview tabs (`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
+    builds the workloads state itself with `useWorkloadsState`, renders the
+    one shared `WorkloadsFilter` toolbar (search, status filter, a type
+    filter that vSphere suppresses, and the View options for grouping, metric
+    display, and columns on the shared `FilterBar`) from that state, directly
+    above the surface, and hands the same state to `WorkloadsSurface` through
+    its `state` prop. The surface renders no filter row of its own, so the
+    page never stacks two toolbars wired to one state. That `state` prop is
+    required and the surface never builds a workloads state itself: it
+    accepts only `state` plus presentation props (`forcedPlatform`,
+    `forcedViewMode`, the empty-state title and description, and
+    `tableTitle`). Every `useWorkloadsState` option
+    (`WorkloadsStateOptions` in `useWorkloadsState.ts`) belongs on the
+    page's own state call. The state always runs its workloads query and
+    takes no enable flag and no `vms`, `containers` or `nodes` arrays: guests
+    and Proxmox nodes come from the canonical resource snapshot the page
+    passes (or, with none, from the state's own resource queries), so no
+    caller can supply a second inventory that diverges from it.
+    The options type rejects them on either page, and
+    `WorkloadsSurface.performance.contract.test.tsx` and
+    `ProxmoxPageSurface.contract.test.tsx` pin their absence from the hook
+    and the Proxmox call.
+    The surface repeats only `forcedPlatform` and
+    `forcedViewMode` and declares none of the hook-only options, so a mount
+    that names one as an attribute fails type-checking. It imports only the
+    state's type, so it can never become a second state owner on the page.
+    Proxmox also passes that state's search, plus its page-owned metric mode
+    and history range, to the nodes table above the guests, so one toolbar
+    drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
+    toolbar prop, and no dashboard cards or summary strip to hide: it renders
+    the workloads table or an empty-state table card, plus a Back to top
+    control while scrolled. The platform scope flows through `forcedPlatform`
+    as a typed page input to `useWorkloadsState`, the toolbar, and the
+    surface. `suppressPlatformFilter: true` makes the state expose no Platform
+    filter config, so a platform the page already fixed never counts as an
+    operator filter in the surface's filtered-empty state, and both pages pass
+    `platformFilter={undefined}` to the toolbar, so the user never sees the
+    locked platform as a removable chip.
 
 ### Navigation resolves from a bounded request
 
@@ -1644,21 +1934,24 @@ without contention or cross-delivery.
 2. Update this contract when a new protected hot path is adopted
 3. Route runtime changes through the explicit performance proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Record the evidence source for any claimed performance improvement
-5. Keep wide-desktop infrastructure table layout proof on the shared owner.
-   Changes to `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-   that affect host, PBS, or PMG desktop column widths must ship with shared
-   model verification plus desktop Playwright proof that full-width shells
-   distribute surplus width across peer columns instead of stretching only the
-   `Resource` column.
-6. Keep entitlement and runtime capability lookups on shared router/settings
+5. Keep entitlement and runtime capability lookups on shared router/settings
    hot paths bounded and request-local. AI control-level clamping in
    `internal/api/router.go` may consult the already-wired runtime entitlement
    service, but it must not add broad persistence scans, metrics fan-out, or
    external network calls to protected settings or chat request paths.
-7. Initialize and cache each organization RBAC manager once per router
+6. Initialize and cache each organization RBAC manager once per router
    lifecycle. Request handlers may reuse the cached manager but must not reopen
    or remigrate SQLite on each role or assignment request, and shutdown must
    close the owned manager set.
+7. Guest Overview filesystem provenance is local presentation over the already
+   supplied snapshot: no additional query, timer, poll, History fetch or guest
+   command may be added to establish it. Its existing linear filesystem mapping
+   may label retained values and omit current utilization bars; it must preserve
+   ordinary current-value builder behaviour and must not mutate the snapshot.
+   `DiskList.test.tsx` verifies the pure builder's retained/unavailable/current
+   controls; mounted drawer regressions and the full-drawer browser proof cover
+   the shipped path. No performance or native workload improvement follows from
+   the presentation proof alone.
 
 ## Current State
 
@@ -1677,6 +1970,21 @@ final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
 
+### Window resize listeners do not grow with rows
+
+Table rows must not each register a window `resize` listener.
+`frontend-modern/src/hooks/useBreakpoint.ts` keeps one module-level width
+signal, fed by a single rAF-debounced listener while at least one caller is
+mounted, and a new caller starts from the live `innerWidth`. Shared tooltip
+state in `frontend-modern/src/components/shared/useTooltipState.ts` listens
+only while its tooltip is visible. Measured on 2026-10-07 on a mock-mode
+`/proxmox` page with 140 workload rows at 1440 px, the active listener count
+fell from 859 (699 tooltip instances, 156 breakpoint callers) to 5; at 390 px
+with 36 rows it fell from 203 to 5. An open tooltip adds one listener and
+removes it on close, and crossing the phone breakpoint in either direction
+still switches the workload table and row layout. `useBreakpoint.test.ts`
+proves one listener for 50 callers, that back-to-back resizes leave one pending
+frame, and that every caller crosses a breakpoint when that frame runs.
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -1710,8 +2018,8 @@ definitions with four concurrent command or REST executions. Group/subgroup
 ordering and numeric, boolean, or timestamp rendering remain one bounded
 sort-and-map over that collection and stay outside table-row and virtualized
 viewport hot paths.
-`UnifiedResourceTable.performance.contract.test.tsx` pins the resource-local
-projection and no-fetch boundary.
+`resourceDetailMappers.test.ts` pins the resource-local projection and no-fetch
+boundary.
 
 ### Workload refreshes retain one coherent paged generation
 
@@ -1835,17 +2143,36 @@ internal persistent signal so the toggle and the hosts-table render
 stay in lockstep. The history range remains inline in both display modes because
 the default bars mode uses it for the intent-driven guest-row history lens.
 Embedded sibling tables that opt into sparklines
-re-instantiate `useWorkloadTableMetricHistory`; the cache key matches
-the workloads-table reader so both readers dedupe their fetches and
-the canonical Workloads hot-path budget is preserved. Standalone
-WorkloadsSurface callers (no override props) keep the original
-persistent-signal-backed behavior.
+re-instantiate `useWorkloadTableMetricHistory` and name the rows they draw
+through its required `series` option. The Proxmox nodes table passes
+`'nodes'` and polls only the infrastructure summary; the WorkloadsSurface
+reader passes `'guests'` and polls only the workloads history. Two readers
+on one page do not share reads: each passes its own abort signal straight to
+the charts API, and retained query values seed matching mounts and source
+changes without deduplicating requests. A
+reader therefore must not poll a summary its rows do not render. In Trends
+the vSphere overview polls only the workloads history, and the Proxmox
+overview polls the workloads history and the infrastructure summary once
+each. A `useWorkloadsState` owner that omits these overrides keeps the
+original persistent-signal-backed behavior; `WorkloadsSurface` builds no
+state of its own, so it always renders the owner its page passes.
 Every toolbar that controls a `WorkloadsSurface` consumes
-`getWorkloadsMetricFilterProps` as one atomic binding. This keeps the display
-mode, row-hover mode, history range, and first-use hint on the same state owner
-for the generic surface and the Proxmox and vSphere platform compositions;
-provider pages must not recreate a partial metric prop list that can enable
-prefetching without exposing the matching control or discovery state.
+`getWorkloadsMetricFilterProps` as one atomic binding. Those toolbars are the
+page-owned `WorkloadsFilter` instances on the Proxmox and vSphere overviews,
+since the surface renders none, and the binding keeps the display mode,
+row-hover mode, history range, and first-use hint on the page's one workload
+state owner; provider pages must not recreate a partial metric prop list that
+can enable prefetching without exposing the matching control or discovery
+state.
+That first-use hint clears while the pointer is over a guest row, because the
+first populated preview marks it seen. Clearing it must not unmount it or
+change the toolbar height: wherever the hint wraps the action row onto its own
+line, removing it moved the table up under the pointer and the history lens
+retargeted the next guest. `WorkloadsFilter.tsx` therefore keeps the cleared
+hint mounted but `invisible` wherever the desktop History controls render,
+for as long as row hover stays in bars + history mode. Leaving that mode or
+remounting the filter releases the box. `WorkloadsFilter.test.tsx` pins the
+retained node and its release on a switch to Trends.
 
 The alert-bridge patrol-trigger callback wired in `internal/api/router.go` now
 short-circuits before queuing a scoped patrol when a firing alert does not meet
@@ -1863,22 +2190,23 @@ query persistence once per resource, or run on the steady-state alert hot path;
 ancestor lookup remains bounded by canonical hierarchy depth for each active
 alert actually evaluated.
 
-The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
-`frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
-platform pages owning their own hosts table (Proxmox overview today) set
-to strip per-host metric cells out of the `NodeGroupHeader` rows in
-grouped mode. The flag is threaded through
-`frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`,
-`frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and
-`frontend-modern/src/components/Workloads/WorkloadPanel.tsx`; when set,
-`WorkloadPanel` calls `NodeGroupHeader` without `columns` /
-`renderColumnCell` so the existing colspan layout renders just the
-status dot, linked node name, cluster badge, and agent badge — the
-duplicate CPU / Memory / Disk / uptime / temperature / version stats
-the top-of-page hosts table already owns are dropped. New embedded
-platform-page consumers that render their own hosts summary must set
-this flag; standalone Workloads surfaces (no top hosts table) keep the
-original verbose group rows by default.
+Grouped host rows in the embedded WorkloadsSurface are identity-only
+dividers. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
+renders each grouped node through `NodeGroupHeader` as one cell spanning
+the table: status dot, linked node name, cluster badge, and agent badge.
+Per-host CPU, memory, disk, network and disk I/O, uptime, temperature,
+and version stats belong to the platform page's own hosts table (the
+Proxmox nodes table today), so the workloads table must not render them
+per column or inline in the group row. The former `compactGroupHeaders`
+option and the per-column node metric cells it switched off were removed
+because both remaining production mounts (Proxmox and vSphere overview)
+set it unconditionally, so the non-compact path no longer rendered
+anywhere. A new embedded consumer that needs host
+stats beside its workloads must render its own hosts table rather than
+re-growing metric cells in the shared group row. The same applies to host
+interaction: the group row has no drawer, hover preview, or pin, and the
+Workloads state no longer builds per-group summary scopes for every
+filtered-guest change.
 
 WorkloadsSurface stays monitoring-first. It must not render a persistent
 aggregate banner just because running VMs or system containers lack an
@@ -1892,8 +2220,10 @@ Trend-mode and row-history-lens cells own their vertical scale through
 `getMetricMiniSparklineScale` in
 `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
 Percent series are zero-floored and scaled to their own observed peak with a
-5% floor ceiling and a 100% cap, the same shape rule the network and disk I/O
-series already follow. A fixed 0-100 window is not the contract, because inside
+5% floor ceiling and a 100% cap. Network and disk I/O series follow the same
+shape rule with a 100 KiB/s floor ceiling, so an idle guest's background
+chatter stays near the axis instead of drawing the full-height spike a busy
+guest draws. A fixed 0-100 window is not the contract, because inside
 a 16px table cell it draws low-domain series such as a guest's share of host
 memory or an idle guest's CPU on top of the axis rule, where a flat line is
 indistinguishable from missing history. Absolute level stays readable through
@@ -1902,20 +2232,30 @@ work must not remove those. The scale is derived from the points already
 fetched for that cell and must not add history reads or a second pass over the
 Workloads hot path. Pointer scrubbing may synchronize one normalized cursor
 position across the active guest row, but it must remain row-local and operate
-only on the already-fetched series.
+only on the already-fetched series. `GuestRow` builds each chart from accessors,
+so a live snapshot updates the mounted lens or Trends chart in place instead of
+remounting it, and an open scrub tooltip re-reads the current series at its
+pointer position rather than holding the values from the last mouse move.
 
 The Workloads table metric display mode is part of the protected Workloads
 hot path. Default bar mode keeps compact current-value bars at rest and swaps
 only the active fine-pointer or keyboard-focused guest row to the original
 sparklines; persistent Trends mode keeps sparklines visible for every rendered
-row. Bar mode does not hydrate estate history at rest: the selected range is
-local state until a row is active, then one centralized query reads only that
-guest's canonical metrics target from `/api/metrics-store/history`, capped at
-36 points. Equivalent live guest snapshots must not restart that request, and
-leaving the row disables it; per-row query owners, fan-out, and polling remain
-forbidden. Persistent Trends retains the shared, cache-keyed
-`fetchWorkloadsSummaryAndCache` / `fetchInfrastructureSummaryAndCache` reader
-for all rendered rows. Range-sensitive readers clear prior-range data when no
+row. Bar mode does not hydrate estate history at rest. With the history lens
+on, one centralized queue warms a bounded window instead: up to the first six
+guests of the mounted table window at rest, then the active guest first plus
+its next four and previous one, with at most four reads in flight and 18 cached rows. Each read
+targets one guest's canonical metrics target on `/api/metrics-store/history`,
+is capped at 36 points, and is never polled. Equivalent live guest snapshots
+must not restart a read. A range change or leaving the lens mode cancels
+pending and in-flight reads, while leaving a row lets its read settle into the
+bounded cache. Per-row query owners, estate-wide fan-out, and polling remain
+forbidden. Persistent Trends retains one cache-keyed
+`ChartsAPI.getWorkloadCharts` reader for all rendered guest rows. Grouped
+host rows render no metric cells, so the WorkloadsSurface reader never polls
+`ChartsAPI.getInfrastructureSummaryCharts`; node series belong to the page's
+hosts table reader. Both readers keep fetched series only in the query layer's
+retained cache; neither persists a summary to browser storage. Range-sensitive readers clear prior-range data when no
 exact cache entry exists and forward cancellation so superseded range work
 does not continue occupying browser connections. Sparkline ranges must stay
 bounded to the governed compact table windows. Expanded history belongs in the existing guest drawer chart
@@ -1929,7 +2269,7 @@ the hovered timestamp, so density does not remove point-in-time metric detail.
 Proxmox node thermals follow that same drawer-only rule: temperature remains a
 node-context metric, not a universal Workloads table column, and the node detail
 drawer may add one compact `Thermals` history group beside utilization and I/O
-only after a grouped node row is selected. Host-agent CPU temperature must be
+only after a node's drawer is opened from the Proxmox nodes table. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature displayed only as a drawer-local current reading
 while history is still accumulating; it must not become a synthetic history
@@ -1954,10 +2294,22 @@ render those sensor values already present on the selected resource payload,
 but it must not add host powercap reads, sensor-specific history reads,
 per-row polling, browser-side command assumptions, or table-wide aggregation
 work.
+Host-agent SMART disk rows in `resourceDetailMappers.ts` mark a retained
+temperature "(last known)", with its collection reason as the title, from the
+payload's own `collection.temperature` state, through `getPhysicalDiskTemperaturePresentation`
+in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`.
+That module stays separate from `diskPresentation.ts` so the drawer and
+Machines chunks take the decision without the Storage presenter, and the rows
+add no reads, polling or aggregation work.
+A silent host agent's other Thermals rows (pressure, limits, GPU, temperatures,
+additional sensors, fans, power) take the same "(last known)" suffix and reason
+title. `buildTemperatureRows` gets them through its `lastKnownReason` option,
+which the drawer sets from the resource's own `agent.stale`, so the drawer
+still reads nothing extra.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
-repeating the metric cells already visible in the grouped table row.
+repeating the metric cells already visible in the Proxmox nodes table row.
 Object drawers across workload, node, Docker, and unified-resource surfaces
 must keep their default render bounded to active attention plus a small
 additive context projection. Full provider-specific support workflows remain
@@ -2062,15 +2414,10 @@ Operator-state suppression therefore adds at most one read per new
 finding, not per existing-finding update, and not per operator-set
 flag.
 
-Summary cards for Infrastructure, Storage, Workloads, and Recovery now surface
-health-state counts (offline, degraded, alerting) instead of raw online/offline
-splits. `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` add
-`degraded` and `alerting` resource counts; `StorageSummary.tsx` and
-`useStoragePageSummary.ts` add `poolsDegraded` and `disksFailing` indicators;
-`WorkloadsSummary.tsx` and `useWorkloadsDerivedState.ts` add an
-alerting count derived from `activeAlerts`. These additions must remain
-read-only projections from existing websocket state — they must not introduce
-new polling loops or widen fetch scope on the hot-path boundary.
+A route summary that surfaces health-state counts (offline, degraded,
+alerting) must derive them as read-only projections from existing websocket
+state. It must not introduce new polling loops or widen fetch scope on the
+hot-path boundary.
 Agentless availability endpoints participate in the same unified-resource
 consumer hot path as other infrastructure resources. Adding
 `network-endpoint` to resource queries, filters, and summary counts must reuse
@@ -2118,22 +2465,11 @@ Route-backed workload `resource` focus on that hot path is contextual state
 only, not inferred filter state: opening or closing an inline drawer must not
 invent, retain, or clear `agent` or node-scope filters unless those filters
 were already explicit in the managed workload URL.
-That same hot-path ownership now covers top-of-page summary emphasis: infrastructure
-and workloads summary cards must treat row hover, chart hover, and route focus
-as one shared active-series contract so time-range switches, row scrubbing, and
-chart cross-highlighting reuse one existing chart path instead of repainting
-page-local “selected row” overlays on top of already downsampled summary
-history. Hovering a sparkline or density map for one entity must promote that
-entity into the shared active series so sibling cards highlight the same object
-at once rather than maintaining chart-local hover state, and the synchronized
-hover timestamp must remain visible across those sibling cards even when the
-active entity has no samples for one metric in the current range. Those
-sibling cards should expose the synchronized value through one compact
-header-level readout, not by spawning duplicate floating tooltips on every
-chart.
-Infrastructure cluster-header hover now belongs to that same bounded hot path:
-hovering a grouped infrastructure header must scope the top cards to that
-cluster's unified-resource members through the shared group/entity interaction
+That same hot-path ownership covers summary emphasis. No top-of-page summary
+cards render on infrastructure or workloads today; if they return, row hover,
+chart hover, and route focus must stay one shared active-series contract that
+reuses one existing chart path instead of repainting page-local “selected row”
+overlays on top of already downsampled summary history.
 That same hot path now also owns dashboard freshness discipline. Supported
 unified-resource dashboard reads may hydrate from REST for first paint, but
 once websocket `state.resources` is available they must consume that canonical
@@ -2155,21 +2491,22 @@ queries. Compact route consumers that request only CPU/memory or only storage
 `pkg/metrics/store.go` instead of fetching every series for every resource and
 discarding the extra payload in higher layers.
 That same protected workload-chart hot path now also owns rendered-metric
-budgeting. `internal/api/router.go` may parallelize VM, container, pod, and
-docker-container workload batch reads, but `/api/charts/workloads` and
-`/api/charts/workloads-summary` must request only the canonical five workload
-metrics they actually render instead of widening back to disk read/write or
-fetch-all history queries.
+budgeting. `internal/api/chartapi/service.go` may parallelize VM, container,
+pod, and docker-container workload batch reads, but `/api/charts/workloads`
+must request only the metric set it serializes for each workload type (the
+guest sparkline set for VMs and system containers, the infrastructure set for
+app containers, the five-metric set for Kubernetes pods) instead of widening
+back to fetch-all history queries.
 That same chart-batch hot path now also owns long-range in-memory coverage.
 `internal/monitoring/monitor_metrics.go` may skip SQLite for guest and node
 chart batches when `metrics_history` can prove the requested window is
 already covered in memory, and performance work must preserve that
 coverage-gated fast path rather than treating every long-duration request as
 store-backed by default.
-That same hot path now also covers mock-mode cache warmth. The canonical
-24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
-across live mock sampler ticks so the first dashboard request after a refresh
-does not pay the full aggregate-storage synthesis cost on the operator path.
+That same hot path now also covers mock-mode cache warmth: live mock sampler
+ticks prewarm only the Workloads guest-chart cache. The retired aggregate
+`/api/charts/storage-summary` trend is no longer synthesized or prewarmed, so
+no sampler tick pays for an aggregate nothing reads.
 That same chart-client hot path also owns canonical Kubernetes target typing.
 `frontend-modern/src/api/charts.ts` may normalize Kubernetes history requests
 onto the shared backend `resourceType=k8s` transport, but it must preserve the
@@ -2270,36 +2607,37 @@ must not tighten physical retention until the durable downgrade state reaches
 its governed day-60 purge timestamp. Re-upgrade clears that ceiling before the
 next retention run. The ceiling may only reduce configured retention; it must
 never expand an operator's shorter storage policy.
-contract instead of inventing an infrastructure-local summary filter branch.
-For shared line charts on that hot path, the shared sparkline primitive may
-isolate the selected series inside the existing render budget, but that
-isolation must still reuse the same summary series set and timeline data rather
-than triggering a second page-local chart recomputation.
-That same hot-path rule now covers contextual row focus on those pages.
-That same hot-path ownership now also forbids hover-driven table movement.
-When a summary chart promotes one active entity, the matching row may highlight
-in place if it is already mounted and visible, but the hot path must not
-auto-scroll the page or rebuild the table into a one-row filtered view on
-transient hover. Off-screen reveal must stay behind an explicit `Jump to row`
-action routed through the shared summary-table focus bridge.
-That same hot-path contract also owns the row-emphasis paint. Dashboard guest
-rows and infrastructure resource rows must expose summary-linked activity
-through the shared `data-summary-row-active` marker and let the shared frontend
+That same hot-path ownership forbids hover-driven table movement on the
+workloads and storage tables. Row hover may highlight the matching row in
+place, but the hot path must not auto-scroll the page or rebuild the table
+into a one-row filtered view on transient hover; only a deliberate row focus
+may reveal an off-screen row, through the shared summary-table focus bridge.
+The bridge measures row position only inside that deliberate reveal. It must
+not keep window-level scroll or resize listeners, or re-measure the hovered
+row on every hover change and scroll frame, for an off-screen affordance that
+nothing renders: the retired `Jump to row` visibility check did exactly that,
+costing 128 `getComputedStyle` calls across eight row hovers and 320 across
+ten scroll steps on the 12-node mock storage table, and none once removed.
+That same hot-path contract also owns the row-emphasis paint. Workload guest
+rows and storage pool, group, and disk rows must expose
+summary-linked activity through the shared `data-summary-row-active` marker and let the shared frontend
 primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
-`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` must
-write workload selection back into the workloads route through the shared
-same-path route-state scheduler, but the actual shell-position handoff for
-query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
-plus the root `frontend-modern/src/App.tsx` shell so opening a focused
-workload does not look like a full page reload, and the governed infrastructure and
-workloads summary surfaces must keep the summary page-scoped while that focus
-reuses the shared highlight contract; density maps may retain page-level
-context, but they must now also surface focused-entity detail inside the same
-card instead of dimming the rest of the map into unusable background noise or
-swapping the hot path into a transient single-series chart. Line-card
-isolation must still flow through the shared sparkline runtime instead of a
-page-local focus overlay. The shared same-path scheduler must also own cleanup
+`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` keeps
+workload selection local and never writes it back into the route; an inbound
+`resource` link only hydrates it. Local row focus keeps the scroll position
+through `preserveScrollableAncestorVerticalOffset` in
+`frontend-modern/src/components/shared/contextualFocus.ts` and reveals the
+opened detail through `summaryTableFocus.ts`, so opening a focused workload
+does not look like a full page reload. The root `frontend-modern/src/App.tsx`
+shell applies a pending `frontend-modern/src/utils/appShellScrollRestoration.ts`
+restore on the next route change, whatever caused it, so only the shared
+same-path route-state scheduler may stage one, from the shell position at the
+moment it navigates. Local row focus stages none: a position staged without a
+navigation waits for an unrelated one, and before this rule a Type filter
+change made at the top of the Proxmox overview jumped the shell back down to
+the row toggled earlier, because the scheduler stages nothing from scrollTop 0.
+The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2308,48 +2646,46 @@ focus may mount drawer-local facet and intelligence fetches, but those
 requests must retain the mounted page shell through the shared non-suspending
 query helper instead of bubbling a transient `Loading view...` fallback through
 `AppLayout.tsx` when an inline infrastructure drawer opens.
-That same hot-path rule now has one shared runtime boundary. Interactive-series
-filtering, active-series derivation, focused-label lookup, and local
-scroll-preserving row focus must extend
-`frontend-modern/src/components/shared/contextualFocus.ts` instead of
-rebuilding page-local `Set` scans or scroll repair logic in dashboard,
-infrastructure, or workloads hot paths.
+That same hot-path rule now has one shared runtime boundary. Local
+scroll-preserving row focus and inline-detail reveal must extend
+`frontend-modern/src/components/shared/contextualFocus.ts`, and active-series
+derivation must stay in
+`frontend-modern/src/components/shared/summaryCardInteraction.ts` behind
+`summaryTableFocus.ts`, instead of rebuilding page-local `Set` scans or scroll
+repair logic in workloads, storage, or platform-table hot paths.
 That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
 must still flow through the shared contextual-focus and summary-table helpers.
-Direct row toggles that already have the row in view must capture the current
-app-shell scroll position before the focus write and let the remounted root
-shell restore that position, so the interaction stays anchored instead of
-looking like a full refresh. Once the drawer is mounted, the shared reveal
+Direct row toggles that already have the row in view stay anchored through
+that contextual-focus offset preservation, not through a staged app-shell
+restore, so the interaction does not look like a full refresh. Once the drawer is mounted, the shared reveal
 helper must still take over whenever the opened detail would land below the
 fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the
 top of the detail visible instead of hard-centering every expansion.
-That same hot-path ownership now includes summary cache invalidation.
-Infrastructure and workload summary caches may hydrate charts for fast remounts,
-but when the summary chart timeline contract changes, the cache version must
-advance and stale payloads must be purged on read so long-lived browser sessions
-cannot keep rendering pre-fix sparkline shapes after the backend timeline model
-has been corrected.
-That same cache contract also applies to same-tab in-memory hydration on the
-protected summary hot path. Infrastructure and workload summary shells must
-version their module-scoped remount caches alongside the chart contract so a
-hot-reloaded or long-lived browser tab cannot immediately rehydrate an older
-summary series set before the next live fetch completes.
-That same hot-path rule now applies to infrastructure summary resource
-filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-must include API-backed systems such as top-level TrueNAS appliances through
-the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
-`resource.type` branch, so the summary poll/cache path stays on one canonical
-infrastructure selector contract.
+That same hot-path ownership now includes summary cache invalidation. A
+summary history cache that hydrates fast remounts, today the storage page's
+module-scoped `frontend-modern/src/utils/storageSummaryCache.ts` behind the
+pool Growth column and its sort, must
+carry the chart contract version in its key and advance it when the summary
+chart timeline contract changes, so a hot-reloaded or long-lived browser tab
+cannot rehydrate an older series set before the next live fetch completes.
+The table history reader keeps no summary cache of its own:
+`useWorkloadTableMetricHistory.ts` holds the infrastructure and workloads
+summaries only in the query layer's retained cache, which expires entries after
+five minutes and clears on org switch. A new persistent summary cache needs a
+reader in the same change: after their readers were deleted, the infrastructure
+and workloads summary caches kept serializing every polled response on the main
+thread (on the 50-node, 929-guest mock estate at the 1h range, about 9.6 MB of
+workloads and 0.9 MB of infrastructure JSON per 30-second poll) only to write
+it to browser storage, or drop it when over the size cap, with nothing reading
+it.
 That same protected hot path keeps storage trend loading route-owned after the
-dashboard overview retirement. `internal/api/router.go` must continue serving
-the compact `/api/charts/storage-summary` request backed by
-`GetStorageMetricsForChartBatch(...)` for the surfaces that still own storage
-summary presentation, but no deleted dashboard trend hook may reopen the full
-storage-page `/api/storage-charts` payload or an N+1 per-pool
-`/api/metrics-store/history` fan-out.
+dashboard overview retirement. The compact `/api/charts/storage-summary` route
+is retired after its last reader was deleted, and no deleted dashboard trend hook may
+reopen it, the full storage-page `/api/storage-charts` payload, or an N+1
+per-pool `/api/metrics-store/history` fan-out.
 That same Workloads shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`. When the
 Workloads route has no connected infrastructure sources, the CTA must hand
@@ -2377,12 +2713,6 @@ query only if the runtime preserves ascending timestamps plus correct
 avg/min/max bucket aggregates within every returned resource/metric series, and
 the hot-path proof keeps latency, ordering, and aggregate correctness guarded
 together in the explicit metrics SLO surface. That protected surface should
-That same workload-summary hot path now also owns chart-cache invalidation
-whenever the shaped timeline contract changes. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
-must version-bust cached summary payloads in the same slice that changes
-workload chart bucket semantics or timestamp precision, so operators are not
-served stale mixed-cadence chart shapes after the backend timeline model has
-already been corrected.
 stay on one ordered index scan plus Go-side bucket aggregation rather than
 forcing SQLite to `GROUP BY` computed buckets through a temp B-tree on the
 fleet-scale workload path.
@@ -2429,15 +2759,10 @@ app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWor
 `frontend-modern/src/components/Workloads/workloadTopology.ts`, and
 `frontend-modern/src/components/Workloads/useGuestRowState.ts` must preserve a
 canonical app-container navigation path while keeping Docker runtime action
-identifiers explicit. Discovery affordances on the Workloads drawer must follow
-the canonical `discoveryTarget` contract, not generic app-container host
-fallbacks. Guest-drawer manual discovery run controls must route through the
-shared `DiscoveryTab` manual-run action and the canonical target identifiers
-instead of adding Workloads-local discovery trigger state. TrueNAS
-app-containers may reuse runtime metadata such as image and
-runtime strings, but they must not inherit Docker-only update affordances or
-agent-only Discovery tabs on the Workloads row path unless the unified
-resource contract explicitly supplies discovery ownership.
+identifiers explicit. Agent resource context follows backend-authored
+`discoveryTarget` coordinates. TrueNAS app-containers may reuse image and
+runtime metadata, while Docker-only update actions remain scoped to
+Docker-managed workloads.
 That same row-and-selection boundary also requires canonical app-container
 identity to stay intact on the workload surface. Workload rows, deep links,
 drawer selection, anomaly correlation, and route-state filters must key on the
@@ -2451,26 +2776,29 @@ across provider-backed history. Row hover and focus plus top-card isolation on
 workload surfaces must resolve against the same canonical workload ID even
 when the backing history is stored under a provider metrics target, so
 provider-backed VM rows do not silently drop out of summary emphasis.
-The shared infrastructure table hot path now also treats operator-facing
-resource identity as a protected boundary: sorting, searching, summary-series
-matching, and row titles on the infrastructure page must use the canonical
-local instance identity rather than governed AI-summary text, so performance
-work cannot “optimize” the table into ambiguous labels that collapse multiple
-resources into the same visible name.
-The same protected table path treats the visible system column as
-identity-first presentation over canonical merged-source data. Sort derivation
-for that column must use the same displayed system identity as the render path,
-while the render path may keep full merged-source detail in tooltips. When a
-row contains both `agent` and a provider/API platform such as Proxmox, the table
-must render the provider platform as the compact visible badge rather than
-adding extra Agent badge width or sorting primarily by the telemetry method.
-When a row is only known through an agent or container runtime, the table must
-prefer reported OS/appliance identity before falling back to Docker/runtime
-capability labels.
-When the displayed system badge already includes the platform version, row title
-metadata must not spend extra badge/title budget repeating that same platform as
-an unversioned source; it may keep non-duplicate collection context such as
-Pulse Agent.
+Platform-table hot paths treat operator-facing resource identity as a
+protected boundary: sorting, searching, summary-series matching, and row
+titles must use the canonical local instance identity (the resource's own name or
+`getPreferredInfrastructureDisplayName(...)`) rather than governed AI-summary
+text, so performance work cannot “optimize” a table into ambiguous labels that
+collapse multiple resources into the same visible name.
+A visible system column is identity-first presentation over canonical
+merged-source data. The Docker hosts table's System column is the live
+instance: `frontend-modern/src/features/docker/DockerHostsTable.tsx` sorts and
+renders the same `getDockerHostSystemBadge(...)` result, and the render path
+may keep full merged-source detail in tooltips. When a row contains both
+`agent` and a provider/API platform such as Proxmox, the system badge must show
+the provider platform rather than adding extra Agent badge width or sorting
+primarily by the telemetry method. When a row is only known through an agent or
+container runtime, the shared resolver prefers reported OS/appliance identity
+before falling back to Docker/runtime capability labels; the Docker hosts
+column drops that runtime-only fallback, since every row there is a Docker
+host, and shows `—` instead.
+A surface that shows source badges beside a versioned system badge must not
+spend extra badge/title budget repeating that same platform as an unversioned
+source; it may keep non-duplicate collection context such as Pulse Agent. The
+resource drawer header avoids the repeat by showing system identity badges in
+place of source badges.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and
@@ -2567,12 +2895,22 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
-Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
-`Filesystems` section before the `Tags` section, so the shared
-`DetailSectionTable` span algorithm gives the longer mount-point list the wider
-panel and keeps the short tag list in the narrower slot. Future section-order
-changes in that overview must preserve the filesystem-first ordering rather
-than letting the shorter tag list take the wide column.
+`GuestDrawerOverview.tsx` renders the `Filesystems` section on its own, in
+front of the collapsed Details, so the mount-point list never shares a card
+row with shorter sections; tags render as chips in the Overview facts strip
+rather than as a `Tags` detail section. The guest and node drawers chart
+history on Overview itself: `GuestDrawerOverview.tsx` and
+`NodeDrawerOverview.tsx` lazy-load `GuestDrawerHistory` out of the
+WorkloadsSurface chunk, open it on the 24h `GUEST_DRAWER_HISTORY_DEFAULT_RANGE`
+and pass `enabled={false}` while Manage shows, so one query from
+`guestDrawerHistoryQuery.ts` polls only while the charts are visible. These
+drawers have no History tab, so there is no second read of the same resource
+at another range (the deleted `DrawerTrendCards.tsx` and the History tab each
+held one). The Docker host drawer and the shared resource-detail drawer
+(agents, containers, PBS, TrueNAS, Kubernetes and other platform rows) follow
+the same rule: `DockerHostDrawerOverview.tsx` and
+`ResourceDetailDrawerOverviewTab.tsx` render `GuestDrawerHistory` on Overview
+on the same 24h default and pass `enabled={false}` while another tab shows.
 Panel width alone does not make mount paths readable. Filesystem disk rows must
 opt into the shared `layout: 'stacked'` presentation so their full mount path
 wraps above usage and progress at desktop and phone widths. Shared-prefix paths
@@ -2580,12 +2918,48 @@ must remain distinguishable without hover. Workloads supplies this row metadata,
 not local table CSS or a duplicate renderer; non-filesystem rows keep the compact
 default. Verification covers the opt-in at this composition boundary and actual
 long-path wrapping in the shared renderer's browser proof.
+A guest's linked Pulse Agent can stop reporting while Proxmox keeps polling the
+VM. `useWorkloads` copies `resource.agent.stale` onto the row as `agentStale`,
+and sets `disksFromAgent` when Proxmox reported no guest filesystems and the
+agent's own `disks` filled in. When that agent is stale, `GuestDrawerOverview.tsx`
+reads the Guest RAID card as last known through the shared `RaidCard`
+`lastKnownReason` prop with `HOST_AGENT_STOPPED_REPORTING_REASON`, puts a status
+line over muted Network rows, reads agent-supplied Filesystems rows through the
+existing `last-known` disk read state, and marks the Pulse Agent row as stopped
+reporting. Agent-supplied filesystem rows follow the agent's freshness rather
+than the Proxmox `diskStatusReason`, which describes Proxmox's own guest reads,
+so a live agent's rows keep their usage and bars. Those rows read as
+unavailable once the guest is stopped, whether its status or the Proxmox
+`vm-stopped` reason says so, and Proxmox's own guest filesystems keep their
+Proxmox read state. The two flags ride the existing row mapping and
+add no query or poll; `GuestDrawer.test.tsx` and `useWorkloads.test.ts` pin
+both sources. The workload table's disk cell (`useGuestRowState.ts`,
+`GuestRow.tsx`) and the drawer History (`guestDrawerModel.ts`) judge the same
+guest through the drawer rows' rule, `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts`: a silent agent's bars carry the Last known
+label, a live agent's bars stay current under Proxmox `agent-not-running`, and
+History reads the aggregate disk metric as current, last known or unavailable
+the same way. The rule covers the aggregate because Proxmox records no guest
+disk usage without guest filesystems, so a manually linked guest then keeps the
+agent's disk metric, and the poller no longer carries that agent reading
+forward as Proxmox's own `prev-` read (see the monitoring contract).
+`TestResourceRegistry_ManualGuestAgentLinkDiskMetricFollowsProxmoxGuestFilesystems`
+pins that merge; `GuestRow.test.tsx` and `GuestDrawer.test.tsx` pin the cell and
+History. On the websocket path (`resourceStateAdapters.ts`) a native Proxmox VM
+facet's new guest-read outcome drops filesystems it no longer reports, a native
+agent facet without `disks` drops the agent's, and the agent facet always
+carries `stale`, so the rows switch source and lose the Last known label when
+the agent resumes, without a reload. A stale Proxmox source
+can still lose the aggregate to a live agent while its own filesystem rows
+remain; such a guest stays on the Proxmox rule. The agent's OS, addresses and
+physical disk health carry no stale cue yet.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
-boundary for collapse: Workloads owns which inline row is selected and the
-close handler, while
+boundary for collapse: the owning table (Workloads for guests, the Proxmox
+nodes table for nodes, the Docker hosts table for Docker hosts) owns which
+inline row is selected and the close handler, while
 `frontend-modern/src/components/shared/ObjectDrawerHeader.tsx` owns the
 full-width semantic header button, phone target height, focus treatment, and
-collapse chevron. `WorkloadPanel` must pass the grouped node close handler into
+collapse chevron. `ProxmoxNodesTable` must pass its node close handler into
 `NodeDrawer`, the Docker hosts table must pass its close handler into
 `DockerHostDrawer`, and those shells must not fall back to a small icon-only
 collapse target or wrap interactive header actions inside a local button.
@@ -2604,15 +2978,6 @@ re-accumulating discovery heuristics back into the performance hot-path mapper.
 That mapper may add simple host-agent thermals rows from already-loaded sensor
 metadata, including `thermalState`, but it must not perform additional resource
 lookups, history reads, or polling work to decorate the drawer.
-The PBS service-table hot path now follows that same split: raw job arrays may
-cross the transport boundary, but
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-must collapse them into one shared `Activity` presentation via the canonical
-service-model helpers, while
-`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-stays a thin render shell. Future running-task visibility changes must extend
-through the shared model and accepted performance proof file instead of adding
-per-row PBS status parsing or inline job scans in the table render path.
 The Workloads disk list now follows the same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in
@@ -2636,7 +3001,7 @@ the filter and presentation rails wrap-capable instead of forcing a single
 no-wrap row that clips trailing actions. The workload shell leaves Type,
 Status, dynamic scope, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
-bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
+bars/trends, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
 wrapping `ViewOptionsDisclosure` in the workload feature or rendering as
 equally prominent filter toggles. The shared FilterBar owns the inline View
@@ -2652,17 +3017,23 @@ counts wrap independently so a narrow toolbar cannot strand View on a line by
 itself or force page-level horizontal overflow. The compact Add filter control
 joins that cluster only in the default state where no active menu chip,
 contextual Clear action, or leading action needs its own filter row; active
-scope editing keeps Add filter beside the chips. The sparkline range remains
-inline only while trends are active because it is the frequently changed
-analytical window, and its compact control must include a visible `Trend range`
-label so the values are not an orphaned set of durations. Columns must expand
+scope editing keeps Add filter beside the chips. The sparkline range is a
+trailing inline control, not a View option, because it is the frequently
+changed analytical window. `WorkloadsFilter` renders it whenever the metric
+mode is Trends, and in Bars only at desktop widths while Row hover is `History`
+(the default); Bars with `Details` hover, or Bars below the 768px `isMobile`
+breakpoint, hides it. Its compact control carries the visible `History` label
+so the values are not an orphaned set of durations. Columns must expand
 as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory
-column header after the View disclosure closes. Workload chart
-visibility remains a display preference: its menu action must expose explicit
-`Show charts` / `Hide charts` pressed state, and hiding charts must remove the
-summary section rather than leaving an empty collapsed summary band on screen.
+column header after the View disclosure closes. No workload summary chart
+section renders today, and `WorkloadsFilter` carries no chart-visibility
+control or `onChartsToggle` / `chartsCollapsed` props. A summary section that
+returns through a governed product decision must bring its own visibility
+control with explicit `Show charts` / `Hide charts` pressed state, and hiding
+charts must remove the summary section rather than leaving an empty collapsed
+summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of
@@ -2730,6 +3101,34 @@ hot paths. The shell keeps its fitted percentage/capacity label on a
 semi-opaque surface scrim with base-content contrast so segment colors cannot
 make the small readout illegible; this remains CSS presentation only and adds
 no measurement or per-row runtime work.
+The Workloads memory bar consumes the same already-classified observation as
+the row's freshness cue (`memoryObservation.ts`), without deriving freshness
+from capacity, Last seen, another metric or a host-relative denominator.
+Only a current observation may colour memory as live pressure or show its
+anomaly badge. Last-known and unknown observations keep their percentage,
+composition, balloon and swap geometry for inspection, in a neutral tone;
+their composition tooltip carries the original source/time caveat. A current
+linked-agent memory observation remains current while QEMU disk reads defer.
+A current cache-inclusive Proxmox reading still reaches the row presentation,
+so the VM row can say `May include cache` once the guest's own memory meets
+its warning threshold (below it the caveat is title and assistive text only);
+rows whose reading is current and cache-aware keep returning no presentation
+without formatting a date or source label (`memoryObservation.test.ts` pins
+both paths).
+Tooltip headings, numeric values and neutral labels use theme-aware text so
+the source caveat and composition remain readable on both light and dark surfaces.
+An unavailable reading, including the shared bar's explicit unavailable input,
+emits no swap indicator, swap usage tooltip or anomaly badge even when retained
+numeric carriers are present. Known capacity may still explain that absence.
+Unannotated unrelated-platform callers keep current behaviour and measured
+zero remains zero. Alert records, thresholds, evaluation and historical series
+are unchanged: withholding a live decoration neither dismisses an alert nor
+establishes guest recovery. `stackedMemoryBarModel.test.ts`,
+`StackedMemoryBar.test.tsx` and `GuestRow.test.tsx` verify neutral retention,
+unavailable carriers, current controls, host/percentage-only paths and reactive
+same-guest replacement. Browser acceptance uses the canonical Workloads mapper
+and surface at desktop and phone widths, with source-owned memory independent
+of QEMU disk deferral; it is not native guest or installed acceptance.
 The dashboard metric bar now follows that same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in
@@ -2776,48 +3175,29 @@ precedence, reinterpret ratios above an arbitrary threshold, or replace an
 established provider history series; source authority and canonical identity
 convergence belong upstream in the unified-resource and monitoring contracts.
 
-The unified resource table hot path is now also governed as explicit
-performance-owned runtime, with shared ownership against the unified-resource
-consumer boundary. The remaining performance work is no longer top-level
-ownership ambiguity on the main Infrastructure or Workloads tables.
-The table's reactive runtime, grouping, and row-windowing owner now lives in
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-while pure table-state derivation, service sorting, sort-cycle policy, and
-responsive column layout now live in
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`,
-and viewport-sync plus selected-row reveal behavior now live in
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
-so future hot-path table-state changes must not fold selector derivation,
-layout policy, and scroll coordination back into one mixed owner or the render
-shell.
-The same shared layout policy now treats the phone branch as a zero-overflow
-fixed-width table rather than preserving a 640-pixel intrinsic floor. The
-shared state model must select one identity track fixed at 30 percent plus five to seven
-source-relevant health or activity tracks, normalize those widths to the
-available container, and keep the document and table shell at scroll-width
-parity. That denser phone projection remains pure model/class work: it must not
-add row-time measurement, duplicate tables, viewport listeners, or per-row
-responsive signals to the infrastructure hot path.
-That same hot-path boundary now also owns CSP-safe table sizing. Infrastructure
-host, PBS, and PMG table shells must take their layout and column sizing from
-the shared presentation owner in
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-and apply those values through classes and width/height attributes, not inline
-`style=` maps on the live table DOM. Future hot-path table work must not
-reintroduce inline width, min/max width, or row-height styles into the render
-shell just to land a local layout tweak.
-That same shared sizing contract now also owns wide-desktop width
-distribution. In full-width shells, host, PBS, and PMG tables must keep an
-explicit desktop `Resource` column width in the shared presentation owner so
-surplus width is redistributed across peer metric, source, uptime, and action
-columns instead of being dumped into the first column and wasting operator
-visible table density.
-That hot-path contract now includes policy badge rendering on resource rows.
-Policy-rich table rows must only surface a single inline summary chip for
-blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
+Workloads disk selection follows the same guest-read freshness rule as the
+row and drawer in `frontend-modern/src/utils/workloadGuestPresentation.ts`.
+`workloadSelectors.ts` sorts current available readings before unavailable or
+last-known readings in **both** directions; retaining a labelled number for
+inspection does not promote it to a current capacity observation.
+`frontend-modern/src/utils/searchQuery.ts` must not match a numeric `disk`
+condition from absent, explicitly unavailable, negative-sentinel or non-finite
+usage, or from a non-current guest filesystem read. An actually reported zero
+still matches zero. The Workloads wrapper recognises the shared parser's
+existing numeric equality syntax instead of treating it as a name query.
+Linked Pulse Agent filesystems follow that agent's lease
+and stopped-guest boundary, not a failed Proxmox read; unrelated stale agent
+metadata must not suppress a current platform reading. Text/OR searches and
+unfiltered inventory remain available. These are selection rules, not health,
+thaw, collection-recovery or alert-policy verdicts. The selector and search
+regressions cover refusal/retention, same-identity fresh withdrawal, linked-agent
+precedence, both sort directions and unknown-versus-zero controls.
+
+Resource table rows that surface policy posture must show at most a single
+inline summary chip for blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
 `local-first` and redaction-only metadata belongs in Data Handling, detail, and
 AI/governance surfaces instead of spending default row visual budget.
-Agentless availability evidence belongs on that same bounded row path.
+Agentless availability evidence belongs on the bounded row path.
 Any resource row carrying an `AvailabilityData` facet—whether a standalone
 `network-endpoint` or a known guest that inherited the facet through explicit
 link or IP correlation—may replace otherwise empty host metric slots with one
@@ -2836,51 +3216,38 @@ summary and detail surfaces iterate the bounded attached set from the same
 payload. Neither plural presentation nor freshness evaluation may issue a
 check-specific request, reconstruct the set from the settings API, or add a
 second websocket hydration path.
-The infrastructure summary hot path is now explicit shared ownership too:
-`InfrastructureSummary.tsx` stays a render shell,
-`useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and
-`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
-selection, empty-state wording, and summary-series/metric derivation. Future
-summary-chart work must not put polling, cache hydration, and series math
-back into the shell.
-The summary API feeding that hot path must also normalize mixed-resolution
-history into equal-time summary buckets before it reaches the shell/runtime
-owners, so long-range cards do not bunch recent higher-resolution samples at
-the right edge.
-It now also includes compact resource-facet summary chips rendered next to
-policy metadata, and table-row uses must set an explicit visible chip limit
-with overflow disclosure instead of allowing mock-rich resource rows to wrap
-an unbounded badge list. Those chips must stay within the same bounded
-windowing and mounted-row budget proved by
-`UnifiedResourceTable.performance.contract.test.tsx`.
-The same facet summary contract applies to the service-resource rows inside
-the unified table as well, so PBS and PMG entries must keep the same bounded
-presentation and verification surface as the primary fleet rows. The shared
-`ResourceFacetSummary` component now owns that chip rendering path, so any
-future summary changes must preserve the same bounded row budget instead of
-forking separate table-only presentation logic. That component now also
+The infrastructure summary API (`/api/charts/infrastructure`, shaped in
+`internal/api/chartapi/service.go`) must normalize mixed-resolution history into
+equal-time summary buckets before it reaches its consumers, today the Proxmox
+nodes table's Trends sparklines (`frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx`,
+reading through `useWorkloadTableMetricHistory` with `series: 'nodes'`), so
+long-range series do not bunch recent higher-resolution samples at the right
+edge. On the frontend,
+`useWorkloadTableMetricHistory.ts` owns polling for both estate summaries and
+`workloadMetricHistoryModel.ts` owns series folding and chart-key matching;
+table rows must not grow their own summary polling or series math.
+Compact resource-facet summary chips render through the shared
+`ResourceFacetSummary` component, whose only production consumer is the
+detail drawer's change history, so it renders every chip. A table-row use must
+first give that shared component a visible chip limit with overflow disclosure
+instead of letting mock-rich rows wrap an unbounded badge list, and must stay
+within the table's bounded windowing and mounted-row budget rather than forking
+separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
-Host, PBS, and PMG summary rows also declare themselves as the compact touch
-disclosure target through `SummaryRowActionButton`; the shared primitive hides
-the redundant visible mobile chevron while preserving accessible disclosure
-semantics, so provider sections do not pay a separate cell-width or tap-target
-cost for an action already owned by the whole row.
 The same infrastructure hot path now also depends on the shared
 `frontend-modern/src/components/shared/ProgressBar.tsx` primitive for metric
 fill rendering. Performance-sensitive metric bars may vary by value and color,
 but they must render width through shared attribute-driven progress geometry
 instead of per-row inline width styles that break the hosted demo CSP.
-The default table hot path now scopes those summary chips to timeline and
-change-provenance badges only. Generic capability and relationship badges are
-removed from the default row surface entirely until the underlying data is
-proven populated, which preserves the fleet-table scan path and avoids
-spending hot-path visual budget on model nouns that do not yet clear the
-product bar.
-Row summaries now also prefer canonical `facetCounts` on each resource when
-they are available, so the hot path can stay within the same budget while
-still reading totals from the shared resource contract. The drawer history
+Those summary chips are scoped to timeline and change-provenance badges only.
+Generic capability and relationship badges stay off the default surface until
+the underlying data is proven populated, so no surface spends visual budget on
+model nouns that do not yet clear the product bar.
+Facet summaries fall back to canonical `facetCounts` on each resource when no
+fetched facet counts are available, reading totals from the shared resource
+contract. The drawer history
 surface reuses the same governed resource route helpers for relationship and
 related-resource links, so cross-resource navigation stays within the existing
 infrastructure surface rather than branching into custom detail-only routing.
@@ -2892,50 +3259,35 @@ history overview down to timeline counts and timeline-summary chips, so the
 performance-sensitive shared presentation path stays aligned with the
 investigation-first product contract instead of rendering low-signal generic
 facet sections by default.
-Governance metadata such as sensitivity and routing scope may be visible in
-the table, but it must remain on the same bounded row-windowing and mounted-row
-budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather
+Governance metadata such as sensitivity and routing scope shown in a table
+must remain on the same bounded row-windowing and mounted-row budget rather
 than creating a separate unbounded rendering path for policy-rich fleets.
-Infrastructure cluster-header presentation must stay inside that same bounded
-row model. `unifiedResourceTableStateModel.ts` owns whether the compact
-`Cluster` chip is rendered, including suppressing it when the visible group
-name already ends in `Cluster`, so label cleanup does not add a second
-row-rendering path or per-page DOM workaround.
-The shared table and detail drawer now also render governed resource labels
-through the shared identity/display contract, which routes policy-aware
-resources through the canonical policy-aware helper and suppresses the raw
-alternate name when policy requires governed handling. That keeps the
-policy-aware label path inside the same hot-row rendering budget instead of
-adding a second display branch for redacted fleets, and the proof for that
-behavior lives in `UnifiedResourceTable.performance.contract.test.tsx`.
-The shared table now also passes the same canonical resource-label resolver
-into the detail drawer so related-resource chips in the timeline/history path
-can resolve through the canonical catalog without adding a separate
+The detail drawer's governance summary resolves governed resources through the
+canonical policy-aware `getResourcePolicyGovernedSummary(...)` helper. That
+keeps the policy-aware label path inside the same rendering budget instead of
+adding a second display branch for redacted fleets.
+Platform tables pass the canonical resource-label resolver into the detail
+drawer through `PlatformResourceDetailTableRow` so related-resource chips in
+the timeline/history path can resolve through the canonical catalog without adding a separate
 detail-only lookup branch to the hot-row path.
 The same detail drawer also uses that resolver for correlation dependency and
-dependent chips, so the investigation path does not fall back to raw IDs in
-the drawer while the AI page keeps its broader no-catalog fallback.
-The shared infrastructure selector search path now also routes through that
-same preferred resource display contract, so governed resources do not
-reappear via raw-name search candidates while the selector stays on the same
-hot-path budget.
-The shared workloads-link helper used by the resource drawer and table now
-also routes its Kubernetes-cluster fallback through the same preferred
-resource display contract, so navigation context does not leak raw
-`displayName` values for governed clusters.
-That same workloads-link path and the workload projection now also
-share the canonical cluster-name helpers in the shared agent-resource layer,
-so route labels, pod grouping, and cluster-name fetch keys keep using the
-same source of truth instead of rebuilding the `clusterName`/`context`/
-`clusterId` prefix locally.
-The infrastructure host-table hot path now also suppresses the default
-`Internal` + `Cloud Summary` policy pair in row chrome. That baseline posture
-still belongs to the canonical policy contract, but repeating it on every host
-burns row-density budget without adding operator-grade signal.
-The shared node adapter also uses that same cluster-name helper for the
-infrastructure summary surface, so Proxmox node projections stay aligned with
-the same canonical cluster label instead of carrying a raw adapter-local
-cluster string.
+dependent chips, so the investigation path shows catalog labels in the drawer
+and keeps the raw ID only when the catalog cannot resolve one.
+The workload projection and the resource drawer share the canonical
+cluster-name helpers in `frontend-modern/src/utils/agentResources.ts`, so pod
+grouping and the drawer's cluster-name fetch keys keep using the same source
+of truth instead of rebuilding the `clusterName`/`context`/`clusterId` prefix
+locally.
+A platform table that adds policy chips to row chrome must suppress the
+default `Internal` + `Cloud Summary` policy pair. That baseline posture still
+belongs to the canonical policy contract, but repeating it on every row burns
+row-density budget without adding operator-grade signal. No platform table
+renders policy chips today.
+The shared node adapter (`nodeFromResource` in
+`frontend-modern/src/utils/resourceStateAdapters.ts`) also uses that same
+cluster-name helper for the node's `clusterName`, so the Proxmox host drawer
+(`frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx`) shows the
+same canonical cluster label instead of a raw adapter-local cluster string.
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.
@@ -2949,19 +3301,15 @@ The unified-resource projection also uses that same helper for Kubernetes
 `clusterId`, so the shared store, dashboard grouping, and detail-navigation
 surfaces all see the same cluster-context prefix before any surface-specific
 fallback applies.
-The aggregate `/api/charts/workloads-summary` endpoint now also has its own
-explicit API p95 budget constant, aligned with the per-workload charts budget,
-and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
-store-backed mixed-workload benchmark coverage drifts.
-The infrastructure and workload-summary chart endpoints may keep a short
-backend response cache for identical org/range/metric-scope summary requests,
-but only as presentation hot-path protection for repeated summary polling and
-remounts. The cached payloads must still be built from the canonical
+The infrastructure summary and per-workload chart endpoints may keep a short
+backend response cache for identical org/range/metric-scope or
+org/range/node/point-count requests, but only as presentation hot-path
+protection for repeated polling and remounts. The cached payloads must still be built from the canonical
 store-backed/read-state sources, must remain isolated by organization and
 explicit chart scope, and must not become telemetry freshness, lifecycle,
 recovery, or persistence authority.
-Those summary caches and the per-workload chart cache share one process-local
-retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
+The infrastructure summary cache and the per-workload chart cache share one
+process-local retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
 variants and evicts oldest payloads at either bound, so raw range, node,
 metric-order, or point-count variants cannot turn a short TTL into unbounded
 steady-state memory. Responses larger than the byte budget remain uncached
@@ -2971,41 +3319,20 @@ series key. Pod chart and history consumers must normalize bare pod IDs onto
 `k8s:<cluster>:pod:<uid>` before lookup; otherwise demo and mock workloads pay
 repeated empty-store misses and redundant refetch churn even while the shared
 workload charts already hold the same pod metrics in memory.
-The infrastructure and workload summary cards now share a canonical
-throughput-rate formatter in `frontend-modern/src/utils/throughputPresentation.ts`,
-so bytes-per-second labels stay consistent between the two summary surfaces
-instead of each component carrying its own rate string builder.
-That shared throughput boundary is now also explicitly governed here.
-`frontend-modern/src/components/Workloads/WorkloadsSummary.tsx` is the
-canonical workload-summary hot-path surface, and
-`frontend-modern/src/utils/throughputPresentation.ts` is the canonical
-bytes-per-second formatter shared by workload and infrastructure summary
-cards. Future throughput wording or workload-summary hot-path changes must
-extend these performance-owned surfaces instead of leaving the formatter or
-summary shell unowned in registry coverage.
-
-Infrastructure selector status ordering must now tolerate arbitrary filter-set
-strings without widening the canonical hot-path order tuple. Unknown statuses
-must sort after the governed status order instead of forcing the selector path
-to abandon the typed canonical order used by the infrastructure table and its
-performance proof surface.
-
-The Infrastructure page now also normalizes source filter keys through the
-shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
-selector boundary keeps using the canonical source-platform contract instead of
-maintaining a local source-normalization alias.
-
 Resource detail mappers now also use the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
 labels, so the canonical presentation layer owns that wording instead of the
 mapper carrying its own title-casing branch.
 
-Dashboard, workload-summary, infrastructure-summary, and org-scoped cache-key
-paths now normalize org scope through the shared
-`frontend-modern/src/utils/orgScope.ts` helper instead of each file carrying
-its own `getOrgID() || 'default'` fallback. That keeps cache isolation and
-multi-tenant row-scoping aligned across the dashboard and resource-summary hot
-paths.
+Org-scoped cache-key paths (`frontend-modern/src/hooks/useWorkloads.ts`,
+`frontend-modern/src/hooks/useUnifiedResources.ts`, and
+`frontend-modern/src/utils/storageSummaryCache.ts`) normalize org scope through
+the shared `frontend-modern/src/utils/orgScope.ts` helper instead of each file
+carrying its own `getOrgID() || 'default'` fallback. That keeps cache isolation
+and multi-tenant row-scoping aligned across the resource and storage-summary hot
+paths. Readers on `createNonSuspendingQuery` need no org key: on `org_switched`
+the query layer clears retained and live values, then re-reads every reader
+with a non-null source; a disabled reader fetches when it is enabled.
 
 GitHub-hosted runner proof for the API performance surface now intentionally
 uses a looser budget envelope than local/staging benchmark runs for the
@@ -3096,8 +3423,8 @@ runtime-capabilities response, but route shells must treat them as already
 loaded runtime identity facts. They must not start polling billing
 entitlements, checkout, or commercial posture endpoints just to decide whether
 a community runtime should show private Pulse Pro download guidance.
-Workloads and infrastructure summary consumers now also keep null-tolerant read
-models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
+Workloads consumers now also keep null-tolerant read models on the shared hot
+path. Guest rows, stacked bars, anomaly summaries, and
 resource detail mappers may accept partial platform metadata or undefined
 ratios, but they must normalize those values once in the shared model layer
 instead of scattering non-null assertions or per-component count coercion
@@ -3131,35 +3458,6 @@ other than `will_fix_later`. The newer `AutoResolved` attribution flag
 on the same UnifiedFinding shape stays a fixed-size `bool` in the same
 struct, so the operator-vs-Pulse closure attribution adds no per-row
 allocation pressure on the same hot path.
-That same Workloads drawer boundary now also owns passive discovery
-surfacing in the overview. `useGuestDrawerState.ts` may issue a single
-`GET /api/discovery/{type}/{target}/{id}` per drawer open through
-`getDiscovery` to populate an "Identified Service" card in
-`GuestDrawerOverview.tsx`, but must never trigger a scan or modify
-discovery state — manual scans, progress UI, and approval prompts stay
-owned by `DiscoveryTab` and `useDiscoveryTabState`. Render is gated by
-`getDiscoveryIdentifiedSummary` so empty or low-signal records collapse
-the card entirely instead of mounting an empty container. The drawer
-fetch must reuse the existing `discoveryTarget` derivation (resource
-type, agent id, resource id) rather than re-implementing target
-resolution, so workloads without canonical discovery ownership (e.g.
-TrueNAS app-containers without explicit `discoveryTarget`) skip the
-fetch cleanly.
-Observed service version, source labels, observed age, and suggested web
-URL candidates may be rendered from that same cached discovery summary,
-but they must not add a second discovery request, route-level Suspense
-dependency, row-time endpoint probe, or auto-save mutation. Suggested
-URLs remain copy/open/adopt affordances only; persisting them as a
-workload link stays a user action through the existing Web Interface URL
-field. For Docker-managed app-containers, that field must receive the stable
-host-plus-container-name metadata ID rather than the runtime container ID, while
-the row and drawer still use the canonical workload ID for all non-metadata
-state.
-The compact provenance marker for those values is presentation-only. It
-may identify already-loaded Discovery fields, but must not introduce
-additional discovery fetches, provider lookups, endpoint probes, or
-per-row layout measurement on the Workloads hot path.
-
 The canonical Workloads table mobile floor is 36rem. The mobile table branch
 must preserve that intrinsic width inside its existing scroll shell instead of
 combining it with `min-w-full`, which allows the operational columns to
@@ -3311,17 +3609,9 @@ nothing at all when workload rows are present.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 
-`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
-process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
-called from `Router.CleanupTenant` alongside the other per-tenant teardown;
-`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
-Without this an offboarded tenant kept its file descriptors and its
-`unified_resources.db-wal`/`-shm` files alive and its directory could not be
-fully removed. Closed stores are evicted from the cache so a later request opens
-a fresh handle rather than using a closed one
-(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
-are idempotent and nil-safe
-(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+Tenant offboarding and process shutdown use the [API store-lifecycle contract](api-contracts.md#per-tenant-resource-stores-are-released-on-offboarding-and-shutdown),
+including its source controls and qualification limits.
+
 ### Report-ack version echo adds no steady-state work
 
 The `serverVersion` field on unified-agent report acks is a constant string
@@ -3381,6 +3671,15 @@ whole-estate physical-disk work to Workloads. The guest's existing agent RAID
 snapshot remains local to the opened drawer; an empty or failed child query
 must not imply that host disks belong to the guest. Focused hook and drawer
 tests pin the query and no-data/error presentations.
+The drawer judges those disks' heat under the guest agent's alert overrides:
+its `agentId`, which `useWorkloads` copies from `resource.agent.agentId` onto
+the workload row, then the guest's own override keys. That reads the alert
+configuration already loaded and adds no query, poll or per-row work.
+While Manage hides the Overview, the drawer's `historyEnabled` also pauses
+these disks: an expanded disk's charts stop polling (they polled every 10-30
+seconds behind the hidden tab) and the list's realtime refresh is held
+through `useUnifiedResources`' `realtimeEnabled`; returning to Overview reads
+once and resumes. `browser-tests/guest-storage-2263.cjs` counts the reads.
 
 ### Configuration transfer authorization stays off persistence hot paths
 
@@ -3416,6 +3715,15 @@ cached client and floor, so the next incident observes the new policy without
 turning alert fan-out into configuration I/O. The hosted Relay runtime tests
 pin persistence and cache replacement together.
 
+### Alert readiness is published with its alerts
+
+`commitActiveAlertsTruth` sets `activeAlertsHydrationStatus` to `ready` and
+applies the alert map in one `batch`, for socket snapshots, socket deltas and
+REST recovery alike, so a reader that sees `ready` also sees the alerts it
+vouches for. Alert History relies on this before deciding a linked alert is
+not firing; the batch adds no work, it only defers effects to one flush
+(`websocket-resilience.test.ts`, `websocket-unified.test.ts`).
+
 ### Mock alert timelines reuse the canonical fixture graph
 
 Mock alert incidents are built once with the canonical fixture graph and read
@@ -3437,6 +3745,75 @@ resource policy attached to them. `internal/mock/generator_test.go` verifies
 nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
+
+### Mock linked fixture builds use the live resource generation
+
+The fixture graph delegates snapshot and supplemental resource assembly to
+MonitorAdapter.PopulateSnapshotAndSupplemental. It shares the live monitor's
+source ordering, deferred operator-link boundary, availability projection and
+final freshness verdict. Storeless generations retain explicit links without
+adding persistence. The fixture data and link cache boundaries remain unchanged.
+
+The graph obtains resources and metrics targets together through
+GetAllWithMetricsTargets, which indexes source mappings once. It does not
+materialize an unrelated VM view to warm a cache or scan all mappings for each
+resource. Generation cost is paid when a fixture view rebuilds, not on every
+alert target lookup. No performance measurement is claimed for this change.
+TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary and
+TestFixtureGraphMatchesMonitorSupplementalFreshness in
+internal/mock/platform_fixtures_test.go pin the generation behavior.
+
+### vSphere workload groups follow canonical parent identity
+
+The workload adapter copies resource.parentId into parentResourceId. vSphere
+workload groups use that server parent identity while cluster, connection and
+host display labels are enriched. A metadata update therefore keeps the row
+and its drawer mounted, including its selected tab. The workload
+instance fallback uses an explicit cluster and never the workload's own name.
+Legacy rows without a canonical parent retain the existing scoped fallback.
+
+The snapshot-enrichment case in hooks/__tests__/useWorkloads.test.ts and the
+parent-identity cases in Workloads/__tests__/workloadSelectors.test.ts preserve
+group stability, updated display labels and separation of equal host labels
+belonging to different canonical parents.
+
+### Alert passes resolve metrics targets without materializing the estate
+
+An alert pass makes one `Monitor.MetricsTargetForResource` call per resource
+and windowed metric, so that call has to be a lookup, not a view build. In mock
+mode it reads the targets the cached view captured and keeps reading them across
+metric ticks (see "Mock-mode metrics-target lookups ride the fixture structure
+revision" in the monitoring contract). On pulse-dev,
+`BenchmarkMockMetricsTargetResolutionAfterTick` measured a pass of 4,731
+lookups against the default estate, after a tick, at 1.8 ms and 151 KB. The
+data-version key made the first lookup after every tick build the estate, and
+made every lookup of a pass build it once a build outlasted the 2-second tick,
+which stalled startup under CPU starvation. Real mode did not show this cost in
+steady state: the store is itself the read state, and a one-off measurement
+with a temporary counter (not asserted by a test) found a full
+`updateResourceStore` pass over 1,694 resources (populate, metric syncs and
+alert sync) taking 108 ms with 121 registry resolutions that fell back to the
+full-mapping scan, because the registry's typed views are built before the
+alert loop runs. `BenchmarkLiveRegistryMetricsTargetResolution` records only
+the lookup cost of a registry whose views are unbuilt against one whose views
+are built (136 ms against 5 ms per 5,079 lookups); it controls the warming
+itself, so it cannot detect production failing to warm the views before the
+alert loop, which is what the one-off measurement above showed. Run both
+benchmarks with `-benchtime=3x`, since the registry case rebuilds its ingest
+outside the timer. `TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks`
+is the guard that fails on a rebuild per lookup. The remaining startup cost
+under starvation was the monitor's repeated full resource-store passes (one per
+supplemental provider registration, 19 before the listener answered) and the
+other consumers of the shared view, which rebuilt it whenever they found it
+stale. A start now makes one pass and one estate build, and a mock-mode process
+with no client connected no longer builds the estate on every monitor tick (the
+data-version consumers, broadcast and `/api/state`, still rebuild it after a
+tick for a connected client). The callers that read
+identity and topology only share the view built for the current fixture
+structure, and the connection-degraded alert feed no longer asks the monitor for
+hosts or PBS instances it throws away (see "Mock-mode metrics-target lookups
+ride the fixture structure revision" in the monitoring contract for the callers
+and the measurements).
 
 ### Update evidence reuses the bounded node observation
 
@@ -3473,7 +3850,6 @@ The signal survives transport loss and resets on organisation URL changes.
 
 On admission-request failure retain the existing facet without extra retries,
 polling or full-estate reads. A later successful refresh replaces that facet.
-
 
 ### ASCII route-label classification
 
@@ -3640,3 +4016,139 @@ backend, metrics-store, performance threshold or latency claim changes here.
 including selection retention while a same-source window advances. Browser
 receipts exercise the actual PBS table/drawer renderer with synthetic APIs,
 not installed collection or a performance benchmark.
+
+### Stored drawer History segmentation stays bounded
+
+Missing-observation rendering uses the existing normalized, configured-group
+timestamps and the unchanged maximum of 240 requested points per metric. The
+segment builder indexes those timestamps once per series and walks its stored
+points without nested nearest-point searches. It adds no request, polling timer,
+collector or synthetic reading. Separate singletons/segments retain the source
+data and shared time window; live updates cannot fill absent stored evidence.
+The mounted `GuestDrawerHistory.gaps.test.tsx` controls pin one initial read and
+only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
+unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
+complete point preservation at the existing request bound. Neither claims a
+timing benchmark, fleet CPU attribution or native incident relief.
+Round dot markers (zero-length round-capped strokes) and the in-place
+`no reading` readout change presentation only: they add no read, timer or DOM
+node per observation beyond the marker's two paths, and the readout no longer
+inserts or removes a line as the inspected time changes.
+Numeric gridline labels are computed from the scale the panel already holds;
+the compact "Worth checking" list reuses rows already derived, and an alert's
+dashed trigger line reuses the alert the drawer already holds. The min-max band
+reads the `min`/`max` each stored bucket already carries: one extra path per
+series with any spread (none for flat data). Range picker option labels come
+from one lookup table (`formatHistoryRangeOptionLabel`). The phone collapse of
+later chart panels is a CSS class below `sm` on panels that stay mounted: it
+hides nothing from the shared history read and adds no read or timer. The
+removed "Refresh history" button took no read away: the 30-second poll is
+unchanged and "Retry history" still appears for a failed read. Its focus
+handoff reads `document.activeElement` once, as the Retry branch is disposed.
+Repeated gridline labels are blanked from the three labels each panel already
+formats, and the canvas chart measures the time labels it already draws to
+choose how many fit. None adds a read or timer. The disk detail's phone fold
+removes reads rather than adding them: folded charts stay paused until opened. The readout and notice
+naming a reply's source read the `source` field the reply already carries.
+
+The default stored-history legend resolves one latest timestamp from that
+same bounded, normalized panel index, then looks up each configured series at
+that time. It does not join unrelated latest or live values, add collection or
+fetch missing siblings. The 240-point cap, 30-second poll, query coordinates,
+cache and segment geometry remain unchanged. Mounted readout, pointer and
+sparse controls verify only explicit query refreshes and correctly qualified
+empty-panel fallback; this is not a timing or native-recovery claim.
+
+
+### Accessible Workloads backup evidence
+
+Both the Backup column badge and its hidden-column name indicator are native
+read-only disclosure buttons. Keyboard activation and an ordinary first touch
+open the same named-guest completion evidence that fine-pointer hover shows.
+Exact time and age use readable theme text rather than colour alone. The shared
+Dialog owns focus, Escape/backdrop dismissal and background isolation, and
+returns focus to the originating disclosure. Nested evidence activation must
+not trigger the enclosing guest row. The Backup column badge keeps a touch
+target of at least 44px. The name indicator keeps 24px (the WCAG 2.2 AA
+minimum): on phones the whole guest row is the disclosure target and the expand
+chevron is screen-reader only, so a 44px box covered the lower left of every
+row's tap area and grew phone rows from about 34px to 64px. Compact desktop
+shields and the existing status colours remain.
+
+The Backup column badge does not truncate. Running (73px with its shield) and
+Unknown (79px) need about 95px with cell padding, so the compact layout weights
+give Backup 10 against Type 5.4 and CPU 9.6, and the wide column is 96px with
+the extra 24px taken from CPU (116px). Type still fits its VM/LXC badge and
+sorted header, and CPU its percentage and core count, while Name, ID, Uptime,
+Net I/O, Disk I/O and the memory and disk bars keep their widths and used/total
+sublabels; views without a Backup column (pods, Docker) give them slightly more.
+Before this, Running was cut inside its pill at every width up to 1600px, and
+None and month ages up to about 1500px.
+`WorkloadsSurface.performance.contract.test.tsx` checks the narrowest compact
+table and the wide width.
+
+The evidence content is reactive to the same guest identity: running is not
+completion, malformed/future times are unknown, and only the existing absence
+sentinels mean no backup recorded. A removed row unmounts its disclosure and
+restores dialog isolation. Opening details adds no API/history read, collector,
+permission, backup/guest operation or polling timer. Dialog machinery and
+content are mounted only when opened; existing freshness thresholds and source
+projection are unchanged. `GuestRow.test.tsx` covers both nested row paths and
+`BackupStatusAccess.test.tsx` covers semantics, focus and observation changes.
+Browser proof exercises production rows with synthetic data, not native backup
+or guest-recovery acceptance.
+
+### Bounded rolling-alert window copies
+
+The existing persistent-window cache is one optional working set per metrics
+history. It admits at most 1,024 entries and 16 MiB of charged storage, including
+keys, conservative entry bookkeeping and copied timestamp/value points. Admission
+precedes the copy. Expired entries release their charge; expiry sweeps follow
+the earliest retained expiry rather than scanning the cache on every live miss.
+Replacement and Reset release old storage and accounting. Readers receive
+independently owned points, and the existing 30-second hit expiry is unchanged.
+
+At either ceiling an uncached request still returns its complete source window;
+the query, live-tail authority, interval merge, alert calculation and persistent
+history are unchanged. This bounds optional retention, not query allocations or
+whole-process RSS. Overflow can increase query work: no installed CPU or memory
+relief, or attribution of a reporter's memory sample, follows from the bound.
+
+`metric_window_cache_bounds_test.go` checks live-entry and dense/key byte bounds,
+oversized admission, replacement, zero/empty points, independent ownership,
+staggered expiry, re-admission and concurrent readers/writers/Reset without a
+database or collector. `metric_window_provider_test.go` retains cache Reset,
+request-scoped history ownership and fresh in-memory duplicate authority.
+Its connected monitor control fills each ceiling independently and checks
+complete stored/live windows, measured zero, unchanged original times, reader
+ownership and renewed admission after Reset. It uses an ordinary temporary
+history store, not an installed workload or process-memory measurement.
+
+### Mounted health consumes the existing bounded clock (10 October 2026)
+
+Availability tables/fleet/cards and held guest/node/gateway metric attention
+subscribe to the existing 30-second shared clock and release their subscription
+with their owner. Usable metric status reads a supplied accessor; non-metric
+attention copy does not read it. No per-row timer, new poll, probe, retry or
+notification is introduced. Current snapshot/delta fast paths retain their
+existing scope; only availability complete-record replacement changes, never
+other partial provider facets or independent metric updates. This is truthful
+presentation and scoped invalidation, not a measured whole-fleet CPU saving.
+
+### Open guest drawers age completed backups passively (12 October 2026)
+
+`useGuestDrawerState` derives completed-backup age and policy tone from the
+existing shared 30-second clock, not just a new guest snapshot. This adds a
+clock subscription for the mounted drawer, not a timer per row, network read,
+refresh, guest probe or alert evaluation. Disposal releases the subscription.
+The supplied completed timestamp is immutable under ticks and backup activity;
+only replacement completion evidence changes it. Configured fresh/stale hours
+retain their existing inclusive boundaries and unknown/absent distinctions.
+
+`GuestDrawer.backup-clock.test.tsx` covers passive default/custom policy
+crossings, unchanged completion time, tab round trips, later completion,
+future/backwards-clock uncertainty and timer disposal. Connected
+`GuestDrawer.test.tsx` and `guestDrawerModel.branchcov2.test.ts` retain existing
+backup-activity, configured policy and caution/absence controls. Browser proof
+uses the real read-only AlertsAPI/store and existing drawer/table badge with
+synthetic timestamps, not native backup safety, guest recovery or availability.

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "19558f955d2d17c88e97358ac9c78a23387b8ce3",
+  "verified_at": "2026-10-07T13:11:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/components/shared/contextualFocus.ts",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts",
+    "frontend-modern/src/utils/agentResources.ts",
+    "frontend-modern/src/utils/resourceIdentity.ts",
+    "frontend-modern/src/utils/status.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "1d38ecb88f6266d6376ff1299f1ef6ce9e113a88507672a926cfb7475876f77e",
+    "frontend-modern/src/components/shared/contextualFocus.ts": "d86a4bdcb0474a64451b665f2f07517f2537bc5904c6b22fc5c883563b97a9fc",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts": "f5ff8561513b192f1c5b7dc11d7072f007cc0ddf9ba6467960a0541170b864c7",
+    "frontend-modern/src/utils/agentResources.ts": "bd94b247f8afc025f169bf06c30526681488b15146be6e6debbbd25a4aedf076",
+    "frontend-modern/src/utils/resourceIdentity.ts": "f1ece68877a3a8e2eb7319471e76c02e753b1aff239cefde4db539d80515f189",
+    "frontend-modern/src/utils/status.ts": "a4f2ebf9ee6a3d6ab53438a0222fa23f590be28f00f99e9c823112c6b2bb7c1e"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox/storage",
+    "/proxmox/storage?group=node"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree compared with the build of its parent 19558f955d: after normalising chunk-name hashes, SRI hashes and 1-3 character minified identifiers, every dist file is identical except the shared chunk carrying ChartsAPI, which differs only by the removed never-called getInfrastructureCharts static method (99 bytes); the other removed exports were already tree-shaken. Served embedded by a private DEMO_MODE mock backend on port 7763",
+    "Proxmox overview at 1440: node table plus grouped guests table; clicking the Analytics A node name focuses the \"Guests on Analytics A\" heading inside the viewport and the node row carries data-summary-row-active=true",
+    "Guest row hover sets data-summary-row-active=true; workload group header hover stays inert (Proxmox mounts WorkloadsSurface with groupNodeDrawerMode disabled, unchanged)",
+    "Guest inline detail ([data-inline-detail-for]) opens with its top inside the viewport at 1440 and 390 without moving the page scroll",
+    "Proxmox storage pools at 1440: Growth (24h) column renders values on 72 pool rows from the storage summary history cache; pool row hover sets data-summary-row-active=true; pool inline detail opens in view at 1440 and 390",
+    "Storage grouped by node: pool-group header hover marks 2 member pools data-summary-group-member-active=preview; header click pins the group scope (header stays active after the pointer leaves) and Escape clears it",
+    "No page errors; the only failed request is the Pro-gated /api/usage/workload-history (403 on this community-tier stack), which no file in this change touches"
+  ],
+  "interactions": [
+    "Demo auto sign-in, then direct navigation to /proxmox, /proxmox/storage and /proxmox/storage?group=node",
+    "Clicked a node name in the Proxmox node table, hovered and clicked a guest row, hovered a workload group header",
+    "Hovered and clicked a storage pool row, hovered and clicked a pool-group header, moved the pointer away, pressed Escape"
+  ]
+}

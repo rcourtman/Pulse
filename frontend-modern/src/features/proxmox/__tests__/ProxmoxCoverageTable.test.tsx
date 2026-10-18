@@ -66,9 +66,6 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>()}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={false}
-        showSnapshotColumn={true}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
       />
@@ -81,8 +78,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Node');
     expect(headers).toContain('Posture▲');
     expect(headers).toContain('Last backup');
-    expect(headers).toContain('PBS snapshot');
-    expect(headers).toContain('Guest snapshot');
+    // Per-source ages are expansion detail at every width.
+    expect(headers).not.toContain('PBS snapshot');
+    expect(headers).not.toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
     expect(headers).not.toContain('Task');
     // Identity data lives in dedicated cells, not stacked under the name.
@@ -93,7 +91,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('Node pve1');
   });
 
-  it('keeps posture and provider evidence visible in compact rows', () => {
+  it('keeps posture, backup age and job visible in compact rows', () => {
     render(() => (
       <ProxmoxCoverageTable
         rows={[row]}
@@ -106,15 +104,12 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>()}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={true}
-        showSnapshotColumn={true}
         showTaskColumn={true}
         layoutWidth={() => 330}
       />
     ));
 
-    expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'PBS', 'Job']);
+    expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'Job']);
     expect(document.body.textContent).toContain('Prot.');
     expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });
@@ -132,9 +127,6 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>()}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={false}
-        showSnapshotColumn={false}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
       />
@@ -158,9 +150,6 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>(['w1'])}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={false}
-        showSnapshotColumn={false}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
       />
@@ -197,9 +186,6 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>()}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={false}
-        showSnapshotColumn={false}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
       />
@@ -227,25 +213,77 @@ describe('ProxmoxCoverageTable column visibility', () => {
         onSort={() => {}}
         expandedKeys={new Set<string>()}
         onToggleExpand={() => {}}
-        showPbsColumn={true}
-        showArchiveColumn={true}
-        showSnapshotColumn={true}
         showTaskColumn={true}
         layoutWidth={() => 1_200}
       />
     ));
 
-    // The header already names the source, so the cell does not repeat it and
-    // cannot truncate to "No PVE backup f…".
+    // The cell says None and the full reason sits on hover, so it cannot
+    // truncate to "No PBS snapshot or PVE b…".
     const empty = (title: string) => document.querySelector(`td span[title="${title}"]`);
-    for (const title of [
-      'No PBS snapshot or PVE backup file',
-      'No PBS snapshot',
-      'No PVE backup file',
-      'No guest snapshot',
-      'No recent task',
-    ]) {
+    for (const title of ['No PBS snapshot or PVE backup file', 'No recent task']) {
       expect(empty(title)).toHaveTextContent(/^None$/);
     }
+  });
+
+  it('explains snapshot-only and unrated rows in plain words', () => {
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          { ...row, key: 'snapshot-only', snapshotCount: 2 },
+          { ...row, key: 'unrated', posture: 'not-evaluated', protectionPosture: undefined },
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showTaskColumn={true}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const titles = [...document.querySelectorAll('td span[title]')].map((span) =>
+      span.getAttribute('title'),
+    );
+    expect(titles).toContain(
+      'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
+    );
+    expect(titles).toContain(
+      'This backup does not match a guest Pulse currently monitors, so it is not rated.',
+    );
+    expect(titles.join(' ')).not.toMatch(/canonical|provider evidence|independent recovery/);
+  });
+
+  it('keeps a long node name truncating inside its own column', () => {
+    // A capped inline-block sat above the row's text line; a block span fills
+    // the fixed-layout cell and ends in an ellipsis there.
+    const node = 'pve-production-rack-04-node-17.example.internal';
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[{ ...row, workload: { ...row.workload, node } }] as WorkloadCoverageRow[]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const span = document.querySelector(`td span[title="${node}"]`);
+    expect(span).toHaveTextContent(node);
+    expect(span?.parentElement?.children).toHaveLength(1);
+    expect(span?.getAttribute('class')).toBe('block truncate');
+    expect(span?.closest('table')).toHaveClass('table-fixed');
   });
 });

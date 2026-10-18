@@ -19,6 +19,8 @@ type RateLimiter struct {
 	limit       int
 	window      time.Duration
 	stopCleanup chan struct{}
+	cleanupDone chan struct{}
+	stopOnce    sync.Once
 }
 
 // NewRateLimiter creates a rate limiter that allows limit requests per window duration.
@@ -44,10 +46,12 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 		limit:       limit,
 		window:      window,
 		stopCleanup: make(chan struct{}),
+		cleanupDone: make(chan struct{}),
 	}
 
 	// Clean up old entries periodically
 	go func() {
+		defer close(rl.cleanupDone)
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
@@ -64,13 +68,19 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return rl
 }
 
-// Stop stops the cleanup routine
+// Stop stops and joins the cleanup routine. Concurrent owners may call it
+// repeatedly without racing a channel close. Request budgets remain intact.
 func (rl *RateLimiter) Stop() {
-	select {
-	case <-rl.stopCleanup:
+	if rl == nil {
 		return
-	default:
-		close(rl.stopCleanup)
+	}
+	rl.stopOnce.Do(func() {
+		if rl.stopCleanup != nil {
+			close(rl.stopCleanup)
+		}
+	})
+	if rl.cleanupDone != nil {
+		<-rl.cleanupDone
 	}
 }
 

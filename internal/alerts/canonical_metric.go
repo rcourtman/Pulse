@@ -76,9 +76,41 @@ func formatMetricValue(value float64, suffix string) string {
 	return fmt.Sprintf("%.1f%s", value, suffix)
 }
 
-func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+// releaseCanonicalMetricAlert stops evaluating a metric spec the way a
+// disabled threshold does: any pending run is dropped and any open alert is
+// resolved. A non-nil resolution says why the close was not a recovery, and
+// travels with the resolved alert to every consumer.
+func (m *Manager) releaseCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, resolution *AlertResolution) {
 	if spec.MetricThreshold == nil {
 		return
+	}
+	storageKey := canonicalTrackingKeyForSpec(spec, spec.ID)
+	m.mu.Lock()
+	for _, state := range m.mirrorStatesNoLock() {
+		state.ApplyMetric(reducer.MetricSignal{
+			ResourceID: spec.ResourceID,
+			Key:        spec.ID,
+			Metric:     spec.MetricThreshold.Metric,
+			Value:      value,
+			ObservedAt: time.Now(),
+		}, reducer.MetricRule{})
+	}
+	intentChanged := m.clearIntentPendingNoLock(storageKey)
+	m.mu.Unlock()
+	if intentChanged {
+		m.saveActiveAlertsAsync("canonical metric intent pending state")
+	}
+	// A guest that moved nodes may hold this alert under its old node-scoped
+	// identity; re-home it first so the clear below can resolve it.
+	m.rehomeStrandedGuestAlert(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType)
+	m.clearAlertWithResolution(storageKey, resolution)
+}
+
+// evaluateCanonicalMetricAlert reports whether this observation was usable:
+// a live threshold, finite value and ready window, even if delivery is suppressed.
+func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) bool {
+	if spec.MetricThreshold == nil {
+		return false
 	}
 
 	alertID := spec.ID
@@ -86,26 +118,15 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	trackingKey := storageKey
 	metricType := spec.MetricThreshold.Metric
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
-		m.mu.Lock()
-		m.core.ApplyMetric(reducer.MetricSignal{
-			ResourceID: spec.ResourceID,
-			Key:        spec.ID,
-			Metric:     metricType,
-			Value:      value,
-			ObservedAt: time.Now(),
-		}, reducer.MetricRule{})
-		m.mu.Unlock()
-		// A guest that moved nodes may hold this alert under its old node-scoped
-		// identity; re-home it first so the clear below can resolve it.
-		m.rehomeStrandedGuestAlert(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType)
-		m.clearAlert(storageKey)
-		return
+		m.releaseCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, nil)
+		return false
 	}
 
 	observedAt := m.policyNow()
 	windowed := m.evaluateMetricWindow(spec.ResourceID, resourceType, metricType, value, observedAt)
 	if !windowed.Ready {
-		return
+		m.interruptMetricRun(spec)
+		return false
 	}
 	value = windowed.Value
 	opts = metricWindowOptions(opts, metricType, resourceType, windowed)
@@ -135,7 +156,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			Str("trackingKey", trackingKey).
 			Time("suppressedUntil", suppressUntil).
 			Msg("Canonical metric alert suppressed")
-		return
+		return true
 	}
 
 	triggered := alertspecsMetricTriggered(spec.MetricThreshold, value)
@@ -162,7 +183,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
 			abs(recent.Value-value) < m.config.MinimumDelta {
 			m.suppressedUntil[trackingKey] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
-			return
+			return true
 		}
 	}
 
@@ -231,7 +252,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 	switch {
 	case hasIncident && incident.State == reducer.StatePending:
-		return
+		return true
 	case hasIncident && incident.State == reducer.StateFiring:
 		if intent != nil && (primary == reducer.EventFired || primary == reducer.EventRefired) {
 			m.clearIntentPendingNoLock(trackingKey)
@@ -261,6 +282,27 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alertMetadata[k] = v
 			}
 		}
+		// Date the evaluated breach, not a newer hold/recovery observation.
+		// A restored alert retains its breach's LastSeen; without that evidence
+		// the date stays unknown rather than becoming the restart or poll time.
+		var lastBreachAt time.Time
+		if triggered {
+			lastBreachAt = observedAt
+		} else if exists && existingAlert != nil {
+			lastBreachAt = existingAlert.LastSeen
+		}
+		metricStatus := buildMetricAlertStatus(metricStatusInput{
+			value:                value,
+			triggered:            triggered,
+			trigger:              spec.MetricThreshold.Trigger,
+			clear:                clearThreshold,
+			recoveryDelaySeconds: stability.RecoveryDelaySeconds,
+			unit:                 metricStatusUnit(metricType),
+			window:               windowed,
+			incident:             incident,
+			observedAt:           observedAt,
+			lastBreachAt:         lastBreachAt,
+		})
 
 		if !exists {
 			alert := &Alert{
@@ -278,6 +320,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				StartTime:       alertStartTime,
 				LastSeen:        observedAt,
 				Metadata:        alertMetadata,
+				MetricStatus:    metricStatus,
 			}
 
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
@@ -296,7 +339,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alert.AckUser = ""
 			}
 			if !m.setActiveAlertNoLock(storageKey, alert) {
-				return
+				return true
 			}
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
@@ -317,7 +360,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			}
 
 			if !m.checkRateLimit(trackingKey) {
-				return
+				return true
 			}
 
 			if m.getAlertCallback() != nil {
@@ -327,16 +370,29 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 					alert.LastNotified = nil
 				}
 			}
-			return
+			return true
+		}
+
+		// A hold keeps the last breach's value and message, but what the
+		// alert is about is current: one restored from an older checkpoint,
+		// or raised before its producer named a child type or platform,
+		// must not link to the wrong page until it re-fires or clears.
+		if refreshMetricAlertClassification(existingAlert, alertMetadata) {
+			m.setActiveRecoveryAlert(existingAlert, storageKey)
+			m.saveActiveAlertsAsync("canonical metric classification")
 		}
 
 		if !triggered && primary == "" {
-			// Hysteresis latch: below trigger but above recovery — hold
-			// without refreshing, as the pre-cutover engine did.
-			return
+			// Hysteresis hold or recovery run: Value, Message and LastSeen
+			// keep the last breach, and nothing here may notify. Only the
+			// volatile live status moves, so surfaces can say what the
+			// reading is now and why the alert has not cleared.
+			existingAlert.MetricStatus = metricStatus
+			return true
 		}
 
 		oldLevel := existingAlert.Level
+		existingAlert.MetricStatus = metricStatus
 		existingAlert.LastSeen = observedAt
 		existingAlert.Value = value
 		existingAlert.Threshold = spec.MetricThreshold.Trigger
@@ -363,7 +419,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		applyCanonicalOperationalEvidence(existingAlert, spec, evidence, time.Now())
 
 		if !m.setActiveAlertNoLock(storageKey, existingAlert) {
-			return
+			return true
 		}
 		shouldRenotify := false
 		if existingAlert.Acknowledged {
@@ -382,7 +438,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 	default:
 		if !exists || existingAlert == nil {
-			return
+			return true
 		}
 
 		// Publish the observation that cleared the incident, not the last
@@ -390,6 +446,8 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		existingAlert = existingAlert.Clone()
 		existingAlert.Value = value
 		existingAlert.LastSeen = observedAt
+		// A resolved record is history; the live status describes open alerts only.
+		existingAlert.MetricStatus = nil
 		message, _ := metricAlertMessage(resourceType, metricType, value, opts)
 		existingAlert.Message = "Resolved: " + message
 
@@ -409,6 +467,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(resolvedAlert, storageKey, true)
 	}
+	return true
 }
 
 func alertspecsMetricTriggered(spec *alertspecs.MetricThresholdSpec, observed float64) bool {
@@ -423,4 +482,32 @@ func alertspecsMetricTriggered(spec *alertspecs.MetricThresholdSpec, observed fl
 	default:
 		return false
 	}
+}
+
+// metricAlertClassificationKeys name what a metric alert is about and which
+// platform owns it. They describe the resource, not the reading.
+var metricAlertClassificationKeys = []string{"resourceType", alertPlatformTypeKey}
+
+// refreshMetricAlertClassification copies the producer's current
+// classification onto an open alert and reports whether anything changed.
+func refreshMetricAlertClassification(alert *Alert, metadata map[string]interface{}) bool {
+	if alert == nil {
+		return false
+	}
+	changed := false
+	for _, key := range metricAlertClassificationKeys {
+		value, _ := metadata[key].(string)
+		if value == "" {
+			continue
+		}
+		if current, _ := alert.Metadata[key].(string); current == value {
+			continue
+		}
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{}, len(metricAlertClassificationKeys))
+		}
+		alert.Metadata[key] = value
+		changed = true
+	}
+	return changed
 }

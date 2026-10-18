@@ -10,11 +10,7 @@ import {
   type FilterDef,
   type FilterSelectOption,
 } from '@/components/shared/FilterBar';
-import {
-  ChartVisibilityToggleButton,
-  FilterActionButton,
-  FilterSegmentedControl,
-} from '@/components/shared/FilterToolbar';
+import { FilterActionButton, FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -181,7 +177,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
 
   const handleClearAll = () => {
     props.setSearch('');
-    props.setSortKey(props.defaultSortKey ?? DEFAULT_WORKLOADS_SORT_KEY);
+    props.setSortKey(DEFAULT_WORKLOADS_SORT_KEY);
     props.setSortDirection(DEFAULT_WORKLOADS_SORT_DIRECTION);
     if (!props.suppressTypeFilter) {
       props.setViewMode(DEFAULT_WORKLOADS_VIEW_MODE);
@@ -292,6 +288,20 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
 
   const searchSuggestions = createMemo(() =>
     buildWorkloadSearchSuggestions(props.searchSuggestionWorkloads?.() ?? []),
+  );
+
+  // The history hint clears on the first populated row preview, while the
+  // pointer is over the table. Once shown, it keeps its box for as long as row
+  // hover previews history: removing it could unwrap the action row and slide
+  // the hovered guest out from under the pointer, retargeting the lens to the
+  // next row. Leaving bars + history hover, or remounting, releases the box.
+  const historyHintSlotReserved = createMemo<boolean>(
+    (reserved) =>
+      props.metricHistoryHintVisible?.() === true ||
+      (reserved &&
+        props.metricDisplayMode?.() === 'bars' &&
+        (props.metricHoverMode?.() ?? 'history') === 'history'),
+    false,
   );
 
   return (
@@ -412,19 +422,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={props.onChartsToggle}>
-            <div>
-              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Summary
-              </div>
-              <ChartVisibilityToggleButton
-                class="inline-flex!"
-                collapsed={props.chartsCollapsed?.() ?? false}
-                onToggle={() => props.onChartsToggle?.()}
-              />
-            </div>
-          </Show>
-
           <Show when={props.columnVisibility}>
             {(visibility) => (
               <div>
@@ -456,9 +453,11 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           }
         >
           <div class="flex items-center gap-2">
-            <Show when={props.metricHistoryHintVisible?.()}>
+            <Show when={historyHintSlotReserved()}>
               <span
-                class="hidden whitespace-nowrap text-[11px] lg:inline"
+                class={`hidden whitespace-nowrap text-[11px] lg:inline ${
+                  props.metricHistoryHintVisible?.() ? '' : 'invisible'
+                }`.trim()}
                 data-testid="workload-history-hover-hint"
               >
                 Hover a guest to preview history

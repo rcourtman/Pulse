@@ -34,6 +34,7 @@ type UseStorageModelOptions = {
   sortKey: Accessor<StorageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
   storageGrowthBySeriesId?: Accessor<ReadonlyMap<string, StorageCapacityDeltaPresentation>>;
+  alertWeightByRecordId?: (recordId: string) => number;
   groupBy: Accessor<StorageGroupKey>;
 };
 
@@ -61,6 +62,7 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
     sortStorageRecords(filteredRecords(), options.sortKey(), options.sortDirection(), {
       growthBySeriesId:
         options.sortKey() === 'growth' ? options.storageGrowthBySeriesId?.() : undefined,
+      alertWeightByRecordId: options.alertWeightByRecordId,
     }),
   );
 

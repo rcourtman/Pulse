@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -41,7 +42,6 @@ type QueryService struct {
 	stateProvider       SnapshotProvider
 	tenantStateProvider TenantStateProvider
 	actionAvailability  actionlifecycle.AvailabilityChecker
-	discoveryReadiness  ResourceDiscoveryReadinessProvider
 }
 
 // SnapshotProvider supplies the legacy monitoring snapshot used while callers
@@ -66,10 +66,20 @@ type UnifiedResourceSnapshotProvider interface {
 	UnifiedResourceSnapshot() ([]unified.Resource, time.Time)
 }
 
-// ResourceDiscoveryReadinessProvider projects service-discovery state onto a
-// unified resource without coupling the resource API to discovery storage.
-type ResourceDiscoveryReadinessProvider interface {
-	DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness
+// UnifiedResourceSnapshotWithStaleThresholdsProvider supplies the default
+// tenant's unified-resource seed with the stale thresholds the seed's registry
+// judged its sightings by (nil: the registry defaults). The registry rebuilt
+// from the seed runs its own stale pass, merges and presentation coalesce,
+// which must judge by the same thresholds or a source the monitor calls
+// current between configured polls reads stale here.
+type UnifiedResourceSnapshotWithStaleThresholdsProvider interface {
+	UnifiedResourceSnapshotWithStaleThresholds() ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration)
+}
+
+// TenantUnifiedResourceSnapshotWithStaleThresholdsProvider is the
+// tenant-scoped form of UnifiedResourceSnapshotWithStaleThresholdsProvider.
+type TenantUnifiedResourceSnapshotWithStaleThresholdsProvider interface {
+	UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID string) ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration)
 }
 
 type registrySeed struct {
@@ -77,6 +87,9 @@ type registrySeed struct {
 	resources     []unified.Resource
 	lastUpdate    time.Time
 	unifiedSource bool
+	// staleThresholds are those the seed's registry judged it by; nil
+	// means the registry defaults.
+	staleThresholds map[unified.DataSource]time.Duration
 }
 
 // SupplementalRecordsProvider provides out-of-band ingest records for a specific source.
@@ -132,12 +145,6 @@ func (h *QueryService) SetTenantStateProvider(provider TenantStateProvider) {
 // the API composition layer.
 func (h *QueryService) SetActionAvailabilityChecker(checker actionlifecycle.AvailabilityChecker) {
 	h.actionAvailability = checker
-}
-
-// SetDiscoveryReadinessProvider wires the canonical discovery-readiness
-// projection onto resource responses and Assistant context packs.
-func (h *QueryService) SetDiscoveryReadinessProvider(provider ResourceDiscoveryReadinessProvider) {
-	h.discoveryReadiness = provider
 }
 
 // SetSupplementalRecordsProvider configures additional records for a source.
@@ -197,7 +204,6 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
-	h.attachDiscoveryReadinesses(paged, time.Now().UTC())
 	attachMetricsTargets(paged, registry)
 	paged = unified.RefreshCanonicalMetadataSlice(paged)
 	pruneResourcesForListResponse(paged)
@@ -360,7 +366,6 @@ func (h *QueryService) HandleGetResource(w http.ResponseWriter, r *http.Request)
 	h.applyActionAvailability(r.Context(), resourceCopies)
 	resourceCopy = resourceCopies[0]
 	attachDiscoveryTarget(&resourceCopy)
-	h.attachDiscoveryReadiness(&resourceCopy, time.Now().UTC())
 	attachMetricsTarget(&resourceCopy, registry)
 	unified.RefreshCanonicalMetadata(&resourceCopy)
 	resourceCopy.Type = resourceContractType(resourceCopy)
@@ -644,7 +649,6 @@ func (h *QueryService) HandleGetChildren(w http.ResponseWriter, r *http.Request)
 
 	children := registry.GetChildren(path)
 	attachDiscoveryTargets(children)
-	h.attachDiscoveryReadinesses(children, time.Now().UTC())
 	children = unified.RefreshCanonicalMetadataSlice(children)
 	applyResourceContractTypes(children)
 	w.Header().Set("Content-Type", "application/json")
@@ -964,13 +968,16 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if len(resource.Sources) < 2 {
+	// Two resources an operator linked can share every source (two agents),
+	// so an applied link marks a merge too.
+	linkFolds := registry.ManualLinkFolds(path)
+	if len(resource.Sources) < 2 && len(linkFolds) == 0 {
 		http.Error(w, "Resource is not merged", http.StatusBadRequest)
 		return
 	}
 
 	sourceTargets := registry.SourceTargets(path)
-	if len(sourceTargets) == 0 {
+	if len(sourceTargets) == 0 && len(linkFolds) == 0 {
 		http.Error(w, "No source targets found", http.StatusBadRequest)
 		return
 	}
@@ -979,31 +986,56 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 	for _, source := range payload.Sources {
 		filteredSources[strings.ToLower(strings.TrimSpace(source))] = struct{}{}
 	}
+	selected := func(sources ...unified.DataSource) bool {
+		if len(filteredSources) == 0 {
+			return true
+		}
+		for _, source := range sources {
+			if _, ok := filteredSources[strings.ToLower(string(source))]; ok {
+				return true
+			}
+		}
+		return false
+	}
 
 	reason := strings.TrimSpace(payload.Notes)
 	if reason == "" {
 		reason = "reported_incorrect_merge"
 	}
 
-	exclusionsAdded := 0
-	seen := make(map[string]struct{})
+	// An operator link that joins a member carrying a reported source to the
+	// part that stays is undone by excluding the link's own pair, which
+	// replaces the link in the store. A fold's sources span everything its
+	// folded side took in, so the registry picks links by member instead
+	// (ReportedManualLinkFolds). Identity merges are kept apart by excluding
+	// the candidate ID each source's record takes when no match is allowed;
+	// for a linked source that candidate names neither side of the link.
+	type exclusionPair struct{ a, b string }
+	pairs := make([]exclusionPair, 0, len(linkFolds)+len(sourceTargets))
+	for _, fold := range unified.ReportedManualLinkFolds(path, linkFolds, selected) {
+		pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})
+	}
 	for _, target := range sourceTargets {
-		if len(filteredSources) > 0 {
-			if _, ok := filteredSources[strings.ToLower(string(target.Source))]; !ok {
-				continue
-			}
-		}
-		if target.CandidateID == "" || target.CandidateID == path {
+		if !selected(target.Source) || target.CandidateID == "" || target.CandidateID == path {
 			continue
 		}
-		key := target.CandidateID
+		pairs = append(pairs, exclusionPair{path, target.CandidateID})
+	}
+
+	exclusionsAdded := 0
+	seen := make(map[string]struct{})
+	for _, pair := range pairs {
+		key := pair.a + "|" + pair.b
+		if pair.b < pair.a {
+			key = pair.b + "|" + pair.a
+		}
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
 		exclusion := unified.ResourceExclusion{
-			ResourceA: path,
-			ResourceB: target.CandidateID,
+			ResourceA: pair.a,
+			ResourceB: pair.b,
 			Reason:    reason,
 			CreatedBy: getUserID(r),
 			CreatedAt: time.Now().UTC(),
@@ -1013,7 +1045,8 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 				Err(err).
 				Str("orgID", orgID).
 				Str("resourceID", path).
-				Str("candidateID", target.CandidateID).
+				Str("resourceA", pair.a).
+				Str("resourceB", pair.b).
 				Msg("Failed to add resource merge exclusion")
 			http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 			return
@@ -1058,7 +1091,8 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 
 	h.cacheMu.Lock()
 	entry, ok := h.registryCache[key]
-	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) {
+	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) &&
+		maps.Equal(entry.staleThresholds, seed.staleThresholds) {
 		h.cacheMu.Unlock()
 		return entry.registry, nil
 	}
@@ -1071,7 +1105,11 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 	}
 	h.supplementalMu.RUnlock()
 
-	registry := unified.NewRegistry(store)
+	// The rebuild runs its own stale pass, merges and presentation coalesce,
+	// so it judges freshness by the thresholds the seed was judged by; with
+	// the defaults a Proxmox node polled every two minutes read stale here
+	// between polls while the monitor called it current.
+	registry := unified.NewRegistryWithStaleThresholds(store, seed.staleThresholds)
 	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
 	supplementalSources := sortedSupplementalSources(supplementalProviders)
 	if seed.unifiedSource {
@@ -1114,7 +1152,7 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 	if h.registryCache == nil {
 		h.registryCache = make(map[string]registryCacheEntry)
 	}
-	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate}
+	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate, staleThresholds: seed.staleThresholds}
 	h.cacheMu.Unlock()
 
 	return registry, nil
@@ -1153,14 +1191,28 @@ func (h *QueryService) registrySeed(orgID string) (registrySeed, error) {
 		if h.tenantStateProvider == nil {
 			return seed, errors.New("tenant state provider unavailable")
 		}
-		resources, lastUpdate := h.tenantStateProvider.UnifiedResourceSnapshotForTenant(orgID)
-		seed.resources = resources
-		seed.lastUpdate = lastUpdate
+		if provider, ok := any(h.tenantStateProvider).(TenantUnifiedResourceSnapshotWithStaleThresholdsProvider); ok {
+			var thresholds map[unified.DataSource]time.Duration
+			seed.resources, seed.lastUpdate, thresholds = provider.UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID)
+			seed.staleThresholds = maps.Clone(thresholds)
+		} else {
+			seed.resources, seed.lastUpdate = h.tenantStateProvider.UnifiedResourceSnapshotForTenant(orgID)
+		}
 		seed.unifiedSource = true
 		return seed, nil
 	}
 
-	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
+	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotWithStaleThresholdsProvider); ok {
+		resources, lastUpdate, thresholds := provider.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(resources) > 0 || !lastUpdate.IsZero() {
+			seed.resources = resources
+			seed.lastUpdate = lastUpdate
+			seed.unifiedSource = true
+			// Owned copy: the cache compares it with the next seed's.
+			seed.staleThresholds = maps.Clone(thresholds)
+			return seed, nil
+		}
+	} else if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
 		resources, lastUpdate := provider.UnifiedResourceSnapshot()
 		if len(resources) > 0 || !lastUpdate.IsZero() {
 			seed.resources = resources
@@ -1626,6 +1678,9 @@ type StorageIncidentSection struct {
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
+	// staleThresholds are those the registry was built with; a seed judged
+	// by others needs a rebuild even at the same lastUpdate.
+	staleThresholds map[unified.DataSource]time.Duration
 	// rawList and presentation are lazily built once per registry generation
 	// and SHARED between requests. Both the slices and the nested data of
 	// their elements are read-only: take a flat copy (flatCopyResources)
@@ -2446,32 +2501,6 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 	if target := buildDiscoveryTarget(*resource); target != nil {
 		resource.DiscoveryTarget = target
 	}
-}
-
-func (h *QueryService) attachDiscoveryReadinesses(resources []unified.Resource, now time.Time) {
-	if h == nil || h.discoveryReadiness == nil {
-		return
-	}
-	for i := range resources {
-		h.attachDiscoveryReadiness(&resources[i], now)
-	}
-}
-
-func (h *QueryService) attachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
-	if h == nil || h.discoveryReadiness == nil || resource == nil {
-		return
-	}
-	readiness := h.discoveryReadiness.DiscoveryReadinessForResource(*resource, now)
-	if readiness.State == "" {
-		return
-	}
-	resource.DiscoveryReadiness = &readiness
-}
-
-// AttachDiscoveryReadiness projects current discovery state onto a resource
-// used by another API domain.
-func (h *QueryService) AttachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
-	h.attachDiscoveryReadiness(resource, now)
 }
 
 func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {

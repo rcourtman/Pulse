@@ -1,6 +1,5 @@
 // Type-safe formatting utilities
 import type { Disk } from '@/types/api';
-import type { Resource } from '@/types/resource';
 
 type DiskInput = {
   device?: string;
@@ -67,6 +66,35 @@ export function formatSpeed(bytesPerSecond: number, decimals: number | 'auto' = 
   return `${formatBytes(bytesPerSecond, decimals)}/s`;
 }
 
+const COMPACT_SPEED_UNITS = ['K', 'M', 'G', 'T', 'P', 'E'];
+
+/**
+ * Transfer rate for a dense cell that shares its width with a chart: binary
+ * unit letter, no "/s", one decimal below 10 ("3.3M", "512K"). Sub-kilobyte
+ * rates read "<1K" so idle chatter is not dressed up as a measurement.
+ */
+export function formatCompactSpeed(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0';
+  if (bytesPerSecond < 1024) return '<1K';
+
+  let value = bytesPerSecond / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < COMPACT_SPEED_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  // Exabytes per second is already a wrapped counter, not a measurement; keep
+  // anything beyond it to the slot's width rather than printing an exponent.
+  if (unit === COMPACT_SPEED_UNITS.length - 1 && value >= 1023.5) return '>1023E';
+  if (value < 9.95) return `${value.toFixed(1)}${COMPACT_SPEED_UNITS[unit]}`;
+
+  const rounded = Math.round(value);
+  if (rounded >= 1024 && unit < COMPACT_SPEED_UNITS.length - 1) {
+    return `1.0${COMPACT_SPEED_UNITS[unit + 1]}`;
+  }
+  return `${rounded}${COMPACT_SPEED_UNITS[unit]}`;
+}
+
 export function formatObservedSpeed(bytesPerSecond: number | null | undefined): string {
   return typeof bytesPerSecond === 'number' &&
     Number.isFinite(bytesPerSecond) &&
@@ -83,6 +111,14 @@ export function formatPercent(value: number): string {
     return '0%';
   }
   return `${Math.round(value)}%`;
+}
+
+/** Keep small observed CPU readings distinct from an actual zero. */
+export function formatCpuPercent(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value > 0 && value < 0.1) return '<0.1%';
+  if (value > 0 && value < 10) return `${value.toFixed(1).replace(/\.0$/, '')}%`;
+  return formatPercent(value);
 }
 
 export function formatNumber(value: number): string {
@@ -133,31 +169,74 @@ export function formatAbsoluteTime(timestamp: number | undefined): string {
   return `${day} ${month} ${hours}:${minutes}`;
 }
 
+function relativeTimeInputMs(timestamp: number | string | Date): number {
+  if (typeof timestamp === 'number') return timestamp;
+  if (typeof timestamp === 'string') return new Date(timestamp).getTime();
+  return timestamp.getTime();
+}
+
 /**
- * Format a timestamp as a human-readable relative time string.
- * ALL relative time formatting MUST use this function.
+ * Format a timestamp as a human-readable relative age ("5m ago").
+ * ALL relative ages MUST use this function. It is past-only: a time ahead of
+ * `now` is clock skew on something already observed and reads as "just now".
+ * A time meant to be in the future (an expiry, a reminder, a schedule) uses
+ * formatTimeUntil instead.
  *
  * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
  * @param options.compact - Use short format: "5m ago" instead of "5 mins ago"
  * @param options.emptyText - Text for falsy input (default: '')
+ * @param options.now - The time to measure from (default: Date.now()). A cell
+ *   that must keep its age current passes the shared relative-time clock.
  */
 export function formatRelativeTime(
   timestamp: number | string | Date | undefined,
-  options?: { compact?: boolean; emptyText?: string },
+  options?: { compact?: boolean; emptyText?: string; now?: number },
 ): string {
   if (!timestamp) return options?.emptyText ?? '';
 
-  let ms: number;
-  if (typeof timestamp === 'number') {
-    ms = timestamp;
-  } else if (typeof timestamp === 'string') {
-    ms = new Date(timestamp).getTime();
-  } else {
-    ms = timestamp.getTime();
-  }
-
-  const diffMs = Date.now() - ms;
+  const diffMs = (options?.now ?? Date.now()) - relativeTimeInputMs(timestamp);
   return formatTimeDiff(diffMs, options?.compact);
+}
+
+/**
+ * Format a future timestamp as a countdown: "in 3h" (compact) or "in 3 hours".
+ * ALL relative future times (expiries, reminders, schedules) MUST use this
+ * function, because formatRelativeTime reads any future time as "just now".
+ *
+ * Unlike an age, a countdown rounds to the nearest unit, so a 24-hour
+ * suppression set a moment ago reads "in 1d" rather than "in 23h".
+ *
+ * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
+ * @param options.compact - Use short format: "in 5m" instead of "in 5 mins"
+ * @param options.emptyText - Text for falsy or unparseable input (default: '')
+ * @param options.dueText - Text once the time has arrived or passed (default: 'now')
+ * @param options.now - The time to count down from (default: Date.now()). A
+ *   countdown that must keep moving passes the shared relative-time clock.
+ */
+export function formatTimeUntil(
+  timestamp: number | string | Date | undefined,
+  options?: { compact?: boolean; emptyText?: string; dueText?: string; now?: number },
+): string {
+  if (!timestamp) return options?.emptyText ?? '';
+
+  const remainingMs = relativeTimeInputMs(timestamp) - (options?.now ?? Date.now());
+  if (!Number.isFinite(remainingMs)) return options?.emptyText ?? '';
+  if (remainingMs <= 0) return options?.dueText ?? 'now';
+  if (remainingMs < 60_000) return 'in under a minute';
+
+  const compact = options?.compact;
+  const inUnits = (value: number, short: string, singular: string, plural: string) =>
+    compact ? `in ${value}${short}` : `in ${value} ${value === 1 ? singular : plural}`;
+
+  const minutes = Math.round(remainingMs / 60_000);
+  if (minutes < 60) return inUnits(minutes, 'm', 'min', 'mins');
+  const hours = Math.round(remainingMs / 3_600_000);
+  if (hours < 24) return inUnits(hours, 'h', 'hour', 'hours');
+  const days = Math.round(remainingMs / 86_400_000);
+  if (compact || days < 30) return inUnits(days, 'd', 'day', 'days');
+  const months = Math.round(remainingMs / (30 * 86_400_000));
+  if (months < 12) return inUnits(months, '', 'month', 'months');
+  return inUnits(Math.round(remainingMs / (365 * 86_400_000)), '', 'year', 'years');
 }
 
 /**
@@ -215,6 +294,17 @@ export interface BackupThresholds {
   staleHours?: number;
 }
 
+/** The fresh and stale limits a backup is judged by, defaults filled in. */
+export function resolveBackupThresholds(thresholds?: BackupThresholds): {
+  freshHours: number;
+  staleHours: number;
+} {
+  return {
+    freshHours: thresholds?.freshHours ?? DEFAULT_FRESH_HOURS,
+    staleHours: thresholds?.staleHours ?? DEFAULT_STALE_HOURS,
+  };
+}
+
 /**
  * Analyzes backup freshness for a guest.
  * @param lastBackup - ISO timestamp string or Unix timestamp (ms)
@@ -270,9 +360,7 @@ export function getBackupInfo(
   }
   const ageMs = nowMs - timestamp;
 
-  // Use provided thresholds or fall back to defaults
-  const freshHours = thresholds?.freshHours ?? DEFAULT_FRESH_HOURS;
-  const staleHours = thresholds?.staleHours ?? DEFAULT_STALE_HOURS;
+  const { freshHours, staleHours } = resolveBackupThresholds(thresholds);
   const freshThresholdMs = freshHours * 60 * 60 * 1000;
   const staleThresholdMs = staleHours * 60 * 60 * 1000;
 
@@ -508,35 +596,4 @@ export function normalizeDiskArray(disks?: DiskInput[]): NormalizedDisk[] | unde
     };
   });
   return normalized.length > 0 ? normalized : undefined;
-}
-
-export function getResourceDiskSummary(
-  resource: Pick<Resource, 'agent' | 'disk'>,
-): NormalizedDisk | undefined {
-  if (resource.disk) {
-    const total = resource.disk.total ?? 0;
-    const used = resource.disk.used ?? 0;
-    return {
-      total,
-      used,
-      free: resource.disk.free ?? Math.max(total - used, 0),
-      usage: total > 0 ? (used / total) * 100 : resource.disk.current,
-    };
-  }
-
-  // Disks with unknown usage (sentinel -1) have no measured used/free to sum.
-  const disks = normalizeDiskArray(resource.agent?.disks)?.filter((disk) => disk.usage >= 0);
-  if (!disks || disks.length === 0) return undefined;
-
-  const total = disks.reduce((sum, disk) => sum + disk.total, 0);
-  if (total <= 0) return undefined;
-  const used = disks.reduce((sum, disk) => sum + disk.used, 0);
-  const free = disks.reduce((sum, disk) => sum + disk.free, 0);
-
-  return {
-    total,
-    used,
-    free,
-    usage: (used / total) * 100,
-  };
 }

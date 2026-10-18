@@ -1,6 +1,10 @@
+import { traverse, transformSync, types as t } from '@babel/core';
+// @ts-expect-error babel-preset-solid ships no type declarations.
+import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { settingsDocumentationLinkViolations } from './__tests__/settingsDocumentationLinkContract';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
@@ -16,7 +20,6 @@ import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
 import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
-import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
 import detailSectionTableSource from '@/components/shared/DetailSectionTable.tsx?raw';
 import detailSectionModelSource from '@/components/shared/detailSectionModel.ts?raw';
 import drawerAttentionSectionSource from '@/components/shared/DrawerAttentionSection.tsx?raw';
@@ -67,7 +70,6 @@ import searchInputEnhancementsModelSource from '@/components/shared/searchInputE
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
-import discoveryLoadingFallbackSource from '@/components/shared/DiscoveryLoadingFallback.tsx?raw';
 import settingsLoadingSkeletonSource from '@/components/shared/SettingsLoadingSkeleton.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
@@ -75,7 +77,6 @@ import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge
 import alertSeverityBadgeSource from '@/components/shared/AlertSeverityBadge.tsx?raw';
 import metadataBadgeSource from '@/components/shared/MetadataBadge.tsx?raw';
 import organizationBadgesSource from '@/components/shared/OrganizationBadges.tsx?raw';
-import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import actionsSource from '@/pages/Actions.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
@@ -101,7 +102,6 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
-import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import storagePoolsTableWindowingSource from '@/components/Storage/useStoragePoolsTableWindowing.ts?raw';
 import workloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
 import platformWindowedItemsSource from '@/features/platformPage/usePlatformWindowedItems.ts?raw';
@@ -142,7 +142,6 @@ import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow
 import objectDrawerHeaderSource from '@/components/shared/ObjectDrawerHeader.tsx?raw';
 import toastSource from '@/components/Toast/Toast.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import errorBoundarySource from '@/components/ErrorBoundary.tsx?raw';
 import updateConfirmationModalSource from '@/components/UpdateConfirmationModal.tsx?raw';
@@ -217,16 +216,13 @@ import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
+import proxmoxPageModelSource from '@/features/proxmox/proxmoxPageModel.ts?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import availabilityChecksTableSource from '@/features/standalone/AvailabilityChecksTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
-import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
-import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
-import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
-import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
@@ -334,6 +330,7 @@ import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.t
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import dockerHostDrawerOverviewSource from '@/features/docker/DockerHostDrawerOverview.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -350,6 +347,36 @@ describe('shared primitive guardrails', () => {
     expect(source).not.toMatch(/max-h-|overflow-y-|custom-scrollbar/);
     expect(source).toContain('<For each={props.disks}>');
     expect(source).toContain('<StackedDiskBar');
+  });
+
+  it("keeps a silent agent's retained disk usage out of threshold colour and usage bars", () => {
+    const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
+    expect(source).toContain('lastKnownReason?: string;');
+    expect(source).toContain('`Last known reading, not current: ${reason}`');
+    expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?<StackedDiskBar/);
+    expect(source).toMatch(
+      /<Show when=\{!lastKnownTitle\(\)\}>\s*<div[^>]*data-testid="disks-card-mount-bar"/,
+    );
+    expect(
+      readFrontendSource('src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx'),
+    ).toContain('lastKnownReason={props.drawer.agentReadingsLastKnownReason()}');
+  });
+
+  it("keeps a silent agent's retained RAID state out of live colour and rebuild progress", () => {
+    const source = readFrontendSource('src/components/shared/cards/RaidCard.tsx');
+    expect(source).toContain('lastKnownReason?: string;');
+    expect(source).toContain('`Last known reading, not current: ${reason}`');
+    expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?getRaidStateTextClass/);
+    expect(source).toContain('Rebuild was at {Math.round(rebuildPercent())}%');
+    expect(source).toContain('RAID_LAST_KNOWN_DEVICE_BADGE_CLASS');
+    expect(
+      readFrontendSource('src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx'),
+    ).toMatch(
+      /<RaidCard\s+arrays=\{props\.drawer\.agentMeta\(\)\?\.raid\}\s+lastKnownReason=\{props\.drawer\.agentReadingsLastKnownReason\(\)\}/,
+    );
+    expect(readFrontendSource('src/features/standalone/AgentsMachinesTable.tsx')).toMatch(
+      /lastKnownReason=\{\s*agentStale\(\) \? HOST_AGENT_STOPPED_REPORTING_REASON : undefined\s*\}/,
+    );
   });
 
   it('keeps one canonical agent-host metric history group catalog', () => {
@@ -719,7 +746,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/FilterToolbar.tsx',
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
       'src/features/alerts/AlertDeliveryRoutingSection.tsx',
-      'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
       'src/features/patrol/PatrolAttentionWorkbench.tsx',
     ]);
@@ -766,7 +792,9 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('<select');
     }
 
-    expect(guestDrawerHistorySource).toContain('id="guest-history-range"');
+    expect(guestDrawerHistorySource).toContain(
+      'const id = `guest-history-range-${createUniqueId()}`;',
+    );
     expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
   });
 
@@ -1058,8 +1086,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCardHeader.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCardHeader');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/features/platformPage/sharedPlatformPage.tsx',
     ]);
@@ -1081,11 +1107,7 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
     expect(tableCardHeaderSource).not.toContain('Pinned to');
     expect(tableCardHeaderSource).not.toContain('Scoped to');
-    for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
-      storageContentCardSource,
-    ]) {
+    for (const source of [storageContentCardSource]) {
       expect(source).toContain('TableCardHeader');
       expect(source).not.toContain('SummaryTableCardHeader');
     }
@@ -1117,8 +1139,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCard.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCard');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/components/Workloads/WorkloadsSurface.tsx',
       'src/components/Workloads/WorkloadsTable.tsx',
@@ -1150,8 +1170,6 @@ describe('shared primitive guardrails', () => {
       workloadsSurfaceSource,
       alertHistoryTableSectionSource,
       sharedPlatformPageSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
     ]) {
       expect(source).toContain('TableCard');
@@ -1177,7 +1195,6 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const expectedConsumers = [
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
       'src/components/Infrastructure/ResourceActionHistory.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
@@ -1189,7 +1206,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/cards/RootDiskCard.tsx',
       'src/components/shared/cards/SystemInfoCard.tsx',
       'src/components/shared/cards/TemperaturesCard.tsx',
-      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
       'src/components/Workloads/DrawerDiskListCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
       'src/features/storageBackups/detailPresentation.ts',
@@ -1256,7 +1272,6 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of [
       'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
     ]) {
       const source = readFrontendSource(consumerPath);
@@ -1267,7 +1282,6 @@ describe('shared primitive guardrails', () => {
     }
 
     for (const consumerPath of [
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Infrastructure/ResourceActionHistory.tsx',
       'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
     ]) {
@@ -1290,24 +1304,38 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('sm:hidden');
   });
 
-  it('keeps object detail history behind the canonical Overview and History subtabs', () => {
-    for (const source of [
-      diskDetailSource,
-      guestDrawerSource,
-      nodeDrawerSource,
-      storagePoolDetailSource,
-    ]) {
+  it('charts object detail history in the detail itself, not behind a History tab', () => {
+    // Storage disk and pool details had only Overview and History, so with the
+    // charts in the one view they need no tab strip at all.
+    for (const source of [diskDetailSource, storagePoolDetailSource]) {
+      expect(source).not.toContain('@/components/shared/Subtabs');
+      expect(source).not.toContain("value: 'history', label: 'History'");
+    }
+    // Guest, node, Docker host and resource-detail drawers chart their history
+    // on Overview itself, with the range picker beside the charts. A History
+    // tab there repeated Overview's charts, or hid them a tab away.
+    for (const source of [guestDrawerSource, nodeDrawerSource, dockerHostDrawerSource]) {
       expect(source).toContain('@/components/shared/Subtabs');
       expect(source).toContain("value: 'overview', label: 'Overview'");
-      expect(source).toContain("value: 'history', label: 'History'");
+      expect(source).not.toContain("value: 'history', label: 'History'");
     }
+    expect(resourceDetailDrawerSource).not.toContain("activeTab() === 'history'");
+    // Drawer charts draw triggers from the resource's own alerts; Needs
+    // attention may list nested resources, the charts never do.
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getOwnAlertsForUnifiedResource(');
+    expect(dockerHostDrawerOverviewSource).toContain('getAlertAttentionCopy(alert, now)');
+    expect(resourceDetailDrawerOverviewTabSource).toContain('getAlertAttentionCopy(alert, now)');
+    // Range pickers name their options from one table, never a local list.
+    expect(guestDrawerHistorySource).toContain('formatHistoryRangeOptionLabel(option)');
+    expect(guestDrawerHistorySource).not.toContain('const formatRangeLabel');
 
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
 
     for (const storageDetailSource of [diskDetailSource, storagePoolDetailSource]) {
       expect(storageDetailSource).toContain('filterSelectClass');
-      expect(storageDetailSource).toContain("activeTab() === 'history'");
+      expect(storageDetailSource).not.toContain('activeTab()');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
     }
@@ -1330,40 +1358,34 @@ describe('shared primitive guardrails', () => {
     );
     expect(contextualFocusSource).toContain('export const findInlineDetailElement');
     expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
-    expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
-    expect(contextualFocusSource).toContain('chartHoveredSeriesId');
-    expect(contextualFocusSource).toContain('hoveredGroupScope');
-    expect(contextualFocusSource).toContain('filterSeriesForActiveScope');
     expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
     expect(contextualFocusSource).toContain('data-inline-detail-for');
-    expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
-    expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
-    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
-    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
+    // No table pins or previews a group scope since the Storage group pin went.
+    expect(summaryCardInteractionSource).not.toContain('SummarySeriesGroupScope');
 
     expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
-    expect(workloadSelectionStateSource).toContain('hoveredWorkloadGroupScope');
-    expect(workloadSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
     expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
-    expect(summaryTableFocusSource).toContain('activeScopeState');
     expect(summaryTableFocusSource).toContain('focusedSeriesId');
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
+    expect(summaryTableFocusSource).toContain(
+      'untrack(() => revealFocusedSeries(root, focusedId))',
+    );
     expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
     expect(summaryTableFocusSource).toContain('onEscapeClear?: () => void;');
     expect(summaryTableFocusSource).toContain('setClearSurfaceRootRef');
     expect(summaryTableFocusSource).toContain('[data-summary-clear-ignore]');
     expect(summaryTableFocusSource).toContain("event.key !== 'Escape'");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
-    expect(summaryTableFocusSource).toContain(
-      "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
-    );
+    expect(summaryTableFocusSource).not.toContain('focusedGroupId');
+    expect(summaryTableFocusSource).not.toContain('activeGroupScope');
+    expect(summaryTableFocusSource).not.toContain("window.addEventListener('scroll'");
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
   });
 
@@ -1373,9 +1395,8 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
     expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
     expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
-    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='preview'] > td");
-    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='pinned'] > td");
-    expect(frontendIndexCssSource).toContain('--color-summary-group-member-pinned-accent');
+    expect(frontendIndexCssSource).not.toContain('data-summary-group-member-active');
+    expect(frontendIndexCssSource).not.toContain('--color-summary-group-member-');
     expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
     expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
     expect(frontendIndexCssSource).toContain(
@@ -1391,17 +1412,10 @@ describe('shared primitive guardrails', () => {
     expect(groupedTableRowPresentationSource).not.toContain('GROUPED_TABLE_ROW_DIVIDER_CLASS');
 
     expect(guestRowSource).toContain('data-summary-row-active');
-    expect(guestRowSource).toContain('data-summary-group-member-active');
     expect(guestRowStateSource).not.toContain('bg-sky-50/70');
     expect(guestRowStateSource).not.toContain('ring-sky-400/25');
 
-    for (const source of [
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [storagePoolRowSource, diskListSource]) {
       expect(source).toContain('data-summary-row-active');
       expect(source).not.toContain('bg-sky-50/70');
       expect(source).not.toContain('ring-sky-400/25');
@@ -1409,16 +1423,14 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('ring-blue-300 dark:ring-blue-600');
     }
 
-    expect(storagePoolRowSource).toContain('data-summary-group-member-active');
+    expect(storagePoolRowSource).not.toContain('data-summary-group-member-active');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupPresentationSource).toContain('getInteractiveGroupedTableRowClass');
     expect(storageGroupPresentationSource).toContain('getGroupedTableRowCellClass');
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowClass');
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowCellClass');
-    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('class={getGroupedTableRowClass()}');
     expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
@@ -1427,13 +1439,12 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
-    expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
   it('routes Proxmox node version presentation through the shared formatter', () => {
-    expect(nodeGroupHeaderSource).toContain("from '@/utils/proxmoxVersion'");
-    expect(nodeGroupHeaderSource).toContain('formatProxmoxVersion(props.node.pveVersion)');
-    expect(nodeGroupHeaderSource).not.toContain('pve-manager\\/');
+    expect(proxmoxPageModelSource).toContain("from '@/utils/proxmoxVersion'");
+    expect(proxmoxPageModelSource).toContain('formatProxmoxVersion(resource.proxmox?.pveVersion)');
+    expect(proxmoxPageModelSource).not.toContain('pve-manager\\/');
 
     expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
     expect(proxmoxVersionSource).toContain('pve-manager\\/');
@@ -1464,7 +1475,6 @@ describe('shared primitive guardrails', () => {
     expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
     for (const source of [
       platformWindowedItemsSource,
-      unifiedResourceTableViewportSyncSource,
       storagePoolsTableWindowingSource,
       workloadViewportSyncSource,
     ]) {
@@ -1488,9 +1498,6 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storagePoolsTableSource,
@@ -1510,7 +1517,6 @@ describe('shared primitive guardrails', () => {
     }
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storageContentCardSource,
@@ -1518,9 +1524,7 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('<TableCard');
     }
 
-    for (const source of [unifiedResourceHostTableCardSource, storageContentCardSource]) {
-      expect(source).toContain('TableCardHeader');
-    }
+    expect(storageContentCardSource).toContain('TableCardHeader');
 
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded-sm border border-border',
@@ -1576,56 +1580,25 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('HEADER_SORT_BUTTON');
   });
 
-  it('keeps chart visibility display actions on the shared toolbar toggle', () => {
+  it('keeps the retired summary chart-visibility toggle out of the shared toolbar', () => {
+    // The workload summary chart section this toggle controlled is deleted and
+    // no other page exposes a chart show/hide control. A returning summary
+    // section is a governed product decision that must register its own
+    // primitive.
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
-      rules?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        requiredConsumers?: Array<{ path?: string }>;
-      }>;
-      patternGuards?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        allPatterns?: string[];
-        scopes?: string[];
-        pathIncludes?: string[];
-        pathExcludes?: string[];
-        allowedPaths?: string[];
-        ignoredPaths?: string[];
-      }>;
+      rules?: Array<{ id: string; canonical?: { export?: string } }>;
+      patternGuards?: Array<{ id: string; canonical?: { export?: string } }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'chart-visibility-toggle-button',
-    );
-    const registeredGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'chart-visibility-local-toggle-labels',
-    );
+    const retiredIds = ['chart-visibility-toggle-button', 'chart-visibility-local-toggle-labels'];
+    for (const entry of [...(registry.rules ?? []), ...(registry.patternGuards ?? [])]) {
+      expect(retiredIds).not.toContain(entry.id);
+      expect(entry.canonical?.export).not.toBe('ChartVisibilityToggleButton');
+    }
 
-    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredRule?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Workloads/WorkloadsFilter.tsx',
-    ]);
-    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredGuard?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredGuard?.allPatterns).toEqual(['Show charts', 'Hide charts']);
-    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(registeredGuard?.ignoredPaths).toEqual([
-      'src/components/Workloads/__tests__/WorkloadsFilter.test.tsx',
-    ]);
-    expect(registeredGuard?.scopes).toEqual(
-      expect.arrayContaining(['src/components/Workloads', 'src/features', 'src/pages']),
-    );
-
-    expect(filterToolbarSource).toContain('export const ChartVisibilityToggleButton');
-    expect(filterToolbarSource).toContain("local.collapsed ? 'Show charts' : 'Hide charts'");
-    expect(filterToolbarSource).toContain('active={!local.collapsed}');
-    expect(filterToolbarSource).toContain('aria-pressed={!local.collapsed}');
-    expect(filterToolbarSource).toContain('title={label()}');
-
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
-    expect(workloadsFilterSource).not.toContain('Show charts');
-    expect(workloadsFilterSource).not.toContain('Hide charts');
+    expect(filterToolbarSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('onChartsToggle');
+    expect(workloadsFilterSource).not.toContain('chartsCollapsed');
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {
@@ -1719,29 +1692,22 @@ describe('shared primitive guardrails', () => {
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
     expect(platformResourceDetailTableRowSource).toContain('hideWhenRowTappableOnMobile');
 
-    for (const source of [
-      guestRowSource,
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [guestRowSource, storagePoolRowSource, diskListSource]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
       expect(source).toContain('hideWhenRowTappableOnMobile');
     }
 
-    expect(storageGroupRowSource).toContain('createSummaryInteractiveRowPreviewHandlers');
+    // Storage group headers are disclosure rows: no hover preview, no group pin.
+    expect(storageGroupRowSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(storageGroupRowSource).toContain('SummaryRowActionButton');
     expect(storageGroupRowSource).toContain('hideWhenRowTappableOnMobile');
     expect(storageGroupRowSource).not.toContain('hideWhenRowTappableOnMobile={false}');
-    expect(storageGroupRowSource).toContain('props.onToggle();');
+    expect(storageGroupRowSource).toContain('onClick={() => props.onToggle()}');
+    expect(storageGroupRowSource).not.toContain('onFocusChange');
 
-    expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');
     expect(storageGroupRowSource).not.toContain('kind="scope"');
-    expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
     expect(nodeGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(webInterfaceLinkSource).toContain('event.stopPropagation()');
@@ -1887,14 +1853,16 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('ExternalTextLink');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AIProviderConfigurationSection.tsx',
-      'src/components/Settings/AIRuntimeControlsSection.tsx',
       'src/components/Settings/AISettingsDialogs.tsx',
       'src/components/Settings/APITokenManager.tsx',
       'src/components/Settings/AgentIntegrationsPanel.tsx',
+      'src/components/Settings/BackupTransferDialogs.tsx',
       'src/components/Settings/GeneralSettingsPanel.tsx',
       'src/components/Settings/SecurityOverviewPanel.tsx',
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
     ]);
+    // A link inside a tinted callout sentence keeps the callout's colour.
+    expect(externalTextLinkSource).toContain("inlineInherit: 'underline'");
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1923,9 +1891,11 @@ describe('shared primitive guardrails', () => {
     expect(externalTextLinkSource).toContain('EXTERNAL_TEXT_LINK_REL');
     expect(externalTextLinkSource).toContain('target="_blank"');
     expect(externalTextLinkSource).toContain('rel={getExternalTextLinkRel');
+    // Removing an optional control may remove its whole documentation link.
+    // Check the surviving JSX without requiring that obsolete control back.
+    expect(settingsDocumentationLinkViolations(aiRuntimeControlsSectionSource)).toEqual([]);
     for (const source of [
       aiProviderConfigurationSectionSource,
-      aiRuntimeControlsSectionSource,
       aiSettingsDialogsSource,
       apiTokenManagerSource,
       agentIntegrationsPanelSource,
@@ -2069,7 +2039,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx',
       'src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx',
       'src/components/Infrastructure/ResourceOperatorStateSection.tsx',
-      'src/components/Settings/AIRuntimeControlsSection.tsx',
       'src/components/Settings/AISettings.tsx',
       'src/components/Settings/AuditLogPanel.tsx',
       'src/components/Settings/DiscoverySettingsForm.tsx',
@@ -2117,6 +2086,10 @@ describe('shared primitive guardrails', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+    // A disabled toggle keeps its on/off track and dims; bg-base names no
+    // theme colour, so a disabled track built on it rendered transparent.
+    expect(toggleModelSource).not.toMatch(/TOGGLE_DISABLED_CLASS = '[^']*bg-base/);
+    expect(toggleModelSource).toContain('checked ? TOGGLE_CHECKED_CLASS : TOGGLE_UNCHECKED_CLASS');
 
     expect(dockerRuntimeSettingsCardSource).toContain('TogglePrimitive');
     expect(dockerRuntimeSettingsCardSource).toContain('ariaLabelledBy');
@@ -2133,6 +2106,8 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeSource).not.toContain('cursor-not-allowed');
     expect(statusBadgeSource).not.toContain('props.onToggle?.()');
     expect(statusBadgeSource).not.toContain('labelEnabled ??');
+    // Pages of alike On/Off badges name each one for assistive tech.
+    expect(statusBadgeSource).toContain('aria-label={getStatusBadgeAriaLabel(props)}');
 
     expect(statusBadgeStateSource).toContain('export function useStatusBadgeState');
     expect(statusBadgeStateSource).toContain('Boolean(props.disabled)');
@@ -2550,6 +2525,10 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('formatPlatformAlertResourceType');
       expect(source).toContain('formatPlatformAlertStartedAt');
       expect(source).toContain('formatPlatformAlertDetailDateTime');
+      // Started reads as an age on the shared clock, the exact time on hover.
+      expect(source).toContain('useRelativeTimeNow');
+      expect(source).toContain('formatPlatformAlertStartedAt(incident.startedAt, now())');
+      expect(source).toContain('title={formatPlatformAlertDetailDateTime(incident.startedAt)}');
       expect(source).not.toContain('severityVariant');
       expect(source).not.toContain('severityTextClass');
       expect(source).not.toContain('const alertTone');
@@ -2621,6 +2600,7 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/RunToolCallTrace.tsx',
       'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
+      'src/components/Infrastructure/ResourceDetailSummary.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
     expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
@@ -2688,6 +2668,18 @@ describe('shared primitive guardrails', () => {
     expect(metadataBadgeSource).toContain("muted: 'bg-surface-alt text-muted'");
     expect(metadataBadgeSource).toContain("warning: 'bg-amber-100 text-amber-800");
     expect(metadataBadgeSource).not.toContain(["muted: 'bg", 'slate', '100'].join('-'));
+    // Drawer identity values differ at their ends and a phone has no hover to
+    // show a title, so they wrap inside the drawer cell instead of spilling
+    // past the drawer edge, where the content shell clips them.
+    expect(metadataBadgeSource).toContain(
+      "METADATA_BADGE_WRAP_CLASS = 'min-w-0 max-w-full whitespace-normal wrap-anywhere text-left'",
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge tone="info" size="xs" shape="rounded" wrap title={ip}>',
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge size="xs" shape="rounded" wrap title={value}>',
+    );
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
     expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');
@@ -2841,7 +2833,7 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps shared, discovery drawer, Login, Settings, Patrol, and AI loading spinners on shared loading primitives', () => {
+  it('keeps shared, drawer, Login, Settings, Patrol, and AI loading spinners on shared loading primitives', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -2859,9 +2851,6 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'loading-spinner-shell');
-    const discoveryFallbackRule = registry.rules?.find(
-      (rule) => rule.id === 'discovery-loading-fallback',
-    );
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'patrol-ai-local-loading-spinner-shell',
     );
@@ -2877,8 +2866,8 @@ describe('shared primitive guardrails', () => {
     const sharedComponentSpinnerGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'shared-component-local-loading-spinner-shell',
     );
-    const drawerDiscoveryFallbackGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'drawer-discovery-local-loading-fallback',
+    const drawerSpinnerGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'drawer-local-border-loading-spinner-shell',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
@@ -2898,7 +2887,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/UserAssignmentsPanel.tsx',
       'src/components/UpdateProgressModal.tsx',
       'src/components/shared/Button.tsx',
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
       'src/components/shared/HistoryChartOverlay.tsx',
       'src/components/shared/PulseDataGrid.tsx',
       'src/components/patrol/ApprovalSection.tsx',
@@ -2945,40 +2933,21 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/PulseDataGrid.tsx',
     ]);
     expect(sharedComponentSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(discoveryFallbackRule?.canonical?.path).toBe(
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
-    );
-    expect(discoveryFallbackRule?.canonical?.export).toBe('DiscoveryLoadingFallback');
-    expect(discoveryFallbackRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+    expect(drawerSpinnerGuard?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
+    expect(drawerSpinnerGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(drawerSpinnerGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
+    expect(drawerSpinnerGuard?.scopes).toEqual([
       'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
       'src/components/Workloads/GuestDrawer.tsx',
       'src/components/Workloads/NodeDrawer.tsx',
       'src/features/docker/DockerHostDrawer.tsx',
     ]);
-    expect(drawerDiscoveryFallbackGuard?.canonical?.path).toBe(
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
-    );
-    expect(drawerDiscoveryFallbackGuard?.canonical?.export).toBe('DiscoveryLoadingFallback');
-    expect(drawerDiscoveryFallbackGuard?.allPatterns).toEqual([
-      'border-t-transparent',
-      'animate-spin',
-    ]);
-    expect(drawerDiscoveryFallbackGuard?.scopes).toEqual([
-      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
-      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-      'src/components/Workloads/GuestDrawer.tsx',
-      'src/components/Workloads/NodeDrawer.tsx',
-      'src/features/docker/DockerHostDrawer.tsx',
-    ]);
-    expect(drawerDiscoveryFallbackGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(drawerSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
     expect(loadingSpinnerSource).toContain("button: 'h-5 w-5 border-2'");
-    expect(discoveryLoadingFallbackSource).toContain('LoadingSpinner');
-    expect(discoveryLoadingFallbackSource).toContain('getDiscoveryLoadingState');
-    expect(discoveryLoadingFallbackSource).toContain('role="status"');
     expect(loginSource).toContain('LoadingSpinner');
     expect(loginSource).toContain('size="button"');
     expect(loginSource).not.toContain(
@@ -2988,7 +2957,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       buttonSource,
-      discoveryLoadingFallbackSource,
       historyChartOverlaySource,
       pulseDataGridSource,
       updateProgressModalSource,
@@ -2997,28 +2965,13 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('animate-spin');
     }
 
-    const discoveryFallbackConsumers: Array<[string, string]> = [
-      ['src/components/Infrastructure/ResourceDetailDrawer.tsx', resourceDetailDrawerSource],
-      [
-        'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-        resourceDetailDrawerOverviewTabSource,
-      ],
-      ['src/components/Workloads/GuestDrawer.tsx', guestDrawerSource],
-      ['src/components/Workloads/NodeDrawer.tsx', nodeDrawerSource],
-      ['src/features/docker/DockerHostDrawer.tsx', dockerHostDrawerSource],
-    ];
-    const discoveryFallbackForbiddenByPath = new Map(
-      discoveryFallbackRule?.forbiddenPatterns?.map((entry) => [
-        entry.path,
-        entry.patterns ?? [],
-      ]) ?? [],
-    );
-
-    for (const [path, source] of discoveryFallbackConsumers) {
-      expect(source).toContain('DiscoveryLoadingFallback');
-      for (const retiredPattern of discoveryFallbackForbiddenByPath.get(path) ?? []) {
-        expect(source).not.toContain(retiredPattern);
-      }
+    for (const source of [
+      resourceDetailDrawerSource,
+      resourceDetailDrawerOverviewTabSource,
+      guestDrawerSource,
+      nodeDrawerSource,
+      dockerHostDrawerSource,
+    ]) {
       expect(source).not.toContain('border-t-transparent');
     }
 
@@ -3302,9 +3255,6 @@ describe('shared primitive guardrails', () => {
       (guard) => guard.id === 'button-drawer-header-icon-local-shell',
     );
     const copyValueRule = registry.rules?.find((rule) => rule.id === 'copy-value-action-shell');
-    const copyableCodeRowRule = registry.rules?.find(
-      (rule) => rule.id === 'copyable-code-row-shell',
-    );
     const ssoProviderActionRule = registry.rules?.find(
       (rule) => rule.id === 'sso-provider-settings-action-shell',
     );
@@ -3316,9 +3266,6 @@ describe('shared primitive guardrails', () => {
     );
     const copyValueAccentGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'copy-value-accent-local-button-shell',
-    );
-    const copyableCodeRowGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'copyable-code-row-local-shell',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
@@ -3526,9 +3473,9 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/InfrastructureInstallerSection.tsx',
           patterns: expect.arrayContaining([
             'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
           ]),
         }),
         expect.objectContaining({
@@ -3784,7 +3731,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessOutlineActionGuard?.allPatterns).toEqual([
-      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25',
+      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900',
     ]);
     expect(settingsSuccessOutlineActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -3800,7 +3747,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessGhostActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessGhostActionGuard?.allPatterns).toEqual([
-      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25',
+      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900',
     ]);
     expect(settingsSuccessGhostActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -4088,12 +4035,12 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
             'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
             'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
             'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
             'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
             'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
@@ -4101,7 +4048,7 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/AI/Chat/MessageItem.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
         expect.objectContaining({
@@ -4156,7 +4103,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(aiChatMessageQueuedActionGuard?.canonical?.export).toBe('ActionIconButton');
     expect(aiChatMessageQueuedActionGuard?.allPatterns).toEqual([
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]);
     expect(aiChatMessageQueuedActionGuard?.scopes).toEqual([
       'src/components/AI/Chat/MessageItem.tsx',
@@ -4185,7 +4132,7 @@ describe('shared primitive guardrails', () => {
       'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
     ]);
     expect(aiChatActionIconAccentGuard?.allPatterns).toEqual([
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950',
     ]);
     expect(aiChatActionIconPrimarySendGuard?.allPatterns).toEqual([
       'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700',
@@ -4201,7 +4148,6 @@ describe('shared primitive guardrails', () => {
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/MessageItem.tsx',
       'src/components/AI/Chat/ToolExecutionBlock.tsx',
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',
     ]);
@@ -4245,11 +4191,6 @@ describe('shared primitive guardrails', () => {
       'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
       'CopyIcon class="h-3 w-3"',
     ]);
-    expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
-    expect(copyableCodeRowRule?.canonical?.export).toBe('CopyableCodeRow');
-    expect(copyableCodeRowRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Discovery/DiscoveryTab.tsx',
-    ]);
     expect(ssoProviderActionRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(ssoProviderActionRule?.canonical?.export).toBe('Button');
     expect(ssoProviderActionRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
@@ -4285,12 +4226,6 @@ describe('shared primitive guardrails', () => {
       'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25',
       'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
     ]);
-    expect(copyableCodeRowGuard?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
-    expect(copyableCodeRowGuard?.canonical?.export).toBe('CopyableCodeRow');
-    expect(copyableCodeRowGuard?.allPatterns).toEqual([
-      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
-      'break-all font-mono text-xs text-base-content',
-    ]);
 
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function CommandCopyButton');
@@ -4303,7 +4238,6 @@ describe('shared primitive guardrails', () => {
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonSource).toContain('getCopyValueButtonClass');
     expect(buttonSource).toContain('getActionIconButtonClass');
-    expect(copyableCodeRowSource).toContain('CopyValueButton');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
@@ -4373,12 +4307,12 @@ describe('shared primitive guardrails', () => {
     for (const retiredActionIconShell of [
       'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
       'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
       'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
       'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
       'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
       'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]) {
@@ -4401,7 +4335,7 @@ describe('shared primitive guardrails', () => {
       'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');
@@ -4510,13 +4444,13 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
     expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
@@ -4702,19 +4636,6 @@ describe('shared primitive guardrails', () => {
     expect(userAssignmentsPanelSource).not.toContain(
       'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors',
     );
-    expect(discoveryTabSource).toContain('@/components/shared/Button');
-    expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');
-    expect(discoveryTabSource).toContain('CopyValueButton');
-    expect(discoveryTabSource).toContain('CopyableCodeRow');
-    expect(discoveryTabSource).not.toContain('interface CopyValueButtonProps');
-    expect(discoveryTabSource).not.toContain('const CopyValueButton');
-    expect(discoveryTabSource).not.toContain('const CopyableCodeRow');
-    expect(discoveryTabSource).not.toContain(
-      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
-    );
-    expect(discoveryTabSource).not.toContain(
-      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
-    );
     expect(webInterfaceUrlFieldSource).toContain('CopyValueButton');
     expect(webInterfaceUrlFieldSource).not.toContain('CopyIcon class="h-3.5 w-3.5"');
     expect(webInterfaceUrlFieldSource).not.toContain(
@@ -4728,18 +4649,6 @@ describe('shared primitive guardrails', () => {
     expect(standalonePageSurfaceSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
     );
-  });
-
-  it('keeps discovery readiness badges presentation-only and accessible', () => {
-    expect(discoveryReadinessBadgeSource).toContain(
-      "import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness'",
-    );
-    expect(discoveryReadinessBadgeSource).toContain('aria-label={presentation()?.title');
-    expect(discoveryReadinessBadgeSource).toContain('title={presentation()?.title}');
-    expect(discoveryReadinessBadgeSource).toContain('aria-hidden="true"');
-    expect(discoveryReadinessBadgeSource).not.toContain('fetch(');
-    expect(discoveryReadinessBadgeSource).not.toContain('localStorage');
-    expect(discoveryReadinessBadgeSource).not.toContain('innerHTML');
   });
 
   it('routes settings info callouts through CalloutCard', () => {
@@ -5055,7 +4964,7 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('InlineNotice');
       expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
-      expect(source).not.toContain('text-amber-900/25 underline-offset-2');
+      expect(source).not.toContain('text-amber-900 underline-offset-2');
     }
     expect(platformOutdatedAgentNoticeSource).toContain(
       "import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';",
@@ -5190,7 +5099,6 @@ describe('shared primitive guardrails', () => {
     expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
     expect(gitHubStarBannerSource).toContain('<ActionIconButton');
     expect(gitHubStarBannerSource).toContain('<Button');
-    expect(gitHubStarBannerSource).toContain('const ACTIVE_DAYS_BEFORE_PROMPT = 14;');
     expect(gitHubStarBannerSource).toContain("reserveLowPriorityNoticeSession('github-star')");
     expect(gitHubStarBannerSource).toContain('GITHUB_STAR_PROMPT_SHOWN');
     expect(gitHubStarBannerSource).not.toContain('Maybe later');
@@ -5352,8 +5260,6 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
-    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
-    expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 
   it('keeps runtime web-interface launch on the shared inline-link template', () => {
@@ -5384,9 +5290,6 @@ describe('shared primitive guardrails', () => {
         'src/features/proxmox/ProxmoxNodesTable.tsx',
         'src/components/Alerts/AlertResourceGroupHeader.tsx',
         'src/components/Alerts/AlertResourceTableRow.tsx',
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/features/docker/DockerNativeTableShared.tsx',
         'src/features/docker/DockerContainersTable.tsx',
         'src/features/kubernetes/KubernetesClustersTable.tsx',
@@ -5403,9 +5306,6 @@ describe('shared primitive guardrails', () => {
     expect(proxmoxNodesTableSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourceHostTableCardSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePBSTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePMGTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
@@ -5466,6 +5366,10 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewFooter');
     expect(sharedPlatformPageSource).toContain('data-platform-table-preview-footer');
     expect(sharedPlatformPageSource).toContain('aria-expanded={props.expanded}');
+    // Kiosk is a wall display with nobody to press Show all: the shared preview
+    // shows every row there, so no table may re-cap itself or add its own check.
+    expect(sharedPlatformPageSource).toContain('!kioskMode() && hasHiddenRows()');
+    expect(proxmoxNodesTableSource).not.toContain('useKioskMode');
 
     for (const [path, source] of [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
@@ -5895,7 +5799,9 @@ describe('shared primitive guardrails', () => {
       ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
       ['src/features/truenas/TrueNASNetworkSharesTable.tsx', truenasNetworkSharesTableSource],
       ['src/features/truenas/TrueNASServicesTable.tsx', truenasServicesTableSource],
-      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
+      // The storage table no longer formats a raw provider value: its Health
+      // cell carries TrueNAS's own reason text. The scope-wide local-helper
+      // guard below still keeps a private titleCase out of it.
       ['src/features/truenas/TrueNASVirtualMachinesTable.tsx', truenasVirtualMachinesTableSource],
     ];
     const truenasTitleCaseConsumerPaths = truenasTitleCaseConsumers.map(([path]) => path);
@@ -6275,7 +6181,6 @@ describe('shared primitive guardrails', () => {
     );
     const platformDateTimeConsumers: Array<[string, string]> = [
       ['src/features/truenas/TrueNASProtectionTable.tsx', truenasProtectionTableSource],
-      ['src/features/vmware/VsphereActivityTable.tsx', vsphereActivityTableSource],
     ];
     const platformDateTimeConsumerPaths = platformDateTimeConsumers.map(([path]) => path);
 
@@ -6290,13 +6195,6 @@ describe('shared primitive guardrails', () => {
       {
         path: 'src/features/truenas/TrueNASProtectionTable.tsx',
         patterns: ['const formatPointTime', 'formatPointTime(point)'],
-      },
-      {
-        path: 'src/features/vmware/VsphereActivityTable.tsx',
-        patterns: [
-          'const formatActivityDate',
-          'formatActivityDate(activity.occurredAt || activity.observedAt)',
-        ],
       },
     ]);
     expect(truenasDateGuard?.canonical?.path).toBe(
@@ -6314,7 +6212,7 @@ describe('shared primitive guardrails', () => {
     expect(vsphereDateGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
-    expect(vsphereDateGuard?.canonical?.export).toBe('PlatformTableDateTimeValue');
+    expect(vsphereDateGuard?.canonical?.export).toBe('PlatformTableRelativeTimeValue');
     expect(vsphereDateGuard?.allPatterns).toEqual([
       'const formatActivityDate',
       'toLocaleString(undefined, {',
@@ -6338,9 +6236,10 @@ describe('shared primitive guardrails', () => {
     }
 
     // The When header renders through the shared sortable head; the
-    // numeric-value alignment intent now lives on its kind prop.
+    // numeric-value alignment intent now lives on its kind prop. vCenter's
+    // unset times (before 2000) stay an empty marker, not a decades-old age.
     expect(vsphereActivityTableSource).toContain('kind="numeric-value"');
-    expect(vsphereActivityTableSource).toContain('minYear={2000}');
+    expect(vsphereActivityTableSource).toContain('getUTCFullYear() < 2000');
   });
 
   it('keeps platform table relative timestamps on the shared primitive', () => {
@@ -6376,6 +6275,7 @@ describe('shared primitive guardrails', () => {
       ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
       ['src/features/standalone/AvailabilityChecksTable.tsx', availabilityChecksTableSource],
       ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
+      ['src/features/vmware/VsphereActivityTable.tsx', vsphereActivityTableSource],
     ];
     const platformRelativeTimeConsumerPaths = platformRelativeTimeConsumers.map(([path]) => path);
 
@@ -6420,6 +6320,13 @@ describe('shared primitive guardrails', () => {
         path: 'src/features/standalone/AvailabilityChecksTable.tsx',
         patterns: ['formatRelativeTime(availability?.lastChecked', 'const formatChecked'],
       },
+      {
+        path: 'src/features/vmware/VsphereActivityTable.tsx',
+        patterns: [
+          'const formatActivityDate',
+          'formatActivityDate(activity.occurredAt || activity.observedAt)',
+        ],
+      },
     ]);
     expect(localHelperGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -6439,6 +6346,9 @@ describe('shared primitive guardrails', () => {
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableRelativeTimeValue');
     expect(sharedPlatformPageSource).toContain('formatPlatformTableRelativeTimeValue');
+    // Ages read the shared clock: rows stay mounted across refreshes, so an age
+    // computed only at render froze while its timestamp did not change.
+    expect(sharedPlatformPageSource).toContain('useRelativeTimeNow');
     expect(sharedPlatformPageSource).toContain('formatRelativeTime(value');
 
     for (const [path, source] of platformRelativeTimeConsumers) {
@@ -7527,6 +7437,9 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(sharedPlatformPageSource).toContain('export function PlatformSectionTabs');
+    // Kiosk hides the rail here once, so page surfaces must not gate it themselves.
+    expect(sharedPlatformPageSource).toContain('<PlatformSectionTabRail {...props} />');
+    expect(sharedPlatformPageSource).toContain('<Show when={!kioskMode()}>');
     expect(sharedPlatformPageSource).toContain('useActiveHorizontalRailItemVisibility({');
     expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
     expect(sharedPlatformPageSource).toContain('href={tab.path}');
@@ -7724,6 +7637,7 @@ describe('shared primitive guardrails', () => {
         requiredPatterns?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
+        pathExcludes?: string[];
       }>;
     };
     const registeredRule = registry.rules?.find(
@@ -7749,9 +7663,6 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/components/Workloads/WorkloadPanel.tsx',
         'src/features/docker/DockerHostsTable.tsx',
         'src/features/docker/DockerNetworksTable.tsx',
@@ -7768,9 +7679,9 @@ describe('shared primitive guardrails', () => {
       expect(guard?.allowedPaths ?? []).toHaveLength(0);
     }
     expect(inlineGuard?.triggerPatterns).toEqual(['data-inline', 'TableRow']);
-    expect(inlineGuard?.ignoredPaths).toEqual([
-      'src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx',
-    ]);
+    // Test files assert on rendered rows; they are not row surfaces.
+    expect(inlineGuard?.pathExcludes).toEqual(['.test.', '__tests__']);
+    expect(inlineGuard?.ignoredPaths).toEqual([]);
     expect(namedGuard?.triggerPatterns).toEqual(['detail-row', 'TableRow']);
     expect(namedGuard?.ignoredPaths ?? []).toHaveLength(0);
 
@@ -7779,9 +7690,6 @@ describe('shared primitive guardrails', () => {
       dockerHostsTableSource,
       proxmoxCoverageTableSource,
       proxmoxNodesTableSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       workloadPanelSource,
     ]) {
       expect(source).toContain('InlineDetailTableRow');
@@ -8416,6 +8324,11 @@ describe('shared primitive guardrails', () => {
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipStateSource).toContain('sanitizeTooltipContent');
     expect(tooltipStateSource).toContain('supportsHoverTooltips');
+    // Hidden tooltips sit on every table row; only an open one may hold a
+    // window resize listener (TooltipPortal.test.tsx proves the behaviour).
+    expect(tooltipStateSource).toMatch(
+      /if \(typeof window === 'undefined' \|\| !options\.visible\(\)\) return;\s*updateViewport\(\);\s*const handleResize/,
+    );
 
     expect(sharedTooltipHookSource).toContain('supportsHoverTooltips');
     expect(hoverCapabilitySource).toContain('(hover: hover) and (pointer: fine)');
@@ -8551,6 +8464,9 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).not.toContain('LabeledFilterSelect');
     expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');
     expect(filterBarSource).not.toContain('filterControlsVariant');
+    // Kiosk hiding lives in the shared bar, not in each page that mounts one.
+    expect(filterBarSource).toContain("import { useKioskMode } from '@/hooks/useKioskMode';");
+    expect(filterBarSource).toContain('<Show when={!kioskMode()}>');
 
     expect(filterChipSource).toContain('clearFilter,');
     expect(filterChipSource).toContain('formatFilterChipValue,');
@@ -8672,7 +8588,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).toContain('trailingControls={');
     expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
     expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).toContain('<ColumnPicker');
     expect(workloadsFilterSource).toContain('onClearAll={handleClearAll}');
     expect(workloadsFilterSource).toContain('showClearAll={showClearAll}');
@@ -8761,7 +8676,10 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('h-9 w-9');
     expect(searchFieldSource).toContain('min-h-11');
     expect(filterToolbarSource).toContain('min-h-11');
-    expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
+    // Phone and tablet drawers fill the table's visible width (the scroll
+    // shell is a size container), not a viewport guess at the page chrome.
+    expect(inlineDetailTableRowSource).toContain('max-w-[100cqi]');
+    expect(inlineDetailTableRowSource).not.toContain('100vw-3.5rem');
   });
 
   it('keeps shared settings panels dense without forking their desktop framing', () => {
@@ -8781,6 +8699,21 @@ describe('shared primitive guardrails', () => {
     expect(drawerAttentionSectionSource).toContain('Show fewer alerts');
     expect(drawerAttentionSectionSource).toContain('aria-expanded={expanded()}');
     expect(drawerAttentionSectionSource).not.toContain('DetailSectionTable');
+    // A threshold alert held under its trigger leads with the live reading and
+    // a second line saying what clears it, never only its stale breach text.
+    expect(drawerAttentionSectionSource).toContain('item.detail');
+    expect(drawerAttentionSectionSource).toContain('item.title ?? item.message');
+    for (const liveAlertConsumer of [
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+    ]) {
+      const source = readFrontendSource(liveAlertConsumer);
+      expect(source).toContain('...getAlertAttentionCopy(alert, now)');
+      expect(source).not.toContain('message: alert.message');
+    }
+    expect(readFrontendSource('src/components/Workloads/guestDrawerModel.ts')).toContain(
+      'getAlertAttentionCopy(alert, now)',
+    );
 
     const overviewConsumers = [
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
@@ -8804,7 +8737,9 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of overviewConsumers) {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('DrawerAttentionSection');
-      expect(source).toContain('TechnicalDetailsSection');
+      // Warning rows lift in front; the rest waits under one Details disclosure.
+      expect(source).toContain('DrawerExceptionList');
+      expect(source).toContain('<TechnicalDetailsDisclosure');
       expect(source).not.toContain('ResourceOperatorStateSection');
     }
 
@@ -8847,7 +8782,20 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/TechnicalDetailsDisclosure.tsx',
     );
     expect(disclosureSource).toContain('onToggle');
-    expect(disclosureSource).toContain('<Show when={expanded()}>');
+    // Lazily mounted by default; keepMounted is an explicit opt-in for a
+    // disclosure that holds a surface's complete record (drawer Details).
+    expect(disclosureSource).toContain('<Show when={props.keepMounted || expanded()}>');
+    expect(disclosureSource).toContain('keepMounted?: boolean;');
+    // The drawer's compact Worth checking list reuses the detail-row tone
+    // mapping rather than keeping a local palette that could drift.
+    expect(readFrontendSource('src/components/shared/DetailSectionTable.tsx')).toContain(
+      'export const detailValueToneClass',
+    );
+    const exceptionListSource = readFrontendSource(
+      'src/components/Workloads/DrawerExceptionList.tsx',
+    );
+    expect(exceptionListSource).toContain('detailValueToneClass(row.tone)');
+    expect(exceptionListSource).not.toMatch(/text-(amber|rose|red)-700/);
     expect(disclosureSource).toContain('sections?: DetailSection[]');
     expect(disclosureSource).toContain('<DetailSectionTable');
     expect(disclosureSource).toContain('export const TechnicalDetailsSection');
@@ -8858,7 +8806,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker/DockerHostDrawerOverview.tsx',
     ]) {
       const source = readFrontendSource(overviewPath);
-      expect(source).toContain('<TechnicalDetailsSection');
+      expect(source).toMatch(/<TechnicalDetails(Section|Disclosure)\b/);
       expect(source).toContain('...technicalSections()');
       expect(source).not.toContain('const DetailCard');
     }
@@ -8866,7 +8814,7 @@ describe('shared primitive guardrails', () => {
     const resourceOverviewSource = readFrontendSource(
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
     );
-    expect(resourceOverviewSource).toContain('content="all"');
+    expect(resourceOverviewSource).toContain("content: 'all'");
 
     const registry = JSON.parse(readFrontendSource('scripts/shared-template-registry.json')) as {
       rules?: Array<{ id: string; requiredConsumers?: Array<{ path: string }> }>;
@@ -8876,4 +8824,136 @@ describe('shared primitive guardrails', () => {
       expect(rule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(overviewConsumers);
     }
   });
+});
+
+// The production server sends `style-src 'self' 'nonce-...'` without
+// 'unsafe-inline' (internal/api/security.go), so the browser reports every
+// style attribute that arrives as markup. Solid compiles static style values
+// (`style="..."`, or any literal entry of a `style={{ ... }}` object) into the
+// element's template HTML, which is such markup: each render logs a CSP
+// violation, and whether the style still applies is up to the browser. The Vite
+// dev server allows inline styles, so this only shows in a production build.
+// Dynamic style values are applied through CSSOM at runtime and are fine.
+const componentRuntimeSources = import.meta.glob(
+  ['../../**/*.tsx', '!../../**/__tests__/**', '!../../**/*.test.tsx'],
+  { query: '?raw', eager: true, import: 'default' },
+) as Record<string, string>;
+
+const compileSolidTemplates = (source: string, filename: string): string[] => {
+  // Same Solid preset options vite-plugin-solid uses for the client build.
+  const result = transformSync(source, {
+    filename,
+    babelrc: false,
+    configFile: false,
+    ast: true,
+    code: false,
+    parserOpts: { plugins: ['jsx', 'typescript'] },
+    presets: [[solidPreset, { generate: 'dom', hydratable: false }]],
+  });
+  const templates: string[] = [];
+  if (!result?.ast) return templates;
+
+  const templateHelpers = new Set<string>();
+  traverse(result.ast, {
+    ImportSpecifier(path) {
+      const imported = path.node.imported;
+      const importedName = t.isIdentifier(imported) ? imported.name : imported.value;
+      const parent = path.parentPath.node;
+      if (
+        importedName === 'template' &&
+        t.isImportDeclaration(parent) &&
+        parent.source.value === 'solid-js/web'
+      ) {
+        templateHelpers.add(path.node.local.name);
+      }
+    },
+  });
+  if (templateHelpers.size === 0) return templates;
+
+  traverse(result.ast, {
+    CallExpression(path) {
+      const { callee, arguments: args } = path.node;
+      if (!t.isIdentifier(callee) || !templateHelpers.has(callee.name)) return;
+      const [html] = args;
+      if (t.isTemplateLiteral(html)) {
+        templates.push(html.quasis.map((quasi) => quasi.value.cooked ?? '').join(''));
+      } else if (t.isStringLiteral(html)) {
+        templates.push(html.value);
+      }
+    },
+  });
+  return templates;
+};
+
+// Style attributes and <style> elements, including those inside nested
+// <template> content, which querySelectorAll does not enter.
+const collectInlineStyleMarkup = (root: ParentNode): string[] =>
+  Array.from(root.querySelectorAll('[style], style, template')).flatMap((element) => {
+    const found: string[] = [];
+    if (element.hasAttribute('style')) {
+      found.push(`<${element.localName} style="${element.getAttribute('style')}">`);
+    }
+    if (element.localName === 'style') found.push('<style>');
+    if (element instanceof HTMLTemplateElement) {
+      found.push(...collectInlineStyleMarkup(element.content));
+    }
+    return found;
+  });
+
+const findTemplateStyleAttributes = (source: string, filename: string): string[] =>
+  compileSolidTemplates(source, filename).flatMap((html) => {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return collectInlineStyleMarkup(template.content);
+  });
+
+describe('production CSP inline style guardrails', () => {
+  it('detects the static style forms Solid compiles into template markup', () => {
+    const fixture = `
+      export const Fixture = (props: { width: number; shown: boolean }) => (
+        <section>
+          <div style={{ 'overflow-anchor': 'none' }} />
+          <span style="animation-delay: 120ms" />
+          <p style={{ 'min-width': '0', width: \`\${props.width}px\` }} />
+          <b style={{ width: \`\${props.width}px\` }} />
+          <i style={props.shown ? 'opacity: 1' : undefined} />
+          <em class="[overflow-anchor:none]" />
+          <u STYLE="color: blue" />
+          <template>
+            <s style="color: red" />
+          </template>
+          <style>{'.fixture { color: green; }'}</style>
+        </section>
+      );
+    `;
+
+    expect(findTemplateStyleAttributes(fixture, 'Fixture.tsx')).toEqual([
+      '<div style="overflow-anchor:none">',
+      '<span style="animation-delay:120ms">',
+      '<p style="min-width:0">',
+      '<u style="color:blue">',
+      '<s style="color:red">',
+      '<style>',
+    ]);
+  });
+
+  // Use a class for static styling instead: a Tailwind utility, or an
+  // arbitrary property such as `[overflow-anchor:none]`. Only files that
+  // mention style can emit one, and compiling those takes a few seconds, or
+  // tens of seconds on a loaded machine.
+  it('keeps static style attributes out of every runtime component template', () => {
+    const paths = Object.keys(componentRuntimeSources);
+    expect(paths.length).toBeGreaterThan(100);
+
+    const offenders = paths
+      .filter((path) => /\bstyle\b/i.test(componentRuntimeSources[path]))
+      .flatMap((path) =>
+        findTemplateStyleAttributes(componentRuntimeSources[path], path).map(
+          (attribute) => `${path}: ${attribute}`,
+        ),
+      )
+      .sort();
+
+    expect(offenders).toEqual([]);
+  }, 120_000);
 });

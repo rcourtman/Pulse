@@ -1,13 +1,16 @@
-import { createSignal, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
 
 import { TableCell, TableRow, type TableRowProps } from './Table';
 
 export const INLINE_DETAIL_TABLE_CELL_CLASS = 'p-0 border-b border-border bg-surface-alt';
 // overflow-x-clip keeps over-wide content from painting outside the row's
 // border below the lg breakpoint (issue #1622) without creating a scroll
-// container the way overflow-hidden would.
+// container the way overflow-hidden would. Below lg the sticky content is as
+// wide as the table's visible area: 100cqi resolves against the table scroll
+// shell (a size container), so a guess at the page chrome cannot leave an
+// empty strip beside the drawer or push it past the visible edge.
 export const INLINE_DETAIL_TABLE_CONTENT_CLASS =
-  'sticky left-0 min-w-0 max-w-[calc(100vw-3.5rem)] whitespace-normal overflow-x-clip px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none lg:overflow-x-visible';
+  'sticky left-0 min-w-0 max-w-[100cqi] whitespace-normal overflow-x-clip px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none lg:overflow-x-visible';
 
 export interface InlineDetailTableRowProps extends TableRowProps {
   cellId?: string;
@@ -88,11 +91,56 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
         : undefined;
     if (tableShell) observer?.observe(tableShell);
 
+    // A column picker, or a column that depends on the data (one vCenter
+    // versus several), can add, remove or hide summary cells while this row
+    // stays open, without resizing the table shell. Watch the summary row's
+    // own cells so the detail cell never keeps a stale span. Changes deeper
+    // inside a cell are ignored: live metric updates must not re-measure.
+    const summaryRow = detailRow?.previousElementSibling;
+    let summaryCellsObserver: MutationObserver | undefined;
+    if (summaryRow instanceof HTMLTableRowElement && typeof MutationObserver === 'function') {
+      summaryCellsObserver = new MutationObserver((records) => {
+        const summaryCellsChanged = records.some(
+          (record) =>
+            record.target === summaryRow ||
+            (record.type === 'attributes' && record.target.parentNode === summaryRow),
+        );
+        if (summaryCellsChanged) syncColspanToVisibleSummaryCells();
+      });
+      summaryCellsObserver.observe(summaryRow, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden', 'colspan'],
+      });
+    }
+
     onCleanup(() => {
       window.removeEventListener('resize', syncColspanToVisibleSummaryCells);
       observer?.disconnect();
+      summaryCellsObserver?.disconnect();
     });
   });
+
+  // Callers that change the span they ask for (and rows rendered without a
+  // summary row, which fall back to that span) re-sync on the change.
+  createEffect(on(requestedColspan, syncColspanToVisibleSummaryCells, { defer: true }));
+
+  // Chromium keeps a fixed-layout table's column widths when a spanning
+  // cell's colspan grows over a column added since the table last laid out,
+  // so the detail cell would stop short of the new column. A change to the
+  // cell's own width makes it recompute them; restore it after one layout.
+  // The effect is not deferred so its first run records the mounted span.
+  createEffect(
+    on(effectiveColspan, (colspan, previousColspan) => {
+      const detailCell = detailRow?.cells[0];
+      if (!detailCell || previousColspan === undefined || colspan <= previousColspan) return;
+      const width = detailCell.style.width;
+      detailCell.style.width = '0px';
+      void detailCell.offsetWidth;
+      detailCell.style.width = width;
+    }),
+  );
 
   return (
     <TableRow ref={detailRow} class={local.class} {...rest}>

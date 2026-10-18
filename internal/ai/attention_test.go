@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 )
@@ -242,10 +243,150 @@ func TestProjectAttentionItemsProducesCurrentCalmEvaluation(t *testing.T) {
 	}
 }
 
+func TestProjectAttentionItemsLeadsHeldMetricAlertsWithTheLiveReading(t *testing.T) {
+	// minipc on 2026-10-06: the alert opened at 80°C and stayed open while the
+	// node read 71-76°C, and Patrol kept saying "Node temperature at 80.0°C".
+	now := time.Date(2026, 10, 6, 10, 52, 0, 0, time.UTC)
+	raw := 61.0
+	tests := []struct {
+		name      string
+		alertType string
+		message   string
+		metadata  map[string]interface{}
+		status    *models.MetricAlertStatus
+		want      string
+	}{
+		{
+			name:      "held under the trigger",
+			alertType: "temperature",
+			message:   "Node temperature at 80.0°C",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseLatched, Value: 76, Unit: "°C",
+				ObservedAt: now.Add(-10 * time.Second), Trigger: 80, Recovery: 75, RecoveryDelaySeconds: 300,
+			},
+			want: "Temperature 76°C now, back under the 80°C alert level. Stays open until it reaches 75°C or lower and stays there for 5 minutes.",
+		},
+		{
+			name:      "recovering at the clear level",
+			alertType: "temperature",
+			message:   "Node temperature at 80.0°C",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseRecovering, Value: 72, Unit: "°C",
+				ObservedAt: now.Add(-10 * time.Second), Trigger: 80, Recovery: 75,
+				RecoveryDelaySeconds: 300, RecoveryElapsedSeconds: 120,
+			},
+			want: "Temperature 72°C now, recovering. Clears after 5 minutes at 75°C or lower, 2 minutes so far.",
+		},
+		{
+			name:      "recovery progress rounds down",
+			alertType: "temperature",
+			message:   "Node temperature at 80.0°C",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseRecovering, Value: 72, Unit: "°C",
+				ObservedAt: now, Trigger: 80, Recovery: 75,
+				RecoveryDelaySeconds: 300, RecoveryElapsedSeconds: 290,
+			},
+			want: "Temperature 72°C now, recovering. Clears after 5 minutes at 75°C or lower, 4 minutes so far.",
+		},
+		{
+			name:      "one of a guest's disks",
+			alertType: "disk",
+			message:   "VM disk (/var) at 92.0%",
+			metadata:  map[string]interface{}{"label": "/var"},
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseRecovering, Value: 84.6, Unit: "%",
+				ObservedAt: now, Trigger: 90, Recovery: 85,
+			},
+			want: "Disk (/var) 85% now, recovering. Clears at 85% or lower.",
+		},
+		{
+			name:      "rolling-average rule",
+			alertType: "cpu",
+			message:   "VM cpu at 93.0%",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseLatched, Value: 84.2, RawValue: &raw, EvaluationWindowSeconds: 600,
+				Unit: "%", ObservedAt: now, Trigger: 90, Recovery: 80,
+			},
+			want: "CPU averaged 84% over 10 minutes, latest 61% now, back under the 90% alert level. Stays open until it reaches 80% or lower.",
+		},
+		{
+			name:      "breaching keeps the message that tracks the breach",
+			alertType: "temperature",
+			message:   "Node temperature at 88.0°C",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseBreaching, Value: 88, Unit: "°C",
+				ObservedAt: now, Trigger: 80, Recovery: 75,
+			},
+			want: "Node temperature at 88.0°C",
+		},
+		{
+			name:      "an old evaluation is not described as now",
+			alertType: "temperature",
+			message:   "Node temperature at 80.0°C",
+			status: &models.MetricAlertStatus{
+				Phase: models.MetricAlertPhaseLatched, Value: 76, Unit: "°C",
+				ObservedAt: now.Add(-attentionMetricStatusStaleAfter - time.Minute), Trigger: 80, Recovery: 75,
+			},
+			want: "Node temperature at 80.0°C",
+		},
+		{
+			name:      "no live status",
+			alertType: "temperature",
+			message:   "Node temperature at 80.0°C",
+			want:      "Node temperature at 80.0°C",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alert := attentionTestAlert("held", operationaltrust.OperationalOpen, operationaltrust.SeverityWarning, now.Add(-3*time.Hour), now)
+			alert.Type = tt.alertType
+			alert.Message = tt.message
+			alert.Value = 80
+			alert.Metadata = tt.metadata
+			alert.MetricStatus = tt.status
+			projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+			if len(projected.Details) != 1 {
+				t.Fatalf("details = %d, want 1", len(projected.Details))
+			}
+			if got := projected.Details[0].Item.PlainLanguageSummary; got != tt.want {
+				t.Fatalf("summary = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAttentionMetricFormattingRoundsLikeTheFrontend(t *testing.T) {
+	// The frontend rounds with Number(value.toFixed(1)), which works from the
+	// float's exact value: 2.55 is stored just under 2.55 and reads 2.5.
+	cases := []struct{ got, want string }{
+		{formatAttentionMetricValue(2.55, "MB/s"), "2.5 MB/s"},
+		{formatAttentionMetricValue(4.25, "%"), "4.3%"},
+		{formatAttentionMetricValue(0.75, "MB/s"), "0.8 MB/s"},
+		{formatAttentionMetricValue(1.05, "MB/s"), "1.1 MB/s"},
+		{formatAttentionMetricValue(12.5, "MB/s"), "12.5 MB/s"},
+		{formatAttentionMetricValue(3.0, "MB/s"), "3 MB/s"},
+		{formatAttentionMetricValue(84.5, "%"), "85%"},
+		{formatAttentionMetricValue(71.6, "°C"), "72°C"},
+		{formatAttentionMetricValue(-10.5, "%"), "-10%"},
+		{formatAttentionMetricValue(-0.01, "MB/s"), "0 MB/s"},
+		{formatAttentionMetricValue(0.49999999999999994, "°C"), "0°C"},
+		{formatAttentionSeconds(4140), "1.1 hours"},
+		{formatAttentionSeconds(3600), "1 hour"},
+		{formatAttentionSeconds(90), "2 minutes"},
+		{formatAttentionElapsed(290), "4 minutes"},
+	}
+	for _, tc := range cases {
+		if tc.got != tc.want {
+			t.Errorf("formatted %q, want %q", tc.got, tc.want)
+		}
+	}
+}
+
 func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 	tests := []struct {
 		name         string
 		alertType    string
+		incidentCode string
 		message      string
 		resourceName string
 		want         string
@@ -253,6 +394,47 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 		{
 			name:         "VMware alarm uses the actual alarm",
 			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Datastore latency above threshold. Affects 2 dependent resources",
+			resourceName: "archive-tier",
+			want:         "Datastore latency above threshold on archive-tier",
+		},
+		{
+			name:         "VMware alarm recorded before the alarm-name summary",
+			alertType:    "resource-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Network network-302 has VMware alarm Network packet loss above threshold (yellow)",
+			resourceName: "Edge Stateful",
+			want:         "Network packet loss above threshold on Edge Stateful",
+		},
+		{
+			name:         "VMware alarm keeps punctuation that belongs to its name",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Storage warning. Latency (p99) above threshold. Puts backups for 2 protected workloads at risk: db-01, db-02",
+			resourceName: "archive-tier",
+			want:         "Storage warning. Latency (p99) above threshold on archive-tier",
+		},
+		{
+			name:         "VMware alarm strips only the one appended consumer summary",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Latency high. Affects production. Puts backups for 2 protected workloads at risk",
+			resourceName: "archive-tier",
+			want:         "Latency high. Affects production on archive-tier",
+		},
+		{
+			name:         "VMware legacy alarm strips only its final colour",
+			alertType:    "resource-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Network network-302 has VMware alarm Storage (yellow) (red)",
+			resourceName: "Edge Stateful",
+			want:         "Storage (yellow) on Edge Stateful",
+		},
+		{
+			name:         "VMware alarm recorded before the alarm-name summary on storage",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
 			message:      "Datastore datastore-202 has VMware alarm Datastore latency above threshold (yellow). Affects 2 dependent resources",
 			resourceName: "archive-tier",
 			want:         "Datastore latency above threshold on archive-tier",
@@ -260,9 +442,18 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 		{
 			name:         "VMware host status uses product language",
 			alertType:    "resource-incident",
-			message:      "Host has VMware overall status yellow",
+			incidentCode: "vmware_health_state",
+			message:      "vCenter health is yellow",
 			resourceName: "esxi-07.lab.local",
 			want:         "VMware host health on esxi-07.lab.local",
+		},
+		{
+			name:         "VMware datastore status names the datastore",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_health_state",
+			message:      "vCenter health is yellow",
+			resourceName: "edge-cold-iscsi",
+			want:         "VMware datastore health on edge-cold-iscsi",
 		},
 		{
 			name:         "generic incident avoids incident placeholder",
@@ -294,7 +485,11 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := attentionTitle(alerts.Alert{Type: test.alertType, Message: test.message}, test.resourceName)
+			alert := alerts.Alert{Type: test.alertType, Message: test.message}
+			if test.incidentCode != "" {
+				alert.Metadata = map[string]interface{}{"incidentCode": test.incidentCode}
+			}
+			got := attentionTitle(alert, test.resourceName)
 			if got != test.want {
 				t.Fatalf("attentionTitle() = %q, want %q", got, test.want)
 			}

@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "base_sha": "38ce73c24a7fdf9f3523fbf7f9f9a23ac2be7276",
+  "verified_at": "2026-10-07T10:53:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/physicalDiskAlertOwner.ts",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts",
+    "frontend-modern/src/components/Storage/useStoragePoolDetailModel.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts",
+    "frontend-modern/src/utils/metricThresholds.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "f6617192db42acb3da59297ef86e03e2d01dafc16cb5744ad87f84ffd37f6773",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "0a457320ac9aea99618f9c1be12cd85a59d0536341436b225eeaeadec09896f3",
+    "frontend-modern/src/components/Storage/Storage.tsx": "c1ecf5d710c427f0acc8230728e15648376628b43131f8504f12e0ff841dccff",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx": "faa6896330d7ea74b6886fc3d449fe8bab3b6275f00bf15e7c9d8bb24a1b2d8e",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "0a6401690187f4b3fa886ece2862edb34cf99122e175a1c4806384cdc8e4fed4",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "ce177b691b800852f35ec66267150e6259d3bf9cc65b3492bbe7055879dade7c",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "ad1bc1967c8e4561a943ec12629f3c64ccb0423ebe6551d4a8ccd2c6afe72872",
+    "frontend-modern/src/components/Storage/physicalDiskAlertOwner.ts": "279aa8cd48705a31e91579bdbcf4964495301bb7478a4fa0c4549959596dd9fa",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "b47926cc53cca725a2bca4300742b5ad211103140b809c86140648affa6d5b36",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts": "84aa1e3c298f614a0e2e7da012ea0cc4f7f8993d9fe686d67c7865cd84298de5",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "d274908f0a7fa531921f226936bab93166676904dc8544717f7fa2172ddb37d3",
+    "frontend-modern/src/components/Storage/useStoragePageResources.ts": "adf35ccbe0fcae8d7559177419be0e9086720b6e039632b9c1ea829f7f7bd6c1",
+    "frontend-modern/src/components/Storage/useStoragePoolDetailModel.ts": "7654fbb97eaf9d1ed20b7ef41c73a0061f83f29cb989ded5e3e9b4b65c0e23ef",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "9a35f11b805b2c067afd9aeff08a2cc017caa345a72f1512a8d1bf0fc98b5615",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "74f6b660e4d91bffad9c1c8e7580a7085036bff68e15daaf7709b4c3f615d5e3",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "ce492c2348a7e2a690b2613d0e8c0284b6de37dd5b0c0e63cd32c22bdfe150db",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "75765a1f902eb717aacc995143d750f0fa5957e6217442995566d00592f9effa",
+    "frontend-modern/src/hooks/useWorkloads.ts": "f25d948645c4de8984ff53242f0426c42ee24f2e5f916b4906c80faf50772be1",
+    "frontend-modern/src/types/workloads.ts": "013a5de46caf8c2d968fd1459383f0fcf0fb09efbc924b46c9aa781683d6c5e9",
+    "frontend-modern/src/utils/metricThresholds.ts": "cbe2299b0a2e3b917d7fa8c0c8ccabb2f7a0862708736636c74908f969e5c9ea"
+  },
+  "routes": [
+    "/proxmox/storage?tab=disks&q=West%20Production"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (8 nodes, each with a linked Pulse agent): Vite dev server on this exact staged frontend tree, backend built from the same tree with a local-only generator overlay (never committed) pinning West Production A/B/C NVMe disks at 72C and a pve3 SATA disk at 41C. Each disk's parent is its node's merged agent machine (agent IDs host-node-mock-cluster-1-pve1/2/3)",
+    "Overrides set through GET/PUT /api/alerts/config: host-node-mock-cluster-1-pve1 diskTemperature 80/75, host-node-mock-cluster-1-pve3 disabled; pve2 none. diskTempByType nvme 70/65",
+    "Same-session control with the changed runtime files swapped to origin/main under the running Vite (then restored, full diff cmp-identical): all three NVMe disks read 'Running Hot' with red 72C cells, including pve1 under its 80C override (detail: 'Disk temperature is 72\u00b0C, at or above its 70\u00b0C alert threshold.') and pve3 with alerts off",
+    "After, 1440: pve1 NVMe 72C 'Healthy' with a green cell (rgb(22,163,74)); pve2 NVMe 72C 'Running Hot' with a red cell (rgb(220,38,38)); pve3 NVMe 72C uncoloured (text-base-content) and not hot (its mock SMART health is UNKNOWN, so the verdict reads 'Unknown'), and pve3's other disks lose their threshold colour too; no horizontal overflow (scrollWidth 1440)",
+    "After, 375: same verdicts in compact form (pve1 'Healthy' green, pve2 'Hot' red, pve3 uncoloured); scrollWidth 375",
+    "After, inline disk detail for pve1's NVMe: health 'Healthy' and Temperature 72\u00b0C, agreeing with its row",
+    "After, override moved to pve2's linked Proxmox node ID (mock-cluster-1-pve2, diskTemperature 80/75): pve2's NVMe reads 'Healthy' with a green cell, as CheckHost inherits a linked-node override; config restored afterwards",
+    "Not reachable on the mock estate and covered by unit tests instead: pool-drawer linked disks (storagePoolDetailPresentation/useStoragePoolDetailModel tests), the guest drawer for an agent merged into a VM (GuestPhysicalDisks.test.tsx), and the owner walk through an Unraid pool (physicalDiskAlertOwner.test.ts)"
+  ],
+  "interactions": [
+    "Loaded Physical Disks filtered to West Production at 1440x900 and 375x812 and read each pinned row's verdict, Temp cell class and computed colour, before (main frontend) and after",
+    "Clicked pve1's NVMe row to open its inline disk detail and read its health and temperature",
+    "Changed alert overrides through GET/PUT /api/alerts/config (host-keyed, then node-keyed) and reloaded Physical Disks after each",
+    "Measured document scrollWidth at both widths"
+  ]
+}

@@ -11,7 +11,7 @@ describe('aiControlLevelPresentation', () => {
   it('normalizes legacy and unknown control levels', () => {
     expect(normalizeAIControlLevel('read_only')).toBe('read_only');
     expect(normalizeAIControlLevel('controlled')).toBe('controlled');
-    expect(normalizeAIControlLevel('autonomous')).toBe('autonomous');
+    expect(normalizeAIControlLevel('autonomous')).toBe('controlled');
     expect(normalizeAIControlLevel('suggest')).toBe('controlled');
     expect(normalizeAIControlLevel('unexpected')).toBe('read_only');
     expect(normalizeAIControlLevel(undefined)).toBe('read_only');
@@ -19,15 +19,11 @@ describe('aiControlLevelPresentation', () => {
 
   it('returns canonical panel, badge, and description presentation', () => {
     expect(getAIControlLevelPanelClass('read_only')).toContain('border-blue-200');
-    expect(getAIControlLevelPanelClass('autonomous')).toContain('border-amber-200');
+    expect(getAIControlLevelPanelClass('controlled')).toContain('border-blue-200');
     expect(getAIControlLevelBadgeClass('controlled')).toContain('bg-amber-100');
-    expect(getAIControlLevelBadgeClass('autonomous')).toContain('bg-red-100');
     expect(getAIControlLevelDescription('read_only')).toContain('Assistant can query and explain');
-    expect(getAIControlLevelDescription('controlled')).toContain('asks before chat-only actions');
-    expect(getAIControlLevelDescription('autonomous')).toContain('eligible chat-only actions');
-    expect(getAIControlLevelDescription('autonomous')).toContain(
-      'Infrastructure work stays with Patrol mode',
-    );
+    expect(getAIControlLevelDescription('controlled')).toContain('saves each plan to Actions');
+    expect(getAIControlLevelDescription('controlled')).toContain('Chat does not execute the plan');
   });
 
   it('returns canonical chat control-level presentation', () => {
@@ -38,13 +34,8 @@ describe('aiControlLevelPresentation', () => {
     });
     expect(getAIChatControlLevelPresentation('controlled')).toMatchObject({
       label: 'Ask first',
-      description: 'Asks before chat-only actions',
+      description: 'Plans actions for your review',
       dotClassName: 'bg-amber-500',
-    });
-    expect(getAIChatControlLevelPresentation('autonomous')).toMatchObject({
-      label: 'Chat actions',
-      description: 'Eligible chat-only actions',
-      dotClassName: 'bg-red-500',
     });
   });
 });

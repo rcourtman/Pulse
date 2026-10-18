@@ -86,6 +86,10 @@ func NormalizeMetricEvaluationWindows(input map[string]map[string]int) map[strin
 	return alertconfig.NormalizeMetricEvaluationWindows(input)
 }
 
+func NormalizeHysteresisThreshold(threshold *HysteresisThreshold, defaultTrigger, defaultClear float64, metricName string) *HysteresisThreshold {
+	return alertconfig.NormalizeHysteresisThreshold(threshold, defaultTrigger, defaultClear, metricName)
+}
+
 func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
 	return alertconfig.NormalizeDockerIgnoredPrefixes(prefixes)
 }
@@ -113,6 +117,14 @@ func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
 	alertconfig.EnsureValidHysteresis(threshold, metricName)
 }
+
+// NormalizeDockerDefaults fills unset Docker container thresholds with their
+// factory values and stores an Off count threshold as 0.
+func NormalizeDockerDefaults(config *AlertConfig) { alertconfig.NormalizeDockerDefaults(config) }
+
+// NormalizePMGDefaults fills unset PMG thresholds with their factory values
+// and stores an Off threshold as 0.
+func NormalizePMGDefaults(config *AlertConfig) { alertconfig.NormalizePMGDefaults(config) }
 
 func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnapshotDefaults(config) }
 func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }

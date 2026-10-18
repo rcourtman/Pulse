@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Keep passive agent-authentication triage aligned with the real install flow.
+
+These source/document controls do not authenticate an installed agent or
+establish a reporter's cause. No credential, service or target is accessed.
+"""
+
+from pathlib import Path
+import re
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DOC = ROOT / "docs/UNIFIED_AGENT.md"
+
+
+def section():
+    text = DOC.read_text(encoding="utf-8")
+    marker = "### Agent lookup returns HTTP 401 or 403\n"
+    if marker not in text:
+        raise AssertionError("missing agent authentication triage")
+    return re.split(r"\n#{2,3} ", text.split(marker, 1)[1], 1)[0]
+
+
+class AgentAuthDocsTest(unittest.TestCase):
+    def test_status_explanations_match_authentication_before_scoped_lookup(self):
+        text = " ".join(section().split())
+        routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
+        self.assertIn(
+            '"/api/agents/agent/lookup", RequireAuth(r.config, '
+            'RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup)',
+            routes,
+        )
+        auth = (ROOT / "internal/api/auth.go").read_text()
+        self.assertIn('http.Error(w, "Invalid API token", http.StatusUnauthorized)', auth)
+        scope = (ROOT / "internal/api/apihttp/scope.go").read_text()
+        denial = scope.split("func RespondMissingScope(", 1)[1]
+        self.assertIn("w.WriteHeader(http.StatusForbidden)", denial)
+        self.assertIn('"error":', denial)
+        self.assertIn('"missing_scope"', denial)
+        for fact in ("authenticates the request **before**", "**HTTP 401** is an authentication rejection",
+                     "**HTTP 403** with `missing_scope`", "`agent:report`", "**HTTP 404**",
+                     "upstream authentication layer"):
+            self.assertIn(fact, text)
+
+    def test_normal_install_is_not_conflated_with_bootstrap_enrolment(self):
+        text = " ".join(section().split())
+        install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
+        args = install.split("const getInstallerExtraArgs = () => [", 1)[1].split("];", 1)[0]
+        self.assertNotIn("--enroll", args)
+        scopes = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        host = scopes.split("func HostScopes(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("config.ScopeAgentReport", host)
+        self.assertIn("config.ScopeAgentConfigRead", host)
+        self.assertNotIn("ScopeAgentEnroll", host)
+        prompt = (ROOT / "frontend-modern/src/utils/agentInstallCommand.ts").read_text()
+        self.assertIn('read -r -s -p', prompt)
+        self.assertIn('--token-file "$token_file"', prompt)
+        for fact in ("silent token prompt", "does not change reporting permissions",
+                     "It does not use `--enroll`", "bootstrap token for a runtime token",
+                     "Do not substitute a bootstrap token", "normal host installation"):
+            self.assertIn(fact, text)
+
+    def test_triage_preserves_unknowns_state_and_private_credentials(self):
+        text = " ".join(section().split())
+        host = (ROOT / "internal/hostagent/agent.go").read_text()
+        self.assertIn("Pulse rejected this agent's API token", host)
+        client = (ROOT / "internal/remoteconfig/client.go").read_text()
+        self.assertIn('Str("component", "remote_config_client")', client)
+        for fact in ("bounded agent log reader", "affected agent host", "retrieval and does not establish",
+                     "ordinary host reports were accepted", "successful-looking installer output does not prove",
+                     "No host-report error", "inconclusive", "Do not restart, re-enrol, delete identity",
+                     "same Pulse instance", "do not prove that the running service is using that record",
+                     "service environments, token files and connection files private",
+                     "Do not grant administrator scope", "disable authentication/TLS",
+                     "manually redacted error line", "saved credentials unchanged",
+                     "not itself a reason to reinstall or rotate every token"):
+            self.assertIn(fact, text)
+        self.assertNotIn("```", section(), "Reuse the bounded reader; do not add live credential probes")
+
+    def test_shipped_help_matches_the_canonical_guide(self):
+        self.assertEqual(DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/UNIFIED_AGENT.md").read_bytes())
+
+    def test_inventory_guidance_matches_available_navigation_and_metadata(self):
+        text = " ".join(section().split())
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text()
+        api_entry = re.search(r"id: 'api',\s+label: '([^']+)'", catalog)
+        self.assertIsNotNone(api_entry)
+        self.assertIn(f"Settings → {api_entry.group(1)}", text)
+        inventory = (ROOT / "frontend-modern/src/components/Settings/APITokenManager.tsx").read_text()
+        for field in ("Created", "Last used", "Scopes"):
+            self.assertIn(field, inventory)
+            self.assertIn(f"**{field}**", text)
+        self.assertIn("Security group", text)
+        self.assertNotIn("Security → API Tokens", text)
+        self.assertNotIn("presence, expiry", text)
+        self.assertIn("not a token-use audit", text)
+        self.assertIn("do not share the token or its hint", text)
+
+    def test_dual_rejection_does_not_recommend_another_install_or_assume_a_restore(self):
+        text = " ".join(section().split())
+        for fact in ("both lookup and host reporting return 401", "not a lookup-only failure",
+                     "restore/upgrade explanation is generic", "not an established cause",
+                     "already tried reinstalling", "do not repeat it",
+                     "missing record", "service is presenting the same token"):
+            self.assertIn(fact, text)
+
+    def test_matching_hint_is_not_whole_credential_equality(self):
+        text = " ".join(section().split())
+        for fact in ("matching token hint", "only the visible ends", "whole token",
+                     "duplicated or missing characters in the middle",
+                     "does not establish which step introduced the error",
+                     "Legacy token formats remain supported",
+                     "do not replace a token merely because its length or format differs"):
+            self.assertIn(fact, text)
+        comparison = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func CompareAPIToken(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("HashAPIToken(token)", comparison)
+        self.assertIn("subtle.ConstantTimeCompare", comparison)
+
+    def test_missing_record_check_registers_once_before_touching_the_agent(self):
+        text = " ".join(section().split())
+        install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
+        generation = install.split("const generateInstallToken = async (", 1)[1].split(
+            "const handleGenerateToken = async", 1)[0]
+        self.assertIn("NodesAPI.createHostAgentInstallToken", generation)
+        self.assertIn("enableCommands: withCommands", generation)
+        self.assertNotIn("deleteToken", generation)
+        ui = (ROOT / "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx").read_text()
+        self.assertIn("Generate token", ui)
+        inventory = (ROOT / "internal/api/security_tokens.go").read_text()
+        listing = inventory.split("func (r *Router) handleListAPITokens(", 1)[1].split(
+            "// handleGetAPIToken", 1)[0]
+        self.assertIn("range r.config.APITokens", listing)
+        self.assertIn("toAPITokenDTO(record)", listing)
+        for fact in ("If the intended record is absent", "server registration",
+                     "one new install token a distinct name", "Before running any install command",
+                     "refresh the page", "does not change the Pi or any other agent's saved credential",
+                     "Leave command execution disabled", "missing or disappears, stop there",
+                     "do not generate more tokens", "generation showed an error",
+                     "not persistence across a server restart", "successful credential hand-off",
+                     "accepted host reports", "Retain the existing installation",
+                     "not, by itself, a reason to mint a replacement"):
+            self.assertIn(fact, text)
+
+    def test_docker_only_record_is_not_host_authority_or_a_401_diagnosis(self):
+        text = " ".join(section().split())
+        routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
+        for endpoint, required in (("docker/report", "ScopeDockerReport"),
+                                   ("agent/report", "ScopeAgentReport"),
+                                   ("agent/lookup", "ScopeAgentReport")):
+            self.assertIn(
+                f'"/api/agents/{endpoint}", RequireAuth(r.config, '
+                f'RequireScope(config.{required},', routes,
+            )
+        labels = (ROOT / "frontend-modern/src/constants/apiScopes.ts").read_text()
+        for constant, value, label in (
+            ("AGENT_REPORT_SCOPE", "agent:report", "Agent reporting"),
+            ("AGENT_CONFIG_READ_SCOPE", "agent:config:read", "Agent config fetch"),
+        ):
+            self.assertIn(f"export const {constant} = '{value}';", labels)
+            self.assertIn(f"value: {constant},\n    label: '{label}'", labels)
+            self.assertIn(f"**{label}** (`{value}`)", text)
+        scopes = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        host = scopes.split("func HostScopes(", 1)[1].split("\n}", 1)[0]
+        for required in ("ScopeAgentReport", "ScopeAgentConfigRead"):
+            self.assertIn(f"config.{required}", host)
+        self.assertNotIn("ScopeWildcard", host)
+        self.assertNotIn("ScopeSettingsWrite", host)
+        for fact in ("If the listed record has only Docker reporting", "`docker:report`",
+                     "not the host module's lookup", "scope does not explain an earlier 401",
+                     "Command execution and administrator scope are not required",
+                     "includes both host scopes automatically", "manually selected scope set",
+                     "retain which screen generated it", "do not generate another token",
+                     "broaden its permissions, reinstall or probe the agent"):
+            self.assertIn(fact, text)
+
+    def test_file_format_guidance_matches_the_literal_reader_without_requesting_a_secret(self):
+        text = " ".join(section().split())
+        source = (ROOT / "cmd/pulse-agent/main.go").read_text()
+        reader = source.split("func resolveTokenInternal(", 1)[1].split(
+            "// 3. PULSE_TOKEN", 1)[0]
+        self.assertIn("readFile(tokenFileFlag)", reader)
+        self.assertIn("strings.TrimSpace(string(content))", reader)
+        self.assertNotIn("strings.Trim(", reader)
+        self.assertNotIn("strings.TrimPrefix(", reader)
+        validator = (ROOT / "internal/config/api_tokens.go").read_text().split(
+            "func (c *Config) ValidateAPIToken(", 1)[1].split(
+            "// IsValidAPIToken", 1)[0]
+        self.assertIn("auth.CompareAPIToken(rawToken, record.Hash)", validator)
+        self.assertLess(validator.index("auth.CompareAPIToken"), validator.index("LastUsedAt = &now"))
+        for fact in ("Token-file format is not shell syntax", "not a diagnosis from `Never`",
+                     "not** interpret shell syntax, strip quotes", "The quotes remain part",
+                     "The prefix remains part", "does not prove it matches",
+                     "rejected credential can leave that record showing `Never`",
+                     "Use how the file was saved or an existing private observation",
+                     "say **unknown**", "not the value, length, hint, screenshot or file",
+                     "Do not print, source, upload or edit", "merely to classify it",
+                     "not proof of accepted reporting"):
+            self.assertIn(fact, text)
+        self.assertIn("#token-file-format-is-not-shell-syntax", DOC.read_text())
+
+    def test_first_install_checks_the_whole_current_host_token_privately(self):
+        guide = DOC.read_text(encoding="utf-8")
+        preparation = " ".join(guide.split("### Private-file installation: Linux, macOS and NAS", 1)[1]
+                               .split("2. Replace", 1)[0].split())
+        issuance = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        self.assertIn("rawToken, err := internalauth.GenerateAPIToken()", issuance)
+        generator = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func GenerateAPIToken()", 1)[1].split("// HashAPIToken", 1)[0]
+        self.assertIn("make([]byte, 32)", generator)
+        self.assertIn("hex.EncodeToString(bytes)", generator)
+        for fact in ("Before a first installation", "complete value privately",
+                     "not only its visible ends", "64 lowercase hexadecimal",
+                     "duplicated characters", "internal space or newline",
+                     "not every legacy, manually supplied or bootstrap credential",
+                     "matching shape alone does not authenticate",
+                     "commands, terminal output, screenshots and reports"):
+            self.assertIn(fact, preparation)
+
+    def test_bare_file_can_be_damaged_without_changing_its_hint(self):
+        text = " ".join(section().split())
+        metadata = (ROOT / "internal/config/api_tokens.go").read_text()
+        prefix = metadata.split("func tokenPrefix(", 1)[1].split("// tokenSuffix", 1)[0]
+        suffix = metadata.split("func tokenSuffix(", 1)[1].split("// HasAPITokens", 1)[0]
+        self.assertIn("value[:6]", prefix)
+        self.assertIn("value[len(value)-4:]", suffix)
+        for fact in ("Bare does not mean intact", "Duplicated or missing characters",
+                     "whitespace inside a bare value", "trimming the file's ends does not repair",
+                     "first six and last four characters", "middle characters can leave both ends matching",
+                     "do not prove full equality", "intended Pulse instance or accepted reporting",
+                     "Do not apply this shape check to other token families",
+                     "rotate a working credential because it looks different"):
+            self.assertIn(fact, text)
+        self.assertIn("#private-file-installation-linux-macos-and-nas", section())
+
+
+if __name__ == "__main__":
+    unittest.main()

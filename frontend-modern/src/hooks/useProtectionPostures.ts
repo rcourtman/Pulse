@@ -20,7 +20,6 @@ const EMPTY_POLICY: ProtectionPosturePolicy = {
 const EMPTY_RESPONSE: ProtectionPosturesResponse = {
   data: [],
   policy: EMPTY_POLICY,
-  meta: { page: 1, limit: MAX_PROTECTION_POSTURE_BATCH_SIZE, total: 0, totalPages: 0 },
 };
 
 export function normalizeProtectionPostureResourceIDs(
@@ -64,16 +63,9 @@ async function fetchAllProtectionPostures(
     batches.push(resourceIDs.slice(offset, offset + MAX_PROTECTION_POSTURE_BATCH_SIZE));
   }
   const responses = await Promise.all(batches.map(fetchProtectionPostures));
-  const data = responses.flatMap((response) => response.data ?? []);
   return {
-    data,
+    data: responses.flatMap((response) => response.data ?? []),
     policy: responses[0]?.policy ?? EMPTY_POLICY,
-    meta: {
-      page: 1,
-      limit: MAX_PROTECTION_POSTURE_BATCH_SIZE,
-      total: data.length,
-      totalPages: responses.length,
-    },
   };
 }
 

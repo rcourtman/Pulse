@@ -36,11 +36,16 @@ make_fake_npm() {
     printf 'printf "%%s" "$n" > "$count_file"\n'
     printf 'case "$n" in\n'
     local i=1
+    local status
     for payload in "$@"; do
-      printf '  %d) cat <<'"'"'JSON'"'"'\n%s\nJSON\n  ;;\n' "${i}" "${payload}"
+      status=1
+      if [ "${payload}" = "${CLEAN}" ]; then status=0; fi
+      printf '  %d) cat <<'"'"'JSON'"'"'\n%s\nJSON\n  exit %d\n  ;;\n' "${i}" "${payload}" "${status}"
       i=$((i + 1))
     done
-    printf '  *) cat <<'"'"'JSON'"'"'\n%s\nJSON\n  ;;\n' "${!#}"
+    status=1
+    if [ "${!#}" = "${CLEAN}" ]; then status=0; fi
+    printf '  *) cat <<'"'"'JSON'"'"'\n%s\nJSON\n  exit %d\n  ;;\n' "${!#}" "${status}"
     printf 'esac\n'
     printf 'exit 1\n'
   } > "${path}"

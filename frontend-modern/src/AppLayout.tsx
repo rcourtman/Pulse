@@ -694,7 +694,7 @@ export function AppLayout(props: AppLayoutProps) {
         return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-xs font-semibold`;
       }
       if (needsSetup()) {
-        return `${baseClasses} text-muted opacity-70 bg-base hover:bg-surface-hover`;
+        return `${baseClasses} text-muted opacity-70 hover:bg-surface-hover`;
       }
       return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
     };

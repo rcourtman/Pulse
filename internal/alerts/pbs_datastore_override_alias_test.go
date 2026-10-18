@@ -12,6 +12,7 @@ import (
 // must bridge the two so a UI-written override actually applies (#1591).
 func TestResolveStorageThresholds_HonorsCanonicalPBSDatastoreAlias(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
 	m.UpdateConfig(AlertConfig{
 		Enabled:        true,
 		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},

@@ -254,6 +254,12 @@ func connectionSystemMemberFromResource(
 	if resource.Proxmox == nil || !resource.Proxmox.IsClusterMember {
 		return ConnectionSystemMember{}, "", false
 	}
+	// Disks an agent reports on a cluster node carry the node's Proxmox
+	// identity so they stay discoverable in the Proxmox workspace. Only the
+	// node itself is a member; a disk's health is not the node's liveness.
+	if unified.CanonicalResourceType(resource.Type) != unified.ResourceTypeAgent {
+		return ConnectionSystemMember{}, "", false
+	}
 	nodeName := strings.TrimSpace(resource.Proxmox.NodeName)
 	if nodeName == "" {
 		return ConnectionSystemMember{}, "", false

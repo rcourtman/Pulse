@@ -37,9 +37,6 @@ function makeConfig(overrides: Partial<UIEmailConfig> = {}): UIEmailConfig {
     to: [],
     tls: false,
     startTLS: true,
-    replyTo: '',
-    maxRetries: 3,
-    retryDelay: 5,
     rateLimit: 60,
     ...overrides,
   };
@@ -178,7 +175,6 @@ describe('EmailProviderSelect', () => {
     expect(screen.getByRole('textbox', { name: 'SMTP server' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'SMTP port' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'From address' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Reply-to address' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Username' })).toBeInTheDocument();
     expect(screen.getByLabelText('Password / API key')).toHaveAttribute('type', 'password');
     expect(screen.getByRole('textbox', { name: 'Recipients (one per line)' })).toBeInTheDocument();
@@ -186,8 +182,6 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Show advanced options'));
 
     expect(screen.getByRole('spinbutton', { name: 'Rate limit' })).toBeInTheDocument();
-    expect(screen.getByRole('spinbutton', { name: 'Max retries' })).toBeInTheDocument();
-    expect(screen.getByRole('spinbutton', { name: 'Retry delay (seconds)' })).toBeInTheDocument();
   });
 
   it('loads providers from the API and populates the select', async () => {
@@ -368,19 +362,6 @@ describe('EmailProviderSelect', () => {
     expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ from: 'alerts@myco.com' }));
   });
 
-  it('updates reply-to on input', async () => {
-    render(() => (
-      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
-    ));
-
-    const replyToInput = screen.getByPlaceholderText('admin@example.com');
-    fireEvent.input(replyToInput, { target: { value: 'help@myco.com' } });
-
-    expect(onChangeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ replyTo: 'help@myco.com' }),
-    );
-  });
-
   it('updates username on input', async () => {
     render(() => (
       <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
@@ -458,8 +439,9 @@ describe('EmailProviderSelect', () => {
     fireEvent.click(screen.getByText('Show advanced options'));
     expect(screen.getByText('Security')).toBeInTheDocument();
     expect(screen.getByText('Rate limit')).toBeInTheDocument();
-    expect(screen.getByText('Max retries')).toBeInTheDocument();
-    expect(screen.getByText('Retry delay (seconds)')).toBeInTheDocument();
+    expect(
+      screen.getByText('Email retries are managed by Pulse, not by this form.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Hide advanced options')).toBeInTheDocument();
 
     // Click to hide
@@ -520,66 +502,8 @@ describe('EmailProviderSelect', () => {
     expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ rateLimit: 120 }));
   });
 
-  it('updates max retries via advanced options', async () => {
-    render(() => (
-      <EmailProviderSelect
-        config={makeConfig({ maxRetries: 3 })}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
-    ));
-
-    fireEvent.click(screen.getByText('Show advanced options'));
-
-    const numberInputs = screen.getAllByRole('spinbutton');
-    const retriesInput = numberInputs.find((el) => (el as HTMLInputElement).value === '3');
-    expect(retriesInput).toBeTruthy();
-
-    fireEvent.input(retriesInput!, { target: { value: '5' } });
-    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 5 }));
-  });
-
-  it('updates retry delay via advanced options', async () => {
-    render(() => (
-      <EmailProviderSelect
-        config={makeConfig({ retryDelay: 5 })}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
-    ));
-
-    fireEvent.click(screen.getByText('Show advanced options'));
-
-    const numberInputs = screen.getAllByRole('spinbutton');
-    const delayInput = numberInputs.find((el) => (el as HTMLInputElement).value === '5');
-    expect(delayInput).toBeTruthy();
-
-    fireEvent.input(delayInput!, { target: { value: '15' } });
-    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ retryDelay: 15 }));
-  });
-
-  it('coerces maxRetries=0 to default display value of 3 (known || coercion)', async () => {
-    // NOTE: The source uses `value={props.config.maxRetries || 3}` which
-    // coerces 0 to 3. This test documents the current behavior.
-    // maxRetries has min={0} so 0 is semantically valid but displays as 3.
-    render(() => (
-      <EmailProviderSelect
-        config={makeConfig({ maxRetries: 0 })}
-        onChange={onChangeMock}
-        onTest={onTestMock}
-      />
-    ));
-
-    fireEvent.click(screen.getByText('Show advanced options'));
-
-    const numberInputs = screen.getAllByRole('spinbutton');
-    // With maxRetries=0, the input shows "3" due to || coercion
-    const retriesInput = numberInputs.find((el) => (el as HTMLInputElement).value === '3');
-    expect(retriesInput).toBeTruthy();
-  });
-
   it('coerces rateLimit=0 to default display value of 60 (known || coercion)', async () => {
-    // NOTE: Same || coercion pattern as maxRetries.
+    // The backend interprets the legacy zero sentinel as the default rate limit.
     render(() => (
       <EmailProviderSelect
         config={makeConfig({ rateLimit: 0 })}

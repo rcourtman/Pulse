@@ -10,12 +10,6 @@ from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 from subsystem_lookup import lookup_paths, normalize_input_path, parse_args, render_pretty
 
 
-RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-    "tests/integration/tests/17-recovery-layout.spec.ts",
-]
-
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/api/__tests__/patrolAttention.test.ts",
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
@@ -23,10 +17,12 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
     "frontend-modern/src/features/patrol/__tests__/PatrolObjectivesPanel.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/PatrolRecentWorkPanel.test.tsx",
+    "frontend-modern/src/features/patrol/__tests__/PatrolSetupPanel.render.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolHomePresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",
+    "frontend-modern/src/features/patrol/__tests__/patrolSetupModel.test.ts",
     "frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts",
     "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
     "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
@@ -100,6 +96,38 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 
 class SubsystemLookupTest(unittest.TestCase):
+
+    def test_release_presentation_proofs_do_not_widen_promotion_metadata(self):
+        paths = [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            "docs/releases/RELEASE_NOTES_TEMPLATE.md",
+            "frontend-modern/src/components/WhatsNewCard.tsx",
+            "frontend-modern/src/components/WhatsNewContent.tsx",
+            "frontend-modern/src/components/whatsNewModel.ts",
+            "scripts/capture-release-note-visuals.sh",
+            "scripts/generate-release-notes.sh",
+            "VERSION",
+        ]
+        result = lookup_paths(paths)
+        self.assertEqual(result["unowned_runtime_files"], [])
+        for entry in result["files"]:
+            requirement = next(
+                match["verification_requirement"]
+                for match in entry["matches"]
+                if match["subsystem"] == "deployment-installability"
+            )
+            if entry["path"] == "VERSION":
+                self.assertEqual(requirement["id"], "release-promotion-metadata-runtime")
+                self.assertNotIn(
+                    "scripts/release_control/capture_release_note_visuals.test.mjs",
+                    requirement["exact_files"],
+                )
+            else:
+                self.assertEqual(requirement["id"], "release-note-presentation")
+                self.assertIn(
+                    "scripts/release_control/capture_release_note_visuals.test.mjs",
+                    requirement["exact_files"],
+                )
 
     def test_demo_transaction_sources_have_connected_proof_without_widening_release_metadata(self):
         for path in (".github/scripts/demo-runtime-transaction.py", ".github/scripts/dispatch-demo-runtime.py",
@@ -378,11 +406,11 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_unified_resource_table_state_model_to_shared_infrastructure_hot_path(
+    def test_lookup_paths_assigns_resource_detail_mappers_to_shared_infrastructure_hot_path(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts"]
+            ["frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -426,7 +454,7 @@ class SubsystemLookupTest(unittest.TestCase):
             "resource-consumers",
         )
         self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+            "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
             unified_resources_match["verification_requirement"]["exact_files"],
         )
 
@@ -456,7 +484,7 @@ class SubsystemLookupTest(unittest.TestCase):
             "resource-consumers",
         )
         self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
+            "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
             match["verification_requirement"]["exact_files"],
         )
 
@@ -665,6 +693,15 @@ class SubsystemLookupTest(unittest.TestCase):
 
     def test_lookup_paths_reports_retired_dashboard_overview_as_unowned(self) -> None:
         path = "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(file_entry["matches"], [])
+
+    def test_lookup_paths_reports_retired_problem_resource_helper_as_unowned(self) -> None:
+        path = "frontend-modern/src/utils/problemResourcePresentation.ts"
         result = lookup_paths([path])
         self.assertEqual(result["unowned_runtime_files"], [path])
         self.assertEqual(result["impacted_subsystems"], [])
@@ -3722,16 +3759,13 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L1")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "deployment-script-runtime",
+            "unattended-update-runtime",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
-                "scripts/installtests/install_docker_sh_test.go",
-                "scripts/installtests/install_ps1_test.go",
-                "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/pulse_auto_update_consent_test.go",
                 "scripts/installtests/pulse_auto_update_test.go",
-                "scripts/installtests/root_install_sh_test.go",
             ],
         )
 
@@ -4262,6 +4296,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/monitor_pbs_coverage_test.go",
                 "internal/monitoring/monitor_pmg_test.go",
                 "internal/monitoring/monitor_polling_test.go",
+                "internal/monitoring/truenas_disk_history_scope_test.go",
                 "internal/monitoring/truenas_poller_test.go",
             ],
         )
@@ -4539,23 +4574,6 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_discovery_tab_state_owner_to_unified_resources(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Discovery/useDiscoveryTabState.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(len(file_entry["matches"]), 1)
-
-        match = file_entry["matches"][0]
-        self.assertEqual(match["subsystem"], "unified-resources")
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/unified-resources.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L13")
-        self.assertEqual(match["verification_requirement"]["id"], "resource-consumers")
-
     def test_lookup_paths_reports_dependent_contract_updates_for_shared_canonical_file(self) -> None:
         result = lookup_paths(["internal/unifiedresources/views.go"])
         file_entry = result["files"][0]
@@ -4715,6 +4733,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/commands_host_update_test.go",
                 "internal/hostagent/commands_storage_cleanup_test.go",
                 "internal/hostagent/docker_lifecycle_test.go",
+                "internal/hostagent/enroll_test.go",
                 "internal/hostagent/issue1595_sas_collection_test.go",
                 "internal/hostagent/observer_delivery_test.go",
                 "internal/hostagent/package_updates_test.go",

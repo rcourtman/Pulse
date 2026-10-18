@@ -5,13 +5,14 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 
@@ -71,6 +73,10 @@ type BusinessHooks struct {
 	// BindReportingAdminEndpoints allows enterprise modules to replace or decorate
 	// reporting admin endpoints without importing internal API packages.
 	BindReportingAdminEndpoints extensions.BindReportingAdminEndpointsFunc
+
+	// GenerateBackupHealthReport supplies private backup report rendering while
+	// the public scheduler retains evidence, entitlement and delivery ownership.
+	GenerateBackupHealthReport extensions.GenerateBackupHealthReportFunc
 
 	// BindAIAutoFixEndpoints allows enterprise modules to replace or decorate
 	// safe remediation endpoints (investigation, remediation, autonomy, fix execution).
@@ -127,6 +133,7 @@ func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdenti
 		h.BindRBACAdminEndpoints != nil ||
 		h.BindSSOAdminEndpoints != nil ||
 		h.BindReportingAdminEndpoints != nil ||
+		h.GenerateBackupHealthReport != nil ||
 		h.BindAIAutoFixEndpoints != nil ||
 		h.BindAIAlertAnalysisEndpoints != nil ||
 		h.AIInvestigationEnabled != nil ||
@@ -166,7 +173,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 		return err
 	}
 
-	// Check for auto-import on first startup
+	// Bootstrap only a blank destination, before ordinary loading creates state.
 	if ShouldAutoImport() {
 		if err := PerformAutoImport(); err != nil {
 			log.Error().Err(err).Msg("Auto-import failed, continuing with normal startup")
@@ -363,6 +370,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	bindAuditAdminEndpoints := globalHooks.BindAuditAdminEndpoints
 	bindSSOAdminEndpoints := globalHooks.BindSSOAdminEndpoints
 	bindReportingAdminEndpoints := globalHooks.BindReportingAdminEndpoints
+	generateBackupHealthReport := globalHooks.GenerateBackupHealthReport
 	bindAIAutoFixEndpoints := globalHooks.BindAIAutoFixEndpoints
 	bindAIAlertAnalysisEndpoints := globalHooks.BindAIAlertAnalysisEndpoints
 	aiInvestigationEnabled := globalHooks.AIInvestigationEnabled
@@ -382,6 +390,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)
 	api.SetReportingAdminEndpointsBinder(bindReportingAdminEndpoints)
+	api.SetBackupHealthReportGenerator(generateBackupHealthReport)
 	api.SetAIAutoFixEndpointsBinder(bindAIAutoFixEndpoints)
 	api.SetAIAlertAnalysisEndpointsBinder(bindAIAlertAnalysisEndpoints)
 
@@ -400,18 +409,10 @@ func Run(ctx context.Context, version string) (runErr error) {
 
 	// Initialize reporting engine if not already set by enterprise hooks.
 	// This ensures Pro license holders get reporting even with the standard binary.
-	// Uses a dynamic store getter so the engine always queries the current monitor's
-	// metrics store, even after monitor reloads (which close and recreate the store).
+	// Each report reads only its own organization's metrics store.
 	if reporting.GetEngine() == nil {
-		if store := reloadableMonitor.GetMonitor().GetMetricsStore(); store != nil {
-			engine := reporting.NewReportEngine(reporting.EngineConfig{
-				MetricsStoreGetter: func() *metrics.Store {
-					return reloadableMonitor.GetMonitor().GetMetricsStore()
-				},
-			})
-			reporting.SetEngine(engine)
-			log.Info().Msg("Advanced Infrastructure Reporting (PDF/CSV) initialized")
-		}
+		reporting.SetEngine(newOrgScopedReportEngine(reloadableMonitor.GetMultiTenantMonitor))
+		log.Info().Msg("Advanced Infrastructure Reporting (PDF/CSV) initialized")
 	}
 
 	// WebSocket state ownership is tenant-aware by construction, including default-org state.
@@ -633,14 +634,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 			// Feature flags from persisted config (using pre-created persistence).
 			snap.AIProviderClass = telemetry.AIProviderClassNone
 			if aiCfg, err := telemetryPersistence.LoadAIConfig(); err == nil && aiCfg != nil {
-				snap.AIEnabled = aiCfg.Enabled
-				// Closed route class only; provider, model, endpoint, and
-				// account identity never enter the snapshot.
-				snap.AIProviderClass = telemetry.ClassifyAIProviderClass(aiCfg)
-				snap.PatrolEnabled = aiCfg.IsPatrolEnabled()
-				snap.DiscoveryEnabled = snap.DiscoveryEnabled || aiCfg.IsDiscoveryEnabled()
-				snap.AIActionsEnabled = aiCfg.IsControlEnabled()
-				snap.AlertAIEnabled = aiCfg.IsAlertTriggeredAnalysisEnabled()
+				applyAIConfigTelemetrySnapshot(&snap, aiCfg)
 			}
 			if relayCfg, err := telemetryPersistence.LoadRelayConfig(); err == nil {
 				snap.RelayEnabled = relayCfg.Enabled
@@ -1070,14 +1064,66 @@ func startMetricsServer(ctx context.Context, addr string, metricsToken string, a
 }
 
 func ShouldAutoImport() bool {
-	configPath := config.ResolveRuntimeDataDir("")
-
-	if _, err := os.Stat(filepath.Join(configPath, "nodes.enc")); err == nil {
+	if os.Getenv("PULSE_INIT_CONFIG_DATA") == "" && os.Getenv("PULSE_INIT_CONFIG_FILE") == "" {
 		return false
 	}
 
-	return os.Getenv("PULSE_INIT_CONFIG_DATA") != "" ||
-		os.Getenv("PULSE_INIT_CONFIG_FILE") != ""
+	if err := checkAutoImportDestination(config.ResolveRuntimeDataDir("")); err != nil {
+		log.Warn().Err(err).Msg("Startup auto-import skipped; destination state is retained")
+		return false
+	}
+	return true
+}
+
+var (
+	errAutoImportDestinationNotEmpty = errors.New("startup import requires an empty data directory; use authenticated Recovery for an existing installation")
+	errAutoImportDestinationUnknown  = errors.New("cannot inspect the startup import destination; resolve its path and access before importing")
+)
+
+// checkAutoImportDestination must not construct persistence: doing so creates
+// an encryption key before admission. nodes.enc is not a first-run marker for
+// agent-only, TrueNAS or vSphere installations. Retain every unknown entry too,
+// so new persistence stores cannot silently fall outside the bootstrap guard.
+// A regular .env is the only exception for pre-start deployment overrides;
+// keep the input archive outside the destination, not alongside retained state.
+func checkAutoImportDestination(dataDir string) error {
+	// Inspect the exact path persistence will use. Raw symlink/.. traversal or
+	// trailing separators can otherwise inspect a different directory, or hide
+	// the final directory link from Lstat.
+	dataDir, err := securityutil.NormalizeStorageDir(dataDir)
+	if err != nil {
+		return errAutoImportDestinationUnknown
+	}
+	info, err := os.Lstat(dataDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil || !info.IsDir() {
+		return errAutoImportDestinationUnknown
+	}
+	dir, err := os.Open(dataDir)
+	if err != nil {
+		return errAutoImportDestinationUnknown
+	}
+	defer dir.Close()
+
+	// Read one entry at a time: admission does not need an unbounded listing,
+	// file contents, decryption or an attempt to repair the destination.
+	for {
+		entries, err := dir.ReadDir(1)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return errAutoImportDestinationUnknown
+		}
+		for _, entry := range entries {
+			if entry.Name() == ".env" && entry.Type().IsRegular() {
+				continue
+			}
+			return errAutoImportDestinationNotEmpty
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+	}
 }
 
 func PerformAutoImport() error {
@@ -1131,6 +1177,17 @@ func PerformAutoImport() error {
 	}
 
 	configPath := config.ResolveRuntimeDataDir("")
+	// Do not rely on an earlier ShouldAutoImport result or a caller using it.
+	// This is a pre-write recheck, not a lock against another Pulse process;
+	// provisioning still requires an isolated destination.
+	if err := checkAutoImportDestination(configPath); err != nil {
+		reason := "destination_unavailable"
+		if errors.Is(err, errAutoImportDestinationNotEmpty) {
+			reason = "destination_not_empty"
+		}
+		logAudit(false, reason)
+		return err
+	}
 
 	persistence := config.NewConfigPersistence(configPath)
 	if err := persistence.ImportConfig(encryptedData, configPass); err != nil {

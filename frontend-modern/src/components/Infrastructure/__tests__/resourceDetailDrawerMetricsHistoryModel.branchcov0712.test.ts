@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getResourceMetricsHistoryCurrentMetrics,
+  getResourceMetricsHistoryDeferredMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
 import type { MetricsHistoryTargetResourceType, Resource } from '@/types/resource';
+import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 
 // Minimal valid Resource fixture; mirrors the baseResource() convention used by
 // sibling branchcov tests in this directory.
@@ -20,6 +22,256 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   status: 'online',
   lastSeen: 1_700_000_000_000,
   ...overrides,
+});
+
+describe('canonical drawer History honours selected guest observation provenance', () => {
+  const resource = (
+    state: string,
+    value = 25,
+    observedAt: string | undefined = '2026-10-04T12:00:00Z',
+  ) =>
+    baseResource({
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      memory: { current: value, observation: { state, source: 'guest-agent-meminfo', observedAt } },
+      disk: { current: 50 },
+      cpu: { current: 10 },
+      network: { rxBytes: 0, txBytes: 200 },
+      proxmox: { diskStatusReason: 'prev-vm-locked' },
+    });
+
+  it.each(['vm', 'system-container'] as const)(
+    'retains %s memory with its original time, not Last seen',
+    (type) => {
+      const value = {
+        ...resource('last-known'),
+        type,
+        lastSeen: Date.parse('2026-10-05T00:00:00Z'),
+      };
+      expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+        memory: undefined,
+        cpu: 10,
+        netin: 0,
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+        lastKnownValue: 25,
+        message: expect.stringContaining('2026-10-04 12:00:00 UTC'),
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toContain(
+        '2026-10-05',
+      );
+      // Container disk usage is not a QEMU guest-agent filesystem read.
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBe(
+        type === 'vm' ? undefined : 50,
+      );
+    },
+  );
+
+  it('qualifies a retained Proxmox listing reading by the guest kind', () => {
+    const listing = (type: 'vm' | 'system-container') => {
+      const value = { ...resource('last-known'), type };
+      value.memory!.observation!.source = 'cluster-resources';
+      return getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+    };
+    // A QEMU listing counts the guest's cache; a container's has it removed.
+    expect(listing('vm')).toContain('cached memory the VM can reuse');
+    expect(listing('system-container')).not.toContain('cached memory');
+    expect(listing('system-container')).toContain('Source: Proxmox.');
+  });
+
+  it.each([-1, 101, NaN, Infinity])('withdraws invalid retained memory %s', (value) => {
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('last-known', value)).memory.lastKnownValue,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryCurrentMetrics(resource('last-known', value)).memory,
+    ).toBeUndefined();
+  });
+
+  it.each([undefined, 'invalid', '0001-01-01T00:00:00Z', '2999-01-01T00:00:00Z'])(
+    'does not promote unusable current timestamps %s',
+    (observedAt) => {
+      const value = resource('current');
+      value.memory!.observation!.observedAt = observedAt;
+      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+        lastKnownValue: 25,
+        valueLabel: 'freshness unknown',
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+        'Observation time unknown.',
+      );
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toMatch(
+        /invalid|2999|0001/,
+      );
+    },
+  );
+
+  it('retains a legitimate linked-agent filesystem zero without calling it current', () => {
+    const value = resource('current', 0);
+    value.disk = { current: 0, used: 0, total: 100 };
+    value.proxmox = { runtimeStatus: 'running', diskStatusReason: '' };
+    value.agent = { stale: true, disks: [{ mountpoint: '/', used: 0, total: 100, free: 100 }] };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+      disk: undefined,
+      usage: undefined,
+      memory: 0,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+      lastKnownValue: 0,
+      message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+    });
+  });
+
+  it('keeps unavailable, true zero and independent current memory distinct from disk deferral', () => {
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('unavailable', 0)).memory.lastKnownValue,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('last-known', 0)).memory.lastKnownValue,
+    ).toBe(0);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource('current', 0)).memory).toBe(0);
+    expect(getResourceMetricsHistoryDeferredMetrics(resource('current', 0)).memory).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('current', 0)).disk.lastKnownValue,
+    ).toBe(50);
+  });
+
+  it('qualifies unannotated Proxmox memory but leaves unrelated platforms unchanged', () => {
+    const value = resource('current');
+    delete value.memory!.observation;
+    expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory.valueLabel).toBe(
+      'freshness unknown',
+    );
+    const vsphere = { ...value, platformType: 'vmware-vsphere' as const };
+    expect(getResourceMetricsHistoryCurrentMetrics(vsphere)).toMatchObject({
+      memory: 25,
+      disk: 50,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(vsphere)).toEqual({});
+    const scoped = { ...vsphere, platformScopes: ['proxmox-pve'] };
+    expect(getResourceMetricsHistoryCurrentMetrics(scoped).memory).toBeUndefined();
+    const agent = {
+      ...resource('last-known'),
+      type: 'agent' as const,
+      platformType: 'agent' as const,
+    };
+    expect(getResourceMetricsHistoryDeferredMetrics(agent).memory.lastKnownValue).toBe(25);
+    expect(getResourceMetricsHistoryDeferredMetrics(agent).disk).toBeUndefined();
+  });
+
+  it('does not echo unrecognised source or state text', () => {
+    const value = resource('private raw state');
+    value.memory!.observation!.source = 'private raw source';
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+      valueLabel: 'freshness unknown',
+      message: expect.stringContaining('Unknown source'),
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toContain(
+      'private raw',
+    );
+  });
+
+  it.each(guestDiskDeferrals)(
+    'qualifies both retained and unavailable filesystem %s readings',
+    (reason, message) => {
+      const value = resource('current');
+      value.proxmox!.diskStatusReason = `prev-${reason}`;
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+        lastKnownValue: 50,
+        message: `Using last known disk stats. ${message}`,
+      });
+      value.proxmox!.diskStatusReason = reason;
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+        lastKnownValue: undefined,
+        message,
+      });
+      value.proxmox!.diskStatusReason = '';
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBe(50);
+    },
+  );
+
+  it.each(['stopped', ' STOPPED ', 'offline'])(
+    'withdraws native %s VM disk carriers before considering a retained read reason',
+    (runtimeStatus) => {
+      for (const diskStatusReason of ['', 'prev-agent-busy']) {
+        const value = resource('current', 0);
+        value.proxmox = { runtimeStatus, diskStatusReason };
+        expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+          disk: undefined,
+          usage: undefined,
+          memory: 0,
+          cpu: 10,
+          netin: 0,
+        });
+        expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+          lastKnownValue: undefined,
+          message: 'Guest filesystem stats unavailable while the VM is stopped.',
+        });
+        value.lastSeen += 3600000;
+        expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+      }
+    },
+  );
+
+  it('uses native running state over canonical offline, keeping accepted zero current', () => {
+    const value = resource('current');
+    value.status = 'offline';
+    value.proxmox = { runtimeStatus: ' RUNNING ', diskStatusReason: '' };
+    value.disk = { current: 0 };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 0, usage: 0 });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+    value.proxmox.diskStatusReason = 'vm-stopped';
+    expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+  });
+
+  it.each([undefined, '', '   '])(
+    'uses canonical offline only when native state is absent (%s)',
+    (runtimeStatus) => {
+      const value = resource('current');
+      value.status = 'offline';
+      value.proxmox = { runtimeStatus };
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk.message).toContain(
+        'VM is stopped',
+      );
+    },
+  );
+
+  it('honours native power for a VM with Proxmox among its platform scopes', () => {
+    const value = resource('current');
+    value.platformType = 'agent';
+    value.platformScopes = ['agent', 'proxmox-pve'];
+    value.proxmox = { runtimeStatus: 'stopped' };
+    expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
+  });
+
+  it.each(['system-container', 'storage', 'physical_disk', 'agent'] as const)(
+    'does not apply VM filesystem power/read rules to independent %s metrics',
+    (type) => {
+      const value = resource('current');
+      value.type = type;
+      value.status = 'offline';
+      value.proxmox = { runtimeStatus: 'stopped', diskStatusReason: 'prev-agent-busy' };
+      expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 50, usage: 50 });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+    },
+  );
+
+  it('leaves a vSphere-only VM independent of Proxmox power/read metadata', () => {
+    const value = resource('current');
+    value.platformType = 'vmware-vsphere';
+    value.platformScopes = ['vmware-vsphere'];
+    value.status = 'offline';
+    value.proxmox = { runtimeStatus: 'stopped', diskStatusReason: 'prev-agent-busy' };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({ disk: 50, usage: 50 });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+  });
 });
 
 describe('getResourceMetricsHistoryTarget branch coverage', () => {
@@ -366,6 +618,66 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
       diskwrite: 2048,
       smart_temp: 41,
     });
+  });
+
+  it('offers a retained physical disk temperature only as last known, with its reason', () => {
+    // useUnifiedResources copies physicalDisk.temperature onto the resource.
+    // A disk in standby keeps its last reading under an unavailable state, so
+    // with no history points the chart must not label it current.
+    const disk = (state?: 'available' | 'unavailable', temperature = 47) =>
+      baseResource({
+        type: 'physical_disk',
+        metricsTarget: { resourceType: 'disk', resourceId: 'SERIAL-1' },
+        temperature,
+        physicalDisk: {
+          devPath: '/dev/sdb',
+          temperature,
+          collection: state
+            ? { temperature: { state, source: 'smartctl', reason: 'disk is in standby' } }
+            : undefined,
+        },
+      });
+
+    expect(getResourceMetricsHistoryCurrentMetrics(disk('unavailable'))).toMatchObject({
+      smart_temp: undefined,
+      temperature: undefined,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(disk('unavailable')).smart_temp).toEqual({
+      lastKnownValue: 47,
+      message: 'Last known reading, not current: disk is in standby.',
+    });
+    // An unavailable state with no retained reading has nothing to offer.
+    expect(getResourceMetricsHistoryCurrentMetrics(disk('unavailable', 0)).smart_temp).toBe(
+      undefined,
+    );
+    expect(getResourceMetricsHistoryDeferredMetrics(disk('unavailable', 0)).smart_temp).toBe(
+      undefined,
+    );
+
+    for (const current of [disk('available'), disk()]) {
+      expect(getResourceMetricsHistoryCurrentMetrics(current).smart_temp).toBe(47);
+      expect(getResourceMetricsHistoryDeferredMetrics(current).smart_temp).toBeUndefined();
+    }
+
+    // Websocket rows carry the reading only on physicalDisk, beside its state.
+    const websocketRow = (state: 'available' | 'unavailable') => {
+      const row = disk(state);
+      delete row.temperature;
+      return row;
+    };
+    expect(getResourceMetricsHistoryCurrentMetrics(websocketRow('available')).smart_temp).toBe(47);
+    expect(
+      getResourceMetricsHistoryCurrentMetrics(websocketRow('unavailable')).smart_temp,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(websocketRow('unavailable')).smart_temp,
+    ).toMatchObject({ lastKnownValue: 47 });
+
+    // A top-level value never stands in for the disk's own missing reading,
+    // which the disk's collection state could not qualify.
+    const unpaired = disk('available');
+    delete unpaired.physicalDisk!.temperature;
+    expect(getResourceMetricsHistoryCurrentMetrics(unpaired).smart_temp).toBeUndefined();
   });
 
   it('uses the source-aware host subset for API-only Proxmox node targets', () => {

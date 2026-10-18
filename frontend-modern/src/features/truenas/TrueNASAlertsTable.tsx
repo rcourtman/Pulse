@@ -38,6 +38,7 @@ import {
   formatPlatformAlertResourceType,
   formatPlatformAlertStartedAt,
 } from '@/utils/alertDetailPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -116,6 +117,7 @@ export const TrueNASAlertsTable: Component<{
   emptyDescription: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.incidents,
     initialStatus: 'all' as TrueNASIncidentSeverityFilter,
@@ -280,7 +282,9 @@ export const TrueNASAlertsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatPlatformAlertStartedAt(incident.startedAt)}
+                            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
+                              {formatPlatformAlertStartedAt(incident.startedAt, now())}
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}

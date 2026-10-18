@@ -252,6 +252,20 @@ describe('EnhancedCPUBar', () => {
       expect(screen.getByText('CPU Details')).toBeInTheDocument();
     });
 
+    it('names the CPU count shown beside the percentage', async () => {
+      const { container } = render(() => <EnhancedCPUBar usage={22} cores={18} />);
+      expect(container.textContent).toContain('(18)');
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      const label = screen.getByText('CPUs');
+      expect(label.closest('.flex.justify-between')?.textContent).toContain('18');
+    });
+
+    it('omits the CPU row when the count is unknown', async () => {
+      const { container } = render(() => <EnhancedCPUBar usage={22} />);
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      expect(screen.queryByText('CPUs')).not.toBeInTheDocument();
+    });
+
     it('shows usage value in tooltip', async () => {
       const { container } = render(() => <EnhancedCPUBar usage={72} />);
       await fireEvent.mouseEnter(getBarTrigger(container));

@@ -111,7 +111,6 @@ export interface UseChatOptions {
 
 export interface SendMessageOptions {
   model?: string;
-  autonomousMode?: boolean;
   handoffContext?: string;
   handoffResources?: ChatHandoffResource[];
   handoffActions?: ChatHandoffAction[];
@@ -1158,9 +1157,6 @@ export function useChat(options: UseChatOptions = {}) {
     if (request.model) {
       cloned.model = request.model;
     }
-    if (typeof request.autonomousMode === 'boolean') {
-      cloned.autonomousMode = request.autonomousMode;
-    }
     if (request.handoffContext) {
       cloned.handoffContext = request.handoffContext;
     }
@@ -1187,9 +1183,6 @@ export function useChat(options: UseChatOptions = {}) {
     if (modelRoute) {
       requestContext.model = modelRoute;
     }
-    if (typeof sendOptions.autonomousMode === 'boolean') {
-      requestContext.autonomousMode = sendOptions.autonomousMode;
-    }
     if (sendOptions.handoffContext) {
       requestContext.handoffContext = sendOptions.handoffContext;
     }
@@ -1215,9 +1208,6 @@ export function useChat(options: UseChatOptions = {}) {
     const next: SendMessageOptions = {};
     if (modelRoute) {
       next.model = modelRoute;
-    }
-    if (typeof sendOptions?.autonomousMode === 'boolean') {
-      next.autonomousMode = sendOptions.autonomousMode;
     }
     if (sendOptions?.handoffContext) {
       next.handoffContext = sendOptions.handoffContext;
@@ -1262,9 +1252,6 @@ export function useChat(options: UseChatOptions = {}) {
     const sendOptions: SendMessageOptions = {};
     if (request.model) {
       sendOptions.model = request.model;
-    }
-    if (typeof request.autonomousMode === 'boolean') {
-      sendOptions.autonomousMode = request.autonomousMode;
     }
     if (request.handoffContext) {
       sendOptions.handoffContext = request.handoffContext;
@@ -2106,7 +2093,6 @@ export function useChat(options: UseChatOptions = {}) {
         abortController.signal,
         mentions,
         findingId,
-        requestSendOptions?.autonomousMode,
         requestSendOptions?.handoffContext,
         requestSendOptions?.handoffResources,
         requestSendOptions?.handoffActions,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createEffect, createRoot } from 'solid-js';
 
 // Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024;
@@ -278,6 +278,45 @@ describe('websocket store resilience', () => {
       expect(store.activeAlerts[recoveredAlert.id]).toMatchObject(recoveredAlert);
       expect(store.state.activeAlerts).toHaveLength(1);
     } finally {
+      dispose();
+    }
+  });
+
+  // History waits for "ready" before deciding a linked alert is not firing;
+  // the status must never be observable before the alerts it vouches for.
+  it('publishes ready together with the recovered alerts', async () => {
+    autoOpenSockets = false;
+    const recoveredAlert = {
+      id: 'agent:host-3-disk',
+      type: 'disk',
+      level: 'warning',
+      resourceId: 'agent:host-3',
+      resourceName: 'host-3',
+      node: 'host-3',
+      instance: 'host-3',
+      message: 'Disk above threshold',
+      value: 91,
+      threshold: 90,
+      startTime: '2026-05-14T07:57:00Z',
+      acknowledged: false,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([recoveredAlert]);
+    const { store, dispose } = await createStoreHarness();
+    const seen: number[] = [];
+    const disposeObserver = createRoot((disposeRoot) => {
+      createEffect(() => {
+        if (store.activeAlertsHydrationStatus() === 'ready') {
+          seen.push(Object.keys(store.activeAlerts).length);
+        }
+      });
+      return disposeRoot;
+    });
+    try {
+      currentInstance!.onclose?.({ code: 1006, reason: '' } as CloseEvent);
+      await flushMicrotasks();
+      expect(seen).toEqual([1]);
+    } finally {
+      disposeObserver();
       dispose();
     }
   });

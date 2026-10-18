@@ -200,7 +200,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                           <Show when={call.input}>
                             <div>
                               <div class="text-[10px] font-medium text-muted mb-1">Input</div>
-                              <pre class="text-[11px] font-mono bg-base rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
+                              <pre class="text-[11px] font-mono bg-page rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                                 {truncate(call.input, 500)}
                               </pre>
                             </div>
@@ -208,7 +208,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                           <Show when={call.output}>
                             <div>
                               <div class="text-[10px] font-medium text-muted mb-1">Output</div>
-                              <pre class="text-[11px] font-mono bg-base rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
+                              <pre class="text-[11px] font-mono bg-page rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                                 {truncate(call.output, 500)}
                               </pre>
                             </div>

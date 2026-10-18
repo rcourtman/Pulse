@@ -7,8 +7,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'pricing.handoff.link.pulseAccount': 'continua a Pulse Account',
   'pricing.handoff.title.publicPricing': 'Redirigiendo a precios',
   'pricing.handoff.title.pulseAccount': 'Redirigiendo a Pulse Account',
-  'alerts.activation.label.enabled': 'Notificaciones activadas',
-  'alerts.activation.label.disabled': 'Notificaciones pausadas',
+  'alerts.activation.switchLabel': 'Enviar notificaciones',
   'alerts.activation.toast.activated':
     'Notificaciones activadas. Ahora recibiras avisos cuando se detecten problemas.',
   'alerts.activation.toast.activateFailed':
@@ -41,6 +40,9 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.subject': '{level} {alertType} en {resourceName}',
   'alerts.assistant.title': 'Investigacion de alerta adjunta',
   'alerts.assistant.unlockedTitle': 'Preguntar a Pulse Assistant sobre esta alerta',
+  'alerts.assistant.iconLabel': 'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}',
+  'alerts.assistant.iconLabelAt':
+    'Preguntar a Pulse Assistant sobre {alertType} en {resourceName}, {startedAt}',
   'alerts.assistant.explain.menuLabel': 'Explicar con Assistant',
   'alerts.assistant.explain.menuHint': 'Usar esta alerta como contexto de solo lectura',
   'alerts.assistant.patrol.chevron': 'Mas acciones para esta alerta',
@@ -55,13 +57,14 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.nav.collapseSidebar': 'Contraer barra lateral',
   'alerts.nav.expandSidebar': 'Expandir barra lateral',
   'alerts.nav.title': 'Alertas',
-  'alerts.nav.toggleAlerts': 'Alternar notificaciones externas',
   'alerts.overview.action.acknowledge': 'Reconocer',
   'alerts.overview.action.acknowledgeAll': 'Reconocer todas ({count})',
   'alerts.overview.action.acknowledging': 'Reconociendo...',
   'alerts.overview.action.cancel': 'Cancelar',
   'alerts.overview.action.hideAcknowledged': 'Ocultar reconocidas',
   'alerts.overview.action.hideTimeline': 'Ocultar linea de tiempo',
+  'alerts.overview.action.moreActions': 'Más',
+  'alerts.overview.action.lessActions': 'Menos',
   'alerts.overview.action.processing': 'Procesando...',
   'alerts.overview.action.resume': 'Reanudar',
   'alerts.overview.action.showAcknowledged': 'Mostrar reconocidas',
@@ -119,6 +122,23 @@ export const ES_MESSAGE_OVERRIDES = {
     'Activa las alertas para reanudar la monitorizacion y desbloquear las pestañas de configuracion',
   'alerts.overview.paused.title': 'Las alertas estan pausadas',
   'alerts.overview.section.activeAlerts': 'Alertas activas',
+  'alerts.overview.summary.warning': '{count} de aviso',
+  'alerts.overview.summary.critical': '{count} críticas',
+  'alerts.delivery.paused.title': 'Las notificaciones están en pausa',
+  'alerts.delivery.paused.action': 'Activar el envío',
+  'alerts.delivery.paused.setupLink': 'Configurar adónde van las alertas',
+  'alerts.delivery.paused.reason.detectionOff':
+    'Las alertas están desactivadas en la configuración de alertas.',
+  'alerts.delivery.paused.reason.snoozed': 'El envío de notificaciones está pospuesto.',
+  'alerts.delivery.paused.reason.notActivated': 'El envío de notificaciones está desactivado.',
+  'alerts.delivery.paused.consequence.destinations':
+    'Pulse sigue detectando alertas, pero ninguna se enviará a los destinos de abajo. Los mensajes de prueba omiten la pausa, así que una prueba correcta no significa que las alertas reales lleguen.',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff':
+    'Mientras las alertas estén desactivadas, Pulse no genera alertas nuevas y ninguna se enviará a los destinos de abajo. Los mensajes de prueba omiten la pausa, así que una prueba correcta no significa que las alertas reales lleguen.',
+  'alerts.delivery.paused.consequence.overview':
+    'Pulse sigue detectando las alertas de abajo, pero nadie recibe avisos sobre ellas.',
+  'alerts.delivery.paused.consequence.overviewDetectionOff':
+    'Mientras las alertas estén desactivadas, Pulse no genera alertas nuevas y nadie recibe avisos.',
   'alerts.overview.snooze.description':
     'Pausa las notificaciones y el escalado de este incidente. La monitorizacion continua y la resolucion se sigue detectando.',
   'alerts.overview.snooze.option.eightHours': 'Durante 8 horas',
@@ -146,7 +166,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.page.overview.title': 'Resumen de alertas',
   'alerts.page.schedule.description':
     'Define horas de silencio, agrupacion, enfriamiento, recuperacion y escalado para la entrega de alertas.',
-  'alerts.page.schedule.title': 'Programacion de mantenimiento',
+  'alerts.page.schedule.title': 'Programacion de entregas',
   'alerts.page.thresholds.description':
     'Ajusta umbrales y excepciones especificas para infraestructura, cargas e integraciones.',
   'alerts.page.thresholds.title': 'Umbrales de alerta',
@@ -265,6 +285,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Ingresa una contraseña',
   'setup.security.error.passwordTooShort': 'La contraseña debe tener al menos 12 caracteres',
   'setup.security.error.setupFailed': 'La configuración falló: {error}',
+  'setup.security.error.telemetryLockedOn':
+    'Tu cuenta de administrador se creó. Las estadísticas de uso siguen activadas porque este servidor define PULSE_TELEMETRY=true. Define PULSE_TELEMETRY=false y reinicia Pulse para desactivarlas.',
   'setup.security.error.telemetryDisableFailed':
     'Tu cuenta de administrador se creó, pero las estadísticas de uso no se pudieron desactivar. Puedes desactivarlas en Ajustes → Sistema → General.',
   'setup.security.generatedPasswordHelp':
@@ -462,9 +484,6 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.header.systemAiAssistant.description':
     'Configura el comportamiento del chat, los permisos de acciones, las sesiones y los conectores de agentes externos (MCP) del Assistant.',
   'settings.header.systemAiAssistant.title': 'Assistant',
-  'settings.header.systemAiDiscovery.description':
-    'Configura el contexto de servicio asistido por IA que usan Assistant y Patrol. El descubrimiento y onboarding de infraestructura permanecen en Infraestructura.',
-  'settings.header.systemAiDiscovery.title': 'Contexto de servicio',
   'settings.header.systemAiPatrol.description':
     'Configura cuando se ejecuta Patrol, que lo inicia y que modelo usa.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -512,7 +531,6 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.item.dataReports': 'Datos e informes',
   'settings.nav.item.diagnosticsHealth': 'Diagnóstico y salud',
   'settings.nav.item.assistant': 'Assistant',
-  'settings.nav.item.discovery': 'Contexto de servicio',
   'settings.nav.item.general': 'General',
   'settings.nav.item.infrastructure': 'Infraestructura',
   'settings.nav.item.network': 'Red',

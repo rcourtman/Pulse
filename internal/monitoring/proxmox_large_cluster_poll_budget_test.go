@@ -104,6 +104,9 @@ func TestLargePVEClusterPublishesCompleteGenerationWhenEnrichmentBudgetExpires(t
 		stubPVEClient: &stubPVEClient{},
 		resources:     largeClusterResources(),
 	}
+	monitor.replacePVEClient("large-cluster", client)
+	// Deadline exhaustion must not lose completed authoritative inventory.
+	// It is distinct from explicit cancellation or a retired connection.
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 
@@ -182,6 +185,7 @@ func TestLargePVEClusterCoreSuccessKeepsConnectionHealthy(t *testing.T) {
 	monitor.guestAgentWorkSlots = make(chan struct{}, defaultGuestAgentVMMaxConcurrent)
 	monitor.config.PVEInstances[0].MonitorVMs = true
 	monitor.config.PVEInstances[0].MonitorContainers = true
+	monitor.replacePVEClient("large-cluster", client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()

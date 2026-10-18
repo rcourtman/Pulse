@@ -149,9 +149,8 @@ func TestResolveResource_DockerContainerTargetHostRewrite(t *testing.T) {
 
 	// Docker HOST lookup must NOT rewrite TargetHost.
 	locHost := ResolveResource(rr, "docker-host-lxc")
-	if !locHost.Found || locHost.ResourceType != "system-container" {
-		// Should match as system-container first (earlier in resolution order)
-		t.Fatalf("expected system-container, got found=%v type=%q", locHost.Found, locHost.ResourceType)
+	if !locHost.Found || locHost.ResourceType != "docker-host" || locHost.DockerHostType != "system-container" || locHost.DockerHostVMID != 100 {
+		t.Fatalf("expected the registered Docker host source reference to keep its current guest parent, got %+v", locHost)
 	}
 }
 
@@ -229,11 +228,10 @@ func TestResolveResource_VMwareStorage(t *testing.T) {
 	}
 }
 
-func TestLookupResolvedResource_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
+func TestResolveResourceContext_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
 	rr := newTrueNASAppRegistryFixture()
 
-	loc := ResolveResource(rr, "Nextcloud")
-	resource := lookupResolvedResource(rr, loc)
+	resource := ResolveResourceContext(rr, "Nextcloud").Resource
 	if resource == nil {
 		t.Fatal("expected resolved resource for TrueNAS app")
 	}
@@ -454,4 +452,425 @@ func TestResolveResourceContext_NotFound(t *testing.T) {
 	if resolved.Resource != nil {
 		t.Fatalf("expected no resolved resource for missing lookup, got %#v", resolved.Resource)
 	}
+}
+
+// linkedGuestEstate is an agent inside a vSphere VM, joined by an operator
+// link, as Pulse sees it after a restart before the agent reports again: the
+// published registry has only the VM, and saved-host continuity fills in the
+// agent.
+type linkedGuestEstate struct {
+	saved     models.Host
+	vmRecords []IngestRecord
+	agentID   string
+	vmID      string
+}
+
+func newLinkedGuestEstate(t *testing.T) linkedGuestEstate {
+	t.Helper()
+	now := time.Now().UTC()
+	estate := linkedGuestEstate{
+		saved: models.Host{
+			ID: "host-app-guest", MachineID: "machine-app-guest", Hostname: "app-guest",
+			Platform: "linux", Status: "offline", LastSeen: now.Add(-10 * time.Minute),
+			Memory: models.Memory{Total: 8 << 30, Used: 7 << 30, Free: 1 << 30, Usage: 88},
+		},
+		vmRecords: []IngestRecord{{
+			SourceID: "vc-1:vm:vm-42",
+			Resource: Resource{
+				Type:       ResourceTypeVM,
+				Technology: "vmware",
+				Name:       "app-guest",
+				Status:     StatusOnline,
+				LastSeen:   now,
+				Metrics:    &ResourceMetrics{Memory: &MetricValue{Percent: 40, Source: SourceVMware}},
+				VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+		}},
+	}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(
+		models.StateSnapshot{Hosts: []models.Host{estate.saved}, LastUpdate: now},
+		map[DataSource][]IngestRecord{SourceVMware: estate.vmRecords},
+	)
+	if len(unlinked.VMs()) != 1 || len(unlinked.Hosts()) != 1 {
+		t.Fatalf("unlinked estate = %d VMs, %d agents, want one of each", len(unlinked.VMs()), len(unlinked.Hosts()))
+	}
+	estate.vmID, estate.agentID = unlinked.VMs()[0].ID(), unlinked.Hosts()[0].ID()
+	return estate
+}
+
+// readStateAfterRestart publishes the VM alone and overlays the saved agent,
+// as Monitor.GetUnifiedReadStateOrSnapshot does.
+func (e linkedGuestEstate) readStateAfterRestart(store ResourceStore) *MonitorAdapter {
+	published := NewMonitorAdapter(NewRegistry(store))
+	published.PopulateSnapshotAndSupplemental(
+		models.StateSnapshot{LastUpdate: time.Now().UTC()},
+		map[DataSource][]IngestRecord{SourceVMware: e.vmRecords},
+	)
+	return ReadStateWithHostContinuity(published, []IngestRecord{HostIngestRecord(e.saved)}).(*MonitorAdapter)
+}
+
+// An operator link names one identity, so every reference to the saved
+// agent resolves to the VM, as it does once the agent reports and folds in.
+// The agent's saved telemetry stays on its own row in the read state and in
+// the resources API, which seeds a registry from that listing and re-applies
+// the links.
+func TestContinuityAgentLinkedIntoLiveGuestAnswersToTheGuest(t *testing.T) {
+	estate := newLinkedGuestEstate(t)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: estate.vmID, ResourceB: estate.agentID, PrimaryID: estate.agentID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	readState := estate.readStateAfterRestart(store)
+	resources := NewRegistry(store)
+	resources.IngestResources(readState.GetAll())
+
+	for _, registry := range []struct {
+		name     string
+		registry *ResourceRegistry
+	}{
+		{"read state", readState.registry},
+		{"resources API", resources},
+	} {
+		t.Run(registry.name, func(t *testing.T) {
+			rr := registry.registry
+			agent, ok := rr.Get(estate.agentID)
+			if !ok || agent.Status != StatusOffline {
+				t.Fatalf("saved agent row = %+v (listed=%v), want its own offline row", agent, ok)
+			}
+			vm, ok := rr.Get(estate.vmID)
+			if !ok {
+				t.Fatalf("linked VM %s missing", estate.vmID)
+			}
+			if vm.Agent != nil || vm.Status != StatusOnline || vm.Metrics == nil || vm.Metrics.Memory == nil || vm.Metrics.Memory.Source != SourceVMware {
+				t.Fatalf("VM agent=%v status=%s metrics=%+v, want vSphere's online VM without the saved agent's payload", vm.Agent != nil, vm.Status, vm.Metrics)
+			}
+			// The hostname both rows carry stays unambiguous: the saved row shares
+			// the VM's identity.
+			for _, ref := range []string{estate.agentID, "agent:" + estate.saved.ID, estate.saved.MachineID, "app-guest"} {
+				if resolved, ok := rr.ResolveReferenceID(ref); !ok || resolved != estate.vmID {
+					t.Fatalf("ResolveReferenceID(%q) = %q (%v), want the link primary %s", ref, resolved, ok, estate.vmID)
+				}
+				if _, resolved, ok := rr.GetByReference(ref); !ok || resolved != estate.vmID {
+					t.Fatalf("GetByReference(%q) = %q (%v), want the link primary %s", ref, resolved, ok, estate.vmID)
+				}
+			}
+			if resolved, ok := rr.ResolveReferenceID(estate.vmID); !ok || resolved != estate.vmID {
+				t.Fatalf("VM reference resolved to %q (%v)", resolved, ok)
+			}
+		})
+	}
+	if resolved, ok := readState.ResolveCanonicalResourceID("agent:" + estate.saved.ID); !ok || resolved != estate.vmID {
+		t.Fatalf("read-state canonical resolution = %q (%v), want %s", resolved, ok, estate.vmID)
+	}
+
+	// Once the agent reports, the link folds it in as before.
+	live := estate.saved
+	live.Status, live.LastSeen = "online", time.Now().UTC()
+	published := NewMonitorAdapter(NewRegistry(store))
+	published.PopulateSnapshotAndSupplemental(
+		models.StateSnapshot{Hosts: []models.Host{live}, LastUpdate: time.Now().UTC()},
+		map[DataSource][]IngestRecord{SourceVMware: estate.vmRecords},
+	)
+	if len(published.Hosts()) != 0 {
+		t.Fatal("reporting agent still listed beside its linked VM")
+	}
+	if resolved, ok := published.ResolveCanonicalResourceID(estate.agentID); !ok || resolved != estate.vmID {
+		t.Fatalf("folded agent resolved to %q (%v), want %s", resolved, ok, estate.vmID)
+	}
+}
+
+// A saved primary never captures a live member: the live row keeps its own
+// references and telemetry, and the saved row its own, until the primary
+// reports and the link folds them.
+func TestContinuityPrimaryLeavesLiveLinkMemberItsOwnIdentity(t *testing.T) {
+	now := time.Now().UTC()
+	live := models.Host{ID: "host-live", MachineID: "machine-live", Hostname: "live", Platform: "linux", Status: "online", LastSeen: now, CPUUsage: 23}
+	saved := models.Host{ID: "host-saved", MachineID: "machine-saved", Hostname: "saved", Platform: "linux", Status: "offline", LastSeen: now.Add(-time.Hour)}
+
+	ids := NewMonitorAdapter(NewRegistry(nil))
+	ids.PopulateFromSnapshot(models.StateSnapshot{Hosts: []models.Host{live, saved}, LastUpdate: now})
+	if len(ids.Hosts()) != 2 {
+		t.Fatalf("unlinked estate has %d agents, want 2", len(ids.Hosts()))
+	}
+	agentIDs := map[string]string{}
+	for _, host := range ids.Hosts() {
+		agentIDs[host.AgentID()] = host.ID()
+	}
+	liveID, savedID := agentIDs[live.ID], agentIDs[saved.ID]
+
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: savedID, ResourceB: liveID, PrimaryID: savedID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	published := NewMonitorAdapter(NewRegistry(store))
+	published.PopulateFromSnapshot(models.StateSnapshot{Hosts: []models.Host{live}, LastUpdate: now})
+	readState := ReadStateWithHostContinuity(published, []IngestRecord{HostIngestRecord(saved)}).(*MonitorAdapter)
+	resources := NewRegistry(store)
+	resources.IngestResources(readState.GetAll())
+
+	for name, rr := range map[string]*ResourceRegistry{"read state": readState.registry, "resources API": resources} {
+		liveRow, ok := rr.Get(liveID)
+		if !ok || liveRow.Status != StatusOnline || len(liveRow.Sources) != 1 {
+			t.Fatalf("%s: live member = %+v (listed=%v), want its own online row", name, liveRow, ok)
+		}
+		if _, ok := rr.Get(savedID); !ok {
+			t.Fatalf("%s: saved primary row missing", name)
+		}
+		for ref, want := range map[string]string{liveID: liveID, "agent:" + live.ID: liveID, savedID: savedID, "agent:" + saved.ID: savedID} {
+			if resolved, ok := rr.ResolveReferenceID(ref); !ok || resolved != want {
+				t.Fatalf("%s: %q resolved to %q (%v), want %s", name, ref, resolved, ok, want)
+			}
+		}
+	}
+}
+
+// An observation that merges into a saved row makes it a live row again, so
+// the link folds it: the resources API's record replay is one such path.
+func TestObservationMergedIntoASavedRowLetsItsLinkFold(t *testing.T) {
+	estate := newLinkedGuestEstate(t)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: estate.vmID, ResourceB: estate.agentID, PrimaryID: estate.vmID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := estate.readStateAfterRestart(store).registry
+	if _, held := rr.Get(estate.agentID); !held {
+		t.Fatal("saved agent not listed before it reports")
+	}
+	live := estate.saved
+	live.Status, live.LastSeen = "online", time.Now().UTC()
+	rr.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(live)})
+	if _, listed := rr.Get(estate.agentID); listed {
+		t.Fatal("reported agent still listed beside its linked VM")
+	}
+	if vm, ok := rr.Get(estate.vmID); !ok || vm.Agent == nil {
+		t.Fatalf("linked VM = %+v (listed=%v), want it carrying the reported agent", vm, ok)
+	}
+}
+
+// Holds follow the links one pass applies, whatever their order: a primary a
+// later link folds away hands its held members to the row holding it, a saved
+// member held under a saved primary answers to that primary's own target, and
+// a cycle of saved members resolves each to itself.
+func TestLinkHoldsFollowTheirPrimaryThroughThePass(t *testing.T) {
+	saved := func(id string) Resource {
+		return Resource{ID: id, Type: ResourceTypeAgent, Name: id, Status: StatusOffline, Sources: []DataSource{SourceAgent}, continuityOnly: true}
+	}
+	vm := func(id string) Resource {
+		return Resource{ID: id, Type: ResourceTypeVM, Name: id, Status: StatusOnline, Sources: []DataSource{SourceVMware}}
+	}
+	for _, tc := range []struct {
+		name      string
+		resources []Resource
+		links     []ResourceLink
+		want      map[string]string
+	}{
+		{
+			name:      "primary folded later",
+			resources: []Resource{saved("agent-a"), vm("vm-v"), vm("vm-w")},
+			links: []ResourceLink{
+				{ResourceA: "agent-a", ResourceB: "vm-v", PrimaryID: "vm-v"},
+				{ResourceA: "vm-v", ResourceB: "vm-w", PrimaryID: "vm-w"},
+			},
+			want: map[string]string{"agent-a": "vm-w", "vm-v": "vm-w", "vm-w": "vm-w"},
+		},
+		{
+			name:      "saved primary held in turn",
+			resources: []Resource{saved("agent-x"), saved("agent-a"), vm("vm-v")},
+			links: []ResourceLink{
+				{ResourceA: "agent-x", ResourceB: "agent-a", PrimaryID: "agent-a"},
+				{ResourceA: "agent-a", ResourceB: "vm-v", PrimaryID: "vm-v"},
+			},
+			want: map[string]string{"agent-x": "vm-v", "agent-a": "vm-v", "vm-v": "vm-v"},
+		},
+		{
+			name:      "cycle",
+			resources: []Resource{saved("agent-a"), saved("agent-b"), saved("agent-c")},
+			links: []ResourceLink{
+				{ResourceA: "agent-a", ResourceB: "agent-b", PrimaryID: "agent-a"},
+				{ResourceA: "agent-b", ResourceB: "agent-c", PrimaryID: "agent-b"},
+				{ResourceA: "agent-c", ResourceB: "agent-a", PrimaryID: "agent-c"},
+			},
+			want: map[string]string{"agent-a": "agent-a", "agent-b": "agent-b", "agent-c": "agent-c"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewMemoryStore()
+			for _, link := range tc.links {
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+			rr := NewRegistry(store)
+			rr.IngestResources(tc.resources)
+			for ref, want := range tc.want {
+				if resolved, ok := rr.ResolveReferenceID(ref); !ok || resolved != want {
+					t.Fatalf("%q resolved to %q (%v), want %s", ref, resolved, ok, want)
+				}
+			}
+			for _, resource := range tc.resources {
+				if !resource.continuityOnly {
+					continue
+				}
+				if row, listed := rr.Get(resource.ID); !listed || row.Status != StatusOffline {
+					t.Fatalf("saved row %s = %+v (listed=%v), want it kept", resource.ID, row, listed)
+				}
+			}
+		})
+	}
+}
+
+// A saved agent answers to the row its link partner folds into, in every
+// link order: the read-state overlay and the resources API, which seeds a
+// registry from that listing and re-applies the links, hold it alike. The partner here is the vSphere VM the agent was linked into from
+// its own page, and the VM is itself linked into a TrueNAS pool, so the
+// published registry folds the VM away before continuity adds the agent;
+// the hold used to need both members listed and left the agent answering for
+// itself. When two links would fold the agent, the chain precedence picks:
+// the guest outranks the pool, whichever link the store lists first.
+func TestSavedLinkMemberHoldsFollowTheChainInAnyLinkOrder(t *testing.T) {
+	estate := newLinkedGuestEstate(t)
+	now := time.Now().UTC()
+	pool := func(name string) IngestRecord {
+		return IngestRecord{
+			SourceID: "system:tn-1:pool:" + name,
+			Resource: Resource{
+				Type: ResourceTypeStorage, Name: name, Status: StatusOnline, LastSeen: now,
+				Storage: &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+			},
+		}
+	}
+	records := map[DataSource][]IngestRecord{SourceVMware: estate.vmRecords, SourceTrueNAS: {pool("tank"), pool("vault")}}
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(models.StateSnapshot{LastUpdate: now}, records)
+	poolIDs := map[string]string{}
+	for _, resource := range probe.GetAll() {
+		if resource.Type == ResourceTypeStorage {
+			poolIDs[resource.Name] = resource.ID
+		}
+	}
+	if len(poolIDs) != 2 {
+		t.Fatalf("probe estate = %+v, want two pools", probe.GetAll())
+	}
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		name  string
+		links []ResourceLink
+		want  string
+	}{
+		{
+			name: "partner folded into a third resource",
+			links: []ResourceLink{
+				{ResourceA: estate.agentID, ResourceB: estate.vmID, PrimaryID: estate.agentID, CreatedAt: created},
+				{ResourceA: estate.vmID, ResourceB: poolIDs["tank"], PrimaryID: poolIDs["tank"], CreatedAt: created.Add(time.Minute)},
+			},
+			want: poolIDs["tank"],
+		},
+		{
+			name: "competing links pick the guest",
+			links: []ResourceLink{
+				{ResourceA: estate.agentID, ResourceB: poolIDs["vault"], PrimaryID: poolIDs["vault"], CreatedAt: created},
+				{ResourceA: estate.agentID, ResourceB: estate.vmID, PrimaryID: estate.agentID, CreatedAt: created.Add(time.Minute)},
+			},
+			want: estate.vmID,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, order := range linkOrders(len(tc.links)) {
+				store := NewMemoryStore()
+				for _, i := range order {
+					if err := store.AddLink(tc.links[i]); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+				}
+				published := NewMonitorAdapter(NewRegistry(store))
+				published.PopulateSnapshotAndSupplemental(models.StateSnapshot{LastUpdate: time.Now().UTC()}, records)
+				readState := ReadStateWithHostContinuity(published, []IngestRecord{HostIngestRecord(estate.saved)}).(*MonitorAdapter)
+				resources := NewRegistry(store)
+				resources.IngestResources(readState.GetAll())
+				for _, view := range []struct {
+					name string
+					rr   *ResourceRegistry
+				}{{"read state", readState.registry}, {"resources API", resources}} {
+					if agent, ok := view.rr.Get(estate.agentID); !ok || agent.Status != StatusOffline {
+						t.Fatalf("order %v, %s: saved agent row = %+v (listed=%v), want its own offline row", order, view.name, agent, ok)
+					}
+					if target, ok := view.rr.Get(tc.want); !ok || target.Agent != nil {
+						t.Fatalf("order %v, %s: hold target %s = %+v (listed=%v), want it listed without the saved agent's payload", order, view.name, tc.want, target, ok)
+					}
+					for _, ref := range []string{estate.agentID, "agent:" + estate.saved.ID} {
+						if got, ok := view.rr.ResolveReferenceID(ref); !ok || got != tc.want {
+							t.Fatalf("order %v, %s: ResolveReferenceID(%q) = %q (%v), want %s", order, view.name, ref, got, ok, tc.want)
+						}
+						if _, got, ok := view.rr.GetByReference(ref); !ok || got != tc.want {
+							t.Fatalf("order %v, %s: GetByReference(%q) = %q (%v), want %s", order, view.name, ref, got, ok, tc.want)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+// A saved member held under a partner answers to the row that partner
+// survives in. A seeded listing can carry the partner inside a storage row
+// that the changed links now fold into a guest, so the hold ranks the guest,
+// not the row that left the registry, and repeating the pass changes nothing.
+func TestSavedLinkMemberHoldFollowsThePartnersSurvivingRow(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	vm, pool, otherPool, guest := estate.ids["pve-vm"], estate.ids["tank"], estate.ids["vault"], estate.ids["vsphere-vm"]
+
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	var savedID string
+	for _, resource := range ReadStateWithHostContinuity(probe, []IngestRecord{HostIngestRecord(estate.saved)}).(*MonitorAdapter).GetAll() {
+		if resource.Agent != nil && resource.Agent.AgentID == estate.saved.ID {
+			savedID = resource.ID
+		}
+	}
+	if savedID == "" {
+		t.Fatal("overlay did not list the saved host")
+	}
+
+	savedLinks := []ResourceLink{
+		{ResourceA: savedID, ResourceB: otherPool, PrimaryID: otherPool, CreatedAt: created},
+		{ResourceA: savedID, ResourceB: vm, PrimaryID: vm, CreatedAt: created.Add(time.Minute)},
+	}
+	published := NewMemoryStore()
+	for _, link := range append([]ResourceLink{{ResourceA: vm, ResourceB: pool, PrimaryID: pool, CreatedAt: created}}, savedLinks...) {
+		if err := published.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	adapter := NewMonitorAdapter(NewRegistry(published))
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	readState := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(estate.saved)}).(*MonitorAdapter)
+
+	// The links change after the listing was published: the pool now folds
+	// into the vSphere VM, which takes the Proxmox VM the pool held with it.
+	changed := NewMemoryStore()
+	for _, link := range append([]ResourceLink{{ResourceA: pool, ResourceB: guest, PrimaryID: guest, CreatedAt: created.Add(2 * time.Minute)}}, savedLinks...) {
+		if err := changed.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	seeded := NewRegistry(changed)
+	seeded.IngestResources(readState.GetAll())
+	check := func(step string) {
+		t.Helper()
+		if got, ok := seeded.ResolveReferenceID(savedID); !ok || got != guest {
+			t.Fatalf("%s: saved agent resolved to %q (%v), want the guest %s its partner folded into", step, got, ok, guest)
+		}
+		if _, listed := seeded.Get(pool); listed {
+			t.Fatalf("%s: pool still listed beside the guest", step)
+		}
+	}
+	check("seeded")
+	seeded.mu.Lock()
+	seeded.applyManualLinks(nil)
+	seeded.mu.Unlock()
+	check("second pass")
 }

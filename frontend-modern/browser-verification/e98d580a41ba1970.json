@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "df9b6d962018e7f51aac06d70c80c6ab99e20a6a",
+  "verified_at": "2026-10-05T19:25:15.383671Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "b7411029defc2a45647b4e1783215f8450108e5c355509a5e0b9916d442296ee"
+  },
+  "routes": [
+    "/patrol/activity#patrol-suppression-rules"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Final apiClient content mounted through the production Patrol surface, Router, clients and CSS. Local API responses, tenant/session/CSRF values are synthetic; this is not installed or customer deletion proof.",
+    "Desktop Chromium and narrow WebKit native fetch: default pre-aborted call delegates once and rejects AbortError; retry:false and expectedOrgID opt-ins each reject AbortError before dispatch, with zero fetch calls and zero network requests.",
+    "Existing Activity manual-rule controls with wildcard scope, preserved unrelated/manual-origin and finding-backed decisions; second creator link/reason/Reopen distinction remains usable.",
+    "Uncertain DELETE response followed by explicit reload never retries or reports success; denied fresh read stops before DELETE; organisation change discards pending confirmation and old rows.",
+    "All eight capture hashes inspected. Full-page wildcard captures omit the fixed dialog, as in the inherited proof; this pass asserts its DOM scope but does not claim new visual confirmation-panel acceptance. The unchanged five other runtime files retain their earlier viewport/long-reason receipt 22122ef8054826c5.",
+    "Both browsers and preview servers closed; no page errors, horizontal overflow or off-origin calls. Exact manual-rule creation/deletion and long-reason tests were not replayed in this final-client pass."
+  ],
+  "interactions": [
+    "Real browser AbortController pre-aborted before GET; instrumented window.fetch delegates to native fetch for ordinary options only, then restored in finally.",
+    "Finding options creator opens its labelled reason field and the existing Activity management link without a second POST.",
+    "Wildcard confirmation issues one exact DELETE with tenant and CSRF binding. Lost response retains an uncertainty warning, hides stale controls and requires explicit Reload rules; later GET reconciles absence without a second DELETE.",
+    "403 pre-read denial blocks mutation; organisation switch invalidates the confirmation and prior collection, with no cross-tenant request.",
+    "Playwright 1.56.1 matches the integration lockfile; Chromium 141.0.7390.37 at 1365x900 and WebKit 26.0 at 320x900. Both cases pass five asserted checks and complete browser/server cleanup."
+  ]
+}

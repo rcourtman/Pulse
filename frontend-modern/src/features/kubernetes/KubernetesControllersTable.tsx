@@ -22,6 +22,7 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -30,13 +31,17 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   compareKubernetesControllers,
   filterKubernetesResources,
   kubernetesScopeLabel,
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
+import { KubernetesNameText } from './KubernetesNameText';
 
 const controllerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -134,9 +139,10 @@ const plainDetail = (text: string): ControllerDetail => ({ text, title: text });
 
 // Kubernetes reports job timestamps as RFC 3339 strings with microseconds,
 // which never fit the Detail column. The cell says how long ago the event
-// happened and keeps the absolute time on hover.
-const timeDetail = (label: string, timestamp: string): ControllerDetail => {
-  const relative = formatPlatformTableRelativeTimeValue(timestamp, { emptyText: '' });
+// happened, measured from the shared clock so it keeps moving while the row
+// stays mounted, and keeps the absolute time on hover.
+const timeDetail = (label: string, timestamp: string, now: number): ControllerDetail => {
+  const relative = formatPlatformTableRelativeTimeValue(timestamp, { emptyText: '', now });
   if (!relative) return plainDetail(`${label}: ${timestamp}`);
   const absolute = formatPlatformTableDateTimeValue(timestamp, {
     dateTimeFormat: { year: 'numeric' },
@@ -144,7 +150,7 @@ const timeDetail = (label: string, timestamp: string): ControllerDetail => {
   return { text: `${label} ${relative}`, title: `${label}: ${absolute}` };
 };
 
-const apiDetail = (resource: Resource): ControllerDetail => {
+const apiDetail = (resource: Resource, now: number): ControllerDetail => {
   switch (resource.type) {
     case 'k8s-replicaset': {
       if (typeof resource.kubernetes?.fullyLabeledReplicas === 'number') {
@@ -168,17 +174,17 @@ const apiDetail = (resource: Resource): ControllerDetail => {
       );
     case 'k8s-job':
       if (resource.kubernetes?.completionTime) {
-        return timeDetail('Completed', resource.kubernetes.completionTime);
+        return timeDetail('Completed', resource.kubernetes.completionTime, now);
       }
       return resource.kubernetes?.startTime
-        ? timeDetail('Started', resource.kubernetes.startTime)
+        ? timeDetail('Started', resource.kubernetes.startTime, now)
         : plainDetail('—');
     case 'k8s-cronjob':
       if (resource.kubernetes?.lastSuccessfulTime) {
-        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime);
+        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime, now);
       }
       return resource.kubernetes?.lastScheduleTime
-        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime)
+        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime, now)
         : plainDetail('—');
     default:
       return plainDetail('—');
@@ -242,6 +248,8 @@ export const KubernetesControllersTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const now = useRelativeTimeNow();
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -315,7 +323,7 @@ export const KubernetesControllersTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="controller"
-                  class="platform-table-mobile-w-30 md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[22%]"
                 >
                   Controller
                 </PlatformSortableTableHead>
@@ -396,10 +404,9 @@ export const KubernetesControllersTable: Component<{
                     const indicator = () => mapKubernetesControllerStatus(resource);
                     const name = () => controllerName(resource);
                     const kind = () => controllerKind(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const target = () => targetValue(resource);
                     const exceptions = () => exceptionSummary(resource);
-                    const detail = () => apiDetail(resource);
+                    const detail = () => apiDetail(resource, now());
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
 
@@ -424,9 +431,10 @@ export const KubernetesControllersTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <KubernetesNameText
+                                name={name()}
+                                class="font-semibold text-base-content"
+                              />
                             </div>
                           </TableCell>
                           <TableCell
@@ -437,14 +445,16 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={target()}>
+                            <span class="block truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -466,7 +476,18 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={exceptions()}>
+                            {/* The exception is why the dot is not green: its colour. */}
+                            <span
+                              class={`block truncate ${
+                                exceptions() === '—'
+                                  ? ''
+                                  : getPlatformStatusTextToneClass(indicator().variant)
+                              }`}
+                              title={exceptions()}
+                              data-kubernetes-controller-exception={
+                                exceptions() === '—' ? 'none' : indicator().variant
+                              }
+                            >
                               {exceptions()}
                             </span>
                           </TableCell>

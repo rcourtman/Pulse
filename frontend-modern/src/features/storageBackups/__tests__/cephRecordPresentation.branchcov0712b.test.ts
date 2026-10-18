@@ -11,6 +11,7 @@ import {
   getCephSummaryText,
   isCephClusterPoolStorageRecord,
 } from '@/features/storageBackups/cephRecordPresentation';
+import { getStorageRecordAlertResourceIds } from '@/features/storageBackups/storageAlertState';
 
 // ---------------------------------------------------------------------------
 // Fixture builders — mirror cephRecordPresentation.test.ts so casts and
@@ -234,8 +235,8 @@ describe('consolidateCephClusterPoolRecords branch coverage', () => {
     expect(survivor.issueSummary).toBe('first pool wins');
   });
 
-  // ---- Branch L84: pool not sicker than mount → record unchanged by ref ----
-  it('leaves a mount untouched (by reference) when the pool is not sicker than it', () => {
+  // ---- Branch L84: pool not sicker than mount → health and status unchanged ----
+  it('leaves a mount health untouched when the pool is not sicker than it', () => {
     const healthyPool = makePoolRecord({
       id: 'pool-1',
       name: 'cephfs-data',
@@ -248,10 +249,12 @@ describe('consolidateCephClusterPoolRecords branch coverage', () => {
       health: 'critical',
       statusLabel: 'unavailable',
     });
-    // storageHealthRank('healthy')=0 <= storageHealthRank('critical')=4 → return record.
+    // storageHealthRank('healthy')=0 <= storageHealthRank('critical')=4 → keep the
+    // mount's health and status; only the folded pool's alert identity is added.
     const consolidated = consolidateCephClusterPoolRecords([healthyPool, sickMount]);
-    expect(consolidated).toEqual([sickMount]);
-    expect(consolidated[0]).toBe(sickMount);
+    expect(consolidated).toEqual([
+      { ...sickMount, absorbedAlertResourceIds: getStorageRecordAlertResourceIds(healthyPool) },
+    ]);
   });
 
   // ---- storageHealthRank `?? 0` arm: unrecognized record health → rank 0 --

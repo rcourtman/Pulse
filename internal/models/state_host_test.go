@@ -2168,3 +2168,100 @@ func TestUpdateNodesForInstanceStandaloneViewStillFoldsIntoClusterNode(t *testin
 		t.Fatalf("agent link: nodes = %#v, want 1 (fingerprint-proven view folds via shared agent)", byAgent.Nodes)
 	}
 }
+
+// splitNodeDecider reports the pairs an operator split, by node and agent ID.
+type splitNodeDecider map[[2]string]bool
+
+func (d splitNodeDecider) ProxmoxNodeAgentSplit(node Node, host Host) bool {
+	return d[[2]string{node.ID, host.ID}]
+}
+
+// A split recorded after one connection's poll is applied to that connection's
+// retained node before its link can fold the next connection's view into it.
+func TestUpdateNodesForInstanceReadsASplitOfARetainedNodeBeforeItFolds(t *testing.T) {
+	agent := Host{ID: "agent-1", Hostname: "pve1.lan", ReportIP: "10.0.0.5", Status: "online"}
+	nodeA := Node{ID: "a-pve1", Name: "pve1", Instance: "a", Host: "https://10.0.0.5:8006", Status: "online"}
+	nodeB := Node{ID: "b-pve1", Name: "pve1", Instance: "b", Host: "https://pve1.lan:8006", Status: "online"}
+
+	decider := splitNodeDecider{}
+	state := NewState()
+	state.UpsertHost(agent)
+	state.SetNodeAgentSplitDecider(decider)
+	state.UpdateNodesForInstance("a", []Node{nodeA})
+	if linked := state.GetSnapshot().Nodes; len(linked) != 1 || linked[0].LinkedAgentID != agent.ID {
+		t.Fatalf("fixture: the first poll should link its node to the agent: %+v", linked)
+	}
+
+	// The operator splits the first node from the agent; nothing has written
+	// a link since, so the retained node still names the agent.
+	decider[[2]string{nodeA.ID, agent.ID}] = true
+	state.UpdateNodesForInstance("b", []Node{nodeB})
+
+	nodes := state.GetSnapshot().Nodes
+	if len(nodes) != 2 {
+		t.Fatalf("a retained node's split link still folded the next view into its slot: %+v", nodes)
+	}
+	for _, node := range nodes {
+		switch node.ID {
+		case nodeA.ID:
+			if node.LinkedAgentID != "" {
+				t.Fatalf("node %s kept the agent %q the operator split it from", node.ID, node.LinkedAgentID)
+			}
+		case nodeB.ID:
+			if node.LinkedAgentID != agent.ID {
+				t.Fatalf("node %s lost an agent link nobody split: %q", node.ID, node.LinkedAgentID)
+			}
+		default:
+			t.Fatalf("unexpected node %+v", node)
+		}
+	}
+}
+
+// One agent corroborates two standalone connections' nodes through the node's
+// IP address and its full hostname, which is the proof that folds the second
+// view into the first node's slot. When the operator has split the second
+// node from that agent, the agent is no evidence for it, so the view is not
+// folded, and neither a node nor the agent keeps a link the operator split.
+func TestUpdateNodesForInstanceHoldsASplitAgentBackBeforeItFoldsNodeViews(t *testing.T) {
+	agent := Host{
+		ID:       "agent-1",
+		Hostname: "pve1.lan",
+		ReportIP: "10.0.0.5",
+		Status:   "online",
+	}
+	nodeA := Node{ID: "a-pve1", Name: "pve1", Instance: "a", Host: "https://10.0.0.5:8006", Status: "online"}
+	nodeB := Node{ID: "b-pve1", Name: "pve1", Instance: "b", Host: "https://pve1.lan:8006", Status: "online"}
+
+	poll := func(decider NodeAgentSplitDecider) []Node {
+		state := NewState()
+		state.UpsertHost(agent)
+		state.SetNodeAgentSplitDecider(decider)
+		state.UpdateNodesForInstance("a", []Node{nodeA})
+		state.UpdateNodesForInstance("b", []Node{nodeB})
+		return state.GetSnapshot().Nodes
+	}
+
+	folded := poll(nil)
+	if len(folded) != 1 || folded[0].LinkedAgentID != agent.ID {
+		t.Fatalf("fixture: the agent should fold both views into one linked node, got %+v", folded)
+	}
+
+	apart := poll(splitNodeDecider{{nodeB.ID, agent.ID}: true})
+	if len(apart) != 2 {
+		t.Fatalf("a node split from the agent folded into its slot anyway: %+v", apart)
+	}
+	for _, node := range apart {
+		switch node.ID {
+		case nodeA.ID:
+			if node.LinkedAgentID != agent.ID {
+				t.Fatalf("the split of the other node unlinked %s from the agent", node.ID)
+			}
+		case nodeB.ID:
+			if node.LinkedAgentID != "" {
+				t.Fatalf("node %s kept the agent %q the operator split it from", node.ID, node.LinkedAgentID)
+			}
+		default:
+			t.Fatalf("unexpected node %+v", node)
+		}
+	}
+}

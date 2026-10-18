@@ -124,14 +124,14 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         )}
       </Show>
 
-      <div class="flex items-center justify-between px-6 py-4 border-t border-border">
-        <div class="flex items-center gap-3">
+      <div class="flex flex-col gap-3 px-4 py-4 border-t border-border sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+        <div class="flex min-w-0 flex-wrap items-center gap-3">
           <Show when={state.isEditingExistingNode() && props.onDelete}>
             <button
               type="button"
               onClick={props.onDelete}
               disabled={props.togglePending || props.deletePending}
-              class={`px-4 py-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              class={`flex-1 px-4 py-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none ${
                 props.deleteConfirming
                   ? 'bg-rose-600 text-white hover:bg-rose-700'
                   : 'border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-900/25 dark:text-rose-300 dark:hover:bg-rose-950/25'
@@ -154,20 +154,20 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               type="button"
               onClick={state.handleTestConnection}
               disabled={state.isTesting() || props.togglePending || props.deletePending}
-              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none"
             >
               {state.isTesting() ? 'Testing…' : 'Test connection'}
             </button>
           </Show>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex min-w-0 flex-wrap items-center justify-end gap-3">
           <Show when={state.isEditingExistingNode() && props.onToggleEnabled}>
             <button
               type="button"
               onClick={props.onToggleEnabled}
               disabled={props.togglePending || props.deletePending}
-              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
             >
               {props.togglePending
                 ? props.connectionEnabled
@@ -185,7 +185,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 modalProps.onBackToDiscovery!();
                 modalProps.onClose();
               }}
-              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-2"
+              class="w-full px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center justify-center gap-2 sm:w-auto"
             >
               <svg
                 width="16"
@@ -205,7 +205,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
             type="button"
             onClick={modalProps.onClose}
             disabled={props.togglePending || props.deletePending}
-            class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
+            class="flex-1 px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors sm:flex-none"
           >
             {guidedSetupOnlyMode() ? 'Close' : 'Cancel'}
           </button>
@@ -214,7 +214,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               type="submit"
               disabled={props.togglePending || props.deletePending || props.saveDisabled}
               title={props.saveDisabled ? props.saveDisabledReason : undefined}
-              class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed sm:flex-none"
             >
               {state.isEditingExistingNode() ? 'Save changes' : 'Add node'}
             </button>

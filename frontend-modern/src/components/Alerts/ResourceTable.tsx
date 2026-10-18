@@ -11,6 +11,7 @@ import { ActionIconButton } from '@/components/shared/Button';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
 import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
+import type { AlertResourceGlobalDefaultFallback } from './alertResourceTableModel';
 import { AlertResourceTableDesktop } from './AlertResourceTableDesktop';
 import { AlertResourceTableMobile } from './AlertResourceTableMobile';
 
@@ -49,6 +50,10 @@ export interface ResourceTableProps {
   formatMetricValue: (metric: string, value: number | undefined) => string;
   hasActiveAlert: (resourceId: string, metric: string) => boolean;
   globalDefaults?: Record<string, number | undefined>;
+  /** Metrics whose unset global default follows another setting. */
+  globalDefaultFallbacks?: Record<string, AlertResourceGlobalDefaultFallback>;
+  /** Header tooltips that replace the generic one for a column label. */
+  columnTooltips?: Record<string, string>;
   setGlobalDefaults?: (
     value:
       | Record<string, number | undefined>
@@ -97,10 +102,20 @@ export function ResourceTable(props: ResourceTableProps) {
     someSelected,
     clearSelectedIds,
   } = useAlertResourceTableState({
-    resources: props.resources,
-    groupedResources: props.groupedResources,
-    globalDefaults: props.globalDefaults,
-    factoryDefaults: props.factoryDefaults,
+    // Getters keep the state reactive: saved defaults arrive after mount, and
+    // the Custom badge and reset control must follow them.
+    get resources() {
+      return props.resources;
+    },
+    get groupedResources() {
+      return props.groupedResources;
+    },
+    get globalDefaults() {
+      return props.globalDefaults;
+    },
+    get factoryDefaults() {
+      return props.factoryDefaults;
+    },
   });
   const totalColumnCount = createMemo(
     () =>
@@ -124,6 +139,7 @@ export function ResourceTable(props: ResourceTableProps) {
             table={props}
             hasRows={hasRows}
             hasCustomGlobalDefaults={hasCustomGlobalDefaults}
+            activeMetricInput={activeMetricInput}
             setActiveMetricInput={setActiveMetricInput}
           />
         }
@@ -132,6 +148,7 @@ export function ResourceTable(props: ResourceTableProps) {
           table={props}
           hasRows={hasRows}
           hasCustomGlobalDefaults={hasCustomGlobalDefaults}
+          isActiveLayout={() => !useCardLayout()}
           activeMetricInput={activeMetricInput}
           setActiveMetricInput={setActiveMetricInput}
           showDelayRow={showDelayRow}
@@ -145,9 +162,9 @@ export function ResourceTable(props: ResourceTableProps) {
       </Show>
 
       <Show when={selectedIds().size > 0 && props.onBulkEdit}>
-        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-base border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-100 animate-in slide-in-from-bottom-5">
-          <span class="text-sm font-medium text-white">
-            {selectedIds().size} <span class="text-slate-400">selected</span>
+        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-surface border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-100 animate-in slide-in-from-bottom-5">
+          <span class="text-sm font-medium text-base-content">
+            {selectedIds().size} <span class="text-muted">selected</span>
           </span>
           <div class="flex items-center gap-2">
             <button
@@ -163,7 +180,7 @@ export function ResourceTable(props: ResourceTableProps) {
               {getAlertBulkEditOpenLabel()}
             </button>
             <ActionIconButton
-              class="rounded-full bg-surface text-slate-400 hover:bg-slate-700 hover:text-white focus-visible:ring-offset-0"
+              class="rounded-full focus-visible:ring-offset-0"
               onClick={clearSelectedIds}
               label={ALERT_BULK_EDIT_CLEAR_LABEL}
               size="sm"

@@ -38,6 +38,7 @@ You MUST:
 - Keep observations to short, concrete sentences. Avoid hedging adverbs ("perhaps", "seems"). State the fact and its implication.
 - When prior-period data is supplied, write a period_comparison paragraph describing the most material deltas (resource trends, new or resolved alerts, new findings). When no prior data is supplied, leave period_comparison empty.
 - Do NOT invent recommendations for problems that aren't in the data. If everything is healthy, say so plainly.
+- An alert with a "resolution" closed without recovering, for example because the Pulse agent now monitoring the machine took its metric over. It is not a recovery: never count it as resolved or call the resource healthy because of it, and say where it went using the resolution text. When it also has "successor_alert_listed": true, the alerts list holds the alert the resource it moved to raised for that metric; describe the condition once, from that alert.
 
 DETECTION BOUNDARY — this is critical:
 Pulse Patrol is the canonical detection layer for this product. The patrol_findings array, when populated, contains issues Patrol has already classified with its own severity. Your job is to SUMMARIZE those findings, not to function as a parallel detector competing with them.
@@ -118,7 +119,14 @@ type reportNarratorAlert struct {
 	Message   string  `json:"message"`
 	Value     float64 `json:"value,omitempty"`
 	Threshold float64 `json:"threshold,omitempty"`
-	Resolved  bool    `json:"resolved"`
+	// Resolved is true only for a recovery. An alert that closed without
+	// recovering, such as a node alert that moved to its Pulse agent, carries
+	// the alert engine's account in Resolution instead, and
+	// SuccessorAlertListed when this list also holds the alert the resource
+	// it moved to raised for the same metric.
+	Resolved             bool   `json:"resolved"`
+	Resolution           string `json:"resolution,omitempty"`
+	SuccessorAlertListed bool   `json:"successor_alert_listed,omitempty"`
 }
 
 type reportNarratorStorage struct {
@@ -318,12 +326,14 @@ func buildReportNarratorPayload(in reporting.NarrativeInput) reportNarratorPaylo
 
 	for _, alert := range in.Alerts {
 		payload.Alerts = append(payload.Alerts, reportNarratorAlert{
-			Type:      alert.Type,
-			Level:     alert.Level,
-			Message:   alert.Message,
-			Value:     alert.Value,
-			Threshold: alert.Threshold,
-			Resolved:  alert.ResolvedTime != nil,
+			Type:                 alert.Type,
+			Level:                alert.Level,
+			Message:              alert.Message,
+			Value:                alert.Value,
+			Threshold:            alert.Threshold,
+			Resolved:             alert.Recovered(),
+			Resolution:           alert.ResolutionSummary(),
+			SuccessorAlertListed: alert.SuccessorAlertListed(in.Alerts),
 		})
 	}
 

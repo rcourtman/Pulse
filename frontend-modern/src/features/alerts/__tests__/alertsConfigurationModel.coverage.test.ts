@@ -150,7 +150,7 @@ describe('normalizeWarningCriticalPair', () => {
     expect(snapshot.backupDefaults.criticalDays).toBe(7);
   });
 
-  it('clamps negative warning and critical inputs to 0 and collapses critical to warning', () => {
+  it('clamps negative warning and critical inputs to 0 (both Off)', () => {
     const snapshot = readAlertsConfigurationSnapshot({
       overrides: {},
       backupDefaults: { enabled: true, warningDays: -3, criticalDays: -9 },
@@ -170,24 +170,49 @@ describe('normalizeWarningCriticalPair', () => {
     expect(snapshot.backupDefaults.criticalDays).toBe(14);
   });
 
-  it('inherits critical from warning when critical is 0 (build snapshotDefaults path)', () => {
+  // The backend reads a 0 critical age as Off. Raising it to the warning age
+  // made snapshots and backups go critical at the warning age.
+  it('keeps a critical age of 0 Off (build snapshotDefaults path)', () => {
     const snapshot = createDefaultAlertsConfigurationSnapshot();
     snapshot.snapshotDefaults = { enabled: true, warningDays: 15, criticalDays: 0 };
 
     const { alertConfig } = buildFromSnapshot(snapshot);
 
     expect(alertConfig?.snapshotDefaults?.warningDays).toBe(15);
-    expect(alertConfig?.snapshotDefaults?.criticalDays).toBe(15);
+    expect(alertConfig?.snapshotDefaults?.criticalDays).toBe(0);
   });
 
-  it('defaults an undefined critical to 0 and inherits the warning value', () => {
+  it('saves the Off toggle value for a backup critical age as 0, not the warning age', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.backupDefaults = { ...snapshot.backupDefaults, warningDays: 7, criticalDays: -1 };
+
+    const { alertConfig } = buildFromSnapshot(snapshot);
+
+    expect(alertConfig?.backupDefaults?.warningDays).toBe(7);
+    expect(alertConfig?.backupDefaults?.criticalDays).toBe(0);
+  });
+
+  it('reads an undefined critical age as Off', () => {
     const snapshot = readAlertsConfigurationSnapshot({
       overrides: {},
       backupDefaults: { enabled: true, warningDays: 4, criticalDays: undefined },
     } as unknown as AlertConfig);
 
     expect(snapshot.backupDefaults.warningDays).toBe(4);
-    expect(snapshot.backupDefaults.criticalDays).toBe(4);
+    expect(snapshot.backupDefaults.criticalDays).toBe(0);
+  });
+
+  it('still raises a 0 critical snapshot size to the warning size, as the backend does', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.snapshotDefaults = {
+      ...snapshot.snapshotDefaults,
+      warningSizeGiB: 50,
+      criticalSizeGiB: 0,
+    };
+
+    const { alertConfig } = buildFromSnapshot(snapshot);
+
+    expect(alertConfig?.snapshotDefaults?.criticalSizeGiB).toBe(50);
   });
 });
 

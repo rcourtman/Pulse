@@ -15,6 +15,7 @@ import type {
 } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
+import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskTemperaturePresentation';
 import { formatBytes } from '@/utils/format';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
@@ -316,7 +317,9 @@ export const toAgentFromResource = (
     sensors: agent.sensors,
     raid: agent.raid,
     status: resource.status,
-    uptimeSeconds: agent.uptimeSeconds ?? resource.uptime ?? 0,
+    // A silent agent's uptime is from its last report, not how long the
+    // machine has been up.
+    uptimeSeconds: resource.agent?.stale ? 0 : (agent.uptimeSeconds ?? resource.uptime ?? 0),
     lastSeen: resource.lastSeen,
     agentVersion: agent.agentVersion,
     commandsEnabled: agent.commandsEnabled,
@@ -399,7 +402,23 @@ const buildTypedGPUTemperatureKeys = (gpus?: HostSensorSummary['gpu']) => {
   return keys;
 };
 
-export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
+// Matches the backend's reason for readings a host agent past its reporting
+// lease no longer collects (models.HostAgentStoppedReportingReason).
+export const HOST_AGENT_STOPPED_REPORTING_REASON = 'host agent stopped reporting';
+
+export type TemperatureRowsOptions = {
+  /**
+   * Why the machine's own sensor readings are retained rather than current,
+   * such as a host agent past its reporting lease. Disk rows keep their own
+   * collection state instead.
+   */
+  lastKnownReason?: string;
+};
+
+export const buildTemperatureRows = (
+  sensors?: HostSensorSummary,
+  options: TemperatureRowsOptions = {},
+) => {
   const rows: { label: string; value: string; valueTitle?: string }[] = [];
   const thermalState = sensors?.thermalState;
   const typedGPUTemperatureKeys = buildTypedGPUTemperatureKeys(sensors?.gpu);
@@ -499,16 +518,31 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
       });
   }
 
+  // This card has no other cue that a value is not current, so a retained
+  // sensor reading says so in its value, as a retained disk reading does.
+  const lastKnownReason = options.lastKnownReason?.trim();
+  if (lastKnownReason) {
+    const title = `Last known reading, not current: ${lastKnownReason}`;
+    for (const row of rows) {
+      row.value = `${row.value} (last known)`;
+      row.valueTitle = title;
+    }
+  }
+
   const smart = sensors?.smart;
   if (smart) {
     smart
-      .filter((disk) => !disk.standby && Number.isFinite(disk.temperature))
+      .filter((disk) => !disk.standby)
       .sort((a, b) => a.device.localeCompare(b.device))
       .forEach((disk) => {
+        const temperature = getPhysicalDiskTemperaturePresentation(disk);
+        if (!temperature) return;
+        // A retained reading, such as a silent agent's, says so in the value
+        // because this card has no other cue that it is not current.
         rows.push({
           label: `Disk ${disk.device}`,
-          value: formatTemperature(disk.temperature),
-          valueTitle: `${disk.temperature.toFixed(1)}°C`,
+          value: temperature.current ? temperature.label : `${temperature.label} (last known)`,
+          valueTitle: temperature.title ?? `${disk.temperature.toFixed(1)}°C`,
         });
       });
   }
