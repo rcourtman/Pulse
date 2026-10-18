@@ -63,13 +63,22 @@ func setBackupFilesystemUsage(vm *models.VM, usage float64) {
 	}
 }
 
+func filesystemRecoveryActiveAlert(t *testing.T, m *Manager, id string) *Alert {
+	t.Helper()
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ID == id {
+			return alert.Clone()
+		}
+	}
+	t.Fatalf("expected active filesystem alert %q", id)
+	return nil
+}
+
 func requireFilesystemRecovery(t *testing.T, m *Manager, original *Alert) {
 	t.Helper()
-	m.mu.Lock()
-	active := testHasActiveAlert(t, m, original.ID)
-	m.mu.Unlock()
-	if active {
-		t.Fatal("fresh below-clear usage left the original filesystem incident active")
+	// The lookup helper owns its lock; an outer write lock would deadlock it.
+	if testHasActiveAlert(t, m, original.ID) {
+		t.Fatal("fresh at-or-below-clear usage left the original filesystem incident active")
 	}
 	fired := queryAlertEvents(t, m, eventlog.Filter{AlertID: original.ID, Types: []string{eventlog.TypeFired}})
 	resolved := queryAlertEvents(t, m, eventlog.Filter{AlertID: original.ID, Types: []string{eventlog.TypeResolved}})
@@ -122,7 +131,7 @@ func TestGuestFilesystemTemporaryUseRecovery(t *testing.T) {
 				if len(m.GetActiveAlerts()) != 2 {
 					t.Fatalf("wanted exactly the two backup filesystems, not roots/rollups: %+v", m.GetActiveAlerts())
 				}
-				original, peerOriginal := activeAlert(t, m, id), activeAlert(t, m, peerID)
+				original, peerOriginal := filesystemRecoveryActiveAlert(t, m, id), filesystemRecoveryActiveAlert(t, m, peerID)
 				if acknowledged {
 					if err := m.AcknowledgeAlert(id, "test-operator"); err != nil {
 						t.Fatal(err)
@@ -132,7 +141,7 @@ func TestGuestFilesystemTemporaryUseRecovery(t *testing.T) {
 				setBackupFilesystemUsage(&vm, 85) // Below trigger, but above clear.
 				elapsed.Add(int64(time.Minute))
 				m.CheckGuest(vm, "site")
-				held := activeAlert(t, m, id)
+				held := filesystemRecoveryActiveAlert(t, m, id)
 				if held.Value != original.Value || held.Message != original.Message || held.LastSeen != original.LastSeen || held.StartTime != original.StartTime || held.Acknowledged != acknowledged {
 					t.Fatalf("hysteresis changed the breach/occurrence/ack: before=%+v after=%+v", original, held)
 				}
@@ -144,7 +153,7 @@ func TestGuestFilesystemTemporaryUseRecovery(t *testing.T) {
 				m.CheckGuest(vm, "site")
 				m.CheckGuest(vm, "site")
 				requireFilesystemRecovery(t, m, original)
-				if got := activeAlert(t, m, peerID); got.StartTime != peerOriginal.StartTime || got.Value != peerOriginal.Value {
+				if got := filesystemRecoveryActiveAlert(t, m, peerID); got.StartTime != peerOriginal.StartTime || got.Value != peerOriginal.Value {
 					t.Fatal("same-named peer was changed by another guest's recovery")
 				}
 				if len(m.GetActiveAlerts()) != 1 {
@@ -162,7 +171,7 @@ func TestGuestFilesystemTemporaryUseUnavailableRecovery(t *testing.T) {
 			vm := filesystemRecoveryVM(105)
 			id := filesystemRecoveryID(vm)
 			m.CheckGuest(vm, "site")
-			original := activeAlert(t, m, id)
+			original := filesystemRecoveryActiveAlert(t, m, id)
 			before := guestObservationBytes(t, m)
 			setBackupFilesystemUsage(&vm, 20)
 			vm.DiskStatusReason = "agent-timeout"
@@ -220,11 +229,11 @@ func TestGuestFilesystemTemporaryUseRollingRecovery(t *testing.T) {
 		return []MetricWindowPoint{{r.Start, value}, {r.Start.Add(2 * time.Minute), value}, {r.Start.Add(4 * time.Minute), value}}, nil
 	})
 	m.CheckGuest(vm, "site")
-	original := activeAlert(t, m, id)
+	original := filesystemRecoveryActiveAlert(t, m, id)
 	setBackupFilesystemUsage(&vm, 20)
 	elapsed.Add(int64(time.Minute))
 	m.CheckGuest(vm, "site")
-	held := activeAlert(t, m, id)
+	held := filesystemRecoveryActiveAlert(t, m, id)
 	if held.MetricStatus == nil || held.MetricStatus.RawValue == nil || *held.MetricStatus.RawValue != 20 || held.MetricStatus.Value <= 80 {
 		t.Fatalf("low current usage must still respect the high rolling average: %+v", held.MetricStatus)
 	}
