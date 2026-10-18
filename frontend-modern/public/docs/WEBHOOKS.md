@@ -97,7 +97,7 @@ an informational firing still has event `"alert"`. Preserve and flag an
 unrecognised level rather than silently dropping the notification. Minimum
 severity and other delivery policies still apply.
 
-**Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. The alert ID (`{{.ID}}`) correlates firing and recovery, but can be reused when the same condition fires again. It is not a unique incident or delivery ID.
+**Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. For a single-alert notification, the alert ID (`{{.ID}}`) correlates firing and recovery, but can be reused when the same condition fires again. In a group it identifies only the primary alert; use [member-aware receiver correlation](#receiver-correlation-and-deduplication), not the primary ID alone. It is not a unique incident or delivery ID.
 
 **Message key.** `{{.MessageKey}}` is the stable, language-neutral condition key for rebuilding or translating a notification. Canonical alerts use `<kind>.<type>` (for example, `metric-threshold.disk`); older alert paths fall back to `{{.Type}}`. Combine it with `{{.Event}}` and `{{.ResourceType}}` when the receiving system needs separate wording for firing/recovery events or different resource classes. Unlike a numeric message index, the symbolic key does not change when another alert type is added.
 
@@ -284,6 +284,12 @@ Keep ticket correlation separate from suppressing repeated processing:
   identify its observed occurrence; a later start with the same ID must be
   processed as a new occurrence. Firing and recovery use the same occurrence
   record, so an old delayed recovery must not close a newer incident.
+  The primary can change between firing and recovery even when the members
+  are the same. A Home Assistant persistent-notification bridge that creates
+  with one primary and removes with another can leave a notification behind.
+  Process each member on both events, using the same member identity for
+  create and remove; neither the batch's primary ID nor `X-Pulse-Event-ID`
+  substitutes for its members.
 - For a `resolved` event, inspect each member's [resolution reason](#resolved-does-not-always-mean-recovered).
   Close a moved occurrence as moved, not recovered, and keep unknown or
   incomplete outcomes for reconciliation. Do not mark an entire mixed group
