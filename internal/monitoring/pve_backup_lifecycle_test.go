@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -136,5 +135,5 @@ func TestPVEBackupLifecycleRefusesUnregisteredClient(t *testing.T) {
 		t.Fatal("unregistered client started a backup scan")
 	default:
 	}
-	t.Log(fmt.Sprintf("BACKUP_LIFECYCLE_UNREGISTERED requests=0"))
+	t.Log("BACKUP_LIFECYCLE_UNREGISTERED requests=0")
 }

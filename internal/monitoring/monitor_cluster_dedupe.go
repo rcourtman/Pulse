@@ -91,6 +91,7 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 
 	m.mu.Lock()
 	m.cancelPVEGuestPollLocked(instanceName)
+	m.cancelPVEBackupPollLocked(instanceName)
 	if poll := m.pveReplicationPolls[instanceName]; poll != nil {
 		poll.cancel()
 		delete(m.pveReplicationPolls, instanceName)
