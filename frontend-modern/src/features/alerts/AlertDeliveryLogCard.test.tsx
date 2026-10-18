@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
@@ -86,6 +86,71 @@ describe('AlertDeliveryLogCard', () => {
     ));
 
     expect(screen.getByText(/Test sends skip the queue/)).toBeInTheDocument();
+  });
+
+  it('names the activity list and makes older evidence keyboard-scrollable', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    const list = screen.getByRole('list', { name: 'Notification activity' });
+    expect(list).toHaveAttribute('tabindex', '0');
+    list.focus();
+    expect(list).toHaveFocus();
+  });
+
+  it('makes every grouped alert ID available without hover', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    const summary = screen.getByText('vm-offline-101 +1 more');
+    expect(summary.tagName).toBe('SUMMARY');
+    const details = summary.closest('details')!;
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute('open');
+    expect(within(details).getByText(/vm-offline-101\s+vm-offline-102/)).toBeVisible();
+  });
+
+  it('shows the held explanation as readable content rather than a hover-only title', () => {
+    const message = 'Delivery held by quiet hours until 08:00 UTC; monitoring continues.';
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+        heldEvents={[
+          {
+            id: 99,
+            occurredAt: new Date().toISOString(),
+            type: 'notification_deferred',
+            alertId: 'held-only',
+            resourceName: 'nas-1',
+            alertType: 'usage',
+            reason: 'quiet_hours:performance',
+            message,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText(message)).toBeVisible();
+    expect(screen.getByRole('listitem')).not.toHaveAttribute('title', message);
   });
 
   it.each([

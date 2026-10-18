@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e88cb1961f20af35fb38b5b02e472004f4833710",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "8414d08dc49898a13c6238ffce2c5cc34289558c2e38cb2dd3ace90959421fc1"
+  },
+  "routes": [
+    "/browser-tests/apprise-transport.html (reused real Notifications tab; synthetic HTTP GETs through production NotificationsAPI, AlertsAPI and delivery-state owner)"
+  ],
+  "states": [
+    "Long destination, resource and alert identities; grouped delivery with every alert ID",
+    "Held explanation as escaped readable text, not a hover-only title",
+    "Long TLS diagnostic wrapping at desktop and 320px; older evidence reachable within bounded scrolling",
+    "Independent unavailable reads withdraw old identities; empty read removes the focus stop; recovered reads restore only new rows"
+  ],
+  "interactions": [
+    "Tab from activity refresh to the named list, visible focus and PageDown reach older rows",
+    "Desktop Enter and narrow touch open native grouped-ID disclosure; scroll down to inspect both IDs and the full narrow diagnostic",
+    "Refresh into unavailable, empty and recovered states without any send, save, retry or dismissal"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-18T05:31:52.032Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow_webkit": "26.0"
+  },
+  "pixel_review": "All eight final captures opened natively with view_image. Baseline identities and diagnostics clip; fixed identities, held explanation, both grouped IDs and full diagnostic wrap inside the list. Focus is visible in light desktop and dark 320px. Narrow lower-row captures inspect the second ID and complete diagnostic after vertical scrolling.",
+  "limits": "Synthetic HTTP reads through production API readers and Notifications tab. Not recipient delivery, native recovery or installed availability. No Back/reload crash sequence.",
+  "driver": "frontend-modern/browser-tests/delivery-activity.cjs"
+}

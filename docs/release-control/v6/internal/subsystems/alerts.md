@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Notification activity remains inspectable without hover
+
+The bounded delivery/held-event list has an accessible name, an explicit keyboard
+tab stop and visible focus, so older rows remain reachable in engines which do
+not automatically focus scrolling elements. Destination names, alert IDs, held
+reasons and failure diagnostics wrap within narrow layouts rather than requiring
+horizontal scrolling or a hover tooltip. Grouped deliveries expose every recorded
+alert ID through a native keyboard/touch disclosure; the compact summary is not
+the only evidence. Held-event messages are ordinary readable text, not hover-only
+titles, and remain escaped as text.
+
+Read bounds, retention, interleaving, independent unavailable states and recovery
+ownership do not change. An unavailable read still withdraws its old rows; an
+empty read removes the list and its tab stop. This presentation does not send,
+retry or dismiss notifications and is not proof of recipient delivery.
+
+Verification: `AlertDeliveryLogCard.test.tsx` and
+`useAlertDestinationsTabState.test.tsx` exercise names, disclosures, readable held
+messages and failure/recovery without stale identities. The source-bound
+`browser-tests/delivery-activity.cjs` reuses the real Notifications-tab fixture,
+compares baseline/fixed pixels, exercises keyboard scrolling and keyboard/touch
+disclosure, and checks long diagnostics at desktop and 320px through production
+HTTP readers. It refuses all writes and off-origin requests.
+
 ### Legacy alert-history compaction releases removed-row storage
 
 Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
