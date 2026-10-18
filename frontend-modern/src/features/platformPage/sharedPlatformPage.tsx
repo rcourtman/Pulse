@@ -666,12 +666,27 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
       } ${props.class ?? ''}`
         .replace(/\s+/g, ' ')
         .trim()}
+      scope="col"
       aria-sort={props.sortKey !== undefined ? props.sort.getAriaSort(props.sortKey) : undefined}
       style={platformTableBandWidthStyle(props.bandWidth)}
       onClick={handleClick}
     >
-      {props.children}
-      {isSorted() ? ` ${getTableSortIndicator(true, props.sort.sortDirection())}` : null}
+      <Show when={props.sortKey !== undefined} fallback={props.children}>
+        {/* Keep the cell's pointer target; native activation bubbles through
+            the same handler once, without a parallel keyboard sort path. */}
+        <button
+          type="button"
+          class="block min-h-6 w-full min-w-0 rounded-sm [text-align:inherit] [text-transform:inherit] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        >
+          {props.children}
+          <Show when={isSorted()}>
+            <span aria-hidden="true">
+              {' '}
+              {getTableSortIndicator(true, props.sort.sortDirection())}
+            </span>
+          </Show>
+        </button>
+      </Show>
     </TableHead>
   );
 }
