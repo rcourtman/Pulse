@@ -87,7 +87,7 @@ establish safe recovery.
   [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
   Do not trigger an alert or replay the queue just to complete a report.
 - **A usage alert stays open after usage drops:** compare
-  [the affected reading, clear level and recovery delay](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
+  [the affected reading, clear level and metric-specific timing](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
   Acknowledgement is not recovery; an old notification is not a current reading.
 - **Private information was posted:** follow
   [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
@@ -1287,13 +1287,22 @@ an expected recovery hold from a stale reading or an alert that failed to clear:
    lower clear level prevents repeated open/close notifications near it. For
    example, with a **90% trigger and 85% clear**, 88% can leave an alert open;
    an evaluated 85% or lower is eligible to clear it. These are example values,
-   not every rule's settings. Any configured averaging window and recovery
-   delay still apply. Read the [threshold and timing explanation](CONFIGURATION.md#metric-thresholds-off-and-inheritance)
+   not every rule's settings. Timing depends on the metric, not just the
+   resource. Read the [threshold and timing explanation](CONFIGURATION.md#metric-thresholds-off-and-inheritance)
    without changing the rule to make the alert disappear.
 
-If fresh matching readings remain at or below the saved clear level beyond
-the configured recovery delay and ordinary evaluations, but the same incident
-stays active, keep that as an unresolved symptom. In the [existing report](#-getting-help),
+**Guest filesystem capacity uses the current matching reading, not a rolling
+average.** Its disk grace period delays activation only; recovery has no extra
+configured delay. A fresh capacity reading at or below the saved clear level
+should clear the incident on an ordinary evaluation, without acknowledgement.
+This is different from disk I/O-rate rules. CPU can use an averaging window;
+memory can have a recovery stability delay. Do not apply those waits to guest
+filesystem capacity.
+
+If the same incident stays active through ordinary evaluations despite fresh
+matching readings at or below the saved clear level, keep that as an unresolved
+symptom. For other metrics, account for their supported averaging or recovery
+timing first. In the [existing report](#-getting-help),
 include only details not already supplied: the affected versions, metric and
 filesystem, trigger/clear levels, reading times and how long the lower value
 persisted. A locally reviewed, redacted capture can show the conflicting view;

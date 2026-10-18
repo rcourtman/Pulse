@@ -37,10 +37,31 @@ class AlertRecoveryHelpTest(unittest.TestCase):
             "value and its timestamp", "a single lower sample",
             "not measured recovery", "90% trigger and 85% clear",
             "88% can leave an alert open", "85% or lower is eligible",
-            "example values", "averaging window and recovery delay",
-            "beyond the configured recovery delay and ordinary evaluations",
+            "example values", "Timing depends on the metric",
+            "stays active through ordinary evaluations despite fresh matching readings",
         ):
             self.assertIn(distinction, text)
+
+    def test_guest_capacity_does_not_inherit_other_metrics_recovery_waits(self):
+        configuration = (ROOT / "docs/CONFIGURATION.md").read_text(encoding="utf-8")
+        for name, guide in (("troubleshooting", recovery_help()),
+                            ("configuration", configuration)):
+            text = " ".join(guide.split())
+            for distinction in (
+                "Guest filesystem capacity uses the current matching reading, not a rolling average",
+                "disk grace period delays activation only; recovery has no extra configured delay",
+                "CPU can use an averaging window",
+                "memory can have a recovery stability delay",
+            ):
+                with self.subTest(guide=name, distinction=distinction):
+                    self.assertIn(distinction, text)
+        text = " ".join(recovery_help().split())
+        self.assertIn("without acknowledgement", text)
+        self.assertIn("Do not apply those waits to guest filesystem capacity", text)
+        self.assertIn("different from disk I/O-rate rules", text)
+        self.assertIn("TROUBLESHOOTING.md#" + FRAGMENT, configuration)
+        self.assertEqual((ROOT / "docs/CONFIGURATION.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
 
     def test_incident_history_acknowledgement_and_delivery_are_not_recovery(self):
         text = " ".join(recovery_help().split())

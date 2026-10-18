@@ -696,9 +696,15 @@ manual CPU example below, `trigger: 90` and `clear: 80` mean:
 - An already active alert stays active **above 80%**, even at 85%.
 - A fresh evaluated value of **80% or lower** is eligible to clear it.
 
-Configured evaluation windows and activation/recovery delays still apply;
-these are not promises of immediate notifications. The excerpt illustrates a
-saved rule, not the clear value produced by every UI edit.
+Timing is metric-specific: CPU can use an averaging window, and memory can
+have a recovery stability delay. **Guest filesystem capacity uses the current
+matching reading, not a rolling average.** Its disk grace period delays
+activation only; recovery has no extra configured delay. Disk I/O-rate rules
+are different from capacity. These rules do not promise immediate notification
+delivery. The excerpt illustrates a saved rule, not the clear value produced
+by every UI edit. If an alert remains active, use the
+[reading, clear-level and timing checks](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops)
+without changing its policy to demonstrate recovery.
 
 Disabling a metric can close its existing alert even while usage remains high.
 That disappearance is a policy change, **not measured recovery**. Missing or
