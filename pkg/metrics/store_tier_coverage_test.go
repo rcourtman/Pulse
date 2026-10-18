@@ -56,6 +56,10 @@ func TestStoreRetainedTierCoverage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			filteredMany, err := store.QueryMetricTypesBatch("node", []string{"a", "b"}, []string{"memory", "cpu", "cpu"}, start, end, step)
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, id := range []string{"a", "b"} {
 				all, err := store.QueryAll("node", id, start, end, step)
 				if err != nil {
@@ -63,6 +67,9 @@ func TestStoreRetainedTierCoverage(t *testing.T) {
 				}
 				if !reflect.DeepEqual(all, batch[id]) {
 					t.Fatalf("batch differs for %s: %v != %v", id, batch[id], all)
+				}
+				if !reflect.DeepEqual(filteredMany[id], all) {
+					t.Fatalf("multi-metric filter changed ordering or retained values for %s: %v != %v", id, filteredMany[id], all)
 				}
 				for _, metric := range []string{"cpu", "memory"} {
 					single, err := store.Query("node", id, metric, start, end, step)

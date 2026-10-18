@@ -758,6 +758,86 @@ jobs:
       - name: Build Pulse backend
         run: go build ./cmd/pulse
 
+  chart-latency-slo:
+    name: Workload chart 90ms SLO
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.go_compile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GOMAXPROCS: "2"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout pull request base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: chart-baseline
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check idle proof guards
+        run: python3 -m unittest discover -s internal/api/testdata -p test_chart_latency_proof.py -v
+
+      - name: Compile fixed baseline and candidate executables
+        run: |
+          set -euo pipefail
+          proof_dir="$RUNNER_TEMP/chart-latency"
+          mkdir -p "$proof_dir"
+          for source in chart-baseline .; do
+            mkdir -p "$source/internal/api/frontend-modern/dist"
+            [ -f "$source/internal/api/frontend-modern/dist/index.html" ] || \
+              printf '<!doctype html><title>ci embed stub</title>\n' \
+                > "$source/internal/api/frontend-modern/dist/index.html"
+          done
+          {
+            date -u +%FT%TZ
+            go version
+            go env GOOS GOARCH
+            lscpu
+            printf 'GOMAXPROCS=%s\nGITHUB_RUN_ID=%s\nGITHUB_RUN_ATTEMPT=%s\n' \
+              "$GOMAXPROCS" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'baseline HEAD/tree:\n'
+            git -C chart-baseline rev-parse HEAD HEAD^{tree}
+            printf 'candidate HEAD/tree:\n'
+            git rev-parse HEAD HEAD^{tree}
+            printf 'candidate source changes:\n'
+            git diff --exit-code
+          } > "$proof_dir/metadata.txt"
+          (cd chart-baseline && go test -p 1 ./internal/api -run '^$' -c -o "$proof_dir/baseline-api.test")
+          go test -p 1 ./internal/api -run '^$' -c -o "$proof_dir/candidate-api.test"
+          sha256sum "$proof_dir/"*.test >> "$proof_dir/metadata.txt"
+
+      # This additional evidence job keeps the ordinary hosted envelope and
+      # required source/release gates intact. A fresh VM must first demonstrate
+      # idle capacity; the candidate then enforces the existing local 90 ms SLO.
+      - name: Verify chart latency on observed idle capacity
+        run: |
+          python3 internal/api/testdata/chart_latency_proof.py \
+            --baseline "$RUNNER_TEMP/chart-latency/baseline-api.test" \
+            --candidate "$RUNNER_TEMP/chart-latency/candidate-api.test" \
+            --output "$RUNNER_TEMP/chart-latency/samples"
+
+      - name: Upload chart latency evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chart-latency
+          path: |
+            ${{ runner.temp }}/chart-latency/metadata.txt
+            ${{ runner.temp }}/chart-latency/samples/
+          if-no-files-found: warn
+          retention-days: 7
+
   benchmarks:
     name: Benchmarks
     needs: changes

@@ -537,11 +537,21 @@ func explainQueryPlan(t *testing.T, db *sql.DB, query string, args []any) string
 
 func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
 	db := newPlanTestDB(t)
+	store := &Store{}
 	end := time.Unix(2000000040, 0)
-	query, args := retainedQuerySQL("node", []string{"a", "b"}, nil, end.Add(-time.Hour), end, 0, []Tier{TierRaw, TierMinute, TierHourly}, false)
-	for _, line := range strings.Split(explainQueryPlan(t, db, query, args), "\n") {
-		if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
-			t.Fatalf("unaggregated all-metric read sorts despite time-ordered index: %s", line)
+	for _, window := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour} {
+		for _, ids := range [][]string{{"a"}, {"a", "b"}} {
+			for _, metrics := range [][]string{nil, {"cpu"}, {"cpu", "memory"}} {
+				t.Run(fmt.Sprintf("%s/resources_%d/metrics_%d", window, len(ids), len(metrics)), func(t *testing.T) {
+					query, args := retainedQuerySQL("node", ids, metrics, end.Add(-window), end, 0, store.tierFallbacks(window), false)
+					plan := explainQueryPlan(t, db, query, args)
+					for _, line := range strings.Split(plan, "\n") {
+						if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
+							t.Fatalf("unaggregated read sorts despite time-ordered index: %s", plan)
+						}
+					}
+				})
+			}
 		}
 	}
 }

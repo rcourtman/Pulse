@@ -1696,7 +1696,11 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
         FROM (` + query + ") GROUP BY " + identityColumns + "bucket_ts ORDER BY " + identityColumns + "bucket_ts ASC"
 	} else {
 		orderColumns := identityColumns
-		if !groupSeries && len(metricTypes) == 0 {
+		if !groupSeries {
+			// The identity index is time-major within each resource. Metric
+			// filters do not require metric-major output: the result assembler
+			// handles interleaved series while preserving each series' time order.
+			// Only streamed display buckets need consecutive metric groups.
 			orderColumns = ""
 			if len(resourceIDs) != 1 {
 				orderColumns = "resource_id, "
