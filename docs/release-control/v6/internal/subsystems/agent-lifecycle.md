@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### Cluster peer sensor identity and failure visibility (#3064)
+
+The optional Linux Proxmox peer collector offers the existing supported root
+RSA and Ed25519 identities in that order in a single bounded, noninteractive
+SSH command with `IdentitiesOnly=yes`. It stats paths without reading key
+contents; it does not provision a key, mutate authorisation, change the existing
+host-key policy or touch the server's restricted sensor fallback. The opt-out
+precedes discovery. Local/offline peers are not contacted. A failed peer does
+not discard other peer readings. The remote `sensors -j` exit is no longer
+masked by a successful shell fallback. Unusable data is omitted, never zero.
+
+Agent warnings are limited to once per peer per five minutes; usable recovery
+clears the limiter and logs once, and removed/offline peers are pruned. Caller
+cancellation is not a peer incident. Raw command output is not logged. Wire
+shapes, server freshness/scoping and local-agent precedence are unchanged.
+
+`cluster_sensors_regression_test.go` binds mixed-key recovery and warning/
+recovery transitions to the real collector. `cluster_sensors_ssh_test.go` uses
+the real OpenSSH client with invented keys and a loopback SSH fixture for RSA,
+Ed25519, rejected authentication and restored trust; it also checks the exact
+command, deadlines, empty/invalid data, warning interval and pruning. Existing
+peer tests retain opt-out/offline/partial-failure behaviour. Actual producer
+reports are separately consumed through monitoring's scoped temperature path
+and the node drawer in desktop/narrow browser proof; this is not native PVE
+installation, reporter acceptance or verified host-key trust.
+
 ### Ordinary Unix installer executable publication
 
 After checksum and pinned-signature admission, `scripts/install.sh` prepares

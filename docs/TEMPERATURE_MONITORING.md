@@ -35,6 +35,32 @@ Notes:
   before changing its setup. A current server does not upgrade every agent.
 - When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host.
 
+### Optional Proxmox cluster-peer reads
+
+`--enable-proxmox` also collects temperatures from online sibling nodes using
+root SSH, even when local temperature collection needs no SSH. This uses the
+cluster's existing inter-node keys, not a Pulse API token or the Pulse server's
+restricted sensor key. The agent offers existing `id_rsa` then `id_ed25519`
+identities in one non-interactive connection, so an unrelated Ed25519 key does
+not hide a working RSA cluster key. It does not create keys, edit peer trust,
+or enable SSH access. The remote command is only `sensors -j`.
+
+Failed authentication, a failed sensor command or no usable readings now emits
+an agent warning naming the peer, at most once per peer every five minutes.
+Usable recovery is logged once. The warning does not contain the raw SSH or
+sensor output. Missing readings stay unavailable, not zero; a failed peer does
+not prevent other peers or local sensors from reporting. Collection keeps its
+eight-second per-peer timeout and fifteen-second overall budget.
+
+If every node already has its own reporting agent, add
+`--disable-cluster-peer-sensors` to the **agent's** existing configuration on
+each host to use local readings only. That opt-out takes effect before cluster
+discovery and makes no peer SSH attempts. Check the running agent's version and
+configuration, not just the server version. Do not remove an unrelated key,
+replace cluster trust, disable host-key verification or widen SSH access to fix
+a missing reading. The agent's existing peer host-key policy is unchanged;
+this identity-selection correction does not establish verified peer trust.
+
 ### Check existing Linux readings safely
 
 Use the monitored host's trusted local console, not the Pulse LXC or container.
