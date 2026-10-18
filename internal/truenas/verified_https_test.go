@@ -124,7 +124,7 @@ func TestTrueNASVerifiedHTTPSConnectionAndInventory(t *testing.T) {
 				case "/api/v2.0/pool":
 					_, _ = io.WriteString(w, `[{"id":1,"name":"core-tank","status":"ONLINE"}]`)
 				case "/api/v2.0/pool/dataset":
-					_, _ = io.WriteString(w, `[{"id":"core-tank/data","name":"core-tank/data","used":123,"available":456,"readonly":false}]`)
+					_, _ = io.WriteString(w, `[{"id":"core-tank/data","name":"core-tank/data","used":{"parsed":123},"available":{"parsed":456},"readonly":{"parsed":false}}]`)
 				default:
 					t.Errorf("unexpected request: %s", r.URL.Path)
 					http.NotFound(w, r)
