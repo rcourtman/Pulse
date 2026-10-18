@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -50,6 +51,9 @@ func newBenchMetricsStore(b *testing.B) *metrics.Store {
 		b.Fatalf("NewStore: %v", err)
 	}
 	b.Cleanup(func() { store.Close() })
+	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+		b.Fatalf("WaitForMaintenance: %v", err)
+	}
 	return store
 }
 
@@ -289,9 +293,10 @@ func BenchmarkHandleMetricsHistory_MemoryFallback(b *testing.B) {
 	})
 }
 
-// BenchmarkHandleWorkloadCharts_StoreBacked measures the workloads charts
-// endpoint under a store-backed 4h range. This is the workloads summary
-// sparkline hot path and should avoid per-workload N+1 queries.
+// BenchmarkHandleWorkloadCharts_StoreBacked separates warmed handler work,
+// fresh service computation, and real HTTP response transfer. A recorder that
+// retains the full response would measure its large buffer allocation instead
+// of the warmed handler. The cold case must still exercise store-backed reads.
 func BenchmarkHandleWorkloadCharts_StoreBacked(b *testing.B) {
 	suppressBenchLogs(b)
 
@@ -443,17 +448,92 @@ func BenchmarkHandleWorkloadCharts_StoreBacked(b *testing.B) {
 	// Go calls a benchmark function again for every b.N it tries, and seeding
 	// 84,000 points costs far more than the measured request. A parent with a
 	// sub-benchmark runs once, so the store is seeded once per run.
-	b.Run("range=4h", func(b *testing.B) {
+	b.Run("range=4h/warm-handler", func(b *testing.B) {
+		// net/http supplies the request and writer to the handler. Reuse those
+		// inputs here without accumulating a copy of the cached JSON body.
+		writer := &benchmarkChartWriter{header: make(http.Header)}
 		b.ReportAllocs()
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			req := httptest.NewRequest(http.MethodGet, url, nil)
-			rec := httptest.NewRecorder()
-			router.handleWorkloadCharts(rec, req)
-			if rec.Code != http.StatusOK {
-				b.Fatalf("unexpected status %d", rec.Code)
+			writer.reset()
+			router.handleWorkloadCharts(writer, req)
+			if writer.status != http.StatusOK || writer.bytes == 0 {
+				b.Fatalf("unexpected response: status=%d bytes=%d", writer.status, writer.bytes)
 			}
 		}
 	})
+	b.Run("range=4h/cold-service", func(b *testing.B) {
+		writer := &benchmarkChartWriter{header: make(http.Header)}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			writer.reset()
+			// A fresh service has no response cache or singleflight result.
+			// Include its construction rather than adding cache-reset hooks to
+			// production code or manufacturing query-string variants.
+			cold := &Router{monitor: monitor}
+			cold.handleWorkloadCharts(writer, req)
+			if writer.status != http.StatusOK || writer.bytes == 0 {
+				b.Fatalf("unexpected cold response: status=%d bytes=%d", writer.status, writer.bytes)
+			}
+		}
+	})
+	b.Run("range=4h/http-transfer", func(b *testing.B) {
+		server := httptest.NewServer(http.HandlerFunc(router.handleWorkloadCharts))
+		b.Cleanup(server.Close)
+		client := server.Client()
+		// This bounds fixture failures, not endpoint latency. Race-instrumented
+		// cold cache warmup can take seconds before timed transfer begins.
+		client.Timeout = 30 * time.Second
+		b.Cleanup(client.CloseIdleConnections)
+		requestURL := server.URL + url
+		read := func() int64 {
+			response, err := client.Get(requestURL)
+			if err != nil {
+				b.Fatal(err)
+			}
+			n, readErr := io.Copy(io.Discard, response.Body)
+			closeErr := response.Body.Close()
+			if response.StatusCode != http.StatusOK || n == 0 || readErr != nil || closeErr != nil {
+				b.Fatalf("unexpected HTTP response: status=%d bytes=%d read=%v close=%v", response.StatusCode, n, readErr, closeErr)
+			}
+			return n
+		}
+		read() // Warm the connection and response caches outside the timer.
+		b.ReportAllocs()
+		b.ResetTimer()
+		var transferred int64
+		for i := 0; i < b.N; i++ {
+			transferred += read()
+		}
+		b.StopTimer()
+		b.SetBytes(transferred / int64(b.N))
+	})
+}
+
+// benchmarkChartWriter observes handler status and bytes without retaining a
+// payload-sized test buffer. HTTP transfer is measured separately above.
+type benchmarkChartWriter struct {
+	header http.Header
+	status int
+	bytes  int
+}
+
+func (w *benchmarkChartWriter) Header() http.Header { return w.header }
+func (w *benchmarkChartWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+func (w *benchmarkChartWriter) Write(payload []byte) (int, error) {
+	w.WriteHeader(http.StatusOK)
+	w.bytes += len(payload)
+	return len(payload), nil
+}
+func (w *benchmarkChartWriter) reset() {
+	clear(w.header)
+	w.status = 0
+	w.bytes = 0
 }
 
 // BenchmarkHandleMetricsStoreStats measures latency of the /api/metrics-store/stats

@@ -62,3 +62,37 @@ Keep untimed work per iteration in proportion to timed work. Setup between
 with all of that setup. `BenchmarkRegistryProjectionSnapshot`'s empty cold cases
 took 16 s per sample at a 100 ms benchtime that way and pushed paired runs past
 their timeout.
+
+The workload-chart benchmark has three distinct measurement boundaries under
+`HandleWorkloadCharts_StoreBacked/range=4h`:
+
+- `warm-handler` reuses a request and a counting response writer. It measures
+  cached handler work without retaining another copy of the response body.
+  It does not measure HTTP transfer or provide a throughput number.
+- `cold-service` creates a fresh router and chart service for every request.
+  It includes construction, empty-response-cache computation, store-backed
+  reads and serialization. SQLite and OS caches remain warm. It is not a
+  cold-disk or process-startup measurement.
+- `http-transfer` uses a real loopback HTTP server and fully drains each body.
+  It includes client, server and local transport costs. Connection and response
+  caches are warmed before timing. Its throughput applies to that loopback
+  exchange, not a deployed network.
+
+All three share the same 70-workload fixture and payload sanity checks. The
+store fixture waits for queued startup maintenance before seeding and timing.
+`TestSLO_WorkloadCharts` also creates a fresh service for each timed sample,
+so its existing latency budgets cover chart generation rather than cached
+payload copies. It retains the separate sanity request and payload checks.
+The warm cases use the production cache lifetime, so a run longer than that
+lifetime also includes refreshes. Keep duration and cache policy visible when
+interpreting or comparing them.
+
+These names replace the legacy `range=4h` case, whose timed work included a
+fresh `httptest.ResponseRecorder` and a payload-sized buffer allocation after
+warming the response cache. Their timings are not interchangeable. The first
+CI comparison across this test change has no matching chart-case names and
+establishes a new baseline. Retain the old failed comparison and use the same
+revised harness on both recorded runtime trees for diagnostic continuity.
+The original +12.72% signal from #3052 remains historical evidence, not a
+validated chart-runtime regression or a claimed speedup from this harness fix.
+See the scoped [investigation record](../docs/release-control/v6/internal/records/workload-chart-benchmark-reliability-2026-10-18.md).
