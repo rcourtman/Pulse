@@ -1394,42 +1394,15 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 // busy nodes; filtering server-side keeps the window useful.
 const backupTaskListLimit = 200
 
-// GetBackupTasks gets all backup tasks across all nodes, including currently
-// running ones (source=all) so in-progress backup jobs are visible.
+// GetBackupTasks preserves the compatibility view of readable online nodes.
+// It supplies no replacement authority for skipped nodes. Live state consumers
+// use GetBackupTaskInventory to retain unread scopes separately.
 func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
-	// First get all nodes
-	nodes, err := c.GetNodes(ctx)
+	inventory, err := c.GetBackupTaskInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	var allTasks []Task
-	for _, node := range nodes {
-		if node.Status != "online" {
-			continue
-		}
-
-		resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks?typefilter=vzdump&source=all&limit=%d", node.Node, backupTaskListLimit))
-		if err != nil {
-			// The caller replaces the instance's task set on success. A failed
-			// online node is not evidence that its running/failed tasks vanished.
-			return nil, fmt.Errorf("get backup tasks: %w", err)
-		}
-
-		tasks, err := readTasks(resp)
-		if err != nil {
-			return nil, fmt.Errorf("read backup tasks: %w", err)
-		}
-
-		// Filter for backup tasks
-		for _, task := range tasks {
-			if task.Type == "vzdump" {
-				allTasks = append(allTasks, task)
-			}
-		}
-	}
-
-	return allTasks, nil
+	return inventory.Tasks, nil
 }
 
 // TaskLogLine is a single line of a task's log output.

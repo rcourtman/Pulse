@@ -235,7 +235,7 @@ func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"}, true)
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"}, true, nil)
 			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
 				t.Fatalf("retained log observation renewed or lost: %+v", got)
 			}
