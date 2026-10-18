@@ -29,7 +29,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
  }
  const result = { result: 'incomplete', source: input, playwright: require('playwright/package.json').version,
   cases: [], requests: [], screenshots: [], errors: [], cleanup: {},
-  limits: 'Synthetic CORE REST fixture through production pinned-TLS/provider/poller/monitor/authenticated resource and chart HTTP captured in the Go VM; exact raw HTTP responses served locally to the production decoder, TrueNAS table, inline drawer and charts. No appliance, installed or released recovery.',
+  limits: 'Synthetic CORE REST fixture through production pinned-TLS/provider/poller/monitor/authenticated resource and chart HTTP captured in the Go VM; captured full JSON responses decoded/re-encoded only for local HTTP and served to the production decoder, TrueNAS table, inline drawer and charts. No appliance, installed or released recovery.',
  };
  assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
  let phase = 'complete';
@@ -110,6 +110,9 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     const drawer = page.locator('[data-inline-detail-for]');
     await drawer.waitFor();
     const select = drawer.getByTestId('guest-history-range-control');
+    check(await select.inputValue() === '24h', 'the existing drawer opens on its default day range');
+    if (phase === 'rejected') await drawer.getByText('Failed to load history data', { exact:true }).waitFor();
+    else await drawer.locator('[data-history-group="utilization"]').getByRole('img').waitFor();
     await select.selectOption('1h');
     await page.waitForTimeout(400);
     const utilization = drawer.locator('[data-history-group="utilization"]');
