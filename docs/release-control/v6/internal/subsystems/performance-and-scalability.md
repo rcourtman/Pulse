@@ -1903,10 +1903,22 @@ dashboard-specific overview, trend, or summary transport.
     modules remain lazy for the same phone-startup reason.
     The same protected hot path now also owns proof harness steadiness.
     Store-backed chart SLO and benchmark helpers in `pkg/metrics/store_slo_test.go`,
-    `internal/api/slo_bench_test.go`, and `internal/monitoring/monitor_metrics_slo_test.go`
-    must wait for deferred metrics-store startup maintenance to quiesce before
-    timing steady-state reads, so one-time retention or auto-vacuum cleanup does
-    not masquerade as summary-route or chart-batch regression latency.
+    `internal/api/router_bench_test.go`, `internal/api/slo_bench_test.go`, and
+    `internal/monitoring/monitor_metrics_slo_test.go` must wait for deferred
+    metrics-store startup maintenance to quiesce before timing steady-state
+    reads, so one-time retention or auto-vacuum cleanup does not masquerade as
+    summary-route or chart-batch regression latency.
+    `BenchmarkHandleWorkloadCharts_StoreBacked` separates cached handler work
+    through a counting writer, fresh-service store-backed computation, and a
+    fully drained loopback HTTP exchange. Keep those measurement boundaries
+    explicit. A payload-retaining test recorder must not stand in for cached
+    handler cost, and warm response-cache hits must not stand in for query
+    latency. Fresh services do not clear SQLite or OS caches. Preserve old
+    failed comparisons across harness changes and establish new baselines
+    rather than claiming that renamed cases prove a runtime speedup.
+    `TestSLO_WorkloadCharts` must similarly use a fresh service per timed
+    sample so its existing query-latency budgets cannot be satisfied solely
+    by a response-cache hit after the sanity request.
 31. Keep the retired dashboard overview route absent from the protected hot
 path. `frontend-modern/src/pages/Dashboard.tsx`,
 `frontend-modern/src/hooks/useDashboardOverview.ts`, and
@@ -4143,8 +4155,13 @@ system `go version` outside the repository reports 1.26.5 but the module's
 toolchain directive selected 1.26.8 for compilation. Neither worker run
 reproduced the CI magnitude or establishes an improvement. Keep the signal
 open as an environment-bound observation under the existing
-`performance-post-rc-headroom` follow-up; no chart-path code change is
-justified by this comparison alone.
+`performance-post-rc-headroom` follow-up. The later #3052 legacy-recorder
+signal has the same unresolved historical status. Its investigation identified
+response-buffer allocation and absent cold-service coverage in the benchmark.
+The corrected measurement boundaries are defined above and in
+`scripts/BENCHMARK_EVIDENCE.md`. `docs/release-control/v6/internal/records/workload-chart-benchmark-reliability-2026-10-18.md`
+retains the original comparison and the controlled diagnostic evidence. Neither legacy
+signal alone justifies a chart-runtime change.
 
 ### Shared drawer History window calculation
 

@@ -622,7 +622,11 @@ func TestSLO_WorkloadCharts(t *testing.T) {
 	latencies := measureEndpointLatencies(t, func() {
 		req := httptest.NewRequest(http.MethodGet, url, nil)
 		rec := httptest.NewRecorder()
-		router.handleWorkloadCharts(rec, req)
+		// Each sample must compute the store-backed response. The sanity
+		// request above warms router's payload cache and would otherwise turn
+		// this query-latency guard into a cached response-copy measurement.
+		cold := &Router{monitor: monitor}
+		cold.handleWorkloadCharts(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("unexpected status %d", rec.Code)
 		}
