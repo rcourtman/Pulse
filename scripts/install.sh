@@ -4165,12 +4165,81 @@ teardown_nas_agent_boot_owner() {
     confirm_nas_agent_removal_quiescent "$platform"
 }
 
-remove_qnap_autorun_block() {
-    local autorun_path="$1"
-
-    portable_sed_in_place '/^# Pulse Agent bootstrap begin$/,/^# Pulse Agent bootstrap end$/d' "$autorun_path"
-    portable_sed_in_place '/^# Pulse Agent$/d' "$autorun_path"
-    portable_sed_in_place '/start-pulse-agent\.sh/d' "$autorun_path"
+# Installation shares the removal parser's exact-entry ownership rules. A NAS
+# boot script is also the owner's script: a substring match is not permission
+# to erase an unrelated command, sibling agent or edited bootstrap.
+register_nas_agent_boot_file() {
+    local platform="$1" path="$2" parent="" directory="" mode=755 original=false observed="" uid="" original_mode=""
+    local wrapper="$STATE_DIR/start-pulse-agent.sh"
+    [[ "$platform" == Unraid || "$platform" == QNAP ]] || return 1
+    # Both generated forms use a double-quoted path. Refuse shell expansion,
+    # rather than creating a boot command different from the admitted target.
+    [[ "$wrapper" == /* && "$wrapper" != *'"'* && "$wrapper" != *'\'* &&
+       "$wrapper" != *'$'* && "$wrapper" != *'`'* &&
+       "$wrapper" != *$'\n'* && "$wrapper" != *$'\r'* ]] || return 1
+    [[ "$path" == /* && "$path" != *$'\n'* && "$path" != *$'\r'* ]] || return 1
+    parent=$(dirname "$path") || return 1
+    uid=$(id -u) || return 1
+    [[ "$uid" =~ ^[0-9]+$ && -d "$parent" && ! -L "$parent" &&
+       "$(portable_path_uid "$parent")" == "$uid" ]] || return 1
+    # An earlier incomplete install/removal owns its recovery. Do not turn a
+    # second invocation into an implicit replay or an automatic restoration.
+    for directory in "$path".pulse-install.* "$path".pulse-removal.*; do
+        [[ ! -e "$directory" && ! -L "$directory" ]] || return 1
+    done
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == present || "$observed" == absent ]] || return 1
+    if [[ -e "$path" || -L "$path" ]]; then
+        original=true
+        mode=$(portable_path_mode "$path") || return 1
+        [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+        original_mode="$mode"
+        # QNAP previously enabled autorun execution with chmod +x. Preserve
+        # all other bits rather than silently dropping that boot requirement.
+        if [[ "$platform" == QNAP ]]; then printf -v mode '%o' "$((8#$mode | 0111))"; fi
+    fi
+    directory=$(mktemp -d "$path.pulse-install.XXXXXX") || return 1
+    chmod 700 "$directory" || return 1
+    if [[ "$original" == true ]]; then
+        cp "$path" "$directory/original" || return 1
+        filter_nas_agent_boot_file "$platform" "$directory/original" filter > "$directory/replacement" || return 1
+    else
+        if [[ "$platform" == Unraid ]]; then
+            printf '#!/bin/bash\n' > "$directory/replacement" || return 1
+        else
+            printf '#!/bin/sh\n' > "$directory/replacement" || return 1
+        fi
+    fi
+    if [[ "$platform" == Unraid ]]; then
+        printf '# Pulse Agent\nbash "%s"\n' "$wrapper" >> "$directory/replacement" || return 1
+    else
+        render_qnap_autorun_block "$wrapper" >> "$directory/replacement" || return 1
+    fi
+    bash -n "$directory/replacement" >/dev/null 2>&1 || return 1
+    observed=$(filter_nas_agent_boot_file "$platform" "$directory/replacement" status) || return 1
+    [[ "$observed" == present ]] || return 1
+    if [[ "$original" == true ]]; then
+        nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/original" || return 1
+        if [[ "$original_mode" == "$mode" ]] && cmp -s "$path" "$directory/replacement"; then
+            rm -f -- "$directory/original" "$directory/replacement" || return 1
+            rmdir "$directory" || return 1
+            return 0
+        fi
+        # FAT has no hard links. Retire the checked original into our owned
+        # directory, then create exclusively: never follow or overwrite a
+        # concurrent destination. Failed publication leaves both versions for
+        # explicit recovery; no unchecked rollback or runtime restart follows.
+        mv "$path" "$directory/retired" || return 1
+        nas_agent_removal_file_safe "$directory/retired" && cmp -s "$directory/retired" "$directory/original" || return 1
+    fi
+    (set -o noclobber; cat "$directory/replacement" > "$path") || return 1
+    chmod "$mode" "$path" || return 1
+    [[ "$(portable_path_mode "$path")" == "$mode" ]] || return 1
+    nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/replacement" || return 1
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == present ]] || return 1
+    rm -f -- "$directory/original" "$directory/replacement" "$directory/retired" || return 1
+    rmdir "$directory" || return 1
 }
 
 write_qnap_wrapper_script() {
@@ -4346,16 +4415,8 @@ append_qnap_autorun_block() {
     local wrapper_script="$2"
     local state_dir="$3"
 
-    remove_qnap_autorun_block "$autorun_path"
-    if [[ ! -f "$autorun_path" ]]; then
-        echo "#!/bin/sh" > "$autorun_path"
-    fi
-
-    printf '\n' >> "$autorun_path"
-    render_qnap_autorun_block "$wrapper_script" >> "$autorun_path"
-    printf '\n' >> "$autorun_path"
-
-    chmod +x "$autorun_path"
+    [[ "$state_dir" == "$STATE_DIR" && "$wrapper_script" == "$STATE_DIR/start-pulse-agent.sh" ]] || return 1
+    register_nas_agent_boot_file QNAP "$autorun_path"
 }
 
 # --- Auto-Detection Functions ---
@@ -7597,25 +7658,10 @@ done
 EOF
 
 
-    # Add to /boot/config/go if not already present
-    GO_MARKER="# Pulse Agent"
-    if [[ -f "$GO_SCRIPT" ]]; then
-        # Remove any existing Pulse agent entries (line-by-line, not range-based)
-        sed -i "/^${GO_MARKER}$/d" "$GO_SCRIPT" 2>/dev/null || true
-        sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-    else
-        # Create go script if it doesn't exist
-        echo "#!/bin/bash" > "$GO_SCRIPT"
-        chmod +x "$GO_SCRIPT"
-    fi
-
-    # Append startup entry (use bash explicitly since /boot is FAT32 and doesn't support execute bits)
-    cat >> "$GO_SCRIPT" <<EOF
-
-${GO_MARKER}
-bash ${WRAPPER_SCRIPT}
-
-EOF
+    # Preserve unrelated boot commands; ambiguous/custom Pulse launchers are
+    # an incomplete install, not a reason to delete matching lines.
+    register_nas_agent_boot_file Unraid "$GO_SCRIPT" ||
+        fail "Unraid boot registration was not confirmed; inspect the shared boot path and any .pulse-install recovery before retrying. No new watchdog was started." "$EXIT_GENERAL"
 
     log_info "Added startup entry to ${GO_SCRIPT}..."
 
@@ -7692,8 +7738,12 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     if [[ -x /etc/init.d/init_disk.sh ]]; then
         if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
             AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-            append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"
-            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
+            if ! append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"; then
+                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
+                fail "QNAP boot registration was not confirmed; inspect the shared boot path and any .pulse-install recovery before retrying. No new watchdog was started." "$EXIT_GENERAL"
+            fi
+            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null ||
+                fail "QNAP boot configuration unmount was not confirmed; installation is incomplete. Reconcile the mounted flash before retrying; no new watchdog was started." "$EXIT_GENERAL"
             AUTORUN_CONFIGURED=true
             log_info "Configured autorun.sh with a deferred Pulse Agent bootstrap."
         else

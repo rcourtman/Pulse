@@ -1930,7 +1930,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 	required := []string{
 		`detect_qnap_data_volume() {`,
 		`find_qnap_state_dir() {`,
-		`remove_qnap_autorun_block() {`,
+		`register_nas_agent_boot_file() {`,
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
 		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,
@@ -2982,108 +2982,23 @@ func TestInstallSHUsesCanonicalSysVEnablementHelper(t *testing.T) {
 	}
 }
 
-// TestUnraidGoScriptCleanup verifies the sed commands that remove pulse entries
-// from /boot/config/go without disturbing other entries.
-func TestUnraidGoScriptCleanup(t *testing.T) {
-	cases := []struct {
-		name   string
-		before string
-		after  string
-	}{
-		{
-			name: "pulse entry with trailing blank line",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-# Other stuff
-echo hello
-`,
-			// The comment and command lines are removed; the trailing blank line remains.
-			// This is harmless in /boot/config/go.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-
-# Other stuff
-echo hello
-`,
-		},
-		{
-			name: "pulse entry without trailing blank line",
-			before: `#!/bin/bash
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-# Other stuff
-echo hello
-`,
-			after: `#!/bin/bash
-# Other stuff
-echo hello
-`,
-		},
-		{
-			name: "no pulse entries - unchanged",
-			before: `#!/bin/bash
-echo hello
-echo world
-`,
-			after: `#!/bin/bash
-echo hello
-echo world
-`,
-		},
-		{
-			name: "telegraf line containing pulse is kept",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-echo done
-`,
-			// The telegraf line is NOT removed (no "pulse-agent" in it).
-			// Comment and command lines are deleted individually.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-echo done
-`,
-		},
+// The production installer must preserve unrelated commands in shared NAS boot
+// scripts, and refuse unknown content rather than deleting substring matches.
+func TestInstallSHNASBootRegistrationPreservesUnrelatedCommands(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			goScript := filepath.Join(dir, "go")
-			if err := os.WriteFile(goScript, []byte(tc.before), 0755); err != nil {
-				t.Fatal(err)
-			}
-
-			// Run the exact same sed commands from install.sh (line-by-line, not range-based)
-			script := `
-				GO_SCRIPT="` + goScript + `"
-				# Remove unified agent entries
-				sed -i '' '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-				`
-			out, err := exec.Command("bash", "-c", script).CombinedOutput()
-			if err != nil {
-				t.Fatalf("bash: %v\n%s", err, out)
-			}
-
-			got, err := os.ReadFile(goScript)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if string(got) != tc.after {
-				t.Errorf("go script mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, tc.after)
-			}
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "nas_boot_registration.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("NAS boot registration and production caller controls: %v\n%s", err, output)
 	}
+	if !strings.Contains(string(output), "Ran 8 tests") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete NAS boot registration verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
 }
 
 // TestAPIDeregistrationCurl verifies the curl command sends the correct
