@@ -110,6 +110,11 @@
       "incomplete_commit": "822eac9789e1d17c4139b0163c1014014dd76c1b",
       "completion_commit": "b07dfef40c5803cc4aeca787d3280c79af31d47e",
       "reason": "The tenant-scoped websocket delivery shipped its runtime change and tenant tests in the first commit; the following commit adds the agent-lifecycle and storage-recovery contract updates and moves the tenant tests into the named proof files. No source identity or required contract/proof gate is rewritten or waived."
+    },
+    {
+      "incomplete_commit": "b8925cc1a80d4ab56fd562c1432ede630e0d8106",
+      "completion_commit": "276d49cdfed10775e515b40fd783957e014a59de",
+      "reason": "Preserve the VMware poll-timeout contribution while binding it to the follow-up monitoring contract, registered VMware poller regression tests and operator documentation as one reviewed completion unit."
     }
   ]
 }
