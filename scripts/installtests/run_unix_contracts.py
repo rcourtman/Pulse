@@ -1,80 +1,83 @@
 #!/usr/bin/env python3
-"""Keep native installer checks exhaustive inside bounded package invocations.
+"""Run every native installer check with an independent Go process deadline.
 
-Each Go invocation retains the existing ten-minute package deadline; individual
-fixture, transport and cleanup deadlines are unchanged. Discover the actual
-package inventory so future tests, examples and fuzz seeds remain included.
-The general inventory grew to 500 checks and exhausted that package alarm on
-macOS Intel. Split it deterministically rather than extending safety deadlines.
-Run the existing NAS process/boot-owner control before frontend preparation;
-the remaining phase still requires that identity in the discovered inventory
-and excludes only the check already executed by the workflow's preflight.
-The TrueNAS retirement and updater state matrices also have their own existing
-individual budgets. Run them separately from the general package alarm so their
-cost cannot starve unrelated checks; verbose progress identifies the last control
-if either individual deadline is reached. No check is omitted or retried.
+Compile once and discover from that exact binary. Inventory growth must not
+consume another check's ten-minute Go alarm. Fixture, transport, cleanup and
+workflow job deadlines remain unchanged. The NAS boot-owner preflight runs
+before frontend preparation; the remaining phase requires that identity too
+and excludes only the check already executed by preflight.
 """
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
+# These safety matrices remain mandatory even though every root check now has
+# its own process budget rather than a dedicated aggregate group.
 FIXTURES = ("TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure",
             "TestAutoUpdateServiceStateFailsClosed")
-GROUPS = ("nas-preflight", "truenas-retirement", "update-state", "general-0", "general-1", "reset")
 
 
 def partition(output):
-    preflight, general, reset = [], [], []
-    seen = set()
+    names = []
     for name in output.splitlines():
         if not name.startswith(("Test", "Example", "Fuzz")):
             continue
-        if not name.isidentifier() or name in seen:
+        if not name.isidentifier() or name in names:
             raise ValueError("invalid or repeated Go test identity")
-        seen.add(name)
-        if name in PREFLIGHT:
-            preflight.append(name)
-        (reset if name.startswith("TestRootInstallReset") else general).append(name)
-    if (set(preflight) != set(PREFLIGHT) or not set(FIXTURES) <= seen
-            or len(general) - len(preflight) - len(FIXTURES) < 2 or not reset):
+        names.append(name)
+    if (not set(PREFLIGHT + FIXTURES).issubset(names)
+            or sum(name.startswith("TestRootInstallReset") for name in names) < 1
+            or sum(name not in PREFLIGHT + FIXTURES and not name.startswith("TestRootInstallReset")
+                   for name in names) < 2):
         raise ValueError("missing preflight, fixture, general or reset installer inventory")
-    # Interleave sorted identities so adjacent fixture families do not all
-    # consume the same package budget. Never omit or retry a discovered check.
-    general.sort()
-    # Remove the dedicated fixtures only after partitioning so every other check keeps
-    # its existing group and order, rather than reshuffling the package budgets.
-    dedicated = set(PREFLIGHT + FIXTURES)
-    return (sorted(preflight),
-            [FIXTURES[0]], [FIXTURES[1]],
-            [name for name in general[::2] if name not in dedicated],
-            [name for name in general[1::2] if name not in dedicated],
-            sorted(reset))
+    # Preserve compiled order within the general inventory and the final reset
+    # inventory. Every discovered test, example and fuzz seed runs exactly once;
+    # reset safety checks still run last, as in the previous grouped runner.
+    return ([name for name in names if name in PREFLIGHT],
+            [name for name in names if name not in PREFLIGHT
+             and not name.startswith("TestRootInstallReset")]
+            + [name for name in names if name.startswith("TestRootInstallReset")])
+
+
+def run_check(binary, name, *, cwd, timeout="10m"):
+    command = [str(binary), "-test.count=1", "-test.timeout=" + timeout,
+               "-test.paniconexit0", "-test.v", "-test.run=^" + name + "$"]
+    completed = False
+    with subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True) as process:
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            if re.match(r"^--- (PASS|SKIP): " + re.escape(name) + r"(?:\s|$)", line):
+                completed = True
+        code = process.wait()
+    if code:
+        raise subprocess.CalledProcessError(code, command)
+    if not completed:
+        raise RuntimeError("native installer check did not finish: " + name)
 
 
 def main(phase="all"):
     if phase not in ("all", "preflight", "remaining"):
         raise ValueError("unknown native installer phase")
-    inventory = subprocess.run(
-        ["go", "test", "-list", ".", PACKAGE], cwd=ROOT,
-        check=True, capture_output=True, text=True,
-    )
-    for group, names in zip(GROUPS, partition(inventory.stdout)):
-        if phase == "preflight" and group != "nas-preflight":
-            continue
-        if phase == "remaining" and group == "nas-preflight":
-            continue
-        print(f"Native Unix installer {group}: {len(names)} discovered checks", flush=True)
-        verbose = ["-v"] if group in GROUPS[:3] else []
-        subprocess.run(
-            ["go", "test", "-count=1", "-timeout", "10m", *verbose,
-             "-run", "^(" + "|".join(names) + ")$", PACKAGE],
-            cwd=ROOT, check=True,
-        )
+    with tempfile.TemporaryDirectory(prefix="pulse-native-contracts-") as directory:
+        binary = Path(directory) / "installtests.test"
+        subprocess.run(["go", "test", "-c", "-o", str(binary), PACKAGE],
+                       cwd=ROOT, check=True)
+        inventory = subprocess.run([str(binary), "-test.list=."], cwd=ROOT / "scripts/installtests",
+                                   check=True, capture_output=True, text=True)
+        early, remaining = partition(inventory.stdout)
+        selected = early if phase == "preflight" else remaining if phase == "remaining" else early + remaining
+        print(f"Native Unix installer {phase}: {len(selected)} discovered checks", flush=True)
+        for index, name in enumerate(selected, 1):
+            print(f"Native Unix installer {index}/{len(selected)}: {name}", flush=True)
+            run_check(binary, name, cwd=ROOT / "scripts/installtests")
 
 
 if __name__ == "__main__":
