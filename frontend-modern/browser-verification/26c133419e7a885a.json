@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "13c4da72f93ec5a51ccdeea826366a9cfe57e984",
+  "verified_at": "2026-10-18T02:56:13.206240+00:00",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "1b628a3d8d13de7fa1a89c481d97b7dbf976093e7af95431359d3853753fbe5e"
+  },
+  "routes": [
+    "Settings > Infrastructure > existing Proxmox VE / PBS / PMG credential editor, rendered by production ConnectionEditor and NodeCredentialSlot; synthetic loopback HTTP"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "browsers": [
+    "chromium 141.0.7390.37 / Playwright 1.56.1",
+    "webkit 26.0 / Playwright 1.56.1"
+  ],
+  "states": [
+    "PVE HTTP 200 error with complete 64-byte-hex expected/got certificate pins.",
+    "PBS HTTP 400 x509 hostname error through the production API error parser.",
+    "PMG entered-settings success with limited-coverage warning containing a long unbroken hostname, newline and escaped literal markup."
+  ],
+  "interactions": [
+    "Keyboard activation at desktop and touch at 320px; all six cases have zero overflowing text rects and result/scroller scroll widths equal client widths.",
+    "Saved tests POST only the saved record ID with no body. Entered PMG test carries only the explicitly entered synthetic password, unchanged verification and pin.",
+    "Explicit synthetic PVE save preserves verifySSL and fingerprint and does not submit saved secrets. PBS/PMG input changes retire stale results, then Cancel closes. Save remains inside the viewport and accepts focus.",
+    "Opened all six final captures and the failing baseline with native view_image; narrow fingerprints, scope explanations and warnings are fully wrapped without truncation or HTML execution."
+  ],
+  "evidence": [
+    "BROWSER-ASSESSMENT.json",
+    "browser-execution.json",
+    "preview-build.json",
+    "PIXEL-REVIEW.json",
+    "RECEIPTS.md"
+  ],
+  "limits": [
+    "The final suite-wide unexpected-resource assertion counted one local GET /favicon.ico 404. All six journeys, text-range/scroll geometry, exact transport, trust preservation, save/cancel/focus and stale-result assertions completed before that assertion.",
+    "Accept the six completed UI cases; retain exit 1 and the favicon-only harness failure. It is not an application API, TLS, permission, browser-execution or cleanup refusal. No browser journey was replayed just to obtain a zero process exit.",
+    "A source-bound consuming fixture, not a live PVE/PBS/PMG operation or proof of ACME/new-member/provisioning recovery. Containing source build/type/lint/unit/budget proof follows on the committed candidate."
+  ]
+}
