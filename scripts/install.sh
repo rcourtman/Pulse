@@ -56,6 +56,7 @@ main() {
 
 # --- Cleanup trap ---
 TMP_FILES=()
+AGENT_STAGING_DIRS=()
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
     if [[ "${SAFE_PROFILE_TRANSACTION_ACTIVE:-false}" == "true" &&
@@ -70,8 +71,13 @@ cleanup() {
     for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
         rm -f "$f" 2>/dev/null || true
     done
+    for f in ${AGENT_STAGING_DIRS[@]+"${AGENT_STAGING_DIRS[@]}"}; do
+        rmdir "$f" 2>/dev/null || true
+    done
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- Configuration ---
 AGENT_NAME="pulse-agent"
@@ -7125,6 +7131,25 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     exit "$PREFLIGHT_EXIT"
 fi
 
+# Prepare ordinary collector/helper replacements before stopping the collector.
+# TMPDIR can be on a different filesystem: moving that download directly onto
+# the live path can fall back to a destructive copy. Only a complete, executable
+# file prepared beside its destination may reach the publication rename.
+stage_verified_agent_executable() {
+    local source="$1" directory="$2" name="$3" staging_dir=""
+    AGENT_STAGED_EXECUTABLE=""
+    if [[ -d "$directory/$name" || ( -e "$directory/$name" && ! -f "$directory/$name" ) ]]; then
+        return 1
+    fi
+    mkdir -p "$directory" || return 1
+    staging_dir=$(mktemp -d "$directory/.pulse-agent-stage.XXXXXX") || return 1
+    AGENT_STAGING_DIRS+=("$staging_dir")
+    TMP_FILES+=("$staging_dir/$name")
+    cp "$source" "$staging_dir/$name" || return 1
+    chmod 0755 "$staging_dir/$name" || return 1
+    AGENT_STAGED_EXECUTABLE="$staging_dir/$name"
+}
+
 # --- Download ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -7340,6 +7365,20 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
 fi
 
 chmod 0755 "$TMP_BIN"
+if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
+    stage_verified_agent_executable "$TMP_BIN" "$INSTALL_DIR" "$BINARY_NAME" ||
+        fail "Could not prepare the verified agent on the installation filesystem; the existing collector has not been stopped or replaced." "$EXIT_GENERAL"
+    STAGED_COLLECTOR="$AGENT_STAGED_EXECUTABLE"
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        mkdir -p "$PRIVILEGE_HELPER_DIR"
+        chown root:root "$PRIVILEGE_HELPER_DIR"
+        chmod 0755 "$PRIVILEGE_HELPER_DIR"
+        stage_verified_agent_executable "$TMP_HELPER_BIN" "$PRIVILEGE_HELPER_DIR" "$PRIVILEGED_HELPER_BINARY_NAME" ||
+            fail "Could not prepare the verified helper on the installation filesystem; the existing collector has not been stopped or replaced." "$EXIT_GENERAL"
+        STAGED_HELPER="$AGENT_STAGED_EXECUTABLE"
+        chown root:root "$STAGED_HELPER"
+    fi
+fi
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     # The irreversible server-side reduction must run only through the staged
     # binary whose checksum/signature have just been verified. The installed
@@ -7358,6 +7397,8 @@ fi
 VERSION_PROBE_BINARY="$TMP_BIN"
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     VERSION_PROBE_BINARY="$SAFE_PROFILE_STAGED_COLLECTOR"
+else
+    VERSION_PROBE_BINARY="$STAGED_COLLECTOR"
 fi
 NEW_VERSION=$("$VERSION_PROBE_BINARY" --version 2>/dev/null | head -1 || echo "unknown")
 
@@ -7440,8 +7481,10 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
     COLLECTOR_LIFECYCLE_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 else
-    mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
-    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
+    # Passing the containing directory selects the basename exactly once; an
+    # existing or concurrently created pulse-agent directory cannot absorb it.
+    mv -f "$STAGED_COLLECTOR" "${INSTALL_DIR}/" ||
+        fail "Could not publish the prepared agent; no service restart was attempted. Check the installation destination and retained executable before restarting the collector." "$EXIT_GENERAL"
 fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
@@ -7454,7 +7497,8 @@ if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
         install -o root -g root -m 0755 "$TMP_HELPER_BIN" "$SAFE_PROFILE_STAGED_HELPER"
         mv "$SAFE_PROFILE_STAGED_HELPER" "$PRIVILEGED_HELPER_BINARY_PATH"
     else
-        mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+        mv -f "$STAGED_HELPER" "${PRIVILEGE_HELPER_DIR}/" ||
+            fail "Could not publish the prepared helper; no service restart was attempted. Check the installation destination and retained helper before restarting the collector." "$EXIT_GENERAL"
     fi
     TMP_HELPER_BIN=""
     chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
