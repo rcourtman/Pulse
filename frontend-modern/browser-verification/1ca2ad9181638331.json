@@ -1,7 +1,7 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "bdd186654053b8d6f7be57175b1af6ce7bfc0905",
+  "base_sha": "a69ecff8da0f0e59d9eb29fe70cd27d618b6a12a",
   "changed_paths": [
     "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
     "frontend-modern/src/utils/alertDestinationsPresentation.ts"
@@ -35,7 +35,7 @@
       "height": 900
     }
   ],
-  "verified_at": "2026-10-18T05:07:58.186962+00:00",
+  "verified_at": "2026-10-18T05:07:58.186962Z",
   "browsers": {
     "playwright": "1.56.1",
     "desktop": "141.0.7390.37",
@@ -43,5 +43,6 @@
   },
   "pixel_review": "All six retained captures opened with native view_image in this source turn. New notice/checkbox/help text is readable without clipping in desktop light and 320px dark layouts. Existing panel description and saved-key placeholder truncate at narrow width; their content is unchanged. New notices wrap fully. Document scrollWidth/clientWidth 1365/1365 and 320/320.",
   "limits": "Synthetic presentation and draft preservation, not TLS negotiation, recipient delivery, installed recovery or availability. Existing source-free WebKit Back/reload fault is not exercised or cleared.",
-  "driver": "frontend-modern/browser-tests/apprise-transport.cjs"
+  "driver": "frontend-modern/browser-tests/apprise-transport.cjs",
+  "receipt_correction": "Retains the same browser pass and exact runtime hashes. Corrects UTC timestamp serialization from +00:00 to the guard-required Z; this non-merge receipt is bound to its own parent. No runtime source changed and no browser result is replayed."
 }
