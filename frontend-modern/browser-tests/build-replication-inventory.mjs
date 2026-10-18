@@ -68,6 +68,12 @@ try {
     'browser-tests/replication-result-verdicts.cjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
+  fs.mkdirSync(path.join(outDir, 'docs'), { recursive: true });
+  for (const name of ['README', 'TROUBLESHOOTING']) {
+    const file = `public/docs/${name}.md`;
+    sources[file] = hash(fs.readFileSync(path.join(root, file)));
+    fs.copyFileSync(path.join(root, file), path.join(outDir, 'docs', `${name}.md`));
+  }
   scan(outDir, artifacts);
   fs.writeFileSync(
     path.join(outDir, 'binding.json'),

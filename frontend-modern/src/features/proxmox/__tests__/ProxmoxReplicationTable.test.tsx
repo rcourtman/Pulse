@@ -46,7 +46,7 @@ describe('ProxmoxReplicationTable', () => {
       emptyDescription="Replication jobs appear here."
     />
   );
-  const jobRow = () => screen.getByText('100 (web)').closest('tr')!;
+  const jobRow = () => screen.getByRole('cell', { name: '100 (web)', exact: true }).closest('tr')!;
 
   it.each([
     ['ok', { lastSyncStatus: 'ok' }, 'OK'],
@@ -64,7 +64,11 @@ describe('ProxmoxReplicationTable', () => {
     ['running is not pending', { lastSyncStatus: 'running' }, 'Unknown'],
     ['explicit pending', { lastSyncStatus: ' PENDING ' }, 'Pending'],
     ['blank error is not failure', { lastSyncStatus: 'ok', error: '  ' }, 'OK'],
-    ['disabled retains history', { enabled: false, lastSyncStatus: 'error', error: 'Old failure' }, 'Disabled'],
+    [
+      'disabled retains history',
+      { enabled: false, lastSyncStatus: 'error', error: 'Old failure' },
+      'Disabled',
+    ],
   ] satisfies [string, Partial<ReplicationJob>, string][])(
     'interprets %s without inventing overall health or a pending operation',
     (_name, change, expected) => {
@@ -76,8 +80,12 @@ describe('ProxmoxReplicationTable', () => {
 
   it('keeps an absent result unreported despite a retained sync timestamp', async () => {
     render(() => table([replicationJob({ lastSyncStatus: undefined })]));
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
-    expect(screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling).toHaveTextContent('Not reported');
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    expect(
+      screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling,
+    ).toHaveTextContent('Not reported');
     expect(within(jobRow()).getByText('Unknown', { exact: true })).toBeVisible();
   });
 
@@ -85,9 +93,24 @@ describe('ProxmoxReplicationTable', () => {
     const [jobs, setJobs] = createSignal([
       replicationJob({ lastSyncStatus: undefined }),
       replicationJob({ id: 'other', jobId: '101-0', guestId: 101, guestName: 'other' }),
-      replicationJob({ id: 'error', jobId: '102-0', guestId: 102, guestName: 'error', error: 'Sync failed' }),
+      replicationJob({
+        id: 'error',
+        jobId: '102-0',
+        guestId: 102,
+        guestName: 'error',
+        error: 'Sync failed',
+      }),
     ]);
-    render(() => table(jobs()));
+    render(() => (
+      <ProxmoxReplicationTable
+        jobs={jobs()}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
     const unknown = screen.getByRole('button', { name: 'Unknown, 1' });
     await fireEvent.click(unknown);
     expect(unknown).toHaveAttribute('aria-pressed', 'true');
@@ -95,7 +118,10 @@ describe('ProxmoxReplicationTable', () => {
     expect(screen.queryByText('101 (other)')).toBeNull();
     expect(screen.queryByText('102 (error)')).toBeNull();
     setJobs([replicationJob(), jobs()[1], jobs()[2]]);
-    expect(screen.getByRole('button', { name: 'Unknown, 0' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Unknown, 0' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByText('No replication jobs match current filters')).toBeVisible();
     await fireEvent.click(screen.getByRole('button', { name: 'OK, 2' }));
     expect(within(jobRow()).getByText('OK', { exact: true })).toBeVisible();
@@ -110,7 +136,9 @@ describe('ProxmoxReplicationTable', () => {
     const raw = '<b>provider-future-state</b>';
     render(() => table([replicationJob({ lastSyncStatus: raw })]));
     expect(screen.getByText(/not a restore check or current guest health/)).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
     const result = screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling!;
     expect(result).toHaveTextContent(raw);
     expect(result.querySelector('b')).toBeNull();
@@ -120,10 +148,16 @@ describe('ProxmoxReplicationTable', () => {
   it('does not lose the error behind an OK result and zero failure count', async () => {
     render(() => table([replicationJob({ error: 'Source snapshot unavailable', failCount: 0 })]));
     expect(within(jobRow()).getByText('Failed', { exact: true })).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
-    expect(document.querySelector('[data-replication-job-error]')).toHaveTextContent('Source snapshot unavailable');
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    expect(document.querySelector('[data-replication-job-error]')).toHaveTextContent(
+      'Source snapshot unavailable',
+    );
     expect(screen.getByText(/previous successful sync does not override/)).toBeVisible();
-    expect(screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling).toHaveTextContent('ok');
+    expect(
+      screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling,
+    ).toHaveTextContent('ok');
   });
 
   it('uses five readable columns and compact time direction across phone widths', () => {
