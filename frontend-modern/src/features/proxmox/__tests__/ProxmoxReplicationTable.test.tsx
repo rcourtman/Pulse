@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -35,6 +36,89 @@ afterEach(() => {
 });
 
 describe('ProxmoxReplicationTable', () => {
+  const table = (jobs: ReplicationJob[]) => (
+    <ProxmoxReplicationTable
+      jobs={jobs}
+      error={undefined}
+      onRetry={() => undefined}
+      emptyIcon={<span />}
+      emptyTitle="No replication jobs"
+      emptyDescription="Replication jobs appear here."
+    />
+  );
+  const jobRow = () => screen.getByText('100 (web)').closest('tr')!;
+
+  it.each([
+    ['ok', { lastSyncStatus: 'ok' }, 'OK'],
+    ['success alias', { lastSyncStatus: ' success ' }, 'OK'],
+    ['completed alias', { lastSyncStatus: 'COMPLETED' }, 'OK'],
+    ['zero-count error', { lastSyncStatus: 'ok', error: 'Sync failed', failCount: 0 }, 'Failed'],
+    ['error without result', { lastSyncStatus: undefined, error: 'Sync failed' }, 'Failed'],
+    ['failed attempts override ok', { lastSyncStatus: 'ok', failCount: 2 }, 'Failed'],
+    ['failure result', { lastSyncStatus: ' Failed ' }, 'Failed'],
+    ['error result', { lastSyncStatus: 'ERROR' }, 'Failed'],
+    ['missing result', { lastSyncStatus: undefined }, 'Unknown'],
+    ['empty result', { lastSyncStatus: '' }, 'Unknown'],
+    ['blank result', { lastSyncStatus: '  ' }, 'Unknown'],
+    ['future result', { lastSyncStatus: 'provider-future-state' }, 'Unknown'],
+    ['running is not pending', { lastSyncStatus: 'running' }, 'Unknown'],
+    ['explicit pending', { lastSyncStatus: ' PENDING ' }, 'Pending'],
+    ['blank error is not failure', { lastSyncStatus: 'ok', error: '  ' }, 'OK'],
+    ['disabled retains history', { enabled: false, lastSyncStatus: 'error', error: 'Old failure' }, 'Disabled'],
+  ] satisfies [string, Partial<ReplicationJob>, string][])(
+    'interprets %s without inventing overall health or a pending operation',
+    (_name, change, expected) => {
+      render(() => table([replicationJob(change)]));
+      expect(within(jobRow()).getByText(expected, { exact: true })).toBeVisible();
+      expect(within(jobRow()).queryByText('Healthy', { exact: true })).toBeNull();
+    },
+  );
+
+  it('keeps unknown counts and filtering aligned with the same live verdict', async () => {
+    const [jobs, setJobs] = createSignal([
+      replicationJob({ lastSyncStatus: undefined }),
+      replicationJob({ id: 'other', jobId: '101-0', guestId: 101, guestName: 'other' }),
+      replicationJob({ id: 'error', jobId: '102-0', guestId: 102, guestName: 'error', error: 'Sync failed' }),
+    ]);
+    render(() => table(jobs()));
+    const unknown = screen.getByRole('button', { name: 'Unknown, 1' });
+    await fireEvent.click(unknown);
+    expect(unknown).toHaveAttribute('aria-pressed', 'true');
+    expect(within(jobRow()).getByText('Unknown', { exact: true })).toBeVisible();
+    expect(screen.queryByText('101 (other)')).toBeNull();
+    expect(screen.queryByText('102 (error)')).toBeNull();
+    setJobs([replicationJob(), jobs()[1], jobs()[2]]);
+    expect(screen.getByRole('button', { name: 'Unknown, 0' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('No replication jobs match current filters')).toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'OK, 2' }));
+    expect(within(jobRow()).getByText('OK', { exact: true })).toBeVisible();
+    expect(screen.getByText('101 (other)')).toBeVisible();
+    expect(screen.queryByText('102 (error)')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Failed, 1' }));
+    expect(screen.getByText('102 (error)')).toBeVisible();
+    expect(screen.queryByText('100 (web)')).toBeNull();
+  });
+
+  it('explains unknown outcomes and preserves the plain-text provider result without hover', async () => {
+    const raw = '<b>provider-future-state</b>';
+    render(() => table([replicationJob({ lastSyncStatus: raw })]));
+    expect(screen.getByText(/not a restore check or current guest health/)).toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
+    const result = screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling!;
+    expect(result).toHaveTextContent(raw);
+    expect(result.querySelector('b')).toBeNull();
+    expect(screen.getByText(/This does not mean a sync is pending/)).toBeVisible();
+  });
+
+  it('does not lose the error behind an OK result and zero failure count', async () => {
+    render(() => table([replicationJob({ error: 'Source snapshot unavailable', failCount: 0 })]));
+    expect(within(jobRow()).getByText('Failed', { exact: true })).toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for replication job 100-0' }));
+    expect(document.querySelector('[data-replication-job-error]')).toHaveTextContent('Source snapshot unavailable');
+    expect(screen.getByText(/previous successful sync does not override/)).toBeVisible();
+    expect(screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling).toHaveTextContent('ok');
+  });
+
   it('uses five readable columns and compact time direction across phone widths', () => {
     expect(REPLICATION_MOBILE_COLUMNS).toEqual([
       'guest',
