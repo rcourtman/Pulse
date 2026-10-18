@@ -137,7 +137,9 @@ main() {
     tmp="$(mktemp -t pulse-mcp.XXXXXX)"
     trap 'rm -f "${tmp}"' EXIT
 
-    if ! curl -fsSL --retry 3 "${url}" -o "${tmp}"; then
+    # Keep saved curl settings out of every binary/integrity download. Explicit
+    # CA trust and proxy environment still apply; signed admission is unchanged.
+    if ! curl --disable -fsSL --retry 3 "${url}" -o "${tmp}"; then
         err "download failed: ${url}
 If a release exists for this version, the binary may not yet be published for ${platform}.
 Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mcp@latest"
@@ -162,10 +164,10 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     allowed_signers="$(mktemp -t pulse-mcp-signers.XXXXXX)"
     trap 'rm -f "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"' EXIT
 
-    if ! curl -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
+    if ! curl --disable -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
         err "could not fetch checksums.txt; refusing unverified install"
     fi
-    if ! curl -fsSL --retry 3 "${signature_url}" -o "${signature_tmp}"; then
+    if ! curl --disable -fsSL --retry 3 "${signature_url}" -o "${signature_tmp}"; then
         err "could not fetch checksums.txt.sshsig; refusing unverified install"
     fi
 

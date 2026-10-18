@@ -186,6 +186,22 @@ cp "$FIXTURE_DIR/$name" "$output"
 	}
 }
 
+// Exercise the complete Unix installer with real TLS, curl, SSH verification and
+// file installation. The isolated peer and fixture signer are the only source
+// substitutions; downloaded bytes are never executed.
+func TestInstallMCPHTTPClientsIgnoreAmbientConfiguration(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal("python3 is required for real MCP installer transport checks")
+	}
+	cmd := exec.Command(python, repoFile("scripts", "tests", "test_mcp_installer_client_config.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	t.Logf("%s", output)
+	if err != nil {
+		t.Fatalf("real MCP installer transport checks failed: %v", err)
+	}
+}
+
 func TestInstallMCPPowerShellFailsClosed(t *testing.T) {
 	path := repoFile("scripts", "install-mcp.ps1")
 	assertFileContainsAll(t, path,

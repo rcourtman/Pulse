@@ -6342,7 +6342,17 @@ verify SHA256 against the same `checksums.txt` the rest of the
 release uses, first verifying `checksums.txt.sshsig` against the pinned
 Pulse release key and failing closed if either integrity artifact is missing,
 invalid, or ambiguous, and place the binary at `~/.local/bin/pulse-mcp`
-(Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). The
+(Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). Each Unix
+binary, checksum-manifest and signature download starts `curl --disable` before
+any other option. Saved curl settings must not weaken TLS verification, change
+request methods/headers, add transfers or enable traces. Explicit CA trust and
+proxy environment remain supported; retries, signed-manifest verification and
+binary-digest admission are unchanged. The real-client controls in
+`TestInstallMCPHTTPClientsIgnoreAmbientConfiguration` exercise the complete Unix
+installer with a loopback TLS peer and fixture signer, including preservation
+of a previous binary and cleanup on refused TLS, missing integrity inputs and
+changed bytes. They do not execute the downloaded binary or establish native
+platform or installed customer recovery. The
 binary takes no version ldflags because it reads the manifest
 from the Pulse instance it points at. `scripts/build-release.sh`
 builds `pulse-mcp` for the same multi-OS matrix as the unified
