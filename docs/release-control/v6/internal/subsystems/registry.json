@@ -6707,6 +6707,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_read_projection_test.go",
               "internal/monitoring/backup_task_history_test.go",
               "internal/monitoring/guest_snapshot_projection_test.go",
               "internal/monitoring/guest_snapshot_workers_test.go",
