@@ -4706,6 +4706,7 @@
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/installtests/auto_update_systemd.py",
+        "scripts/installtests/run_unix_contracts.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
@@ -5365,6 +5366,20 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/tests/test_e2e_test_images.py"
+            ]
+          },
+          {
+            "id": "native-unix-installer-runner",
+            "label": "exhaustive native Unix installer execution proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/installtests/run_unix_contracts.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/native_unix_contract_runner_test.go",
+              "scripts/installtests/native_unix_contract_runner_test.py"
             ]
           }
         ],
