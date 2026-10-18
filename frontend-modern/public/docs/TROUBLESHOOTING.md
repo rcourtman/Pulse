@@ -18,6 +18,11 @@ establish safe recovery.
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
   or repeat first-time setup.
+- **SSO stopped working after editing a provider:** use
+  [provider-save sign-in recovery](OIDC.md#sign-in-fails-after-editing-a-provider),
+  including when you saved without changing anything. Keep the working
+  administrator session; a local password reset does not restore the provider's
+  client secret, and a successful provider Test does not prove sign-in.
 - **Already paid but Pro features are unavailable:** distinguish
   [payment, local activation and the installed runtime](PULSE_PRO.md#already-paid-but-pro-features-are-unavailable).
   An active licence does not install Pro-only runtime hooks; do not buy again
@@ -419,7 +424,10 @@ Identify which request failed before clearing cookies or changing credentials:
   expired session, not a wrong password. Open the same public Pulse URL in a
   fresh browser session and sign in through the configured method. Preserve any
   working administrator session; do not clear unrelated sites' cookies.
-- **SSO or proxy login:** use the identity-provider or Pulse administrator's
+- **SSO or proxy login:** if OIDC worked before a provider edit or unchanged
+  save, follow [provider-save sign-in recovery](OIDC.md#sign-in-fails-after-editing-a-provider)
+  without closing the working administrator session. For other SSO failures,
+  use [safe SSO diagnosis](OIDC.md#safe-diagnosis) or the instance administrator's
   recovery path. Check the [proxy authentication guide](PROXY_AUTH.md) when the
   proxy signs you in but Pulse rejects the request. A local lockout reset does
   not repair an identity-provider account or missing trusted proxy headers.
