@@ -1890,7 +1890,9 @@ describe('settings architecture guardrails', () => {
 
     expect(trueNASCredentialSlotSource).toContain('getTrueNASTlsPolicy');
     expect(trueNASCredentialSlotSource).toContain('aria-label="TrueNAS form TLS policy"');
-    expect(trueNASCredentialSlotSource).toContain('Form settings only, not a connection-test result');
+    expect(trueNASCredentialSlotSource).toContain(
+      'Form settings only, not a connection-test result',
+    );
     expect(trueNASCredentialSlotSource).not.toContain('TlsVerificationWarningBanner');
   });
 

@@ -8,12 +8,16 @@ type TrustInputs = Pick<
 // Describe requested policy, never a verified peer. Keep the defaults and pin
 // semantics aligned with internal/truenas/client.go resolveEndpoint/buildTLSConfig.
 export const getTrueNASTlsPolicy = (form: TrustInputs) => {
-  const scheme = form.host.trim().match(/^([^:]+):\/\//)?.[1].toLowerCase();
+  const scheme = form.host
+    .trim()
+    .match(/^([^:]+):\/\//)?.[1]
+    .toLowerCase();
   if (scheme && scheme !== 'https' && scheme !== 'http') {
     return {
       tone: 'warning' as const,
       title: 'Endpoint scheme is not supported',
-      description: 'Use an HTTPS endpoint or a hostname. These settings do not establish a connection.',
+      description:
+        'Use an HTTPS endpoint or a hostname. These settings do not establish a connection.',
     };
   }
   const port = form.port.trim();
@@ -21,7 +25,8 @@ export const getTrueNASTlsPolicy = (form: TrustInputs) => {
     return {
       tone: 'warning' as const,
       title: 'Connection port is invalid',
-      description: 'Enter a whole number between 1 and 65535, or leave Port blank for the client default.',
+      description:
+        'Enter a whole number between 1 and 65535, or leave Port blank for the client default.',
     };
   }
   // The native client uses the explicit URL scheme, then defaults back to
@@ -35,7 +40,11 @@ export const getTrueNASTlsPolicy = (form: TrustInputs) => {
         'HTTP traffic is not encrypted or authenticated by TLS. Neither a fingerprint nor the verification setting protects credentials over HTTP. Use a trusted HTTPS endpoint; do not switch to HTTP to bypass a certificate error.',
     };
   }
-  const pin = form.fingerprint.trim().toLowerCase().replace(/^sha256:/, '').replace(/[: ]/g, '');
+  const pin = form.fingerprint
+    .trim()
+    .toLowerCase()
+    .replace(/^sha256:/, '')
+    .replace(/[: ]/g, '');
   if (pin && !/^[0-9a-f]{64}$/.test(pin)) {
     return {
       tone: 'warning' as const,

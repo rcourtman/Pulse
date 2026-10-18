@@ -294,7 +294,8 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </InlineNotice>
         <p id={`${trustId}-transport-help`} class={formHelpText}>
           The scheme in Host takes precedence over Use HTTPS. With no separate port, the client
-          defaults to HTTPS. Form settings only, not a connection-test result or proof of collection.
+          defaults to HTTPS. Form settings only, not a connection-test result or proof of
+          collection.
         </p>
 
         <Show when={props.editingConnection?.transport}>

@@ -23,7 +23,9 @@ const saved = {
 
 describe('mounted TrueNAS form TLS policy', () => {
   it('describes draft trust without testing, mutating or claiming saved/verified trust', () => {
-    const { result: state } = renderHook(() => useTrueNASSettingsPanelState({ canLoad: () => false }));
+    const { result: state } = renderHook(() =>
+      useTrueNASSettingsPanelState({ canLoad: () => false }),
+    );
     render(() => (
       <TrueNASCredentialSlot
         state={state}
@@ -50,10 +52,14 @@ describe('mounted TrueNAS form TLS policy', () => {
     expect(policy).toHaveTextContent('Certificate identity not verified');
     fireEvent.click(skip);
     expect(policy).toHaveTextContent('Trusted certificate chain required');
-    fireEvent.input(screen.getByLabelText('Host'), { target: { value: 'http://nas.example.invalid' } });
+    fireEvent.input(screen.getByLabelText('Host'), {
+      target: { value: 'http://nas.example.invalid' },
+    });
     expect(policy).toHaveTextContent('HTTP does not protect credentials');
     expect(screen.getByRole('checkbox', { name: 'Use HTTPS' })).toBeChecked();
-    expect(screen.getByLabelText('Host')).toHaveAccessibleDescription(/scheme in Host takes precedence/);
+    expect(screen.getByLabelText('Host')).toHaveAccessibleDescription(
+      /scheme in Host takes precedence/,
+    );
     expect(skip).toHaveAccessibleDescription(/Neither a fingerprint/);
     expect(state.form()).toMatchObject({
       host: 'http://nas.example.invalid',

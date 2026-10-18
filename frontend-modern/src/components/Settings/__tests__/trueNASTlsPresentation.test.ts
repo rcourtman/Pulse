@@ -30,39 +30,58 @@ describe('TrueNAS requested TLS policy', () => {
     expect(policy.description).toContain('pin is still required');
   });
   it.each(['', '   ', ' SHA256: : '])('does not claim pinning for a native-empty pin %j', (pin) => {
-    expect(getTrueNASTlsPolicy({ ...secure, fingerprint: pin, insecureSkipVerify: true })).toMatchObject({
+    expect(
+      getTrueNASTlsPolicy({ ...secure, fingerprint: pin, insecureSkipVerify: true }),
+    ).toMatchObject({
       title: 'Certificate identity not verified',
       tone: 'danger',
     });
   });
-  it.each(['ab', 'zz'.repeat(32), 'ab\t'.repeat(32)])('does not call invalid pin %j verified', (pin) => {
-    expect(getTrueNASTlsPolicy({ ...secure, fingerprint: pin }).title).toBe(
-      'Certificate fingerprint is invalid',
-    );
-  });
-  it.each([true, false])('warns about explicit HTTP regardless of the HTTPS checkbox (%s)', (useHttps) => {
-    expect(getTrueNASTlsPolicy({ ...secure, host: '  HTTP://nas.example.invalid', useHttps })).toMatchObject({
-      title: 'HTTP does not protect credentials',
-      tone: 'danger',
-    });
-  });
+  it.each(['ab', 'zz'.repeat(32), 'ab\t'.repeat(32)])(
+    'does not call invalid pin %j verified',
+    (pin) => {
+      expect(getTrueNASTlsPolicy({ ...secure, fingerprint: pin }).title).toBe(
+        'Certificate fingerprint is invalid',
+      );
+    },
+  );
+  it.each([true, false])(
+    'warns about explicit HTTP regardless of the HTTPS checkbox (%s)',
+    (useHttps) => {
+      expect(
+        getTrueNASTlsPolicy({ ...secure, host: '  HTTP://nas.example.invalid', useHttps }),
+      ).toMatchObject({
+        title: 'HTTP does not protect credentials',
+        tone: 'danger',
+      });
+    },
+  );
   it('does not imply a pin can secure HTTP, including an invalid pin', () => {
     expect(getTrueNASTlsPolicy({ ...secure, useHttps: false, fingerprint: 'bad' }).title).toBe(
       'HTTP does not protect credentials',
     );
   });
   it.each(['', '   '])('matches the native HTTPS default with separate port %j', (port) => {
-    expect(getTrueNASTlsPolicy({ ...secure, host: 'http://nas.example.invalid:80', useHttps: false, port }).title).toBe(
-      'Trusted certificate chain required',
-    );
+    expect(
+      getTrueNASTlsPolicy({
+        ...secure,
+        host: 'http://nas.example.invalid:80',
+        useHttps: false,
+        port,
+      }).title,
+    ).toBe('Trusted certificate chain required');
   });
-  it.each(['0', '-1', '65536', 'bad', '1.5'])('does not claim valid policy with port %j', (port) => {
-    expect(getTrueNASTlsPolicy({ ...secure, port }).title).toBe('Connection port is invalid');
-  });
+  it.each(['0', '-1', '65536', 'bad', '1.5'])(
+    'does not claim valid policy with port %j',
+    (port) => {
+      expect(getTrueNASTlsPolicy({ ...secure, port }).title).toBe('Connection port is invalid');
+    },
+  );
   it('lets an explicit HTTPS scheme override an unchecked HTTPS checkbox', () => {
-    expect(getTrueNASTlsPolicy({ ...secure, host: 'https://nas.example.invalid', useHttps: false }).title).toBe(
-      'Trusted certificate chain required',
-    );
+    expect(
+      getTrueNASTlsPolicy({ ...secure, host: 'https://nas.example.invalid', useHttps: false })
+        .title,
+    ).toBe('Trusted certificate chain required');
   });
   it('does not claim supported transport for another URL scheme', () => {
     expect(getTrueNASTlsPolicy({ ...secure, host: 'wss://nas.example.invalid' }).title).toBe(
