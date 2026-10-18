@@ -19,6 +19,13 @@ type pbsBackupPoll struct {
 	started time.Time
 }
 
+// Namespace discovery is collection evidence, not part of the public datastore
+// model. Carry its result with the exact datastore input into the admitted scan.
+type pbsBackupDatastore struct {
+	models.PBSDatastore
+	namespaceDiscoveryErr error
+}
+
 type pbsBackupPollContextKey struct{}
 
 func (m *Monitor) beginPBSBackupPoll(instance string, now time.Time, client *pbs.Client) (*pbsBackupPoll, string) {
@@ -121,14 +128,14 @@ func (m *Monitor) applyPBSBackupEffect(ctx context.Context, instance string, eff
 	}
 }
 
-func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, datastores []models.PBSDatastore) {
+func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, datastores []pbsBackupDatastore) {
 	owner, reason := m.beginPBSBackupPoll(instance, time.Now(), client)
 	if owner == nil {
 		log.Debug().Str("instance", instance).Str("reason", reason).Msg("Skipping PBS backup polling this cycle")
 		return
 	}
 	// Namespace slices also belong to this admitted scan, not a later poll.
-	ds := append([]models.PBSDatastore(nil), datastores...)
+	ds := append([]pbsBackupDatastore(nil), datastores...)
 	for i := range ds {
 		ds[i].Namespaces = append([]models.PBSNamespace(nil), ds[i].Namespaces...)
 	}
@@ -139,7 +146,7 @@ func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, datas
 		ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 		defer cancel()
 		log.Info().Str("instance", instance).Int("datastores", len(ds)).Msg("Starting background PBS backup polling")
-		m.pollPBSBackups(ctx, instance, client, ds)
+		m.pollPBSBackupInventory(ctx, instance, client, ds)
 		log.Info().Str("instance", instance).Dur("duration", time.Since(owner.started)).Msg("Completed background PBS backup polling")
 	}()
 }

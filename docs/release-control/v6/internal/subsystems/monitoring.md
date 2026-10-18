@@ -8607,3 +8607,32 @@ multi-connection dispatch and canonical resource projection for consuming
 browser proof. No poll interval, API limit, TLS setting, provider permissions
 or timeout threshold is waived. These synthetic controls are not vCenter 8.0.3
 or installed recovery, and do not attribute #2070's HTTP 500 to refresh duration.
+
+### PBS namespace discovery is inventory evidence (18 October 2026)
+
+The ordinary foreground PBS poll carries each datastore's namespace-discovery
+result into the same admitted background backup scan. A readable root cannot
+certify complete history when discovery failed. Transient discovery failure
+retains only that datastore's previously observed nested rows at their original
+cache age; the root and other datastores retain independent replacement results.
+Rejected discovery withdraws those unread raw rows instead. Neither outcome
+probes cached namespace paths, renews their successful-read times, nor authorises
+instance-wide recovery-point deletion. The provider observation is partial (or
+unavailable without a readable scope), with unknown or partial/denied permission
+evidence as appropriate. An ordinary complete discovery and inventory can again
+confirm deletion and clear unused cache entries.
+
+Namespace success consumes and closes the whole existing 8 MiB-bounded response,
+requiring a canonical array and identifiable, unique namespace rows. Missing/null
+data, conflicting errors, duplicate/case-variant supported keys, incomplete
+bodies, trailing content and read/close failures are not empty inventories.
+Supported `ns`/`path`/`name` spellings, explicit root, additive metadata and genuine
+empty arrays remain accepted. Only an actual HTTP 404 preserves the older-PBS
+root-only compatibility result; a different status mentioning 404 does not.
+
+`TestPBSNamespaceInventoryAdmission` checks the real client boundary;
+`TestPBSNamespaceDiscoveryFailureIsNotEmptyInventory` and
+`TestPBSNamespaceDiscoveryAdmissionAndRecovery` join foreground discovery,
+background admission, raw/cache scope, stored protection and ordinary recovery.
+The controlled HTTP and consumer proofs do not establish incident cause,
+installed recovery, backup/restore availability or independent guest thaw.

@@ -1051,3 +1051,82 @@ func TestPBSBackupInventoryAdmission(t *testing.T) {
 		})
 	}
 }
+
+func TestPBSNamespaceInventoryAdmission(t *testing.T) {
+	const good = `{"data":[{"ns":"team/production","parent":"team"}]}`
+	for _, tc := range []struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		valid             bool
+		want              int
+	}{
+		{name: "complete", body: good, valid: true, want: 1},
+		{name: "root", body: `{"data":[{"ns":""}]}`, valid: true, want: 1},
+		{name: "path-alias", body: `{"data":[{"path":"team/production"}]}`, valid: true, want: 1},
+		{name: "name-alias", body: `{"data":[{"name":"team"}]}`, valid: true, want: 1},
+		{name: "empty", body: `{"data":[]}`, valid: true},
+		{name: "legacy-not-found", body: "fixture absent", status: http.StatusNotFound, valid: true},
+		{name: "extended", body: `{"extra":true,"errors":null,"data":[{"ns":"team","extra":7}]}`, valid: true, want: 1},
+		{name: "exact-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, want: 1},
+		{name: "unavailable-mentions-404", body: "fixture refers to 404", status: http.StatusServiceUnavailable},
+		{name: "access-denied", body: "fixture denied", status: http.StatusForbidden},
+		{name: "missing-data", body: `{}`},
+		{name: "null-data", body: `{"data":null}`},
+		{name: "wrong-data-type", body: `{"data":{}}`},
+		{name: "duplicate-data", body: `{"data":[],"data":[{"ns":"team"}]}`},
+		{name: "case-data", body: `{"Data":[]}`},
+		{name: "provider-error", body: `{"data":[],"errors":{"private-provider-marker":"unavailable"}}`},
+		{name: "trailing-json", body: good + ` {"data":[]}`},
+		{name: "trailing-garbage", body: good + ` private-provider-marker`},
+		{name: "truncated", body: strings.TrimSuffix(good, "}")},
+		{name: "null-row", body: `{"data":[null]}`},
+		{name: "missing-identity", body: `{"data":[{}]}`},
+		{name: "null-identity", body: `{"data":[{"ns":null}]}`},
+		{name: "nontext-identity", body: `{"data":[{"ns":1}]}`},
+		{name: "duplicate-identity", body: `{"data":[{"ns":"team","ns":"other"}]}`},
+		{name: "case-identity", body: `{"data":[{"NS":"team"}]}`},
+		{name: "duplicate-namespace", body: `{"data":[{"ns":"team"},{"name":"team"}]}`},
+		{name: "duplicate-root", body: `{"data":[{"ns":""},{"path":"/"}]}`},
+		{name: "invalid-utf8", body: `{"data":[{"ns":"` + string([]byte{0xff}) + `"}]}`},
+		{name: "partial-http-status", body: good, status: http.StatusPartialContent},
+		{name: "read-error-after-json", body: good, tailErr: errors.New("private-provider-marker")},
+		{name: "close-error", body: good, closeErr: errors.New("private-provider-marker")},
+		{name: "over-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+		{name: "read-truncation", body: good, tailErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+			status := tc.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			calls := 0
+			c, err := NewClient(ClientConfig{Host: "https://pbs-namespaces.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore/main/namespace" || r.URL.Query().Get("ns") != "team" || r.URL.Query().Get("max-depth") != "7" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+				}
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+			})
+			values, err := c.ListNamespaces(context.Background(), "main", "team", 7)
+			if tc.valid {
+				if err != nil || len(values) != tc.want {
+					t.Fatalf("complete namespace count=%d err=%v, want %d", len(values), err, tc.want)
+				}
+			} else if err == nil || len(values) != 0 {
+				t.Errorf("unsafe namespace inventory admitted: count=%d err=%v", len(values), err)
+			}
+			if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+				t.Error("private provider details escaped through namespace diagnostic")
+			}
+			if calls != 1 || !body.closed {
+				t.Errorf("requests=%d closed=%t", calls, body.closed)
+			}
+		})
+	}
+}

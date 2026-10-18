@@ -1914,22 +1914,12 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		// If namespace endpoint doesn't exist (older PBS versions), return empty list
-		if strings.Contains(err.Error(), "404") {
+		if isPBSNotFoundError(err) {
 			return []Namespace{}, nil
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Namespace `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readBackupNamespaces(resp)
 }
 
 // ListBackupGroups lists all backup groups in a datastore/namespace

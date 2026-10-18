@@ -130,3 +130,41 @@ func readBackupSnapshots(resp *http.Response, backupType, backupID string) ([]Ba
 		return true
 	})
 }
+
+// Namespace discovery determines which backup scopes may be declared absent.
+// Use the same complete-body admission as the resulting group/snapshot lists.
+func readBackupNamespaces(resp *http.Response) ([]Namespace, error) {
+	seen := make(map[string]bool)
+	namespaces, err := readBackupInventory(resp, []string{"ns", "path", "name", "parent"}, func(fields map[string]json.RawMessage, namespace Namespace) bool {
+		identified := false
+		for _, key := range []string{"ns", "path", "name"} {
+			if raw, ok := fields[key]; ok {
+				var text string
+				if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &text) != nil {
+					return false
+				}
+				identified = true
+			}
+		}
+		path := namespace.NS
+		if path == "" {
+			path = namespace.Path
+		}
+		if path == "" {
+			path = namespace.Name
+		}
+		if path == "/" {
+			path = ""
+		}
+		if !identified || seen[path] {
+			return false
+		}
+		seen[path] = true
+		return true
+	})
+	if err != nil {
+		// Reader/closer errors can contain private provider/proxy details too.
+		return nil, errors.New("invalid PBS namespace inventory response")
+	}
+	return namespaces, nil
+}

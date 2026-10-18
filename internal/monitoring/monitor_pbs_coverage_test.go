@@ -809,3 +809,32 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 		t.Fatalf("raised policy did not clear high-usage alert: %+v", active)
 	}
 }
+
+// Ordinary discovery and successful recovery retain per-scope replacement.
+func TestPBSNamespaceDiscoveryAdmissionAndRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		status           int
+		body             string
+		denied, complete bool
+	}{
+		{name: "denied", status: http.StatusForbidden, body: "fixture denied", denied: true},
+		{name: "unauthorized", status: http.StatusUnauthorized, body: "fixture denied", denied: true},
+		{name: "status-not-body", status: http.StatusServiceUnavailable, body: "fixture references error 404"},
+		{name: "missing-array", status: http.StatusOK, body: `{}`},
+		{name: "null-array", status: http.StatusOK, body: `{"data":null}`},
+		{name: "provider-error", status: http.StatusOK, body: `{"data":[],"errors":{"fixture":"unavailable"}}`},
+		{name: "trailing-json", status: http.StatusOK, body: `{"data":[]} {"data":[]}`},
+		{name: "missing-identity", status: http.StatusOK, body: `{"data":[{}]}`},
+		{name: "successful-empty", status: http.StatusOK, body: `{"data":[]}`, complete: true},
+		{name: "legacy-404", status: http.StatusNotFound, body: "fixture endpoint unavailable", complete: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projection := ""
+			if tc.name == "denied" {
+				projection = "denied"
+			}
+			exercisePBSNamespaceDiscovery(t, tc.status, tc.body, tc.denied, tc.complete, projection)
+		})
+	}
+}

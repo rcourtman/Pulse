@@ -178,6 +178,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	var pbsInst models.PBSInstance
+	var backupDatastores []pbsBackupDatastore
 	publishResult := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
@@ -455,6 +456,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				}
 
 				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
+				backupDatastores = append(backupDatastores, pbsBackupDatastore{PBSDatastore: modelDS, namespaceDiscoveryErr: err})
 			}
 		}
 	}
@@ -534,7 +536,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Msg("Skipping PBS backup polling - globally disabled")
 		} else {
-			m.pollPBSBackupsAsync(instanceName, client, pbsInst.Datastores)
+			m.pollPBSBackupsAsync(instanceName, client, backupDatastores)
 		}
 	} else {
 		log.Debug().

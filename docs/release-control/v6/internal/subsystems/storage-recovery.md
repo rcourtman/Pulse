@@ -7487,3 +7487,25 @@ separate SMTP and saved-file counters describe report delivery only. Only daily
 aggregate counts leave the installation, with no workload, task, repository,
 client scope or reporting range. Recovery evidence, observation coverage and
 collection checkpoints remain owned by the existing recovery store.
+
+### Incomplete PBS namespace discovery cannot delete history (18 October 2026)
+
+A failed namespace listing is not a complete root-only inventory. Its result
+travels with the exact datastore input into the admitted background scan, and
+qualifies the provider observation before recovery ingestion. Transient failure
+preserves that datastore's unread nested raw backups and their original cache
+read times; access rejection withdraws the unread raw scope. Historical recovery
+points remain, qualified by partial/unavailable provider evidence, until an
+ordinary complete discovery and inventory can reconcile absence. Successfully
+read root and sibling datastore raw inventories still replace their own scopes.
+No cached namespace is probed after failed discovery and no unknown scope gains
+fresh verification. The existing live-state bounds and connection/runtime
+publication fence remain effective.
+
+Namespace arrays use the same complete-body admission as backup groups and
+snapshots, including positive empty-array/explicit-root and actual HTTP-404
+legacy controls. `TestPBSNamespaceInventoryAdmission` covers the client;
+`TestPBSNamespaceDiscoveryFailureIsNotEmptyInventory` and
+`TestPBSNamespaceDiscoveryAdmissionAndRecovery` cover ordinary foreground ->
+background -> stored-protection -> deletion recovery. These are synthetic source
+and consuming-surface proofs, not installed guest safety or restore acceptance.
