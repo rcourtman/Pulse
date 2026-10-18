@@ -98,6 +98,10 @@ establish safe recovery.
 - **A usage alert stays open after usage drops:** compare
   [the affected reading, clear level and metric-specific timing](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
   Acknowledgement is not recovery; an old notification is not a current reading.
+- **The UI stalled after enabling Debug:** restore the previous working level
+  with [server log-level recovery](CONFIGURATION.md#if-debug-makes-the-ui-unusable).
+  Pause Stream is display-only; a startup override does not change the saved
+  level. Do not repeat the stall or restart a server held for backup safety.
 - **Private information was posted:** follow
   [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
   Deleting the public copy does not revoke a credential.
