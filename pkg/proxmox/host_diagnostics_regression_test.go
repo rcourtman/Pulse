@@ -545,7 +545,7 @@ func TestGuestFilesystemNonObjectRowsRemainIncomplete(t *testing.T) {
 			}))
 			defer server.Close()
 			// Keep independent cases outside any prior listener's guest fence.
-			client := commandReplyTestClient(t, lockEvidenceFixtureEndpoint(t, server.URL))
+			client := commandReplyTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
 			if len(rows) != 1 || rows[0].UsedBytes != 0 || cap(rows) > 2 || err == nil || err.Error() != "guest filesystem inventory is incomplete: 2 malformed entries" {
 				t.Fatal("known malformed row shape changed accepted peer, output reservation or counted error")
