@@ -261,8 +261,14 @@ func (c *Client) refreshAuthentication(ctx context.Context, force bool) error {
 	password := c.config.Password
 
 	err := c.authenticateJSON(ctx, username, password)
-	if shouldFallbackToForm(err) {
+	if ctx.Err() == nil && shouldFallbackToForm(err) {
 		err = c.authenticateForm(ctx, username, password)
+	}
+	// A response can finish as the request is cancelled. Preserve the owning
+	// caller's outcome before sharing it with waiters; an empty or refused
+	// response from that ended exchange is not a new credential diagnosis.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		err = ctxErr
 	}
 	c.authMu.Lock()
 	pending.err = err
@@ -299,7 +305,7 @@ func (c *Client) authenticateJSON(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
 func (c *Client) authenticateForm(ctx context.Context, username, password string) error {
@@ -324,10 +330,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
-func (c *Client) handleAuthResponse(resp *http.Response) error {
+func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
 		body, err := readResponseBodyLimited(resp.Body)
 		if err != nil {
@@ -349,11 +355,13 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 	}
 
 	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.auth.ticket = ticket
 	c.auth.csrfToken = csrf
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PBS tickets expire after 2 hours
-	c.authMu.Unlock()
-
 	return nil
 }
 

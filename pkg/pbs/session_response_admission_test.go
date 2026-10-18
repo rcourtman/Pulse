@@ -71,7 +71,7 @@ func TestClientSessionResponseAdmission(t *testing.T) {
 				body = sessionAdmissionReadError{body}
 			}
 			resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(body), ContentLength: -1}
-			err := c.handleAuthResponse(resp)
+			err := c.handleAuthResponse(context.Background(), resp)
 			resp.Body.Close()
 			if !tc.valid {
 				if err == nil {

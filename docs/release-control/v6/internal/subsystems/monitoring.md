@@ -4208,6 +4208,20 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+### PBS authentication keeps an ended response caller's outcome
+
+Initial and ordinary PBS authentication preserve the owning caller's context
+error when cancellation races with response consumption. A cancelled JSON
+refusal cannot authorize a form retry, and a complete response cannot replace
+the retained session after its caller has ended. The pending owner's result
+keeps that context class for joined readers. Live malformed or refused
+responses retain their existing admission and HTTP-status behavior; an
+independent later login can recover without resetting retained credentials.
+`TestClientCancelledAuthResponseOwnsErrorAndSession` deterministically cancels
+during response reading for JSON/form, complete and incomplete success,
+encoding and credential refusal, and body-read failure. The real TLS
+constructor cancellation/deadline and shared-renewal controls remain separate.
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)

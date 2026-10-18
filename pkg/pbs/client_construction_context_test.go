@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -149,6 +150,78 @@ func testClientConstructionHonoursContext(t *testing.T) {
 				bad.Fingerprint = strings.Repeat("0", 64)
 				if refused, err := NewClientWithContext(context.Background(), bad); refused != nil || err == nil || logins.Load() != before {
 					t.Error("context-aware construction weakened the saved TLS pin")
+				}
+			})
+		}
+	}
+}
+
+// Cancel while consuming the response, after HTTP has already returned 200 or
+// a refusal. This reproduces the constructor race without scheduler timing.
+type cancellationAuthBody struct {
+	io.Reader
+	cancel context.CancelFunc
+}
+
+func (r cancellationAuthBody) Read(p []byte) (int, error) {
+	r.cancel()
+	return r.Reader.Read(p)
+}
+
+func testClientCancelledAuthResponseOwnsErrorAndSession(t *testing.T) {
+	const good = `{"data":{"ticket":"recovered-ticket","CSRFPreventionToken":"recovered-csrf"}}`
+	for _, encoding := range []string{"json", "form"} {
+		for _, outcome := range []struct {
+			name, body string
+			status     int
+			readError  bool
+		}{
+			{"invalid-success", `{}`, http.StatusOK, false},
+			{"complete-success", good, http.StatusOK, false},
+			{"encoding-refusal", `{}`, http.StatusUnsupportedMediaType, false},
+			{"credential-refusal", `{}`, http.StatusForbidden, false},
+			{"body-read-failure", good, http.StatusOK, true},
+		} {
+			t.Run(encoding+"/"+outcome.name, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				calls, recovering := 0, false
+				c := &Client{
+					baseURL: "https://pbs.fixture.invalid/api2/json",
+					config:  ClientConfig{Password: "fixture-password"},
+					auth: auth{user: "fixture", realm: "pbs", ticket: "retained-ticket",
+						csrfToken: "retained-csrf", expiresAt: time.Now().Add(-time.Hour)},
+				}
+				c.httpClient = &http.Client{Timeout: 5 * time.Second, Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					calls++
+					if encoding == "form" && r.Header.Get("Content-Type") == "application/json" {
+						return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: io.NopCloser(strings.NewReader(`{}`)), ContentLength: -1}, nil
+					}
+					if recovering {
+						return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(good)), ContentLength: -1}, nil
+					}
+					var body io.Reader = strings.NewReader(outcome.body)
+					if outcome.readError {
+						body = sessionAdmissionReadError{body}
+					}
+					body = cancellationAuthBody{Reader: body, cancel: cancel}
+					return &http.Response{StatusCode: outcome.status, Body: io.NopCloser(body), ContentLength: -1}, nil
+				})}
+				before := c.authSnapshot()
+				err := c.authenticate(ctx)
+				if !errors.Is(err, context.Canceled) || !reflect.DeepEqual(c.authSnapshot(), before) {
+					t.Errorf("ended response lost caller or changed retained session: error=%v session_changed=%t", err, !reflect.DeepEqual(c.authSnapshot(), before))
+				}
+				want := 1
+				if encoding == "form" {
+					want = 2
+				}
+				if calls != want || c.authInFlight != nil {
+					t.Errorf("cancellation replayed login or retained owner: calls=%d pending=%t", calls, c.authInFlight != nil)
+				}
+				recovering = true
+				if err := c.authenticate(context.Background()); err != nil || c.auth.ticket != "recovered-ticket" || c.auth.csrfToken != "recovered-csrf" || calls != 2*want {
+					t.Errorf("distinct later authentication did not recover coherently: error=%v calls=%d", err, calls)
 				}
 			})
 		}
