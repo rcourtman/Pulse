@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "8e28dc46c785f97bd3462a29d9f42a4b506007be",
+  "verified_at": "2026-10-18T02:33:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "e6d52a04de47bf548c84d1c764a62ed291194e1ad4cc00300a3d926ca9a4bd26",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "ee5a595d886cc4664e7fc1d18ff542cee1af6b2ac90c08de9dbf26dffbae94e7",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "2ecd26a4365a0c1006d059e3d8f7fe71617b764087130430bf306411c41799c9",
+    "frontend-modern/src/types/api.ts": "9228bf22910d6636484f1e2578fb498e34a312a80a7ef0d1b9ecd8e49c4876ae"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Production inventory HTTP reader, recovery model and Coverage UI/CSS consume unchanged real offline-node polling projections from source-xiilte0_ at ccc64fe1139db33f5c9060e0060d1e7659b1c351. The producer exercises direct and clustered clients; browser fixtures use the direct-client projections and explicit timestamp controls.",
+    "Four unread-node projections keep the original job observation while the readable peer and a repeated VMID in another connection retain their own source timestamps. Job warnings and server-owned Unknown protection remain independent.",
+    "A controlled display clock moves the retained source age from four to six hours without inventory requests; an ordinary page refresh never renews it. These are simulated clock controls, not six hours of native collection.",
+    "Missing, empty, Go-zero, invalid, future and HTML-shaped observation strings show explicitly Unknown, never a just-now fallback, stale prior timestamp or markup. A known replacement restores its own exact timestamp and one-minute age in place.",
+    "Full local observation time includes year, seconds and BST in the Europe/London browser context, separate from the job start and result. The narrow summary puts source age beneath the workload rather than in the compact job dot.",
+    "All 299 imported/source hashes and five served asset hashes used by the browser exactly match the independently completed offline VM build source-26af2b7z at 8e28dc46c785f97bd3462a29d9f42a4b506007be. The earlier normal preview route advanced browser verification while full-source capacity was occupied; it did not replace the product build.",
+    "Chromium 141.0.7390.37 at 1440px/light and WebKit 26.0 at 320px/dark; Playwright 1.56.1 matches the integration lock. All six capture files were opened with native view_image and inspected. Text is legible, full local timestamps wrap, and eight geometry checks find no horizontal page or painted-glyph overflow."
+  ],
+  "interactions": [
+    "Desktop keyboard opens the actual workload disclosure and activates Refresh backups; narrow touch opens and refreshes the same production surface.",
+    "Refresh response bodies must match the selected producer projection or explicit control and the read must settle before assertions. The same row node, open disclosure and desktop refresh focus persist through replacement.",
+    "The shared clock ages source observations without an inventory reload. A resumed source, six unknown controls and a new one-minute observation replace the field without changing job warning or protection posture."
+  ],
+  "limitations": [
+    "Offline safe fixtures, not native guest/backup execution, independent thaw, filesystem writes/liveness, installed recovery, deployment or release availability. #2439 monitoring stays stopped."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER.json",
+    "PIXEL-REVIEW.json",
+    "BUILD-PARITY.json",
+    "SOURCE-VALIDATION.json"
+  ]
+}
