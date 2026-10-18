@@ -180,6 +180,36 @@ function normalizeLegacyVersionValue(value) {
     ? normalizeVersion(visible) : null;
 }
 
+function titlePulseVersion(title) {
+  const text = String(title || "");
+  // A title's upgrade versions describe an attempt, not necessarily the
+  // executable that failed. An explicit body field still takes precedence.
+  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing|ion))\b/i.test(text)) return null;
+
+  const version = "v?(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)";
+  const end = "(?![\\w.-])";
+  // Free-form reports can name several products. Only explicitly named Pulse
+  // server versions may be selected from that context; Pulse Agent is not the
+  // server, and a platform's first semantic version is not Pulse evidence.
+  const named = [...text.matchAll(new RegExp(
+    `\\bPulse(?:[ \\t]+Pro)?(?:[ \\t]+server)?(?:[ \\t]+version)?[ \\t]*[:=]?[ \\t]+${version}${end}`,
+    "gi"
+  )), ...text.matchAll(new RegExp(`(?:^|[ \\t/])pulse(?:-pro)?:${version}${end}`, "gi"))];
+  if (named.length) return named.length === 1 ? normalizeVersion(named[0][1]) : null;
+
+  // Preserve concise legacy release titles, not arbitrary numbers embedded in
+  // platform names, companion artifacts or prose. Multiple release numbers
+  // remain ambiguous even when the title begins with one of them.
+  const versions = [...text.matchAll(new RegExp(`(?<![\\w.-])${version}${end}`, "gi"))];
+  if (versions.length !== 1) return null;
+  const concise = new RegExp(
+    `^(?:\\[[^\\]\\r\\n]+\\][ \\t]*:?[ \\t]*)?(?:bug[ \\t]+on[ \\t]+)?${version}${end}`,
+    "i"
+  );
+  const match = text.trim().match(concise);
+  return match ? normalizeVersion(match[1]) : null;
+}
+
 function pulseVersionEvidence(title, body) {
   if (body) {
     const lines = declarationLines(body);
@@ -225,10 +255,7 @@ function pulseVersionEvidence(title, body) {
     }
   }
 
-  // A starting version named in an upgrade title is not a running-version
-  // declaration. Copied examples may leave no usable body field at all.
-  const upgradeFrom = /\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""));
-  return { version: upgradeFrom ? null : normalizeVersion(title), declared: false };
+  return { version: titlePulseVersion(title), declared: false };
 }
 
 function extractPulseVersion(title, body) {

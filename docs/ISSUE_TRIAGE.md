@@ -33,6 +33,12 @@ inside quoted logs, nested lists, raw HTML or code examples. A legacy bullet
 whose first line explicitly names **Pulse version** remains a declaration;
 a copied continuation does not. Hidden comments do not supply a value, and
 an upgrade title's **from** version is not a fallback for the failing version.
+Without a body declaration, title fallback accepts an explicitly named Pulse
+server version or a concise release title (for example, `Bug on v6.5.0`). It
+does not turn a platform, agent or chart version into a Pulse version, or infer
+the failing executable from an upgrade/migration title. An unknown body field
+still takes precedence. This does not clear versions established from the
+whole thread or automatically request more information from the reporter.
 These labels support intake only: they do not establish a cause, resolution or
 reason to contact the reporter. Existing reports need no refile.
 
