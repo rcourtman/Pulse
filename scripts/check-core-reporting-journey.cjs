@@ -37,6 +37,12 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
   try {
    assert.equal(req.method, 'GET', 'no mutation is permitted');
    const url = new URL(req.url, origin);
+   if (url.pathname === '/ws') {
+    // The ordinary global store may try its websocket channel. This fixture
+    // deliberately has no stream: resources and History use captured HTTP.
+    result.offlineWebSocketRequests = (result.offlineWebSocketRequests || 0) + 1;
+    res.writeHead(503); res.end(); return;
+   }
    if (url.pathname.startsWith('/api/')) {
     result.requests.push({ phase, path: url.pathname, query: Object.fromEntries(url.searchParams) });
     res.setHeader('Content-Type', 'application/json');

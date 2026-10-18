@@ -12,14 +12,14 @@ function Fixture() {
     query: 'source=truenas&type=agent,storage,physical_disk',
     realtimeEnabled: () => false,
   });
-  const systems = createMemo(() => state.resources.filter((resource) => resource.type === 'agent'));
+  const systems = createMemo(() => state.resources().filter((resource) => resource.type === 'agent'));
   return (
     <main class="mx-auto max-w-6xl space-y-3 bg-surface p-3 text-base-content">
       <h1 class="text-lg font-semibold">CORE reporting consumer verification</h1>
       <p class="text-xs text-muted">Synthetic CORE REST observations. No appliance or guest is contacted.</p>
       <TrueNASSystemsTable
         systems={systems()}
-        scope={state.resources}
+        scope={state.resources()}
         emptyIcon={<span />}
         emptyTitle="Loading CORE fixture"
         emptyDescription="Reading the captured canonical resource response."
