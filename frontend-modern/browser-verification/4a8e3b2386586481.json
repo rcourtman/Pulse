@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "7541ed3405288c75c370c4384ab3ea55e98e498a",
+  "verified_at": "2026-10-18T15:07:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "94e4991046fd481ee862aae1f08fa13864ca94346abe1cbf5cd9d2dc449d5076",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "59db673417e8b2a0c278310c80cbd1532eda2b88296a22c5bb025780dce71822",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "1b47b930a7546f6d5c3b01df4c60f38a8e6fceef92c52e23cc3374f4d2d765c7",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "d28fd889f1013cf312b204e131f2b7592c1bb0ebbea66a19684bc525c896514a",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "edf14c65cf7b222177cb4a50a633dc7493c811217dcca402d7867368843affeb"
+  },
+  "routes": [
+    "/proxmox/backups/date (production Backups reader/decoder/model/tables/CSS with safe loopback HTTP inventory)",
+    "/proxmox/backups/coverage (same existing surface and data)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    },
+    {
+      "width": 640,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "fe87c007092049ca8608d7a8201045e52688f068/source-o5bzp75g passes types, full lint, pinned formatting, 991 tests in 43 files and production/embed plus fixture builds. Complete source output hash verified; command exit zero and guest stop complete.",
+    "Only the browser protocol changes afterwards. 7541ed3405288c75c370c4384ab3ea55e98e498a/source-lzj2fza8 passes pinned protocol formatting/syntax and the exact fixture build. All 307 inputs match the workspace; only the protocol differs from the full-suite build and all seven served artifact hashes are identical.",
+    "Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 passes desktop 1440px light, 320px dark touch and 640px light touch; Firefox 142.0.1 passes desktop. The desktop also checks intermediate container layouts through viewport resizing.",
+    "Two equal-format archives retain distinct full provider paths alongside zst. Complete long snapshot descriptions and PBS file counts appear once per point. Details wrap in visible columns or move into correctly spanned full-width provenance continuations when the column is hidden. No unknown identity is constructed.",
+    "All eight final capture files were opened using native view_image and the pixels inspected. Full paths, refreshed identifier, descriptions and state remain readable on desktop, phone and tablet without hover or horizontal overflow. Long text intentionally creates taller rows; unchanged Source-badge wrapping and search-placeholder truncation are not claimed redesigned.",
+    "Both desktop and phone traverse all 162 archive paths in the 164-entry windowed feed, with 140/36 artifact rows mounted at the end. No page/console errors, off-origin traffic or non-GET requests; browsers/server close. No appliance, backup/restore, independent guest thaw, installed recovery, protected publication or release acceptance. The fixture does not emit the full production CSP response header; no CSP behaviour is changed."
+  ],
+  "interactions": [
+    "Activate the active Created header with native Enter and Space; assert exactly ascending then descending and retained keyboard focus.",
+    "Open and close existing Coverage with the keyboard button on desktop and the actual row touch target on phone/tablet, without forcing clicks on the screen-reader-only phone button.",
+    "Refresh synthetic HTTP inventory while the same Coverage disclosure stays open; verify the new full archive path replaces the old one and desktop refresh focus remains.",
+    "Resize through compact/basic/operational/expanded/full layouts; verify complete text, correct current colspans, no duplicate identifiers and no clipped text rectangles.",
+    "Scroll the bounded desktop/phone feed to every full archive path and inspect the retained phone tail pixels."
+  ]
+}
