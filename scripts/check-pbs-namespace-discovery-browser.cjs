@@ -28,6 +28,11 @@ const { chromium } = require('playwright');
   assert.deepEqual(phases.partial.postures.map(row => row.state).sort(), ['unknown', 'unknown', 'unknown']);
   assert.deepEqual(phases.denied.postures.map(row => row.state).sort(), ['attention', 'attention', 'attention']);
   assert.deepEqual(phases.complete.postures.map(row => row.state).sort(), ['protected', 'unknown', 'unknown']);
+  // Match the fixture's actual node-independent canonical guest identities,
+  // not the store's lexicographic posture ordering (100, 102, 101).
+  const guestID = vmid => `vm-${crypto.createHash('sha256').update(`proxmox-guest:cluster:${vmid}`).digest('hex').slice(0, 16)}`;
+  assert.deepEqual(phases.initial.postures.map(row => row.subjectResourceId).sort(), [100, 101, 102].map(guestID).sort());
+  assert.equal(phases.complete.postures.find(row => row.state === 'protected').subjectResourceId, guestID(102));
   const held = phases.initial.backups.find(row => row.vmid === '100');
   assert.equal(held.namespace, 'team/production');
   assert.deepEqual(phases.partial.backups.find(row => row.vmid === '100'), held, 'transient loss retains exact original artifact');
@@ -62,10 +67,10 @@ const { chromium } = require('playwright');
       const pageErrors = [], requests = [], unexpected = [];
       page.on('pageerror', error => pageErrors.push(error.message));
       let phase = 'initial';
-      const workloads = phases.initial.postures.map((posture, i) => ({
-        id: posture.subjectResourceId, type: 'vm', name: `guest-${100+i}`, displayName: `guest-${100+i}`,
+      const workloads = [100, 101, 102].map((vmid, i) => ({
+        id: guestID(vmid), type: 'vm', name: `guest-${vmid}`, displayName: `guest-${vmid}`,
         platformId: 'cluster', platformType: 'proxmox-pve', sourceType: 'api', status: 'running',
-        lastSeen: Date.now(), proxmox: { vmid: 100+i, node: `node-${i}`, instance: 'cluster' },
+        lastSeen: Date.now(), proxmox: { vmid, node: `node-${i}`, instance: 'cluster' },
       }));
       await page.route('**/fixture/workloads', route => route.fulfill({ json: workloads }));
       await page.route(url => url.pathname.startsWith('/api/'), route => {
@@ -137,7 +142,7 @@ const { chromium } = require('playwright');
       }
       assert.deepEqual(pageErrors, []);
       assert.deepEqual(unexpected, []);
-      result.cases.push({ width, facts, requests, pageErrors, unexpected, keyboardRefresh: true, pageOverflow: false });
+      result.cases.push({ width, workloadBindings: workloads.map(row => ({ id: row.id, vmid: row.proxmox.vmid })), facts, requests, pageErrors, unexpected, keyboardRefresh: true, pageOverflow: false });
       await context.close();
     }
   } finally {
