@@ -2317,11 +2317,31 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	// Live inventory replacement and durable history backfill have different
-	// completeness requirements. The history reader deliberately returns valid
-	// rows from partial collections; those must not erase unreadable live rows.
-	// Keep the unwindowed, all-online-nodes read as the live replacement boundary.
-	tasks, liveErr := client.GetBackupTasks(ctx)
+	// Live replacement and durable report backfill have separate admission.
+	// Offline nodes were not read: keep their original live observations while
+	// allowing complete healthy-node reads (including empty ones) to progress.
+	var tasks []proxmox.Task
+	var liveErr error
+	var unreadNodes map[string]bool
+	if source, ok := client.(interface {
+		GetBackupTaskInventory(context.Context) (proxmox.BackupTaskInventory, error)
+	}); ok {
+		var inventory proxmox.BackupTaskInventory
+		inventory, liveErr = source.GetBackupTaskInventory(ctx)
+		tasks = inventory.Tasks
+		if len(inventory.OfflineNodes) > 0 {
+			unreadNodes = make(map[string]bool, len(inventory.OfflineNodes)+1)
+			for _, node := range inventory.OfflineNodes {
+				unreadNodes[node] = true
+			}
+			// Older observations without node provenance cannot safely be
+			// assigned to a readable node during a partial collection.
+			unreadNodes[""] = true
+		}
+	} else {
+		// Legacy adapters expose only all-or-nothing collection semantics.
+		tasks, liveErr = client.GetBackupTasks(ctx)
+	}
 	if liveErr != nil {
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, liveErr, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
@@ -2411,7 +2431,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs, liveErr == nil)
+	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs, liveErr == nil, unreadNodes)
 	backupTasks = append(backupTasks, guestTasks...)
 	for _, guest := range guestTasks {
 		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
@@ -2422,7 +2442,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 
 	// Update state with new backup tasks for this instance
 	if liveErr == nil {
-		m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
+		m.state.UpdateBackupTasksForInstanceWithUnreadNodes(instanceName, liveTasks, unreadNodes)
 	}
 	if !hasHistoryStore {
 		return
@@ -2450,6 +2470,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
 // vzdump job run's log so finished jobs are fetched at most once.
 type vzdumpJobTaskCacheEntry struct {
+	node            string
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
@@ -2465,10 +2486,10 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // cached by instance|UPID; logs of finished jobs are immutable, so those are
 // fetched only once. Running jobs are re-parsed every cycle to pick up guests
 // as the job progresses.
-func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string, prune bool) []models.BackupTask {
+func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string, prune bool, unreadNodes map[string]bool) []models.BackupTask {
 	if len(jobTasks) == 0 {
 		if prune {
-			m.pruneVzdumpJobTaskCache(instanceName, nil)
+			m.pruneVzdumpJobTaskCache(instanceName, nil, unreadNodes)
 		}
 		return nil
 	}
@@ -2479,6 +2500,9 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	fetches := 0
 
 	for _, jobTask := range jobTasks {
+		if unreadNodes[jobTask.Node] {
+			continue // Report backfill cannot renew an unread node's live cache.
+		}
 		upid := jobUPIDs[jobTask.ID]
 		key := instanceName + "|" + upid
 		seen[key] = struct{}{}
@@ -2524,6 +2548,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
 		}
 		m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
+			node:            jobTask.Node,
 			tasks:           guestTasks,
 			final:           historyComplete,
 			historyComplete: historyComplete,
@@ -2533,18 +2558,18 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	}
 
 	if prune {
-		m.pruneVzdumpJobTaskCache(instanceName, seen)
+		m.pruneVzdumpJobTaskCache(instanceName, seen, unreadNodes)
 	}
 	return synthesized
 }
 
 // pruneVzdumpJobTaskCache drops cached job entries for this instance whose
 // UPIDs are no longer present in the task list (fell out of the window).
-func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
+func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}, unreadNodes map[string]bool) {
 	prefix := instanceName + "|"
 	m.mu.Lock()
-	for key := range m.vzdumpJobTaskCache {
-		if !strings.HasPrefix(key, prefix) {
+	for key, entry := range m.vzdumpJobTaskCache {
+		if !strings.HasPrefix(key, prefix) || unreadNodes[entry.node] {
 			continue
 		}
 		if _, ok := seen[key]; !ok {

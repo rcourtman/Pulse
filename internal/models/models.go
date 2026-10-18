@@ -6218,13 +6218,20 @@ func (s *State) UpdatePMGInstance(instance PMGInstance) {
 
 // UpdateBackupTasksForInstance updates backup tasks for a specific instance, merging with existing tasks
 func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []BackupTask) {
+	s.UpdateBackupTasksForInstanceWithUnreadNodes(instanceName, tasks, nil)
+}
+
+// UpdateBackupTasksForInstanceWithUnreadNodes atomically replaces observed
+// node scopes while retaining unread ones verbatim, including ObservedAt.
+// An unavailable node is not an empty task inventory. Other instances are
+// independent even when their node names and VMIDs coincide.
+func (s *State) UpdateBackupTasksForInstanceWithUnreadNodes(instanceName string, tasks []BackupTask, unreadNodes map[string]bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing tasks, excluding those from this instance
 	taskMap := make(map[string]BackupTask)
 	for _, task := range s.PVEBackups.BackupTasks {
-		if task.Instance != instanceName {
+		if task.Instance != instanceName || unreadNodes[task.Node] {
 			taskMap[task.ID] = task
 		}
 	}

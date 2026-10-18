@@ -7401,11 +7401,18 @@ exercise dependency retention and actual history persistence.
 
 ### Live backup inventory and report backfill have separate admission
 
-The unwindowed, bounded `GetBackupTasks` read remains the replacement boundary
-for live backup tasks: every online node must return a complete valid response.
-A failed live collection preserves the entire instance's rows, original
-observation times and unseen job-log caches. A complete empty live inventory
-may clear them. Report backfill may still retain independently observed task
+The unwindowed, bounded live task read remains separate from report backfill:
+every online node must return a complete valid response. Its
+`GetBackupTaskInventory` result explicitly identifies offline or unconfirmed-online
+nodes. Those nodes are not probed; their known task rows and job-log caches keep
+the original observation times, while readable peers can update or authoritatively
+return empty. Node-less legacy observations are retained during a partial read.
+Task rows must name their actual collection node (an omitted node is filled from
+the request; a conflicting one rejects the collection). A failed online read or
+no visible nodes preserves the entire instance. Complete live emptiness can clear
+only the scopes actually observed. The legacy all-or-nothing `GetBackupTasks`
+adapter rejects unread node scopes instead of returning an apparently complete
+subset. Report backfill may still retain independently observed task
 executions while its collection quality is explicitly incomplete. An empty
 incremental report window, missing audit confirmation or failed history page
 cannot delete live tasks or certify complete report history.
@@ -7423,6 +7430,11 @@ through node/body/history/authority failures, incremental emptiness, recovery
 and authoritative live emptiness. `TestBackupHistoryRejectsIncompletePagesAndAuditEvidence`
 checks page and permission admission. Existing log fixtures now include the
 upstream terminal marker rather than weakening immutable-cache assertions.
+`TestPVEOfflineBackupTasksRetainAgeAndHealthyPeerProgress` joins direct and
+cluster HTTP collection, live replacement and cached guest details through
+partial/all-offline reads, healthy-peer advancement and emptiness, recovery,
+no-visible-node reads and an independent connection with repeated names/VMIDs.
+Model and transport controls bind unread scopes and reject conflicting provenance.
 Source and consuming desktop/narrow proof do not establish installed backup,
 restore, independent guest thaw, writes/liveness or prior-active restoration.
 
