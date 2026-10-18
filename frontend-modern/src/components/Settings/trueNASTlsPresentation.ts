@@ -37,7 +37,7 @@ export const getTrueNASTlsPolicy = (form: TrustInputs) => {
       tone: 'danger' as const,
       title: 'HTTP does not protect credentials',
       description:
-        'HTTP traffic is not encrypted or authenticated by TLS. Neither a fingerprint nor the verification setting protects credentials over HTTP. Use a trusted HTTPS endpoint; do not switch to HTTP to bypass a certificate error.',
+        'HTTP traffic is not encrypted or authenticated by TLS. Neither a fingerprint nor the verification setting protects credentials over HTTP. Use a trusted HTTPS endpoint. Do not switch to HTTP to bypass a certificate error.',
     };
   }
   const pin = form.fingerprint
