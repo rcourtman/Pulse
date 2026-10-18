@@ -178,6 +178,36 @@ policy, credential, SSRF boundary or notification payload is changed.
 
 ### SMTP authentication and envelopes belong to each delivery
 
+SMTP mechanism negotiation matches complete advertised names, prefers PLAIN
+over LOGIN and classifies an unsupported nonempty mechanism list as a local
+configuration failure. It must not select PLAIN from PLAIN-CLIENTTOKEN or LOGIN
+from XLOGIN, nor spend retry budgets on an unsupported mechanism. The existing
+PLAIN probe for a missing/empty AUTH advertisement remains available to legacy
+servers, retaining the underlying EHLO/connection error if that probe fails.
+
+LOGIN sends username followed by password according to exchange order. Server
+challenges are opaque display text, including empty or localised prompts, and
+must neither select a credential nor enter diagnostics. A fresh exchange resets
+its progress. Premature success or a third challenge fails closed without DATA
+and without another credential response. Genuine SMTP 535 rejection remains an
+authentication failure, while 454 retains transient retries and its typed reply.
+
+Connection tests and delivery share the implicit-TLS rule: an explicit TLS flag
+or port 465 selects TLS before SMTP begins. A configured STARTTLS flag must not
+request another TLS upgrade inside that established TLS session. Saved flags
+remain the submitted configuration, and certificate verification still applies.
+
+`email_authentication_wire_test.go` uses real plain/TLS/STARTTLS receivers to
+check connection tests, ordinary/threaded/attachment delivery, exact mechanism
+selection, legacy probing, malformed exchanges, certificate refusal and server
+verdicts. Its persistent queue control reopens accepted and bad-password verdicts
+with one attempt, retaining the authentication dead letter for bad credentials.
+The port-465 control maps only the destination to an owned ephemeral listener
+and retains the real TLS handshake and SMTP session. Protocol-level controls
+in `email_authentication_test.go` cover opaque challenges and exchange bounds.
+These are synthetic source proofs, not native provider acceptance or attribution
+of the fleet's aggregate authentication counters.
+
 SMTP managers resolve the provider identity and any supported default username
 before deciding whether credentials require authentication. Explicit usernames
 take precedence. Validation, connection tests and real sends use the same

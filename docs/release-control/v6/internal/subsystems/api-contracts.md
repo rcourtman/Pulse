@@ -12184,6 +12184,16 @@ and repeatable customer outcomes.
 
 ### Report email shares the canonical SMTP retry verdict
 
+Report attachment delivery also inherits complete-token SMTP mechanism
+negotiation and the bounded LOGIN exchange in the notification sender. Opaque
+challenge text must not reject correct report credentials or select which
+credential to send. Unsupported mechanism lists are configuration failures,
+while actual SMTP authentication replies keep their typed verdict and retry
+policy. `email_authentication_wire_test.go` exercises actual threaded and
+attachment delivery through LOGIN over plain, TLS and STARTTLS sessions. It
+also verifies that connection tests use the same port-465 TLS rule as delivery.
+Report scheduling must not introduce another authentication implementation.
+
 Attachment delivery through `internal/notifications/email_enhanced.go` uses
 notifications-owned `sendEmailWithOptions`. Reporting must not introduce a
 separate retry classification. Reporting also inherits the notification-owned

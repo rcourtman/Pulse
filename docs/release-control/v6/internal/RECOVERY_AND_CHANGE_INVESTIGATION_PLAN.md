@@ -68,7 +68,7 @@ The task timeline already has an accepted, bounded implementation contract in [B
 - [Issue 2465](https://github.com/rcourtman/Pulse/issues/2465) records missed backup evaluation and a subsequent correction that retains existing alerts and exposes evaluation failure. Successful monitoring and visible failure remain prerequisites, not deferred feature work.
 - [Issue 2587](https://github.com/rcourtman/Pulse/issues/2587) already has a PBS shortcut correction reported in v6.6.0-rc.1. Verify current behavior and delivery before scheduling more navigation work for it.
 
-Before implementing this roadmap, reconcile the task timeline ledger's stable-delivery condition for the 1815 correction with actual release contents. Current reliability work remains the active target. Trust defects found in matching, collection, evaluation, persistence or updates return to that work instead of being disguised as post-reliability enhancements.
+Reconciled on 18 October 2026: the #1815 backup-running correction `8c639846969c4f174aba874e7841df0ba0122de8` is included in published stable v6.5.0. Its stable-inclusion prerequisite is met. Current reliability work remains the active target, with remaining work and the manual exit evidence recorded in [the existing L1 delivery follow-up](records/maintenance-release-delivery-and-observation-2026-10-18.md). Trust defects found in matching, collection, evaluation, persistence or updates return to that work instead of being disguised as post-reliability enhancements.
 
 ## Priority and dependency order
 
@@ -162,7 +162,7 @@ The existing roadmap owns pickup of this sequence:
 
 L15 and L19 keep their existing planned follow-ups and bounded-residual lane states. L20 governs any later expansion of executable actions. Demand statuses and signal counts are unchanged. The audit and roadmap direction are not additional independent customer signals.
 
-When reliability work is explicitly ready to yield priority, activate one bounded slice through the existing target and demand process. Reconcile the relevant ledger entry and contract, reserve its claim, and name its source owner and proof obligations before implementation. This tracked sequence is not evidence that the reliability target has completed and is not independent authority to start every item.
+When reliability work is explicitly ready to yield priority under [the recorded manual exit decision](records/maintenance-release-delivery-and-observation-2026-10-18.md#exit-decision-and-feature-pickup), activate one bounded slice through the existing target and demand process. Reconcile the relevant ledger entry and contract, reserve its claim, and name its source owner and proof obligations before implementation. This tracked sequence is not evidence that the reliability target has completed and is not independent authority to start every item.
 
 ## Browser audit evidence
 
