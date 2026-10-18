@@ -1,8 +1,9 @@
 # Recovery confidence and change investigation plan
 
-Status: PROPOSED POST-RELIABILITY PLAN. Audit and sequencing only. Implementation remains unscheduled under the existing L15 and L19 follow-ups and demand ledger. This document does not activate a lane, change the reliability target, or add a release gate.
+Status: TRACKED POST-RELIABILITY PLAN. Audit and sequencing only. The existing planned product target, L15 and L19 follow-ups, and demand ledger link to this sequence. Implementation remains unscheduled until reliability explicitly yields priority. This document does not activate a lane, change the reliability target, or add a release gate.
 
 Reviewed: 2026-10-17
+Roadmap tracking updated: 2026-10-18
 Source baseline: `8f10dfa9438151db41ea01ccf19e58b669601e96`
 
 Pulse should first make recovery evidence and nearby changes easier to act on. The strongest first investment is the already-requested cross-system backup task timeline. Follow that with an accessible incident-focused change investigation flow, then a consistent explanation of workload protection and its objectives. Full recovery orchestration is a later product decision.
@@ -150,9 +151,18 @@ Begin with evidence from an explicit external or operator-run test attached to t
 
 ## Governance and activation
 
-L15 remains tracked by `storage-recovery-post-rc-hardening`. L19 remains tracked by `resource-change-intelligence-post-rc-hardening`. L20 governs any later expansion of executable actions. Their existing bounded-residual states remain unchanged by this audit.
+The existing roadmap owns pickup of this sequence:
 
-When reliability work is explicitly ready to yield priority, activate one bounded slice through the existing target and demand process. Reconcile the relevant ledger entry and contract, reserve its claim, and name its source owner and proof obligations before implementation. This proposed sequence is not evidence that the reliability target has completed and is not independent authority to start every item.
+| Canonical record | Tracked scope |
+| --- | --- |
+| Planned target `v6-product-lane-expansion` in [control_plane.json](../../control_plane.json) | Links this plan for consideration after `v6-release-reliability` explicitly yields priority. The reliability target remains active. |
+| L15 follow-up `storage-recovery-post-rc-hardening` in [status.json](status.json) | Orders 1, 3 and 5, with the existing task timeline contract and a separate decision before recovery-test execution. |
+| L19 follow-up `resource-change-intelligence-post-rc-hardening` in [status.json](status.json) | Orders 2 and 4, starting with access to retained history before richer configuration diffs. |
+| Existing demand entries in `pulse-pro/FEATURE_REQUESTS.md` | Cross-system backup task timeline and outcomes links order 1. Infrastructure lifecycle event timeline distinguishes the bounded L19 investigation work from its broader, still-watching request. |
+
+L15 and L19 keep their existing planned follow-ups and bounded-residual lane states. L20 governs any later expansion of executable actions. Demand statuses and signal counts are unchanged. The audit and roadmap direction are not additional independent customer signals.
+
+When reliability work is explicitly ready to yield priority, activate one bounded slice through the existing target and demand process. Reconcile the relevant ledger entry and contract, reserve its claim, and name its source owner and proof obligations before implementation. This tracked sequence is not evidence that the reliability target has completed and is not independent authority to start every item.
 
 ## Browser audit evidence
 
