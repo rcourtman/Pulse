@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -54,7 +55,25 @@ func readTaskRows[T any](resp *http.Response, fields ...string) ([]T, error) {
 }
 
 func readTasks(resp *http.Response) ([]Task, error) {
-	return readTaskRows[Task](resp, "upid", "node", "pid", "pstart", "starttime", "type", "id", "user", "status", "endtime")
+	tasks, err := readTaskRows[Task](resp, "upid", "node", "pid", "pstart", "starttime", "type", "id", "user", "status", "endtime")
+	if err != nil {
+		return nil, err
+	}
+	// Live lists replace earlier observations and history can update a live
+	// verdict. An unidentified row is not successful emptiness; repeated
+	// executions cannot be resolved by whichever outcome a consumer keeps.
+	// UPIDs stay opaque, and scheduled/running jobs need no guest ID/result.
+	seen := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		if strings.TrimSpace(task.UPID) == "" || strings.TrimSpace(task.Type) == "" {
+			return nil, errInvalidTaskResponse
+		}
+		if _, duplicate := seen[task.UPID]; duplicate {
+			return nil, errInvalidTaskResponse
+		}
+		seen[task.UPID] = struct{}{}
+	}
+	return tasks, nil
 }
 
 // This reader always requests start=0. Numbered, present text is necessary

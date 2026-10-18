@@ -148,6 +148,31 @@ cache replacement. The existing By date/Coverage surface consumes emitted rows
 at desktop/narrow widths. These proofs do not establish native backup/restore,
 independent guest thaw, filesystem liveness or installed recovery.
 
+### PVE task pages require unambiguous execution identity
+
+Every task row needs a nonblank opaque UPID and task type, with no repeated
+UPID within a page. A missing/null/blank identity or duplicate makes the whole
+page unavailable before filtering, live replacement or History reconciliation.
+It cannot silently drop a failed guest task, publish an OK prefix or establish
+complete History. Earlier valid History pages and independently readable nodes
+remain available; malformed live reads retain their earlier observations and
+original observation times. Ordinary complete reads can recover normally.
+
+Scheduled parents may still have an empty guest ID; running tasks may omit their
+result/end time. Omitted redundant node fields, explicit other task kinds,
+additive metadata, genuine empty arrays and cross-page History deduplication
+retain their existing meaning. No UPID format constraint, guest/backup command,
+request budget or privilege is added.
+
+`TestTaskListsRequireUnambiguousIdentity` covers all three HTTP task-list consumers;
+`TestTaskIdentityPreservesSupportedOptionalFields` and
+`TestBackupHistoryIdentityGapKeepsEarlierPagesAndPeer` pin compatibility and scope.
+`TestPVEBackupTaskIdentityGapCannotEraseFailure` joins ordinary direct/cluster
+polling to the served backup projection. Desktop/narrow Coverage proof consumes
+those actual emitted values, not invented verdicts. Persistence is unavailable
+in the fixture: these are evidence-integrity checks, not durable report storage,
+installed backup/restore, independent thaw or filesystem liveness.
+
 ### PVE job logs retain their numbered text sequence
 
 The bounded task-log read starts at line zero and admits only a contiguous
