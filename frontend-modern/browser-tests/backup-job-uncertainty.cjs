@@ -173,7 +173,9 @@ async function geometry(page) {
       const read = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/backups/pve');
       if (phone) await button.tap(); else { await button.focus(); await page.keyboard.press('Enter'); }
       const response = await read;
-      assert.deepEqual(await response.json(), { data: { backupTasks: tasks, guestSnapshots: [], storageBackups: [] } });
+      // Compare wire objects: JSON omits undefined optional properties.
+      const expected = JSON.parse(JSON.stringify({ data: { backupTasks: tasks, guestSnapshots: [], storageBackups: [] } }));
+      assert.deepEqual(await response.json(), expected);
       await page.waitForFunction(predicate, value);
       await page.waitForFunction(() => [...document.querySelectorAll('button[aria-disabled="false"]')]
         .some((b) => b.textContent === 'Refresh backups'));
