@@ -210,7 +210,10 @@ const point = (id, dataset, outcome = 'success') => ({
       release();
       release = null;
       await page.locator('[data-truenas-protection-row="snapshot-b"]').waitFor();
-      assert.equal(await page.getByRole('status').count(), 0);
+      assert.equal(
+        await page.getByRole('status').filter({ hasText: 'last loaded records' }).count(),
+        0,
+      );
       entry.states.push(
         'Cached remount keeps the warning throughout its pending retry; valid replacement clears it',
       );
@@ -243,7 +246,10 @@ const point = (id, dataset, outcome = 'success') => ({
       );
       await page.getByText('No TrueNAS protection activity', { exact: true }).waitFor();
       assert.equal(await rows().count(), 0);
-      assert.equal(await page.getByRole('status').count(), 0);
+      assert.equal(
+        await page.getByRole('status').filter({ hasText: 'last loaded records' }).count(),
+        0,
+      );
       await capture('empty');
       entry.states.push(
         'A readable empty array authoritatively replaces the retained page and shows the normal empty state',

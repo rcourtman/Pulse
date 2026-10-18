@@ -59,7 +59,9 @@ describe('TrueNAS protection read availability', () => {
     await screen.findByText('tank/apps');
     await view.read().refetch();
     expect(document.querySelector('[data-truenas-protection-row="snapshot-a"]')).not.toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('last loaded records');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
     expect(screen.queryByText('No protection activity')).not.toBeInTheDocument();
   });
 
@@ -70,7 +72,9 @@ describe('TrueNAS protection read availability', () => {
     const first = mountProtection();
     await screen.findByText('tank/apps');
     await first.read().refetch();
-    expect(screen.getByRole('status')).toHaveTextContent('last loaded records');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
     expect(screen.queryByText('private transport diagnostic')).not.toBeInTheDocument();
     first.unmount();
 
@@ -83,10 +87,14 @@ describe('TrueNAS protection read availability', () => {
     );
     mountProtection();
     await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(3));
-    expect(screen.getByRole('status')).toHaveTextContent('last loaded records');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
     expect(screen.getByRole('button', { name: 'Refreshing protection activity…' })).toBeDisabled();
     resolve({ data: [point('snapshot-b')] });
-    await vi.waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    await vi.waitFor(() =>
+      expect(screen.queryByText(/Could not refresh TrueNAS protection\./)).not.toBeInTheDocument(),
+    );
     expect(document.querySelector('[data-truenas-protection-row="snapshot-b"]')).not.toBeNull();
   });
 
@@ -136,7 +144,9 @@ describe('TrueNAS protection empty and access boundaries', () => {
     await view.read().refetch();
     expect(document.querySelector('[data-truenas-protection-row="snapshot-a"]')).not.toBeNull();
     expect(document.querySelector('[data-truenas-protection-row="partial"]')).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('last loaded records');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
   });
 
   it('withdraws the retained page when the server actually denies access', async () => {

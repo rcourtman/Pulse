@@ -29,10 +29,14 @@ describe('TrueNASProtectionTable', () => {
         emptyDescription="No protection"
       />
     ));
-    expect(screen.getByRole('status')).toHaveTextContent('last loaded records');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Attention, 0' }));
     expect(screen.getByText('No protection events match current filters')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('do not establish current protection');
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'do not establish current protection',
+    );
     expect(screen.queryByText('private diagnostic')).not.toBeInTheDocument();
   });
 
