@@ -16,6 +16,28 @@
 
 ## Purpose
 
+### Ordinary Unix agent copies finish before the collector is stopped
+
+The agent installer must not move a generic temporary download directly onto
+an installed collector/helper: a cross-filesystem `mv` can become a partial copy
+that destroys the previous executable. Stage each admitted ordinary executable
+privately beside its final destination, set its mode before stopping the
+collector, then publish its basename with a same-filesystem rename. Preparation
+failure preserves the previous files and does not stop the collector; refused
+publication is an error, not a successful install or an automatic restart.
+Destination directories, including symlinks to directories and directories
+created at the rename boundary, must not silently absorb the prepared file.
+
+The registered `install_sh_test.go` caller-order proof and Linux
+`TestInstallSHBinaryPublicationPreservesPreviousExecutable` exercise the actual
+signed download/publication slice with real TLS, signatures, copying, rename
+and cross-filesystem failure. Cleanup retains neither partial preparation nor
+unneeded downloads after handled failures. Service/ownership doubles do not
+establish native recovery. Separate safe-profile/action-runner transactions
+and the installer’s later service configuration are not replaced by this
+per-executable publication rule; a helper rename failure can follow a completed
+collector rename and is reported without claiming pair-wide rollback.
+
 ### Server installer ignores ambient HTTP-client configuration
 
 Every curl call in the server `install.sh`, including generated/manual commands,

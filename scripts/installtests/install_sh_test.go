@@ -7857,6 +7857,40 @@ if grep -q 'PULSE_AGENT_RUNNER_AGENT_ID_FILE' "$ACTION_RUNNER_ENV_FILE"; then ex
 	}
 }
 
+func TestInstallSHOrdinaryBinaryPreparationPrecedesServiceStop(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	previous := -1
+	for _, step := range []string{
+		`verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"`,
+		`stage_verified_agent_executable "$TMP_BIN" "$INSTALL_DIR" "$BINARY_NAME"`,
+		`stage_verified_agent_executable "$TMP_HELPER_BIN" "$PRIVILEGE_HELPER_DIR" "$PRIVILEGED_HELPER_BINARY_NAME"`,
+		`# --- Upgrade Detection ---`,
+		`stop_existing_agent_service || true`,
+		`mv -f "$STAGED_COLLECTOR" "${INSTALL_DIR}/"`,
+		`mv -f "$STAGED_HELPER" "${PRIVILEGE_HELPER_DIR}/"`,
+	} {
+		// Earlier stop calls belong to separate lifecycle actions/functions.
+		tail := source[previous+1:]
+		position := strings.Index(tail, step)
+		if position < 0 {
+			t.Fatalf("ordinary publication ordering missing %q", step)
+		}
+		previous += position + 1
+	}
+	for _, forbidden := range []string{
+		`mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`,
+		`mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("ordinary publication still permits a destructive cross-filesystem move: %s", forbidden)
+		}
+	}
+}
+
 func TestInstallSHSafeProfileLifecycleUsesVerifiedInstallFilesystemStage(t *testing.T) {
 	root := t.TempDir()
 	legacy := filepath.Join(root, "pulse-agent")
