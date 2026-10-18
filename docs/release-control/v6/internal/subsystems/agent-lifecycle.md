@@ -88,6 +88,30 @@ Linux removal receipt are unchanged. `TestNativeAgentWorkflowBuildsRealFrontendB
 to the refreshed pin without relaxing ordering or platform controls. Local
 source proof is not native Windows, appliance or installed lifecycle acceptance.
 
+### Installation transport disclosure follows the generated commands
+
+The host installer shows its effective transport policy beside unlocked install
+commands, even while advanced options are collapsed. Plain HTTP is disclosed
+independently of the skip-verification checkbox; a CA file cannot add TLS to
+HTTP. Explicit HTTPS bypass disables certificate and hostname checks, not just
+self-signed-chain rejection, and takes precedence over a supplied custom CA.
+Verification-enabled HTTPS and custom-CA settings are described as requests, never as a
+successful connection test or installed trust. Incomplete/unsupported URLs
+receive no HTTPS assurance. The advanced URL help does not suggest downgrading
+to HTTP to evade hostname verification. Each installation copy control and the
+bypass checkbox references the current policy through its accessible description.
+
+`InfrastructureOperationsModel.test.tsx` mounts the production operations owner
+and installer panel against synthetic status reads. It compares HTTP, HTTPS,
+custom-CA and bypass text with the actual Unix and Windows generated commands,
+including override precedence and collapsed-options persistence. Component
+regressions cover the default HTTP warning and current-policy accessibility.
+Desktop and narrow browser proof must inspect these states and copied bytes.
+No token generation, command flags, trust defaults, installer execution, saved
+removal credentials or installed lifecycle behaviour changes; browser fixtures
+must not execute the displayed commands. This is safe disclosure, not PVE/PBS
+certificate renewal or installed recovery acceptance.
+
 ### Optional configuration-signing guidance fits narrow installers (13 October 2026)
 
 The three existing signing environment names wrap within their advice card.

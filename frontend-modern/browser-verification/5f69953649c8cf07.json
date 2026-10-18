@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d34c7a63faafe5a066d5e297966d3c593a133349",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "1e3f94565f80c444e5c14fb2647de14618f91f6303b41e071f4b278fc70a33b7"
+  },
+  "routes": [
+    "/browser-tests/installer-transport.html (production InfrastructureOperationsStateProvider, useInfrastructureInstallState and InfrastructureInstallerSection; synthetic HTTP status reads)"
+  ],
+  "states": [
+    "Default HTTP warns with skip verification off and advanced controls collapsed",
+    "HTTPS verification request, custom CA request and explicit bypass precedence",
+    "Long target-host CA path and full bypass explanation wrap at 320px",
+    "Unsupported/incomplete URL withdraws HTTPS assurance; cleared URL uses configured HTTP fallback"
+  ],
+  "interactions": [
+    "Desktop keyboard Space and narrow touch toggle real controls; collapsing advanced controls preserves current policy",
+    "Compare Unix and Windows generated flags and clipboard bytes in all four transport states (16 copies total, none executed)",
+    "Installation copy buttons and skip-verification checkbox describe the current policy; no token creation or API write"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-18T06:29:28.791Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop_chromium": "141.0.7390.37",
+    "narrow_webkit": "26.0"
+  },
+  "pixel_review": "All eight final captures opened with native view_image. HTTP and bypass warnings stay fully readable above the copy cards in light desktop and dark 320px views. Long CA paths wrap in full; the bypass explanation has its own paragraph. No page-wide horizontal overflow. Initial missing paragraph separation was corrected and a fresh browser pass inspected.",
+  "limits": "Synthetic status reads and draft transport edits. Clipboard intercepted in page. No command execution, token creation, actual TLS, installed recovery or WebKit Back/reload sequence.",
+  "driver": "frontend-modern/browser-tests/installer-transport.cjs"
+}

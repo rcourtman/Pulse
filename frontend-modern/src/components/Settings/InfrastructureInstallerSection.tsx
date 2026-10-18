@@ -1,8 +1,9 @@
 import type { Component } from 'solid-js';
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId } from 'solid-js';
 import { Button, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
@@ -132,6 +133,54 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
 ) => {
   const state = useInfrastructureOperationsContext();
   const now = useRelativeTimeNow();
+  const transportPolicyId = createUniqueId();
+  const transportPolicy = createMemo(() => {
+    // Describe the URL actually used by the command producer, including its
+    // auto-detected fallback. A checkbox alone cannot describe plain HTTP.
+    let protocol = '';
+    try {
+      protocol = new URL(state.selectedAgentUrl()).protocol;
+    } catch {
+      // An incomplete URL must not acquire an HTTPS assurance while editing.
+    }
+    if (protocol === 'http:') {
+      return {
+        tone: 'danger' as const,
+        title: 'HTTP does not protect this installation',
+        detail:
+          'Installer downloads, agent traffic and any credentials sent to this Pulse URL are not encrypted or authenticated by TLS. Neither the verification checkbox nor a custom CA protects HTTP. Use a trusted HTTPS URL where possible; do not switch to HTTP to bypass a certificate error.',
+      };
+    }
+    if (protocol !== 'https:') {
+      return {
+        tone: 'warning' as const,
+        title: 'Check the Pulse URL before installing',
+        detail:
+          'Use a full http:// or https:// Pulse URL. A custom CA path or TLS override cannot correct an incomplete or unsupported URL.',
+      };
+    }
+    if (state.insecureMode()) {
+      return {
+        tone: 'danger' as const,
+        title: 'Certificate identity checks are disabled',
+        detail:
+          'These commands skip certificate and hostname checks for installer downloads and configure the agent to skip them too, not just for self-signed certificates. An impersonated server could supply code or receive credentials. Use a trusted certificate or custom CA instead.',
+      };
+    }
+    return state.customCaPath().trim()
+      ? {
+          tone: 'info' as const,
+          title: 'HTTPS with a custom CA requested',
+          detail:
+            'These commands request certificate-chain and hostname verification using the custom CA file on the target host. Obtain the CA through an already-trusted channel; entering a path does not install or verify it.',
+        }
+      : {
+          tone: 'info' as const,
+          title: 'HTTPS certificate verification requested',
+          detail:
+            'These commands request certificate-chain and hostname verification for installer downloads and agent connections. The target host must trust the issuing CA.',
+        };
+  });
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
   const focus = createMemo<InfrastructureInstallerFocus>(() => props.focus ?? 'agent');
   const presentation = createMemo(() => INSTALLER_FOCUS_PRESENTATION[focus()]);
@@ -506,6 +555,37 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 </div>
               </div>
 
+              <InlineNotice
+                id={transportPolicyId}
+                tone={transportPolicy().tone}
+                role="status"
+                aria-label="Installation transport policy"
+                aria-live="polite"
+                aria-atomic="true"
+                class="[overflow-wrap:anywhere]"
+              >
+                <p class="font-semibold">{transportPolicy().title}</p>
+                <p class="mt-1 text-xs">{transportPolicy().detail}</p>
+                <Show when={state.customCaPath().trim()}>
+                  {(caPath) => (
+                    <>
+                      <p class="mt-1 text-xs">
+                        CA file on the target host: <code>{caPath()}</code>
+                      </p>
+                      <Show when={state.insecureMode()}>
+                        <p class="mt-1 text-xs">
+                          The skip-verification override takes precedence over this CA. Turn it off
+                          to use CA verification with HTTPS.
+                        </p>
+                      </Show>
+                    </>
+                  )}
+                </Show>
+                <p class="mt-1 text-xs">
+                  Generated settings only, not a connection test or proof of installed trust.
+                </p>
+              </InlineNotice>
+
               <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div class="space-y-1">
@@ -551,8 +631,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       />
                     </div>
                     <p class="mt-1.5 text-xs text-muted">
-                      Override the address agents use to connect to this server (e.g., use IP
-                      address <code>http://192.0.2.50:7655</code> if DNS fails).
+                      Override the Pulse address used by installer downloads and the agent. For
+                      HTTPS, use a hostname covered by the server certificate. An IP address can
+                      fail hostname verification; do not switch to HTTP to bypass that check.
                       <Show when={!state.customAgentUrl()}>
                         <span class="ml-1 opacity-75">
                           Currently using auto-detected: {state.agentUrl()}
@@ -590,24 +671,17 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </p>
                   </div>
 
-                  <Show when={state.insecureMode()}>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
-                      <span class="font-medium">TLS verification disabled</span> — skip cert checks
-                      for self-signed setups. Not recommended for production.
-                    </div>
-                  </Show>
-
                   <label
-                    class={`flex items-center gap-2 text-sm text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
-                    title="Skip TLS certificate verification (for self-signed certificates)"
+                    class={`flex min-h-11 items-center gap-2 text-sm text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
                   >
                     <input
                       type="checkbox"
                       checked={state.insecureMode()}
                       onChange={(event) => state.setInsecureMode(event.currentTarget.checked)}
+                      aria-describedby={transportPolicyId}
                       class="rounded-sm text-blue-600 focus:ring-blue-500"
                     />
-                    Skip TLS certificate verification (self-signed certs, not recommended)
+                    Skip TLS certificate verification (unsafe)
                   </label>
 
                   <label
@@ -717,6 +791,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                   }}
                                   title="Copy command"
                                   label={`Copy ${snippet.label} command`}
+                                  aria-describedby={transportPolicyId}
                                 />
                                 <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                   <code>{copyCommand()}</code>
