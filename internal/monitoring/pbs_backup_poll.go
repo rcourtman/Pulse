@@ -32,13 +32,17 @@ type pbsBackupDatastore struct {
 type pbsBackupInventory struct {
 	datastores            []pbsBackupDatastore
 	datastoreDiscoveryErr error
+	runtimeEpoch          uint64
 }
 
 type pbsBackupPollContextKey struct{}
 
-func (m *Monitor) beginPBSBackupPoll(instance string, now time.Time, client *pbs.Client) (*pbsBackupPoll, string) {
+func (m *Monitor) beginPBSBackupPoll(instance string, now time.Time, client *pbs.Client, runtimeEpoch uint64) (*pbsBackupPoll, string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if runtimeEpoch != m.pbsBackupRuntimeEpoch {
+		return nil, "runtime changed during discovery"
+	}
 	if client == nil || m.pbsClients[instance] != client {
 		return nil, "connection changed"
 	}
@@ -137,7 +141,7 @@ func (m *Monitor) applyPBSBackupEffect(ctx context.Context, instance string, eff
 }
 
 func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, inventory pbsBackupInventory) {
-	owner, reason := m.beginPBSBackupPoll(instance, time.Now(), client)
+	owner, reason := m.beginPBSBackupPoll(instance, time.Now(), client, inventory.runtimeEpoch)
 	if owner == nil {
 		log.Debug().Str("instance", instance).Str("reason", reason).Msg("Skipping PBS backup polling this cycle")
 		return

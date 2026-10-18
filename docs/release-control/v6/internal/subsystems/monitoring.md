@@ -20,7 +20,8 @@
 ### Root PBS datastore discovery owns backup replacement authority
 
 The foreground datastore-list result travels into the same connection/runtime-owned
-background scan as its namespace inputs. A transient or malformed root discovery
+background scan as its namespace inputs. Admission checks the runtime epoch captured
+before discovery, even when replacement reuses an uncancelled parent context. A transient or malformed root discovery
 publishes unavailable protection evidence while retaining exact raw backups, cache
 read times and stored recovery points; it probes no cached datastore path. An
 access-rejected discovery withdraws only that connection's raw rows and reusable

@@ -242,6 +242,15 @@ func exercisePBSRootDatastoreDiscovery(t *testing.T, cases []pbsDatastoreDiscove
 						cancelPoll()
 						http.Error(w, "fixture cancelled", http.StatusServiceUnavailable)
 						return
+					case 10, 11:
+						// Replacement need not cancel the old foreground parent,
+						// and may even reuse that exact context value.
+						f.m.setRuntimeContext(context.Background(), nil)
+						if p == 11 {
+							http.Error(w, "old fixture denied", http.StatusForbidden)
+							return
+						}
+						body = `{"data":[]}`
 					}
 				case strings.HasSuffix(r.URL.Path, "/status"):
 					body = `{"data":{"status":"available","total":1000,"used":250,"avail":750}}`

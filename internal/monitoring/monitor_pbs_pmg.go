@@ -178,7 +178,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	var pbsInst models.PBSInstance
-	var backupInventory pbsBackupInventory
+	m.mu.RLock()
+	backupInventory := pbsBackupInventory{runtimeEpoch: m.pbsBackupRuntimeEpoch}
+	m.mu.RUnlock()
 	publishResult := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")

@@ -846,5 +846,6 @@ func TestPBSRootDatastoreInventoryAndScope(t *testing.T) {
 		{"empty", 3, ""}, {"removed_store", 7, ""},
 		{"datastores_off", 3, "datastores"}, {"backups_off", 3, "backups"}, {"global_off", 3, "global"},
 		{"cancelled", 9, "cancelled"},
+		{"withdrawn_empty", 10, "withdrawn"}, {"withdrawn_denied", 11, "withdrawn"},
 	})
 }
