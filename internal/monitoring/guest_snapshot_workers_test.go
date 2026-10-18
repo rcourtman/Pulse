@@ -101,7 +101,7 @@ func awaitSnapshotPoll(t *testing.T, done <-chan struct{}) {
 }
 
 func TestGuestSnapshotPollingBoundsWorkersNotOnlyRequests(t *testing.T) {
-	for _, count := range []int{1, 7, 8, 512} {
+	for _, count := range []int{0, 1, 7, 8, 512} {
 		t.Run(fmt.Sprintf("guests=%d", count), func(t *testing.T) {
 			m := snapshotWorkerMonitor(count)
 			entered := make(chan struct{}, count)
@@ -243,6 +243,63 @@ func TestGuestSnapshotWorkersCancellationRetainsUnreadAndWaitsForReturn(t *testi
 		t.Errorf("ordinary authoritative empty read did not resume scoped replacement: %+v", got)
 	}
 	t.Logf("SNAPSHOT_CANCEL reads=%d unread_retained=%d independent=1 actual_return_waited=true ordinary_recovery=true", reads.Load(), count)
+}
+
+func TestGuestSnapshotWorkersKeepCompletedProgressWhenQueueIsCancelled(t *testing.T) {
+	const count = 32
+	m := snapshotWorkerMonitor(count)
+	previous := make([]models.GuestSnapshot, count)
+	for i := range previous {
+		kind := "qemu"
+		if i%4 == 0 {
+			kind = "lxc"
+		}
+		previous[i] = models.GuestSnapshot{ID: fmt.Sprintf("site-member-%d-retained", 1000+i), VMID: 1000 + i, Name: "retained", Node: "member", Instance: "site", Type: kind, Time: time.Unix(1792028400, 0)}
+	}
+	m.state.UpdateGuestSnapshotsForInstance("site", previous)
+	entered := make(chan struct{}, count)
+	release, done := make(chan struct{}), make(chan struct{})
+	var unblock sync.Once
+	var reads atomic.Int32
+	client := &snapshotWorkerClient{read: func(ctx context.Context, _ string, vmid int) ([]proxmox.Snapshot, error) {
+		reads.Add(1)
+		switch vmid {
+		case 1001:
+			return []proxmox.Snapshot{{Name: "fresh", SnapTime: 1792028460}}, nil
+		case 1002:
+			return nil, nil // An observed empty list may replace this guest only.
+		case 1003:
+			return nil, fmt.Errorf("fixture inventory unavailable")
+		}
+		entered <- struct{}{}
+		<-release
+		return nil, ctx.Err()
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { m.pollGuestSnapshots(ctx, "site", client); close(done) }()
+	defer func() { unblock.Do(func() { close(release) }); awaitSnapshotPoll(t, done) }()
+	awaitSnapshotWorkers(t, entered, 8)
+	cancel()
+	unblock.Do(func() { close(release) })
+	awaitSnapshotPoll(t, done)
+	if reads.Load() != 11 {
+		t.Errorf("partial poll started %d reads; want three completed and eight active", reads.Load())
+	}
+	want := make([]models.GuestSnapshot, 0, count-1)
+	for _, snapshot := range previous {
+		if snapshot.VMID != 1001 && snapshot.VMID != 1002 {
+			want = append(want, snapshot)
+		}
+	}
+	want = append(want, models.GuestSnapshot{ID: "site-member-1001-fresh", VMID: 1001, Name: "fresh", Node: "member", Instance: "site", Type: "qemu", Time: time.Unix(1792028460, 0), VMState: true})
+	got := m.state.GetSnapshot().PVEBackups.GuestSnapshots
+	sort.Slice(want, func(i, j int) bool { return want[i].ID < want[j].ID })
+	sort.Slice(got, func(i, j int) bool { return got[i].ID < got[j].ID })
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("partial cancellation lost completed or unread evidence: got=%+v want=%+v", got, want)
+	}
+	t.Logf("SNAPSHOT_PARTIAL started=%d fresh=1 observed_empty=1 unavailable=1 retained=%d", reads.Load(), count-2)
 }
 
 func BenchmarkGuestSnapshotFleetPoll(b *testing.B) {

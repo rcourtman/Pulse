@@ -1233,42 +1233,55 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	results := make(chan guestSnapshotPollResult, len(targets))
+	jobs := make(chan guestSnapshotPollTarget)
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)
 
-	for _, target := range targets {
-		target := target
+	// Bound the workers as well as the requests. A goroutine per guest leaves
+	// an entire large fleet's stacks waiting behind an eight-request semaphore.
+	// Reuse the same workers and stop admitting queued reads after cancellation.
+	for i := 0; i < min(maxConcurrentGuestSnapshotPolls, len(targets)); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			select {
-			case sem <- struct{}{}:
-			case <-snapshotCtx.Done():
-				results <- guestSnapshotPollResult{target: target, err: snapshotCtx.Err()}
-				return
-			}
-			defer func() { <-sem }()
-
-			snapshots, err := fetchSnapshots(target)
-			result := guestSnapshotPollResult{target: target, err: err}
-			if err == nil {
-				result.polled = true
-				result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
-				for _, snap := range snapshots {
-					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+			for target := range jobs {
+				if snapshotCtx.Err() != nil {
+					return
 				}
-			}
-			// A failed read, including an unavailable LXC endpoint, is not an
-			// empty inventory. Keep this guest's known snapshots until an
-			// authoritative successful enumeration replaces them.
 
-			results <- result
+				snapshots, err := fetchSnapshots(target)
+				result := guestSnapshotPollResult{target: target, err: err}
+				if err == nil {
+					result.polled = true
+					result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
+					for _, snap := range snapshots {
+						result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+					}
+				}
+				// A failed or undispatched read is not an empty inventory. Keep
+				// that guest's known snapshots until a successful enumeration.
+
+				results <- result
+			}
 		}()
 	}
 
+dispatch:
+	for _, target := range targets {
+		if snapshotCtx.Err() != nil {
+			break
+		}
+		select {
+		case jobs <- target:
+		case <-snapshotCtx.Done():
+			break dispatch
+		}
+	}
+	close(jobs)
+	// Cancellation withdraws queued work, not occupancy of active readers.
 	wg.Wait()
 	close(results)
+	deadlineExceeded = snapshotCtx.Err() != nil
 
 	for result := range results {
 		if result.polled {

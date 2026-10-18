@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Guest snapshot polling bounds workers, not just requests
+
+Snapshot inventory uses at most eight reusable workers per existing connection
+scan, with no worker for an empty fleet. Waiting guests do not each retain a
+goroutine stack. The existing VM/LXC selection, template exclusions, request
+limit and bounded scan budget remain unchanged. Cancellation stops queued reads
+and still waits for active readers to actually return before releasing the scan.
+Completed per-guest observations remain usable; failed and undispatched guests
+retain prior inventory rather than becoming successful emptiness. Existing size
+uncertainty, alert/recovery semantics and connection/runtime publication fences
+remain in force. No resource field or rendered state is added or reinterpreted.
+
+`guest_snapshot_workers_test.go` counts actual collector goroutine frames under
+gated mixed-fleet reads, checks scoped inventory and actual-return cancellation,
+and measures fixed-sample allocation cost. These are source resource/evidence
+proofs, not installed RSS, incident diagnosis or frozen-guest recovery.
+
 ### Storage content is shared evidence, not a backup-only list
 
 The validated Proxmox content reader returns every content kind to its existing
