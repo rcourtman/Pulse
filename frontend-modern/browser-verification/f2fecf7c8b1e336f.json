@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "afedbecaf24774a6171ade84505a8b58d752ae93",
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/agentInstallCommand.ts": "210be6e0386e200c6cc1e3ca567aaffa0123cc8976ce81e494bb347b774aacd4"
+  },
+  "routes": [
+    "/browser-tests/unix-private-install.html",
+    "/browser-tests/proxmox-private-input.html?type=pve",
+    "/browser-tests/proxmox-private-input.html?type=pbs"
+  ],
+  "states": [
+    "Actual host installer and node setup state owners/sections plus token dialog, built from the verified parent",
+    "PVE/PBS setup readiness and agent command; host private-token install commands; separate synthetic token reveal",
+    "Desktop light and320px dark; real generated values with no command execution"
+  ],
+  "interactions": [
+    "Keyboard desktop and touch narrow token generation/reveal/copy/dismiss",
+    "Ten whole-command copies retain supervising read/wait cleanup and never contain the separate token",
+    "PVE/PBS command copies exactly equal the Go producer output from source-m4u7qeu_; host copied bytes equal actual rendered frontend-generated commands",
+    "All12 retained final captures opened through native view_image; browser and HTTP server closed"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-18T19:47:08Z",
+  "browser": {
+    "client": "1.56.1",
+    "engine": "Chromium",
+    "version": "141.0.7390.37"
+  },
+  "source_proofs": {
+    "go": "source-m4u7qeu_",
+    "frontend_types_lint_format_before_failed_fixture": "source-d8s1x3ux",
+    "corrected_native_input_tests_and_builds": "source-kwbsfsy3"
+  },
+  "scope": "Targeted production state/components, real copied producer values and synthetic offline APIs, not a full authenticated application or installed agent. The first frontend proof has eight retained fixture failures due to the supplied BusyBox basename; the corrected exact-source proof passes all184 tests and both builds. The initial browser driver expected hidden setup source as text; corrected checks require the actual ready state without weakening copied-byte checks.",
+  "limits": [
+    "Unchanged long macOS launchd-path guidance is partly clipped at320px; no layout repair is claimed.",
+    "Native appliance installation, private build, Safari, reporter acceptance and released availability are unproved."
+  ],
+  "dossier": [
+    "RECEIPTS.md",
+    "BOOTSTRAP-SOURCE-PROOFS.tar.xz",
+    "BOOTSTRAP-CONSUMER-BUILD.tar.xz",
+    "BOOTSTRAP-BROWSER-PIXELS.tar.xz",
+    "BOOTSTRAP-ADVERSE-AND-BASELINE.tar.xz"
+  ]
+}
