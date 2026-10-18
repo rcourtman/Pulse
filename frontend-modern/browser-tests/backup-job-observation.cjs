@@ -136,7 +136,7 @@ async function capture(page, name) {
     const other = page.locator('[data-proxmox-coverage-key="resource:other-200"]');
     await row.waitFor();
     await row.evaluate((node) => { window.observedRow = node; });
-    assert.match(await row.innerText(), /Job observed 4h ago/);
+    assert.match(await row.innerText(), /Job observed\s+4h ago/);
     const toggle = row.getByRole('button');
     if (phone) await row.locator('td').first().tap();
     else { await toggle.focus(); await page.keyboard.press('Enter'); }
@@ -193,7 +193,7 @@ async function capture(page, name) {
       await page.waitForFunction(() => [...document.querySelectorAll('[data-backup-task-detail] dt')].find((node) => node.textContent === 'Last observed')?.nextElementSibling.textContent === 'Unknown');
       assert.equal(await observed.innerText(), 'Unknown');
       assert.equal(await observed.locator('time').count(), 0);
-      assert.match(await row.innerText(), /Job observation unknown/);
+      assert.match(await row.innerText(), /Job observation\s+unknown/);
       assert.equal(await resultField.innerText(), 'Warning');
       result.cases.push({ browser: name, check: label + ' observation stays unknown, result stays separate' });
     }
@@ -205,8 +205,8 @@ async function capture(page, name) {
     if (measured.problems.length || measured.pageOverflow) await capture(page, name + '-adverse-geometry');
     assert.deepEqual(measured, { problems: [], pageOverflow: false });
     await detail.scrollIntoViewIfNeeded(); await capture(page, name + '-replacement-observation');
-    assert.match(await detail.innerText(), /not when the job finished/);
-    assert.match(await detail.innerText(), /does not make retained results current/);
+    assert.match(await detail.innerText(), /not when the job\s+finished/);
+    assert.match(await detail.innerText(), /does not make\s+retained results current/);
     result.cases.push({ browser: name, check: 'same-open known replacement restores only its real observation; no false guest health or fresh posture' });
     result.cases.push({ browser: name, browserVersion: browser.version(), viewport: { width, height: 1000 } });
     await context.close(); await browser.close(); browser = undefined;

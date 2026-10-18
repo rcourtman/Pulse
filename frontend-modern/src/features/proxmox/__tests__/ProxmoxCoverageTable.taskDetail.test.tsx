@@ -161,7 +161,9 @@ describe('Coverage job observation age', () => {
       vi.useFakeTimers();
       vi.setSystemTime(BACKUP_IDENTITY_NOW);
       const { toggle, container } = mount([identityTask({ status: 'warning', observedAt })], width);
-      expect(screen.getByText('Job observed 45m ago')).toBeVisible();
+      expect(container.querySelector('[data-backup-task-observed]')).toHaveTextContent(
+        'Job observed 45m ago',
+      );
       fireEvent.click(toggle);
       expect(lastObserved()).toHaveTextContent('45m ago');
       expect(lastObserved()?.querySelector('time')).toHaveAttribute('datetime', observedAt);
@@ -169,7 +171,9 @@ describe('Coverage job observation age', () => {
         'not when the job finished',
       );
       vi.advanceTimersByTime(2 * 60 * 60 * 1000);
-      expect(screen.getByText('Job observed 2h ago')).toBeVisible();
+      expect(container.querySelector('[data-backup-task-observed]')).toHaveTextContent(
+        'Job observed 2h ago',
+      );
       expect(lastObserved()).toHaveTextContent('2h ago');
       expect(container.querySelectorAll('[data-backup-task-observed]')).toHaveLength(2);
       expect(screen.getByRole('region', { name: 'Latest backup job' })).toHaveTextContent(
