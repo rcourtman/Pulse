@@ -223,9 +223,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </Show>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class={formField}>
-            <span class={formLabel}>TLS fingerprint</span>
+          <div class={formField}>
+            <label for={`${trustId}-fingerprint`} class={formLabel}>
+              TLS fingerprint
+            </label>
             <input
+              id={`${trustId}-fingerprint`}
               aria-describedby={`${trustId}-pin-help ${trustId}-policy`}
               class={formControl}
               value={props.state.form().fingerprint}
@@ -234,12 +237,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               }
               placeholder="Optional SHA256 fingerprint"
             />
-            <span id={`${trustId}-pin-help`} class={formHelpText}>
+            <p id={`${trustId}-pin-help`} class={formHelpText}>
               Optional SHA-256 certificate pin for HTTPS. Renewal can change the pin. Independently
               verify a replacement through an already-trusted administration channel before updating
               it. Do not clear a pin or skip verification to bypass an error.
-            </span>
-          </label>
+            </p>
+          </div>
           <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-3">
             <label class="flex min-h-11 items-center gap-3">
               <input

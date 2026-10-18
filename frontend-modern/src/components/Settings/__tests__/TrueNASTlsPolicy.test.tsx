@@ -55,7 +55,14 @@ describe('mounted TrueNAS form TLS policy', () => {
     expect(screen.getByRole('checkbox', { name: 'Use HTTPS' })).toBeChecked();
     expect(screen.getByLabelText('Host')).toHaveAccessibleDescription(/scheme in Host takes precedence/);
     expect(skip).toHaveAccessibleDescription(/Neither a fingerprint/);
-    expect(state.form()).toMatchObject({ host: 'http://nas.example.invalid', port: '443', apiKey: '', fingerprint: '', useHttps: true, insecureSkipVerify: false });
+    expect(state.form()).toMatchObject({
+      host: 'http://nas.example.invalid',
+      port: '443',
+      apiKey: '',
+      fingerprint: '',
+      useHttps: true,
+      insecureSkipVerify: false,
+    });
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
     expect(TrueNASAPI.previewConnection).not.toHaveBeenCalled();
     expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();

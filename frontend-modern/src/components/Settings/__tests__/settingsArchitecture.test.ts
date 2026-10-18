@@ -1888,11 +1888,10 @@ describe('settings architecture guardrails', () => {
       'Install a trusted certificate for vCenter before using this in production.',
     );
 
-    expect(trueNASCredentialSlotSource).toContain('TlsVerificationWarningBanner');
-    expect(trueNASCredentialSlotSource).toContain('subject="this TrueNAS connection"');
-    expect(trueNASCredentialSlotSource).toContain(
-      'Install a trusted certificate or configure the TLS fingerprint before using this in production.',
-    );
+    expect(trueNASCredentialSlotSource).toContain('getTrueNASTlsPolicy');
+    expect(trueNASCredentialSlotSource).toContain('aria-label="TrueNAS form TLS policy"');
+    expect(trueNASCredentialSlotSource).toContain('Form settings only, not a connection-test result');
+    expect(trueNASCredentialSlotSource).not.toContain('TlsVerificationWarningBanner');
   });
 
   it('exposes external-agent setup from Pulse Intelligence while API Access stays token-only', () => {
