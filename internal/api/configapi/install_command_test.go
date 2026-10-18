@@ -50,6 +50,12 @@ def reader_signal_state(reader):
                     if k in ("Name", "State", "SigBlk", "SigIgn", "SigCgt", "SigPnd", "ShdPnd")}
     except OSError:
         return {"status": "unavailable"}
+def reader_children(reader):
+    try:
+        with open("/proc/%d/task/%d/children" % (reader, reader)) as f:
+            return [int(pid) for pid in f.read().split()]
+    except OSError:
+        return None
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
@@ -98,7 +104,8 @@ while time.monotonic() < deadline:
                 with open(os.path.join(env["FAKE_ROOT"], "reader-pid")) as f:
                     reader = int(f.read())
                 signal_observation = {"signal": p["signal_on_prompt"], "sent": False,
-                                      "before": reader_signal_state(reader)}
+                                      "before": reader_signal_state(reader),
+                                      "input_children": reader_children(reader)}
                 os.kill(reader, getattr(signal, "SIG" + p["signal_on_prompt"]))
                 signal_observation["sent"] = True
             else:
@@ -119,6 +126,9 @@ if initial_tty != final_tty:
 if p.get("signal_on_prompt"):
     observation = signal_observation or {"signal": p["signal_on_prompt"], "sent": False}
     observation.update(exit=code, complete_tty_restored=initial_tty == final_tty)
+    if observation.get("input_children") is not None:
+        observation["remaining_input_children"] = [pid for pid in observation["input_children"]
+                                                   if os.path.exists("/proc/%d" % pid)]
     with open(os.path.join(env["FAKE_ROOT"], "signal-observation"), "w") as f:
         json.dump(observation, f, sort_keys=True)
 os.close(tty_watch)

@@ -417,6 +417,13 @@ os.close(slave)
 output = b""
 sent = False
 echo_at_prompt = False
+signal_observation = None
+def input_children(reader):
+    try:
+        with open("/proc/%d/task/%d/children" % (reader, reader)) as f:
+            return [int(pid) for pid in f.read().split()]
+    except OSError:
+        return None
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
@@ -446,9 +453,13 @@ while time.monotonic() < deadline:
                 and os.path.exists(env["READER_PID"])):
             echo_at_prompt = bool(termios.tcgetattr(tty_watch)[3] & termios.ECHO)
             if p.get("read_signal"):
-                time.sleep(.1)  # read has displayed its own prompt and is waiting
+                # Signal at the actual prompt, including before the supervisor
+                # enters wait. Delaying here hid Bash's read/trap race.
                 with open(env["READER_PID"]) as f: reader = int(f.read())
+                signal_observation = {"signal": p["read_signal"], "sent": False,
+                                      "input_children": input_children(reader)}
                 os.kill(reader, getattr(signal, "SIG" + p["read_signal"]))
+                signal_observation["sent"] = True
             elif p.get("slow"):
                 for piece in [p["input"][:4], p["input"][4:], "\\n"]:
                     os.write(master, piece.encode())
@@ -468,6 +479,14 @@ if initial_tty != final_tty:
 if echo_at_prompt:
     output += b"\\nBootstrap prompted for the token with terminal echo enabled\\n"
     code = 1
+if p.get("read_signal"):
+    observation = signal_observation or {"signal": p["read_signal"], "sent": False}
+    observation.update(exit=code, complete_tty_restored=initial_tty == final_tty)
+    if observation.get("input_children") is not None:
+        observation["remaining_input_children"] = [pid for pid in observation["input_children"]
+                                                   if os.path.exists("/proc/%d" % pid)]
+    with open(os.path.join(os.path.dirname(env["READER_PID"]), "signal-observation"), "w") as f:
+        json.dump(observation, f, sort_keys=True)
 os.close(tty_watch)
 os.close(master)
 sys.stdout.buffer.write(output)
@@ -944,10 +963,14 @@ describe('terminal-control portability', { timeout: 25_000 }, () => {
     },
   );
 
-  it.each(['blank', 'overflow', 'HUP', 'INT', 'TERM'])(
-    'refuses %s with applet-only input, without leaks or leftover modes/files',
-    (failure) => {
-      const fixture = makeUnixFixture('busybox', true);
+  it.each(
+    (['stty', 'busybox'] as const).flatMap((tool) =>
+      ['blank', 'overflow', 'HUP', 'INT', 'TERM'].map((failure) => [tool, failure] as const),
+    ),
+  )(
+    'refuses %s/%s at the prompt, without leaks or leftover readers/modes/files',
+    (tool, failure) => {
+      const fixture = makeUnixFixture(tool, true);
       const input = failure === 'overflow' ? 'x'.repeat(10000) + 'PRIVATE_OVERFLOW_SENTINEL' : '';
       const history = join(fixture.dir, 'history');
       try {
@@ -960,6 +983,17 @@ describe('terminal-control portability', { timeout: 25_000 }, () => {
         );
         expect(result.status, result.stdout + result.stderr).not.toBe(0);
         expect(result.stdout).not.toMatch(/deadline expired|did not restore/);
+        if (['HUP', 'INT', 'TERM'].includes(failure)) {
+          const observation = JSON.parse(
+            readFileSync(join(fixture.dir, 'signal-observation'), 'utf8'),
+          );
+          expect(observation.sent).toBe(true);
+          expect(observation.complete_tty_restored).toBe(true);
+          if (process.platform === 'linux') {
+            expect(observation.input_children).toHaveLength(1);
+            expect(observation.remaining_input_children).toEqual([]);
+          }
+        }
         expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
         for (const text of [result.stdout, result.stderr, readFileSync(history, 'utf8')])
           expect(text).not.toMatch(/PRIVATE_OVERFLOW_SENTINEL|x{512}/);

@@ -164,6 +164,16 @@ preflight, private-file, scope, profile, identity and TLS boundaries remain.
 BusyBox, full terminal restoration and closed privilege/download fixtures;
 it is not native appliance installation or recovery evidence.
 
+The terminal read runs in the privileged shell's sole background job. Its
+supervisor owns signal/EXIT cleanup, terminates and reaps that job before
+restoring the complete terminal state, and never accepts an inherited PID as
+a cleanup target. This avoids Bash's prompt-time read/trap race without
+delaying signals, imposing a token-entry timeout or weakening privacy. Both
+Go and frontend command producers preserve the same boundary. Prompt-time
+HUP/INT/TERM controls keep the terminal owner alive, require the original
+failure exit, and on Linux verify the observed input child has gone; no
+installation may begin after interrupted or invalid input.
+
 ### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
 
 The Unix uninstall caller selects these platforms from their vendor/installed

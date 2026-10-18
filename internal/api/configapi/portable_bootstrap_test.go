@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -211,7 +212,11 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 						t.Fatal("signal execution observation missing")
 					}
 					var observation struct {
-						Sent bool `json:"sent"`
+						Sent                   bool  `json:"sent"`
+						Exit                   int   `json:"exit"`
+						CompleteTTYRestored    bool  `json:"complete_tty_restored"`
+						InputChildren          []int `json:"input_children"`
+						RemainingInputChildren []int `json:"remaining_input_children"`
 					}
 					if json.Unmarshal(body, &observation) != nil || !observation.Sent {
 						t.Fatal("requested reader signal was not actually sent")
@@ -219,6 +224,12 @@ func TestPrivateBootstrapRealBusyBoxInput(t *testing.T) {
 					// This fixed-field record contains no command, input or environment.
 					// Keep delivery separate from a successful cleanup assertion.
 					t.Logf("reader signal observation: %s", body)
+					if !observation.CompleteTTYRestored || observation.Exit != map[string]int{"HUP": 129, "TERM": 143}[tc.signalName] {
+						t.Fatal("prompt-time signal did not retain its exit and complete terminal restoration")
+					}
+					if runtime.GOOS == "linux" && (len(observation.InputChildren) != 1 || len(observation.RemainingInputChildren) != 0) {
+						t.Fatal("input was not supervised and reaped before cleanup completed")
+					}
 				}
 				if (err != nil) != tc.failure {
 					t.Fatalf("BusyBox bootstrap result=%v, expected failure=%t\n%s", err, tc.failure, out)
