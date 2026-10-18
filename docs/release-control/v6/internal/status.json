@@ -10036,7 +10036,7 @@
     },
     {
       "id": "notification-delivery-terminal-failure-diagnosis",
-      "summary": "The 18 October 2026 production clean weekly cohort has 495 of 8,466 covered rotating IDs reporting terminal notification failures, with rolling totals of 122,341 failures and 245,365 deliveries. Connectivity (37,688) and authentication (30,627) are the largest classified sums, with schema-dependent coverage. These aggregates do not identify a transport/provider or prove a release regression. Typed failure classification, deterministic-failure short circuiting and explicit retained-queue recovery already exist. The preceding source slice repairs SMTP provider-default authentication and concurrent envelope mutation. This connectivity slice independently reproduces and repairs stalled leading approved addresses starving healthy fallback connections in both pinned HTTP clients, plus webhook DNS continuing after dial cancellation. Shared bounded dialing, context-aware DNS and real TCP/resolver controls retain destination policy, one-request delivery and persisted queue verdicts. Remaining work is destination-level repeated-failure handling, evidence of destination recovery, and precise delivery-health guidance. These source fixes do not establish how much fleet failure they explain or that the production fleet has recovered.",
+      "summary": "The 18 October 2026 production summary retrieved at 10:01 UTC has 498 of 8,455 covered rotating IDs reporting terminal notification failures, with rolling totals of 120,040 failures and 246,419 deliveries. Connectivity (38,088) and authentication (27,959) are the largest classified sums; classification coverage is 8,113 IDs. These rolling aggregates do not identify a transport/provider or prove a release regression or recovery. Typed classification, deterministic-failure short circuiting and explicit retained-queue recovery already exist. Prior source slices repair SMTP provider-default authentication and concurrent envelope mutation, pinned HTTP fallback starvation, and webhook DNS continuing after cancellation. This authentication slice independently reproduces and repairs literal LOGIN challenge matching, substring AUTH mechanism selection, and port-465 connection tests attempting STARTTLS inside implicit TLS. Shared exact-name negotiation, a bounded prompt-independent LOGIN exchange and a canonical TLS-mode decision retain real 535 authentication verdicts, 454 retries and persisted queue/audit/telemetry outcomes. Unsupported mechanism lists now have a typed configuration verdict. Remaining work is destination-level repeated-failure handling, evidence of destination recovery, and precise delivery-health guidance. These source proofs do not establish which fleet failures they explain or that the production fleet has recovered.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-09-03",
@@ -10049,6 +10049,11 @@
       ],
       "proposed_resolution": "lane-expansion",
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/notification-authentication-reliability-2026-10-18.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/notification-connectivity-reliability-2026-10-18.md",

@@ -35,29 +35,37 @@ type EmailAttachment struct {
 // and reject AUTH PLAIN with "504 5.7.4 Unrecognized authentication type".
 type loginAuth struct {
 	username, password string
+	step               uint8
 }
 
 // LoginAuth returns an Auth that implements the LOGIN authentication mechanism.
 func LoginAuth(username, password string) smtp.Auth {
-	return &loginAuth{username, password}
+	return &loginAuth{username: username, password: password}
 }
 
 func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	a.step = 0
 	return "LOGIN", nil, nil
 }
 
-func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+func (a *loginAuth) Next(_ []byte, more bool) ([]byte, error) {
 	if !more {
+		if a.step != 2 {
+			return nil, FailfWithClass(NotificationFailureAuthentication, "SMTP LOGIN ended before credentials were exchanged")
+		}
 		return nil, nil
 	}
-	prompt := strings.TrimSpace(strings.ToLower(string(fromServer)))
-	switch prompt {
-	case "username:":
+	// LOGIN sends username then password. Challenges are opaque display text,
+	// not protocol tokens, and must not enter diagnostics or select credentials.
+	switch a.step {
+	case 0:
+		a.step++
 		return []byte(a.username), nil
-	case "password:":
+	case 1:
+		a.step++
 		return []byte(a.password), nil
 	default:
-		return nil, FailfWithClass(NotificationFailureAuthentication, "unexpected LOGIN prompt: %s", fromServer)
+		return nil, FailfWithClass(NotificationFailureAuthentication, "SMTP LOGIN received an extra challenge")
 	}
 }
 
@@ -452,20 +460,28 @@ func (e *EnhancedEmailManager) negotiateAuth(client *smtp.Client) (smtp.Auth, er
 	}
 
 	hasAuth, mechanismsRaw := client.Extension("AUTH")
-	mechanisms := strings.ToUpper(mechanismsRaw)
+	var supportsPlain, supportsLogin bool
+	for _, mechanism := range strings.Fields(strings.ToUpper(mechanismsRaw)) {
+		switch mechanism {
+		case "PLAIN":
+			supportsPlain = true
+		case "LOGIN":
+			supportsLogin = true
+		}
+	}
 
-	if strings.Contains(mechanisms, "PLAIN") {
+	if supportsPlain {
 		return &plainAuth{"", username, e.config.Password}, nil
 	}
-	if strings.Contains(mechanisms, "LOGIN") {
+	if supportsLogin {
 		return LoginAuth(username, e.config.Password), nil
 	}
 
-	if !hasAuth || mechanisms == "" {
+	if !hasAuth || strings.TrimSpace(mechanismsRaw) == "" {
 		return &plainAuth{"", username, e.config.Password}, nil
 	}
 
-	return nil, fmt.Errorf("server advertises AUTH mechanisms [%s] but none are supported (PLAIN, LOGIN)", mechanisms)
+	return nil, FailfWithClass(NotificationFailureConfiguration, "SMTP authentication mechanisms: none are supported (PLAIN, LOGIN)")
 }
 
 func resolveProviderUsername(config EmailProviderConfig) string {
@@ -675,6 +691,12 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 	return e.sendViaProviderWithAddresses(msg, addresses)
 }
 
+// Port 465 selects implicit TLS even when the explicit TLS flag is unset.
+// Connection tests and delivery must use the same transport decision.
+func (e *EnhancedEmailManager) usesImplicitTLS() bool {
+	return e.config.TLS || e.config.SMTPPort == 465
+}
+
 func (e *EnhancedEmailManager) sendViaProviderWithAddresses(msg []byte, addresses resolvedEmailAddresses) error {
 	addr := net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort))
 
@@ -682,7 +704,7 @@ func (e *EnhancedEmailManager) sendViaProviderWithAddresses(msg []byte, addresse
 	// mutating the shared config struct.
 
 	// Send with TLS configuration — auth is negotiated after connection
-	if e.config.TLS || e.config.SMTPPort == 465 {
+	if e.usesImplicitTLS() {
 		return e.sendTLS(addr, msg, addresses)
 	} else if e.config.StartTLS {
 		return e.sendStartTLS(addr, msg, addresses)
@@ -837,7 +859,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 	var conn net.Conn
 	var err error
 
-	if e.config.TLS || e.config.SMTPPort == 465 {
+	if e.usesImplicitTLS() {
 		tlsConfig := &tls.Config{
 			ServerName:         e.config.SMTPHost,
 			InsecureSkipVerify: e.config.SkipTLSVerify,
@@ -867,7 +889,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 	defer client.Close()
 
 	// Test STARTTLS if configured
-	if e.config.StartTLS && !e.config.TLS {
+	if e.config.StartTLS && !e.usesImplicitTLS() {
 		tlsConfig := &tls.Config{
 			ServerName:         e.config.SMTPHost,
 			InsecureSkipVerify: e.config.SkipTLSVerify,
