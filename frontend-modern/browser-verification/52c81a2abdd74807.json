@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "4804d45a09562abb4e314f9ef65d9c1da31bfd67",
+  "verified_at": "2026-10-18T11:04:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "36b1eb5fb9a2618a7ba87fac43cc3c1ebb9d827005acfad93e41954923eea5fa",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts": "4a78cafe4c5db3d580586b8ba0c58d7854d4dd40095362ad6f4f5114cb50fb85"
+  },
+  "routes": [
+    "/browser-tests/truenas-protection-read.html (real recovery HTTP reader/query cache and production TrueNAS Protection table/CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Source 4804d45a09562abb4e314f9ef65d9c1da31bfd67: all 2988 source inputs and five rendered artifact hashes verified. Playwright 1.56.1 matches the integration lock, Chromium 141.0.7390.37. Desktop light and 320px dark touch layouts.",
+    "Unreadable HTTP 200 envelopes and partly malformed point arrays are unavailable, not empty or usable subsets. A failed refresh retains historical records with the visible last-loaded qualification and accessible detail.",
+    "The last-loaded notice survives explicit pending retry and cached background remount. Only foreground retry disables its control; the established background-query contract keeps manual Refresh available. A readable replacement clears the notice.",
+    "A genuine empty array clears the page and shows its normal empty state. A failed reread of that empty page stays unavailable during an explicit retry. HTTP 403 withdraws retained rows instead of exposing denied evidence. No raw diagnostic text is rendered.",
+    "Desktop interactions completed at ba82aea369b12b49988075b59322d942fbb0799d with identical rendered artifacts are reused, not replayed. The resumed final-source pass completes narrow interactions and missing steady captures; a single desktop denial capture waits for actual ancestor opacity to settle.",
+    "Twelve selected final-state captures were opened natively and inspected. Five earlier mid-animation captures remain adverse evidence, not passing pixel proof. All browser scripts closed their browser and local server; no off-origin requests, writes or page errors in the completed cases.",
+    "These safe-fixture proofs establish the read-integrity repair, not native appliance collection, installed recovery, restore success, independent thaw, filesystem liveness, publication or release availability."
+  ],
+  "interactions": [
+    "Refresh from unreadable to readable activity, select the Healthy outcome and return to All. At 320px first expand the existing Filters panel, then tap the same outcome controls.",
+    "Open the snapshot disclosure by keyboard on desktop and touch on the narrow viewport; preserve it through a malformed refresh. Exercise explicit retry, leave/reopen the fixture tab with a held background read, and accept its readable replacement.",
+    "Refresh through partly malformed data, HTTP 503, real empty data, a failed empty-page read, a held explicit retry and access denial. Inspect actual desktop and narrow pixels and supplement only captures that were still unreadable during animation."
+  ]
+}
