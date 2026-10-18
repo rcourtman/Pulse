@@ -137,9 +137,14 @@ instant also stay Unknown only on their matched workload, with an accurate
 conflict explanation. Older ties cannot override a strictly newer result;
 agreement and duplicate observations do not fabricate uncertainty. Rebuilt
 rows clear the uncertainty after a corrected inventory, and their existing
-disclosure/focus identity stays stable. The recovery-model and Coverage tests cover isolation and replacement. No new API,
-resource, persistence or execution path is introduced.
-
+disclosure/focus identity stays stable. Unresolved collected jobs remain attached
+only through that same workload match; job ID is not a deduplication key for
+conflicting observations. Their recorded connection/node are never inferred from
+current placement. Unknown-only diagnostic search cannot leak another workload's
+failure or keep an older failure searchable after unambiguous replacement.
+The recovery-model and Coverage tests and `backup-job-uncertainty.cjs` cover
+isolation, exact evidence, response-order reversal and ordinary replacement.
+No new API, resource, persistence or execution path is introduced.
 
 ### Coverage window geometry follows workload identity
 

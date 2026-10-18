@@ -110,10 +110,14 @@ result, start time and nonblank reported error as labelled, wrapping text.
 Provider text is escaped, not HTML; multiline/long errors remain readable
 without hover on phones. Unorderable or conflicting latest jobs retain the
 existing Unknown explanation rather than exposing a misleading earlier job.
-Ordinary inventory replacement updates/removes the detail without closing the
-workload or retaining an old error. Protection posture and restore evidence
-remain separate. `ProxmoxCoverageTable.taskDetail.test.tsx` and
-`backup-job-detail.cjs` cover this read-only presentation; no provider action,
+The same disclosure keeps all matched collected jobs readable in a separately
+labelled region, without claiming list order is chronology. Each observation
+retains its job ID, raw outcome/error, recorded location and observation time;
+invalid or future starts stay Unknown with literal reported text. Ordinary
+replacement removes stale evidence without closing the workload or losing focus.
+Protection posture and restore evidence remain separate.
+`ProxmoxCoverageTable.taskDetail.test.tsx`, `backup-job-detail.cjs` and
+`backup-job-uncertainty.cjs` cover this read-only presentation; no provider action,
 new route, backup completion or guest recovery is established.
 
 ### Backup diagnostics are not completed restore points

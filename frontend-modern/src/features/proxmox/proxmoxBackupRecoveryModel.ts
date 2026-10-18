@@ -102,6 +102,8 @@ export interface WorkloadCoverageRow {
   /** Unknown chronology is not an absent backup, nor an older dated backup. */
   ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
+  /** Collected jobs remain inspectable when chronology cannot select a latest result. */
+  unresolvedTasks?: CoverageTask[];
   /** Unorderable dates or conflicting newest outcomes prevent a latest result. */
   taskChronologyUnknown?: boolean;
   /** Equally recent jobs disagree; not an unavailable or future timestamp. */
@@ -824,6 +826,9 @@ export function buildProxmoxBackupRecoveryModel(
       error: task.error,
       statusErrorConflict: taskStatusErrorConflict(task),
     };
+    // Do not key these by task ID: conflicting observations can share an ID.
+    // Keep collected evidence separate from any claim about the latest result.
+    (row.unresolvedTasks ??= []).push(candidateTask);
     // An unorderable job may be newer than the dated OK/failed job. Never
     // treat an absent time as epoch zero or let a future time win the summary.
     // Keep this uncertainty local to the matched workload, in either order.
@@ -849,6 +854,7 @@ export function buildProxmoxBackupRecoveryModel(
     row.taskOutcomeConflict = !row.taskChronologyUnknown && selected?.conflict === true;
     row.taskChronologyUnknown = row.taskChronologyUnknown || row.taskOutcomeConflict;
     row.latestTask = row.taskChronologyUnknown ? undefined : selected?.task;
+    if (!row.taskChronologyUnknown) row.unresolvedTasks = undefined;
     Object.assign(row, selectWorkloadRecoveryArtifacts(row.artifacts, input.nowMs));
   }
 
@@ -922,6 +928,16 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.latestTask?.node,
     row.latestTask?.error,
     row.taskChronologyUnknown ? 'Latest backup job unknown' : undefined,
+    ...(row.taskChronologyUnknown ? (row.unresolvedTasks ?? []) : []).flatMap((task) => [
+      task.id,
+      task.label,
+      task.status,
+      task.instance,
+      task.node,
+      task.startedAt,
+      task.observedAt,
+      task.error,
+    ]),
     ...(row.protectionPosture?.providerStates ?? []).flatMap((provider) => [
       provider.provider,
       provider.scope,

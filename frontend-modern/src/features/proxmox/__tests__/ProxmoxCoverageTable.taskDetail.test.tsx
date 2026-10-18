@@ -197,6 +197,103 @@ describe('expanded Coverage backup job evidence', () => {
   );
 });
 
+describe('unresolved Coverage job evidence', () => {
+  const collected = () => screen.getByRole('region', { name: 'Collected backup jobs' });
+  const raw = 'ERROR: archive unavailable\n' + 'repository-path-'.repeat(20);
+
+  it.each(['', 'not-a-date', '1970-01-01T00:00:00Z', '2026-10-05T11:00:00Z'])(
+    'keeps a failed job with start %j inspectable without claiming it is latest',
+    (startTime) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BACKUP_IDENTITY_NOW);
+      const { toggle } = mount([
+        identityTask({ id: 'known-ok' }),
+        identityTask({ id: 'unorderable', status: raw, startTime }),
+      ]);
+      fireEvent.click(toggle);
+      expect(screen.queryByRole('region', { name: 'Latest backup job' })).not.toBeInTheDocument();
+      const detail = collected();
+      expect(detail).toHaveTextContent('do not establish which job is latest');
+      expect(detail).toHaveTextContent('not a job timeline');
+      expect(detail).toHaveTextContent(
+        'does not prove backup usability, guest thaw or filesystem writes',
+      );
+      const jobs = detail.querySelectorAll('[data-backup-task-evidence]');
+      expect(jobs).toHaveLength(2);
+      expect(
+        within(jobs[0] as HTMLElement).getByText('Result').nextElementSibling,
+      ).toHaveTextContent(/^OK$/);
+      expect(
+        within(jobs[1] as HTMLElement).getByText('Result').nextElementSibling,
+      ).toHaveTextContent(/^Failed$/);
+      expect(
+        within(jobs[1] as HTMLElement).getByText('Reported status').nextElementSibling?.textContent,
+      ).toBe(raw);
+      const started = jobs[1].querySelector('[data-backup-task-start-unknown]');
+      expect(started).toHaveTextContent('Unknown');
+      expect(started?.textContent).toContain(startTime || 'not reported');
+      expect(started?.querySelector('time')).toBeNull();
+    },
+  );
+
+  it.each([320, 640, 1365])(
+    'retains conflicts and recorded pre-migration origins at %i px',
+    (width) => {
+      const markup = '<img src="/unexpected"><script>unsafe()</script>';
+      const { toggle } = mount(
+        [
+          identityTask({ id: 'repeated' }),
+          identityTask({ id: 'repeated', status: 'failed', error: markup }),
+          identityTask({
+            id: 'other-connection',
+            instance: 'west',
+            status: 'failed',
+            error: 'wrong connection',
+          }),
+          identityTask({
+            id: 'previous-node',
+            node: 'pve-2',
+            status: 'failed',
+            error: 'Recorded on previous node',
+          }),
+        ],
+        width,
+      );
+      fireEvent.click(toggle);
+      const detail = collected();
+      expect(screen.getByText(/same newest start time report different outcomes/)).toBeVisible();
+      expect(detail.querySelectorAll('[data-backup-task-evidence]')).toHaveLength(3);
+      expect(within(detail).getAllByText('repeated')).toHaveLength(2);
+      expect(within(detail).getByText(markup)).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
+      expect(detail.querySelector('img, script')).toBeNull();
+      expect(detail).not.toHaveTextContent('wrong connection');
+      expect(detail).toHaveTextContent('Recorded on previous node');
+      expect(within(detail).getByText('pve-2')).toBeVisible();
+    },
+  );
+
+  it('withdraws uncertain evidence on ordinary replacement without closing or refocusing the row', () => {
+    const { toggle, setInventory } = mount([
+      identityTask({ id: 'known-ok' }),
+      identityTask({ id: 'unknown-failed', status: raw, startTime: '' }),
+    ]);
+    fireEvent.click(toggle);
+    toggle.focus();
+    expect(collected()).toHaveTextContent('archive unavailable');
+    setInventory([identityTask({ id: 'corrected', status: 'OK' })]);
+    expect(screen.queryByRole('region', { name: 'Collected backup jobs' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Latest backup job' })).toHaveTextContent('OK');
+    expect(screen.queryByText(/archive unavailable/)).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    setInventory([]);
+    expect(screen.queryByRole('region', { name: 'Latest backup job' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Collected backup jobs' })).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
 describe('Coverage job observation age', () => {
   const observedAt = '2026-10-04T11:15:00Z';
   const lastObserved = () =>

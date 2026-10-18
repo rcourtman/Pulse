@@ -938,3 +938,92 @@ describe('backup job observation provenance', () => {
     },
   );
 });
+
+describe('unresolved backup-job evidence remains available', () => {
+  const input = (tasks: BackupTask[]) => ({
+    workloads: [workload({})],
+    pbsBackups: [pbsBackup()],
+    archives: [],
+    snapshots: [],
+    tasks,
+    nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
+  });
+
+  it.each(['', 'not-a-date', '1970-01-01T00:00:00Z', '2026-05-27T08:00:00Z'])(
+    'retains and searches the failed observation with start %j in either response order',
+    (startTime) => {
+      const jobs = [
+        task({ id: 'known-ok' }),
+        task({
+          id: 'uncertain-failed',
+          status: 'ERROR: archive unavailable',
+          error: 'full diagnostic reason',
+          startTime,
+          observedAt: '2026-05-26T07:00:00Z',
+        }),
+        task({ id: 'other', instance: 'other-connection', startTime: '', error: 'other failure' }),
+      ];
+      for (const tasks of [jobs, [...jobs].reverse()]) {
+        const before = structuredClone(tasks);
+        const row = buildProxmoxBackupRecoveryModel(input(tasks)).coverageRows.find(
+          (r) => r.key === 'resource:vm-112',
+        )!;
+        expect(row.latestTask).toBeUndefined();
+        expect(row.taskChronologyUnknown).toBe(true);
+        expect(row.unresolvedTasks?.map((t) => t.id).sort()).toEqual([
+          'known-ok',
+          'uncertain-failed',
+        ]);
+        expect(row.unresolvedTasks?.find((t) => t.id === 'uncertain-failed')).toMatchObject({
+          status: 'ERROR: archive unavailable',
+          error: 'full diagnostic reason',
+          startedAt: startTime,
+          observedAt: '2026-05-26T07:00:00Z',
+        });
+        for (const term of [
+          'failed',
+          'archive unavailable',
+          'full diagnostic reason',
+          'uncertain-failed',
+        ])
+          expect(coverageRowMatchesSearch(row, term)).toBe(true);
+        expect(coverageRowMatchesSearch(row, 'other failure')).toBe(false);
+        expect(row.posture).toBe('protected');
+        expect(row.latestBackup?.nativeId).toBe(pbsBackup().id);
+        expect(tasks).toEqual(before);
+      }
+    },
+  );
+
+  it('retains conflicting observations of the same ID rather than overwriting by identity', () => {
+    const row = buildProxmoxBackupRecoveryModel(
+      input([
+        task({ id: 'same-id' }),
+        task({ id: 'same-id', status: 'failed', error: 'conflicting failure' }),
+      ]),
+    ).coverageRows[0];
+    expect(row.latestTask).toBeUndefined();
+    expect(row.taskOutcomeConflict).toBe(true);
+    expect(row.unresolvedTasks?.map((t) => [t.id, t.label])).toEqual([
+      ['same-id', 'OK'],
+      ['same-id', 'Failed'],
+    ]);
+    expect(coverageRowMatchesSearch(row, 'conflicting failure')).toBe(true);
+  });
+
+  it('does not expose older failures as current searchable uncertainty after a newer unambiguous job', () => {
+    const row = buildProxmoxBackupRecoveryModel(
+      input([
+        task({ id: 'old-ok' }),
+        task({ id: 'old-failed', status: 'failed', error: 'old diagnostic reason' }),
+        task({ id: 'new-ok', startTime: '2026-05-26T07:00:00Z' }),
+      ]),
+    ).coverageRows[0];
+    expect(row.latestTask?.id).toBe('new-ok');
+    expect(row.taskChronologyUnknown).toBe(false);
+    expect(row.unresolvedTasks).toBeUndefined();
+    expect(coverageRowMatchesSearch(row, 'old diagnostic reason')).toBe(false);
+    expect(coverageRowMatchesSearch(row, 'failed')).toBe(false);
+  });
+});

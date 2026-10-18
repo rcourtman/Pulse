@@ -17,8 +17,13 @@ Coverage fixture with `node browser-tests/build-coverage-workload-identity.mjs
 job and read the full multiline error and start time, including long unbroken
 text and literal markup. Keep another connection's equal VMID/error separate.
 Refresh to Running, OK, an undated job, conflicting newest outcomes and no jobs:
-the old error must disappear without losing the open row/focus, and uncertain
-chronology must not fall back to an older OK result. Check wrapping, horizontal
+unambiguous/empty replacement must remove the old error without losing the open
+row/focus. Uncertain chronology must not fall back to an older OK result, but its
+matched collected jobs must remain readable and searchable in the separately
+labelled disclosure, including both conflicting observations of one ID. Run
+`backup-job-uncertainty.cjs` for absent/future/invalid starts, literal provider
+text, response-order reversal, same-VMID connection isolation and ordinary
+replacement. List order must never read as a latest-job timeline. Check wrapping, horizontal
 overflow and actual captured pixels. Only fixture GETs are allowed. This is
 stored-observation presentation, not native backup/thaw/restore or installed
 recovery acceptance.
