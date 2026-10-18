@@ -23,6 +23,19 @@ overflow and actual captured pixels. Only fixture GETs are allowed. This is
 stored-observation presentation, not native backup/thaw/restore or installed
 recovery acceptance.
 
+## Restore-point details without hover
+
+Run `ProxmoxCoverageTable.test.tsx`, including both consuming tables across all
+five container layouts. Build `build-backup-point-state.mjs <full-source-SHA>`
+and run `backup-artifact-details.cjs`. Through the real HTTP inventory readers,
+inspect two equal-format archives with distinct long full IDs, a long snapshot
+description and PBS file-count context in By date and expanded Coverage. Check
+desktop, narrow touch, intermediate layouts, native pixels, no clipping/overflow,
+correct fallback colspans and no duplicated text. Refresh the same open Coverage
+row and check replacement of the old identifier. Traverse the bounded feed to
+every archive despite wrapping. These GET-only fixture results establish text
+access, not backup/restore, guest thaw, installed recovery or release availability.
+
 ## Automatic-update settings publication
 
 Run `TestRootInstallAutoUpdateSettingsPublication` (production shell plus

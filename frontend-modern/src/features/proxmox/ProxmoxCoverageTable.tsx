@@ -33,6 +33,7 @@ import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactLocationText,
+  ArtifactDetailText,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -215,6 +216,11 @@ export function ProxmoxCoverageTable(props: {
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const columnVisible = (column: CoverageColumnId) => visibleColumnIds().includes(column);
   const columnCount = () => visibleColumns().length;
+  const evidenceColumnCount = () =>
+    3 +
+    (['location', 'size', 'details'] as const).filter((column) =>
+      isCoverageEvidenceColumnVisible(layoutMode(), column),
+    ).length;
   // Full uncertainty words must fit even beside a Job column at 320px. Numeric
   // ages were short enough for the usual gutters; compact ages use that space.
   const ageCellClass = (kind: 'text' | 'numeric-value') =>
@@ -848,12 +854,7 @@ export function ProxmoxCoverageTable(props: {
                                             <TableCell
                                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
-                                              <span
-                                                class="block truncate"
-                                                title={artifact.detailTitle ?? artifact.detail}
-                                              >
-                                                {artifact.detail || '—'}
-                                              </span>
+                                              <ArtifactDetailText artifact={artifact} />
                                             </TableCell>
                                           </Show>
                                         </TableRow>
@@ -862,13 +863,44 @@ export function ProxmoxCoverageTable(props: {
                                             !isCoverageEvidenceColumnVisible(
                                               layoutMode(),
                                               'location',
+                                            ) ||
+                                            !isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'details',
                                             )
                                           }
                                         >
                                           <TableRow>
-                                            <TableCell colspan={3} class="pt-0 text-[11px]">
-                                              <span class="text-muted">Location</span>
-                                              <ArtifactLocationText artifact={artifact} />
+                                            <TableCell
+                                              colspan={evidenceColumnCount()}
+                                              class="space-y-1 pt-0 text-[11px]"
+                                            >
+                                              <Show
+                                                when={
+                                                  !isCoverageEvidenceColumnVisible(
+                                                    layoutMode(),
+                                                    'location',
+                                                  )
+                                                }
+                                              >
+                                                <div>
+                                                  <span class="text-muted">Location</span>
+                                                  <ArtifactLocationText artifact={artifact} />
+                                                </div>
+                                              </Show>
+                                              <Show
+                                                when={
+                                                  !isCoverageEvidenceColumnVisible(
+                                                    layoutMode(),
+                                                    'details',
+                                                  )
+                                                }
+                                              >
+                                                <div>
+                                                  <span class="text-muted">Details</span>
+                                                  <ArtifactDetailText artifact={artifact} />
+                                                </div>
+                                              </Show>
                                             </TableCell>
                                           </TableRow>
                                         </Show>
