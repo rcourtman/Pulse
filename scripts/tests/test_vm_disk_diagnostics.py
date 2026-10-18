@@ -746,6 +746,23 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
                       "previous working level", "without repeating the stall",
                       "not proof that the underlying problem is fixed",
                       "TROUBLESHOOTING.md#inspect-notification-logs")
+    def test_unusable_ui_has_a_reachable_deployment_recovery_without_reset(self):
+        text = self.log_help()
+        self.contains(text, "##### If Debug makes the UI unusable", "LOG_LEVEL=info",
+                      "authorised deployment administrator", "existing **Pulse server** deployment",
+                      "service inside its container, not the Proxmox host",
+                      "daemon reload", "recreate/redeploy", "`docker restart` alone does not apply",
+                      "same image, data mounts, credentials, encryption keys, connections",
+                      "Monitoring and alerts are unavailable", "Verify ordinary use",
+                      "startup override does not rewrite the saved level",
+                      "saved Debug level can return", "do not remove it or toggle Debug",
+                      "Do not restart or recreate a stopped Pulse server",
+                      "Do not print or post the full environment")
+        index = (ROOT / "docs/TROUBLESHOOTING.md").read_text().split("## ⚡ Quick Fixes", 1)[0]
+        self.assertIn("CONFIGURATION.md#if-debug-makes-the-ui-unusable", index)
+        self.assertEqual((ROOT / "docs/CONFIGURATION.md").read_text().count(
+            "##### If Debug makes the UI unusable\n"), 1)
+
     def test_safety_help_is_shipped_without_new_diagnostic_commands(self):
         for name in ("VM_DISK_MONITORING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"):
             self.assertEqual((ROOT / "docs" / name).read_bytes(),

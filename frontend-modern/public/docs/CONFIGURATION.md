@@ -329,9 +329,10 @@ Start with the current level and the [bounded log readers](TROUBLESHOOTING.md#in
 Debug can produce much more output, including raw guest-filesystem responses
 and private names or paths; do not enable it just to obtain a report. If the
 interface stalls after enabling Debug, return to the previous working level
-through your deployment's existing log-level control, without repeating the
-stall. A responsive interface afterwards is not proof that the underlying
-problem is fixed; retain the original time, affected view and redacted error.
+using the [deployment recovery below](#if-debug-makes-the-ui-unusable), without
+repeating the stall. A responsive interface afterwards is not proof that the
+underlying problem is fixed; retain the original time, affected view and
+redacted error.
 
 **Pause Stream** and **Clear Log Output** only affect the browser display. They
 do not stop monitoring, reduce server logging or erase the server's logs. A
@@ -344,6 +345,44 @@ the display does not remove those records from the download. Some secrets are
 masked, but that is not a guarantee that all content is safe to publish. Keep
 the archive private and share only relevant, manually reviewed, redacted excerpts,
 not the whole bundle.
+
+##### If Debug makes the UI unusable
+
+This is recovery from a log-level change already made, not a reason to enable
+Debug or reproduce a stall. **If a guest is frozen or unresponsive, a backup is
+in freeze/thaw, or an earlier guest request is uncertain, follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) first.** Do not restart or
+recreate a stopped Pulse server to change logging during that incident.
+
+1. **If the UI still responds**, use **Settings → Support → System Logs →
+   Server Log Level** to restore the previous working level, normally **Info**.
+   Pause Stream and Clear Log Output do not change the server's level.
+2. **If the UI is unusable**, an authorised deployment administrator can set
+   `LOG_LEVEL=info` in the existing **Pulse server** deployment. For systemd,
+   use its managed environment file or service drop-in; for Compose or another
+   container manager, use that service's environment settings. In a Proxmox
+   LXC, change the Pulse service inside its container, not the Proxmox host or
+   a monitored agent. Do not print or post the full environment or configuration.
+3. **Apply only that environment change during a suitable maintenance window.**
+   Systemd needs a daemon reload after changing a unit or drop-in, then a
+   restart of the active Pulse service. A container needs its existing
+   recreate/redeploy operation; `docker restart` alone does not apply a changed
+   deployment environment. Keep the same image, data mounts, credentials,
+   encryption keys, connections and monitoring policy. Do not reinstall,
+   delete a volume or reset configuration. Monitoring and alerts are unavailable
+   while the server is stopped; arrange independent coverage.
+4. **Verify ordinary use**, not another Debug run: check the displayed server
+   level and the previously affected view, using existing readings. A usable
+   page does not establish that collection or the original reported fault has
+   recovered. Keep the original time, view and redacted error; do not run Test,
+   Diagnostics, a backup or guest-agent probes to validate the logging change.
+
+**The startup override does not rewrite the saved level.** A saved Debug level
+can return at the next start if `LOG_LEVEL=info` is removed. Keep the override
+as an explicit deployment setting until the administrator has reconciled the
+saved level through the supported controls; do not remove it or toggle Debug
+just to test persistence. There is no need to edit encrypted files, discard
+logs or delete `system.json` to recover the interface.
 
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
