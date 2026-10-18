@@ -7486,7 +7486,9 @@
         "internal/mock/fixture_graph.go",
         "internal/mock/generator.go",
         "internal/mock/integration.go",
-        "pkg/server/gzip_middleware.go"
+        "pkg/server/gzip_middleware.go",
+        "pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml",
+        "pulse-enterprise:scripts/workload-chart-latency-proof.md"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -7693,6 +7695,20 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/slo_bench_test.go"
+            ]
+          },
+          {
+            "id": "workload-chart-idle-worker-proof",
+            "label": "source-bound workload chart idle-worker proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml",
+              "pulse-enterprise:scripts/workload-chart-latency-proof.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-enterprise:scripts/release_latency_gate_test.py"
             ]
           }
         ],
