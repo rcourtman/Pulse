@@ -1378,7 +1378,8 @@ type Monitor struct {
 	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
 	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
-	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
+	pbsBackupPollers           map[string]*pbsBackupPoll                  // Hold runtime/client ownership until the backup reader actually returns
+	pbsBackupPublicationMu     sync.RWMutex                               // Orders backup publication against runtime/client withdrawal
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
 	runtimePollingMu           sync.RWMutex                               // Guards runtimePollingOverride; polling goroutines read it every cycle
 	runtimePollingOverride     runtimePollingOverrides                    // Runtime polling-cadence overrides pushed by the settings API (#1619)
@@ -1509,6 +1510,8 @@ type Monitor struct {
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	m.pveGuestPublicationMu.Lock()
 	defer m.pveGuestPublicationMu.Unlock()
+	m.pbsBackupPublicationMu.Lock()
+	defer m.pbsBackupPublicationMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for name := range m.pveGuestPolls {
@@ -1516,6 +1519,9 @@ func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	}
 	for name := range m.pveBackupPolls {
 		m.cancelPVEBackupPollLocked(name)
+	}
+	for name := range m.pbsBackupPollers {
+		m.cancelPBSBackupPollLocked(name)
 	}
 	// A new runtime invalidates detached replication reads even when the old
 	// caller has not yet canceled its parent context.
@@ -2013,7 +2019,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pveBackupTemplateSubjects:  make(map[string]map[string]struct{}),
 		backupPermissionWarnings:   make(map[string]string),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
-		pbsBackupPollers:           make(map[string]bool),
+		pbsBackupPollers:           make(map[string]*pbsBackupPoll),
 		pbsBackupCacheTime:         make(map[string]map[pbsBackupGroupKey]time.Time),
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),

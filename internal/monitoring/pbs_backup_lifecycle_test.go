@@ -142,7 +142,7 @@ func TestPBSBackupLifecycleHTTP(t *testing.T) {
 				require.Equal(t, int64(4096), current[0].Size)
 				require.Equal(t, "current-owned", current[0].Comment)
 				f.assertProtected(t, "pbs-main")
-				if stage == "snapshots" && withdrawal == "runtime" {
+				if stage == "snapshots" {
 					payload, err := json.Marshal(map[string]any{"held": held, "current": current})
 					require.NoError(t, err)
 					t.Logf("PBS_LIFECYCLE_BROWSER_PRODUCER=%s", base64.StdEncoding.EncodeToString(payload))
