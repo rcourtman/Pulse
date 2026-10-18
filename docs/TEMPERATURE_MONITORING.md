@@ -49,7 +49,9 @@ Failed authentication, a failed sensor command or no usable readings now emits
 an agent warning naming the peer, at most once per peer every five minutes.
 Usable recovery is logged once. The warning does not contain the raw SSH or
 sensor output. Missing readings stay unavailable, not zero; a failed peer does
-not prevent other peers or local sensors from reporting. Collection keeps its
+not prevent other peers or local sensors from reporting. A recent last-good
+server reading keeps its existing freshness limit; failed reads do not renew
+its timestamp. Collection keeps its
 eight-second per-peer timeout and fifteen-second overall budget.
 
 If every node already has its own reporting agent, add

@@ -92,6 +92,21 @@ func TestClusterSensorProducerConsumer(t *testing.T) {
 			})
 		})
 	}
+	// A failed report does not refresh the age of the last successful peer
+	// reading. Existing server freshness is preserved, not replaced by zero.
+	t.Run("failure does not renew cached evidence", func(t *testing.T) {
+		node := readStateTestNode("fixture", "peer")
+		m := readStateMonitor([]models.Node{readStateTestNode("fixture", "source"), node}, []models.Host{reportingTestHost("reporter", "source", "fixture-source", 0)})
+		lastGood := time.Now().Add(-30 * time.Second)
+		m.applyClusterSensors("reporter", reports["id_rsa"], lastGood)
+		m.applyClusterSensors("reporter", reports["denied"], time.Now())
+		if got := m.getHostAgentTemperatureForNode(node); got == nil || got.CPUPackage != 55 {
+			t.Fatalf("recent last-good evidence was discarded: %+v", got)
+		}
+		if !m.clusterSensorsCache["reporter\x00peer"].updatedAt.Equal(lastGood) {
+			t.Fatal("failed report renewed the cache timestamp")
+		}
+	})
 	data, err := json.Marshal(resources)
 	if err != nil {
 		t.Fatal(err)

@@ -6,7 +6,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -45,12 +44,12 @@ func TestClusterPeerSSHNative(t *testing.T) {
 	keys := map[string]string{}
 	signers := map[string]ssh.Signer{}
 	for name, key := range map[string]any{"id_rsa": rsaKey, "id_ed25519": edKey} {
-		der, err := x509.MarshalPKCS8PrivateKey(key)
+		block, err := ssh.MarshalPrivateKey(key, "invented-peer-fixture")
 		if err != nil {
 			t.Fatal(err)
 		}
 		path := filepath.Join(t.TempDir(), name)
-		if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
+		if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
 			t.Fatal(err)
 		}
 		keys["/root/.ssh/"+name] = path
@@ -102,6 +101,9 @@ func TestClusterPeerSSHNative(t *testing.T) {
 				// The fixed fixture ignores ambient agent/config/askpass state.
 				cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "LC_ALL=C"}
 				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Logf("invented loopback SSH result: %s (%v)", strings.TrimSpace(string(out)), err)
+				}
 				return string(out), err
 			})
 			result := a.collectClusterSensors(context.Background())
