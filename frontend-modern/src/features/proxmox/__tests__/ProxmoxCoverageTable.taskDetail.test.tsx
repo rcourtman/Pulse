@@ -166,6 +166,7 @@ describe('Coverage job observation age', () => {
       );
       fireEvent.click(toggle);
       expect(lastObserved()).toHaveTextContent('45m ago');
+      expect(lastObserved()).toHaveTextContent('2026');
       expect(lastObserved()?.querySelector('time')).toHaveAttribute('datetime', observedAt);
       expect(screen.getByRole('region', { name: 'Latest backup job' })).toHaveTextContent(
         'not when the job finished',

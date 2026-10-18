@@ -146,6 +146,8 @@ async function capture(page, name) {
     const resultField = detail.locator('dt', { hasText: /^Result$/ }).locator('xpath=following-sibling::dd[1]');
     assert.equal(await observed.locator('time').getAttribute('datetime'), initialTime);
     assert.match(await observed.innerText(), /4h ago/);
+    assert.match(await observed.innerText(), /2026/);
+    assert.match(await observed.innerText(), /BST/);
     const refresh = async (next) => {
       payload = next;
       const button = page.getByRole('button', { name: 'Refresh backups', exact: true });

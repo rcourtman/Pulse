@@ -67,15 +67,19 @@ function CoverageTaskObservation(props: { value?: string; detailed?: boolean }) 
     const ms = Date.parse(props.value ?? '');
     return Number.isFinite(ms) && ms > 0 && ms <= now() ? ms : undefined;
   });
+  const observedText = () =>
+    formatPlatformTableDateTimeValue(observedMs(), {
+      dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
+    });
   return (
     <span data-backup-task-observed>
       <Show when={observedMs()} fallback={props.detailed ? 'Unknown' : 'Job observation unknown'}>
         {(ms) => (
           <>
             <Show when={!props.detailed}>Job observed </Show>
-            <time dateTime={props.value} title={formatPlatformTableDateTimeValue(ms())}>
+            <time dateTime={props.value} title={observedText()}>
               {props.detailed
-                ? formatPlatformTableDateTimeValue(ms())
+                ? observedText()
                 : formatPlatformTableRelativeTimeValue(ms(), { now: now() })}
             </time>
             <Show when={props.detailed}>
