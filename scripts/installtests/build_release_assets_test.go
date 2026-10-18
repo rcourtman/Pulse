@@ -171,6 +171,13 @@ func TestPublishedLifecycleRehearsalPreservesAutoUpdateChoice(t *testing.T) {
 	}
 }
 
+func TestGitHubReleaseInventoryTransportBoundary(t *testing.T) {
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_github_release_inventory.py"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("GitHub release inventory transport boundary: %v\n%s", err, output)
+	}
+}
+
 func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
 	if err != nil {
@@ -189,8 +196,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`scripts/release_control/release_continuity.py release`,
 		"release-diagnostic.json",
 		"Reject orphaned stable publication tags",
-		`"repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100"`,
-		`"repos/${REPOSITORY}/releases?per_page=100"`,
+		`bash scripts/read-github-release-inventory.sh "$REPOSITORY" "$evidence"`,
 		"https://ghcr.io/token?service=ghcr.io&scope=repository:",
 		"https://auth.docker.io/token?service=registry.docker.io&scope=repository:",
 		`"${registry_url}/v2/${image}/tags/list?n=10000"`,
