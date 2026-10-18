@@ -88,6 +88,15 @@ an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolati
 shares one listener and retains an earlier uncertainty fence unchanged while an
 independent fixture completes its lock/command checks. No runtime fence is
 cleared, expired or weakened; native guest recovery is not established.
+HTTP-status fixtures share this same test-only endpoint namespace helper.
+Independent cases keep distinct base-path identities even when a loopback
+listener is reused; every diagnostic and cluster alias within a case retains
+the same identity and VM-wide cooldown. `TestGuestAgentHTTPFailureFixtureIsolation`
+uses one listener for two independent uncertain commands, then verifies both
+unchanged fences still reject all follow-up guest reads without wire work.
+The old bare-endpoint fixture behaviour fails that control. This is a separately
+claimed test-stabilization correction; no runtime guard, cooldown or provider
+completion rule is changed.
 This establishes source/consumer behaviour, not native recovery or attribution
 of a guest, PBS or certificate report.
 
