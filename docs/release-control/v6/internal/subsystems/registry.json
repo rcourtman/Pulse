@@ -4709,6 +4709,7 @@
         "scripts/installtests/auto_update_systemd.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
+        "scripts/lib/hot-dev-config.sh",
         "scripts/lib/hot-dev-runtime.sh",
         "scripts/prepare-release-container-context.sh",
         "scripts/pulse-auto-update.sh",
@@ -5286,6 +5287,7 @@
               "scripts/hot-dev-bg.sh",
               "scripts/hot-dev.sh",
               "scripts/lib/hot-dev-auth.sh",
+              "scripts/lib/hot-dev-config.sh",
               "scripts/lib/hot-dev-runtime.sh",
               "scripts/toggle-mock.sh",
               "tests/integration/playwright.config.ts",
@@ -5304,6 +5306,7 @@
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
+              "scripts/tests/test_hot_dev_config.py",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]

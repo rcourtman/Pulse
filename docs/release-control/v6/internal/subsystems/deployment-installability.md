@@ -16,6 +16,35 @@
 
 ## Purpose
 
+### Development does not implicitly import installed credentials or targets
+
+The hot-dev launcher defaults both installed-data selectors to `false`.
+`HOT_DEV_USE_PROD_DATA=true` explicitly admits the installed `.env` and direct
+installed data; `HOT_DEV_IMPORT_PROD_CONFIG=true` separately admits the existing
+copy helper for the default non-mock development directory, not the installed
+`.env`. The modes are mutually exclusive, accept only `true`/`false`, and cannot
+be changed by later runtime configuration. LAN/lab-agent selection does not
+imply either opt-in. Warnings identify the development authentication bypass
+and that an imported copy is not isolated reproduction.
+
+Explicit installed data paths (including existing symlink aliases) require the
+direct-data selector. Validate the selected path before managed-auth writes
+and again after runtime `.env` loading, before the backend receives it. Fresh
+default development creates its own encryption key; nonempty encrypted files
+or backups still stop key generation without changing those files. There is
+no implicit sync, installed-data purge, or host-isolation guarantee: local
+shell configuration, caller-selected data, previous development copies and
+inherited environment remain the developer's responsibility.
+
+`scripts/tests/test_hot_dev_config.py` executes the actual launcher's
+configuration path and the existing copy helper against synthetic installed
+sentinels, mapping only the fixed installed pathname. Inert build/process peers
+and a backend environment-capture peer prove default, custom-data, mock and
+lab isolation; explicit direct/copy admission; invalid-selection and alias
+refusal; post-load redirection refusal; encryption guards; and source-file
+preservation. It stops before watchers, Vite or a real application run. This
+does not establish installed recovery or live monitoring acceptance.
+
 ### Stable-publication inventories recover only an observed transport cancellation
 
 The Security Scan's read-only GitHub refs/releases inventory admits only a

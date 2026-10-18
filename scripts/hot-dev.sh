@@ -8,7 +8,10 @@
 # - Snapshot watcher (if scripts/watch-snapshot.sh exists)
 #
 # Environment Variables:
-#   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
+#   HOT_DEV_USE_PROD_DATA=true   Explicitly load installed .env and use /etc/pulse data
+#   HOT_DEV_IMPORT_PROD_CONFIG=true  Explicitly copy installed targets/credentials to
+#                                   default non-mock dev data (not isolated reproduction)
+#                               Both default false; LAN/lab mode does not opt in.
 #   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
 #   HOT_DEV_ALLOW_OSS_FALLBACK=true  Allow fallback to OSS backend when Pro build fails
 #   HOT_DEV_AUTH_USER=admin      Override the managed dev auth username
@@ -56,6 +59,8 @@ SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_P
 source "${SCRIPT_DIR}/lib/hot-dev-auth.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/hot-dev-config.sh"
 
 HOT_DEV_LAB_MODE_FILE="${HOT_DEV_LAB_MODE_FILE:-${ROOT_DIR}/tmp/hot-dev.lab-agents-mode}"
 
@@ -78,18 +83,19 @@ log_error() { printf "\033[0;31m[hot-dev] ERROR:\033[0m %s\n" "$1"; }
 
 detect_encrypted_files() {
     local data_dir=$1
-    local patterns=(nodes.enc* email.enc* webhooks.enc* oidc.enc* ai.enc*)
     local files=()
+    local path
 
-    for pattern in "${patterns[@]}"; do
-        for path in "${data_dir}/${pattern}"; do
-            if [[ -s "${path}" ]]; then
-                files+=("$(basename "${path}")")
-            fi
-        done
+    for path in "${data_dir}"/nodes.enc* "${data_dir}"/email.enc* \
+                "${data_dir}"/webhooks.enc* "${data_dir}"/oidc.enc* "${data_dir}"/ai.enc*; do
+        if [[ -s "${path}" ]]; then
+            files+=("$(basename "${path}")")
+        fi
     done
 
-    printf '%s\n' "${files[@]}"
+    if [[ ${#files[@]} -gt 0 ]]; then
+        printf '%s\n' "${files[@]}"
+    fi
 }
 
 check_dependencies() {
@@ -211,6 +217,11 @@ BANNER
 load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.local"
 load_env_file "${ROOT_DIR}/.env.dev"
+
+# Decide before listener cleanup, builds or installed configuration reads.
+# Repository-local and explicitly selected runtime .env files remain trusted
+# shell inputs; this opt-in is not a substitute for disposable host isolation.
+hot_dev_prepare_config_source "/etc/pulse"
 
 hot_dev_configure_network_defaults
 
@@ -340,14 +351,9 @@ check_script_change() {
     fi
 }
 
-# --- Config Setup ---
-
-if [[ -f /etc/pulse/.env ]] && [[ -r /etc/pulse/.env ]]; then
-    load_env_file "/etc/pulse/.env"
-    echo "Auth configuration loaded from /etc/pulse/.env"
-fi
-
 # --- Start Backend ---
+
+hot_dev_load_installed_env "/etc/pulse"
 
 log_info "Starting backend on port ${PULSE_DEV_API_PORT}..."
 cd "${ROOT_DIR}"
@@ -416,14 +422,13 @@ else
     fi
 fi
 
+hot_dev_validate_data_source "/etc/pulse"
 sync_runtime_auth_env_overrides
 load_runtime_env_overrides
+hot_dev_validate_data_source "/etc/pulse"
 hot_dev_reconcile_agent_bind_address
 
-if [[ "${PULSE_DATA_DIR}" == "${ROOT_DIR}/tmp/dev-config" ]] && [[ ${PULSE_MOCK_MODE:-false} != "true" ]]; then
-    echo "Syncing production configuration..."
-    DEV_DIR="${ROOT_DIR}/tmp/dev-config" "${ROOT_DIR}/scripts/sync-production-config.sh"
-fi
+hot_dev_import_installed_config
 
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     log_info "Mock mode enabled (isolated data directory: ${PULSE_DATA_DIR})"
