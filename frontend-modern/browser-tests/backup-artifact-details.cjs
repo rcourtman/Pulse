@@ -335,8 +335,12 @@ async function capture(name, fullPage = true) {
       ),
     );
     await capture(spec.name + '-coverage');
+    // At phone widths the keyboard button is sr-only until focused; the
+    // existing row is the touch disclosure target for both open and close.
     await activate(
-      page.getByRole('button', { name: /Collapse details for recovery-vm/i }),
+      spec.touch
+        ? page.locator('[data-proxmox-backup-row="coverage"]')
+        : page.getByRole('button', { name: /Collapse details for recovery-vm/i }),
       spec.touch,
     );
     assert.equal(await coverageDetail().count(), 0);
