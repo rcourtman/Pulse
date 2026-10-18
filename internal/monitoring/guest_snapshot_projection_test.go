@@ -131,7 +131,7 @@ func TestGuestSnapshotProjectionPreservesAlertIdentityAndScope(t *testing.T) {
 			}
 			continue
 		}
-		want := models.GuestSnapshot{ID: fmt.Sprintf("site-member-%d-weekly", row.VMID), Instance: "site", Node: "member", VMID: row.VMID, Type: calls[row.VMID], Name: "weekly", Time: created, Description: "fixture", Parent: "previous", VMState: calls[row.VMID] == "qemu"}
+		want := models.GuestSnapshot{ID: fmt.Sprintf("site-member-%d-weekly", row.VMID), Instance: "site", Node: "member", VMID: row.VMID, Type: calls[row.VMID], Name: "weekly", Time: time.Unix(created.Unix(), 0), Description: "fixture", Parent: "previous", VMState: calls[row.VMID] == "qemu"}
 		if row != want {
 			t.Errorf("snapshot fields changed: got=%+v want=%+v", row, want)
 		}

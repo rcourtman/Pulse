@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Guest snapshot input reads avoid unrelated payload copies
+
+Snapshot polling retains typed canonical VM/container views for identity, name,
+tags, template and container-type lookups instead of materialising complete guest
+models with unused disks, interfaces and metrics. Prior snapshot inventory comes
+from the existing detached primary PVE-backup projection, not a second whole-estate
+snapshot. Canonical/mock selection and fallback rebuilding remain unchanged.
+Request targets/order, snapshot fields, tag suppression, names, budgets, worker
+bounds, unread-evidence retention and alert/recovery/publication fences retain
+their existing meaning. No API, resource field or rendered state changes.
+
+`TestGuestSnapshotProjectionDoesNotCopyUnconsumedPayload` varies only unrelated
+Kubernetes metadata or unused guest disk/interface data on fixed canonical inputs;
+`TestGuestSnapshotProjectionPreservesAlertIdentityAndScope` checks ordinary
+requests, exact published fields, templates, independent connections and canonical
+alert names/tag exclusions. Fixed-sample collector benchmarks measure source
+allocation cost, not installed RSS, incident cause or native guest recovery.
+
 ### Guest snapshot polling bounds workers, not just requests
 
 Snapshot inventory uses at most eight reusable workers per existing connection
