@@ -83,7 +83,7 @@ describe('buildPatrolRunAssistantHandoff (residual branches)', () => {
 
     expect(handoff.context.briefing?.statusLabel).toContain('1 nodes');
     expect(handoff.context.briefing?.statusLabel).toContain('1 VMs');
-    expect(handoff.context.briefing?.statusLabel).toContain('1 containers');
+    expect(handoff.context.briefing?.statusLabel).toContain('1 Docker host');
     expect(handoff.context.briefing?.statusLabel).toContain('1 storage resources');
     expect(handoff.context.briefing?.statusLabel).toContain('1 agents');
     expect(handoff.context.briefing?.statusLabel).toContain('1 TrueNAS systems');

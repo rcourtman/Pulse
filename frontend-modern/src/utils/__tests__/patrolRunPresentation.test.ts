@@ -195,7 +195,7 @@ describe('patrolRunPresentation', () => {
     ).toEqual({
       headline: 'Patrol needs attention',
       detail:
-        'Checked 1 of 2 scoped resources in 453ms. Runtime issue: Selected model does not support Patrol tools: Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support.',
+        'Checked 1 scoped resource in 453ms. Runtime issue: Selected model does not support Patrol tools: Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support.',
     });
 
     expect(
@@ -301,7 +301,7 @@ describe('patrolRunPresentation', () => {
         },
       ] satisfies PatrolRunRecord[]),
     ).toEqual({
-      coverageSummary: 'Checked 1 of 2 scoped resources',
+      coverageSummary: 'Checked 1 scoped resource',
       findingsSnapshotAvailable: false,
       kindLabel: 'Targeted check',
       status: {
@@ -391,10 +391,10 @@ describe('patrolRunPresentation', () => {
     );
   });
 
-  it('expresses scoped run coverage against the effective scope', () => {
-    expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe('Checked 1 of 2 scoped resources');
+  it('reports checked resources without an alias-based denominator', () => {
+    expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe('Checked 1 scoped resource');
     expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe(
-      'Resources checked (1 of 2 scoped)',
+      'Resources checked (1)',
     );
   });
 
@@ -410,7 +410,7 @@ describe('patrolRunPresentation', () => {
         scope_resource_ids: ['seed-resource'],
         effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
       }),
-    ).toBe('Checked 0 of 2 scoped resources');
+    ).toBe('Checked 0 scoped resources');
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {

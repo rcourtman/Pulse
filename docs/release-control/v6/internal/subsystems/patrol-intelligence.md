@@ -147,6 +147,24 @@ filters, keeps saved operator notes editable and clearable, and offers
 finding-backed suppression row, refreshes both Patrol and unified finding
 sources, and retains the note as operator context.
 
+### History resource counts and scope identities
+
+History, latest-run summaries and Assistant handoffs report the recorded
+`resources_checked` value, not an inferred completion percentage. Effective
+scope IDs can contain source/canonical aliases and transport-parent context for
+one workload. Their length is not a comparable workload total. Keep those exact
+IDs for finding filters and Assistant context, including the distinction between
+missing and explicitly empty effective scope. Zero checked resources and runtime
+errors remain visible; removing an invented denominator is not a success claim.
+`docker_checked` counts Docker host records, so its badge and fallback handoff
+text say Docker host(s), not container(s). Neither scope labels nor handoffs may
+turn the identity-list length into a resource count.
+
+Proof: `RunHistoryEntry.test.tsx` consumes the eight frozen Docker producer/run
+records in `dockerPatrolHistory.json` (source `dd73bacec9`,
+`source-ux8yc7zc`); formatting, shared summaries and backend handoff tests cover
+aliases, legacy/empty scope, zero/error results and singular/plural host labels.
+
 ## Canonical Files
 
 1. `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`

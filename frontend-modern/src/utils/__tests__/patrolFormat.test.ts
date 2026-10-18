@@ -117,12 +117,12 @@ describe('patrolFormat', () => {
       expect(formatScope(null)).toBe('');
     });
 
-    it('returns resource count for scope_resource_ids', () => {
-      expect(formatScope({ scope_resource_ids: ['a', 'b'] })).toBe('Scoped to 2 resources');
+    it('does not count scope aliases as resources', () => {
+      expect(formatScope({ scope_resource_ids: ['a', 'b'] })).toBe('Scoped');
     });
 
-    it('returns singular for single resource', () => {
-      expect(formatScope({ scope_resource_ids: ['a'] })).toBe('Scoped to 1 resource');
+    it('labels an identity scope without a workload total', () => {
+      expect(formatScope({ scope_resource_ids: ['a'] })).toBe('Scoped');
     });
 
     it('prefers effective_scope_resource_ids when present', () => {
@@ -131,7 +131,7 @@ describe('patrolFormat', () => {
           scope_resource_ids: ['seed'],
           effective_scope_resource_ids: ['seed', 'expanded'],
         }),
-      ).toBe('Scoped to 2 resources');
+      ).toBe('Scoped');
     });
 
     it('returns type list for scope_resource_types', () => {
@@ -149,7 +149,7 @@ describe('patrolFormat', () => {
         scope_resource_ids: ['a'],
         scope_resource_types: ['vm'],
       });
-      expect(result).toBe('Scoped to 1 resource');
+      expect(result).toBe('Scoped');
     });
   });
 
