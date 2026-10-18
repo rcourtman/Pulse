@@ -115,8 +115,10 @@ and installer tooling.
 
 Use a disposable development VM or machine with no production configuration,
 data, host mounts, connected agents or access to monitored systems. A fresh clone
-alone is not isolation: the development launcher can read `/etc/pulse/.env`,
-and its development authentication bypass must never face an untrusted network.
+alone is not isolation. The launcher does not load installed configuration or
+copy installed targets by default, but local environment files are still shell
+inputs and development enables an authentication bypass. That bypass must never
+face an untrusted network.
 Do not use the installed Pulse directory or a production host to reproduce a
 report. Existing evidence is enough when reproduction would be unsafe.
 
@@ -133,11 +135,18 @@ npm --prefix frontend-modern ci
 
 ### Hot Reload Dev Loop
 
-In that disposable environment, from the clone root and in a new shell without
-production environment variables:
+In that disposable environment, use a fresh clone and a new shell without
+production environment variables. Do not copy installed `.env` files or reuse
+a development data directory containing real connections. The launcher sources
+repository-local `.env`, `.env.local` and `.env.dev` files before selecting its
+configuration mode; they can execute commands and override shell settings.
+Review any such local files before starting, rather than assuming the exports
+below make untrusted configuration safe.
+
+From the clone root:
 
 ```bash
-export HOT_DEV_USE_PRO=false HOT_DEV_USE_PROD_DATA=false
+export HOT_DEV_USE_PRO=false HOT_DEV_USE_PROD_DATA=false HOT_DEV_IMPORT_PROD_CONFIG=false
 export PULSE_DATA_DIR="$PWD/tmp/contribution-data"
 export PULSE_DEV_LAN=false PULSE_DEV_LAB_AGENTS=false
 export FRONTEND_DEV_HOST=127.0.0.1 PULSE_DEV_API_HOST=127.0.0.1 BIND_ADDRESS=127.0.0.1
@@ -156,8 +165,17 @@ frontend dev shell proxies `/api` and `/ws` to the backend on `:7655`; do not
 switch your browser to `:7655` unless you are debugging the backend directly.
 The managed dev runtime login defaults to `admin` / `adminadminadmin` unless
 you override it with `HOT_DEV_AUTH_USER` and `HOT_DEV_AUTH_PASS`. These are
-development-only credentials, not production defaults. The environment settings
-above do not prevent configuration-file loading or establish host isolation.
+development-only credentials, not production defaults.
+
+Keep both installed-data selectors **false** for community reproduction:
+`HOT_DEV_USE_PROD_DATA=true` deliberately loads `/etc/pulse/.env` and selects
+installed data; `HOT_DEV_IMPORT_PROD_CONFIG=true` deliberately copies installed
+targets, credentials and keys into the default development directory. Neither
+is a workaround for a startup refusal. LAN or lab-agent mode alone does not
+select either import route. If startup refuses installed data, choose a separate
+empty development directory instead of opting in to make the error disappear.
+These selectors prevent accidental installed-data use; they do not sandbox local
+environment files or establish host isolation.
 
 ```bash
 ./scripts/hot-dev-bg.sh logs

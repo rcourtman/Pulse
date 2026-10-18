@@ -74,14 +74,18 @@ const result = { source: binding.source_sha, binding_sha256: hash(bindingBytes),
       await page.goto(`${origin}/docs/CONTRIBUTING#getting-started`, { waitUntil: 'domcontentloaded' });
       await fragment('getting-started');
       const text = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
-      for (const phrase of ['fresh clone alone is not isolation', 'read /etc/pulse/.env',
-        'authentication bypass must never face an untrusted network', 'without takeover',
-        'refuses to replace it', 'do not prevent configuration-file loading',
+      for (const phrase of ['fresh clone alone is not isolation', 'does not load installed configuration',
+        'bypass must never face an untrusted network', 'without takeover',
+        'refuses to replace it', 'they can execute commands and override shell settings',
+        'Neither is a workaround for a startup refusal', 'do not sandbox local environment files',
         'choose unused', 'not the safe reproduction entrypoint']) assert.ok(text.includes(phrase), phrase);
       await capture('isolation', page.locator('#getting-started'));
       const recipeElement = page.locator('article pre').filter({ hasText: 'HOT_DEV_USE_PRO=false' });
       assert.equal((await recipeElement.locator('code').innerText()).trim(), recipe);
       await capture('recipe', page.locator('#hot-reload-dev-loop'));
+      const selectorWarning = page.locator('article p').filter({ hasText: 'Keep both installed-data selectors' });
+      assert.ok((await selectorWarning.innerText()).includes('HOT_DEV_IMPORT_PROD_CONFIG=true'));
+      await capture('configuration-boundary', selectorWarning);
       const geometry = await recipeElement.evaluate(pre => {
         pre.scrollLeft = pre.scrollWidth;
         const measured = { width: pre.clientWidth, content: pre.scrollWidth, offset: pre.scrollLeft };
@@ -111,7 +115,7 @@ const result = { source: binding.source_sha, binding_sha256: hash(bindingBytes),
       assert.equal(hash(await triageResponse.body()), binding.sources['public/docs/ISSUE_TRIAGE.md']);
       result.cases.push({ ...state, browser: browser.version(), geometry,
         exactRenderedRecipe: true, exactFetchedGuide: true, fragmentFocusAndReload: true,
-        restoredIntakeGuidance: true, interaction: state.width < 500 ? 'touch' : 'keyboard',
+        restoredIntakeGuidance: true, explicitImportSelectorsAndLocalEnvWarning: true, interaction: state.width < 500 ? 'touch' : 'keyboard',
         noDocumentOverflow: true });
       await context.close();
     }

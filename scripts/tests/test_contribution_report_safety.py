@@ -32,9 +32,13 @@ class ContributionReportSafetyTest(unittest.TestCase):
         guide = " ".join((ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
         for statement in (
             "disposable development VM or machine", "no production configuration",
-            "fresh clone alone is not isolation", "read `/etc/pulse/.env`",
-            "authentication bypass must never face an untrusted network",
-            "do not prevent configuration-file loading or establish host isolation",
+            "fresh clone alone is not isolation", "does not load installed configuration",
+            "bypass must never face an untrusted network",
+            "do not sandbox local environment files or establish host isolation",
+            "they can execute commands and override shell settings",
+            "Review any such local files before starting",
+            "Neither is a workaround for a startup refusal",
+            "choose a separate empty development directory",
             "not required for Community reproduction",
         ):
             self.assertIn(statement, guide)
@@ -66,17 +70,49 @@ class ContributionReportSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             env = self.recipe_environment(directory)
             # An ambient lab setting must not defeat the explicit safe recipe.
-            env.update(PULSE_DEV_LAN="true", PULSE_DEV_LAB_AGENTS="true", BIND_ADDRESS="0.0.0.0")
+            env.update(PULSE_DEV_LAN="true", PULSE_DEV_LAB_AGENTS="true", BIND_ADDRESS="0.0.0.0",
+                       HOT_DEV_USE_PROD_DATA="true", HOT_DEV_IMPORT_PROD_CONFIG="true")
             result = subprocess.run(["bash", "-c", "set -eu\n" + exports + '''
 source scripts/lib/hot-dev-runtime.sh
 hot_dev_configure_network_defaults
 test "$HOT_DEV_USE_PRO" = false && test "$HOT_DEV_USE_PROD_DATA" = false
+test "$HOT_DEV_IMPORT_PROD_CONFIG" = false
 test "$PULSE_DATA_DIR" = "$PWD/tmp/contribution-data"
 test "$PULSE_DEV_LAN" = false && test "$PULSE_DEV_LAB_AGENTS" = false
 test "$FRONTEND_DEV_HOST" = 127.0.0.1 && test "$PULSE_DEV_API_HOST" = 127.0.0.1
 test "$BIND_ADDRESS" = 127.0.0.1
 '''], cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_recipe_selects_no_installed_configuration_through_real_helpers(self):
+        _, recipe = self.development_recipe()
+        exports = "\n".join(line for line in recipe.splitlines() if line.startswith("export "))
+        with tempfile.TemporaryDirectory() as directory:
+            installed = Path(directory) / "installed"
+            installed.mkdir()
+            sentinel = Path(directory) / "unexpected-read-or-copy"
+            (installed / ".env").write_text("synthetic installed fixture; never source\n")
+            env = self.recipe_environment(directory)
+            env.update(HOT_DEV_USE_PROD_DATA="true", HOT_DEV_IMPORT_PROD_CONFIG="true",
+                       FIXTURE_INSTALLED=str(installed), FIXTURE_SENTINEL=str(sentinel))
+            # Consume the exact documented exports through the production selector,
+            # load and copy functions. A synthetic peer records any attempted import;
+            # no real installed path, listener, application or host is accessed.
+            result = subprocess.run(["bash", "-c", "set -euo pipefail\n" + exports + r'''
+source scripts/lib/hot-dev-config.sh
+log_error() { printf '%s\n' "$*" >&2; }
+log_warn() { printf '%s\n' "$*" >&2; }
+load_env_file() { printf 'unexpected load\n' >> "$FIXTURE_SENTINEL"; return 91; }
+ROOT_DIR="$PWD"
+hot_dev_prepare_config_source "$FIXTURE_INSTALLED"
+hot_dev_load_installed_env "$FIXTURE_INSTALLED"
+hot_dev_import_installed_config
+[[ "$HOT_DEV_USE_PROD_DATA" == false && "$HOT_DEV_IMPORT_PROD_CONFIG" == false ]]
+[[ "$PULSE_DATA_DIR" == "$PWD/tmp/contribution-data" ]]
+'''], cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
+            self.assertFalse(sentinel.exists(), "recipe selected installed configuration")
+            self.assertEqual((installed / ".env").read_text(), "synthetic installed fixture; never source\n")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_documented_start_refuses_occupied_ports_before_stop_or_spawn(self):
         _, recipe = self.development_recipe()
