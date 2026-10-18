@@ -412,7 +412,8 @@ describe('taskLabel branches (via latestTask.label)', () => {
     ['completed', 'OK'],
     ['error', 'Failed'],
     ['running', 'Running'],
-    ['WARNING', 'WARNING'],
+    ['WARNING', 'Warning'],
+    ['unrecognised-result', 'unrecognised-result'],
     ['', 'Unknown'],
   ])('maps task status %j to label %j', (status, expected) => {
     expect(labelForStatus(status)).toBe(expected);

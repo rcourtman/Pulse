@@ -95,7 +95,12 @@ async function capture(page, name) {
       'node_modules/@playwright/test'
     ].version,
   );
-  assert.equal(producer.binding.source_sha, binding.source_sha);
+  // The containing consumer commit may add test/protocol corrections. Keep the
+  // original executed producer source named, and require its exact code bytes;
+  // a later browser pass must never manufacture or replay a producer result.
+  assert.match(producer.binding.source_sha, /^[a-f0-9]{40}$/);
+  for (const [file, digest] of Object.entries(producer.binding.files))
+    assert.equal(hash(fs.readFileSync(path.join(root, file))), digest, file);
   for (const [file, digest] of Object.entries(binding.sources))
     assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
   for (const file of [
