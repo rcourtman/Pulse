@@ -121,7 +121,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
     await select.selectOption('1h');
     await page.waitForTimeout(400);
     const utilization = drawer.locator('[data-history-group="utilization"]');
-    { 
+    {
      await utilization.waitFor();
      const chart = utilization.getByRole('img');
      await chart.waitFor();
