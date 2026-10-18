@@ -286,7 +286,10 @@ const detailDateTime = (value?: string | null): string | null => {
   });
 };
 
-const detailRow = makeDetailRow;
+// These disclosures are the phone path to fields omitted from the summary.
+// Keep their actual text readable on touch, not only in desktop hover titles.
+const detailRow: typeof makeDetailRow = (label, value, options) =>
+  makeDetailRow(label, value, { wrap: true, ...options });
 
 const outcomeTone = (point: RecoveryPoint): ProtectionDetailTone => {
   const outcome = normalizeRecoveryOutcome(point.outcome);

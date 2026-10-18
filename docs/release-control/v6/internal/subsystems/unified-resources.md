@@ -29,7 +29,8 @@ Below the existing 34rem table-container breakpoint, TrueNAS Protection keeps
 Dataset (with Snapshot/Replication kind), Time and Outcome visible, rather than
 squeezing Artifact and Target into unreadable tracks. Artifact and Target remain
 in the existing expandable detail and return as columns when the container has
-room. Headers and cells hide together, including keyboard sort targets. Desktop
+room. Detail values wrap, including unbroken target/dataset names, rather than
+requiring a hover title to read omitted evidence on touch. Headers and cells hide together, including keyboard sort targets. Desktop
 columns, persisted sort keys, filters and row identity are unchanged.
 
 The narrow timestamp uses separate localised date and clock lines for the same

@@ -362,6 +362,12 @@ describe('TrueNAS protection phone summary', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Expand details for tank/photos' }));
     const detail = within(screen.getByTestId('truenas-protection-detail'));
     expect(detail.getAllByText('Replicate family photos').length).toBeGreaterThan(0);
+    for (const value of ['Replicate family photos', 'vault/family/photos']) {
+      for (const element of detail.getAllByText(value)) {
+        expect(element).toHaveClass('whitespace-normal', 'wrap-break-word');
+        expect(element).not.toHaveClass('truncate');
+      }
+    }
     expect(detail.getAllByText('vault/family/photos').length).toBeGreaterThan(0);
   });
 

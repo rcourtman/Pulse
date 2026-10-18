@@ -12,6 +12,7 @@ const output = path.join(root, 'tmp/protection-density-proof');
 const staticRoot = path.join(root, 'tmp/truenas-protection-read/static');
 const origin = 'http://127.0.0.1:5347';
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const targetDataset = 'vault/family/independent-copy/' + 'segment'.repeat(20);
 const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outcome, index) => ({
   id: `fixture-${outcome}`,
   provider: 'truenas',
@@ -24,7 +25,7 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
   display: { subjectLabel: `tank/${outcome}`, nodeHostLabel: 'fixture-nas' },
   details: {
     taskName: `Replicate ${outcome} dataset to independent vault`,
-    targetDataset: 'vault/family/independent-copy',
+    targetDataset,
     snapshot: index === 4 ? 'daily-20261018' : undefined,
     lastState: outcome.toUpperCase(),
     lastError: outcome === 'failed' ? 'Synthetic permission failure\nNo replication was run.' : '',
@@ -268,9 +269,18 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
           .getByText('Replicate failed dataset to independent vault', { exact: true })
           .count()) > 0,
       );
-      assert(
-        (await detail.getByText('vault/family/independent-copy', { exact: true }).count()) > 0,
-      );
+      assert((await detail.getByText(targetDataset, { exact: true }).count()) > 0);
+      for (const value of ['Replicate failed dataset to independent vault', targetDataset]) {
+        for (const element of await detail.getByText(value, { exact: true }).all()) {
+          assert(
+            await element.evaluate((node) => {
+              const style = getComputedStyle(node);
+              return style.whiteSpace === 'normal' && node.scrollWidth <= node.clientWidth + 1;
+            }),
+            `${config.id} detail still clips ${value}`,
+          );
+        }
+      }
       assert.equal(await detail.getByText('Last run', { exact: true }).count(), 1);
       assert.equal(
         await detail
@@ -297,7 +307,7 @@ const records = ['failed', 'warning', 'running', 'unknown', 'success'].map((outc
       await detail.getByRole('button', { name: /^Collapse .* details$/ }).click();
       await detail.waitFor({ state: 'detached' });
       entry.states.push(
-        'Touch/keyboard detail exposes the full artifact, target, Last run and escaped reported error; accepted HTTP refresh updates the same row/time without closing detail, then collapse works.',
+        'Touch/keyboard detail exposes the full wrapping artifact, unbroken target, Last run and escaped reported error; accepted HTTP refresh updates the same row/time without closing detail, then collapse works.',
       );
       assert.deepEqual(entry.errors, []);
       await context.close();
