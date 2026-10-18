@@ -91,23 +91,25 @@ describe('existing alert incident actions help', () => {
       CONFIGURATION: article('CONFIGURATION'),
       TROUBLESHOOTING: article('TROUBLESHOOTING'),
     };
-    for (const [from, to, fragment, label] of [
+    for (const [from, to, fragment, labels] of [
       [
         'TROUBLESHOOTING',
         'CONFIGURATION',
         'acknowledge-and-snooze-existing-alerts',
-        'acknowledgement or snooze',
+        ['Acknowledge', 'acknowledgement or snooze'],
       ],
       [
         'CONFIGURATION',
         'TROUBLESHOOTING',
         'test-succeeds-but-real-alerts-are-missing',
-        'Recent delivery activity',
+        ['Recent delivery activity'],
       ],
-    ]) {
-      const link = guides[from].querySelector(`a[href="/docs/${to}#${fragment}"]`);
-      expect(link?.textContent).toBe(label);
-      expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    ] as const) {
+      // The guide can link to these controls from more than one symptom.
+      // Validate every occurrence, including its distinct control-name label.
+      const links = [...guides[from].querySelectorAll(`a[href="/docs/${to}#${fragment}"]`)];
+      expect([...new Set(links.map((link) => link.textContent))]).toEqual(labels);
+      for (const link of links) expect(link.hasAttribute('data-doc-link')).toBe(true);
       expect(guides[to].querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
     expect(actions().querySelector('a[href="#quiet-hours-and-notification-holds"]')).not.toBeNull();

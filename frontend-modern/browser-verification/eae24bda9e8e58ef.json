@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e65b881cd2980b81456d210abc5cb68744af968e",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "efd6a8cfd2aea8749ce70d2dce8baca411d75959b0cd7d3a099bf96ad47855ab"
+  },
+  "routes": [
+    "/browser-tests/installer-transport.html (production InfrastructureOperationsStateProvider, useInfrastructureInstallState and InfrastructureInstallerSection; synthetic HTTP status reads)"
+  ],
+  "states": [
+    "Default HTTP warns with skip verification off and advanced controls collapsed",
+    "HTTPS verification request, custom CA request and explicit bypass precedence",
+    "Long target-host CA path and full bypass explanation wrap at 320px",
+    "Unsupported/incomplete URL withdraws HTTPS assurance; cleared URL uses configured HTTP fallback"
+  ],
+  "interactions": [
+    "Desktop keyboard Space and narrow touch toggle real controls; collapsing advanced controls preserves current policy",
+    "Compare Unix and Windows generated flags and clipboard bytes in all four transport states (16 copies total, none executed)",
+    "Installation copy buttons and skip-verification checkbox describe the current policy; no token creation or API write"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-18T07:17:31.160Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop_chromium": "141.0.7390.37",
+    "narrow_webkit": "26.0"
+  },
+  "pixel_review": "Fresh browser pass after replacing three semicolons with full stops. All eight final captures opened with native view_image. Complete HTTP, HTTPS, custom-CA and bypass-over-CA explanations fit at desktop/light and 320px/dark widths, including full CA path and separate override paragraph. Advanced controls remain collapsed beside usable copy cards. No page-wide horizontal overflow.",
+  "limits": "Synthetic status reads and draft transport edits. Clipboard intercepted in page. No command execution, token creation, actual TLS, installed recovery or WebKit Back/reload sequence.",
+  "driver": "frontend-modern/browser-tests/installer-transport.cjs"
+}
