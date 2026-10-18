@@ -239,10 +239,20 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 				if history.Code != 200 || history24.Code != 200 || json.Unmarshal(history.Body.Bytes(), &warm) != nil || fixture.Posts.Load()-before != 21 {
 					t.Fatal("warm native failure discarded valid History or escaped its request bound")
 				}
+				if len(retained["cpu"]) != 1 || len(retained["memory"]) != 1 {
+					t.Fatal("warm control has no original CPU/memory observations")
+				}
 				for metric, points := range retained {
 					if metric == "disk" {
 						continue
 					} // capacity was collected again; it is not a retained optional reading
+					if len(points) == 0 {
+						if len(warm.Metrics[metric]) != 0 {
+							t.Fatalf("warm failure invented unobserved %s", metric)
+						}
+						continue
+					}
+
 					if len(points) != 1 || len(warm.Metrics[metric]) != 1 {
 						t.Fatalf("warm %s history changed cardinality", metric)
 					}
