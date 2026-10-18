@@ -913,6 +913,25 @@ describe('platform overview layout guardrails', () => {
     expect(jsxAttr(protectionTable, 'points')).toBe('props.recoveryPoints.points()');
   });
 
+  it('keeps shared platform sorting on native controls without replacing column semantics', () => {
+    const sortable = functionDecl(parseTsx(sharedPlatformPageSource), 'PlatformSortableTableHead');
+    const header = onlyJsxTag(sortable, 'TableHead');
+    expect(jsxAttr(header, 'scope')).toBe('"col"');
+    expect(jsxAttr(header, 'aria-sort')).toContain('props.sort.getAriaSort');
+    expect(jsxAttr(header, 'role')).toBeUndefined();
+    const button = onlyJsxTag(sortable, 'button');
+    expect(jsxAttr(button, 'type')).toBe('"button"');
+    expect(jsxAttr(button, 'class')).toContain('focus-visible:ring-2');
+    expect(jsxAttr(button, 'onKeyDown')).toBeUndefined();
+    const conditional = findNodes(sortable, ts.isJsxElement).find(
+      (node) =>
+        node.openingElement.tagName.getText() === 'Show' && node.getText().includes('<button'),
+    );
+    expect(conditional).toBeDefined();
+    expect(jsxAttr(conditional!.openingElement, 'when')).toBe('props.sortKey !== undefined');
+    expect(jsxAttr(conditional!.openingElement, 'fallback')).toBe('props.children');
+  });
+
   it('keeps mobile host tables focused on useful operational columns', () => {
     // Assertions use the canonical kind-based helpers — either
     // getPlatformTableHeadClassForKind('<kind>') on a raw TableHead or the

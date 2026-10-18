@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Platform sort actions are native keyboard controls
+
+Every sortable `PlatformSortableTableHead` contains one native `type="button"`
+control, with visible inset focus and inherited column alignment. Enter, Space,
+pointer and touch activation use the same existing cell click path once. The
+column header retains `scope="col"` and the active `aria-sort`; direction glyphs
+are decorative, so the button name stays stable as the direction changes.
+Headers without a sort key stay static, and hidden columns add no Tab stop.
+
+The existing per-table storage keys, three-step direction/default cycle,
+descending-first metric/date choices and missing-last ordering are unchanged.
+Mounted `PlatformSortableTableHead` regressions exercise native semantics,
+focus identity, persistence, ordering and a sortable-to-static transition;
+platform layout guardrails protect the shared structure. The
+`platform-sort-access.cjs` browser protocol checks actual Tab/Enter/Space and
+narrow touch in production Protection and Docker tables/CSS, through the real
+HTTP recovery reader for Protection. This changes access to existing sorting,
+not provider reads, backup status, guest recovery or a new product surface.
+
 ### TrueNAS activity does not claim completion from a last-run timestamp
 
 The existing Protection table calls its sortable date column Reported time
