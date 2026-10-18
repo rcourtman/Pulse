@@ -78,6 +78,9 @@ async function geometry(page) {
   });
 }
 async function capture(page, name) {
+  const measured = await geometry(page);
+  result.geometry.push({ capture: name, measured });
+  assert.deepEqual(measured, { problems: [], pageOverflow: false });
   const file = path.join(output, name + '.png');
   await page.screenshot({ path: file });
   result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });

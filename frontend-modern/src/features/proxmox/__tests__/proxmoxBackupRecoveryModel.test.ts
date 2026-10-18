@@ -881,7 +881,7 @@ describe('backup job observation provenance', () => {
       const result = model([task({ observedAt })]).coverageRows[0];
       expect(result.latestTask?.observedAt).toBe(observedAt);
       expect(result.latestTask?.label).toBe('OK');
-      expect(result.posture).toBe('checking');
+      expect(result.posture).toBe('unknown');
     },
   );
 });
