@@ -240,6 +240,9 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 					t.Fatal("warm native failure discarded valid History or escaped its request bound")
 				}
 				for metric, points := range retained {
+					if metric == "disk" {
+						continue
+					} // capacity was collected again; it is not a retained optional reading
 					if len(points) != 1 || len(warm.Metrics[metric]) != 1 {
 						t.Fatalf("warm %s history changed cardinality", metric)
 					}

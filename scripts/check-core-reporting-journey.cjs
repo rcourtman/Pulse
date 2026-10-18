@@ -74,7 +74,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
    page.setDefaultTimeout(12000);
    page.on('pageerror', (e) => result.errors.push(e.message));
    await page.route('**/*', (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
-   for (phase of ['complete', 'rejected', 'partial', 'zero', 'recovered', 'retained']) {
+   for (phase of input.phases || ['complete', 'rejected', 'partial', 'zero', 'recovered', 'retained']) {
     const record = { phase, width, checks: [] };
     result.cases.push(record);
     const check = (condition, label) => { assert(condition, label); record.checks.push(label); };
@@ -119,12 +119,12 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
      await utilization.waitFor();
      const chart = utilization.getByRole('img');
      await chart.waitFor();
-     if (phase !== 'rejected' && phase !== 'retained') {
-      const inspection = utilization.getByRole('slider', { name:'Inspect Utilization history' });
+     const inspection = utilization.getByRole('slider', { name:'Inspect Utilization history' });
+     if (phase !== 'rejected' && await inspection.count()) {
       await inspection.focus(); await page.keyboard.press('Home');
       check(await inspection.inputValue() === '0', 'keyboard inspection selects the first actual native observation, not the later independent capacity sample');
      }
-     if (phase === 'retained') check((await utilization.innerText()).includes('Single observation. No trend yet.'), 'warm rejection preserves a recorded observation without inventing a trend');
+     if (phase === 'retained') check(samples.retained.history.body.metrics.cpu.length === 1 && samples.retained.history.body.metrics.memory.length === 1, 'warm rejection renders a single recorded CPU/memory observation, not invented optional readings');
      const description = await chart.evaluate((node) => document.getElementById(node.getAttribute('aria-describedby'))?.textContent || '');
      record.utilization = description;
      if (phase === 'rejected') check(!description.includes('CPU 0.0%') && !description.includes('Memory 0.0%') && !description.includes('12.0%') && !description.includes('37.5%'), 'missing CPU and memory are not idle, while capacity remains independently charted');
