@@ -73,6 +73,7 @@ describe('PBS datastore capacity evidence', () => {
     ));
     const cell = usedCell(container);
     await waitFor(() => expect(within(cell).getByText(label)).toBeInTheDocument());
+    expect(within(cell).getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     expect(cell.textContent).not.toMatch(/%|0 B/);
     expect(cell.querySelector('.bg-emerald-500')).toBeNull();
     expect(cell.querySelector('[title]')?.getAttribute('title')).toContain(
@@ -132,7 +133,7 @@ describe('PBS datastore capacity evidence', () => {
         <ProxmoxBackupServersTable servers={servers()} layoutWidth={() => 320} />
       ));
       const button = within(usedCell(container)).getByRole('button', {
-        name: 'Explain capacity for pbs-capacity / tank',
+        name: 'Explain unavailable capacity for pbs-capacity / tank',
       });
       expect(button).toHaveAttribute('type', 'button');
       expect(button).toHaveAttribute('aria-expanded', 'false');
@@ -174,7 +175,7 @@ describe('PBS datastore capacity evidence', () => {
     const open = (name: string) => {
       fireEvent.click(
         within(container).getByRole('button', {
-          name: `Explain capacity for pbs-capacity / ${name}`,
+          name: `Explain ${name === 'tank' ? 'unavailable' : 'unknown'} capacity for pbs-capacity / ${name}`,
         }),
       );
       return within(container).getByRole('region', {

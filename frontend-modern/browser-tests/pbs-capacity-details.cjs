@@ -11,6 +11,7 @@ const staticRoot = path.join(dir, 'static');
 const output = path.join(dir, 'browser');
 const serverName = `pbs-main-${'connection-'.repeat(10)}`;
 const storeName = `main/${'capacity-'.repeat(14)}<literal-name>`;
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 (async () => {
@@ -185,7 +186,9 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         };
         await activate(page.getByRole('button', { name: 'Failure', exact: true }));
         const warning = table.getByRole('button', {
-          name: `Explain capacity for ${serverName} / ${storeName}`,
+          name: new RegExp(
+            `^Explain (?:unavailable|unknown) capacity for ${escapeRegex(serverName)} / ${escapeRegex(storeName)}$`,
+          ),
           exact: true,
         });
         await warning.waitFor();
@@ -251,7 +254,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         await activate(warning, ' ');
         assert.equal(await warning.getAttribute('aria-expanded'), 'true');
         const second = table.getByRole('button', {
-          name: `Explain capacity for ${serverName} / secondary`,
+          name: `Explain unknown capacity for ${serverName} / secondary`,
           exact: true,
         });
         await activate(second);
@@ -318,7 +321,12 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         await update('No stores');
         await table.getByText('No datastore data').waitFor();
         assert.equal(await region.count(), 0);
-        assert.equal(await table.getByRole('button', { name: /^Explain capacity/ }).count(), 0);
+        assert.equal(
+          await table
+            .getByRole('button', { name: /^Explain (?:unavailable|unknown) capacity/ })
+            .count(),
+          0,
+        );
         assert.deepEqual(errors, []);
         assert.deepEqual(offOrigin, []);
         const requests = apiRequests.slice(requestStart);

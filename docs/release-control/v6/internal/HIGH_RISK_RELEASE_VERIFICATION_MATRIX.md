@@ -18,7 +18,7 @@ raw provider errors, executable names, clipped text or horizontal overflow.
 Switch between same-server stores, retain the same open disclosure through
 unavailable/unknown replacements, then replace it with measured zero and high
 usage. Check Enter, Space, tap, expanded/controls semantics, visible focus and
-close-to-disclosure focus return, including when the warning button disappears
+close-to-disclosure focus return and visible state in the accessible name, including when the warning button disappears
 after recovery. Verify actual captures. All fixture API requests must be GETs;
 this is read access, not native PBS capacity recovery or a guest operation.
 

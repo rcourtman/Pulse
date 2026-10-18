@@ -529,6 +529,8 @@ export function ProxmoxBackupServersTable(props: {
                     capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
                       : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
+                  const capacityLabel = () =>
+                    capacityEvidence().state === 'unavailable' ? 'Unavailable' : 'Unknown';
                   const rowIdentity = { id: row.key };
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
@@ -663,14 +665,12 @@ export function ProxmoxBackupServersTable(props: {
                                     type="button"
                                     class="min-h-8 rounded-sm text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-amber-300"
                                     title={capacityNotice()}
-                                    aria-label={`Explain capacity for ${row.serverName} / ${datastore().name}`}
+                                    aria-label={`Explain ${capacityLabel().toLowerCase()} capacity for ${row.serverName} / ${datastore().name}`}
                                     aria-expanded={isExpanded()}
                                     aria-controls={detailRowId()}
                                     onClick={() => detail.toggle(rowIdentity)}
                                   >
-                                    {capacityEvidence().state === 'unavailable'
-                                      ? 'Unavailable'
-                                      : 'Unknown'}
+                                    {capacityLabel()}
                                   </button>
                                 }
                               >
