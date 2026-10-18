@@ -148,7 +148,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         tone: 'danger' as const,
         title: 'HTTP does not protect this installation',
         detail:
-          'Installer downloads, agent traffic and any credentials sent to this Pulse URL are not encrypted or authenticated by TLS. Neither the verification checkbox nor a custom CA protects HTTP. Use a trusted HTTPS URL where possible; do not switch to HTTP to bypass a certificate error.',
+          'Installer downloads, agent traffic and any credentials sent to this Pulse URL are not encrypted or authenticated by TLS. Neither the verification checkbox nor a custom CA protects HTTP. Use a trusted HTTPS URL where possible. Do not switch to HTTP to bypass a certificate error.',
       };
     }
     if (protocol !== 'https:') {
@@ -172,7 +172,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           tone: 'info' as const,
           title: 'HTTPS with a custom CA requested',
           detail:
-            'These commands request certificate-chain and hostname verification using the custom CA file on the target host. Obtain the CA through an already-trusted channel; entering a path does not install or verify it.',
+            'These commands request certificate-chain and hostname verification using the custom CA file on the target host. Obtain the CA through an already-trusted channel. Entering a path does not install or verify it.',
         }
       : {
           tone: 'info' as const,
@@ -633,7 +633,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     <p class="mt-1.5 text-xs text-muted">
                       Override the Pulse address used by installer downloads and the agent. For
                       HTTPS, use a hostname covered by the server certificate. An IP address can
-                      fail hostname verification; do not switch to HTTP to bypass that check.
+                      fail hostname verification. Do not switch to HTTP to bypass that check.
                       <Show when={!state.customAgentUrl()}>
                         <span class="ml-1 opacity-75">
                           Currently using auto-detected: {state.agentUrl()}
