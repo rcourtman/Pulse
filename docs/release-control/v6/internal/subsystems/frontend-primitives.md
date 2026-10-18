@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### TrueNAS Protection keeps read failures visible beside retained records
+
+The existing Protection consumer composes a wrapping status notice and labelled
+native Refresh button above its table when a refresh fails with retained records.
+The notice survives filtering, pending retries and cached remounts; it qualifies
+historical counts/outcomes without discarding accessible disclosures. Without
+records, the existing error panel remains visible and its Refresh control is
+disabled while retrying rather than reverting to a spinner or an empty result.
+No raw diagnostic text is rendered. TrueNASProtectionTable and connected reader
+regressions plus desktop/narrow HTTP/browser checks cover this composition; shared
+primitive APIs and provider/recovery operations are unchanged.
+
 ### Bounded notification evidence is accessible on keyboard and touch
 
 Notification activity retains list semantics and a stable accessible name while
