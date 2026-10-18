@@ -329,7 +329,7 @@ export function getAlertDestinationsDeliveryLogDescription(
   completedRetentionDays: number,
   deadLetterRetentionDays: number,
 ) {
-  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Failures with no further automatic retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts. Entries marked "${getAlertDeliveryLogOutcomeLabel('dead_letter')}" remain available for ${deadLetterRetentionDays} days. Other completed attempts are retained for ${completedRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {

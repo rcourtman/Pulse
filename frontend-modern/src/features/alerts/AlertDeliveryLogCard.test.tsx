@@ -117,7 +117,7 @@ describe('AlertDeliveryLogCard', () => {
       expect(within(row).getByText(/Synthetic destination failure/)).toBeVisible();
       expect(row).not.toHaveTextContent(/exhaust/i);
       expect(row).not.toHaveTextContent('Delivered');
-      expect(screen.getByText(/Failures with no further automatic retries/)).toHaveTextContent(
+      expect(screen.getByText(/Entries marked "Failed, no further retries"/)).toHaveTextContent(
         'remain available for 30 days',
       );
     },
@@ -268,9 +268,9 @@ describe('AlertDeliveryLogCard', () => {
       />
     ));
 
-    expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
+    expect(screen.getByText(/Other completed attempts are retained for 7 days/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Failures with no further automatic retries remain available for 30 days/),
+      screen.getByText(/Entries marked "Failed, no further retries" remain available for 30 days/),
     ).toBeInTheDocument();
     const timestamps = Array.from(container.querySelectorAll('time'));
     expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);
