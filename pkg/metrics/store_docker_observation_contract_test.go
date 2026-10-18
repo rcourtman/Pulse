@@ -87,6 +87,11 @@ func TestDockerObservationContractSeparatesLegacyAcrossRetainedReads(t *testing.
 					assert(batch["a"], false)
 					assert(batch["b"], false)
 					assert(batch["legacy-only"], true)
+					values, err := store.QueryMetricValuesBatch(family, []string{"a", "b", "legacy-only"}, nil, start, end, step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, batch, values)
 					selected, err := store.QueryMetricTypesBatch(family, []string{"a", "b", "legacy-only"}, []string{"disk", "diskread", "diskwrite"}, start, end, step)
 					if err != nil {
 						t.Fatal(err)
@@ -94,6 +99,11 @@ func TestDockerObservationContractSeparatesLegacyAcrossRetainedReads(t *testing.
 					assert(selected["a"], false)
 					assert(selected["b"], false)
 					assert(selected["legacy-only"], true)
+					selectedValues, err := store.QueryMetricValuesBatch(family, []string{"a", "b", "legacy-only"}, []string{"disk", "diskread", "diskwrite"}, start, end, step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, selected, selectedValues)
 					for _, metric := range []string{"disk", "diskread", "diskwrite"} {
 						points, err := store.Query(family, "a", metric, start, end, step)
 						if err != nil {

@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,18 @@ func backupTestClient(t *testing.T, host string) *Client {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// Shared guest fences intentionally outlive a closed fixture listener. A
+// recycled loopback port must not make an independent guest fixture inherit an
+// earlier case's VM-wide uncertainty. Every client within a case keeps its key.
+func guestAgentFixtureEndpoint(t *testing.T, serverURL string) string {
+	t.Helper()
+	// Go appends #NN to repeated subtest names. Names are evidence labels,
+	// not URL syntax; a digest keeps their full identity without fragments,
+	// query parameters or ambiguous path separators.
+	identity := sha256.Sum256([]byte(t.Name()))
+	return serverURL + "/guest-agent-fixture/" + fmt.Sprintf("%x", identity)
 }
 
 func backupAgentReads() map[string]func(context.Context, *Client, int) error {

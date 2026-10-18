@@ -468,16 +468,16 @@ func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resou
 
 	// queryBatch fetches and downsamples metrics for the given IDs.
 	queryBatch := func(ids []string, from time.Time) map[string]map[string][]MetricPoint {
-		sqlResult, err := m.metricsStore.QueryMetricTypesBatch(resourceType, ids, metricTypes, from, end, 0)
+		sqlResult, err := m.metricsStore.QueryMetricValuesBatch(resourceType, ids, metricTypes, from, end, 0)
 		if err != nil || len(sqlResult) == 0 {
 			return nil
 		}
-		// Convert metrics.MetricPoint → monitoring.MetricPoint and downsample.
-		converted := make(map[string]map[string][]MetricPoint, len(sqlResult))
-		for resID, metricMap := range sqlResult {
-			converted[resID] = convertAndDownsample(metricMap, chartDownsampleTarget)
+		// The store returns detached canonical timestamp/value points. Keep
+		// their ownership while applying the existing chart sampling target.
+		for _, metricMap := range sqlResult {
+			downsampleMetricMap(metricMap, chartDownsampleTarget)
 		}
-		return converted
+		return sqlResult
 	}
 
 	result := queryBatch(resourceIDs, start)
@@ -873,11 +873,11 @@ func (m *Monitor) queryStoreMetricHistory(resourceType, resourceID string, durat
 	start := end.Add(-duration)
 
 	query := func(from time.Time) (map[string][]MetricPoint, bool, error) {
-		sqlResult, err := m.metricsStore.QueryAll(resourceType, resourceID, from, end, 0)
+		sqlResult, err := m.metricsStore.QueryMetricValues(resourceType, resourceID, from, end, 0)
 		if err != nil || len(sqlResult) == 0 {
 			return nil, false, err
 		}
-		return convertAndDownsample(sqlResult, chartDownsampleTarget), true, nil
+		return downsampleMetricMap(sqlResult, chartDownsampleTarget), true, nil
 	}
 
 	if result, ok, err := query(start); ok || err != nil || !allowGapFill {
@@ -937,16 +937,11 @@ func (m *Monitor) queryStoreMetricSeriesWithGapFill(resourceType, resourceID, me
 	return query(end.Add(-chartGapFillLookbackWindow(duration)))
 }
 
-// convertAndDownsample converts pkg/metrics.MetricPoint slices to
-// internal/monitoring.MetricPoint slices and applies LTTB downsampling.
-func convertAndDownsample(sqlResult map[string][]metrics.MetricPoint, target int) map[string][]MetricPoint {
-	result := make(map[string][]MetricPoint, len(sqlResult))
-	for metric, points := range sqlResult {
-		converted := make([]MetricPoint, len(points))
-		for i, p := range points {
-			converted[i] = MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-		}
-		result[metric] = lttb(converted, target)
+// downsampleMetricMap samples detached store results at the existing chart
+// target. These slices are owned by this read and never alias retained History.
+func downsampleMetricMap(result map[string][]MetricPoint, target int) map[string][]MetricPoint {
+	for metric, points := range result {
+		result[metric] = lttb(points, target)
 	}
 	return result
 }

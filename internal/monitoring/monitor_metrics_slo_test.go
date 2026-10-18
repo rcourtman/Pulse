@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -1057,4 +1058,58 @@ func sharedMetricTimestampCount(a, b []MetricPoint) int {
 		}
 	}
 	return shared
+}
+
+func TestStoreValueProjectionPreservesChartSampling(t *testing.T) {
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	end := time.Now().Truncate(time.Minute)
+	start := end.Add(-24 * time.Hour)
+	batch := make([]metrics.WriteMetric, 0, 4000)
+	ids := []string{"a", "b"}
+	names := []string{"cpu", "memory"}
+	for _, id := range ids {
+		for _, metric := range names {
+			for i := 0; i < 1000; i++ {
+				batch = append(batch, metrics.WriteMetric{ResourceType: "vm", ResourceID: id, MetricType: metric, Value: float64((i * 37) % 97), Timestamp: end.Add(-18 * time.Hour).Add(time.Duration(i) * time.Minute), Tier: metrics.TierMinute})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+	monitor := &Monitor{metricsStore: store}
+	for _, filter := range [][]string{nil, {"cpu"}, {"cpu", "memory"}} {
+		t.Run(fmt.Sprint(filter), func(t *testing.T) {
+			full, err := store.QueryMetricTypesBatch("vm", ids, filter, start, end, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := make(map[string]map[string][]MetricPoint, len(full))
+			for id, series := range full {
+				want[id] = make(map[string][]MetricPoint, len(series))
+				for metric, points := range series {
+					if len(points) != 1000 {
+						t.Fatalf("fixture %s/%s: got %d points", id, metric, len(points))
+					}
+					want[id][metric] = convertSeriesAndDownsample(points, chartDownsampleTarget)
+				}
+			}
+			got := monitor.queryStoreBatchMetricMapWithGapFill("vm", ids, 24*time.Hour, filter)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatal("value projection changed the sampled chart observations")
+			}
+			for _, series := range got {
+				for _, points := range series {
+					points[0].Value = -999
+					points[0].Timestamp = time.Time{}
+				}
+			}
+			again := monitor.queryStoreBatchMetricMapWithGapFill("vm", ids, 24*time.Hour, filter)
+			if !reflect.DeepEqual(again, want) {
+				t.Fatal("mutating a chart result changed a subsequent read")
+			}
+		})
+	}
 }

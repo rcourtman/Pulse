@@ -1869,6 +1869,22 @@ dashboard-specific overview, trend, or summary transport.
     `TestSLO_WorkloadCharts` must similarly use a fresh service per timed
     sample so its existing query-latency budgets cannot be satisfied solely
     by a response-cache hit after the sanity request.
+    Controlled idle-worker proofs set `PULSE_STRICT_LOCAL_API_SLOS=true` to
+    enforce the existing 90 ms local budget, including on hosted runners,
+    without changing their actual runner identity or accepting a skipped
+    test. Ordinary hosted execution retains its 550 ms envelope. The optional
+    Build and Test chart-latency job compiles a fixed candidate executable
+    before measuring, requires observed idle capacity, and retains executable
+    hashes, raw percentiles, and CPU/guest/swap evidence before, during and
+    after measurement. It executes the candidate directly; relative baseline
+    comparisons belong to the separate paired benchmark job. A baseline
+    failure cannot suppress the candidate's absolute check. The proof requires
+    quiet I/O before starting; the measured process's own I/O remains part of
+    its latency, with I/O wait and process I/O counters retained for diagnosis.
+    Competing CPU, guest/steal or swap activity invalidates the measurement,
+    and process CPU counters identify the largest observed background users.
+    Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
+    This evidence does not replace required source checks or release gates.
 31. Keep the retired dashboard overview route absent from the protected hot
 path. `frontend-modern/src/pages/Dashboard.tsx`,
 `frontend-modern/src/hooks/useDashboardOverview.ts`, and
@@ -2683,7 +2699,29 @@ WAL and checkpoint writes per ~60-byte sample before the change (#1966). The
 accepted cost is on metric-filtered reads, which now scan a resource's other
 metrics in the window: a single-metric 500-node query moved from 45 to 59
 microseconds and the 24-hour 50-disk `smart_temp` batch from about 0.25 to 0.49
-s, while all-metric dashboard reads are unchanged. Legacy databases keep their
+s, while all-metric dashboard reads are unchanged. Ungrouped retained reads,
+including multi-metric filters, must consume that time-major index order
+without a temporary metric sort. Interleaved metric rows must preserve every
+series' timestamp order, tier precedence, values and extrema. Streaming
+display-bucket aggregation retains its required series grouping. The query
+plan guard covers filtered and unfiltered reads across retained windows and
+single/fleet scopes; tier-coverage tests compare filtered results with the
+unfiltered reconciliation contract. Non-aggregated rows preserve nullable
+extrema across the SQLite driver boundary; decoding applies each missing
+bound's value fallback per observation while retaining explicit bounds,
+including zero. SQL display aggregation applies the same fallback before
+MIN/MAX, and streamed buckets receive normalized bounds. Avoid materializing
+the same float three times for observations without stored extrema. Mixed
+nullable-bound tests cover single/fleet reads, metric filters and display
+buckets. Value-only consumers must use the same retained read engine's
+`QueryMetricValues` / `QueryMetricValuesBatch` projection, returning the
+canonical `models.MetricPoint` timestamp/value type. That SQL form omits
+extrema columns and avoids materializing full points only to copy them into
+value points afterward. Full and value projections share scope normalization,
+filters, tier reconciliation, time ordering, display buckets and Docker
+observation provenance; their distinct SQL column shapes must have distinct
+keys within the existing bounded query cache. Neither mode caches results or
+tier presence. Full readers continue to preserve extrema. Legacy databases keep their
 existing unique index authoritative while the replacement index is built, but
 that O(rows) migration must run on deferred startup maintenance and swap indexes
 in one SQLite transaction so constructor latency, concurrent reads, uniqueness,
