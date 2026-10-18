@@ -54,6 +54,10 @@ const workflowDestinations = [
     ],
   ],
   [
+    'SSO stopped working after editing a provider:',
+    ['/docs/OIDC#sign-in-fails-after-editing-a-provider'],
+  ],
+  [
     'Already paid but Pro features are unavailable:',
     ['/docs/PULSE_PRO#already-paid-but-pro-features-are-unavailable'],
   ],
@@ -63,7 +67,10 @@ const workflowDestinations = [
   ],
   [
     'Agent host is missing or reporting is rejected:',
-    ['/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403'],
+    [
+      '/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403',
+      '/docs/UNIFIED_AGENT#agent-is-healthy-locally-but-host-reports-are-stale',
+    ],
   ],
   [
     'Proxmox or PBS reports a certificate error:',
@@ -125,6 +132,14 @@ const workflowDestinations = [
   [
     'Notification Test works but alerts do not arrive:',
     ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
+  ],
+  [
+    'Apprise reports a TLS or connection error:',
+    ['/docs/TROUBLESHOOTING#apprise-api-reports-a-tls-or-connection-error'],
+  ],
+  [
+    'A usage alert stays open after usage drops:',
+    ['/docs/TROUBLESHOOTING#a-usage-alert-stays-open-after-usage-drops'],
   ],
   [
     'Private information was posted:',

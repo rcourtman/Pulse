@@ -83,7 +83,14 @@ describe('existing metric threshold help', () => {
     expect(text).toContain('90% or higher');
     expect(text).toContain('above 80%, even at 85%');
     expect(text).toContain('80% or lower');
-    expect(text).toContain('evaluation windows and activation/recovery delays still apply');
+    expect(text).toContain('CPU can use an averaging window');
+    expect(text).toContain('memory can have a recovery stability delay');
+    expect(text).toContain(
+      'Guest filesystem capacity uses the current matching reading, not a rolling average',
+    );
+    expect(text).toContain('disk grace period delays activation only');
+    expect(text).toContain('recovery has no extra configured delay');
+    expect(text).toContain('These rules do not promise immediate notification delivery');
     expect(text).toContain('not measured recovery');
     expect(text).toContain('Missing or stale readings are not a healthy zero');
     expect(text).toContain('do not lower thresholds, create load or stop a workload');
