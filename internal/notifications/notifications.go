@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"math"
 	"net"
 	"net/http"
@@ -2513,18 +2512,22 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 	}
 	defer resp.Body.Close()
 
-	limited := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	responseBytes, _ := io.Copy(io.Discard, limited)
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "apprise server returned HTTP %d", resp.StatusCode)
+	// Share the bounded response verdict with webhooks. Receiving 2xx headers
+	// does not make a failed body read successful delivery or a durable receipt.
+	result, err := readWebhookResponse(resp)
+	if err != nil {
+		operation := "read Apprise server response"
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			operation = fmt.Sprintf("apprise server returned HTTP %d", resp.StatusCode)
+		}
+		return safeAppriseError(operation, err)
 	}
 
-	if responseBytes > 0 {
+	if result.responseBytes > 0 {
 		log.Debug().
 			Str("mode", string(cfg.Mode)).
 			Int("statusCode", resp.StatusCode).
-			Int64("responseBytes", responseBytes).
+			Int64("responseBytes", result.responseBytes).
 			Msg("apprise API response")
 	}
 
@@ -3557,12 +3560,12 @@ func templateFuncMap() template.FuncMap {
 func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr string, data WebhookPayloadData, service string) ([]byte, error) {
 	tmpl, err := template.New("webhook").Funcs(templateFuncMap()).Parse(templateStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid template: %w", err)
+		return nil, failNotificationConfiguration("invalid template", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("template execution failed: %w", err)
+		return nil, failNotificationConfiguration("template execution failed", err)
 	}
 
 	// Skip JSON validation for services that use plain text payloads
@@ -3575,10 +3578,9 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 	var jsonCheck interface{}
 	if err := json.Unmarshal(buf.Bytes(), &jsonCheck); err != nil {
 		log.Error().
-			Err(err).
-			Str("payload", buf.String()).
+			Int("payloadBytes", buf.Len()).
 			Msg("generated webhook payload is invalid JSON")
-		return nil, fmt.Errorf("template produced invalid JSON: %w", err)
+		return nil, failNotificationConfiguration("template produced invalid JSON", err)
 	}
 
 	return buf.Bytes(), nil
@@ -4243,7 +4245,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	case "email":
 		var emailConfig EmailConfig
 		if err = json.Unmarshal(notif.Config, &emailConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal email config: %w", err)
+			return failNotificationConfiguration("failed to unmarshal email config", err)
 		}
 		currentEmailConfig := n.GetEmailConfig()
 		if !n.IsEnabled() || !currentEmailConfig.Enabled {
@@ -4266,7 +4268,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	case "webhook":
 		var webhookConfig WebhookConfig
 		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
+			return failNotificationConfiguration("failed to unmarshal webhook config", err)
 		}
 		if !n.IsEnabled() || !n.isQueuedWebhookStillEnabled(webhookConfig) {
 			log.Info().
@@ -4289,7 +4291,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	case "apprise":
 		var appriseConfig AppriseConfig
 		if err = json.Unmarshal(notif.Config, &appriseConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
+			return failNotificationConfiguration("failed to unmarshal apprise config", err)
 		}
 		currentAppriseConfig := n.GetAppriseConfig()
 		if !n.IsEnabled() || !currentAppriseConfig.Enabled {
@@ -4310,7 +4312,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		err = n.deliverNotificationJob(deliveredJob)
 
 	default:
-		return fmt.Errorf("unknown notification type: %s", baseType)
+		return FailfWithClass(NotificationFailureConfiguration, "unknown notification type")
 	}
 
 	if err == nil {

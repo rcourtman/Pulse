@@ -4142,7 +4142,11 @@ newest-first record of real alert delivery attempts with plain-language
 outcome labels, destination names resolved from the loaded webhook configs,
 failure classes, and secret-redacted error text. The card names its retention
 windows separately: completed attempts remain for seven days while
-dead-letter attempts can remain for 30 days. It requests the bounded maximum
+dead-letter attempts can remain for 30 days. Retained terminal failures say
+that retries stopped, because a permanent verdict can stop the first attempt
+before its retry budget is exhausted. The description uses the same boundary
+and never infers attempt exhaustion from dead-letter status alone.
+It requests the bounded maximum
 of 200 rows, displays an absolute semantic timestamp for timeline correlation
 with relative time as secondary hover context, and says that test sends skip
 the queue. An unreadable log renders as unavailable rather than empty. While
