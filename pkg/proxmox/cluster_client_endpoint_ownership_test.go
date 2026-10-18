@@ -68,7 +68,7 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 }
 
 func testClusterClientEndpointOwnershipGuestAdmission(t *testing.T) {
-	isolateGuestAgentCapacity(t)
+	isolateGuestAgentRegistry(t)
 	entered, finish := make(chan struct{}), make(chan struct{})
 	var firstCommand atomic.Bool
 	var originalCommands, otherRequests atomic.Int32
