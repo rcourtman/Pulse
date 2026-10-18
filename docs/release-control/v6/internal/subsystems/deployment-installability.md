@@ -16,6 +16,23 @@
 
 ## Purpose
 
+### Stable-publication inventories recover only an observed transport cancellation
+
+The Security Scan's read-only GitHub refs/releases inventory admits only a
+successful, complete slurped array of JSON pages. An exit-1 HTTP/2 `CANCEL`
+diagnostic, with no other stderr, permits at most three identical reads with
+two/four-second backoff. Each command has a 180-second timeout and five-second
+kill backstop. Refusals, unknown errors, signals, timeouts and malformed
+successful output stop without retry. Failed bytes/diagnostics remain separate
+attempt evidence, never a partial or stale accepted inventory. Registry reads,
+frontier decisions, release ownership and publication remain unchanged.
+
+`scripts/tests/test_github_release_inventory.py` executes the actual workflow
+step with controlled GitHub/registry peers, including a truncated cancellation,
+complete recovery, exhausted/denied/mixed failures and the real frontier
+validator. These fixtures establish the collection boundary, not a successful
+live continuity run or any release/installed-health acceptance.
+
 ### Ordinary Unix agent copies finish before the collector is stopped
 
 The agent installer must not move a generic temporary download directly onto
