@@ -94,6 +94,7 @@ func TestPBSBackupLifecycleHTTP(t *testing.T) {
 					Name: "pbs-main", Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only", MonitorDatastores: true, MonitorBackups: true,
 				}}}
 				f.m.lastPBSBackupPoll = make(map[string]time.Time)
+				f.m.pollStatusMap = make(map[string]*pollStatus)
 				f.m.pbsClients = make(map[string]*pbs.Client)
 				f.m.initPBSClients(f.m.config)
 				client, ok := f.m.getPBSClient("pbs-main")
