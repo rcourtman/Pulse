@@ -247,7 +247,13 @@ let browser, server;
       'Real collected HTTP reports OK, zero-count error Failed, missing/future Unknown, explicit Pending and Disabled distinctly. Previous OK does not hide overdue Next sync.',
     );
     const activate = async (button) => {
-      if (spec.name === 'narrow') await button.tap();
+      if (spec.name === 'narrow') {
+        // On phones the row is the explicit touch target. Its disclosure
+        // button is sr-only until keyboard focus, not a tappable icon.
+        if ((await button.getAttribute('data-row-action')) === 'true')
+          await button.locator('xpath=ancestor::tr').tap();
+        else await button.tap();
+      }
       else {
         await button.focus();
         await page.keyboard.press('Enter');
