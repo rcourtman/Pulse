@@ -6,8 +6,14 @@ documentation gaps, or operator workflows described in the same report.
 
 ## Intake contract
 
-Issue forms ask for one primary outcome and provide an **Additional actionable
-topics** field. Declaring a topic when opening an issue or newly adding one to
+Issue forms ask for one primary outcome and provide an optional **Additional
+actionable topics** field. A single problem needs no second answer or "None"
+declaration. Workarounds for that problem belong in its description (or
+**Alternatives considered** for a feature request), not in the secondary-topic
+field. Blank and **None** both mean no declared secondary topic; they do not
+dispose of topics raised elsewhere in the report or conversation.
+
+Declaring a topic when opening an issue or newly adding one to
 this field applies the `needs-decomposition` label automatically. This is a
 queue-integrity signal, not a statement that every topic will be built.
 Materially editing an already populated field also surfaces it for review:

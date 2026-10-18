@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "33a67ccf4d3afd2b12e8353ae6f47cf095b24cb0",
+  "verified_at": "2026-10-17T23:53:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/package-lock.json",
+    "frontend-modern/package.json",
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md",
+    "frontend-modern/src/security/__tests__/dependencySecurity.test.ts",
+    "frontend-modern/src/security/__tests__/dependencyTooling.test.ts",
+    "internal/cloudcp/portal/dist/build_manifest.json",
+    "internal/cloudcp/portal/dist/portal_app.css",
+    "internal/cloudcp/portal/frontend/package-lock.json",
+    "internal/cloudcp/portal/frontend/package.json",
+    "internal/cloudcp/portal/frontend/src/styles.css",
+    "tests/integration/package-lock.json",
+    "tests/integration/package.json"
+  ],
+  "content_sha256": {
+    "frontend-modern/package-lock.json": "54b5779a25cb9a10770836e0399d5758b5fc97c3c8eaad82d1c04db052dbc3c0",
+    "frontend-modern/package.json": "723a0071342627a7160f0db6c97aebb0a6f7167de42b7f7b4df89bd9b2a2d1dc",
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "1f3b79fcabbefcaa19bd032ae1dbc94d8514872a0ad46cfc47544fb0111e7dec",
+    "frontend-modern/src/security/__tests__/dependencySecurity.test.ts": "8379878cb6338d77b94ba3f0382f9041399ee873ff0b44d3e00d2f941a69ced3",
+    "frontend-modern/src/security/__tests__/dependencyTooling.test.ts": "92f6d5caafc12c5fc8eb5c5b340089c91d28fef9289f020cf4d8c58e2bae634e",
+    "internal/cloudcp/portal/dist/build_manifest.json": "b52ee77c2f6c4752cab4fbde310babaa669b8bedc4e0983d4088ac9cdf8cdad7",
+    "internal/cloudcp/portal/dist/portal_app.css": "a27d1341c33bdb6178c33d30f93762ff1e2fa143dd1d1150a8a19f58164a71be",
+    "internal/cloudcp/portal/frontend/package-lock.json": "9fd5668c962aa198d61179f5d06d55c26c83add755a9a6d3bf2cd42858f2b231",
+    "internal/cloudcp/portal/frontend/package.json": "02bb36a79b410468afe550e3d310a65059d33101bb35e8bcbbe7a8240478cf2a",
+    "internal/cloudcp/portal/frontend/src/styles.css": "d9dbaa45f59db9984d3f70c0826a09d0c2a1c273b149df5ddbd3f969e9c891fb",
+    "tests/integration/package-lock.json": "4d0c47bb8ac78c151187901fc9d484c84e5858b04e37ff0c85fdc07626511749",
+    "tests/integration/package.json": "d508385b0a2f482ef1dd3b668df2921f333cf7436afb39e9c308c83e91289e95"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/portal",
+    "/docs/ISSUE_TRIAGE#intake-contract"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Current compatible frontend graph: Solid1.9.17, both serializers1.6.8, DOM10.4.1 and jest-dom7.0.1, with Playwright1.56.1 parity. Actual production build/embed/budget proof source-ahpu1ws_ at d9ebd01d54214ce68850150a9a35f99a240615bd.",
+    "The containing graph was exercised across both full frontend shards; the first retained two failures. Source40d03a4063c538672fffd02be655244db4d94342 strengthens the serializer assertion, mirrors canonical help and passes all107 affected consumer/security/Docs cases with types and formatting. This is not a claim that the initial failing shard passed.",
+    "Production reader/model/Coverage components compiled from d9ebd01d54214ce68850150a9a35f99a240615bd on this graph, with final runtime and manifest bytes unchanged. Chromium1440 and WebKit320 show literal errors, separate independent posture, amber Unknown for contradictory success/error evidence, corrected OK, and uncertain chronology.",
+    "The real Docs/router/Markdown/styles compiled at40d03a4063c538672fffd02be655244db4d94342 serve the exact canonical/shipped ISSUE_TRIAGE guide at both widths; optional secondary topic guidance is visible and focusable.",
+    "The real portal template uses actual production rebuild output source-t3jo8xzs at49605cb5c0d5a5fae0693f5d6c832f1b67bf5601. JS remains byte-identical; CSS and its manifest were regenerated and committed at33a67ccf4d3afd2b12e8353ae6f47cf095b24cb0, not manually reconstructed.",
+    "Before repair the phone portal document was339px wide in a320px viewport and clipped Sign out. After repair both workspace/access document widths are320px, theme control remains wholly visible, and Sign out ends at308px with a12px margin. Desktop stays1440px. Only the email label truncates.",
+    "Fourteen final captures and three retained adverse captures were opened with native view_image and inspected. The final portal script has an old descriptive label saying unchanged JS/CSS; only JS is unchanged. Actual CSS hashes/build output, screenshots and geometry establish the responsive CSS change.",
+    "All API data is synthetic and browser serving is local GET-only. These are browser/source checks, not installed provider, SSO, billing, guest, release or reporter recovery."
+  ],
+  "interactions": [
+    "Keyboard/touch workload disclosure, repeated refreshes through Failed/Running/three contradictory success aliases/corrected OK, ambiguous chronology and empty jobs, retaining row identity and focus.",
+    "Direct Docs fragment focus, keyboard/touch All documentation navigation and browser Back retaining the same application shell.",
+    "Portal Clients/Access/Support navigation, keyboard activation of Access, read-only controls, real theme toggle and persistence after reload; no logout, account, payment or deletion mutation."
+  ]
+}

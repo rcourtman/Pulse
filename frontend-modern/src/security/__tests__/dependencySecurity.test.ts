@@ -89,16 +89,19 @@ describe('frontend dependency security floors', () => {
     );
   });
 
-  it.each<[string, [number, number, number]]>([
+  it.each<[string, [number, number, number], string]>([
     // GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp: both Seroval fixes
     // are required, including the TypedArray fix after the first 1.6.x patch.
-    ['seroval', [1, 6, 3]],
+    // Preserve the newer coupled serializer floor rather than requiring the
+    // historical override's spelling or allowing a rollback to its old patch.
+    ['seroval', [1, 6, 8], '~1.6.8'],
+    ['seroval-plugins', [1, 6, 8], '~1.6.8'],
     // GHSA-rj75-hqrm-r3gf: typography's exact 6.0.10 needs a 7.x override.
-    ['postcss-selector-parser', [7, 1, 6]],
+    ['postcss-selector-parser', [7, 1, 6], '^7.1.6'],
     // GHSA-68fv-2mgg-jv7q: all PostCSS/source-map consumers need the fix.
-    ['source-map-js', [1, 2, 2]],
-  ])('keeps every %s copy above the October deserialization and parsing floors', (name, floor) => {
-    expect(manifest.overrides[name]).toBe(`^${floor.join('.')}`);
+    ['source-map-js', [1, 2, 2], '^1.2.2'],
+  ])('keeps every %s copy at the reviewed security floor', (name, floor, override) => {
+    expect(manifest.overrides[name]).toBe(override);
     const versions = lockedVersions(name);
     expect(versions, `${name} must be locked`).not.toHaveLength(0);
     for (const version of versions) {
