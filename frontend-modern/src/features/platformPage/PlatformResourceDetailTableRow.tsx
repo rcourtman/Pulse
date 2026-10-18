@@ -119,6 +119,8 @@ export const PlatformResourceDetailTableRow: Component<{
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
   initialShowTrueNASDetails?: boolean;
+  /** Evidence specific to this summary row, rather than the whole resource. */
+  beforeDetails?: JSX.Element;
   onResourceActionSettled?: () => void | Promise<void>;
   onClose?: () => void;
 }> = (props) => {
@@ -130,6 +132,7 @@ export const PlatformResourceDetailTableRow: Component<{
         data-inline-detail-for={props.resource.id}
         data-inline-platform-resource-detail-for={props.resource.id}
       >
+        {props.beforeDetails}
         <ResourceDetailDrawer
           resource={props.resource}
           presentation="table-row"

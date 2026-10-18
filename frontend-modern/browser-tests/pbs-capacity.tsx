@@ -21,6 +21,8 @@ const normal = {
 
 function Fixture() {
   const [state, setState] = createSignal('Healthy');
+  Object.assign(window, { __pbsCapacityFixture: { setState } });
+  const detailsMode = new URLSearchParams(location.search).has('details');
   const servers = createMemo((): Resource[] => {
     let store: ResourcePBSDatastore = { ...normal };
     if (state() === 'Failure')
@@ -30,17 +32,33 @@ function Fixture() {
     if (state() === 'Zero') store = { ...store, used: 0, usagePercent: 0, available: 10000 };
     if (state() === 'Full') store = { ...store, used: 9500, usagePercent: 95, available: 500 };
     if (state() === 'Error') store = { ...store, error: 'PRIVATE_PROVIDER_ERROR_SENTINEL' };
+    if (detailsMode) store.name = `main/${'capacity-'.repeat(14)}<literal-name>`;
     const pbs = {
       instanceId: 'pbs-main',
       connectionHealth: state() === 'Offline' ? 'offline' : 'healthy',
       version: '3.2.1',
-      datastores: state() === 'No stores' ? [] : [store],
+      datastores:
+        state() === 'No stores'
+          ? []
+          : detailsMode
+            ? [
+                store,
+                {
+                  ...normal,
+                  name: 'secondary',
+                  total: 0,
+                  used: 0,
+                  available: 0,
+                  status: 'unknown',
+                },
+              ]
+            : [store],
     };
     const resource: Resource = {
       id: 'pbs-main',
       type: 'pbs',
-      name: 'pbs-main',
-      displayName: 'pbs-main',
+      name: detailsMode ? `pbs-main-${'connection-'.repeat(10)}` : 'pbs-main',
+      displayName: detailsMode ? `pbs-main-${'connection-'.repeat(10)}` : 'pbs-main',
       platformId: 'pbs-main',
       platformType: 'proxmox-pbs',
       sourceType: 'api',
