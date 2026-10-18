@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -368,17 +369,17 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 			// Convert to models
 			for _, content := range contents {
+				// Content enumeration is shared with live-disk and snapshot
+				// readers. Only backup archives establish backup success.
+				if content.Content != "backup" {
+					continue
+				}
 				// Skip if we've already seen this item (shared storage duplicate)
 				backupID := pveStorageBackupID(instanceName, backupScope, content.Volid)
 				if seenBackups[backupID] {
 					continue
 				}
 				seenBackups[backupID] = true
-
-				// Skip templates and ISOs - they're not backups
-				if content.Content == "vztmpl" || content.Content == "iso" {
-					continue
-				}
 
 				// Determine type from content type and VMID
 				backupType := "unknown"
@@ -1331,6 +1332,12 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			Msg("Guest snapshot polling completed; carried forward previous snapshots for guests with per-call errors")
 	}
 
+	// Inventory retention is not a fresh measurement of a snapshot's size.
+	// Unavailable sizing must reach the existing alert evidence holder as
+	// unknown, not renew an old positive value or publish a partial sum.
+	for i := range allSnapshots {
+		allSnapshots[i].SizeBytes = 0
+	}
 	if len(allSnapshots) > 0 && !deadlineExceeded {
 		sizeMap := m.collectSnapshotSizes(snapshotCtx, instanceName, client, allSnapshots)
 		if len(sizeMap) > 0 {
@@ -1403,8 +1410,6 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 		return sizes
 	}
 
-	seenVolids := make(map[string]struct{})
-
 	for nodeName := range nodes {
 		if ctx.Err() != nil {
 			break
@@ -1420,8 +1425,16 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 			continue
 		}
 
+		// A snapshot can span several storages. Stage this node's totals
+		// until all eligible storage reads complete; a missing disk cannot
+		// turn a large snapshot into a small, apparently recovered one.
+		nodeSizes := make(map[string]int64)
+		unknownSizes := make(map[string]bool)
+		seenVolids := make(map[string]struct{})
+		complete := true
 		for _, storage := range storages {
 			if ctx.Err() != nil {
+				complete = false
 				break
 			}
 
@@ -1430,6 +1443,7 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 				continue
 			}
 			if !storageContentQueryable(storage) {
+				complete = false
 				continue
 			}
 
@@ -1441,10 +1455,14 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 					Str("storage", storage.Storage).
 					Str("instance", instanceName).
 					Msg("Failed to get storage content for snapshot sizing")
+				complete = false
 				continue
 			}
 
 			for _, item := range contents {
+				if item.Content != "images" && item.Content != "rootdir" {
+					continue
+				}
 				if item.VMID <= 0 {
 					continue
 				}
@@ -1465,12 +1483,19 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 
 				seenVolids[item.Volid] = struct{}{}
 
-				size := int64(item.Size)
-				if size < 0 {
-					size = 0
+				if item.Size == 0 || item.Size > uint64(math.MaxInt64-nodeSizes[key]) {
+					unknownSizes[key] = true
+					continue
 				}
 
-				sizes[key] += size
+				nodeSizes[key] += int64(item.Size)
+			}
+		}
+		if complete && ctx.Err() == nil {
+			for key, size := range nodeSizes {
+				if !unknownSizes[key] {
+					sizes[key] = size
+				}
 			}
 		}
 	}

@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Storage content is shared evidence, not a backup-only list
+
+The validated Proxmox content reader returns every content kind to its existing
+consumers. Only `backup` entries may create storage-backup records or successful
+backup evidence. Container root usage accepts live `rootdir`/`images` volumes,
+never snapshot (`@`) or archive rows. Whole-response integrity, connection scope,
+ordinary read budgets and guest-operation exclusions are unchanged.
+
+Snapshot size is a complete sum, not a lower bound from whichever disk responded.
+Each node stages totals until all eligible storage reads succeed; inactive/unread
+storage makes that node's size unknown without blocking independently readable
+nodes. Missing/zero or overflowing matching volume sizes cannot establish a
+smaller total. Retained snapshot inventory does not renew an old size. Existing
+alert evidence keeps the last known breach, identity, acknowledgement and original
+size-observation time until a complete smaller reading or authoritative snapshot
+removal establishes recovery. No new route or settings surface is added.
+
+`TestStorageContentRetainsAllValidatedKinds` exercises single and cluster clients;
+`TestSnapshotStorageTotalsRequireCompleteNode` covers incomplete totals and peer
+independence. `TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate`
+joins real HTTP, the ordinary container/archive/snapshot collectors, collected
+state, recovery points and alert hold/recovery. Desktop/narrow browser proof uses
+these actual projections in existing Backups, workload and alert components.
+These fixtures do not establish appliance acceptance or frozen-guest recovery.
+
+
 ### Root PBS datastore discovery owns backup replacement authority
 
 The foreground datastore-list result travels into the same connection/runtime-owned

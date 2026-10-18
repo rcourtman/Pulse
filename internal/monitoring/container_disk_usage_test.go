@@ -364,7 +364,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "backup-store", Content: "backup,iso", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"backup-store": {{Volid: "backup-store:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"backup-store": {{Volid: "backup-store:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -380,7 +380,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "zfs", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"zfs": {{Volid: "zfs:subvol-100-disk-0", VMID: 100, Used: 2048, Size: 8192}},
+				"zfs": {{Volid: "zfs:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 2048, Size: 8192}},
 			},
 			contentErr: map[string]error{
 				"local": errors.New("storage offline"),
@@ -412,7 +412,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -437,7 +437,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-0", VMID: 100, Used: 0, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 0, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -452,7 +452,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-200-disk-0", VMID: 200, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-200-disk-0", Content: "rootdir", VMID: 200, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -467,7 +467,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-1", VMID: 100, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-1", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -482,7 +482,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-0", VMID: 0, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 0, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -499,12 +499,12 @@ func TestCollectContainerRootUsage(t *testing.T) {
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
 				"local": {
-					{Volid: "local:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096},
-					{Volid: "local:subvol-101-disk-0", VMID: 101, Used: 2048, Size: 8192},
+					{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096},
+					{Volid: "local:subvol-101-disk-0", Content: "rootdir", VMID: 101, Used: 2048, Size: 8192},
 				},
 				"zfs": {
-					{Volid: "zfs:subvol-102-disk-0", VMID: 102, Used: 3072, Size: 12288},
-					{Volid: "zfs:subvol-103-disk-0", VMID: 103, Used: 4096, Size: 16384},
+					{Volid: "zfs:subvol-102-disk-0", Content: "rootdir", VMID: 102, Used: 3072, Size: 12288},
+					{Volid: "zfs:subvol-103-disk-0", Content: "rootdir", VMID: 103, Used: 4096, Size: 16384},
 				},
 			},
 		}
@@ -536,7 +536,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 0, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -551,7 +551,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "rootdir", Enabled: 1, Active: 0},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"local": {{Volid: "local:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -566,7 +566,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "", Content: "rootdir", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"": {{Volid: ":subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"": {{Volid: ":subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -581,7 +581,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "local", Content: "images", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"local": {{Volid: "local:vm-100-disk-0", VMID: 100, Used: 5000, Size: 10000}},
+				"local": {{Volid: "local:vm-100-disk-0", Content: "rootdir", VMID: 100, Used: 5000, Size: 10000}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -599,7 +599,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "zfs", Content: "subvol", Enabled: 1, Active: 1},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"zfs": {{Volid: "zfs:subvol-100-disk-0", VMID: 100, Used: 7777, Size: 9999}},
+				"zfs": {{Volid: "zfs:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 7777, Size: 9999}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
@@ -620,7 +620,7 @@ func TestCollectContainerRootUsage(t *testing.T) {
 				{Storage: "pbs", Content: "backup", Type: "pbs", Enabled: 1, Active: 0},
 			},
 			contentByStore: map[string][]proxmox.StorageContent{
-				"pbs": {{Volid: "pbs:subvol-100-disk-0", VMID: 100, Used: 1024, Size: 4096}},
+				"pbs": {{Volid: "pbs:subvol-100-disk-0", Content: "rootdir", VMID: 100, Used: 1024, Size: 4096}},
 			},
 		}
 		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})

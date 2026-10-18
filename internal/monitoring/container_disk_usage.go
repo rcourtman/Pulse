@@ -100,6 +100,11 @@ func (m *Monitor) collectContainerRootUsage(ctx context.Context, client PVEClien
 		}
 
 		for _, item := range contents {
+			// The shared content reader also serves backups and snapshots.
+			// Neither is an observation of a container's live root volume.
+			if (item.Content != "rootdir" && item.Content != "images") || strings.Contains(item.Volid, "@") {
+				continue
+			}
 			vmid := item.VMID
 			if vmid == 0 {
 				continue

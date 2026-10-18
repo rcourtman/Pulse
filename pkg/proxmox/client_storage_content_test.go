@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestClient_GetStorageContentFiltersBackupsAndTemplates(t *testing.T) {
+func TestClient_GetStorageContentPreservesBackupsTemplatesAndISOs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes/node1/storage/local/content" {
@@ -33,10 +33,10 @@ func TestClient_GetStorageContentFiltersBackupsAndTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStorageContent failed: %v", err)
 	}
-	if len(content) != 2 {
-		t.Fatalf("expected 2 content entries, got %d", len(content))
+	if len(content) != 3 {
+		t.Fatalf("expected all 3 content entries, got %d", len(content))
 	}
-	if content[0].Content != "backup" || content[1].Content != "vztmpl" {
+	if content[0].Content != "backup" || content[1].Content != "vztmpl" || content[2].Content != "iso" {
 		t.Fatalf("unexpected content list: %+v", content)
 	}
 }
