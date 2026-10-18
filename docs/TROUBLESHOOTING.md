@@ -91,6 +91,10 @@ establish safe recovery.
 - **Notification Test works but alerts do not arrive:** follow
   [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
   Do not trigger an alert or replay the queue just to complete a report.
+- **Apprise reports a TLS or connection error:** distinguish
+  [the API connection, local CLI and onward delivery](TROUBLESHOOTING.md#apprise-api-reports-a-tls-or-connection-error).
+  Keep certificate verification enabled; a working browser or accepted API
+  request does not prove delivery to the recipient.
 - **A usage alert stays open after usage drops:** compare
   [the affected reading, clear level and metric-specific timing](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
   Acknowledgement is not recovery; an old notification is not a current reading.
@@ -1411,7 +1415,7 @@ Start with the failure class and timestamp:
 | Authentication | Destination credentials and account permissions, locally; never post them. |
 | Rate limited | Provider limits and delivery volume; repeated tests or retries can make this worse. |
 | Connectivity | DNS, firewall, proxy and reachability from the Pulse server, not just your browser. |
-| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. |
+| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. For Apprise, distinguish [API transport from onward delivery](#apprise-api-reports-a-tls-or-connection-error). |
 | Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
 | Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
 
@@ -1438,6 +1442,42 @@ Use **Dismiss retained failures** only when those deliveries should not be sent.
 Dismissal clears the warning without retrying them; delivery history remains.
 Neither action deletes the audit trail. Do not delete `notification_queue.db`
 or audit data to clear the warning.
+
+#### Apprise API reports a TLS or connection error
+
+In **Alerts → Notifications → Apprise**, check the saved mode before interpreting
+an existing error. **Remote Apprise API** connects Pulse to an Apprise server using
+the configured HTTP or HTTPS address. **Local Apprise CLI** runs the installed Apprise
+executable instead. The API certificate-verification setting affects neither
+the local CLI nor the separate connections Apprise makes to its delivery targets.
+Do not switch modes or replace a saved key just to diagnose a failure.
+
+| Existing observation | Meaning and safe next step |
+| --- | --- |
+| HTTPS certificate validation failed | Check the configured hostname, certificate expiry and complete chain. Trust must be available to the Pulse server process or container, not just your browser. Obtain any approved private CA through an independently verified administrator route, not from the failing connection. Keep verification enabled. |
+| HTTPS with **Skip TLS certificate verification (unsafe)** enabled | This disables certificate and hostname checks, not just rejection of self-signed certificates. Older versions call the same bypass **Allow self-signed certificates**. API keys, destination URLs and alert content could reach an impersonated server. Leave this option unchecked and use a certificate trusted by the Pulse runtime. |
+| An HTTP API address | HTTP provides no TLS encryption or server identity checks; the verification checkbox has no effect. API keys, destination URLs and alert content can travel in plaintext. Use HTTPS with a trusted certificate; changing the checkbox cannot secure HTTP. |
+| DNS, timeout or connection refusal | Check the existing error and reachability from the Pulse runtime. Access from your own browser is a different path. A refusal alone does not establish bad credentials or a certificate fault. |
+
+An HTTP 2xx response means the Apprise API accepted that request, not that its
+provider delivered it or that the recipient received it. A successful **Test**
+also skips Pulse's persistent queue; use the separate
+[ordinary delivery checks](#test-succeeds-but-real-alerts-are-missing) when real
+alerts are missing. Do not send another Test, induce an alert, weaken verification
+or enable Debug just to collect evidence.
+
+Retained deliveries can still contain older settings; editing the current
+address or key does not update them. Review
+[retained-failure recovery](#recover-retained-delivery-failures) before any retry,
+not a batch replay to test the new settings. Unknown recipient receipt stays
+unknown; a current form warning is not a record of an earlier attempt.
+
+Keep the API address, configuration key, API key and header values, target URLs,
+full settings and raw provider replies private. For a public report, use only
+the mode, HTTP or HTTPS scheme, original time, failure class and HTTP status
+where already available, plus a manually reviewed and redacted error. Do not
+post a full configuration or use a credential-bearing command or URL. See
+[notification log precautions](#inspect-notification-logs).
 
 #### Pause and cancellation limits
 
