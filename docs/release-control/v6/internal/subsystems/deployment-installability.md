@@ -2541,6 +2541,8 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
 
+`scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
+
 ## Shared Boundaries
 
 Installer-managed helper upgrades restart the verified executable after effective isolated-unit and fixed socket-identity validation. Daemon reload or enabling an already-active socket alone does not replace an old process. Failure to restart aborts the installer and uses the existing safe-profile recovery transaction; collector-only updates still cannot replace the helper or unit.
@@ -8750,6 +8752,32 @@ results and the documentation-only skip. `TestCITestCompilationPreservesChecks`
 retains the required names, full race execution and separate dependency audit.
 These proofs establish CI source admission, not hosted queue-time relief.
 
+
+### Exhaustive native Unix installer process budgets (18 October 2026)
+
+`scripts/installtests/run_unix_contracts.py` belongs to deployment installability.
+It compiles the native installer test binary once per workflow phase and discovers
+that exact binary's tests, examples and fuzz seeds. The NAS boot-owner preflight
+and remaining inventory are disjoint and exhaustive, retaining binary discovery
+order within each phase. Every root check executes in its own process with the
+existing ten-minute Go alarm, uncached execution and panic-on-exit-zero behavior;
+a successful exit without that root's PASS or explicit SKIP is rejected.
+Inventory growth therefore cannot exhaust a later check's process budget.
+Fixture, installer, transport, cleanup and overall native CI job deadlines do
+not change, nor do the platform-specific reasons for existing explicit skips.
+
+The 18 October Intel run at `6bf9e818e8c261012902da79ac2fc2e4a5b57acc`
+passed the 23 NAS controls, then exhausted the general-1 aggregate ten-minute
+alarm while its active log-sink recovery control had run only 17 seconds. This
+runner change removes the aggregate coupling; native CI remains required to
+prove the complete inventory on Intel. It does not establish installed NAS or
+customer recovery, release qualification, or closure of the reliability target.
+
+`TestNativeUnixContractRunnerPartitionsWithoutDroppingChecks` runs the Python
+controls against a growing synthetic inventory and real compiled Go tests.
+They prove phase coverage, build/discovery/check failure propagation, passing
+tests, explicit skips, examples and fuzz seeds; actual failure, exit zero,
+timeout and unmatched test names must fail.
 
 ## Release-body updater ownership (30 September 2026)
 

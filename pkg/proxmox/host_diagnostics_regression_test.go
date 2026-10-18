@@ -311,6 +311,10 @@ func TestClientSessionRenewalStarterCancellation(t *testing.T) {
 	testClientSessionRenewalStarterCancellation(t)
 }
 
+func TestClientConstructionHonoursClientTimeout(t *testing.T) {
+	testClientConstructionHonoursContext(t, "client-timeout")
+}
+
 func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
 	testClusterCancelledCallerStartsNoSession(t)
 }

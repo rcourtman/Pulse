@@ -7,8 +7,9 @@ const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 (async () => {
-  const root = '/workspace/frontend-modern';
-  const artifacts = '/workspace/tmp/unix-private-install';
+  const workspace = process.env.PULSE_BROWSER_PROOF_ROOT || '/workspace';
+  const root = path.join(workspace, 'frontend-modern');
+  const artifacts = path.join(workspace, 'tmp/unix-private-install');
   const preview = path.join(artifacts, 'static');
   const bindingBytes = fs.readFileSync(path.join(preview, 'binding.json'));
   const binding = JSON.parse(bindingBytes);
@@ -63,6 +64,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
         viewport: { width, height: 900 },
         ...(engine === 'webkit' ? { isMobile: true, hasTouch: true } : {}),
       });
+      await page.clock.install();
       const errors = [];
       const capture = async (name, locator) => {
         if (locator)
@@ -103,6 +105,8 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       });
       page.on('requestfailed', (r) => console.log('REQUEST_FAILED', r.url(), r.failure()));
       let minted = 0;
+      let lookupReads = 0;
+      const seen = new Date(Date.now() - 5000).toISOString();
       let optionalAuth = false;
       await page.addInitScript(() => {
         window.__copies = [];
@@ -138,6 +142,21 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
                 prefix: 'browser',
                 suffix: 'token',
                 createdAt: new Date().toISOString(),
+              },
+            },
+          });
+        }
+        if (url.pathname === '/api/agents/agent/lookup') {
+          lookupReads++;
+          return route.fulfill({
+            json: {
+              agent: {
+                id: 'fixture-connected',
+                hostname: 'fixture-host',
+                displayName: 'Fixture host',
+                connected: true,
+                status: 'online',
+                lastSeen: seen,
               },
             },
           });
@@ -248,6 +267,22 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       await page
         .getByRole('button', { name: 'Show advanced connection and install options', exact: true })
         .click();
+      const signing = page
+        .locator('div')
+        .filter({ has: page.getByText('Config signing (optional)', { exact: true }) })
+        .last();
+      for (const key of [
+        'PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true',
+        'PULSE_AGENT_CONFIG_SIGNING_KEY',
+        'PULSE_AGENT_CONFIG_PUBLIC_KEYS',
+      ]) {
+        const code = signing.getByText(key, { exact: true });
+        await code.scrollIntoViewIfNeeded();
+        const bounds = await code.boundingBox();
+        assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width, key);
+        assert.match(await code.getAttribute('class'), /wrap-anywhere/);
+      }
+      await capture('config-signing', signing);
       await page
         .getByLabel('Connection URL (Agent → Pulse)', { exact: true })
         .fill('https://pulse.example/base/');
@@ -294,6 +329,16 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
         page.getByLabel('Custom CA certificate path (optional)', { exact: true }),
       );
       consumerCommands.push({ engine, tone, kind: 'linux-install', command: unixCommands[0] });
+      await page.getByPlaceholder('Hostname or agent ID').fill('fixture-host');
+      await page.getByRole('button', { name: 'Check status', exact: true }).click();
+      await page.getByText('First host connected', { exact: true }).waitFor();
+      const age = page.getByText(/^Last seen /);
+      const initialAge = await age.innerText();
+      const readsBeforeTick = lookupReads;
+      await page.clock.runFor(65_000);
+      assert.notEqual(await age.innerText(), initialAge);
+      assert.equal(lookupReads, readsBeforeTick);
+      await capture('connected-age', age);
       optionalAuth = true;
       await page.goto(`${origin}/browser-tests/unix-private-install.html?optional=1`);
       await page.getByRole('button', { name: 'Confirm without token', exact: true }).click();
@@ -329,7 +374,7 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
       await browser.close();
       browser = undefined;
     }
-    assert.equal(captures.length, 16);
+    assert.equal(captures.length, 24);
   } finally {
     if (browser) await browser.close();
     cleanup.browser_closed = true;

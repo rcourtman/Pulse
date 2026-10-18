@@ -83,3 +83,7 @@ func TestClientAcceptedHostDiagnosticsRemainUseful(t *testing.T) {
 func TestClientConstructionHonoursContext(t *testing.T) {
 	testClientConstructionHonoursContext(t)
 }
+
+func TestClientCancelledAuthResponseOwnsErrorAndSession(t *testing.T) {
+	testClientCancelledAuthResponseOwnsErrorAndSession(t)
+}

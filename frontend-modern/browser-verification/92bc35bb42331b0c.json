@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "2fc54a5a1f5524768e27254681d5d41f7036050c",
+  "verified_at": "2026-10-18T14:03:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "a137095e23f8dd83d8fef3abcb28141fcaa25bc1613ed00a83ef44c7a6e533dc",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "a9127787f2605a782e81a275c53a3686f0c5d3694f79722f52b4c2221c615232",
+    "frontend-modern/src/utils/memoryObservation.ts": "ae1398dc541076cc8e7d3ccd2b6f9844fadc73336cd6dbe2b1013654b08c27a1"
+  },
+  "routes": [
+    "/browser-tests/resource-stopped-filesystem.html",
+    "/browser-tests/unix-private-install.html"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "VM and LXC selected agent memory: current zero, stale last known with original observation date, unknown freshness",
+    "Independent current and retained Proxmox listing memory with VM/LXC cache interpretation",
+    "Stopped VM filesystem, running retained/unavailable readings, empty and stored History",
+    "Private installer light/dark desktop and phone: token dialog, advanced trust options, wrapped config signing, connected agent with advancing Last seen",
+    "Production components and CSS with synthetic snapshots, endpoints and tokens. No installed or release acceptance."
+  ],
+  "interactions": [
+    "Same-target memory source and freshness replacement without additional History requests",
+    "Trusted Home/End keyboard inspection of stored History while the VM is stopped",
+    "Token copy with Enter, Escape dismissal and Dismiss button",
+    "Open advanced options, edit URL and CA path, copy install/update/repair/uninstall commands with preserved synthetic identity and trust",
+    "Check status and advance 65 seconds without another lookup to verify reactive Last seen",
+    "Inspect final screenshots, responsive wrapping and no page overflow. Confirm owned browser/server cleanup."
+  ]
+}

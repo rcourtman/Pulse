@@ -16,7 +16,10 @@ import (
 	"time"
 )
 
-func testClientConstructionHonoursContext(t *testing.T) {
+func testClientConstructionHonoursContext(t *testing.T, endings ...string) {
+	if len(endings) == 0 {
+		endings = []string{"cancel", "deadline"}
+	}
 	for _, mode := range []string{"password", "token"} {
 		t.Run("already-ended/"+mode, func(t *testing.T) {
 			var requests atomic.Int32
@@ -45,7 +48,7 @@ func testClientConstructionHonoursContext(t *testing.T) {
 		})
 	}
 	for _, encoding := range []string{"json", "form"} {
-		for _, end := range []string{"cancel", "deadline"} {
+		for _, end := range endings {
 			t.Run(encoding+"/"+end, func(t *testing.T) {
 				var logins, reads atomic.Int32
 				var blocking atomic.Bool
@@ -84,6 +87,11 @@ func testClientConstructionHonoursContext(t *testing.T) {
 				defer releaseOnce.Do(func() { close(release) })
 				pin := sha256.Sum256(server.Certificate().Raw)
 				cfg := ClientConfig{Host: server.URL, User: "fixture@pam", Password: "fixture-password", VerifySSL: true, Fingerprint: hex.EncodeToString(pin[:]), Timeout: 8 * time.Second}
+				resultBound := time.Second
+				if end == "client-timeout" {
+					cfg.Timeout = time.Second
+					resultBound = 5 * time.Second
+				}
 				ctx, cancel := context.WithCancel(context.Background())
 				if end == "deadline" {
 					cancel()
@@ -105,18 +113,25 @@ func testClientConstructionHonoursContext(t *testing.T) {
 				}
 				if end == "cancel" {
 					cancel()
-				} else {
+				} else if end == "deadline" {
 					<-ctx.Done()
 				}
 				var got result
 				select {
 				case got = <-done:
-				case <-time.After(time.Second):
+				case <-time.After(resultBound):
 					t.Error("constructor exceeded ended caller budget")
 					releaseOnce.Do(func() { close(release) })
 					got = <-done
 				}
-				if got.client != nil || !errors.Is(got.err, ctx.Err()) {
+				wantErr := ctx.Err()
+				if end == "client-timeout" {
+					wantErr = context.DeadlineExceeded
+					if ctx.Err() != nil {
+						t.Fatal("client timeout ended the independent caller")
+					}
+				}
+				if got.client != nil || !errors.Is(got.err, wantErr) {
 					t.Errorf("cancelled construction returned session or lost context: client=%t error=%v", got.client != nil, got.err)
 				}
 				select {
