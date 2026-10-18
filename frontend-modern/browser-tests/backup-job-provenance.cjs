@@ -9,7 +9,14 @@ const path = require('node:path');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace';
 const compiled = path.join(root, 'tmp/coverage-workload-identity/static');
-const output = path.join(root, 'tmp/backup-job-provenance/browser');
+const selectionPath = path.join(root, 'tmp/backup-job-provenance/selection.json');
+const selection = fs.existsSync(selectionPath)
+  ? JSON.parse(fs.readFileSync(selectionPath))
+  : { label: 'initial', profiles: ['desktop', 'phone'] };
+assert.match(selection.label, /^[a-z-]{1,40}$/);
+assert(selection.profiles.length > 0 && selection.profiles.length <= 2);
+assert(selection.profiles.every((profile) => ['desktop', 'phone'].includes(profile)));
+const output = path.join(root, 'tmp/backup-job-provenance', 'browser-' + selection.label);
 const origin = 'http://127.0.0.1:5305';
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const producerPath = path.join(root, 'tmp/backup-job-provenance/producer.json');
@@ -21,7 +28,9 @@ const result = {
   producer_input_sha256: hash(fs.readFileSync(producerPath)),
   protocol_sha256: hash(fs.readFileSync(__filename)),
   playwright: require('playwright/package.json').version,
+  selection,
   cases: [],
+  geometry: [],
   captures: [],
   requests: [],
   pve_responses: [],
@@ -78,7 +87,17 @@ async function geometry(page) {
         node.scrollWidth > node.clientWidth + 1 ||
         [...range.getClientRects()].some((r) => r.left < box.left - 1 || r.right > box.right + 1)
       )
-        problems.push(node.textContent);
+        problems.push({
+          text: node.textContent,
+          box: { left: box.left, right: box.right, width: box.width },
+          clientWidth: node.clientWidth,
+          scrollWidth: node.scrollWidth,
+          fragments: [...range.getClientRects()].map((r) => ({
+            left: r.left,
+            right: r.right,
+            width: r.width,
+          })),
+        });
     }
     return { problems, overflow: document.documentElement.scrollWidth > innerWidth };
   });
@@ -157,6 +176,7 @@ async function capture(page, name) {
     ['desktop', chromium, 1440],
     ['phone', webkit, 320],
   ]) {
+    if (!selection.profiles.includes(name)) continue;
     const phone = width === 320;
     browser = await engine.launch(
       engine === chromium
@@ -235,7 +255,13 @@ async function capture(page, name) {
       assert.equal(await row.getByRole('button').getAttribute('aria-expanded'), 'true');
       assert(await row.evaluate((element) => window.provenanceRow === element));
       if (!phone) assert(await button.evaluate((element) => document.activeElement === element));
-      assert.deepEqual(await geometry(page), { problems: [], overflow: false });
+      const measured = await geometry(page);
+      result.geometry.push({ browser: name, measured });
+      if (measured.problems.length || measured.overflow) {
+        await detail.scrollIntoViewIfNeeded();
+        await capture(page, name + '-adverse-geometry');
+      }
+      assert.deepEqual(measured, { problems: [], overflow: false });
     };
     const checks = ['running job keeps original site/pve1 beside current guest node'];
     for (const phase of ['warning', 'cached']) {
