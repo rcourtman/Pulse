@@ -443,11 +443,20 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 func (c *Client) authenticate(ctx context.Context) error {
 	loginCtx, cancel := context.WithTimeout(ctx, c.sessionLoginTimeout())
 	defer cancel()
+	if err := loginCtx.Err(); err != nil {
+		return err
+	}
 	current, _ := c.authSnapshot()
 	username := current.user + "@" + current.realm
 	err := c.authenticateJSON(loginCtx, username, c.config.Password)
-	if shouldFallbackToForm(err) {
+	if loginCtx.Err() == nil && shouldFallbackToForm(err) {
 		err = c.authenticateForm(loginCtx, username, c.config.Password)
+	}
+	// The response can finish while its owner is ending. An empty/refused
+	// reply from that exchange is not a new credential diagnosis or permission
+	// to try another encoding. Shared renewal uses its own bounded owner here.
+	if ctxErr := loginCtx.Err(); ctxErr != nil {
+		return ctxErr
 	}
 	return err
 }
@@ -536,7 +545,7 @@ func (c *Client) authenticateJSON(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
 func (c *Client) authenticateForm(ctx context.Context, username, password string) error {
@@ -561,10 +570,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
-func (c *Client) handleAuthResponse(resp *http.Response) error {
+func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
 		body, err := readResponseBodyLimited(resp.Body)
 		if err != nil {
@@ -586,12 +595,14 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 	}
 
 	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.auth.ticket = ticket
 	c.auth.csrfToken = csrf
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
 	c.authGeneration++
-	c.authMu.Unlock()
-
 	return nil
 }
 

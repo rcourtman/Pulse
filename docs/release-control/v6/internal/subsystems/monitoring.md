@@ -736,6 +736,17 @@ checks both encodings alongside the constructor and cluster caller-budget
 controls below; it preserves the existing detached-renewal timeout and
 ticket/CSRF publication tests.
 
+PVE response consumption retains the same owner boundary: cancellation or the
+login budget ending takes precedence over an empty, refused or unreadable reply.
+An ended exchange cannot try another encoding or publish a new ticket/CSRF/expiry
+and generation, even if complete valid bytes arrive as it ends. This checks the
+bounded shared login context, not the departed reader's context, so live renewal
+waiters remain independent. `TestClientCancelledAuthResponseOwnsErrorAndSession`
+cancels deterministically during JSON/form response reads, checks body closure
+and retained session/generation for five response classes, then exercises one
+distinct later login and an ordinary authenticated node read. This complements,
+and does not replace, the pinned-HTTPS constructor/deadline/renewal controls.
+
 The compatibility constructors retain their background-context behaviour.
 Accepted clients retain their configured full timeout, and subsequent ordinary
 reads use their own contexts, not the ended construction context. TLS pins,
