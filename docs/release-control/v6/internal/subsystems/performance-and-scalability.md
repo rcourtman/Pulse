@@ -1883,7 +1883,7 @@ dashboard-specific overview, trend, or summary transport.
     its latency, with I/O wait and process I/O counters retained for diagnosis.
     Competing CPU, guest/steal or swap activity invalidates the measurement,
     and process CPU counters identify the largest observed background users.
-    Only the explicit 90 ms report establishes the local SLO.
+    Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
     This evidence does not replace required source checks or release gates.
 31. Keep the retired dashboard overview route absent from the protected hot
 path. `frontend-modern/src/pages/Dashboard.tsx`,
@@ -2706,7 +2706,14 @@ series' timestamp order, tier precedence, values and extrema. Streaming
 display-bucket aggregation retains its required series grouping. The query
 plan guard covers filtered and unfiltered reads across retained windows and
 single/fleet scopes; tier-coverage tests compare filtered results with the
-unfiltered reconciliation contract. Legacy databases keep their
+unfiltered reconciliation contract. Non-aggregated rows preserve nullable
+extrema across the SQLite driver boundary; decoding applies each missing
+bound's value fallback per observation while retaining explicit bounds,
+including zero. SQL display aggregation applies the same fallback before
+MIN/MAX, and streamed buckets receive normalized bounds. Avoid materializing
+the same float three times for observations without stored extrema. Mixed
+nullable-bound tests cover single/fleet reads, metric filters and display
+buckets. Legacy databases keep their
 existing unique index authoritative while the replacement index is built, but
 that O(rows) migration must run on deferred startup maintenance and swap indexes
 in one SQLite transaction so constructor latency, concurrent reads, uniqueness,

@@ -1657,8 +1657,10 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 		}
 		return clause + fmt.Sprintf(" AND %s.tier = :p%d AND %s.timestamp >= :p%d AND %s.timestamp <= :p%d", alias, tierParam+tierIndex, alias, startParam, alias, endParam)
 	}
-	projection := identityColumns + `m.timestamp, m.value,
-   COALESCE(m.min_value, m.value) AS min_value, COALESCE(m.max_value, m.value) AS max_value`
+	// Preserve nullable extrema across the row boundary. Materializing the
+	// value again for each missing bound makes SQLite and its driver decode
+	// three floats for an observation that stores only one.
+	projection := identityColumns + `m.timestamp, m.value, m.min_value, m.max_value`
 	directAggregate := stepSecs > 1 && len(tiers) == 1
 	bucketExpression := fmt.Sprintf("(timestamp / :p%d) * :p%d + (:p%d / 2)", stepParam, stepParam, stepParam)
 	if directAggregate {
@@ -1692,7 +1694,7 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 		query += " GROUP BY " + identityColumns + "bucket_ts ORDER BY " + identityColumns + "bucket_ts ASC"
 	} else if stepSecs > 1 {
 		query = "SELECT " + identityColumns + bucketExpression + ` AS bucket_ts,
-        AVG(value), MIN(min_value), MAX(max_value)
+        AVG(value), MIN(COALESCE(min_value, value)), MAX(COALESCE(max_value, value))
         FROM (` + query + ") GROUP BY " + identityColumns + "bucket_ts ORDER BY " + identityColumns + "bucket_ts ASC"
 	} else {
 		orderColumns := identityColumns
@@ -1907,6 +1909,7 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 	var resourceID, metricType string
 	var ts int64
 	var p MetricPoint
+	var low, high sql.NullFloat64
 	destinations := make([]interface{}, 0, 6)
 	if len(resourceIDs) == 1 {
 		resourceID = resourceIDs[0]
@@ -1918,11 +1921,18 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 	} else {
 		destinations = append(destinations, &metricType)
 	}
-	destinations = append(destinations, &ts, &p.Value, &p.Min, &p.Max)
+	destinations = append(destinations, &ts, &p.Value, &low, &high)
 	for rows.Next() {
 		if err := rows.Scan(destinations...); err != nil {
 			log.Warn().Err(err).Msg("Failed to scan batch metric row")
 			continue
+		}
+		p.Min, p.Max = p.Value, p.Value
+		if low.Valid {
+			p.Min = low.Float64
+		}
+		if high.Valid {
+			p.Max = high.Float64
 		}
 		if !streamBuckets {
 			p.Timestamp = time.Unix(ts, 0)

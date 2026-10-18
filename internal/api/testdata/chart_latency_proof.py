@@ -181,9 +181,10 @@ def measure(binary, prefix):
     print(text, flush=True)
     if digest(binary) != identity:
         raise RuntimeError('Measured executable changed')
-    validate_output(text, returncode)
     if capacity_errors:
-        raise RuntimeError('Background CPU or guest/steal activity invalidated the idle measurement')
+        raise RuntimeError('Background CPU or guest/steal activity invalidated the idle measurement '
+                           f'(SLO process exit {returncode}; see raw log)')
+    validate_output(text, returncode)
 
 
 def main():

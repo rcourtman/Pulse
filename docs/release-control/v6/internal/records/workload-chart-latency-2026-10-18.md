@@ -88,3 +88,45 @@ suite. Ten alternating current-source comparisons measured 196.1 ms versus
 shared-worker result is inconclusive; the experiment was reverted and its raw
 samples remain under the native proof directory. It establishes no speedup or
 SLO result.
+
+
+## Follow-up decoding cost and candidate evidence
+
+The candidate-only proof at head `0a6eb9b541f12a9dd6cb64caa7c231355426077e`
+executed the strict 90 ms test: p50 106.672837 ms, p95 130.023547 ms and p99
+144.836677 ms. It failed the budget. The retained capacity receipt also
+invalidates idle qualification: `provjobd4515890` consumed 18.7–25.1% of the
+four-logical-CPU worker during three intervals, with competing busy CPU
+18.7–25.4%. See [job 117769795027](https://github.com/rcourtman/Pulse/actions/runs/39159417029/job/117769795027)
+and [raw artifact 12148113764](https://github.com/rcourtman/Pulse/actions/runs/39159417029/artifacts/12148113764).
+Neither the failed budget report nor idle admission alone establishes an
+idle-worker SLO result. Native capacity remained unsuitable as well (load
+above 15 and sustained I/O wait at 19:33 UTC). No provider or native workload
+was stopped and no repeated measurement was selected for a passing result.
+
+The original paired hosted comparison measured cold-service cost from
+148.8 to 133.6 ms/op (-10.20%, p<0.001, n=10); warm-handler and HTTP-transfer
+changes were not significant. [Job 117757206872](https://github.com/rcourtman/Pulse/actions/runs/39153766278/job/117757206872)
+failed on two unchanged test-only legacy history-filter cases, which exercise
+neither SQL nor collectors. These relative results do not establish 90 ms.
+
+A second retained-read improvement avoids decoding duplicate floats when
+stored extrema are NULL. Non-aggregated SQL now returns nullable bounds;
+Go applies the same per-observation value fallback. SQL aggregation and
+streamed buckets retain their original extrema semantics, including explicit
+zero and independently missing bounds. The full metrics suite passed in
+95.727 seconds. The final strengthened mixed-tier nullable guard passed all
+twelve read-shape cases in 0.024 seconds. The first new test assertion incorrectly compared time-zone representations; it was
+corrected to compare timestamp instants, and its failed log is preserved.
+
+Ten alternating base/candidate diagnostic samples on the shared native
+worker measured 142.3 versus 136.9 ms/op (p=0.579), so no latency gain is
+established. Allocated bytes fell 4.24% (29.85 to 28.58 MiB/op) and allocations
+fell 24.59% (674.6k to 508.7k/op), both p<0.001. This change is retained for
+its measured allocation reduction. Executable hashes are
+`737f1383deecd2d34e20f49731e1a634a690e8de789bb0221bd63a44b3441b70`
+(base) and `843ea5877f711966fdbdf590854b5f3dca96319c5a9d4cd1f5f2fa3b03f98856`
+(candidate); raw samples and metadata are retained as `nullable-*` under the
+native proof directory. This is not an idle-worker result. The strict proof
+for the resulting source remains the source-check run's retained artifact;
+the 90 ms verification and broader L10 headroom follow-up remain open.
