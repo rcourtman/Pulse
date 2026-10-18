@@ -54,6 +54,69 @@ afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
   it.each([320, 1200])(
+    'shows the recorded job location, then clears it in place instead of borrowing the guest location at %i px',
+    (width) => {
+      const node = 'old-backup-node-<img src="/unexpected">';
+      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
+        ...row,
+        latestTask: {
+          id: 'warning',
+          instance: 'original-connection',
+          node,
+          status: 'warning',
+          label: 'Warning',
+          startedAt: '2026-05-25T02:00:00Z',
+          error: 'Backup completed with warnings; review the original Proxmox task log.',
+        },
+      });
+      const { container } = render(() => (
+        <ProxmoxCoverageTable
+          rows={[current()]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKeys={new Set(['w1'])}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => width}
+        />
+      ));
+      const detail = container.querySelector('[data-backup-task-detail]')!;
+      const value = (label: string) =>
+        [...detail.querySelectorAll('dt')].find((dt) => dt.textContent === label)
+          ?.nextElementSibling;
+      expect(value('Job connection')).toHaveTextContent('original-connection');
+      expect(value('Job node')).toHaveTextContent(node);
+      expect(value('Reported warning')).toHaveTextContent('Backup completed with warnings');
+      expect(value('Reported error')).toBeUndefined();
+      expect(detail.querySelector('img')).toBeNull();
+      expect(detail).toHaveTextContent('The workload may now be on another node.');
+      setCurrent({
+        ...row,
+        latestTask: {
+          id: 'next-job',
+          instance: '',
+          node: '  ',
+          status: 'OK',
+          label: 'OK',
+          startedAt: '2026-05-25T03:00:00Z',
+        },
+      });
+      expect(container.querySelector('[data-backup-task-detail]')).toBe(detail);
+      expect(value('Job connection')).toHaveTextContent(/^Not reported$/);
+      expect(value('Job node')).toHaveTextContent(/^Not reported$/);
+      expect(value('Reported warning')).toBeUndefined();
+      expect(detail).not.toHaveTextContent('original-connection');
+      expect(detail).not.toHaveTextContent(node);
+      expect(detail).not.toHaveTextContent(row.workload.node!);
+    },
+  );
+
+  it.each([320, 1200])(
     'keeps a contradictory job Unknown with literal evidence at %i px, then recovers in place',
     (width) => {
       const error = 'Synthetic failure <img src="/unexpected" onerror="unsafe()">';

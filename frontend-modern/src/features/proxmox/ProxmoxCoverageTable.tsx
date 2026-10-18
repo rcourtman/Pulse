@@ -574,6 +574,14 @@ export function ProxmoxCoverageTable(props: {
                                       {task().status}
                                     </dd>
                                   </Show>
+                                  <dt class="text-muted">Job connection</dt>
+                                  <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+                                    {task().instance?.trim() || 'Not reported'}
+                                  </dd>
+                                  <dt class="text-muted">Job node</dt>
+                                  <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
+                                    {task().node?.trim() || 'Not reported'}
+                                  </dd>
                                   <dt class="text-muted">Started</dt>
                                   <dd class="min-w-0 whitespace-normal wrap-anywhere">
                                     <time dateTime={task().startedAt}>
@@ -583,7 +591,11 @@ export function ProxmoxCoverageTable(props: {
                                   <Show when={task().error?.trim()}>
                                     {(error) => (
                                       <>
-                                        <dt class="text-muted">Reported error</dt>
+                                        <dt class="text-muted">
+                                          {task().label === 'Warning'
+                                            ? 'Reported warning'
+                                            : 'Reported error'}
+                                        </dt>
                                         <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
                                           {error()}
                                         </dd>
@@ -591,6 +603,10 @@ export function ProxmoxCoverageTable(props: {
                                     )}
                                   </Show>
                                 </dl>
+                                <p class="mt-2 text-muted">
+                                  The job location is recorded at the time of the backup. The
+                                  workload may now be on another node.
+                                </p>
                                 <Show when={task().statusErrorConflict}>
                                   <p
                                     class="mt-2 text-amber-700 dark:text-amber-300"

@@ -69,6 +69,9 @@ export function getRecoverableArtifactLocation(artifact: RecoverableArtifact): s
 
 export interface CoverageTask {
   id: string;
+  /** Recorded job origin, independent of the workload's current placement. */
+  instance?: string;
+  node?: string;
   status: string;
   label: string;
   startedAt: string;
@@ -596,6 +599,7 @@ function taskLabel(task: BackupTask): string {
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
   if (normalized === 'failed' || normalized === 'error') return 'Failed';
+  if (normalized === 'warning') return 'Warning';
   if (normalized === 'running') return 'Running';
   return task.status || 'Unknown';
 }
@@ -804,6 +808,8 @@ export function buildProxmoxBackupRecoveryModel(
     const startedMs = parseTimestampMs(task.startTime);
     const candidateTask: CoverageTask = {
       id: task.id,
+      instance: task.instance,
+      node: task.node,
       status: task.status,
       label: taskLabel(task),
       startedAt: task.startTime,
@@ -905,6 +911,8 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
+    row.latestTask?.instance,
+    row.latestTask?.node,
     row.latestTask?.error,
     row.taskChronologyUnknown ? 'Latest backup job unknown' : undefined,
     ...(row.protectionPosture?.providerStates ?? []).flatMap((provider) => [

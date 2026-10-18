@@ -134,6 +134,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     { status: 'completed', error: ' \n\t ', label: 'OK' },
     { status: 'failed', error: 'Synthetic backup failure', label: 'Failed' },
     { status: 'error', error: 'Synthetic backup failure', label: 'Failed' },
+    { status: 'warning', error: 'Review the original task log.', label: 'Warning' },
     { status: 'running', error: 'Synthetic progress error', label: 'Running' },
     { status: 'cancelled', error: 'Synthetic cancellation', label: 'cancelled' },
   ])('keeps an uncontradicted $status result as $label', ({ status, error, label }) => {
