@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "725eb7db81e01c27d8ec4c47d9e3da08d85e54d7",
+  "verified_at": "2026-10-18T01:00:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "62dfc1ec4508ace4119ab133af85c78df9f9345f8a04b5835f23435ea765ff9e",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "aa00dc9ea3d5b525a479d1f43bf0c4bfdb8a49aaba0bdfa4282239aeb4945ea0"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Production HTTP inventory reader, workload model, Coverage table and CSS consume four unchanged real HTTP-poller projections from source-uvkhggsj at 69e8cff0f91354423204ae7b8122e9ebd8f243ba: running, guest warning, cached warning and next clean job. Both current producer code hashes remain exact.",
+    "Consumer build source-cnxe9lj0 at ed807291e47f345c2273829ed930a832e797a0a3 has the final runtime bytes. All 299 imported/source hashes and five served artifact hashes were checked in both browser runs; subsequent commits change only the browser protocol.",
+    "Migrated VM 100 shows current-node on its workload row but site/pve1 on its recorded job. A clean sibling LXC stays OK; the repeated west VMID has no borrowed warning. Posture remains independently Unknown and no restore point is invented.",
+    "Warning is amber and its bounded producer guidance is labeled Reported warning. The next clean job removes that warning without rewriting source provenance.",
+    "Explicit synthetic missing instance/node values show Not reported, never the guest location or stale previous values. A long HTML-shaped original node is literal text, wraps, and makes no image/script request.",
+    "Chromium 141.0.7390.37 desktop and WebKit 26.0 narrow/dark, Playwright 1.56.1 (integration-lock parity): six final captures opened using native view_image, plus two retained adverse captures. Final text is legible and no horizontal page/painted-glyph clipping was observed.",
+    "The initial aggregate run completed desktop but failed a narrow full-Range geometry assertion. A narrow-only inspection retained the pixels and raw bounds; a subsequent per-character check also retained a zero-area line-break caret. The final phone-only check retains both raw cases and verifies non-zero-area non-whitespace glyphs, scroll overflow and the unchanged one-pixel tolerance. No runtime CSS changed and completed desktop proof was not replayed."
+  ],
+  "interactions": [
+    "Desktop keyboard opens the workload disclosure and refreshes the actual inventory reader while preserving focus, row identity and the open detail. Narrow touch opens and refreshes the same surface.",
+    "Every refresh body is compared with the selected producer record or explicit synthetic control, and the actual reader must settle before assertions. Old-node search still finds the migrated workload.",
+    "Running \u2192 warning \u2192 cached warning \u2192 next clean job \u2192 missing node \u2192 missing connection \u2192 literal long node all preserve source attribution and clear old detail in place."
+  ],
+  "limitations": [
+    "Offline safe fixtures, not a native backup/guest/QGA operation, installed recovery, thaw proof, deployment or released availability. #2439 monitoring stays stopped."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER.json",
+    "PIXEL-REVIEW.json",
+    "SOURCE-VALIDATION.json"
+  ]
+}

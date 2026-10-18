@@ -8,7 +8,10 @@ import {
   identitySnapshot,
   identityTask,
 } from '../__fixtures__/backupIdentity';
-import { buildProxmoxBackupRecoveryModel } from '../proxmoxBackupRecoveryModel';
+import {
+  buildProxmoxBackupRecoveryModel,
+  coverageRowMatchesSearch,
+} from '../proxmoxBackupRecoveryModel';
 
 type Input = Parameters<typeof buildProxmoxBackupRecoveryModel>[0];
 const model = (input: Partial<Input>) =>
@@ -125,6 +128,53 @@ describe('backup-identity: native ownership rather than first label match', () =
     expect(
       result.coverageRows.find((row) => row.workload.resourceId === 'east-100')?.latestTask?.id,
     ).toBe('task-100');
+  });
+
+  it('keeps the warning job origin searchable after a migration, without changing ownership or posture', () => {
+    const task = identityTask({
+      node: 'old-backup-node',
+      status: 'warning',
+      error: 'Backup completed with warnings; review the original Proxmox task log.',
+    });
+    const original = structuredClone(task);
+    const result = model({
+      workloads: [
+        identityGuest('west-100', 'west', 'old-backup-node'),
+        identityGuest('east-100', 'east', 'new-guest-node'),
+      ],
+      tasks: [task],
+    });
+    const row = result.coverageRows.find((entry) => entry.workload.resourceId === 'east-100')!;
+    expect(row.workload.node).toBe('new-guest-node');
+    expect(row.latestTask).toMatchObject({
+      instance: 'east',
+      node: 'old-backup-node',
+      label: 'Warning',
+      status: 'warning',
+      error: task.error,
+      statusErrorConflict: false,
+    });
+    expect(coverageRowMatchesSearch(row, 'old-backup-node')).toBe(true);
+    expect(coverageRowMatchesSearch(row, 'new-guest-node')).toBe(true);
+    expect(
+      result.coverageRows.find((entry) => entry.workload.resourceId === 'west-100')?.latestTask,
+    ).toBeUndefined();
+    expect(row.posture).toBe('unknown');
+    expect(result.coverageSummary.recoverableArtifacts).toBe(0);
+    expect(task).toEqual(original);
+  });
+
+  it('does not borrow a matched guest location when the job does not report one', () => {
+    const result = model({
+      workloads: [identityGuest('east-100', 'east', 'pve-1')],
+      tasks: [identityTask({ instance: '', node: 'pve-1' })],
+    });
+    expect(result.coverageRows[0].latestTask).toMatchObject({ instance: '', node: 'pve-1' });
+    const missingNode = model({
+      workloads: [identityGuest('east-100', 'east', 'pve-1')],
+      tasks: [identityTask({ node: '' })],
+    });
+    expect(missingNode.coverageRows[0].latestTask).toMatchObject({ instance: 'east', node: '' });
   });
 
   it('does not let a matching node override a conflicting PVE instance, even with one visible guest', () => {
