@@ -23,6 +23,16 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup artifact detail access
+
+The existing By date and Coverage consumers keep full reported archive paths
+and detail text readable without hover at every container width. Hidden Details
+columns move to a correctly spanned provenance continuation rather than dropping
+their values. Short format/context and a different full identifier remain
+distinct; equal values are not repeated. Attribution and repository/filter keys
+are unchanged. The consuming-table tests and HTTP/browser protocol cover resize,
+inventory replacement and bounded variable-height scrolling, not native recovery.
+
 ### Phone protection summaries prioritise readable evidence
 
 Below the existing 34rem table-container breakpoint, TrueNAS Protection keeps

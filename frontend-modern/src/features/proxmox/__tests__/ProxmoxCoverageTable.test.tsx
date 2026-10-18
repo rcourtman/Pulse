@@ -1,10 +1,20 @@
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal, type Accessor } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
+import {
+  BACKUP_IDENTITY_NOW,
+  identityArchive,
+  identityGuest,
+  identityPBS,
+  identitySnapshot,
+} from '../__fixtures__/backupIdentity';
+import { buildProxmoxBackupRecoveryModel } from '../proxmoxBackupRecoveryModel';
+import { ArtifactDetailText } from '../proxmoxBackupsTableShared';
+import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
 
 const row = {
   key: 'w1',
@@ -638,5 +648,129 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(span?.parentElement?.children).toHaveLength(1);
     expect(span?.getAttribute('class')).toBe('block truncate');
     expect(span?.closest('table')).toHaveClass('table-fixed');
+  });
+});
+
+const artifactPathPrefix = 'local:backup/' + 'long-directory-'.repeat(8);
+const paths = [
+  artifactPathPrefix + 'vzdump-qemu-100-first.vma.zst',
+  artifactPathPrefix + 'vzdump-qemu-100-second.vma.zst',
+];
+const description = 'Before the maintenance window: ' + 'snapshot context '.repeat(8);
+const buildDetailsModel = (path = paths[0]) =>
+  buildProxmoxBackupRecoveryModel({
+    nowMs: BACKUP_IDENTITY_NOW,
+    workloads: [identityGuest('east-100', 'east', 'pve-1')],
+    pbsBackups: [identityPBS()],
+    archives: [
+      identityArchive({ id: 'first', volid: path }),
+      identityArchive({ id: 'second', volid: paths[1] }),
+    ],
+    snapshots: [identitySnapshot({ description })],
+    tasks: [],
+  });
+
+describe('restore-point details without hover', () => {
+  it.each([320, 640, 800, 1000, 1365])(
+    'retains full identifiers and descriptions in both tables at %s px',
+    (width) => {
+      const model = buildDetailsModel();
+      const { container } = render(() => (
+        <>
+          <ProxmoxRecoverableTable
+            artifacts={model.recoverableArtifacts}
+            hasAnyArtifacts
+            emptyIcon={<span />}
+            emptyTitle="No backups"
+            emptyDescription="No backups"
+            sortKey={() => 'created'}
+            sortDirection={() => 'desc'}
+            onSort={() => undefined}
+            sizeMaxBytes={2048}
+            layoutWidth={() => width}
+          />
+          <ProxmoxCoverageTable
+            rows={model.coverageRows}
+            hasAnyRows
+            emptyIcon={<span />}
+            emptyTitle="No guests"
+            emptyDescription="No guests"
+            sortKey={() => 'workload'}
+            sortDirection={() => 'asc'}
+            onSort={() => undefined}
+            expandedKeys={new Set(model.coverageRows.map((row) => row.key))}
+            onToggleExpand={() => undefined}
+            showTaskColumn={false}
+            layoutWidth={() => width}
+          />
+        </>
+      ));
+      for (const path of paths) expect(screen.getAllByText(path)).toHaveLength(2);
+      expect(screen.getAllByText(description.trim())).toHaveLength(2);
+      expect(screen.getAllByText('1 PBS file')).toHaveLength(2);
+      const details = container.querySelectorAll('[data-backup-artifact-details]');
+      expect(details).toHaveLength(8);
+      for (const detail of details) {
+        expect(detail).toHaveClass('whitespace-normal', 'wrap-anywhere');
+        expect(detail).not.toHaveClass('truncate');
+        expect(detail.closest('[hidden]')).toBeNull();
+        const cell = detail.closest('td')!;
+        if (cell.colSpan > 1) {
+          const table = cell.closest('table')!;
+          expect(cell.colSpan).toBe(table.querySelector('thead tr')!.children.length);
+        }
+      }
+    },
+  );
+
+  it('moves details between columns and continuation rows without duplicating or losing them', () => {
+    const [width, setWidth] = createSignal(1365);
+    const [model, setModel] = createSignal(buildDetailsModel());
+    const { container } = render(() => (
+      <ProxmoxRecoverableTable
+        artifacts={model().recoverableArtifacts}
+        hasAnyArtifacts
+        emptyIcon={<span />}
+        emptyTitle="No backups"
+        emptyDescription="No backups"
+        sortKey={() => 'created'}
+        sortDirection={() => 'desc'}
+        onSort={() => undefined}
+        sizeMaxBytes={2048}
+        layoutWidth={width}
+      />
+    ));
+    for (const next of [320, 640, 800, 1000, 1365]) {
+      setWidth(next);
+      expect(screen.getAllByText(paths[0])).toHaveLength(1);
+      expect(container.querySelectorAll('[data-backup-artifact-details]')).toHaveLength(4);
+    }
+    const updated = paths[0] + '-after-refresh';
+    setModel(buildDetailsModel(updated));
+    expect(screen.queryByText(paths[0])).not.toBeInTheDocument();
+    expect(screen.getByText(updated)).toBeInTheDocument();
+  });
+
+  it('avoids repeating identical context/identifier and treats provider text as plain text', () => {
+    const value = '<img src=x onerror=alert(1)>';
+    const artifact = {
+      ...buildDetailsModel().recoverableArtifacts[0],
+      detail: value,
+      detailTitle: value,
+    };
+    const { container } = render(() => <ArtifactDetailText artifact={artifact} />);
+    expect(screen.getAllByText(value)).toHaveLength(1);
+    expect(container.querySelector('[data-backup-artifact-identifier]')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('keeps missing details unavailable instead of constructing a provider path', () => {
+    const artifact = {
+      ...buildDetailsModel().recoverableArtifacts[0],
+      detail: '',
+      detailTitle: undefined,
+    };
+    render(() => <ArtifactDetailText artifact={artifact} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });

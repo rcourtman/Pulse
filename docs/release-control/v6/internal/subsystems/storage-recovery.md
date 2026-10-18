@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Restore-point details remain readable without hover
+
+By date and expanded Coverage show the full reported PVE archive identifier
+alongside its short format/context, not solely in a title. Snapshot descriptions
+and PBS file-count context also wrap. When Details is not a visible column, the
+same values move into the existing full-width provenance continuation; its
+colspan follows the actual evidence columns. A value is rendered once per point.
+No missing identifier is constructed, and provider text remains plain text.
+Responsive changes, ordinary HTTP replacement and variable-height windowing
+must retain access to these details. This changes no inventory, identity key,
+verification, protection, backup/guest operation or native recovery verdict.
+
 ### TrueNAS Protection distinguishes unreadable activity from empty inventory
 
 The recovery-points HTTP decoder accepts an explicit array, including a genuine

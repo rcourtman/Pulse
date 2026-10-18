@@ -52,7 +52,7 @@ export interface RecoverableArtifact {
   locationGroupKey?: string;
   locationGroupLabel?: string;
   detail: string;
-  /** Full provider identifier behind a shortened `detail`, shown on hover. */
+  /** Full provider identifier, displayed alongside a shortened `detail`. */
   detailTitle?: string;
   protected: boolean;
   verified?: boolean;

@@ -19,6 +19,7 @@ import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactLocationText,
+  ArtifactDetailText,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -225,17 +226,25 @@ export function ProxmoxRecoverableTable(props: {
         </TableCell>
         <Show when={columnVisible('details')}>
           <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
-              {artifact.detail || '—'}
-            </span>
+            <ArtifactDetailText artifact={artifact} />
           </TableCell>
         </Show>
       </TableRow>
-      <Show when={!columnVisible('location')}>
+      <Show when={!columnVisible('location') || !columnVisible('details')}>
         <TableRow data-proxmox-backup-row="location">
-          <TableCell colspan={visibleColumns().length} class="pt-0 text-[11px]">
-            <span class="text-muted">Location</span>
-            <ArtifactLocationText artifact={artifact} />
+          <TableCell colspan={visibleColumns().length} class="space-y-1 pt-0 text-[11px]">
+            <Show when={!columnVisible('location')}>
+              <div>
+                <span class="text-muted">Location</span>
+                <ArtifactLocationText artifact={artifact} />
+              </div>
+            </Show>
+            <Show when={!columnVisible('details')}>
+              <div>
+                <span class="text-muted">Details</span>
+                <ArtifactDetailText artifact={artifact} />
+              </div>
+            </Show>
           </TableCell>
         </TableRow>
       </Show>

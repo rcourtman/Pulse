@@ -358,6 +358,26 @@ export function ArtifactLocationText(props: { artifact: RecoverableArtifact }) {
   );
 }
 
+// A format such as "zst" is not the archive identifier. Keep the full
+// provider value readable/selectable without hover, beside its short context.
+export function ArtifactDetailText(props: { artifact: RecoverableArtifact }) {
+  return (
+    <span
+      class="block min-w-0 whitespace-normal wrap-anywhere text-left leading-snug"
+      data-backup-artifact-details
+    >
+      <span>{props.artifact.detail || '—'}</span>
+      <Show
+        when={props.artifact.detailTitle && props.artifact.detailTitle !== props.artifact.detail}
+      >
+        <span class="block text-muted" data-backup-artifact-identifier>
+          {props.artifact.detailTitle}
+        </span>
+      </Show>
+    </span>
+  );
+}
+
 export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
   const presentation = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
   const title = () => props.artifact.sourceTitle ?? presentation().sourceTitle;
