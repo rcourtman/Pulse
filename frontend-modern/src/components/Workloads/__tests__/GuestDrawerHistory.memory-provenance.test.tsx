@@ -97,6 +97,57 @@ const mount = (value: () => WorkloadGuest) =>
 const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 
 describe('guest memory original-observation provenance', () => {
+  it('updates mounted memory evidence on native pause/stop without rewriting stored history', async () => {
+    const metrics = {
+      memory: [
+        { timestamp: Date.parse(original), value: 10, min: 10, max: 10 },
+        { timestamp: Date.parse(later), value: 20, min: 20, max: 20 },
+      ],
+    };
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response(metrics));
+    const [value, setValue] = createSignal(guest(annotation('current', original, 'agent')));
+    const { container } = mount(value);
+    await settledHistory();
+    const paths = () =>
+      [...container.querySelectorAll('path[data-history-series]')].map((path) =>
+        path.getAttribute('d'),
+      );
+    const stored = paths();
+    expect(stored.length).toBeGreaterThan(0);
+    setValue({ ...value(), status: 'paused' });
+    expect(getGuestDrawerCurrentMetrics(value()).memory).toBeUndefined();
+    expect(getGuestDrawerDeferredMetrics(value()).memory.lastKnownValue).toBe(25);
+    expect(container.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      'Proxmox reports this guest paused',
+    );
+    expect(paths()).toEqual(stored);
+    setValue({ ...value(), status: 'stopped' });
+    expect(getGuestDrawerDeferredMetrics(value()).memory.lastKnownValue).toBeUndefined();
+    expect(getGuestDrawerMemoryRows(value())).toContainEqual({
+      label: 'Usage',
+      value: 'Unavailable',
+    });
+    expect(getGuestDrawerMemoryRows(value()).some((row) => row.label === 'Free')).toBe(false);
+    expect(container.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      'guest stopped',
+    );
+    expect(paths()).toEqual(stored);
+    setValue({
+      ...value(),
+      status: 'running',
+      memory: {
+        ...value().memory,
+        used: 0,
+        free: 100,
+        usage: 0,
+        observation: annotation('current', later, 'agent'),
+      },
+    });
+    expect(getGuestDrawerCurrentMetrics(value()).memory).toBe(0);
+    expect(container.querySelector('[data-history-deferred="memory"]')).toBeNull();
+    expect(paths()).toEqual(stored);
+  });
+
   it.each(['qemu', 'lxc'] as const)(
     'retains %s memory as evidence without inventing current freshness',
     (type) => {

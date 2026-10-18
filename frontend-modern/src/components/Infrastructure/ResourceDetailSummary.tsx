@@ -29,6 +29,7 @@ import {
 import { formatInteger } from './resourceDetailMappers';
 import { buildKubernetesControllerSection } from './resourceDetailDrawerKubernetesModel';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
+import { getResourceMemoryObservationPresentation } from './resourceDetailDrawerMetricsHistoryModel';
 
 interface ResourceSummaryPresentationProps {
   resource: Resource;
@@ -464,19 +465,23 @@ export const getResourceDrawerFacts = (resource: Resource, primaryIp?: string): 
   // or a retained memory observation, states its size alone.
   const status = (resource.status || '').trim().toLowerCase();
   const reporting = status === 'online' || status === 'running';
-  const size = (metric: Resource['memory'], label: string) => {
+  const size = (
+    metric: Resource['memory'],
+    label: string,
+    current = !metric?.observation || metric.observation.state === 'current',
+  ) => {
     const total = metric?.total ?? 0;
     if (!(total > 0)) return '';
     const used = metric?.used;
-    const current = !metric?.observation || metric.observation.state === 'current';
     return reporting && current && typeof used === 'number' && used >= 0
       ? `${formatBytes(used)} of ${formatBytes(total)} ${label}`
       : `${formatBytes(total)} ${label}`;
   };
   const cpus = resource.agent?.cpuCount ?? 0;
+  const memoryReading = getResourceMemoryObservationPresentation(resource);
   return [
     cpus > 0 ? `${cpus} logical CPUs` : '',
-    size(resource.memory, 'RAM'),
+    size(resource.memory, 'RAM', !memoryReading || memoryReading.state === 'current'),
     size(resource.disk, 'disk'),
     primaryIp ?? '',
   ].filter(Boolean);

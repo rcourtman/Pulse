@@ -168,13 +168,16 @@ const isProxmoxGuest = (resource: Resource): boolean =>
 
 // The guest kind decides whether a Proxmox listing reading counts cache, the
 // same distinction the Workloads drawer makes.
-const memoryReading = (resource: Resource) =>
+export const getResourceMemoryObservationPresentation = (resource: Resource) =>
   getMemoryObservationPresentation(
     resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
     resource.memory?.observation,
     isProxmoxGuest(resource),
     {
       agentStale: resource.agent?.stale === true,
+      proxmoxRuntimeStatus: isProxmoxGuest(resource)
+        ? resource.proxmox?.runtimeStatus?.trim() || resource.status
+        : undefined,
       guestKind:
         resource.type === 'vm'
           ? 'vm'
@@ -222,7 +225,7 @@ export const getResourceMetricsHistoryDeferredMetrics = (
   resource: Resource,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
   const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
-  const memory = memoryReading(resource);
+  const memory = getResourceMemoryObservationPresentation(resource);
   if (memory && memory.state !== 'current') {
     metrics.memory = {
       lastKnownValue:
@@ -268,7 +271,7 @@ export const getResourceMetricsHistoryCurrentMetrics = (
   const temperature = isResourceTemperatureCurrent(resource)
     ? finiteMetric(resourceTemperature(resource))
     : undefined;
-  const memory = memoryReading(resource);
+  const memory = getResourceMemoryObservationPresentation(resource);
   return {
     cpu: finiteMetric(resource.cpu?.current),
     memory:

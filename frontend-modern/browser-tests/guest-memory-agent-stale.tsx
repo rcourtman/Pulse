@@ -84,6 +84,9 @@ function Fixture() {
       ),
     );
   (window as any).__staleAgentMemory = {
+    power: (runtimeStatus: string) =>
+      update({ proxmox: { ...snapshot()[0].proxmox, runtimeStatus } }, ['proxmox']),
+    kind: (type: 'vm' | 'system-container') => update({ type }, ['type']),
     stale: () =>
       update(
         {
@@ -126,6 +129,7 @@ function Fixture() {
         {
           ...guest(),
           id: 'independent',
+          status: 'running',
           memory: {
             ...guest().memory,
             usage: 10,

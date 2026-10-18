@@ -1341,6 +1341,49 @@ describe('GuestRow', () => {
       makeMemory({ observation: { state, source, observedAt: date } });
     const noticeSelector = '[data-workload-memory-read-status]';
     it.each(['bars', 'sparklines'] as const)(
+      'qualifies only in-guest memory on a native power update in %s mode',
+      (mode) => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({ status: 'running', memory: observation('current', observedAt, 'agent') }),
+        );
+        const view = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'memory']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({ ...guest(), status: 'paused' });
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent(
+          'Proxmox reports this guest paused',
+        );
+        if (mode === 'bars')
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), status: 'stopped' });
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent('Unavailable');
+        expect(view.container.querySelector('[data-testid="memory-bar"]')).toBeNull();
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, unavailable N/A' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), status: 'running' });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+      },
+    );
+    it.each(['bars', 'sparklines'] as const)(
       'invalidates only a stale agent-owned carrier in the mounted %s row',
       (mode) => {
         const [guest, setGuest] = createSignal(

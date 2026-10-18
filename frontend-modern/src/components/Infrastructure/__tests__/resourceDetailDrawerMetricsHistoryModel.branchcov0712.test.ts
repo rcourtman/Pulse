@@ -255,7 +255,7 @@ describe('canonical drawer History honours selected guest observation provenance
         expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
           disk: undefined,
           usage: undefined,
-          memory: 0,
+          memory: undefined,
           cpu: 10,
           netin: 0,
         });
@@ -263,6 +263,17 @@ describe('canonical drawer History honours selected guest observation provenance
           lastKnownValue: undefined,
           message: 'Guest filesystem stats unavailable while the VM is stopped.',
         });
+        // The selected memory came from inside this stopped guest too. Its
+        // earlier zero is not current; a host-reported source is independent.
+        expect(
+          getResourceMetricsHistoryDeferredMetrics(value).memory.lastKnownValue,
+        ).toBeUndefined();
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+          'guest stopped',
+        );
+        value.memory!.observation!.source = 'status-mem';
+        expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toBeUndefined();
         value.lastSeen += 3600000;
         expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
       }
