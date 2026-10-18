@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Explicit Unix installer transport policy wins over curl defaults
+
+All direct installer curl requests ignore `.curlrc` before processing their
+explicit arguments, including readiness and the private credential config.
+Ambient TLS bypass, method, extra-URL or tracing settings cannot change the
+requested lifecycle operation. The [transport contract](deployment-installability.md#unix-agent-installer-ignores-ambient-curl-configuration)
+and the full-installer HTTP/HTTPS controls in `install_sh_test.go` retain explicit
+CA/insecure choices, read-only preflight, private-file credentials and unchanged
+download verification. This is not installed renewal or appliance acceptance.
+
 ### NAS installation preserves shared boot-file ownership
 
 Unraid and QNAP registration uses the same exact-entry parser as removal, not

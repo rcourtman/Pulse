@@ -538,6 +538,118 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	}
 }
 
+// Exercise the complete read-only installer with real curl. Ambient defaults
+// must not turn an untrusted TLS peer into a success or turn GET/HEAD into a
+// mutation, extra request or trace. Explicit CA/insecure choices still work.
+func TestInstallSHPreflightIgnoresAmbientCurlConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tls      bool
+		trust    string
+		ambient  bool
+		wantExit int
+	}{
+		{"untrusted_tls_clean", true, "", false, 11},
+		{"untrusted_tls_ambient_insecure", true, "", true, 11},
+		{"explicit_ca", true, "ca", true, 0},
+		{"explicit_insecure", true, "insecure", true, 0},
+		{"plain_http", false, "", true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.Path)
+				mu.Unlock()
+				w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+				w.WriteHeader(http.StatusOK)
+			}))
+			if tc.tls {
+				server.StartTLS()
+			} else {
+				server.Start()
+			}
+			defer server.Close()
+			trace := filepath.Join(dir, "ambient-trace")
+			if tc.ambient {
+				config := "insecure\nrequest = DELETE\ntrace-ascii = " + trace + "\nurl = " + server.URL + "/ambient-extra\n"
+				if err := os.WriteFile(filepath.Join(dir, ".curlrc"), []byte(config), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{repoFile("scripts", "install.sh"), "--url", server.URL,
+				"--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox",
+				"--state-dir", filepath.Join(dir, "state")}
+			if tc.trust == "ca" {
+				ca := filepath.Join(dir, "fixture-ca.pem")
+				if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--cacert", ca)
+			} else if tc.trust == "insecure" {
+				args = append(args, "--insecure")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", args...)
+			cmd.Env = append(os.Environ(), "HOME="+dir, "CURL_HOME="+dir, "XDG_CONFIG_HOME="+dir,
+				"TMPDIR="+dir, "NO_PROXY=*", "no_proxy=*")
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				if ee, ok := err.(*exec.ExitError); ok {
+					exit = ee.ExitCode()
+				} else {
+					t.Fatalf("preflight did not complete: %v\n%s", err, out)
+				}
+			}
+			if ctx.Err() != nil || exit != tc.wantExit {
+				t.Fatalf("preflight exit=%d, want %d; deadline=%v\n%s", exit, tc.wantExit, ctx.Err(), out)
+			}
+			mu.Lock()
+			got := strings.Join(requests, ", ")
+			mu.Unlock()
+			if tc.wantExit == 0 {
+				if got != "GET /api/health, HEAD /download/pulse-agent" || !strings.Contains(string(out), `"code":"ok"`) {
+					t.Fatalf("preflight did not preserve explicit read-only requests: %q\n%s", got, out)
+				}
+			} else if got != "" || strings.Contains(string(out), `"code":"ok"`) {
+				t.Fatalf("untrusted peer received a request or preflight claimed success: %q\n%s", got, out)
+			}
+			if _, err := os.Stat(trace); !os.IsNotExist(err) {
+				t.Fatalf("ambient curl tracing was used: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "state")); !os.IsNotExist(err) {
+				t.Fatalf("read-only preflight changed agent state: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstallSHAllCurlInvocationsDisableAmbientConfiguration(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation := regexp.MustCompile(`\bcurl\s+(?:"|--|-s)`)
+	count := 0
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") || !invocation.MatchString(line) {
+			continue
+		}
+		count++
+		if !strings.Contains(line, "curl --disable ") {
+			t.Fatalf("curl must ignore ambient defaults before all other arguments: %s", line)
+		}
+	}
+	if count != 14 {
+		t.Fatalf("review installer curl invocation inventory: got %d, want 14", count)
+	}
+}
+
 func TestInstallSHPreflightFollowsAgentDownloadRedirect(t *testing.T) {
 	var requestedArtifactMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4362,6 +4474,9 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	args, err := os.ReadFile(argsPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(args), "--disable\n--config\n") {
+		t.Fatalf("private credential config must not re-enable ambient curl defaults:\n%s", args)
 	}
 	if strings.Contains(string(args), "feedface") || strings.Contains(string(args), "X-API-Token") {
 		t.Fatalf("curl argv leaked token material:\n%s", args)
