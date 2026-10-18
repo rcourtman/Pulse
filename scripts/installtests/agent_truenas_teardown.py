@@ -11,6 +11,7 @@ from pathlib import Path
 import shlex
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -147,8 +148,16 @@ class AgentTrueNASTeardown(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / "tools"; tools.mkdir()
+            models = root / "models"; models.mkdir()
             for name in ("midclt", "ps", "systemctl"):
-                file = tools / name; file.write_text(MODEL); file.chmod(0o700)
+                model = models / name; model.write_text(MODEL)
+                # These closed stdlib models share the interpreter selected by
+                # the containing suite. The host's /usr/bin/python3 may differ
+                # and pays its site startup cost on every observed operation.
+                file = tools / name
+                file.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                                + " -I -S " + shlex.quote(str(model)) + ' "$@"\n')
+                file.chmod(0o700)
             if fault == "missing-midclt": (tools / "midclt").unlink()
             for name in ("state", "helper", "profile", "unit"):
                 directory = root / name; directory.mkdir(mode=0o700)

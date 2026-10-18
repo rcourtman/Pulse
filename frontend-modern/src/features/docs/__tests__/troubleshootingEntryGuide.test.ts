@@ -39,12 +39,77 @@ function entry(): HTMLElement {
 const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+const workflow = (section: HTMLElement, label: string): HTMLElement => {
+  const matches = [...section.querySelectorAll('li')].filter(
+    (row) => row.querySelector('strong')?.textContent === label,
+  );
+  expect(matches, label).toHaveLength(1);
+  return matches[0];
+};
+
 describe('troubleshooting workflow entry', () => {
   it('puts guest incident safety before the symptom links and any collection recipe', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(section.querySelectorAll('li')).toHaveLength(9);
+    // New, independently verified workflows must not break unrelated safety
+    // checks. Require every existing job once, without relying on list offsets.
+    const requiredWorkflows: [string, string[]][] = [
+      [
+        'Cannot sign in:',
+        [
+          '/docs/TROUBLESHOOTING#i-forgot-my-password',
+          '/docs/TROUBLESHOOTING#cannot-login--401-unauthorized',
+        ],
+      ],
+      [
+        'Update failed or its result is uncertain:',
+        [
+          '/docs/AUTO_UPDATE#update-failed',
+          '/docs/DOCKER#check-a-failed-or-pending-workload-update',
+        ],
+      ],
+      [
+        'Agent host is missing or reporting is rejected:',
+        ['/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403'],
+      ],
+      [
+        'Guest readings are missing or disagree:',
+        [
+          '/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings',
+          '/docs/TROUBLESHOOTING#guest-memory-is-high-but-available-memory-is-plentiful',
+        ],
+      ],
+      [
+        'Proxmox data belongs to the wrong host, or healthy jobs look Pending:',
+        [
+          '/docs/TROUBLESHOOTING#monitoring-is-mixed-between-proxmox-installations',
+          '/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing',
+        ],
+      ],
+      ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
+      [
+        'Pulse itself uses more memory, CPU or disk writes:',
+        [
+          '/docs/TROUBLESHOOTING#memory-use-keeps-growing',
+          '/docs/TROUBLESHOOTING#excessive-cpu-writes-or-database-growth',
+        ],
+      ],
+      [
+        'Notification Test works but alerts do not arrive:',
+        ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
+      ],
+      [
+        'Private information was posted:',
+        ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
+      ],
+    ];
+    for (const [label, expectedLinks] of requiredWorkflows) {
+      const actual = [...workflow(section, label).querySelectorAll('a[href]')].map((link) =>
+        link.getAttribute('href'),
+      );
+      expect(actual, label).toEqual(expect.arrayContaining(expectedLinks));
+    }
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -62,30 +127,28 @@ describe('troubleshooting workflow entry', () => {
 
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
     const section = entry();
-    const rows = section.querySelectorAll('li');
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'An update of a monitored container is a different job',
-    );
-    const updateLinks = [...rows[1].querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    const update = workflow(section, 'Update failed or its result is uncertain:');
+    expect(prose(update)).toContain('An update of a monitored container is a different job');
+    const updateLinks = [...update.querySelectorAll('a')].map((link) => link.getAttribute('href'));
     expect(updateLinks).toEqual([
       '/docs/AUTO_UPDATE#update-failed',
       '/docs/DOCKER#check-a-failed-or-pending-workload-update',
     ]);
-    expect(prose(rows[1] as HTMLElement)).toContain(
-      'Preserve the current state and rollback evidence',
+    expect(prose(update)).toContain('Preserve the current state and rollback evidence');
+    expect(prose(workflow(section, 'Agent host is missing or reporting is rejected:'))).toContain(
+      'Installer success is not an accepted report',
     );
-    expect(prose(rows[2] as HTMLElement)).toContain('Installer success is not an accepted report');
-    expect(prose(rows[3] as HTMLElement)).toContain(
+    expect(prose(workflow(section, 'Guest readings are missing or disagree:'))).toContain(
       'a working Pulse Agent view does not prove API recovery',
     );
-    expect(prose(rows[6] as HTMLElement)).toContain(
-      'Guest usage and database size are different measurements',
-    );
+    expect(
+      prose(workflow(section, 'Pulse itself uses more memory, CPU or disk writes:')),
+    ).toContain('Guest usage and database size are different measurements');
   });
 
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const links = [...entry().querySelectorAll('a[href]')];
-    expect(links).toHaveLength(16);
+    expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       const href = link.getAttribute('href')!;
       const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);

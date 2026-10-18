@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -180,7 +181,13 @@ class UpdaterFixture(unittest.TestCase):
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
                 (f / name).mkdir(parents=True)
-            (f / "tools/systemctl").write_text(MANAGER)
+            (f / "manager.py").write_text(MANAGER)
+            # Use the suite's selected interpreter, without site startup, for
+            # this stdlib-only model. Re-resolving python3 for every manager
+            # observation can select a different, slower host installation.
+            (f / "tools/systemctl").write_text(
+                "#!/bin/sh\nexec " + shlex.quote(sys.executable) + " -I -S "
+                + shlex.quote(str(f / "manager.py")) + ' "$@"\n')
             (f / "tools/systemctl").chmod(0o755)
             # The production log() remains intact in real-log controls. Only
             # its external sink is confined; no host journal is contacted.

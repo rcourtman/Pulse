@@ -136,15 +136,16 @@ describe('manual backup safety help', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
-    // The symptom-first navigation also links to this precaution. Require both
-    // entry points without rejecting other symptom-specific safety links.
-    const links = render(troubleshooting, 'TROUBLESHOOTING').querySelectorAll(
-      'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
-    );
+    // The opening precaution must precede the workflow list. Other symptoms
+    // can also link to backup safety, so document-wide label counts do not
+    // establish whether this entry point is present or correctly placed.
+    const article = render(troubleshooting, 'TROUBLESHOOTING');
+    const openingLink = article.querySelector('h2 + p + p a');
+    expect(openingLink?.textContent).toBe('Backup safety');
+    expect(openingLink?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
+    const links = article.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
     const labels = [...links].map((link) => link.textContent);
-    for (const label of ['Backup safety', 'manual backup precaution']) {
-      expect(labels.filter((text) => text === label)).toHaveLength(1);
-    }
+    expect(labels.filter((text) => text === 'manual backup precaution')).toHaveLength(1);
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
     for (const fragment of [
