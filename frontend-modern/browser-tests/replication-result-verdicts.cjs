@@ -277,6 +277,7 @@ let browser, server;
       });
     };
     await capture('reported-results');
+    if (spec.name === 'narrow') await page.getByRole('button', { name: /^Filters/ }).tap();
     await activate(page.getByRole('button', { name: 'Unknown, 2', exact: true }));
     assert.equal(await row('successful-replica').count(), 0);
     assert.equal(await row('zero-count-error').count(), 0);
