@@ -20,7 +20,7 @@ const { chromium } = require('playwright');
     recovered: producer.transient_recovered,
   };
   const counts = { initial: 2, unavailable: 2, denied: 0, empty: 0, recovered: 2 };
-  const summaries = { initial: '2 protected', unavailable: '2 unknown', denied: '2 attention', empty: '2 unknown', recovered: '2 protected' };
+  const summaries = { initial: '2 protected', unavailable: '2 unknown', denied: '2 unknown', empty: '2 unknown', recovered: '2 protected' };
   const guestID = vmid => `vm-${crypto.createHash('sha256').update(`proxmox-guest:cluster:${vmid}`).digest('hex').slice(0, 16)}`;
   for (const [name, data] of Object.entries(phases)) {
     assert.equal(data.backups.length, counts[name]);
@@ -29,7 +29,7 @@ const { chromium } = require('playwright');
   }
   assert.deepEqual(phases.unavailable.backups, phases.initial.backups, 'unavailable discovery cannot re-observe raw backup evidence');
   for (const name of ['unavailable', 'denied']) for (const posture of phases[name].postures) {
-    assert.equal(posture.state, name === 'denied' ? 'attention' : 'unknown');
+    assert.equal(posture.state, 'unknown');
     assert.equal(posture.providerStates[0].historyCompleteness, 'unavailable');
     assert.equal(posture.providerStates[0].permissions, name === 'denied' ? 'denied' : 'unknown');
   }

@@ -346,7 +346,9 @@ func exercisePBSRootDatastoreDiscovery(t *testing.T, cases []pbsDatastoreDiscove
 				if tc.phase == 2 {
 					require.Empty(t, rows(instance), "access rejection withdraws reusable raw history")
 					require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key))
-					state, permissions = recovery.ProtectionStateAttention, operationaltrust.EvidencePermissionsDenied
+					// No readable history is Unknown, even when access is known
+					// denied. Attention applies to partially readable evidence.
+					permissions = operationaltrust.EvidencePermissionsDenied
 				} else {
 					require.Equal(t, initial, rows(instance), "failed discovery must retain exact last-known artifacts")
 					require.Equal(t, readAt, f.m.pbsBackupCacheTimeFor(instance, key), "unread history must not be freshened")
