@@ -5,6 +5,11 @@ These are guidance checks, not diagnostic-runtime or incident-recovery proof.
 """
 
 from pathlib import Path
+import os
+import re
+import shlex
+import subprocess
+import tempfile
 import unittest
 
 
@@ -17,6 +22,93 @@ def report_guidance() -> str:
 
 
 class ContributionReportSafetyTest(unittest.TestCase):
+    def development_recipe(self):
+        guide = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        section = guide.split("### Hot Reload Dev Loop\n", 1)[1].split("\n---\n", 1)[0]
+        recipe = re.search(r"```bash\n(.*?)```", section, re.S).group(1)
+        return section, recipe
+
+    def test_development_recipe_names_the_real_isolation_boundary(self):
+        guide = " ".join((ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+        for statement in (
+            "disposable development VM or machine", "no production configuration",
+            "fresh clone alone is not isolation", "read `/etc/pulse/.env`",
+            "authentication bypass must never face an untrusted network",
+            "do not prevent configuration-file loading or establish host isolation",
+            "not required for Community reproduction",
+        ):
+            self.assertIn(statement, guide)
+        section, recipe = self.development_recipe()
+        commands = [shlex.split(line) for line in recipe.splitlines() if line.startswith("./")]
+        self.assertEqual(commands, [
+            ["./scripts/hot-dev-bg.sh", "start"],
+            ["./scripts/hot-dev-bg.sh", "status"],
+        ])
+        self.assertNotIn("--takeover", recipe)
+        self.assertNotIn("mock:on", recipe)
+        self.assertIn("Do not follow", section)
+        self.assertIn("choose unused", section)
+        self.assertIn("same clone and shell", section)
+
+    def recipe_environment(self, directory):
+        # Do not inherit credentials, installed configuration or a dev session.
+        return {
+            "PATH": os.environ["PATH"], "HOME": directory, "LANG": "C.UTF-8",
+            "HOT_DEV_BG_PID_FILE": f"{directory}/runtime.pid",
+            "HOT_DEV_BG_LOG_FILE": f"{directory}/runtime.log",
+            "HOT_DEV_LAB_MODE_FILE": f"{directory}/lab-mode",
+            "LAN_IP": "127.0.0.1", "ALL_IPS": "127.0.0.1",
+        }
+
+    def test_recipe_exports_reach_the_actual_network_configuration_consumer(self):
+        _, recipe = self.development_recipe()
+        exports = "\n".join(line for line in recipe.splitlines() if line.startswith("export "))
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.recipe_environment(directory)
+            # An ambient lab setting must not defeat the explicit safe recipe.
+            env.update(PULSE_DEV_LAN="true", PULSE_DEV_LAB_AGENTS="true", BIND_ADDRESS="0.0.0.0")
+            result = subprocess.run(["bash", "-c", "set -eu\n" + exports + '''
+source scripts/lib/hot-dev-runtime.sh
+hot_dev_configure_network_defaults
+test "$HOT_DEV_USE_PRO" = false && test "$HOT_DEV_USE_PROD_DATA" = false
+test "$PULSE_DATA_DIR" = "$PWD/tmp/contribution-data"
+test "$PULSE_DEV_LAN" = false && test "$PULSE_DEV_LAB_AGENTS" = false
+test "$FRONTEND_DEV_HOST" = 127.0.0.1 && test "$PULSE_DEV_API_HOST" = 127.0.0.1
+test "$BIND_ADDRESS" = 127.0.0.1
+'''], cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_documented_start_refuses_occupied_ports_before_stop_or_spawn(self):
+        _, recipe = self.development_recipe()
+        start = next(shlex.split(line)[1:] for line in recipe.splitlines() if line.endswith(" start"))
+        with tempfile.TemporaryDirectory() as directory:
+            sentinel = Path(directory) / "unexpected-operation"
+            env = self.recipe_environment(directory)
+            env["RECIPE_SENTINEL"] = str(sentinel)
+            result = subprocess.run(["bash", "-c", '''
+source scripts/hot-dev-bg.sh
+# Deterministic occupied-port discovery; no real process is signalled or started.
+is_running() { return 1; }
+has_unmanaged_listeners() { return 0; }
+describe_listener() { printf 'fixture occupied port %s\\n' "$1"; }
+unexpected_operation() { printf '%s\\n' "$*" >> "$RECIPE_SENTINEL"; return 1; }
+stop_launchd_hot_dev_job() { unexpected_operation launchd; }
+stop_hot_dev_sessions() { unexpected_operation sessions; }
+stop_takeover_targets() { unexpected_operation targets; }
+spawn_detached_supervisor() { unexpected_operation spawn; }
+main "$@"
+''', "recipe", *start], cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
+            self.assertFalse(sentinel.exists(), "recipe attempted takeover or spawn")
+            self.assertFalse((Path(directory) / "runtime.pid").exists())
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Refusing to take over unmanaged listeners", result.stdout + result.stderr)
+
+    def test_root_build_command_resolves_to_the_frontend_package(self):
+        guide = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        self.assertIn("`npm --prefix frontend-modern run build`", guide)
+        self.assertNotIn("`gofmt -w ./cmd ./internal ./pkg`", guide)
+        self.assertTrue((ROOT / "internal/monitoring").is_dir())
+
     def test_help_entrypoints_accept_original_evidence_before_public_sharing(self):
         surfaces = (
             ("README.md", "## Community and support\n", "\n## ", "docs/"),
