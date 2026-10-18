@@ -1592,8 +1592,14 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 
 // removeFailedPBSNode removes a PBS node and all its resources from state
 func (m *Monitor) removeFailedPBSNode(instanceName string) {
+	m.pbsBackupPublicationMu.Lock()
+	defer m.pbsBackupPublicationMu.Unlock()
+	m.mu.Lock()
+	m.cancelPBSBackupPollLocked(instanceName)
+	delete(m.pbsBackupCacheTime, instanceName)
+	m.mu.Unlock()
 	// Remove PBS instance by passing empty array
-	currentInstances := m.state.PBSInstances
+	currentInstances := m.state.GetSnapshot().PBSInstances
 	var updatedInstances []models.PBSInstance
 	for _, inst := range currentInstances {
 		if inst.Name != instanceName {
@@ -1903,60 +1909,62 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		return
 	}
 
-	// Publication is the commit boundary: no cancellation return may split a
-	// successful read time from its matching payload. Per-instance poller
-	// admission serializes this publication with the next ordinary poll.
-	m.state.UpdatePBSBackups(instanceName, allBackups)
-	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
-	for key, fetchedAt := range refreshedGroups {
-		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
-	}
+	m.applyPBSBackupEffect(ctx, instanceName, func() {
+		// Publication is the commit boundary: no cancellation return may split a
+		// successful read time from its matching payload or cross a runtime/client
+		// withdrawal. Per-instance ownership lasts until the reader really returns.
+		m.state.UpdatePBSBackups(instanceName, allBackups)
+		m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+		for key, fetchedAt := range refreshedGroups {
+			m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
+		}
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
-	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
-		allBackups,
-		candidates,
-		protectionObservedAt,
-	)
-	if evidenceErr != nil {
-		log.Warn().
-			Err(evidenceErr).
-			Str("instance", instanceName).
-			Msg("Failed to attach PBS recovery evidence; preserving existing points")
+		// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+		candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
+		points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
+			allBackups,
+			candidates,
+			protectionObservedAt,
+		)
+		if evidenceErr != nil {
+			log.Warn().
+				Err(evidenceErr).
+				Str("instance", instanceName).
+				Msg("Failed to attach PBS recovery evidence; preserving existing points")
+			if protectionObservationErr == nil {
+				m.ingestProtectionProviderObservationsAsync(
+					[]recovery.ProtectionProviderObservation{protectionObservation},
+				)
+			}
+			return
+		}
+		observations := []recovery.ProtectionProviderObservation{}
 		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
-			)
+			observations = append(observations, protectionObservation)
 		}
-		return
-	}
-	observations := []recovery.ProtectionProviderObservation{}
-	if protectionObservationErr == nil {
-		observations = append(observations, protectionObservation)
-	}
-	batch := recoveryIngestBatch{points: points, observations: observations}
-	// Only an authoritative complete enumeration can delete absent points.
-	// Unreadable history remains historical evidence, qualified by this poll's
-	// partial/unavailable provider observation, until an ordinary complete poll
-	// recovers or confirms deletion. Never infer absence from a failed request.
-	if protectionObservationErr == nil &&
-		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
-		batch.reconcile = &recoveryReconcileScope{
-			provider: string(recovery.ProviderProxmoxPBS),
-			idPrefix: "pbs-backup:",
-			instance: instanceName,
+		batch := recoveryIngestBatch{points: points, observations: observations}
+		// Only an authoritative complete enumeration can delete absent points.
+		// Unreadable history remains historical evidence, qualified by this poll's
+		// partial/unavailable provider observation, until an ordinary complete poll
+		// recovers or confirms deletion. Never infer absence from a failed request.
+		if protectionObservationErr == nil &&
+			protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
+			batch.reconcile = &recoveryReconcileScope{
+				provider: string(recovery.ProviderProxmoxPBS),
+				idPrefix: "pbs-backup:",
+				instance: instanceName,
+			}
 		}
-	}
-	m.enqueueRecoveryIngest(batch)
+		m.enqueueRecoveryIngest(batch)
 
-	// Sync backup times to VMs/Containers and republish them to canonical resources.
-	m.syncGuestBackupTimesAndResourceStore()
+		// Sync backup times to VMs/Containers and republish them to canonical resources.
+		m.syncGuestBackupTimesAndResourceStore()
 
-	m.checkBackupAlerts(context.Background())
+		m.checkBackupAlerts(ctx)
 
-	// Immediately broadcast the updated state so frontend sees new backups
-	m.broadcastStateUpdate()
+		// Immediately broadcast the updated state so frontend sees new backups
+		m.broadcastStateUpdate()
+	})
 }
 
 func hasIncompletePBSBackup(backups []models.PBSBackup) bool {

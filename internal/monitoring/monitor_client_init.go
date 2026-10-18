@@ -124,7 +124,7 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 			}, monErr)
 			continue
 		}
-		m.pbsClients[pbsInst.Name] = client
+		m.replacePBSClient(pbsInst.Name, client)
 		log.Info().
 			Str("instance", pbsInst.Name).
 			Msg("PBS client created; awaiting first connectivity poll")

@@ -534,77 +534,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Msg("Skipping PBS backup polling - globally disabled")
 		} else {
-			now := time.Now()
-
-			m.mu.Lock()
-			lastPoll := m.lastPBSBackupPoll[instanceName]
-			if m.pbsBackupPollers == nil {
-				m.pbsBackupPollers = make(map[string]bool)
-			}
-			inProgress := m.pbsBackupPollers[instanceName]
-			m.mu.Unlock()
-
-			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-			if !shouldPoll {
-				if reason != "" {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("reason", reason).
-						Msg("Skipping PBS backup polling this cycle")
-				}
-			} else if inProgress {
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("PBS backup polling already in progress")
-			} else {
-				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
-				copy(datastoreSnapshot, pbsInst.Datastores)
-
-				// Atomically check and set poller flag
-				m.mu.Lock()
-				if m.pbsBackupPollers[instanceName] {
-					// Race: another goroutine started between our check and lock
-					m.mu.Unlock()
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("PBS backup polling started by another goroutine")
-				} else {
-					m.pbsBackupPollers[instanceName] = true
-					m.lastPBSBackupPoll[instanceName] = newLast
-					m.mu.Unlock()
-
-					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
-						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
-						defer func() {
-							m.mu.Lock()
-							delete(m.pbsBackupPollers, inst)
-							m.lastPBSBackupPoll[inst] = time.Now()
-							m.mu.Unlock()
-						}()
-
-						log.Info().
-							Str("instance", inst).
-							Int("datastores", len(ds)).
-							Msg("Starting background PBS backup polling")
-
-						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.getRuntimeContext()
-						if parentCtx == nil {
-							parentCtx = context.Background()
-						}
-						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
-						defer cancel()
-
-						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
-
-						log.Info().
-							Str("instance", inst).
-							Dur("duration", time.Since(start)).
-							Msg("Completed background PBS backup polling")
-					}(datastoreSnapshot, instanceName, now, client)
-				}
-			}
+			m.pollPBSBackupsAsync(instanceName, client, pbsInst.Datastores)
 		}
 	} else {
 		log.Debug().

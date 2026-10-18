@@ -17,6 +17,30 @@
 
 ## Purpose
 
+### PBS backup scans belong to their registered connection and runtime
+
+Background PBS inventory admits the registered client and current runtime
+atomically with cadence. Runtime replacement, client replacement and failed-node
+retirement cancel the old reader and fence its state, cache, recovery/alert and
+broadcast admission. A cancelled scan retains occupancy until actual return;
+settings resets cannot admit overlapping scans, and late return cannot postpone
+the next ordinary scan. Network reads stay outside the publication lock.
+
+Previously accepted rows can remain last known. A new connection cannot reuse
+the previous connection's snapshot-cache freshness even if group counts/times
+match. The same connection and independent siblings keep ordinary cache reuse.
+PBS namespace/time/size/verification admission, existing request budgets and
+partial-read preservation are unchanged; no backup or guest command is added.
+
+`TestPBSBackupLifecycleHTTP` exercises the ordinary foreground/background path
+with real synthetic group, snapshot and writer HTTP through runtime/client
+withdrawal, failed-node removal and ordinary resumption. The
+`TestPBSBackupLifecycle*` ownership controls pin actual-return occupancy,
+concurrent admission, publication ordering, ended-runtime rejection and scoped
+cache replacement. The existing By date/Coverage surface consumes emitted rows
+at desktop/narrow widths. These proofs do not establish native backup/restore,
+independent guest thaw, filesystem liveness or installed recovery.
+
 ### PVE job logs retain their numbered text sequence
 
 The bounded task-log read starts at line zero and admits only a contiguous
