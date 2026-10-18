@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "9386a29003438feda9cfaf48447a5b2aef3c3cbd",
+  "verified_at": "2026-10-18T07:18:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/CONFIGURATION.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/CONFIGURATION.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/CONFIGURATION.md": "a26d1e8c2f4e2b3f186d50081767fa4022983b8dd30461fe13e6506639226e1e",
+    "docs/TROUBLESHOOTING.md": "e1d2f91b3388caca34f888d6ba0ddc83f162c1fdc5661df8f2c628092303253b",
+    "frontend-modern/public/docs/CONFIGURATION.md": "a26d1e8c2f4e2b3f186d50081767fa4022983b8dd30461fe13e6506639226e1e",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "e1d2f91b3388caca34f888d6ba0ddc83f162c1fdc5661df8f2c628092303253b"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING",
+    "/docs/CONFIGURATION#if-debug-makes-the-ui-unusable",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Real production Docs page, router, Markdown fetch and CSS in the existing doc-command-help shell; no backend or recovery operation. Chromium 141.0.7390.37 / Playwright 1.56.1 matches the integration lock.",
+    "Keyboard desktop and touch 320px: symptom index reaches the new existing-page recovery section and focuses its heading. Backup safety link, Back and reload retain working fragment navigation. Actual served Markdown hashes match all changed document bytes.",
+    "All six final captures were opened with native view_image. Recovery, preservation, downtime and saved-Debug relapse paragraphs are readable in light desktop and dark narrow views; no new prose overflow. The unchanged wide environment table remains separately scrollable, not asserted to fit all columns.",
+    "This is help acceptance, not a reproduced cause or correction of #1723, native systemd/container recovery, installed availability or WebKit proof. The existing independent WebKit history/reload gap is not cleared."
+  ],
+  "interactions": [
+    "Keyboard Enter or touch through Troubleshooting \u2192 log-level recovery",
+    "Read incident stand-down, deployment application and persistence warning",
+    "Follow Backup safety; Back and reload; compare fetched source bytes"
+  ],
+  "screenshot_sha256": {
+    "desktop-light-existing-incident-boundary.jpg": "ac2c5c0c7f7f71626fcaf4bca5847c2fcad6cc722c3a1431a5e182236cb39ce6",
+    "desktop-light-deployment-application.jpg": "f5660117e8f33ebeb47f383344b141c80aaef2adefbbdda4be58dcc2efbaf2ce",
+    "desktop-light-persistence-limit.jpg": "a9f63d65f8569c73536a736b32f22a88e31042e90b746947e38498d4117f0d8a",
+    "phone-dark-existing-incident-boundary.jpg": "e399cb61254ceb0e692164bf8cdd2ab98176192c54d25a6f1506229742049d39",
+    "phone-dark-deployment-application.jpg": "ef5fd94fd88e87bcae92a5503e7530c9ab45bf702a7f53bd77cdc4595f3a8662",
+    "phone-dark-persistence-limit.jpg": "125b5f164a2cb9fb1b7e1f7fbca546f844f6b9bd9526d08c3209ea96ad1b94ae"
+  }
+}
