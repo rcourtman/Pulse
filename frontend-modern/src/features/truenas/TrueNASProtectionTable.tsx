@@ -379,7 +379,7 @@ export const TrueNASProtectionTable: Component<{
 
   return (
     <Show
-      when={!props.loading || rows().length > 0}
+      when={!props.loading || Boolean(props.error) || rows().length > 0}
       fallback={
         <PlatformTableLoadingState
           title="Loading TrueNAS protection"
@@ -392,8 +392,9 @@ export const TrueNASProtectionTable: Component<{
         fallback={
           <PlatformErrorState
             title="Could not load TrueNAS protection"
-            description="Refresh the recovery point snapshot or check the API connection state."
+            description="Protection activity is unavailable, not necessarily absent. Refresh to try again."
             onRefresh={() => props.onRefresh?.()}
+            refreshDisabled={props.loading}
           />
         }
       >
@@ -408,6 +409,26 @@ export const TrueNASProtectionTable: Component<{
           }
         >
           <div class="space-y-3">
+            <Show when={props.error}>
+              <div class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                <p role="status" class="min-w-0 flex-1 basis-64">
+                  Could not refresh TrueNAS protection. Showing the last loaded records. Counts and
+                  outcomes may be out of date. These records do not establish current protection.
+                </p>
+                <button
+                  type="button"
+                  class="min-h-10 rounded-md border border-current px-3 py-2 font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-wait disabled:opacity-60"
+                  disabled={props.loading}
+                  onClick={() => {
+                    if (!props.loading) props.onRefresh?.();
+                  }}
+                >
+                  {props.loading
+                    ? 'Refreshing protection activity…'
+                    : 'Refresh protection activity'}
+                </button>
+              </div>
+            </Show>
             <Show when={props.showToolbar !== false}>
               <PlatformTableToolbar
                 search={tableState.search}

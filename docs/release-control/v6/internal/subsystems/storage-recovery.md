@@ -21,6 +21,31 @@
 
 ## Purpose
 
+### TrueNAS Protection distinguishes unreadable activity from empty inventory
+
+The recovery-points HTTP decoder accepts an explicit array, including a genuine
+empty array. A missing/non-array envelope, malformed core row, unreadable display
+or reference container, or duplicate point identity rejects the whole page. It
+cannot silently replace earlier restore evidence with an empty or partly usable
+inventory. Canonical/legacy item aliases and open-string outcomes remain supported;
+pagination metadata stays outside the sole TrueNAS consumer.
+
+A failed refresh keeps previously loaded records with a visible last-loaded
+qualification and a retry control. Counts and outcomes belong to those historical
+records, not current protection. The notice persists during retries and cached
+remounts until a readable response replaces the page. Without retained records,
+failure remains unavailable rather than empty, including during a pending retry.
+The existing access-error boundary still withdraws denied records. Neither raw
+error text nor a new backup/replication/guest operation is exposed.
+
+`recoveryPointAdmission.test.ts`, `recoveryTransport.test.ts` and
+`TrueNASProtectionRead.test.tsx` cover envelope/row admission, compatibility,
+malformed/failed refreshes, cached remounts, readable emptiness, pending retry,
+ordinary recovery and access denial. `truenas-protection-read.cjs` exercises the
+real HTTP reader, decoder, query cache, Protection table and CSS at desktop and
+narrow widths. These proofs establish UI read integrity, not appliance collection,
+backup/restore success, independent thaw, filesystem liveness or installed recovery.
+
 ### Root PBS datastore discovery owns backup replacement authority
 
 The foreground datastore-list result travels into the same connection/runtime-owned

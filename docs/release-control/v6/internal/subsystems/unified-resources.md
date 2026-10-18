@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### TrueNAS protection-read failure does not replace inventory
+
+The existing TrueNAS Protection table consumes an all-or-nothing recovery-point
+page. Unreadable envelopes/rows are failures, not zero events or a usable subset.
+A transient failed read retains the last loaded point identities, filters and
+open disclosure with an explicit historical-record notice. Successful replacement
+updates the same consumer; readable empty data clears the page. An actual access
+denial still withdraws retained rows through the existing query boundary. No
+resource identity, API schema, persistence or appliance operation changes.
+The TrueNAS table, connected reader/admission and desktop/narrow browser tests
+exercise these transitions through the ordinary HTTP path.
+
 ### Backup job detail keeps its workload and observation owner
 
 Coverage consumes the existing selected `latestTask` fields inside that

@@ -19,6 +19,27 @@ afterEach(() => {
 });
 
 describe('TrueNASProtectionTable', () => {
+  it('keeps a failed-read notice visible even when filters hide every retained record', async () => {
+    render(() => (
+      <TrueNASProtectionTable
+        points={[makeRecoveryPoint({ id: 'retained', kind: 'snapshot', mode: 'snapshot' })]}
+        error={new Error('private diagnostic')}
+        emptyIcon={<span />}
+        emptyTitle="No protection"
+        emptyDescription="No protection"
+      />
+    ));
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'last loaded records',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Attention, 0' }));
+    expect(screen.getByText('No protection events match current filters')).toBeInTheDocument();
+    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
+      'do not establish current protection',
+    );
+    expect(screen.queryByText('private diagnostic')).not.toBeInTheDocument();
+  });
+
   it('keeps the issue count in the filters and filters directly to attention outcomes', async () => {
     render(() => (
       <TrueNASProtectionTable
