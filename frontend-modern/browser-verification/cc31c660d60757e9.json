@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "4793af28d56fe8725e27a12570a27a94a4e13352",
+  "changed_paths": [
+    "frontend-modern/public/docs/RELAY.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/RELAY.md": "aeffe3e8d41b769e748f5ae2daeb8c442a195c815dbabf40ae1e5c42f36e5a4e",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "5e1f7b877dc2840911ecb70f3a6734b4d1ee0a314c230393f4ba480f483abfc7"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#relay-showing-disconnected",
+    "/docs/RELAY#relay-showing-disconnected",
+    "/docs/RELAY#open-pulse-handoff-not-loading",
+    "/docs/TROUBLESHOOTING#inspect-notification-logs",
+    "/docs/WEBHOOKS#-quick-setup"
+  ],
+  "states": [
+    "Actual application Docs route, shipped markdown producer and production sanitised renderer; only unauthenticated security-status GET uses an offline fixture.",
+    "Existing paired-phone recovery, paid continuity, app/web distinction and post-retirement alert alternatives."
+  ],
+  "interactions": [
+    "Keyboard Enter follows existing Relay recovery link.",
+    "Cross-document links reach the bounded log and existing webhook setup headings at both viewports.",
+    "No pairing, credential, subscription, app, notification or provider operation performed."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-13T21:26:49.312Z",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": 6,
+    "observations": [
+      "Desktop: retirement and continuing paid terms legible; recovery and destination links in context.",
+      "390 px: text and links wrap without page overflow; pairing and secret warnings readable; alternatives visible with normal scrolling."
+    ],
+    "remaining": null
+  },
+  "browser_cleanup": {
+    "closed": true,
+    "preview_exit": 143,
+    "preview_signal": null
+  },
+  "evidence": "PI outcome RECEIPTS.md and PHONE-HELP.json retain original captures, source identities and failed source run; this is server help proof, not native app or Relay qualification."
+}

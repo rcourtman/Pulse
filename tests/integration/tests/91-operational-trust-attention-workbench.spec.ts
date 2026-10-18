@@ -102,6 +102,9 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+  await page.route("**/api/alerts/active", async (route) => {
+    await route.fulfill({ json: [] });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(100);
   expect(pageErrors, "The Patrol shell raised a browser error").toEqual([]);
@@ -416,6 +419,58 @@ async function mockAttention(
       body: "[]",
     });
   });
+  // Activity consumes the weekly digest before rendering its other panels.
+  // The catch-all {} response is not a valid successful digest: keep this
+  // attention fixture's empty history explicit without inventing verified work.
+  await page.route("**/api/ai/patrol/digest?*", async (route) => {
+    await route.fulfill({
+      json: {
+        generated_at: evaluatedAt,
+        window: {
+          start: firstObservedAt,
+          end: evaluatedAt,
+          days: 7,
+          history_complete: true,
+        },
+        mode: "monitor",
+        runs: {
+          total: 0,
+          scheduled: 0,
+          event_triggered: 0,
+          manual: 0,
+          failed: 0,
+          checks: 0,
+          resources_covered: 0,
+        },
+        findings: {
+          new: 0,
+          open_by_severity: { critical: 0, warning: 0, watch: 0, info: 0 },
+          resolved: 0,
+          auto_resolved: 0,
+          dismissed: 0,
+          suppressed: 0,
+        },
+        investigations: { total: 0, by_outcome: {} },
+        actions: {
+          proposed: 0,
+          approved: 0,
+          rejected: 0,
+          executed: 0,
+          verified: 0,
+          failed: 0,
+          pending: 0,
+        },
+        alerts: { reviewed: 0 },
+        spend: {
+          estimated_usd: 0,
+          pricing_known: true,
+          input_tokens: 0,
+          output_tokens: 0,
+          calls: 0,
+        },
+      },
+    });
+  });
   await page.route("**/api/ai/patrol/autonomy", async (route) => {
     await route.fulfill({
       status: 200,
@@ -684,7 +739,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
     page.getByRole("region", { name: "Patrol decision inbox" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
+    page.getByRole("button", { name: "Open pve-main · CPU pressure" }),
   ).toBeVisible();
   await expect(
     page.getByRole("tab", { name: "Inbox", exact: true }),
@@ -723,7 +778,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
 
 test("makes active operational work primary and preserves the evidence boundary", async ({
   page,
-}) => {
+}, testInfo) => {
   await mockAttention(page, "active");
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
@@ -752,13 +807,13 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toHaveCount(0);
 
   const itemButton = queue.getByRole("button", {
-    name: "Open CPU pressure on pve-main",
+    name: "Open pve-main · CPU pressure",
   });
   await itemButton.focus();
   await page.keyboard.press("Enter");
 
   const detailPanel = page.getByRole("complementary", {
-    name: "CPU pressure on pve-main",
+    name: "pve-main · CPU pressure",
   });
   await expect(detailPanel).toBeVisible();
   await expect(
@@ -769,6 +824,15 @@ test("makes active operational work primary and preserves the evidence boundary"
       "Open the node and verify which workload is consuming CPU before making changes.",
     ),
   ).toBeVisible();
+  const evidenceToggle = detailPanel
+    .locator("summary")
+    .filter({ hasText: "Evidence and history" });
+  await expect(evidenceToggle).toBeVisible();
+  await expect(
+    detailPanel.getByText("Two consecutive samples were above 90%."),
+  ).toBeHidden();
+  await evidenceToggle.focus();
+  await page.keyboard.press("Enter");
   await expect(
     detailPanel.getByText("Two consecutive samples were above 90%."),
   ).toBeVisible();
@@ -783,6 +847,10 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(detailPanel.getByText("Job: Success")).toBeVisible();
   await expect(detailPanel.getByText("History: Complete")).toBeVisible();
   await expect(detailPanel.getByText("Observing to Open")).toBeVisible();
+  await testInfo.attach("Patrol evidence after keyboard disclosure", {
+    body: await detailPanel.screenshot(),
+    contentType: "image/png",
+  });
   await expect(page).toHaveURL(
     new RegExp(`attention=${encodeURIComponent(attentionID)}`),
   );
@@ -799,7 +867,7 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toBeVisible();
   await expect(
     attentionList.getByRole("button", {
-      name: "Open CPU pressure on pve-main",
+      name: "Open pve-main · CPU pressure",
     }),
   ).toHaveCount(0);
 
@@ -828,12 +896,12 @@ test("puts the selected detail in view on a phone without page overflow", async 
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   const itemButton = page.getByRole("button", {
-    name: "Open CPU pressure on pve-main",
+    name: "Open pve-main · CPU pressure",
   });
   await itemButton.click();
 
   const detailPanel = page.getByRole("complementary", {
-    name: "CPU pressure on pve-main",
+    name: "pve-main · CPU pressure",
   });
   await expect(detailPanel).toBeInViewport();
   await expect(itemButton).toBeHidden();
@@ -854,7 +922,10 @@ test("puts the selected detail in view on a phone without page overflow", async 
     mobileReviewNavigation.getByRole("button", { name: "Previous" }),
   ).toBeDisabled();
   await expect(
-    mobileReviewNavigation.getByRole("button", { name: "Next decision" }),
+    mobileReviewNavigation.getByRole("button", {
+      name: "Next issue",
+      exact: true,
+    }),
   ).toBeVisible();
   const overflows = await page.evaluate(
     () =>
@@ -872,7 +943,7 @@ test("puts the selected detail in view on a phone without page overflow", async 
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(
-    page.getByRole("complementary", { name: "CPU pressure on pve-main" }),
+    page.getByRole("complementary", { name: "pve-main · CPU pressure" }),
   ).toBeInViewport();
 });
 

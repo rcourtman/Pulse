@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { InlineNotice } from './InlineNotice';
+import { InlineNotice, type InlineNoticeTone } from './InlineNotice';
 
 describe('InlineNotice', () => {
   afterEach(() => {
@@ -81,4 +81,42 @@ describe('InlineNotice', () => {
     expect(onAction).toHaveBeenCalledOnce();
     expect(onDismiss).toHaveBeenCalledOnce();
   });
+
+  it.each(['warning', 'danger', 'info', 'success'] as InlineNoticeTone[])(
+    'keeps %s links and callback actions touch-sized and keyboard-visible',
+    (tone) => {
+      const onAction = vi.fn();
+      render(() => (
+        <>
+          <InlineNotice
+            tone={tone}
+            actionHref="/docs/VM_DISK_MONITORING"
+            actionLabel="Read guidance"
+          >
+            Reading is deferred.
+          </InlineNotice>
+          <InlineNotice tone={tone} layout="banner" actionLabel="Retry" actionOnClick={onAction}>
+            Reading could not be loaded.
+          </InlineNotice>
+        </>
+      ));
+
+      const link = screen.getByRole('link', { name: 'Read guidance' });
+      const button = screen.getByRole('button', { name: 'Retry' });
+      for (const action of [link, button]) {
+        // The real CSS geometry and colours are checked through both guest
+        // drawers and the RBAC recovery consumers in the browser fixture.
+        expect(action).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+        expect(action).toHaveClass('underline', 'focus-visible:outline-2');
+        expect(action).toHaveClass(
+          'focus-visible:outline-offset-2',
+          'focus-visible:outline-current',
+        );
+      }
+      expect(link).toHaveAttribute('href', '/docs/VM_DISK_MONITORING');
+      expect(button).toHaveAttribute('type', 'button');
+      fireEvent.click(button);
+      expect(onAction).toHaveBeenCalledOnce();
+    },
+  );
 });

@@ -108,7 +108,9 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 						rows = []any{row("/", 0), row("/bind", 0)}
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"result": rows}})
-				case strings.Contains(r.URL.Path, "/agent/"):
+				case strings.HasSuffix(r.URL.Path, "/agent/get-osinfo"), strings.HasSuffix(r.URL.Path, "/agent/info"):
+					fmt.Fprint(w, `{"data":{"result":{}}}`)
+				case strings.HasSuffix(r.URL.Path, "/agent/network-get-interfaces"):
 					fmt.Fprint(w, `{"data":{"result":[]}}`)
 				default:
 					t.Errorf("unexpected request: %s", r.URL.Path)

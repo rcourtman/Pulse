@@ -335,7 +335,7 @@ func TestBuildClusterEndpointsForInit_RespectsDiscoveryPolicy(t *testing.T) {
 		},
 	}
 
-	endpoints, _ := monitor.buildClusterEndpointsForInit(config.PVEInstance{
+	endpoints, _, _ := monitor.buildClusterEndpointsForInit(config.PVEInstance{
 		Name:      "cluster-a",
 		Host:      "https://main.local:8006",
 		VerifySSL: true,

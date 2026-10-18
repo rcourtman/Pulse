@@ -329,6 +329,30 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
   },
 ];
 
+// The same already-supported file handoff is useful on NAS/Linux hosts whose
+// console has no usable stty, not only in FreeBSD GUI command fields.
+const privateFileInstallSnippets = (command?: string): InfrastructureCommandSnippet[] =>
+  command
+    ? [
+        {
+          label: 'Install from a private token file (no terminal)',
+          command,
+          note: (
+            <span>
+              Use this when there is no terminal or no usable <code>stty</code> or BusyBox{' '}
+              <code>stty</code>. Before running, save the separately revealed token to{' '}
+              <code>/root/.config/pulse-agent/bootstrap-token</code> using a trusted file editor or
+              upload path. The file must be root-owned with mode <code>0600</code> in a root-owned{' '}
+              <code>0700</code> directory. Never put the token in a GUI command field. This command
+              does not prompt or delete your file. Remove it through the same trusted file path
+              afterwards. If your GUI cannot create private files, use console or SSH instead. Bash
+              must already be installed.
+            </span>
+          ),
+        },
+      ]
+    : [];
+
 export const buildCommandsByPlatform = (
   unixCommand: string,
   windowsInteractiveCommand: string,
@@ -348,10 +372,13 @@ export const buildCommandsByPlatform = (
             Command auto-escalates with <code>sudo</code> when available. Otherwise run from a root
             shell (for example <code>su -</code>). If a token is required, run this command first,
             then paste the separately revealed token at its silent prompt. Auto-detects your init
-            system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
+            system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.{' '}
+            The prompt needs <code>stty</code> or BusyBox <code>stty</code>. Otherwise use the
+            private-file command below.
           </span>
         ),
       },
+      ...privateFileInstallSnippets(unixPrivateFileCommand),
     ],
   },
   macos: {
@@ -392,25 +419,7 @@ export const buildCommandsByPlatform = (
           </span>
         ),
       },
-      ...(unixPrivateFileCommand
-        ? [
-            {
-              label: 'Install from a private token file (no terminal)',
-              command: unixPrivateFileCommand,
-              note: (
-                <span>
-                  Before running, save the separately revealed token to{' '}
-                  <code>/root/.config/pulse-agent/bootstrap-token</code> using a trusted file editor
-                  or upload path. The file must be root-owned with mode <code>0600</code> in a
-                  root-owned <code>0700</code> directory. Never put the token in a GUI command
-                  field. This command does not prompt or delete your file. Remove it through the
-                  same trusted file path afterwards. If your GUI cannot create private files, use
-                  console or SSH instead. Bash must already be installed.
-                </span>
-              ),
-            },
-          ]
-        : []),
+      ...privateFileInstallSnippets(unixPrivateFileCommand),
     ],
   },
   windows: {

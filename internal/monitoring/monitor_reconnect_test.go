@@ -46,7 +46,7 @@ func TestMonitor_RetryFailedConnections_Detailed_Extra(t *testing.T) {
 
 	// 1. Test Successful Reconnection
 	called := false
-	newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 		called = true
 		if !strings.Contains(cfg.Host, "pve1") {
 			return nil, fmt.Errorf("unexpected host: %s", cfg.Host)
@@ -74,7 +74,7 @@ func TestMonitor_RetryFailedConnections_Detailed_Extra(t *testing.T) {
 		{Name: "pve2", Host: "https://pve2:8006"},
 	}
 
-	newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+	newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
 		return nil, fmt.Errorf("connection failed")
 	}
 

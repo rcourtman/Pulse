@@ -449,3 +449,25 @@ func TestGuestPollOwnershipRejectsObsoletePublication(t *testing.T) {
 		}
 	}
 }
+
+// Failed collection still follows canonical membership, but a merged/enrichment
+// view cannot relabel another source's metric as the last Proxmox observation.
+func TestGuestPollFailedEnumerationRetainsProducerOwnership(t *testing.T) {
+	at := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
+	original := models.VM{ID: "site-a:node:105", Instance: "site-a", Node: "node", VMID: 105, Type: "qemu", CPU: .95, LastSeen: at,
+		Memory: models.Memory{Total: 100, Used: 25, Usage: 25, Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: at.Add(-time.Minute)}},
+		Disk:   models.Disk{Total: 100, Used: 40, Usage: 40}, GuestAgentStatus: "deferred"}
+	m := &Monitor{state: models.NewState()}
+	ghost := original
+	ghost.ID = "site-a:node:106"
+	ghost.VMID = 106
+	m.state.UpdateGuestsForInstance("site-a", []models.VM{original, ghost}, nil)
+	merged := original
+	merged.CPU = .01
+	merged.Memory = models.Memory{Total: 100, Used: 99, Usage: 99, Observation: models.MemoryObservation{State: "current", Source: "agent", ObservedAt: at.Add(time.Minute)}}
+	previous := previousGuestContext{vms: []models.VM{merged}}
+	vms, containers := m.retainedGuestsForFailedNodes("site-a", map[string]struct{}{"node": {}}, previous)
+	if len(vms) != 1 || len(containers) != 0 || !reflect.DeepEqual(vms[0].Memory, original.Memory) || vms[0].CPU != .95 || vms[0].GuestAgentStatus != "deferred" || vms[0].Disk.Used != 40 || !vms[0].LastSeen.Equal(at) {
+		t.Fatalf("failed enumeration changed source ownership/membership: %+v", vms)
+	}
+}

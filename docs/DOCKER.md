@@ -108,24 +108,38 @@ services:
 
 Metrics history stored this way is lost on container restart.
 
-<details>
-<summary><strong>Advanced: Resource Limits & Healthcheck</strong></summary>
+### Healthcheck and resource sizing
+
+Add this healthcheck to your **existing** `pulse` service; it is not a complete
+Compose file. Preserve the image, persistent data mount, network and other
+settings. Docker marks health failures as unhealthy; a healthcheck alone does
+not restart the container or prove that monitored workloads are healthy.
 
 ```yaml
 services:
   pulse:
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:7655/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 ```
-</details>
+
+**There is no universal CPU or memory limit for Pulse.** This example does not
+set one, and is not an instruction to remove an existing limit. Keep your
+deployment's current resource policy while investigating a problem. An
+undersized memory limit can cause an out-of-memory kill; a tight CPU quota can
+delay polling and notification delivery. Neither repairs an increased baseline.
+
+Choose limits from already available container readings during normal steady
+and busy periods, leaving headroom for the workload. Pulse process RSS is only
+part of the container's accounted memory, not a safe container limit by itself.
+Use the [bounded Docker statistics](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth)
+and [memory interpretation](TROUBLESHOOTING.md#memory-use-keeps-growing) if help
+is needed; an existing screenshot or unavailable reading is valid evidence.
+Do not restart, induce load, shorten retention or slow polling just to size the
+container or lower a reading. A higher steady baseline with unchanged monitoring
+is worth reporting, even when memory no longer grows.
 
 ---
 

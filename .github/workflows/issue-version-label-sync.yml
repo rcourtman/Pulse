@@ -16,20 +16,39 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Check out triage helper and locked parser
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts/issue-version-triage.cjs
+            .github/scripts/issue-version-triage.test.cjs
+            .github/scripts/triage-comment-policy.test.cjs
+            .github/scripts/package.json
+            .github/scripts/package-lock.json
+            .github/ISSUE_TEMPLATE
+            .github/workflows
+            docs/ISSUE_TRIAGE.md
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install locked parser without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts
+
+      - name: Verify silent triage before obtaining its write credential
+        run: npm run test:triage --prefix .github/scripts
+
       - name: Mint triage bot token
         id: triage-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: 2484142
           private-key: ${{ secrets.PULSE_TRIAGE_APP_PRIVATE_KEY }}
-
-      - name: Check out triage helper
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: |
-            .github/scripts/issue-version-triage.cjs
-          sparse-checkout-cone-mode: false
 
       - name: Sync issue version metadata
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

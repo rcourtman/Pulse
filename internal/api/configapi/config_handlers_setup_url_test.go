@@ -91,7 +91,7 @@ func TestHandleSetupScriptURL(t *testing.T) {
 				}
 				quotedURL := posixShellQuote(url)
 				for _, candidate := range []string{command, commandWithoutEnv} {
-					if !strings.Contains(candidate, "curl -fsSL "+quotedURL+` -o "$install_script"`) || strings.Contains(candidate, token) || !strings.Contains(candidate, "PULSE_SETUP_TOKEN_FILE=") || !strings.Contains(candidate, "sudo bash -c") {
+					if !strings.Contains(candidate, "curl -fsSL "+quotedURL+` -o "$install_script"`) || strings.Contains(candidate, token) || !strings.Contains(candidate, "PULSE_SETUP_TOKEN_FILE=") || !strings.Contains(candidate, `"$@" bash -c`) {
 						t.Error("setup command must download completely, prompt privately, and pass only the token file")
 					}
 				}
@@ -290,7 +290,7 @@ func TestHandleSetupScriptURL_PreservesConfiguredPublicURLSchemeOnLoopback(t *te
 	}
 
 	command, _ := response["command"].(string)
-	if !strings.Contains(command, "curl -fsSL "+posixShellQuote(urlValue)+` -o "$install_script"`) || !strings.Contains(command, `sudo bash -c`) {
+	if !strings.Contains(command, "curl -fsSL "+posixShellQuote(urlValue)+` -o "$install_script"`) || !strings.Contains(command, `"$@" bash -c`) {
 		t.Fatalf("command = %q, want quoted setup-script URL", command)
 	}
 }

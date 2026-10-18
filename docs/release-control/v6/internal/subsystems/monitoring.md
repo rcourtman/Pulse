@@ -27,6 +27,335 @@ current investigation history. Generated demo samples carry `mock_synthetic`;
 they are never evidence of a real storage growth rate. The requested-window and
 store-error regression is `internal/monitoring/storage_history_test.go`.
 
+### Conflicting saved endpoint pins cannot select certificate trust
+
+For equivalent Proxmox endpoint URL spellings, all nonempty saved member pins
+must agree under the TLS verifier's existing case/colon normalization. Exact
+spelling and map iteration can no longer select one of contradictory pins.
+Resolution returns a fixed, credential-free trust-conflict error before a TLS
+probe, password login, token read, first-use capture or polling-client creation.
+The member stays unreachable to Pulse; an independently trusted sibling can
+continue ordinary monitoring. No saved pin is removed or overwritten, and the
+error cannot become an empty pin/CA or opt-out fallback. Agreeing pin formats,
+nonempty invalid pins, primary-pin fallback, declared-member first-use and the
+existing scheme/port/base-path/IPv4-mapped trust boundaries remain unchanged.
+
+`TestClusterConflictingSavedPinsNeverAuthenticate` covers startup, recovery and
+lazy selection in token/JSON/form modes, three URL spellings and both VerifySSL
+settings with real TLS sockets. It checks zero TLS/login/read work for conflicts,
+no installed client or trust mutation, sibling use, and accepted monitoring
+following a normal reload with reconciled fixture pins. Existing established-pin,
+first-use, cancellation, ownership and guest-admission controls still apply.
+`TestClusterSavedPinResolutionRejectsConflicts` and
+`TestClusterFirstUseCaptureDoesNotReconcileConflictingPins` retain the conflict
+through normalized authorities, invalid nonempty pins and a capture race.
+`TestClusterConflictingPinsEndpointProjection` uses the production endpoint
+builder, real clients and monitor projection in all three auth modes: native
+Online, identity and saved trust are not changed by failed Pulse reachability.
+The producer also records contradictory exact duplicate saved rows before
+its map/deduplication can overwrite them, and carries those endpoint conflicts
+through initialisation, missing-client reconnect and cluster refresh. The
+cluster owns a copy of that conflict set; aliases cannot escape it, and a
+later repeated row cannot clear it. Normal configuration reload with agreeing
+pins is required to resume that endpoint. A non-conflicting sibling is not
+refused. The public constructor's optional conflict inputs preserve existing
+callers and do not introduce a new trust mode. Producer tests cover both
+routes, pin formatting, repeated contradictions and configuration ownership.
+The projection cases include exact duplicates as well as URL aliases.
+A credential-free agreement check also holds automatic topology refresh while
+saved trust is contradictory: discovery cannot collapse the rows, move an
+alias or substitute a pin to clear that refusal. Current trusted sibling
+clients keep monitoring; topology changes wait for independently reconciled
+configuration. `TestClusterPinConflictsSurviveMonitorLifecycle` exercises the
+actual initialisation, missing-client retry and refresh/rebuild paths in all
+three auth modes and both layouts, including normal refresh after reconciliation.
+Saved-view consolidation also refuses a view with internal pin contradictions,
+so map indexing cannot hide an earlier contradictory row before monitoring
+starts. `TestConsolidatePVEInstancesRetainsInternallyConflictingPins` covers
+both merge orders, repeated rows, same-node/address evidence and agreeing formats.
+Internal agreement uses the TLS verifier's case/colon comparison even when
+legacy identity formatting would erase or simplify a malformed nonempty pin;
+colon-only, whitespace and prefixed pins cannot hide a contradiction.
+The endpoint-ownership routing control uses a five-second fixture client and
+a ten-second enclosing caller lifetime, rather than a one-second latency
+criterion. It records elapsed time and both targets' request counts; unchanged
+pin, admission and routing assertions remain required. Runtime timeouts and
+separate timeout/cancellation controls are unchanged. This is not a diagnosis
+or dismissal of the retained earlier one-second timeout.
+Lock-evidence fixture cases use independent base-path namespaces while each
+case's clients share the same guard key. A recycled loopback port cannot inherit
+an earlier synthetic guest's cooldown. `TestGuestAgentLockEvidenceFixtureIsolation`
+shares one listener and retains an earlier uncertainty fence unchanged while an
+independent fixture completes its lock/command checks. No runtime fence is
+cleared, expired or weakened; native guest recovery is not established.
+This establishes source/consumer behaviour, not native recovery or attribution
+of a guest, PBS or certificate report.
+
+
+### Cluster recovery requires success of the operation actually probed
+
+Startup and unhealthy-member recovery read `/nodes`; lazy construction uses the
+same probe. A failed nodes or login request cannot count as successful recovery
+because its response text mentions a guest agent, QMP or `guest-get-*`. The old
+per-guest substring exception is removed from these non-guest operations.
+Failed selection retains its actual sanitised reason and observation time, and
+installs no polling client. Successful probe plus accepted full-timeout session
+is still required. The existing temporary-rate-limit path may admit an ordinary
+request, but does not report the failed probe as passed or clear a known failure.
+
+The single-endpoint last-resort path remains available with its cached client;
+selecting it no longer marks that endpoint healthy before a request succeeds.
+A later accepted ordinary read still clears the failure. Actual per-guest
+errors remain request-level errors, without marking an otherwise working node
+unhealthy. Certificate pins, first-use trust, credential encodings, request and
+recovery cadence, rate-limit backoff and guest/backup fences are unchanged.
+
+`TestClusterNodeProbeRequiresSuccess` covers startup/recovery/selection in token,
+JSON password and form password modes, three guest-like failure bodies at the
+nodes or login stage, no extra login/full client and distinct later recovery.
+`TestClusterSingleEndpointFallbackKeepsFailedHealth` checks cached selection,
+failed ordinary read and later success. `TestClusterNodeProbeRateLimitKeepsOrdinaryRead`
+preserves genuine rate-limit handling. `TestClusterNodeProbeEndpointProjection`
+carries the actual failed and later recovered member through the production
+monitor projection while independent native Online, saved trust and identity
+remain unchanged. These are source/consumer controls, not attribution or
+installed acceptance for a reported PBS/QGA/backup incident.
+
+
+### Node inventory admission consumes the complete response
+
+The PVE `/nodes` reader consumes and closes the entire existing 8 MiB-bounded
+body before returning inventory or allowing startup/recovery/lazy probes to
+succeed. A valid JSON prefix with a missing transport tail, extra JSON values,
+oversized suffix, malformed UTF-8, missing/null data, conflicting errors or
+ambiguous/case-overwritten fields is not an authoritative inventory. Each row
+must have a canonical nonempty, unique node name; null/unnamed/duplicate rows
+and ambiguous supported node fields reject the whole response rather than
+publish partial or invented empty inventory. Validation errors contain no body
+material. Unique provider metadata and explicit empty arrays remain accepted,
+including scoped tokens with no visible nodes. Existing node fields and offline
+status are preserved without changing provider permissions.
+
+`node_inventory_response_test.go` exercises actual HTTP reads and all supported
+fields, the explicit-empty controls, byte/transport bounds and no replay.
+`cluster_node_inventory_test.go` checks pinned HTTPS in token, JSON-password and
+form-password modes at startup, recovery and lazy selection: failed success
+installs no client and never advances to a full session; distinct complete
+recovery remains usable. The cached fallback keeps its earlier failure until a
+complete ordinary read succeeds. `TestClusterNodeInventoryEndpointProjection`
+drives missing/duplicate/incomplete responses and subsequent ordinary recovery
+through the production monitor projection while native Online, identity and
+saved pins remain intact. Recovery cadence, auth encodings, TLS admission,
+rate-limit policy, other API readers and guest/backup fences are unchanged.
+These are source and consuming-surface proofs, not attribution or installed
+acceptance for any reported PBS, guest restart or workload-safety incident.
+
+
+### First-use cluster trust includes password construction
+
+Declared, previously untrusted Proxmox members use the existing credential-free
+TLS capture and pinned retry whether the inherited primary pin fails during
+password login or during the token-authenticated nodes probe. Startup, ordinary
+unhealthy recovery and lazy first selection share this path. Capture still
+requires typed local pin-mismatch evidence and cannot replace a primary, saved
+member or concurrent winner pin; it never sends an HTTP request or credentials.
+The pinned retry is not repeated to obtain a nodes count. Failed or cancelled
+authentication installs no polling session; a separately accepted full-timeout
+client is required before recovery becomes healthy. Refusal retains the
+established runtime pin for a distinct later ordinary recovery. Saved trust,
+CA/redirect policy, login encodings, cadence and guest/backup fences do not change.
+
+`TestClusterFirstUseSessionAdmission` covers JSON password, existing form
+fallback and token modes in all three phases, then ordinary member reads.
+The adjacent refusal, established-pin and cancellation controls exercise actual
+TLS sockets. Concurrent lazy selection retains serialized construction while
+health/trust inspection stays usable during capture. `TestClusterFirstUsePasswordEndpointProjection` carries first-use
+probe/full-session refusal and later public-read recovery into the monitor's
+cluster-member projection without changing native Online state, identity or
+saved fingerprints. This is source/consumer qualification, not installed
+cluster recovery or attribution of an existing user report.
+
+
+### Proxmox password success admits a complete session, not just HTTP 200
+
+PVE and PBS consume the entire existing byte-bounded login body before
+publishing ticket, CSRF token and the normal two-hour expiry together. The
+shared `internal/securityutil/proxmox_session.go` parser requires canonical,
+unambiguous envelope/session keys, complete UTF-8 JSON, a nonempty cookie-safe
+ticket and a nonempty header-safe CSRF token. Unknown unique metadata such as
+username and capabilities remains supported. Partial/null, duplicate or
+case-conflicting credentials, extra JSON values, incomplete reads and oversized
+tails fail without replacing the retained tuple or advancing PVE generation.
+Validation errors contain no response credentials. A malformed success is not
+a provider credential refusal and does not trigger JSON-to-form fallback.
+
+`session_response_admission_test.go` in both client packages exercises these
+controls and eight joined expired readers, zero subsequent API/form requests
+on invalid success, retained state and distinct later ordinary recovery with
+coherent cookie/CSRF pairs. Cluster recovery additionally checks empty and
+partial success for the retained polling client, with and without a previous
+client. `TestPBSInvalidSessionKeepsFirstPollBoundary` exercises the real pinned
+constructor, normal startup retry, poll executor and production broadcast:
+invalid success installs no client, valid construction is not healthy telemetry,
+and only the accepted first poll publishes recovered node/datastore readings.
+
+TLS trust, credentials, auth encodings and 400/415 fallback, API-token paths,
+renewal ownership, retries/cadence, guest/backup fences and History are unchanged.
+The parser establishes response integrity, not cryptographic ticket validation
+or native/installed acceptance. It neither attributes nor resolves a reported
+PBS, Windows guest, restart or workload-safety incident.
+
+
+The invalid-QGA-success matrix uses a distinct synthetic base path for each
+case/reader, so OS reuse of a closed ephemeral listener cannot borrow a previous
+fixture's live cooldown. `TestGuestAgentInvalidSuccessFixtureIsolation` shares
+one listener deliberately and checks two independent first admissions and both
+retained second-client fences. No production key, alias, TTL or guard state is
+changed or cleared to qualify these tests.
+
+### Proxmox recovery sessions honour the owning caller
+
+PVE/PBS context-aware constructors bind initial password login, including the
+existing JSON/form fallback, to the initiating context. Cluster selection,
+first-use pinned retry, synchronous construction and unhealthy-member recovery
+carry that context through both the short probe and the retained polling
+session. The six-second background recovery budget also bounds construction;
+ending a caller is neither a credential refusal nor successful recovery.
+Cancelled selection/recovery preserves prior errors and does not install a
+partial or nil client. Startup retry exits without publishing a new health
+outcome or advancing another provider after its monitor stops. Discarded probe
+transports close their idle connections.
+
+The compatibility constructors retain their background-context behaviour.
+Accepted clients retain their configured full timeout, and subsequent ordinary
+reads use their own contexts, not the ended construction context. TLS pins,
+CA verification, redirects, first-use admission, auth encodings, retry cadence,
+provider permissions, guest/backup fences and History are unchanged.
+
+Initial PVE login runs synchronously under the caller and the configured total
+login timeout, including JSON/form fallback. It never joins the detached renewal
+used by an accepted session. Later expiry/401 renewal still coalesces by session
+generation under the client's bounded timeout, so cancellation of its starter or
+one waiting read cannot abandon other active readers. Both paths share the same
+password exchange and session parser. Ending an unaccepted constructor now also
+ends its password request, without changing the rendered health outcome.
+
+`TestClientConstructionHonoursContext` in both client packages covers ended
+password/token construction, in-flight JSON/form cancellation/deadlines,
+independent later reads and wrong-pin refusal. Cluster caller-budget controls
+cover selection/recovery at first login, probe and full login, then trusted
+ordinary recovery. Startup cancellation covers PVE, PBS and multi-endpoint
+cluster construction. The connected PBS first-poll control emits the actual
+broadcast for desktop/phone consumption: cancellation cannot turn an offline
+server healthy, and accepted construction alone still cannot do so. These are
+secret-free local fixtures, not installed recovery, native guest safety or an
+attribution of any reporter's failure.
+
+`TestClientConstructionHonoursClientTimeout` additionally exercises both login
+encodings under the PVE client's own timeout while its caller remains live.
+Existing shared-renewal starter/waiter cancellation, expiry, late-401, failure
+recovery and stalled-login controls retain the accepted-session boundary.
+
+
+### Cluster recovery requires a usable polling session
+
+A short endpoint probe cannot establish successful recovery until the client
+retained for ordinary polling has been constructed successfully. A refused or
+malformed password login for that second client preserves the existing client
+(or its absence), records the failure and does not count or publish recovery.
+An endpoint must never become healthy with a nil polling client. A later
+ordinary eligible recovery can install an accepted full-timeout session and
+clear its own error; usable siblings continue to serve polling throughout.
+
+`TestClusterRecoveryRequiresUsableSession` covers pinned HTTPS 401/403,
+malformed success and JSON-to-form refusal, with and without a retained client,
+then accepted recovery and ordinary reads. `TestClusterRecoverySessionEndpointProjection`
+drives public cluster reads and background recovery through the monitor's
+per-endpoint projection: native Online state, identity and saved pins survive,
+while PulseReachable and PulseError reflect the actual polling session. The
+existing recovery interval, authentication encodings, TLS trust/first-use
+policy, failover order and guest-command safety state are unchanged. These
+synthetic controls establish neither installed trust recovery nor a reported
+incident's cause.
+
+### Rejected infrastructure URLs stay out of diagnostics
+
+PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+`url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
+Cluster logs, health snapshots, recovery summaries and aggregate errors use
+display-only labels:
+a valid base URL or `[invalid endpoint]`. Health snapshots preserve each entry
+even when rejected endpoints share that label, and are built only for enabled
+log events. These labels never supply routing,
+alias membership, saved configuration or TLS-pin identity. HTTP/HTTPS defaults,
+base paths, authentication, CA/pin/opt-out choices and guest fences are unchanged.
+
+`TestClientRejectedHostDiagnosticsContainNoCredentials` and
+`TestClusterRejectedEndpointDiagnosticsContainNoCredentials` exercise actual
+constructors, single/multiple endpoint routing and recovery with synthetic
+userinfo/query/fragment and malformed URLs. Accepted-host and
+`TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
+routing and diagnostics. This bounds client diagnostics, not arbitrary provider
+error text, previously saved logs, native trust recovery or an installed service.
+
+### PBS password renewal publishes one complete shared session
+
+Concurrent reads of an expired PBS password session share one in-flight
+authentication attempt. Ticket, CSRF token and expiry are published together;
+each ordinary request uses one complete tuple. Only renewal is shared: the
+subsequent API reads remain independent, and a cancelled waiter cannot cancel
+the owner. Caller cancellation and deadlines stay context errors, not credential
+refusals, including token reads that never attempt a login. Joined callers receive the owner's failure without reissuing it;
+a later ordinary call may try again. JSON authentication and the existing
+400/415 form fallback retain their semantics. Tokens do not acquire session
+authority, and API 401/403 replies remain terminal without adding a replay.
+
+`pkg/pbs/auth_session_concurrency_test.go` exercises pinned local HTTPS expiry,
+encoding fallback/refusal, malformed responses, independent reads, cookie/CSRF
+pairing, owner/waiter cancellation and ordinary later recovery. Its accepted
+node/datastore responses also consume through the canonical PBS projection.
+TLS pins/CA/opt-out and redirect policy, credentials, ticket lifetime, provider
+permissions, wire shapes, polling schedules, guest/backup fences and stored
+History are unchanged. These synthetic controls do not establish an installed
+connection, native recovery or the cause of a reported PBS/guest failure.
+
+### Connection retirement preserves unrelated guest safety state
+
+Retiring a consolidated PVE connection cancels and clears only its own guest
+metadata lifecycle. Connection labels may contain `|`; matching a label prefix
+cannot establish ownership. The metadata key's two fixed node/VMID suffixes
+are read from the right, while diagnostic memory snapshots use their recorded
+`Instance`. A separate `site|other` connection keeps its outstanding owner,
+OS-command suppression, original observations and refresh/backoff deadlines
+when `site` is retired. The retired connection's cancelled fetch still owns
+its key until completion, and shared transport uncertainty is never cleared.
+
+`TestGuestMetadataRetirementOwnershipContract` covers exact cleanup, nested and
+Unicode labels, diagnostic origins and in-flight HTTP bodies at all three
+metadata stages. `TestGuestMetadataRetirementPollingKeepsSuppression` exercises
+both clients and ordinary collectors: no reissued suppressed OS command, no
+unrelated identity loss, and continued independent filesystem/CPU/memory reads.
+Wire formats, TTLs, guest-command/backup-lock/TLS fences and stored History are
+unchanged. These are synthetic source controls, not native thaw/restart recovery,
+a reporter's failure cause or installed/release acceptance.
+
+### Rate refusals cannot permanently disable guest OS discovery
+
+An observed HTTP 429 from guest OS-info preserves the existing OS-command
+failure count and suppression state, like access refusal or stopped QGA. It
+neither exercised the OS command nor supplies a fresh OS observation. Ordinary
+metadata backoff remains in force; a subsequent admitted poll can learn the OS
+without a restart or clearing command-safety state. Only the typed wire status
+admits this distinction: provider text quoting 429 is not a rate refusal.
+
+`TestGuestMetadataRateLimitRecoveryContract` covers both HTTP client types and
+ordinary collectors with cold/stale metadata, OS-like 429 bodies, unchanged
+backoff and accepted filesystem/memory readings, subsequent Windows discovery
+before Linux-only memory admission, and genuine repeated-failure suppression
+with a quoted 429. Existing unsupported-command, backup-lock and uncertain-reply
+fences are unchanged. Its fixtures use local sockets and synthetic credentials,
+not native guest recovery, History storage or a reported failure's cause.
+
 ### Cluster endpoint membership belongs to its client
 
 `NewClusterClient` snapshots the supplied endpoint slice before registering
@@ -137,6 +466,50 @@ full-pressure/zero-available, legacy, resize and age controls remain distinct.
 These are secret-free source fixtures, not native balloon or freeze recovery,
 reporter #2762 cause/resolution, or release acceptance.
 
+### Contradictory guest meminfo cannot manufacture healthy pressure
+
+The QGA `/proc/meminfo` parser rejects physical counters above their sample's
+MemTotal, integer-overflowing cache estimates and derived availability above
+that total. It does not clamp contradictory evidence into a trusted zero-used
+sample. Shmem is subtracted before checking the derived bound; valid older-kernel
+estimates, exact-total/zero-used readings and explicit zero MemAvailable retain
+their semantics. Swap capacity is not physical RAM, and explicit MemAvailable
+still takes precedence over the optional cache estimate.
+
+A completed but contradictory file-read remains an ordinary failed observation,
+not a QGA transport pause. Existing negative-cache timing and independent
+provider/linked-agent selection remain unchanged. A cold guest can retain an
+independent provider tuple; an existing successful guest reading may instead
+remain bounded last-known evidence with its original observation time. Neither
+provider usage nor held guest data becomes current cache-aware guest pressure,
+and neither can clear an incident established by an earlier qualified sample. Normal valid polling can restore guest authority and
+clear it. The original backup-lock, single-attempt, uncertainty, observation-age
+and History rules remain required; no command or recovery route is added.
+
+Retained snapshots carry their explicitly annotated original source through
+subsequent failed and negative-cache polls. The `previous-snapshot` wrapper
+cannot discard a qualified origin after one poll and thereby clear a held
+incident using an independent provider fallback. This continuity remains
+last-known, uses the unchanged two-minute original-observation window and
+capacity fence, and adds no History points or guest-pressure authority. A
+wrapper with unknown/low-trust provenance, a missing/future/expired original,
+or a capacity change remains ineligible; independent current qualified memory
+still wins. `TestGuestMemoryRetainedOriginSurvivesRepeatedLowTrustPolls` covers
+those controls and 125 synthetic poll transitions across the original deadline.
+
+`pkg/proxmox/meminfo_integrity_test.go` covers contradictory physical components,
+overflow and the supported zero/shared-memory/modern-available boundaries.
+`TestGuestMeminfoIntegrityPollingContract` exercises both ordinary collectors
+with actual single/cluster HTTP clients for every physical-counter and
+estimate-refusal branch, canonical views, negative caching, backup-lock
+admission and the production alert decision. Rejected, negative-cached and
+locked polls must leave both percentage and byte History point sets exactly
+unchanged, including original times. Valid recovery and genuine zero must add
+only their own points. Each synthetic poll has a bounded caller context without
+changing production timeouts. These are
+synthetic source controls, not #2762 attribution, native freeze/restart recovery,
+resolution of #2439/#2619/#2822 or released availability.
+
 ### Existing memory origins cannot be renewed by AI consumers
 
 AI query/context/fact consumers now retain the selected guest observation and
@@ -180,12 +553,24 @@ probe was in flight, and cancelled work cannot initiate or commit new trust.
 Runtime captures belong to the client, not the caller's saved fingerprint map.
 This does not add a certificate-management surface or persist new runtime trust.
 
+The credential-free first-use TLS probe shares the polling caller's context:
+cancellation or deadline ends a stalled handshake and releases its socket without
+waiting for the peer. The existing five-second capture ceiling remains; it never
+extends the caller's budget. Cancellation is checked again under the trust mutex
+before a runtime pin is committed. A later ordinary caller may still establish
+the declared member's first-use pin and make the existing pin-verified API read.
+
 `TestClusterClientFingerprintTrustContract` checks changed and restored real TLS
 leaves through startup/recovery, token containment, known/equivalent pins,
 provider-text/undeclared/cancelled exclusions, concurrent first-use capture and
 ordinary first-use authenticated acceptance. The existing #1664 new-member
 control remains. These are secret-free loopback source proofs, not live cluster
 or installed acceptance, exploitation evidence or native guest recovery.
+
+`TestClusterClientFirstUseCaptureCancellation` holds an actual first-use TLS
+handshake behind a local barrier. Cancellation and deadline must return before
+that barrier is released, without a new pin or authenticated request; a fresh
+caller subsequently establishes the owned leaf and makes one pinned API read.
 
 ### Known Windows guests do not receive Linux-only memory reads
 
@@ -942,6 +1327,55 @@ original metadata/memory timestamps and guest History are not renewed, labelled
 last-known values remain and current CPU advances. These checks establish reply
 consistency, not native payload-to-command provenance, thaw, cross-process
 coordination or restart safety. The native recovery precaution below remains.
+
+The same pre-release check validates the types of present canonical reply
+fields: `result` is an object, array or null, `content` a string or null, and
+`truncated` a boolean or null. Primitive results and wrongly typed file fields
+cannot become empty filesystem/network inventories or release admission before
+a file decoder reports its error. They retain `agent-completion-unverified` and
+the original one-minute fence; blocked follow-ups do not renew that deadline.
+Absent/null fields, compatible object/array rows, unknown metadata and completed
+but unusable memory content keep their existing semantics. A measurement
+rejection alone does not pause ordinary OS discovery.
+
+`TestGuestAgentTypedSuccessDefersEveryRead` checks sixteen impossible field
+shapes through all six real HTTP readers, including no postflight/follow-up
+request and unaffected live counters.
+`TestGuestAgentTypedSuccessSharesUnrenewedFenceAndResumes` checks fresh clients,
+cluster aliases, VM/source isolation, unchanged expiry and valid resumption.
+`TestGuestAgentTypedSuccessPreservesFieldAndMeasurementSemantics` keeps empty,
+null, partial-row, escaped-text and truncated-measurement compatibility.
+`TestGuestAgentTypedReplyMonitoringContract` connects all three field kinds to
+the real poll builder, broadcast resource and History, with untouched
+healthy-read cache and observation origins: original memory/disk remain
+last-known with their QGA provenance, metadata is not renewed, CPU advances,
+and guest metrics are not renewed. This is synthetic source/consuming-surface proof, not attribution of
+the original freeze or native thaw/restart recovery.
+
+The success boundary also checks compatibility with the command sent, before
+postflight lock reads or release of shared admission. Present, non-null fields
+exclusive to another supported command (file content, OS identity, agent command
+catalogue, filesystem capacity or network interfaces), an explicit error payload,
+and list results for the two dictionary-valued information commands retain
+`agent-completion-unverified`. A recognizable network row must not become a
+current filesystem named `eth0`, nor a file/agent-info reply an empty current
+disk inventory. The original one-minute uncertainty fence, alias coordination,
+no-replay transport, credentials and independent live counters are unchanged.
+Empty/null replies, shared `name`/`version` fields, unknown metadata, supported
+object/array inventories, partial rows and completed unusable file measurements
+keep their existing semantics. This is contradiction detection, not proof of
+payload-to-command correlation: replies without discriminating fields remain
+indistinguishable, and native thaw/restart recovery remains unverified.
+
+`TestGuestAgentForeignReplyDefersEveryReader` covers cross-command/error replies
+through all six HTTP readers, with no postflight/follow-up guest request and
+independent PVE/VM controls. Alias/fresh-client/unchanged-expiry/resumption and
+compatible empty/partial-data tests complete the client boundary.
+`TestGuestAgentCommandReplyMonitoringContract` connects three foreign reply
+families through the actual polling builder, state, broadcast and History:
+original disk/memory remain last-known, metadata and measurement times are not
+renewed, and CPU advances. Source and browser fixture proof do not establish a
+native command-ID collision, incident cause, guest liveness or successful thaw.
 
 The completed-error boundary uses the actual HTTP status retained by the request
 layer, not an `API error` phrase in provider or proxy text. The supported
@@ -3774,6 +4208,20 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+### PBS authentication keeps an ended response caller's outcome
+
+Initial and ordinary PBS authentication preserve the owning caller's context
+error when cancellation races with response consumption. A cancelled JSON
+refusal cannot authorize a form retry, and a complete response cannot replace
+the retained session after its caller has ended. The pending owner's result
+keeps that context class for joined readers. Live malformed or refused
+responses retain their existing admission and HTTP-status behavior; an
+independent later login can recover without resetting retained credentials.
+`TestClientCancelledAuthResponseOwnsErrorAndSession` deterministically cancels
+during response reading for JSON/form, complete and incomplete success,
+encoding and credential refusal, and body-read failure. The real TLS
+constructor cancellation/deadline and shared-renewal controls remain separate.
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
@@ -4157,6 +4605,23 @@ thresholds. `TestApplyHostReportPreservesTypedSensorSummary` and
 and read-state preservation.
 
 ### PBS health is one completed-poll outcome
+
+Configured, active PVE/PBS connections whose initial client could not be
+constructed remain eligible for startup recovery for the monitor's lifetime.
+The existing 5/10/20/40/60-second backoff stays capped at sixty seconds; a
+five-minute startup window must not permanently strand a missing client
+outside the providers' ordinary polling lists. Cancellation interrupts the
+wait, paused instances are excluded, and constructor retries preserve the
+configured authority, authentication and TLS trust. This does not add a PMG
+retry route or change existing clients' request/renewal policies.
+`TestConnectionRetrySurvivesLongStartupOutage` advances the real timers with
+Go's virtual clock through a six-minute outage and checks every attempt's
+cadence and unchanged connection inputs. The cancellation and pause controls
+pin lifecycle/exclusion behaviour. `TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary`
+exercises the real pinned-TLS PBS constructor, ordinary scheduler task and
+broadcast producer: a recreated client still has no successful poll evidence,
+an accepted first poll restores measured host/datastore values, and a wrong
+saved pin remains refused without password-bearing HTTP or pin replacement.
 
 PBS client construction is transport setup, not connectivity evidence. Initial
 client creation and retry recreation therefore remain pending until a poll
@@ -6543,6 +7008,19 @@ the temperature SSH key on disk) and from every system-settings save
 settings API), so repairing the key — or saving settings after repairing SSH
 access any other way — is retried on the next cycle rather than after a window
 that has compounded to fifteen minutes.
+The shared socket dialler also tries the usable addresses in that one cached
+answer rather than discarding all but the first. It preserves answer order,
+filters explicit IPv4/IPv6 networks and deduplicates equivalent literals.
+Serial socket attempts share a ten-second ceiling or the earlier caller
+deadline; each attempt reserves a share for the remaining addresses.
+Cancellation stops later attempts and closes a connection that arrives after
+the caller ends. This is TCP/socket establishment, not HTTP replay, a change
+to discovery admission, new DNS resolution or a relaxation of TLS/authority.
+`pkg/tlsutil/dns_fallback_test.go` covers actual second-address sockets, retained
+cache reuse, caller budgets, cancellation, family selection and pinned HTTPS.
+The existing macOS private-address subprocess route is preserved; Linux socket
+controls do not establish native macOS/VPN acceptance.
+
 `internal/monitoring/issue1638_dns_cache_test.go` is the registered proof that
 repeat polls stay on the DNS cache, that the link-local blocklist still rejects
 hostname endpoints resolving into it, and that the SSH backoffs suppress,
@@ -7442,3 +7920,65 @@ Recovery rollup and alert readers take a locked snapshot of the manager pointer,
 matching the existing setter during live monitor dependency rebinding. The
 `TestBackupHealthRecoveryRebindingCanOverlapActiveReaders` race proof exercises
 rebinding while both consumers remain active.
+
+### Complete guest enumeration before publication (14 October 2026)
+
+PVE `cluster/resources`, node `qemu` and node `lxc` enumeration consume and
+close the whole existing 8 MiB-bounded HTTP response before admission. Only
+HTTP 200 containing a complete UTF-8 JSON object with an explicit canonical
+`data` array is authoritative inventory. Missing/null data, duplicate or
+case-variant supported fields, conflicting errors, trailing values, incomplete
+bodies, invalid rows and duplicate guest identities fail the whole enumeration;
+no partial inventory or provider body is returned as a successful reading.
+Cluster guest identities require a node and positive cluster-wide unique VMID.
+Node lists require positive unique VMIDs; existing LXC string integers remain.
+Scoped empty arrays, optional names/status/metrics, null counter presence,
+templates, unique provider metadata and unfiltered non-guest resources remain
+supported. Observation timestamps are assigned only to an admitted inventory.
+
+A refused efficient enumeration can use the existing ordinary node fallback.
+Failed node enumerations retain their earlier guest observations, History and
+backup-template eligibility; a complete fallback can still remove deleted
+guests and restore ordinary sampling. Complete cluster recovery returns to
+its efficient route. This changes no TLS/pin, credentials, permissions,
+polling cadence, guest-command/backup-lock checks, completion uncertainty,
+publication ownership or grace-period rules.
+
+`guest_inventory_response_test.go` covers complete-body and all-or-nothing
+admission on all three real HTTP readers; `io_counters_test.go` covers
+scoped-empty, extended fields, counter presence and receipt-time controls.
+`diagnostic_snapshots_test.go` covers actual efficient/fallback collection,
+owned publication, retained observation times, breach/History/template
+continuity, independent-connection preservation and normal recovery/removal.
+These controlled source proofs do not establish native thaw/restart recovery,
+installed trust, report attribution or release availability.
+
+Failed-node retention selects canonical guest membership but takes the unchanged
+complete tuple from that connection's last accepted producer state. Enrichment's
+partial previous-state projection is not an observation: it must not turn an
+unavailable/retained memory reading into zero, lose CPU/disk usage or change the
+original in-guest collection state. A node-scoped detached snapshot copies only
+selected guests, not unrelated host disks or Kubernetes state. The existing
+canonical/enrichment path remains the fallback when no accepted source tuple
+exists; linked-agent evidence is never promoted to Proxmox ownership. The
+same publication owner still admits or withdraws the eventual generation.
+`proxmox_guest_observations_test.go` checks scope, original memory provenance,
+CPU/disk/read time and nested detachment, alongside the end-to-end admission
+controls above. The first complete admission proof exposed the former partial
+retention and is retained as failed evidence, not weakened into acceptance.
+
+### Permission-denial diagnostics retain scoped access (14 October 2026)
+
+A PVE token's 403 error explains that privilege-separated access is the
+intersection of user and token ACLs on the intended resource. It no longer
+says to inspect only the user or includes the configured username/provider
+body. The actual HTTP status, authentication-error wrapping and guest permission
+classification remain; there is no retry, token rotation, access widening or
+TLS change. Diagnostics distinguishes rejected authentication from permission
+and other wire failures without promoting a denied resource to a reading.
+`TestClientRequest_403TokenPermissionHint` and
+`TestGetNodeStatusPermissionRefusalDoesNotInventMemory` cover the ordinary
+HTTP boundary, unknown-not-zero memory and resumed CPU/memory with the same
+credential. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials` covers
+pinned PVE/PBS fixture use and preserves the separate PBS scheduler state.
+Native scoped-fleet recovery, QGA/thaw and installed trust remain separate.

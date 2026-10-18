@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import type { VM } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import { getDiskUsagePercent, getWorkloadGroupKey } from '@/components/Workloads/workloadSelectors';
 
@@ -81,6 +82,192 @@ describe('useWorkloads', () => {
 
     resetWorkloadsCacheForTests();
   });
+
+  it.each(['api', 'snapshot'] as const)(
+    'preserves aggregate disk presence and percentage points through %s refreshes',
+    async (transport) => {
+      const [snapshot, setSnapshot] = createSignal<Resource[]>([]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+      try {
+        await flushAsync();
+        for (const [metric, expected] of [
+          [{ total: 100 }, null],
+          [{ used: 0 }, null],
+          [{}, null],
+          [{ used: 0, total: 100 }, 0],
+          [{ percent: 0 }, 0],
+          [{ percent: 0.5 }, 0.5],
+          [{ percent: 1 }, 1],
+          [{ value: 0.5 }, 0.5],
+          [{ value: 0, total: 100, unit: 'bytes' }, null],
+          [{ value: 0, used: 0, total: 100, unit: 'bytes' }, 0],
+          [{ value: 0, used: 50, total: 200, unit: 'bytes' }, 25],
+          [{ value: 0.5, unit: 'percent' }, 0.5],
+          [{ used: 50, total: 200 }, 25],
+          [{ percent: -1, used: 0, total: 100 }, null],
+          [{ percent: Infinity, used: 0, total: 100 }, null],
+        ] as const) {
+          if (transport === 'snapshot' && 'unit' in metric) continue;
+          const raw = { ...sampleResource, metrics: { ...sampleResource.metrics, disk: metric } };
+          if (transport === 'api') {
+            apiFetchJSONMock.mockResolvedValue({ data: [raw] });
+            await result.refetch();
+          } else {
+            const { percent, value, ...bytes } = metric as {
+              percent?: number;
+              value?: number;
+              total?: number;
+              used?: number;
+            };
+            setSnapshot([
+              {
+                ...raw,
+                lastSeen: Date.parse(raw.lastSeen),
+                memory: { current: 50, used: 2048, total: 4096 },
+                disk: { ...bytes, current: percent ?? value } as Resource['disk'],
+              } as unknown as Resource,
+            ]);
+          }
+          await flushAsync();
+          const row = result.workloads()[0];
+          expect(row.id).toBe(sampleResource.id);
+          expect(row.telemetryAvailability?.disk).toBe(expected !== null);
+          expect(getDiskUsagePercent(row)).toBe(expected);
+          if (expected === null && !('used' in metric)) expect(row.disk.used).toBeUndefined();
+          expect(row.memory.usage).toBe(50);
+        }
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it.each(
+    (['api', 'snapshot'] as const).flatMap((transport) =>
+      (['vm', 'system-container'] as const).map((type) => ({ transport, type })),
+    ),
+  )(
+    'preserves selected guest network interfaces through $transport for $type',
+    async ({ transport, type }) => {
+      const platformInterfaces = [
+        { name: 'eth0', addresses: ['192.0.2.80'], mac: '02:00:00:00:00:80' },
+        { name: 'podman0', addresses: ['10.88.0.1'] },
+      ];
+      const agentInterfaces = [
+        { name: 'ens18', addresses: ['192.0.2.80'], rxBytes: 1024, txBytes: 2048 },
+      ];
+      const resource: Resource = {
+        id: `${type}-site-a-2757`,
+        type,
+        name: 'guest-2757',
+        displayName: 'guest-2757',
+        platformId: 'site-a',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        sources: ['proxmox'],
+        status: 'running',
+        lastSeen: Date.parse(sampleResource.lastSeen),
+        identity: { ips: ['192.0.2.80', '10.88.0.1'] },
+        metricsTarget: { resourceType: type, resourceId: 'site-a-node-a-2757' },
+        proxmox: {
+          vmid: 2757,
+          nodeName: 'node-a',
+          instance: 'site-a',
+          networkInterfaces: platformInterfaces,
+        },
+      };
+      const apiResource = (value: Resource) => ({
+        ...value,
+        lastSeen: new Date(value.lastSeen).toISOString(),
+        identity: { ipAddresses: value.identity?.ips },
+      });
+      const [snapshot, setSnapshot] = createSignal([resource]);
+      apiFetchJSONMock.mockResolvedValue({ data: [apiResource(resource)] });
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+      const update = async (value: Resource) => {
+        if (transport === 'snapshot') setSnapshot([value]);
+        else {
+          apiFetchJSONMock.mockResolvedValue({ data: [apiResource(value)] });
+          await result.refetch();
+        }
+        await flushAsync();
+      };
+      const check = (
+        interfaces: typeof platformInterfaces | typeof agentInterfaces,
+        fromAgent: boolean,
+      ) => {
+        const guest = result.workloads()[0];
+        expect(guest.networkInterfaces).toEqual(interfaces);
+        expect(guest).toMatchObject({
+          id: resource.id,
+          canonicalResourceId: resource.id,
+          metricsTarget: resource.metricsTarget,
+          vmid: 2757,
+          node: 'node-a',
+          instance: 'site-a',
+          ipAddresses: ['192.0.2.80', '10.88.0.1'],
+          lastSeen: new Date(resource.lastSeen).toISOString(),
+          networkInterfacesFromAgent: fromAgent,
+        });
+        expect(Date.parse(guest.lastSeen)).toBe(resource.lastSeen);
+      };
+      try {
+        await waitForWorkloadCount(() => result.workloads().length);
+        check(platformInterfaces, false);
+        // An agent facet without interfaces does not erase API-provided names
+        // or make those API readings part of the silent agent's last report.
+        await update({ ...resource, agent: { agentId: 'linked-agent', stale: true } });
+        check(platformInterfaces, false);
+        expect(result.workloads()[0].agentStale).toBe(true);
+        await update({
+          ...resource,
+          agent: { agentId: 'linked-agent', networkInterfaces: agentInterfaces },
+        });
+        check(agentInterfaces, true);
+        await update({
+          ...resource,
+          agent: { agentId: 'linked-agent', stale: true, networkInterfaces: agentInterfaces },
+        });
+        check(agentInterfaces, true);
+        expect(result.workloads()[0].agentStale).toBe(true);
+        // A reported empty list remains authoritative; do not resurrect a
+        // different producer's interfaces merely because this list is empty.
+        await update({ ...resource, agent: { agentId: 'linked-agent', networkInterfaces: [] } });
+        check([], true);
+        await update({ ...resource, proxmox: { ...resource.proxmox, networkInterfaces: [] } });
+        check([], false);
+        await update({
+          ...resource,
+          proxmox: { ...resource.proxmox, networkInterfaces: undefined },
+        });
+        expect(result.workloads()[0].networkInterfaces).toBeUndefined();
+        expect(result.workloads()[0].networkInterfacesFromAgent).toBeUndefined();
+        await update(resource);
+        check(platformInterfaces, false);
+        if (transport === 'snapshot') expect(apiFetchJSONMock).not.toHaveBeenCalled();
+        else expect(apiFetchJSONMock).toHaveBeenCalledTimes(8);
+        expect(resource.proxmox?.networkInterfaces).toEqual(platformInterfaces);
+      } finally {
+        dispose();
+      }
+    },
+  );
 
   it.each(['invalid', '0002-01-01T00:00:00Z'])(
     'does not turn a present unusable backup time %s into absence',

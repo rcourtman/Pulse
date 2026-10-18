@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b54a2fa3f70d7df05e5d3fe1d3733326c2332da8",
+  "verified_at": "2026-10-12T18:23:23.779839Z",
+  "changed_paths": [
+    "docs/METRICS_HISTORY.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/METRICS_HISTORY.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "docs/METRICS_HISTORY.md": "2f3e78e9d066f2b7e221b6ed351c4cd8f7b40567a6d7b5e47332376ade0c6b11",
+    "docs/TROUBLESHOOTING.md": "cf128b8d4a3edb4595e57536d3370de0be636dd3300736efa4a6501c53861967",
+    "frontend-modern/public/docs/METRICS_HISTORY.md": "2f3e78e9d066f2b7e221b6ed351c4cd8f7b40567a6d7b5e47332376ade0c6b11",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "cf128b8d4a3edb4595e57536d3370de0be636dd3300736efa4a6501c53861967"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#guest-memory-is-high-but-available-memory-is-plentiful",
+    "/docs/METRICS_HISTORY#read-a-history-panel",
+    "/docs/METRICS_HISTORY#retention-and-accessible-range",
+    "/docs/PULSE_PRO#self-hosted-commercial-model",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "states": [
+    "Stored-time interpretation table: latest stored, selected stored, qualified fallback, single observation and missing observations",
+    "Unequal CPU/memory observation times and keyboard/touch History guidance",
+    "Stored retention versus active accessible range, retired Relay sale and continuing Pro subscriber terms",
+    "Guest-memory entry and linked backup-safety help"
+  ],
+  "interactions": [
+    "Keyboard activation of the existing guest-memory History interpretation link, with fragment focus and scroll",
+    "Direct range fragment navigation, plans link and backup-safety link with target focus",
+    "Scroll the comparison example at the narrow touch viewport",
+    "Inspect eight retained capture files natively; all table columns and new links remain readable without horizontal page overflow"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "touch": true
+    }
+  ],
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "driver": "frontend-modern/browser-tests/metrics-history-help.cjs"
+  },
+  "source_help_commit": "c036461de74c0e71932e7e481dc35ead26bbe685",
+  "containing_source_sha256": {
+    "docs/METRICS_HISTORY.md": "2f3e78e9d066f2b7e221b6ed351c4cd8f7b40567a6d7b5e47332376ade0c6b11",
+    "docs/PULSE_PRO.md": "776235ec660c1c53fef781e99b024bd2030d218afb8a601929e4bb5cf6b2dffb",
+    "docs/TROUBLESHOOTING.md": "cf128b8d4a3edb4595e57536d3370de0be636dd3300736efa4a6501c53861967",
+    "docs/VM_DISK_MONITORING.md": "88da3f28184e78b724f2bf59e39cbb1b7be65f8094ca2a3197c3d88875155b8e",
+    "frontend-modern/browser-tests/docs-fragment-navigation.html": "8303e101060aabd3247446676624d0f83b2cf81b9f6b1b71f180ea3432f66208",
+    "frontend-modern/browser-tests/docs-fragment-navigation.tsx": "2de6b8c853e5cd87790dcb6e582fefae07661d449835366cb72f2623b1bfe053",
+    "frontend-modern/browser-tests/metrics-history-help.cjs": "45b4189d641b6ec75fdb0dfd9889ef0d6ba6ca14edeac2f55e263cb4f7d2e674",
+    "frontend-modern/package-lock.json": "230d8a9ef15f68577ba07691753a52b4baad05b36b9d6058993955d3fe480ecb",
+    "frontend-modern/package.json": "e00d2edb9f70b43c7e43ef3d79195fc2148b58772c00a3e130fe721f0eec76ee",
+    "frontend-modern/public/docs/METRICS_HISTORY.md": "2f3e78e9d066f2b7e221b6ed351c4cd8f7b40567a6d7b5e47332376ade0c6b11",
+    "frontend-modern/public/docs/PULSE_PRO.md": "776235ec660c1c53fef781e99b024bd2030d218afb8a601929e4bb5cf6b2dffb",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "cf128b8d4a3edb4595e57536d3370de0be636dd3300736efa4a6501c53861967",
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md": "88da3f28184e78b724f2bf59e39cbb1b7be65f8094ca2a3197c3d88875155b8e",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/hooks/useKioskMode.ts": "31a30251cb828b2a32977143707f5cc1b57d980aa2228d6e09b26b000162cc0b",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/src/pages/Docs.tsx": "2ddb5a1daef50d23a99a7d1cb510c73cd7a85600f07ea9f69ad72f741f3b5229",
+    "frontend-modern/src/utils/url.ts": "94c3a37354a53b38169ed41188f1c4d18d2d04c829b6c8f9573d2fb2d28a93dc",
+    "frontend-modern/vite.config.ts": "de649c3466c8369b7ceff630b72f3733d1123417d6ef1964903450d64d796fb2",
+    "tests/integration/package-lock.json": "d6241c8c3ad5ccd1c97c749ea70e0b707a2dc5eabd8601faf19c78b8f79b975a"
+  },
+  "captures": [
+    {
+      "filename": "chromium-entry.png",
+      "bytes": 212900,
+      "sha256": "c40718b94d55645aa8389c815d793f9b673e3c7f3928af55ab5341873ea04d87"
+    },
+    {
+      "filename": "chromium-observations.png",
+      "bytes": 177877,
+      "sha256": "f993e99b0d895a8999642430718ee358220cfcc9dc52ea70650e5d996307c572"
+    },
+    {
+      "filename": "chromium-comparison.png",
+      "bytes": 177877,
+      "sha256": "f993e99b0d895a8999642430718ee358220cfcc9dc52ea70650e5d996307c572"
+    },
+    {
+      "filename": "chromium-range.png",
+      "bytes": 146986,
+      "sha256": "8a3102b040206bb83062c4a81befc7e3deb60118923551998a11510751ba09a0"
+    },
+    {
+      "filename": "webkit-entry.png",
+      "bytes": 129297,
+      "sha256": "120dce35f9200582d2a56957981b96dd239810bdc230308ac9e5da00a4b0c435"
+    },
+    {
+      "filename": "webkit-observations.png",
+      "bytes": 110289,
+      "sha256": "92ddf9b74d610be0f8bbd47de520b73af413c6a8ca3630441580bef5e00778dd"
+    },
+    {
+      "filename": "webkit-comparison.png",
+      "bytes": 125240,
+      "sha256": "fad1d40830e85f736ae5a983719cf38ec52f7635bbe41e2795cee024916a884d"
+    },
+    {
+      "filename": "webkit-range.png",
+      "bytes": 137572,
+      "sha256": "7b164d7ccdd59544af4f4df4d99ff9f4686ba1e200ae6f30c4f9e5add8b4eac5"
+    }
+  ],
+  "pixel_observations": [
+    "Desktop: focus outlines identify the guest-memory, History and range headings; the three-column table, 12:02/12:01 example, plan qualification and underlined links are legible and unclipped. The two desktop History captures are byte-identical because the comparison example was already visible.",
+    "Narrow dark WebKit: table columns wrap within 390 pixels; focus heading, missing-not-zero qualification, unequal-time example, History link and retired-Relay/range text remain legible. Vertical scroll is needed for the longer table and page, not horizontal scrolling."
+  ],
+  "backend_requests": [],
+  "mutations": [],
+  "console_and_page_errors": [],
+  "browser_and_server_closed": true,
+  "scope": "Existing production Docs/router/Markdown/CSS consumer and exact help bytes. No native guest, monitoring collector, licence migration, full authenticated app, release or installed-recovery acceptance."
+}

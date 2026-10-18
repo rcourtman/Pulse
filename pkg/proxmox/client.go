@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -321,16 +322,16 @@ type auth struct {
 
 // NewClient creates a new Proxmox VE API client
 func NewClient(cfg ClientConfig) (*Client, error) {
-	var user, realm string
+	return NewClientWithContext(context.Background(), cfg)
+}
 
-	// Log what auth method we're using
-	log.Debug().
-		Str("host", cfg.Host).
-		Bool("hasToken", cfg.TokenName != "").
-		Bool("hasPassword", cfg.Password != "").
-		Str("tokenName", cfg.TokenName).
-		Str("user", cfg.User).
-		Msg("Creating Proxmox client")
+// NewClientWithContext binds initial password authentication to its caller.
+// The retained client's later reads keep their own contexts and full timeout.
+func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var user, realm string
 
 	// For token authentication, we don't need user@realm format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
@@ -368,13 +369,25 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if baseHost == "" {
 		return nil, fmt.Errorf("host is required")
 	}
-	if !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://") {
+	defaultedScheme := !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://")
+	if defaultedScheme {
 		baseHost = "https://" + baseHost
-		log.Debug().Str("host", baseHost).Msg("No protocol specified in Proxmox host, defaulting to HTTPS")
 	}
-	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(baseHost, "")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "")
 	if err != nil {
 		return nil, fmt.Errorf("invalid Proxmox host: %w", err)
+	}
+	// Do not log raw configuration before URL validation.
+	log.Debug().
+		Str("host", baseHostURL.String()).
+		Bool("hasToken", cfg.TokenName != "").
+		Bool("hasPassword", cfg.Password != "").
+		Str("tokenName", cfg.TokenName).
+		Str("user", cfg.User).
+		Msg("Creating Proxmox client")
+
+	if defaultedScheme {
+		log.Debug().Str("host", baseHostURL.String()).Msg("No protocol specified in Proxmox host, defaulting to HTTPS")
 	}
 	if baseHostURL.Scheme == "http" {
 		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for Proxmox connection - consider enabling HTTPS")
@@ -411,29 +424,45 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 	// Authenticate if using password
 	if cfg.Password != "" && cfg.TokenName == "" {
-		if err := client.authenticate(context.Background()); err != nil {
+		if err := client.authenticate(ctx); err != nil {
+			httpClient.CloseIdleConnections()
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		httpClient.CloseIdleConnections()
+		return nil, err
 	}
 
 	return client, nil
 }
 
-// authenticate performs password-based authentication
+// Initial authentication belongs only to the constructing caller. It has no
+// retained session or other readers whose login must outlive that caller.
 func (c *Client) authenticate(ctx context.Context) error {
-	return c.renewAuthentication(ctx, nil)
+	loginCtx, cancel := context.WithTimeout(ctx, c.sessionRenewalTimeout())
+	defer cancel()
+	auth, _ := c.authSnapshot()
+	return c.authenticatePassword(loginCtx, auth.user+"@"+auth.realm)
+}
+
+func (c *Client) authenticatePassword(ctx context.Context, username string) error {
+	err := c.authenticateJSON(ctx, username, c.config.Password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(ctx, username, c.config.Password)
+	}
+	return err
 }
 
 // expected binds expiry or a 401 to the session actually used by that read.
 // A late rejection of an old ticket cannot trigger another renewal after a
-// concurrent request has already replaced it. Explicit authentication (nil)
-// still owns the existing JSON/form fallback and failed-attempt behaviour.
-func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
+// concurrent request has already replaced it.
+func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	c.authMu.Lock()
-	if expected != nil && c.authGeneration != *expected {
+	if c.authGeneration != expected {
 		c.authMu.Unlock()
 		return nil
 	}
@@ -459,11 +488,7 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
 	go func() {
 		defer cancelLogin()
-		password := c.config.Password
-		err := c.authenticateJSON(loginCtx, username, password)
-		if shouldFallbackToForm(err) {
-			err = c.authenticateForm(loginCtx, username, password)
-		}
+		err := c.authenticatePassword(loginCtx, username)
 		c.authMu.Lock()
 		pending.err = err
 		c.authInFlight = nil
@@ -555,20 +580,18 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		return err
 	}
 
-	var result struct {
-		Data struct {
-			Ticket              string `json:"ticket"`
-			CSRFPreventionToken string `json:"CSRFPreventionToken"`
-		} `json:"data"`
+	body, err := readResponseBodyLimited(resp.Body)
+	if err != nil {
+		return err
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	ticket, csrf, err := securityutil.ParseProxmoxSession(body)
+	if err != nil {
 		return err
 	}
 
 	c.authMu.Lock()
-	c.auth.ticket = result.Data.Ticket
-	c.auth.csrfToken = result.Data.CSRFPreventionToken
+	c.auth.ticket = ticket
+	c.auth.csrfToken = csrf
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
 	c.authGeneration++
 	c.authMu.Unlock()
@@ -611,7 +634,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 	// Re-authenticate if needed
 	auth, generation := c.authSnapshot()
 	if c.config.Password != "" && auth.tokenName == "" && time.Now().After(auth.expiresAt) {
-		if err := c.renewAuthentication(ctx, &generation); err != nil {
+		if err := c.renewAuthentication(ctx, generation); err != nil {
 			return nil, fmt.Errorf("re-authentication failed: %w", err)
 		}
 		auth, generation = c.authSnapshot()
@@ -673,7 +696,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.
 		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && auth.tokenName == "" {
-			if err := c.renewAuthentication(ctx, &generation); err != nil {
+			if err := c.renewAuthentication(ctx, generation); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
 			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
@@ -682,8 +705,10 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Create base error with helpful guidance for common issues
 		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
-			// Special case for 403 with API token - this is usually a permission issue
-			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", auth.user, auth.realm)
+			// Privilege-separated tokens are limited by both ACLs. A denied
+			// target may be deliberately outside the token's intended scope;
+			// neither credential rotation nor a wider grant follows from 403.
+			apiErr = errors.New("API error 403 (Forbidden): Proxmox denied access to this resource. With privilege separation enabled, effective access is the intersection of the owning user's and token's permissions. Check both ACLs on the intended resource path; do not widen the token's scope or disable privilege separation to silence a denial")
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
@@ -963,17 +988,14 @@ func (c *Client) GetNodes(ctx context.Context) ([]Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Node `json:"data"`
+	// /nodes is also the cluster's startup/recovery probe. A decodable JSON
+	// prefix or absent inventory cannot establish usable polling health.
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil {
+		return nil, fmt.Errorf("read Proxmox node inventory: %w", errors.Join(readErr, closeErr))
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return decodeNodeInventory(body)
 }
 
 // GetNodeStatus returns detailed status for a specific node
@@ -1287,18 +1309,13 @@ func (c *Client) GetVMs(ctx context.Context, node string) ([]VM, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []VM `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(vm VM) (string, bool) { return guestInventoryID(vm.VMID) })
+	if err != nil {
 		return nil, err
 	}
 
-	stampVMObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampVMObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // GetContainers returns all LXC containers on a specific node
@@ -1307,18 +1324,13 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Container `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(container Container) (string, bool) { return guestInventoryID(int(container.VMID)) })
+	if err != nil {
 		return nil, err
 	}
 
-	stampContainerObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampContainerObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // GetStorage returns storage information for a specific node
@@ -2377,7 +2389,9 @@ type LinuxMemoryAvailability struct {
 // ParseLinuxMemoryAvailability parses /proc/meminfo. New kernels provide
 // MemAvailable directly. Older kernels use the conservative cache-aware
 // estimate Free + Buffers + Cached + SReclaimable - Shmem. A partial payload
-// containing only MemTotal/MemFree is deliberately rejected.
+// containing only MemTotal/MemFree is deliberately rejected. Impossible
+// physical counters or a derived estimate above MemTotal are not measurements;
+// clamping them would manufacture a trusted zero-usage sample.
 func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAvailability, error) {
 	var result LinuxMemoryAvailability
 	seen := make(map[string]struct{})
@@ -2420,6 +2434,14 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 		*target = kB * 1024
 	}
 
+	if result.Total > 0 {
+		for _, name := range []string{"MemFree", "Buffers", "Cached", "SReclaimable", "Shmem"} {
+			if *fieldsByName[name] > result.Total {
+				return LinuxMemoryAvailability{}, fmt.Errorf("%s exceeds MemTotal", name)
+			}
+		}
+	}
+
 	if _, present := seen["MemAvailable"]; present {
 		if _, ok := seen["MemTotal"]; !ok || result.Total == 0 {
 			return LinuxMemoryAvailability{}, fmt.Errorf("MemAvailable has no valid MemTotal")
@@ -2450,8 +2472,7 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 	available := result.Free
 	for _, value := range []uint64{result.Buffers, result.Cached, result.SReclaimable} {
 		if math.MaxUint64-available < value {
-			available = math.MaxUint64
-			break
+			return LinuxMemoryAvailability{}, fmt.Errorf("cache-aware /proc/meminfo estimate overflows uint64")
 		}
 		available += value
 	}
@@ -2461,7 +2482,7 @@ func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAv
 		available -= result.Shmem
 	}
 	if available > result.Total {
-		available = result.Total
+		return LinuxMemoryAvailability{}, fmt.Errorf("derived MemAvailable exceeds MemTotal")
 	}
 	result.EffectiveAvailable = available
 	result.Source = "meminfo-derived"
@@ -2586,18 +2607,18 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []ClusterResource `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	values, err := readGuestInventory(resp, func(resource ClusterResource) (string, bool) {
+		if resourceType == "vm" && resource.Type != "qemu" && resource.Type != "lxc" {
+			return "", false
+		}
+		return clusterInventoryID(resource)
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	stampClusterResourceObservation(result.Data, time.Now().UTC())
-	return result.Data, nil
+	stampClusterResourceObservation(values, time.Now().UTC())
+	return values, nil
 }
 
 // ClusterOptions holds selected Proxmox datacenter configuration options.

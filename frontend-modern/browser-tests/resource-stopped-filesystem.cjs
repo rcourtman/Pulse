@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
-const root = '/workspace/frontend-modern';
+const workspace = process.env.PULSE_BROWSER_PROOF_ROOT || '/workspace';
+const root = path.join(workspace, 'frontend-modern');
 const origin = 'http://127.0.0.1:5343';
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const runtime = [
@@ -12,6 +13,7 @@ const runtime = [
   'frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx',
   'frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx',
   'frontend-modern/src/utils/workloadGuestPresentation.ts',
+  'frontend-modern/src/utils/memoryObservation.ts',
 ];
 const settle = (page) =>
   page.evaluate(async () => {
@@ -20,13 +22,18 @@ const settle = (page) =>
   });
 
 async function verify(original = false) {
-  const output = `/workspace/tmp/resource-stopped-filesystem/browser-${original ? 'original' : 'final'}`;
+  const output = path.join(
+    workspace,
+    `tmp/resource-stopped-filesystem/browser-${original ? 'original' : 'final'}`,
+  );
   fs.mkdirSync(output, { recursive: true });
   const result = {
     result: 'incomplete',
     phase: original ? 'original-adverse-observation' : 'candidate-verification',
     playwright: require('playwright/package.json').version,
-    runtime_hashes: Object.fromEntries(runtime.map((file) => [file, hash('/workspace/' + file)])),
+    runtime_hashes: Object.fromEntries(
+      runtime.map((file) => [file, hash(path.join(workspace, file))]),
+    ),
     cases: [],
     screenshots: [],
     cleanup: { browsers: false, server: false },
@@ -35,9 +42,8 @@ async function verify(original = false) {
   };
   assert.equal(
     result.playwright,
-    JSON.parse(fs.readFileSync('/workspace/tests/integration/package-lock.json')).packages[
-      'node_modules/@playwright/test'
-    ].version,
+    JSON.parse(fs.readFileSync(path.join(workspace, 'tests/integration/package-lock.json')))
+      .packages['node_modules/@playwright/test'].version,
   );
   process.chdir(root);
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
@@ -53,6 +59,7 @@ async function verify(original = false) {
     await server.listen();
     for (const [name, engine, width, height, dark] of [
       ['chromium-desktop-light', chromium, 1280, 900, false],
+      ['chromium-tablet-light', chromium, 1024, 768, false],
       ['webkit-phone-dark', webkit, 390, 844, true],
     ]) {
       browser = await engine.launch(
@@ -308,6 +315,68 @@ async function verify(original = false) {
         );
         await apply({ type: 'vm', power: 'stopped', status: 'online', reason: '', usage: 90 });
         await unavailable();
+        // Selected memory freshness belongs to its source, independently of guest type.
+        for (const type of ['vm', 'system-container']) {
+          await apply({
+            type,
+            power: 'running',
+            status: 'online',
+            memorySource: 'agent',
+            memoryState: 'current',
+            memoryUsage: 0,
+            agentStale: false,
+          });
+          assert.match(
+            await chart.locator('[data-history-current="memory"]').innerText(),
+            /0\.0%\s*current/,
+          );
+          const memoryReads = reads();
+          await apply({ agentStale: true });
+          assert.equal(await chart.locator('[data-history-current="memory"]').count(), 0);
+          assert.match(
+            await chart.locator('[data-history-last-known="memory"]').innerText(),
+            /0\.0%/,
+          );
+          assert.match(
+            await chart.locator('[data-history-deferred="memory"]').innerText(),
+            /Last known/,
+          );
+          assert.match(
+            await chart.locator('[data-history-deferred="memory"]').innerText(),
+            /2026-10-10 00:00:00 UTC/,
+          );
+          record.states.push({ state: `${type}-agent-stale`, text: await chart.innerText() });
+          await capture(`${type}-agent-stale`);
+          await apply({ memorySource: 'cluster-resources', memoryUsage: 95 });
+          assert.match(
+            await chart.locator('[data-history-current="memory"]').innerText(),
+            /95\.0%\s*current/,
+          );
+          await capture(`${type}-provider-current`);
+          await apply({ memoryState: 'last-known' });
+          const memoryText = await chart.locator('[data-history-deferred="memory"]').innerText();
+          if (type === 'vm') assert.match(memoryText, /may include cache/i);
+          else assert.doesNotMatch(memoryText, /may include cache/i);
+          await capture(`${type}-provider-retained`);
+          await apply({ memorySource: 'agent', memoryState: 'unknown', agentStale: false });
+          assert.equal(await chart.locator('[data-history-current="memory"]').count(), 0);
+          assert.match(
+            await chart.locator('[data-history-deferred="memory"]').innerText(),
+            /Freshness unknown/,
+          );
+          await apply({ memoryState: 'current' });
+          assert.equal(reads(), memoryReads);
+        }
+        record.checks.push(
+          'A stale selected agent retains its original memory observation for VM and LXC; independent Proxmox memory stays current, with the cache caveat only for VMs.',
+        );
+        await apply({
+          type: 'vm',
+          power: 'stopped',
+          memorySource: 'agent',
+          memoryUsage: 0,
+          agentStale: false,
+        });
         mode = 'stored';
         const read = page.waitForResponse((r) => r.url().includes('/api/metrics-store/history'));
         await page.clock.runFor(30_000);

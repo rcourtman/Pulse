@@ -14,6 +14,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requirePrivateBootstrapPrivilegeDispatch(t *testing.T, command string) {
+	t.Helper()
+	// The shared producer selects its root/sudo argv inside an isolated
+	// subshell. Duplicating the credential reader into literal root and sudo
+	// branches would exceed the common pasted-line budget.
+	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo -v;`)
+	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then set --; else set -- sudo; fi;`)
+	require.Contains(t, command, `"$@" bash -c `)
+	require.Equal(t, 1, strings.Count(command, "bash -c "), "the privileged body must be emitted once")
+}
+
 func TestNormalizeProxmoxInstallType(t *testing.T) {
 	installType, err := normalizeProxmoxInstallType(" PBS ")
 	require.NoError(t, err)
@@ -92,7 +103,7 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 	require.NotContains(t, command, "token-123")
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
-	require.Contains(t, command, `sudo bash -c`)
+	requirePrivateBootstrapPrivilegeDispatch(t, command)
 	require.Contains(t, command, `rmdir -- "$token_dir"`)
 	require.Contains(t, command, "pbs")
 	require.NotContains(t, command, "--enable-commands")
@@ -213,7 +224,7 @@ func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *test
 	require.Contains(t, command, "--enable-host")
 	require.NotContains(t, command, "--enable-host=false")
 	require.Contains(t, command, "--interval 30s")
-	require.Contains(t, command, `sudo bash -c`)
+	requirePrivateBootstrapPrivilegeDispatch(t, command)
 	require.Contains(t, command, "--preflight-only --output json --non-interactive")
 	require.Contains(t, command, `read -r -s -p`)
 	require.NotContains(t, command, "| bash")
@@ -262,7 +273,7 @@ func TestBuildSetupScriptCommand_OmitsTokenWhenNotProvided(t *testing.T) {
 
 	require.Contains(t, command, "curl -fsSL "+posixShellQuote("https://pulse.example.com/api/setup-script?type=pbs")+` -o "$install_script"`)
 	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then`)
-	require.Contains(t, command, `sudo bash -c`)
+	requirePrivateBootstrapPrivilegeDispatch(t, command)
 	require.NotContains(t, command, "PULSE_SETUP_TOKEN=")
 }
 

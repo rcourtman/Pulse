@@ -195,6 +195,18 @@ def latest_failed_runs(
     return sorted(result)
 
 
+def api_read_subject(endpoint: str) -> str:
+    """Name the managed resource, never read filters or arbitrary arguments."""
+    resource = endpoint.partition("?")[0]
+    if (
+        len(resource) <= 256
+        and re.fullmatch(r"repos/rcourtman/(?:Pulse|pulse-pro)(?:/[A-Za-z0-9_.-]+)*", resource)
+        and ".." not in resource.split("/")
+    ):
+        return f"GET {resource}"
+    return "GitHub API read"
+
+
 class GitHub:
     def __init__(
         self,
@@ -216,6 +228,7 @@ class GitHub:
         output: bool = True,
         token: str = "",
         retry_read: bool = False,
+        read_subject: str | None = None,
     ) -> str:
         env = None
         if token:
@@ -246,11 +259,12 @@ class GitHub:
         if result.returncode != 0:
             detail = result.stderr.strip().splitlines() if output else []
             suffix = f": {detail[-1]}" if detail else ""
+            operation = read_subject or " ".join(arguments[:3])
             if "HTTP 404" in result.stderr:
                 raise GitHubNotFound(
-                    f"GitHub object was not found ({' '.join(arguments[:3])}){suffix}"
+                    f"GitHub object was not found ({operation}){suffix}"
                 )
-            raise ReconciliationError(f"GitHub command failed ({' '.join(arguments[:3])}){suffix}")
+            raise ReconciliationError(f"GitHub command failed ({operation}){suffix}")
         return result.stdout if output else ""
 
     def api(self, endpoint: str, *, token: str = "") -> dict[str, Any]:
@@ -267,6 +281,7 @@ class GitHub:
                     ],
                     token=token,
                     retry_read=True,
+                    read_subject=api_read_subject(endpoint),
                 )
             )
         except json.JSONDecodeError as exc:
@@ -276,7 +291,10 @@ class GitHub:
         return value
 
     def pages(self, endpoint: str, *, token: str = "") -> list[object]:
-        output = self._run(["api", "--paginate", endpoint], token=token, retry_read=True)
+        output = self._run(
+            ["api", "--paginate", endpoint], token=token, retry_read=True,
+            read_subject=api_read_subject(endpoint),
+        )
         decoder = json.JSONDecoder()
         value: list[object] = []
         offset = 0

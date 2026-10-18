@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "d4dccb54a730bc927a94e40174edebe055bb3b4f",
+  "verified_at": "2026-10-13T06:31:38.300Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/utils/memoryObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "cab326245efb66528b4ae54c0d3705e00429b6406f9c5caf3a220b7356958b4c",
+    "frontend-modern/src/utils/memoryObservation.ts": "a3c9cc3dd0bc5e3adf1057ac346ff39b536dd086265978aba75ff9fc375a4cf6"
+  },
+  "routes": [
+    "/browser-tests/guest-memory-agent-stale.html (canonical delta merge, useWorkloads projection, GuestRow, GuestDrawer and ResourceDetailDrawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Explicit stale Pulse Agent signal leaves its selected current carrier wire metadata and original timestamp intact but presents the reading as last known, with stopped-reporting context visible and accessible. Original zero and 95% remain distinct from missing data.",
+    "Same-resource source updates preserve the Proxmox platform, backup lock and deferred QGA filesystem reading. Memory sorting and pressure filters exclude only the stale agent-owned observation.",
+    "Independent QGA and Proxmox memory observations remain current despite the linked Pulse Agent staleness. A new reporting-agent observation restores current measured zero in both History consumers without inventing chart points.",
+    "All eight retained desktop/phone screenshots were opened with native view_image. The original source/time, last-known labels and History explanation wrap without horizontal overflow; reporting zero withdraws only its memory deferral. This is synthetic-source presentation proof, not native restart/thaw/recovery, installed or release acceptance."
+  ],
+  "interactions": [
+    "Trusted keyboard Enter on desktop and touch on phone open History in both production drawers. Real display and memory-basis controls retain last-known accessibility in bars and sparklines.",
+    "Only loopback static assets and synthetic GET API reads are used; no mutation, live guest operation, page error or external connection. Both browsers and static listener close."
+  ]
+}

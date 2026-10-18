@@ -12,7 +12,13 @@ import {
   getAlertAttentionCopy,
   type AlertAttentionCopy,
 } from '@/features/alerts/metricAlertPresentation';
-import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
+import {
+  formatBackupCompletionTime,
+  formatBytes,
+  formatPercent,
+  getBackupInfo,
+  type BackupThresholds,
+} from '@/utils/format';
 import {
   getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
@@ -20,6 +26,7 @@ import {
 } from '@/utils/workloadGuestPresentation';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
+import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
@@ -117,8 +124,9 @@ export const getGuestDrawerAlertAttention = (
 };
 
 const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
-  const usage = guest.telemetryAvailability?.disk === false ? undefined : guest.disk?.usage;
-  return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
+  return guest.telemetryAvailability?.disk === false
+    ? undefined
+    : (getWorkloadDiskUsagePercent(guest.disk) ?? undefined);
 };
 
 export type GuestDrawerMemoryReading = MemoryObservationPresentation;
@@ -499,6 +507,9 @@ const guestReadDeferrals = new Set([
   'agent-busy',
   'agent-cooldown',
   'agent-response-incomplete',
+  'agent-completion-unverified',
+  'agent-redirect',
+  'agent-transport-unverified',
   'agent-capacity',
   'invalid-guest-key',
   'agent-timeout',
@@ -698,7 +709,7 @@ export const getGuestDrawerBackupPresentation = (
       dateLabel: 'Unknown',
     };
   }
-  const completedAt = new Date(timestamp!).toISOString();
+  const completion = formatBackupCompletionTime(timestamp!)!;
   const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
@@ -706,7 +717,6 @@ export const getGuestDrawerBackupPresentation = (
     // Elapsed age, not a rolling-day calendar claim: a 23-hour-old backup
     // need not have completed today. Keep older ages in days, like the table.
     ageLabel: daysSince === 0 ? info.ageFormatted : `${daysSince}d ago`,
-    dateLabel: completedAt.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
-    completedAt,
+    ...completion,
   };
 };

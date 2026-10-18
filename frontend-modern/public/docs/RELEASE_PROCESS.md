@@ -31,6 +31,20 @@ Choosing Preview does not make a beta production-qualified. Pulse's unattended
 systemd updater remains Stable-only. See [Automatic updates](AUTO_UPDATE.md) for
 deployment-specific update behaviour.
 
+### Daily betas
+
+Between stable releases, a beta is cut from `main` every **24 hours** when
+there are changes since the previous beta. Each carries everything on `main`
+at its cut, not just the fixes named in an issue reply. No beta is cut within
+a day of the release candidate being due. A beta has no soak and is never
+promoted to stable; a failed beta does not hold the stable release.
+
+You do not need to install every beta. A fix merged after a beta was cut is
+not in that beta, even if it is now on `main`. Use the containing version
+named in the issue reply and its published release notes, rather than assuming
+that the newest preview fixes your problem. Stable users receive the change
+only when a stable release containing it ships.
+
 ## Software releases and Helm charts
 
 The releases list contains both Pulse software and Helm charts. Software tags
@@ -50,10 +64,12 @@ with a chart asset. Follow the existing installation's
 
 Releases follow a fixed schedule rather than individual judgment.
 
-1. **Cut a candidate from `main`.** Fourteen days after the last stable release,
-   the next release candidate is cut from `main`, provided `main` has changed since
-   that release. An important fix that should not wait for the schedule can bring
-   that cut forward, or replace a candidate that is still soaking with a fresh one
+1. **Cut a candidate from `main`.** Stable publication is targeted **seven days
+   after the last stable release**, provided `main` has changed since that release.
+   The next release candidate becomes eligible **one day earlier**, reserving the
+   full 24-hour soak. Preparation and qualification can move publication later.
+   An important fix that should not wait for the schedule can bring that cut
+   forward, or replace a candidate that is still soaking with a fresh one
    that starts its own soak. A candidate carries everything merged to `main` at the
    cut. Nothing is selected for it or added to it afterwards.
 2. **Qualify and publish it.** Required checks include targeted tests, installation
@@ -79,18 +95,30 @@ Releases follow a fixed schedule rather than individual judgment.
 - A defect that the current stable release already has is fixed on `main` and ships
   in the next release.
 
-An urgent hotfix exception requires active customer harm and a justification
-recorded in the release notes. Narrow testing may instead use an immutable reporter
-test image. Such an image is a temporary diagnostic build and cannot be promoted
-directly to stable.
+An important fix can bring the next candidate cut forward. It still carries
+everything on `main` at the cut and goes through the same required checks and
+24-hour soak; it is not a selected patch release or a testing exemption.
 
 ## Taking part in Preview testing
 
 Start with the [published release notes](https://github.com/rcourtman/Pulse/releases).
-Back up your data, keep the documented rollback version available, and exercise
-the checks relevant to your installation. You do not need to install every preview.
+Keep a consistent [full-state backup](MIGRATION.md#full-state-recovery) and the
+documented rollback version available before an update. Follow the
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model)
+for your existing deployment; a backup of Pulse is not a backup of its monitored
+workloads. You do not need to install every preview.
+
+Retest a relevant correction through the next ordinary, safe use of the
+affected view or workflow. Do not repeat a guest freeze, backup failure,
+outage, uncertain update or queued notification just to confirm a fix. A
+successful Test or a source test is not confirmation of the original job;
+unavailable observations remain unknown. Preserve the existing state and
+evidence when recovery is uncertain.
 
 When [reporting a problem](https://github.com/rcourtman/Pulse/issues/new/choose),
-include the exact version, deployment method, expected and observed behaviour,
-and reproduction steps. Remove credentials and other private information from
-logs and screenshots. Confirmation that a named test worked is useful too.
+include the exact version already observed, deployment method, expected and
+observed behaviour, and original sequence; unknown details are valid. Use
+[locally reviewed, redacted evidence](TROUBLESHOOTING.md#collect-diagnostics-safely),
+not a new diagnostic run merely to fill a report. Confirmation of ordinary
+recovery is useful too; if the problem persists, reply on the original issue
+rather than filing it again.

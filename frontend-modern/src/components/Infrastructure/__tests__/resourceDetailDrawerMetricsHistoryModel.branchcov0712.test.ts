@@ -79,6 +79,36 @@ describe('canonical drawer History honours selected guest observation provenance
     expect(listing('system-container')).toContain('Source: Proxmox.');
   });
 
+  it.each(['vm', 'system-container'] as const)(
+    'keeps %s agent freshness independent of provider memory interpretation',
+    (type) => {
+      const value = { ...resource('current', 0), type, agent: { stale: false } };
+      value.memory!.observation!.source = 'agent';
+      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
+      value.agent.stale = true;
+      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+        lastKnownValue: 0,
+        message: expect.stringContaining('stopped reporting'),
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+        '2026-10-04 12:00:00 UTC',
+      );
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+        'Last known.',
+      );
+
+      // A stale supplemental agent cannot invalidate Proxmox's independent
+      // reading or change the VM/LXC distinction of a listing measurement.
+      value.memory!.observation!.source = 'cluster-resources';
+      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
+      value.memory!.observation!.state = 'last-known';
+      const message = getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+      expect(message).not.toContain('stopped reporting');
+      expect(message.includes('cached memory the VM can reuse')).toBe(type === 'vm');
+    },
+  );
+
   it.each([-1, 101, NaN, Infinity])('withdraws invalid retained memory %s', (value) => {
     expect(
       getResourceMetricsHistoryDeferredMetrics(resource('last-known', value)).memory.lastKnownValue,

@@ -1,6 +1,13 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { Dialog } from '@/components/shared/Dialog';
+import { getShippedDocUrl } from '@/utils/docsLinks';
+import {
+  GUEST_DRAWER_BACKUP_PRECAUTION,
+  getGuestDrawerGuestReadPrecaution,
+  getGuestDrawerGuestReadPresentation,
+  type GuestDrawerGuestReadEvidence,
+} from './guestDrawerModel';
 import {
   EXTERNAL_TEXT_LINK_BASE_CLASS,
   EXTERNAL_TEXT_LINK_VARIANT_CLASSES,
@@ -10,7 +17,13 @@ import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
-import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
+import {
+  formatBackupCompletionTime,
+  formatBytes,
+  formatRelativeTime,
+  getBackupInfo,
+  type BackupInfo,
+} from '@/utils/format';
 import { ALERT_BACKUP_THRESHOLDS_PATH } from '@/routing/resourceLinks';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
@@ -57,6 +70,7 @@ function BackupIndicator(props: {
   isTemplate: boolean;
   guestName?: string;
   backupRunning?: boolean;
+  guestReadEvidence?: GuestDrawerGuestReadEvidence;
 }) {
   if (props.isTemplate) return null;
 
@@ -65,6 +79,7 @@ function BackupIndicator(props: {
       lastBackup={props.lastBackup}
       backupRunning={props.backupRunning}
       guestName={props.guestName}
+      guestReadEvidence={props.guestReadEvidence}
       indicator
     />
   );
@@ -158,7 +173,7 @@ function NetworkInfoCell(props: {
         y={tip.pos().y}
       >
         <div class="min-w-[180px] max-w-[280px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
+          <div class="font-medium mb-1 text-base-content border-b border-border pb-1">
             Network Interfaces
           </div>
 
@@ -166,26 +181,26 @@ function NetworkInfoCell(props: {
             <For each={props.networkInterfaces}>
               {(iface, idx) => (
                 <div class="py-1" classList={{ 'border-t border-border': idx() > 0 }}>
-                  <div class="flex items-center gap-2 text-blue-400 font-medium">
+                  <div class="flex items-center gap-2 text-base-content font-medium">
                     <span>{iface.name || 'eth' + idx()}</span>
                     <Show when={iface.mac}>
-                      <span class="text-[9px] text-slate-500 font-normal">{iface.mac}</span>
+                      <span class="text-[9px] text-muted font-normal">{iface.mac}</span>
                     </Show>
                   </div>
                   <Show when={iface.addresses && iface.addresses.length > 0}>
                     <div class="mt-0.5 flex flex-wrap gap-1">
                       <For each={iface.addresses}>
-                        {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
+                        {(ip) => <span class="text-base-content font-mono">{ip}</span>}
                       </For>
                     </div>
                   </Show>
                   <Show when={!iface.addresses || iface.addresses.length === 0}>
-                    <span class="text-slate-500 text-[9px]">
+                    <span class="text-muted text-[9px]">
                       {getWorkloadsGuestNetworkEmptyState()}
                     </span>
                   </Show>
                   <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
-                    <div class="mt-0.5 text-[9px] text-slate-500">
+                    <div class="mt-0.5 text-[9px] text-muted">
                       RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
                     </div>
                   </Show>
@@ -196,13 +211,13 @@ function NetworkInfoCell(props: {
 
           <Show when={!hasInterfaces() && props.ipAddresses.length > 0}>
             <div class="py-1">
-              <div class="flex items-center gap-2 text-blue-400 font-medium">
+              <div class="flex items-center gap-2 text-base-content font-medium">
                 <span>IP Addresses</span>
-                <span class="text-[9px] text-slate-500 font-normal">No agent data</span>
+                <span class="text-[9px] text-muted font-normal">No agent data</span>
               </div>
               <div class="mt-0.5 flex flex-wrap gap-1">
                 <For each={props.ipAddresses}>
-                  {(ip) => <span class="text-slate-300 font-mono">{ip}</span>}
+                  {(ip) => <span class="text-base-content font-mono">{ip}</span>}
                 </For>
               </div>
             </div>
@@ -319,6 +334,7 @@ function BackupStatusCell(props: {
   backupRunning?: boolean;
   indicator?: boolean;
   guestName?: string;
+  guestReadEvidence?: GuestDrawerGuestReadEvidence;
 }) {
   const now = useRelativeTimeNow();
   const tip = useTooltip();
@@ -343,6 +359,10 @@ function BackupStatusCell(props: {
       : getBackupAgeBadgeLabel(props.lastBackup, info(), now()),
   );
   const hasCompletedBackup = createMemo(() => info().ageMs !== null);
+  // Parse/format only when the evidence is disclosed, not for every closed
+  // table row on each shared-clock tick. Unknown/future evidence has no time.
+  const completionTime = () =>
+    hasCompletedBackup() ? formatBackupCompletionTime(props.lastBackup!) : null;
   const ageRule = createMemo(() =>
     getWorkloadsGuestBackupAgeRule(info().status, alertsActivation.getBackupThresholds()),
   );
@@ -370,7 +390,14 @@ function BackupStatusCell(props: {
   // Both entry points reveal the same retained completion evidence. Hover
   // stays a shortcut on a fine pointer; the native button opens a read-only
   // dialog for keyboard/touch without stealing the enclosing row action.
-  const Evidence = (evidenceProps: { ruleLink?: boolean }) => (
+  // Backup completion and current guest-read state are separate evidence.
+  // Reuse the drawer's allowlisted interpretation; never infer thaw from a
+  // fresh timestamp, retained metadata or a reporting Pulse Agent.
+  const guestReadPresentation = () =>
+    props.guestReadEvidence ? getGuestDrawerGuestReadPresentation(props.guestReadEvidence) : null;
+  const guestReadPrecaution = () =>
+    props.guestReadEvidence ? getGuestDrawerGuestReadPrecaution(props.guestReadEvidence) : null;
+  const Evidence = (evidenceProps: { dialog?: boolean; ruleLink?: boolean }) => (
     <div class="space-y-2 text-xs">
       <Show when={props.guestName}>
         <p class="font-medium text-base-content wrap-break-word">{props.guestName}</p>
@@ -378,40 +405,35 @@ function BackupStatusCell(props: {
       <Show when={props.backupRunning}>
         <p class="text-blue-600 dark:text-blue-400">Backup running now…</p>
       </Show>
-      <Show when={hasCompletedBackup()}>
-        <div class="space-y-1">
-          <div class="text-muted">Last completed backup</div>
-          <time
-            class="block font-medium text-base-content"
-            dateTime={new Date(props.lastBackup!).toISOString()}
-          >
-            {new Date(props.lastBackup!).toLocaleDateString(undefined, {
-              weekday: 'short',
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-            {' · '}
-            {new Date(props.lastBackup!).toLocaleTimeString()}
-          </time>
-          <div class="text-base-content">{info().ageFormatted}</div>
-          <Show when={ageRule()}>
-            {(rule) => (
-              <p class="text-muted" data-backup-age-rule>
-                {rule()}
-              </p>
-            )}
-          </Show>
-          <Show when={evidenceProps.ruleLink && ageRule()}>
-            <a
-              href={ALERT_BACKUP_THRESHOLDS_PATH}
-              class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
-              onClick={() => setDetailsOpen(false)}
+      <Show when={completionTime()}>
+        {(completion) => (
+          <div class="space-y-1">
+            <div class="text-muted">Last completed backup</div>
+            <time
+              class="block whitespace-normal wrap-break-word font-medium text-base-content"
+              dateTime={completion().completedAt}
             >
-              Change when backups count as old
-            </a>
-          </Show>
-        </div>
+              {completion().dateLabel}
+            </time>
+            <div class="text-base-content">{info().ageFormatted}</div>
+            <Show when={ageRule()}>
+              {(rule) => (
+                <p class="text-muted" data-backup-age-rule>
+                  {rule()}
+                </p>
+              )}
+            </Show>
+            <Show when={evidenceProps.ruleLink && ageRule()}>
+              <a
+                href={ALERT_BACKUP_THRESHOLDS_PATH}
+                class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1`}
+                onClick={() => setDetailsOpen(false)}
+              >
+                Change when backups count as old
+              </a>
+            </Show>
+          </div>
+        )}
       </Show>
       <Show when={info().status === 'unknown'}>
         <p class="text-amber-700 dark:text-amber-300">{info().ageFormatted}</p>
@@ -422,6 +444,39 @@ function BackupStatusCell(props: {
             ? 'No completed backup yet - the first backup is running now.'
             : 'No backup has ever been recorded for this guest.'}
         </p>
+      </Show>
+      <Show when={guestReadPresentation()}>
+        {(reading) => (
+          <div class="space-y-2 border-t border-border pt-2" data-backup-guest-read-evidence>
+            <p
+              class={
+                reading().tone === 'warning'
+                  ? 'font-medium text-amber-700 dark:text-amber-300'
+                  : 'font-medium text-base-content'
+              }
+            >
+              Guest-agent reads: {reading().label}
+            </p>
+            <p class="whitespace-normal wrap-break-word leading-relaxed text-base-content">
+              {guestReadPrecaution() || reading().detail}
+            </p>
+            <Show when={reading().precaution}>
+              <p class="whitespace-normal wrap-break-word leading-relaxed text-base-content">
+                {GUEST_DRAWER_BACKUP_PRECAUTION}
+              </p>
+              {/* A hover tooltip is not an interactive surface. The same
+                  read-only guidance is reachable by keyboard/touch here. */}
+              <Show when={evidenceProps.dialog}>
+                <a
+                  href={getShippedDocUrl('VM_DISK_MONITORING.md')}
+                  class="inline-flex min-h-6 items-center font-medium text-blue-600 dark:text-blue-400 underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  Backup safety guidance
+                </a>
+              </Show>
+            </Show>
+          </div>
+        )}
       </Show>
     </div>
   );
@@ -489,7 +544,7 @@ function BackupStatusCell(props: {
             </button>
           </div>
           <div class="overflow-y-auto p-4">
-            <Evidence ruleLink />
+            <Evidence dialog ruleLink />
           </div>
         </Dialog>
       </Show>

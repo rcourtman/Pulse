@@ -192,7 +192,10 @@ test('serves only verified bytes, explicit routes and GET/HEAD; closes the liste
     assert.equal(js.body, 'assets/fixture.js');
     assert.match(js.type, /javascript/);
     assert.equal((await request('/assets/fixture.js', 'HEAD')).body, '');
-    assert.equal((await request('/docs/VM_DISK_MONITORING')).body, entryPaths[1]);
+    assert.equal(
+      (await request('/docs/VM_DISK_MONITORING')).body,
+      'browser-tests/guest-reading-help.html',
+    );
     assert.match((await request('/docs/VM_DISK_MONITORING.md')).type, /markdown/);
     for (const url of [
       '/missing.js',

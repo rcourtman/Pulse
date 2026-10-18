@@ -7,19 +7,24 @@ import { renderDocMarkdown } from '../docMarkdown';
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const source = readFileSync(path.join(frontendRoot, '../docs/UNIFIED_AGENT.md'), 'utf8');
 
-function setupSection() {
+function docSection(markdown: string, docPath: string, id: string) {
   const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(source, 'UNIFIED_AGENT');
-  const heading = article.querySelector('#private-file-installation-linux-macos-and-nas')!;
+  article.innerHTML = renderDocMarkdown(markdown, docPath);
+  const heading = article.querySelector(`#${id}`);
+  expect(heading, `${docPath}#${id} must be a real rendered destination`).not.toBeNull();
   const section = document.createElement('section');
   for (
-    let node = heading.nextElementSibling;
+    let node = heading!.nextElementSibling;
     node && !/^H[23]$/.test(node.tagName);
     node = node.nextElementSibling
   ) {
     section.append(node.cloneNode(true));
   }
   return section;
+}
+
+function setupSection() {
+  return docSection(source, 'UNIFIED_AGENT', 'private-file-installation-linux-macos-and-nas');
 }
 
 describe('Unified Agent private-file setup help', () => {
@@ -59,5 +64,88 @@ describe('Unified Agent private-file setup help', () => {
     expect(readFileSync(path.join(frontendRoot, 'public/docs/UNIFIED_AGENT.md'), 'utf8')).toBe(
       source,
     );
+  });
+});
+
+describe('Stopped agent-command help', () => {
+  const failureId = 'copied-agent-command-fails-before-installation';
+  const faq = readFileSync(path.join(frontendRoot, '../docs/FAQ.md'), 'utf8');
+  const troubleshooting = readFileSync(
+    path.join(frontendRoot, '../docs/TROUBLESHOOTING.md'),
+    'utf8',
+  );
+  const normalizedText = (section: HTMLElement) => section.textContent!.replace(/\s+/g, ' ');
+
+  it('makes the same failure destination reachable from setup and troubleshooting', () => {
+    for (const [name, markdown] of [
+      ['FAQ', faq],
+      ['TROUBLESHOOTING', troubleshooting],
+    ]) {
+      const article = document.createElement('article');
+      article.innerHTML = renderDocMarkdown(markdown, name);
+      expect(
+        article.querySelector(`a[data-doc-link][href="/docs/UNIFIED_AGENT#${failureId}"]`),
+      ).not.toBeNull();
+      expect(readFileSync(path.join(frontendRoot, `public/docs/${name}.md`), 'utf8')).toBe(
+        markdown,
+      );
+    }
+    const setup = docSection(faq, 'FAQ', 'how-do-i-add-a-node');
+    expect(
+      setup.querySelector(
+        'a[href="/docs/UNIFIED_AGENT#private-file-installation-linux-macos-and-nas"]',
+      ),
+    ).not.toBeNull();
+    expect(normalizedText(setup)).toContain('token only at its private prompt');
+  });
+
+  it('distinguishes stopped prompt, read-only inspection and destructive removal', () => {
+    const section = docSection(source, 'UNIFIED_AGENT', failureId);
+    const text = normalizedText(section);
+    expect(section.querySelectorAll(':scope > ul > li')).toHaveLength(3);
+    for (const fact of [
+      'Passing preflight is not installation',
+      'A real terminal can still produce this error',
+      'do not assume a missing tool from the terminal message alone',
+      'standalone read-only action, not removal',
+      'The error alone does not prove that removal ran',
+      'failed new command does not establish the cause of the earlier outage',
+    ]) {
+      expect(text).toContain(fact);
+    }
+    const producer = readFileSync(
+      path.join(frontendRoot, 'src/utils/agentInstallCommand.ts'),
+      'utf8',
+    );
+    expect(producer).toContain('--preflight-only');
+    expect(producer).toContain('--token-file "$token_file"');
+    const installer = readFileSync(path.join(frontendRoot, '../scripts/install.sh'), 'utf8');
+    expect(installer).toContain('--safe-profile-inspect is a standalone read-only action');
+    expect(installer).toContain('Safe-profile migration is unsupported on this platform');
+  });
+
+  it('links to existing private preparation and recovery without another executable recipe', () => {
+    const section = docSection(source, 'UNIFIED_AGENT', failureId);
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(source, 'UNIFIED_AGENT');
+    for (const id of [
+      'private-file-installation-linux-macos-and-nas',
+      'agent-lookup-returns-http-401-or-403',
+      'auto-update',
+      'uninstall',
+    ]) {
+      expect(section.querySelector(`a[href="#${id}"]`)).not.toBeNull();
+      expect(article.querySelector(`#${id}`)).not.toBeNull();
+    }
+    expect(section.querySelector('pre')).toBeNull();
+    for (const boundary of [
+      'Stop rather than bypass the private prompt',
+      'not an instruction to repeat a failed recovery attempt',
+      'name only the flag already used',
+      'Do not post the full copied command',
+      'do not repeat installation or removal to complete a report',
+    ]) {
+      expect(normalizedText(section)).toContain(boundary);
+    }
   });
 });

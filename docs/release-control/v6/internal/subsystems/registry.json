@@ -4706,6 +4706,7 @@
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/installtests/auto_update_systemd.py",
+        "scripts/installtests/run_unix_contracts.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
@@ -5365,6 +5366,20 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/tests/test_e2e_test_images.py"
+            ]
+          },
+          {
+            "id": "native-unix-installer-runner",
+            "label": "exhaustive native Unix installer execution proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/installtests/run_unix_contracts.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/native_unix_contract_runner_test.go",
+              "scripts/tests/test_native_installer_contract_runner.py"
             ]
           }
         ],
@@ -6106,7 +6121,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/nodeDrawerModel.branchcov0713.test.ts",
-              "frontend-modern/src/features/docker/__tests__/dockerHostDrawerModel.test.ts"
+              "frontend-modern/src/features/docker/__tests__/dockerHostDrawerModel.test.ts",
+              "frontend-modern/src/utils/__tests__/staleAgentMemory.test.ts"
             ]
           },
           {
@@ -6143,6 +6159,8 @@
               "frontend-modern/src/components/shared/InlineNotice.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/DrawerDiskListCard.readings.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/HostDrawer.filesystem-readings.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/NodeDrawerOverview.updateEvidence.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
               "frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts"
@@ -6551,7 +6569,7 @@
           },
           {
             "id": "proxmox-guest-counter-runtime",
-            "label": "Proxmox guest cumulative-counter presence and receipt-time proof",
+            "label": "Proxmox guest counter presence, receipt-time and memory integrity proof",
             "match_prefixes": [],
             "match_files": [
               "pkg/proxmox/client.go",
@@ -6561,10 +6579,13 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/router_state_test.go",
+              "internal/monitoring/guest_meminfo_integrity_test.go",
               "internal/monitoring/issue1613_contract_test.go",
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
               "internal/monitoring/ratetracker_test.go",
-              "pkg/proxmox/io_counters_test.go"
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/io_counters_test.go",
+              "pkg/proxmox/meminfo_integrity_test.go"
             ]
           },
           {
@@ -6594,7 +6615,8 @@
               "internal/monitoring/monitor_pve_cluster_refresh_test.go",
               "internal/monitoring/monitor_pve_disk_fallback_test.go",
               "pkg/proxmox/cluster_client_additional_api4_test.go",
-              "pkg/proxmox/cluster_client_api_test.go"
+              "pkg/proxmox/cluster_client_api_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go"
             ]
           },
           {
@@ -6678,8 +6700,10 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pkg/pbs/auth_session_concurrency_test.go",
               "pkg/pbs/client_http_test.go",
-              "pkg/pbs/client_test.go"
+              "pkg/pbs/client_test.go",
+              "pkg/pbs/host_diagnostics_regression_test.go"
             ]
           },
           {
@@ -6777,6 +6801,8 @@
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/ceph_test.go",
               "internal/monitoring/deadman_test.go",
+              "internal/monitoring/guest_meminfo_integrity_test.go",
+              "internal/monitoring/guest_memory_stability_test.go",
               "internal/monitoring/guest_poll_ownership_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
@@ -7388,6 +7414,7 @@
         "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/workloads.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
+        "frontend-modern/src/utils/filesystemByteUsage.ts",
         "frontend-modern/src/utils/resourceStateAdapters.ts",
         "frontend-modern/src/utils/searchQuery.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
@@ -7543,6 +7570,7 @@
               "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
               "frontend-modern/src/hooks/useWorkloads.ts",
               "frontend-modern/src/types/workloads.ts",
+              "frontend-modern/src/utils/filesystemByteUsage.ts",
               "frontend-modern/src/utils/searchQuery.ts",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
               "frontend-modern/src/utils/workloads.ts"
@@ -7791,6 +7819,7 @@
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/logging/logging.go",
+        "internal/securityutil/infrastructure_url.go",
         "internal/securityutil/private_path_other.go",
         "internal/securityutil/private_path_windows.go",
         "internal/securityutil/secure_storage_dir.go",
@@ -8129,6 +8158,21 @@
               "pkg/auth/sqlite_manager_queryplan_test.go",
               "pkg/auth/sqlite_manager_test.go",
               "pkg/server/server_test.go"
+            ]
+          },
+          {
+            "id": "infrastructure-endpoint-diagnostics",
+            "label": "rejected infrastructure URL confidentiality proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/securityutil/infrastructure_url.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/securityutil/infrastructure_url_test.go",
+              "pkg/pbs/host_diagnostics_regression_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go"
             ]
           }
         ],
@@ -8619,6 +8663,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceFacetSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceOperatorStateSection.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/DrawerDiskListCard.readings.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/HostDrawer.filesystem-readings.test.tsx",
               "frontend-modern/src/features/docker/__tests__/DockerAlertsTable.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerContainerLifecycleActions.test.ts",
               "frontend-modern/src/features/docker/__tests__/dockerContainerTableModel.test.ts",

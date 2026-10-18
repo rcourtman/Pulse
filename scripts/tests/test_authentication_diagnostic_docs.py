@@ -193,7 +193,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual(json.loads(requests[-1][3]) if body is not None else requests[-1][3],
                                          body if body is not None else b"")
 
-    def exercise_proxy(self, home, port, role, *, editor_exit=0, curl_exit=0):
+    def exercise_proxy(self, home, port, role, *, editor_exit=0, curl_exit=0, proxy_env=None):
         recipes = blocks("PROXY_AUTH")
         self.assertEqual(len(recipes), 1)
         recipe = recipes[0].replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
@@ -231,6 +231,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         for key in list(env):
             if key.lower().endswith("_proxy"):
                 del env[key]
+        env.update(proxy_env or {})
         result = subprocess.run(["bash", "-c", recipe], env=env, capture_output=True, timeout=15)
         edited = json.loads((home / "editor.json").read_text())
         self.assertEqual((edited["directory_mode"], edited["file_mode"]), (0o700, 0o600))
@@ -275,6 +276,37 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual(headers.get("X-Proxy-Roles"), expected_role)
                         for unexpected in ("X-API-Token", "Authorization", "Cookie", "X-Curlrc-Injected"):
                             self.assertNotIn(unexpected, headers)
+
+    def test_proxy_probe_bypasses_environment_proxies(self):
+        # --disable ignores .curlrc, not proxy environment variables. A direct
+        # role probe must send its administrator-capable secret only to Pulse.
+        for variable in ("http_proxy", "all_proxy", "ALL_PROXY"):
+            with self.subTest(variable=variable), proxy_server(403) as (port, requests), \
+                    proxy_server(200) as (proxy_port, proxy_requests), \
+                    tempfile.TemporaryDirectory() as temporary:
+                result = self.exercise_proxy(Path(temporary), port, "X-Proxy-Roles: none\n",
+                                             proxy_env={variable: f"http://127.0.0.1:{proxy_port}",
+                                                        "no_proxy": "", "NO_PROXY": ""})
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(proxy_requests, [], "the proxy must receive neither a request nor the secret")
+                self.assertEqual(result.stdout, b"HTTP 403\n")
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(requests[0][:2], ("GET", "/api/system/settings"))
+                self.assertEqual(requests[0][2]["X-Proxy-Secret"], TEST_TOKEN)
+
+    def test_proxy_denial_cannot_be_mistaken_for_pulse_role_gating(self):
+        # An environment proxy's 403 could otherwise conceal Pulse granting
+        # administrator access. The result must come from the intended host.
+        with proxy_server(200) as (port, requests), proxy_server(403) as (proxy_port, proxy_requests), \
+                tempfile.TemporaryDirectory() as temporary:
+            result = self.exercise_proxy(Path(temporary), port, "X-Proxy-Roles: none\n",
+                                         proxy_env={"http_proxy": f"http://127.0.0.1:{proxy_port}",
+                                                    "no_proxy": "", "NO_PROXY": ""})
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(proxy_requests, [], "a proxy denial is not a Pulse permission result")
+            self.assertEqual(result.stdout, b"HTTP 200\n")
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(requests[0][:2], ("GET", "/api/system/settings"))
 
     def test_proxy_setup_cannot_omit_role_choice_and_authenticated_boundary(self):
         source = DOCUMENTS["PROXY_AUTH"].read_text()

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -14,6 +15,173 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 CHART = b"qualified chart fixture"
 DIGEST = "sha256:" + hashlib.sha256(CHART).hexdigest()
+
+
+class HelmPagesIdentityTests(unittest.TestCase):
+    """Run the workflow identity step and its real packet verifier offline."""
+
+    def run_identity(self, *, release_updates=None, marker_updates=None,
+                     tampered_marker=False, verification="pass",
+                     portable=False, source_available=False, workflow=None):
+        workflow = workflow or (ROOT / ".github/workflows/helm-pages.yml").read_text()
+        step = workflow.split("        id: identity\n", 1)[1]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1].split(
+            "      - name:", 1)[0]).replace("${{ github.repository }}", "rcourtman/Pulse")
+        script += '\nprintf "IDENTITY_BOUNDARY\\n"\n'
+        marker = {"schema_version": 1, "tag": "v6.5.0", "release_id": "123",
+                  "target_commitish": "a" * 40, "source_release_run_id": "200",
+                  "helm_chart_digest": DIGEST}
+        marker.update(marker_updates or {})
+        signed_marker = json.dumps(marker).encode()
+        downloaded_marker = signed_marker + (b"\n" if tampered_marker else b"")
+        release = {"id": 123, "tag_name": "v6.5.0", "target_commitish": "a" * 40,
+                   "draft": False, "published_at": "2026-10-06T00:54:36Z",
+                   "immutable": True, "assets": [{"name": "release-activation.json",
+                       "state": "uploaded", "size": len(signed_marker),
+                       "digest": "sha256:" + hashlib.sha256(signed_marker).hexdigest()}]}
+        if portable:
+            release["assets"].append({"name": "release-build-provenance.sigstore.json",
+                                     "state": "uploaded", "size": 30,
+                                     "digest": "sha256:" + "b" * 64})
+        release.update(release_updates or {})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            for name in ("verify-github-release-integrity.sh", "require-safe-gh-attestation.sh",
+                         "write_github_output.py"):
+                shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
+            (root / "release.json").write_text(json.dumps(release))
+            (root / "downloaded-marker.json").write_bytes(downloaded_marker)
+            gh = root / "gh"
+            gh.write_text(textwrap.dedent('''\
+                #!/usr/bin/env python3
+                import hashlib, json, os, pathlib, subprocess, sys
+                args = sys.argv[1:]
+                with open("calls.jsonl", "a") as log:
+                    log.write(json.dumps(args) + "\\n")
+                if args == ["version"]:
+                    print("gh version 2.97.0 (test)")
+                elif args[0] == "api":
+                    endpoint = next(a for a in args if a.startswith("repos/"))
+                    if os.environ["VERIFICATION"] == "api":
+                        print("gh: Not Found (HTTP 404)", file=sys.stderr)
+                        sys.exit(1)
+                    if "/actions/runs/" in endpoint:
+                        if os.environ["SOURCE_AVAILABLE"] != "true":
+                            print("gh: Not Found (HTTP 404)", file=sys.stderr)
+                            sys.exit(1)
+                        payload = {"path": ".github/workflows/create-release.yml",
+                                   "event": "workflow_dispatch", "head_sha": "a" * 40}
+                    else:
+                        assert endpoint == "repos/rcourtman/Pulse/releases/tags/v6.5.0", args
+                        payload = json.loads(pathlib.Path("release.json").read_text())
+                    if "--jq" in args:
+                        result = subprocess.run(["jq", "-r", args[args.index("--jq") + 1]],
+                                                input=json.dumps(payload), text=True)
+                        sys.exit(result.returncode)
+                    print(json.dumps(payload))
+                elif args[:2] == ["release", "verify"]:
+                    if os.environ["VERIFICATION"] == "release": sys.exit(1)
+                    print('{"verified": true}')
+                elif args[:2] == ["release", "download"]:
+                    dest = pathlib.Path(args[args.index("--dir") + 1])
+                    assert "release-activation.json" not in args, "must verify consumed marker"
+                    (dest / "checksums.txt").write_text("fixture checksum manifest\\n")
+                    if "release-build-provenance.sigstore.json" in args:
+                        (dest / "release-build-provenance.sigstore.json").write_text("fixture bundle")
+                elif args[:2] == ["release", "verify-asset"]:
+                    asset = pathlib.Path(args[3])
+                    if asset.name == "release-activation.json":
+                        digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+                        pathlib.Path("consumed-marker.sha256").write_text(digest)
+                        if digest != os.environ["SIGNED_MARKER_SHA256"]: sys.exit(1)
+                    if os.environ["VERIFICATION"] == "asset": sys.exit(1)
+                    print('{"verified": true}')
+                elif args[:2] == ["attestation", "verify"]:
+                    assert "--deny-self-hosted-runners" in args, args
+                    assert args[args.index("--source-digest") + 1] == "a" * 40, args
+                    portable = os.environ["PORTABLE"] == "true"
+                    signer = "build-release-candidate.yml" if portable else "create-release.yml"
+                    assert args[args.index("--signer-workflow") + 1] == (
+                        "github.com/rcourtman/Pulse/.github/workflows/" + signer), args
+                    assert ("--bundle" in args) == portable, args
+                    assert args[args.index("--predicate-type") + 1] == "https://slsa.dev/provenance/v1", args
+                    if os.environ["VERIFICATION"] == "provenance": sys.exit(1)
+                else:
+                    raise AssertionError(args)
+                '''))
+            curl = root / "curl"
+            curl.write_text(textwrap.dedent('''\
+                #!/usr/bin/env python3
+                import pathlib, sys
+                args = sys.argv[1:]
+                assert args[-1] == "https://github.com/rcourtman/Pulse/releases/download/v6.5.0/release-activation.json", args
+                pathlib.Path(args[args.index("-o") + 1]).write_bytes(
+                    pathlib.Path("downloaded-marker.json").read_bytes())
+                '''))
+            gh.chmod(0o755)
+            curl.chmod(0o755)
+            output = root / "output"
+            env = {"PATH": f"{root}:{os.environ['PATH']}", "VERSION": "6.5.0",
+                   "GITHUB_REPOSITORY": "rcourtman/Pulse", "GITHUB_OUTPUT": str(output),
+                   "SOURCE_RELEASE_RUN_ID": "200", "TARGET_COMMITISH": "a" * 40,
+                   "CHART_DIGEST": DIGEST, "PULSE_RELEASE_ATTESTATION_ATTEMPTS": "1",
+                   "PULSE_RELEASE_ATTESTATION_RETRY_DELAY": "0", "VERIFICATION": verification,
+                   "SOURCE_AVAILABLE": str(source_available).lower(), "PORTABLE": str(portable).lower(),
+                   "SIGNED_MARKER_SHA256": hashlib.sha256(signed_marker).hexdigest()}
+            result = subprocess.run(["bash", "-c", script], cwd=root, env=env,
+                                    capture_output=True, text=True)
+            calls_file = root / "calls.jsonl"
+            calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+            return result, calls, output.read_text() if output.exists() else ""
+
+    def test_authenticated_packet_does_not_require_live_source_run(self):
+        for portable in (False, True):
+            with self.subTest(portable=portable):
+                result, calls, output = self.run_identity(portable=portable)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("IDENTITY_BOUNDARY", result.stdout)
+                self.assertIn("v6.5.0", output)
+                self.assertFalse(any("/actions/runs/" in a for c in calls for a in c))
+                self.assertTrue(any(c[:2] == ["release", "verify-asset"] for c in calls))
+                self.assertTrue(any(c[:2] == ["attestation", "verify"] for c in calls))
+
+    def test_tampered_consumed_marker_cannot_reach_outputs(self):
+        result, _, output = self.run_identity(tampered_marker=True, source_available=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("activation asset verification failed", result.stderr)
+        self.assertNotIn("IDENTITY_BOUNDARY", result.stdout)
+        self.assertEqual(output, "")
+
+    def test_packet_or_provenance_refusal_cannot_reach_outputs(self):
+        for verification in ("api", "release", "asset", "provenance"):
+            with self.subTest(verification=verification):
+                result, calls, output = self.run_identity(verification=verification)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("IDENTITY_BOUNDARY", result.stdout)
+                self.assertEqual(output, "")
+                if verification == "api":
+                    self.assertEqual(len(calls), 1, "an unavailable release must not seek a fallback")
+
+    def test_wrong_release_identity_cannot_reach_outputs(self):
+        for updates in ({"draft": True}, {"immutable": False}, {"published_at": ""},
+                        {"tag_name": "v6.4.5"}, {"target_commitish": "b" * 40},
+                        {"id": None}, {"id": 0}):
+            with self.subTest(updates=updates):
+                result, _, output = self.run_identity(release_updates=updates)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("IDENTITY_BOUNDARY", result.stdout)
+                self.assertEqual(output, "")
+
+    def test_authenticated_but_wrong_marker_identity_cannot_reach_outputs(self):
+        for updates in ({"schema_version": 2}, {"tag": "v6.4.5"}, {"release_id": "124"},
+                        {"target_commitish": "b" * 40}, {"source_release_run_id": "201"},
+                        {"helm_chart_digest": "sha256:" + "c" * 64}):
+            with self.subTest(updates=updates):
+                result, _, output = self.run_identity(marker_updates=updates)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("IDENTITY_BOUNDARY", result.stdout)
+                self.assertEqual(output, "")
 
 
 class HelmPagesRetryTests(unittest.TestCase):

@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "base_sha": "d549d1b5d2c66bad4dab8973f5e9c0efa0b9b8e2",
+  "verified_at": "2026-10-14T05:11:51.641541Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "b31159e78891a319de5cceccfc5039c9b4c0e8afda21774616c3e0ab5d5f99e6"
+  },
+  "routes": [
+    "/browser-tests/proxmox-collection-safety.html?type=pve",
+    "/browser-tests/proxmox-collection-safety.html?type=pbs",
+    "/browser-tests/proxmox-collection-safety.html?type=pmg"
+  ],
+  "states": [
+    "Existing production NodeCredentialSlot renders accurate PVE collection limits and a non-dismissible guest-agent backup precaution before the controls. PBS and PMG do not show QEMU advice.",
+    "All initial choices remain checked, SMART stays off and TLS verification stays on. The safety guidance stays present after disabling VM collection."
+  ],
+  "interactions": [
+    "Desktop keyboard Space and genuine 390px touch change one collector, then the production connection editor passes the unchanged existing-source save payload to the safe fixture callback.",
+    "Six cases preserve the edit target, unaffected collectors, certificate verification and existing credentials. No live API request or page exception; no horizontal overflow."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "solid": "1.9.15",
+    "seroval": "1.6.3"
+  },
+  "pixel_review": {
+    "tool": "native view_image; six original image contents presented to the model",
+    "observations": [
+      "PVE desktop and phone show the complete precaution and available/deferred caveat, with legible contrast and wrapping. The VM checkbox is visibly off; other collection choices remain on.",
+      "PBS and PMG desktop and phone preserve their own descriptions and controls with no guest-agent caution.",
+      "Element captures bound the collection section, not native monitoring or the entire settings journey."
+    ],
+    "captures": [
+      {
+        "file": "chromium-pve-collection.png",
+        "sha256": "9c7164839fdcefd1e8c46d480b42fd3af0eee713c49b094d289ab2e26b8ff8ea",
+        "bytes": 66460
+      },
+      {
+        "file": "chromium-pbs-collection.png",
+        "sha256": "60c8730000103ae27b38d9eaaa8839f6b54edbf4da812ee59979d6b9e78b537c",
+        "bytes": 35945
+      },
+      {
+        "file": "chromium-pmg-collection.png",
+        "sha256": "32288ed7b7c94a0236a46e89805d66199fe00d40d054bc39d4af657a7fb5b077",
+        "bytes": 36528
+      },
+      {
+        "file": "webkit-pve-collection.png",
+        "sha256": "c8b99c1716761bcccc9ac14ffbf64edf8ca4102909f74b244a6693cf194f9003",
+        "bytes": 60787
+      },
+      {
+        "file": "webkit-pbs-collection.png",
+        "sha256": "eb662b52ca766fe6f3bdb8116b32e5d08451787f36991a8b04206a02237c6b2b",
+        "bytes": 34753
+      },
+      {
+        "file": "webkit-pmg-collection.png",
+        "sha256": "eb807003a19a3f48827ba90008c80be75cf5b7dbe82538a99c78163afcc07cc4",
+        "bytes": 36659
+      }
+    ]
+  },
+  "scope": "Existing collection guidance and its production editor consumer only. Does not establish native thaw, writes, restart recovery, release availability, a passing authentication golden or qualification of the unmounted upgraded graph."
+}

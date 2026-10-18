@@ -297,7 +297,7 @@ func TestClientStatusAndResources(t *testing.T) {
 			})
 		case "/api2/json/cluster/resources":
 			writeJSON(t, w, map[string]interface{}{
-				"data": []ClusterResource{{ID: "qemu/100", Type: "vm", VMID: 100, Pool: "prod-vms"}},
+				"data": []ClusterResource{{ID: "qemu/100", Type: "qemu", Node: "node1", VMID: 100, Pool: "prod-vms"}},
 			})
 		case "/api2/json/nodes/node1/lxc/101/interfaces":
 			writeJSON(t, w, map[string]interface{}{

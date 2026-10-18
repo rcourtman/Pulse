@@ -117,3 +117,18 @@ The separate [alert recovery checklist](alert-recovery-acceptance.md) covers
 installed ordinary-event receipts, recurrence/restart isolation, and separately
 identified main-build screen-reader feedback. It is a manual procedure, not an
 automated runner or evidence that a candidate passed.
+
+## Patrol provider protocol tests
+
+The credential-free local provider uses Node's test runner, not Vitest. Run
+its protocol controls explicitly from `frontend-modern`:
+
+```sh
+node --test browser-tests/patrol-setup-provider.node-tests.cjs
+```
+
+The `.node-tests.cjs` name deliberately stays outside Vitest's `.test`/`.spec`
+discovery. The provider controls still execute with Node; naming them
+`.test.cjs` makes `npm test` import a second runner and fail with “No test
+suite found”, even when the protocol controls themselves pass. The browser
+journey continues to use `patrol-setup-real-backend.cjs`.

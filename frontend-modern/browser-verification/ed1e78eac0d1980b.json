@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "efd901c232a8c3748e20d7b6bec9193178a32738",
+  "tested_source_sha": "efd901c232a8c3748e20d7b6bec9193178a32738",
+  "changed_paths": [
+    "CONTRIBUTING.md",
+    "docs/TRUENAS.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/CONTRIBUTING.md",
+    "frontend-modern/public/docs/TRUENAS.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "CONTRIBUTING.md": "1d3bf03cc983e1a5a8742bafbee2ecb3ee805a4b20a1207ec2b37cb2fc48ab30",
+    "docs/TRUENAS.md": "d425946ae6f14c565c7c16df938613b66f690f105de206ebde9550c5464a0c71",
+    "docs/TROUBLESHOOTING.md": "9982b8850864e41d4c277c03d5999a3ff5b76fd625835668eb439141a1223446",
+    "frontend-modern/public/docs/CONTRIBUTING.md": "1d3bf03cc983e1a5a8742bafbee2ecb3ee805a4b20a1207ec2b37cb2fc48ab30",
+    "frontend-modern/public/docs/TRUENAS.md": "d425946ae6f14c565c7c16df938613b66f690f105de206ebde9550c5464a0c71",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "9982b8850864e41d4c277c03d5999a3ff5b76fd625835668eb439141a1223446"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#collect-diagnostics-safely",
+    "/docs/CONFIGURATION#log-levels",
+    "/docs/TRUENAS",
+    "/docs/CONTRIBUTING",
+    "/settings/support/diagnostics"
+  ],
+  "states": [
+    "Actual committed Markdown producer responses match the shipped assets and are consumed by Docs.",
+    "Canonical Support route, absent export controls until a result exists, and desktop/phone Run labels match guidance.",
+    "Original evidence leads intake; no live diagnostic run, export, mutation or upload."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and 390px touch follow existing Docs links to visible target headings and browser Back.",
+    "Existing diagnostic panel is opened in a safe authenticated shell fixture without activating either Run control."
+  ],
+  "viewports": [
+    {
+      "browser": "Chromium",
+      "width": 1440,
+      "height": 1000,
+      "input": "keyboard"
+    },
+    {
+      "browser": "WebKit",
+      "width": 390,
+      "height": 844,
+      "input": "touch"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "chromium-collection.jpg",
+      "sha256": "fdf082890e994000b9c4e0662a79d02ca158c666c557cb2e2ef3e8ba9070590d",
+      "native_pixel_review": true,
+      "observations": "Readable canonical Support navigation, same-origin path and phone Run wording; no-result/original-evidence and live-request warning remain in ordinary wrapped paragraphs. No page overflow."
+    },
+    {
+      "path": "chromium-bundle.jpg",
+      "sha256": "fdf082890e994000b9c4e0662a79d02ca158c666c557cb2e2ef3e8ba9070590d",
+      "native_pixel_review": true,
+      "observations": "Full System Logs archive clearly distinct from diagnostic downloads; manual review/privacy and live-data limits remain readable. Phone links/prose wrap without page overflow."
+    },
+    {
+      "path": "chromium-intake.jpg",
+      "sha256": "b66640a13c6ab4b64ccf12a051832a49b9342cc392a1358a6ee8af020f416fc5",
+      "native_pixel_review": true,
+      "observations": "Contributor entry explicitly makes diagnostics optional, names Support \u2192 Diagnostics & Health, reuses displayed result and keeps unsafe repeat/public-disclosure precautions."
+    },
+    {
+      "path": "chromium-existing-panel.jpg",
+      "sha256": "a1874ad65b5c04d8a37b1e432302226f0c381cd846165a8d4c3a634445c2f4d8",
+      "native_pixel_review": true,
+      "observations": "Actual Diagnostics & Health title, desktop Run Diagnostics / phone Run and safety/export text are readable. Desktop also shows no-result message and second Run control; downloads are absent. Neither Run is activated."
+    },
+    {
+      "path": "webkit-collection.jpg",
+      "sha256": "c276cd810fb87c92621c905de3402c849d416b15cb991d5bd0285cde478e3b1e",
+      "native_pixel_review": true,
+      "observations": "Readable canonical Support navigation, same-origin path and phone Run wording; no-result/original-evidence and live-request warning remain in ordinary wrapped paragraphs. No page overflow."
+    },
+    {
+      "path": "webkit-bundle.jpg",
+      "sha256": "e90488e55cb0263d9e5945c5dd67400a69fd8a1632eef88443cb45776e17f7fb",
+      "native_pixel_review": true,
+      "observations": "Full System Logs archive clearly distinct from diagnostic downloads; manual review/privacy and live-data limits remain readable. Phone links/prose wrap without page overflow."
+    },
+    {
+      "path": "webkit-intake.jpg",
+      "sha256": "c1c8d6f3e7dba9530461bd70dcdd724671d56200fdf26a6444ad0281e841ced1",
+      "native_pixel_review": true,
+      "observations": "Contributor entry explicitly makes diagnostics optional, names Support \u2192 Diagnostics & Health, reuses displayed result and keeps unsafe repeat/public-disclosure precautions."
+    },
+    {
+      "path": "webkit-existing-panel.jpg",
+      "sha256": "3dbd0cb80273166e8161890c900e0c1f060787d2120a526a70ffd0477ce8913f",
+      "native_pixel_review": true,
+      "observations": "Actual Diagnostics & Health title, desktop Run Diagnostics / phone Run and safety/export text are readable. Desktop also shows no-result message and second Run control; downloads are absent. Neither Run is activated."
+    }
+  ],
+  "proof_command": "pulse-worker-browser tmp/diagnostics-help/proof.cjs; corrected remaining-only drivers are retained in BROWSER-MATRIX.json.",
+  "verified_at": "2026-10-14T04:30:35.893062+00:00",
+  "limits": [
+    "chromium-collection.jpg and chromium-bundle.jpg have identical pixels; native Back/link assertions are separate, not a distinct captured state.",
+    "Phone panel capture shows the Run control and safety warnings; the empty-result title sits below the fold. Its presence and absence of exports are browser DOM checks, not claimed visible title pixels. Safe fixtures report reconnecting/absent backend; no TLS, session, native diagnostic or WebSocket acceptance.",
+    "Original auth/array-fixture and whitespace-assertion failures are retained. No changed renderer, access or live-check behaviour.",
+    "Ten completed cases span original source 6860dde3 and containing efd901c2, whose producer/consumer/manifests bytes match."
+  ]
+}

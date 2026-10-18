@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -275,6 +276,10 @@ func (m *Monitor) releaseGuestMetadataSlot() {
 	}
 }
 
+// This marker is evidence that the callback never started, not a classification
+// of a cancellation returned by an already-started guest command.
+var errGuestAgentCallNotStarted = errors.New("guest agent call not started")
+
 // retryGuestAgentCall executes a guest agent API call with timeout and retry logic (refs #592)
 func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration, maxRetries int, fn func(context.Context) (interface{}, error)) (interface{}, error) {
 	if fn == nil {
@@ -298,6 +303,14 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				// A prior attempt did start. Do not relabel its outcome as an
+				// unstarted command merely because the retry budget ended.
+				return nil, errors.Join(lastErr, err)
+			}
+			return nil, fmt.Errorf("%w: %w", errGuestAgentCallNotStarted, err)
+		}
 		callCtx, cancel := context.WithTimeout(ctx, timeout)
 		result, err := fn(callCtx)
 		cancel()
@@ -468,10 +481,14 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 		}
 		if err != nil {
-			if reason := proxmox.GuestAgentErrorReason(err); reason == "permission-denied" || reason == "agent-not-running" {
-				// The request was not admitted or QGA was stopped, so this did
-				// not exercise the OS-info command. Do not permanently disable
-				// that command when ordinary access/agent availability returns.
+			status, statusKnown := proxmox.APIErrorStatus(err)
+			if reason := proxmox.GuestAgentErrorReason(err); errors.Is(err, errGuestAgentCallNotStarted) || reason == "permission-denied" || reason == "agent-not-running" || (statusKnown && status == http.StatusTooManyRequests) {
+				// Access/rate refusal or stopped QGA did not exercise this
+				// command. Use the wire status, not OS-like or status-like body
+				// text: a temporary rate limit must not disable OS discovery.
+				// An ended caller budget before the callback starts likewise
+				// cannot count as a failed OS command. A cancellation after
+				// admission still owns its existing outcome/uncertainty fence.
 				// Preserve any real prior failures and the normal refresh backoff.
 				log.Debug().
 					Str("instance", instanceName).
@@ -614,6 +631,19 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 
 func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", instanceName, nodeName, vmid)
+}
+
+// PVE node names and VM IDs cannot contain '|', but connection labels can.
+// Read the two fixed suffixes from the right: "site|other" is not owned by
+// "site". Retirement must never erase another connection's command-safety
+// state, cancel its fetch, or discard its refresh/backoff deadline.
+func guestMetadataCacheBelongsToInstance(key, instanceName string) bool {
+	end := strings.LastIndexByte(key, '|')
+	if end < 0 {
+		return false
+	}
+	end = strings.LastIndexByte(key[:end], '|')
+	return end >= 0 && key[:end] == instanceName
 }
 
 func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid int) {

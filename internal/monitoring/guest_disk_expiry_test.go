@@ -165,8 +165,15 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 								used = 0 // A measured zero is a successful recovery.
 							}
 							fmt.Fprintf(w, `{"data":{"result":[{"mountpoint":"C:\\","type":"ntfs","total-bytes":%d,"used-bytes":%d}]}}`, 1000*mib, used)
-						} else {
+						} else if strings.HasSuffix(r.URL.Path, "/get-osinfo") || strings.HasSuffix(r.URL.Path, "/info") {
+							// Unknown metadata is a valid empty object, not a
+							// foreign list that must pause shared command admission.
+							fmt.Fprint(w, `{"data":{"result":{}}}`)
+						} else if strings.HasSuffix(r.URL.Path, "/network-get-interfaces") {
 							fmt.Fprint(w, `{"data":{"result":[]}}`)
+						} else {
+							t.Errorf("unexpected guest command: %s", r.URL.Path)
+							http.NotFound(w, r)
 						}
 					default:
 						http.NotFound(w, r)

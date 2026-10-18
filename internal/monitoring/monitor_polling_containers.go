@@ -364,12 +364,9 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 
 	preservedContainers := 0
 	if len(failedNodeNames) > 0 {
-		for _, container := range prevGuests.containers {
-			if _, failed := failedNodeNames[container.Node]; failed {
-				allContainers = append(allContainers, container)
-				preservedContainers++
-			}
-		}
+		_, retained := m.retainedGuestsForFailedNodes(instanceName, failedNodeNames, prevGuests)
+		allContainers = append(allContainers, retained...)
+		preservedContainers = len(retained)
 	}
 	if preservedContainers > 0 {
 		log.Warn().

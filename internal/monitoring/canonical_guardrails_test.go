@@ -118,6 +118,15 @@ func TestPBSClientConstructionCannotPublishConnectedHealth(t *testing.T) {
 	}
 }
 
+// Keep the registered monitoring proof connected to executable lifecycle,
+// trust and actual producer controls, not a source-text expiry assertion.
+func TestStartupConnectionRecoveryCanonicalContract(t *testing.T) {
+	t.Run("late-recovery", TestConnectionRetrySurvivesLongStartupOutage)
+	t.Run("cancel-capped-wait", TestConnectionRetryLongOutageStopsOnCancellation)
+	t.Run("paused-exclusions", TestConnectionRetryDoesNotResumePausedConnections)
+	t.Run("pbs-trust-and-first-poll", TestPBSStartupRecoveryKeepsTrustAndFirstPollBoundary)
+}
+
 func TestMultiTenantMonitorListOrganizationIDsFallsBackToDefault(t *testing.T) {
 	got, err := (&MultiTenantMonitor{}).ListOrganizationIDs()
 	if err != nil {
@@ -3390,6 +3399,19 @@ func TestGuestAgentSuccessEnvelopeMonitoringContract(t *testing.T) {
 	// it only supplies a malformed, ambiguous or prefix-only reply. These
 	// real client/builder controls also keep independent CPU progressing.
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "malformed success", "ambiguous success", "trailing success")
+}
+
+func TestGuestAgentTypedReplyMonitoringContract(t *testing.T) {
+	// Valid JSON with impossible result/file field types is still unreadable
+	// command evidence, not an empty current inventory or a completion fence.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "typed result", "typed content", "typed truncated")
+}
+
+func TestGuestAgentCommandReplyMonitoringContract(t *testing.T) {
+	// A complete but recognizably foreign command reply cannot clear a
+	// filesystem request or renew its capacity/History. Keep actual warm
+	// observation origins and live CPU across both deferral polls.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "foreign file", "foreign network", "foreign version")
 }
 
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {

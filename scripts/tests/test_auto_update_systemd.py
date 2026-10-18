@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Discriminating controls for the native CI recipe; no host manager/root use."""
+import contextlib
 import importlib.util
 import io
 import json
@@ -111,6 +112,38 @@ class NativeContracts(unittest.TestCase):
             allocator = root / "mktemp"; allocator.write_text(native.TRANSPORT); allocator.chmod(0o755)
             result = subprocess.run([str(allocator), "-d", "/tmp/pulse-backup.XXXXXX"], env=env, capture_output=True, check=True)
             self.assertEqual(Path(result.stdout.decode().strip()).parent, root / "tmp")
+
+    def test_transport_accepts_actual_bounded_downloader_and_rejects_option_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "curl"; script.write_text(native.TRANSPORT); script.chmod(0o755)
+            payload = b"private signed fixture bytes\n"
+            (root / "installer").write_bytes(payload)
+            (root / "installer.sshsig").write_bytes(b"private signature sidecar\n")
+            env = {**os.environ, "PULSE_NATIVE_ROOT": str(root),
+                   "PATH": str(root) + os.pathsep + os.environ["PATH"]}
+            url = "https://github.com/rcourtman/Pulse/releases/download/v0.0.2/install.sh"
+            shell = ('source "$1"; download_update_asset "$2" "$3"')
+            for suffix in ("", ".sshsig"):
+                target = root / "downloaded"
+                result = subprocess.run(["bash", "-c", shell, "fixture",
+                                         str(ROOT / "scripts/pulse-auto-update.sh"), url + suffix, str(target)],
+                                        env=env, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(target.read_bytes(), (root / ("installer" + suffix)).read_bytes())
+                target.unlink()
+            flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
+                     "--proto", "=https", "--proto-redir", "=https"]
+            for changed in (flags[1:], [*flags, "--insecure"],
+                            [arg if arg != "60" else "61" for arg in flags],
+                            [arg if arg != "=https" else "=all" for arg in flags],
+                            [*flags, "https://example.com/install.sh"],
+                            [*flags, "--max-time", "60"]):
+                with self.subTest(flags=changed):
+                    result = subprocess.run([str(script), *changed, url, "-o", str(root / "refused")],
+                                            env=env, capture_output=True)
+                    self.assertEqual(result.returncode, 97)
+                    self.assertFalse((root / "refused").exists())
 
     def test_real_verifier_accepts_fixture_and_refuses_tampering(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -267,6 +300,7 @@ class NativeContracts(unittest.TestCase):
                 else:
                     lab.phase("forward", "v0.0.2", active="inactive")
                     self.assertTrue(lab.receipt["phases"][0]["passed"])
+                self.assertEqual(lab.operation, "forward")
 
     def test_managed_process_identity_follows_served_readiness_and_rejects_residuals(self):
         for mutation in ("", "process-bytes", "stopped-after-readiness", "inactive-pid"):
@@ -632,6 +666,93 @@ else: sys.exit(97)
                         source.replace("EXPECTED_SOURCE_SHA: ${{ github.sha }}", "EXPECTED_SOURCE_SHA: main"),
                         source.replace("runs-on: ubuntu-24.04", "runs-on: self-hosted")):
             with self.assertRaises(AssertionError): recipe(changed)
+
+    def run_receipt(self, primary, cleanup_fails):
+        # Execute the actual receipt producer, with real unprivileged failing
+        # children. Substitute only native admission and service/account work.
+        # These controls cannot provide a native transaction or cleanup proof.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            receipt = root / "receipt.json"
+            lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
+            owned_cleanup = lab.cleanup
+            def prepare():
+                lab.operation = "baseline-install"
+                if primary == "command":
+                    lab.run("/bin/bash", "-c", "printf 'private-transaction-fixture'; exit 23")
+                if primary == "timeout":
+                    lab.run(sys.executable, "-c", "import time; time.sleep(60)", timeout=0.05)
+                if primary == "assertion":
+                    raise RuntimeError("confined persistence assertion")
+            def exercise():
+                lab.receipt["phases"] = [{"name": "confined-control"}] * 7
+            def cleanup():
+                lab.operation = "cleanup"
+                if cleanup_fails:
+                    lab.run(sys.executable, "-c", "print('private-cleanup-fixture'); raise SystemExit(31)")
+                owned_cleanup()  # Owns nothing; touches no manager.
+            argv = ["native-receipt-control", "--before", "unused-before", "--after", "unused-after",
+                    "--receipt", str(receipt)]
+            with patch.dict(os.environ, {"EXPECTED_SOURCE_SHA": "a" * 40, "RUNNER_TEMP": str(root)}), \
+                 patch.object(sys, "argv", argv), patch.object(native, "hosted_admission"), \
+                 patch.object(native, "NativeLab", return_value=lab), \
+                 patch.object(lab, "prepare", side_effect=prepare), \
+                 patch.object(lab, "exercise", side_effect=exercise), \
+                 patch.object(lab, "cleanup", side_effect=cleanup), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                if primary or cleanup_fails:
+                    with self.assertRaises(SystemExit): native.main()
+                else:
+                    native.main()
+            result = json.loads(receipt.read_text())
+            for private in ("private-transaction-fixture", "private-cleanup-fixture", str(root)):
+                self.assertNotIn(private, json.dumps(result))
+            return result
+
+    def test_primary_command_survives_successful_or_failed_cleanup(self):
+        for cleanup_fails in (False, True):
+            with self.subTest(cleanup_fails=cleanup_fails):
+                result = self.run_receipt("command", cleanup_fails)
+                self.assertEqual(result["command_failure"]["observed_exit"], 23)
+                self.assertEqual(result["command_failure"]["command"], "bash")
+                self.assertEqual(result["command_failure"]["operation"], "baseline-install")
+                self.assertEqual(result["failure"]["operation"], "baseline-install")
+                self.assertEqual(result["phases"], [])
+                self.assertEqual(result["cleanup"]["complete"], not cleanup_fails)
+                if cleanup_fails:
+                    self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+                    self.assertEqual(result["cleanup"]["command_failure"]["operation"], "cleanup")
+                else:
+                    self.assertNotIn("command_failure", result["cleanup"])
+
+    def test_primary_timeout_is_not_replaced_by_cleanup_exit(self):
+        result = self.run_receipt("timeout", True)
+        self.assertTrue(result["command_failure"]["deadline_exceeded"])
+        self.assertLess(result["command_failure"]["observed_exit"], 0)
+        self.assertEqual(result["command_failure"]["operation"], "baseline-install")
+        self.assertNotIn("output_sha256", result["command_failure"])
+        self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+        self.assertEqual(result["phases"], [])
+
+    def test_assertion_and_cleanup_only_errors_do_not_invent_primary_command(self):
+        for primary in ("assertion", ""):
+            with self.subTest(primary=primary):
+                result = self.run_receipt(primary, True)
+                self.assertNotIn("command_failure", result)
+                self.assertEqual(result["cleanup"]["command_failure"]["observed_exit"], 31)
+                self.assertFalse(result["cleanup"]["complete"])
+                if primary:
+                    self.assertEqual(result["failure"]["operation"], "baseline-install")
+                    self.assertEqual(result["phases"], [])
+                else:
+                    self.assertNotIn("failure", result)
+
+    def test_successful_receipt_retains_no_failure_record(self):
+        result = self.run_receipt("", False)
+        self.assertNotIn("failure", result)
+        self.assertNotIn("command_failure", result)
+        self.assertNotIn("command_failure", result["cleanup"])
+        self.assertTrue(result["cleanup"]["complete"])
 
 
 if __name__ == "__main__":

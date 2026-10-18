@@ -19,6 +19,14 @@ Reporters may still write free-form issues, edit form output, or discover a
 second topic during discussion. Triage owns decomposition in those cases; it
 must not require the reporter to refile information they already supplied.
 
+Automatic metadata uses top-level rendered Markdown fields, not declarations
+inside quoted logs, nested lists, raw HTML or code examples. A legacy bullet
+whose first line explicitly names **Pulse version** remains a declaration;
+a copied continuation does not. Hidden comments do not supply a value, and
+an upgrade title's **from** version is not a fallback for the failing version.
+These labels support intake only: they do not establish a cause, resolution or
+reason to contact the reporter. Existing reports need no refile.
+
 The bug and pre-release forms ask for the version on the failing running
 instance, not merely the version before an upgrade. If installation failed
 before Pulse started, the attempted version or release asset is the relevant

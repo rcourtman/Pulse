@@ -1058,7 +1058,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	if isUnraid() {
 		persistPath := unraidPersistentPathFn(agentName)
 		if _, err := os.Stat(persistPath); err == nil {
-			u.syncPersistentBinaryCopy(execPath, persistPath, "unraid")
+			u.syncPersistentBinaryCopy(realExecPath, persistPath, "unraid")
 		}
 	}
 
@@ -1066,7 +1066,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 		persistPath := qnapPersistentPathFn(u.cfg.StateDir, agentName)
 		if persistPath != "" {
 			if _, err := os.Stat(filepath.Dir(persistPath)); err == nil {
-				u.syncPersistentBinaryCopy(execPath, persistPath, "qnap")
+				u.syncPersistentBinaryCopy(realExecPath, persistPath, "qnap")
 			}
 		}
 	}
@@ -1187,6 +1187,15 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 }
 
 func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform string) {
+	// QNAP normally runs directly from its persistent data volume. The main
+	// replacement has already installed the verified, executable binary there.
+	// Compare file identity, not path spelling, to include symlinked mounts.
+	if execInfo, err := os.Stat(execPath); err == nil {
+		if persistInfo, err := os.Stat(persistPath); err == nil && os.SameFile(execInfo, persistInfo) {
+			return
+		}
+	}
+
 	u.logger.Debug().Str("path", persistPath).Str("platform", platform).Msg("updating persistent binary")
 
 	newBinary, err := readFileFn(execPath)
@@ -1195,16 +1204,39 @@ func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform strin
 		return
 	}
 
-	tmpPersist := persistPath + ".tmp"
-	if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
+	// Use an owned, exclusive temporary in the destination directory. A fixed
+	// .tmp path can retain old permissions or follow a leftover symlink.
+	tmpFile, err := createTempFn(filepath.Dir(persistPath), filepath.Base(persistPath)+"-persist-*.tmp")
+	if err != nil {
+		u.logger.Warn().Err(err).Str("path", persistPath).Str("platform", platform).Msg("failed to create temporary persistent binary")
+		return
+	}
+	tmpPersist := tmpFile.Name()
+	defer func() {
+		if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Str("platform", platform).Msg("failed to remove temporary persistent binary")
+		}
+	}()
+
+	if _, err := tmpFile.Write(newBinary); err != nil {
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to write persistent binary")
+		return
+	}
+	if err := closeFileFn(tmpFile); err != nil {
+		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to close persistent binary")
+		return
+	}
+	// WriteFile's mode does not repair an existing file, and a restrictive
+	// umask can remove execute bits. Establish them before the atomic rename.
+	if err := chmodFn(tmpPersist, 0755); err != nil {
+		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to chmod persistent binary")
 		return
 	}
 	if err := renameFn(tmpPersist, persistPath); err != nil {
 		u.logger.Warn().Err(err).Str("path", persistPath).Str("platform", platform).Msg("failed to replace persistent binary")
-		if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Str("platform", platform).Msg("failed to remove temporary persistent binary")
-		}
 		return
 	}
 

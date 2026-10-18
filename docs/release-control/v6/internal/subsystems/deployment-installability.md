@@ -32,6 +32,77 @@ artifact dispatch, opt-out, pricing or customer entitlements.
 
 
 
+### Issue metadata checks before publication (14 October 2026)
+
+Build and Test runs the locked issue parser and silent-triage policy tests on
+proposed source, not only after publication when an issue event obtains its
+write credential. Parser/test/manifest changes, issue templates, triage guidance
+and every workflow read by the policy tests admit the check. Missing bases admit
+it too; complete receipt-only ranges and unrelated inputs do not. Guidance-only
+changes still run it even when application runtime checks are inapplicable.
+Mixed source or dependency ranges retain every existing runtime/audit check.
+
+The bounded hosted job uses Node 24, read-only repository permission, checkout
+without persisted credentials, no dependency cache and a locked install without
+lifecycle scripts. Both install and test failures propagate; no App token,
+issue mutation, tolerant exit or production operation belongs to this job.
+The separate issue-event pre-token test remains mandatory and unchanged.
+
+`TestCIIssueMetadataUsesSourceOnlyTriageChecks` executes the actual workflow's
+classification and recipes through `test_ci_browser_proof_only.py`, including
+real Git whole-range/lookalike controls and install/test failure exits. Actual
+locked parser tests remain independently required. These source controls do not
+establish a hosted pass, live issue classification or reporter resolution.
+
+### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
+
+The Unix uninstall caller selects these platforms from their vendor/installed
+footprints, not from an ordinary recovered Linux state directory or QNAP state
+finder alone. Existing exact state-removal authority must select the wrapper's
+state directory. Regular root-owned files and parents are required; FAT boot
+volumes cannot be assumed to implement Unix chmod semantics. Unknown wrapper
+ownership and missing observation tools refuse before mutation.
+
+One complete bounded boot-file parse admits only the exact generated Unraid
+launch or canonical QNAP deferred block/legacy direct launch for that wrapper.
+All duplicates retire; unrelated entries (including co-installed names and
+legacy Telegraf) remain. Foreign/indirect targets, partial or changed blocks,
+linked/non-regular files, binary/incomplete content and over-1-MiB files refuse
+without evaluating or disclosing their text. The original remains in a private
+`.pulse-removal.*` recovery directory outside the active boot namespace through
+remote confirmation. A changed source during staging or a concurrently created
+file, directory or symlink refuses without clobbering it; interrupted staging
+retains the actual original and never restores automatic activation. New boot
+content uses no-clobber file creation, compatible with FAT without hard links;
+this is not an atomic whole-content swap or a lock against external root writers.
+
+Complete bounded kernel evidence returns only numeric IDs and roles. Only exact
+selected watchdog/collector processes receive checked TERM, watchdog first,
+with independent absence observations. Editor sessions, backup wrappers and
+co-installed names are not targets. Relative/foreign same-name processes or
+unattributable QNAP deferred autorun or live Unraid go shells refuse instead
+of signalling another boot owner. A live go shell may already hold later boot
+commands in memory; editing its file cannot establish quiescence. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
+retain identity, credentials, trust and recoverable files. QNAP mount and
+unmount each have checked bounded results, including cleanup after partial mount.
+
+Whole boot/process and applicable init-manager quiescence closes again before
+same-instance server removal and before local erasure; late activation refuses,
+even after remote removal succeeded. NAS paths do not subsequently run the
+unchecked global pkill or delete arbitrary discovered QNAP state/whole legacy
+Unraid directories. Successful/absent/repeated removal still requires complete
+fresh observations. No automatic restart, credential churn or transport-policy
+change follows a partial operation.
+
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
+actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+boot filesystem transformations are real private user operations; flash/kernel
+faults are closed models. Two generated watchdog/child controls use real private
+ordinary-user processes, not appliance mounts or root services. Native signed
+Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
+publication remain separate obligations; this source proof does not resolve
+#1099 or claim installed restoration.
+
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 
 The [agent lifecycle removal contract](agent-lifecycle.md#truenas-scale-removal-retires-every-owned-middleware-boot-task-before-recovery-erasure)
@@ -336,6 +407,23 @@ cleanup removes only objects created by this attempt. Compiler and root-command
 failures stay gating under the existing job's deadline; a seven-day closed receipt
 contains source/binary/output hashes, all phases and cleanup, never signer keys,
 persistent contents or raw application/installer logs.
+
+Failed commands and assertions name their fixed preparation or transaction
+operation. The original transaction's `command_failure` is preserved before
+cleanup runs, and a cleanup command failure is retained separately under
+`cleanup.command_failure`. A successful cleanup must not label the earlier
+transaction failure as its own; an assertion or cleanup-only failure must not
+invent an executed transaction command. Timeout facts remain distinct from a
+later numeric cleanup exit, with no stale output hash attached. Neither these
+labels nor completed owned cleanup diagnose why an update failed or accept a
+native phase. `test_primary_command_survives_successful_or_failed_cleanup`,
+`test_primary_timeout_is_not_replaced_by_cleanup_exit`,
+`test_assertion_and_cleanup_only_errors_do_not_invent_primary_command` and
+`test_successful_receipt_retains_no_failure_record` drive the actual receipt
+producer with real confined failing/timeout children and no native manager;
+the registered Go harness requires every portable verdict. Raw command output,
+private fixture contents, argv and paths remain outside these observations.
+
 The private fixture disables telemetry and binds the existing service to loopback;
 it exposes no test server on the hosted VM's external interface.
 Before compiling the native pair, CI requires the exact checkout head and no
@@ -1141,6 +1229,27 @@ the selection and budget cases run in `scripts/tests/test-ci-benchmarks.sh`.
 
 ### Public Helm exact-package receipt
 
+Helm Pages admission uses the immutable published packet, not the continued
+availability of its old Actions source-run record. The identity step authenticates
+the exact downloaded activation marker with `verify-github-release-integrity.sh`,
+bound to the observed release ID, tag and expected source SHA, before parsing it
+or writing outputs. It then requires that marker's release ID, source-run ID and
+chart digest to match the requested identity. The existing verifier still requires
+signed release/asset evidence and canonical hosted checksum provenance; subsequent
+OCI recovery still requires exact chart digest, canonical chart-publisher provenance
+and source SHA. No unverifiable packet may fall back to an Actions lookup, another
+credential, or unchecked chart metadata.
+
+The workflow previously depended on the source Actions record even though chart
+recovery already used durable OCI provenance. A current read of the stable source
+run returns 404; that establishes unavailability, not deletion or its cause.
+`HelmPagesIdentityTests` executes the identity shell and real packet verifier with
+offline CLI fixtures for unavailable source runs, legacy/portable provenance,
+tampered consumed marker bytes, verification refusals and mismatched identities.
+This is source repair proof, not a claim that the historical Helm HTTP404 has been
+attributed or that public Pages, reconciliation, demo credentials or a release
+have recovered.
+
 The post-activation public Pages verification in `.github/workflows/helm-pages.yml`
 must pull the requested chart version through the consumer repository and compare
 its archive bytes with the package already recovered through OCI qualification.
@@ -1850,6 +1959,8 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 103. `scripts/release_lifecycle_rehearsal_versions.py`
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
+
+`scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
 
 ## Shared Boundaries
 
@@ -5161,6 +5272,19 @@ including nested copies. Exact acquired-graph source/build/browser validation
 and the complete hosted audit remain distinct obligations; official patch
 metadata and a lockfile do not by themselves clear an audit failure.
 
+Ordinary frontend CI must check Solid's actual locked Seroval and plugin
+dependency edges before installing the graph. An npm override cannot silently
+reuse an older compatibility proof after the consumer changes its requirements.
+`scripts/check-frontend-serialization.mjs` preserves only the exact qualified
+Solid `1.9.15` / Seroval `1.6.3` root override of `~1.5.4`; otherwise each
+resolved serializer must satisfy Solid's full stable tilde range, including
+nested consumers and dependencies. New range forms require review. The
+standalone regression suite rejects the Solid `1.9.16` / `~1.6.8` update with
+stale Seroval `1.6.3` or plugins `1.5.5`, accepts matched updates, and checks
+the non-optional pre-install CI wiring. This is a graph-admission check, not
+official-byte authenticity, a security-audit verdict or installed UI proof;
+the existing security floors and actual consumer tests remain required.
+
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
@@ -7371,22 +7495,31 @@ The test transport remains in-memory and does not contact a cluster. Version
 0.37 compatibility is not installed-cluster acceptance or qualification of other
 libraries in a grouped dependency proposal.
 
-### Node setup action v7 compatibility
+### Node setup and artifact action refresh (14 October 2026)
 
 Workflow consumers pin `actions/setup-node` to
-`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
-retains the Node 24 execution runtime, setup/cache-save entry points and existing
-inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
-application toolchain. Consumers do not supply `registry-url` or depend on the
+`949feb2413d6458794dcd2491c4babbbce0c15c1` (v7.1.0), `actions/upload-artifact`
+to `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (v7.0.2), and
+`actions/download-artifact` to `9000827ccba6bdab643e8b6fd33ac0654aef8333`
+(v8.0.2). The download action remains an exact reviewed trust baseline, not
+an arbitrary full-SHA or mutable-version admission. The refresh does not change
+the requested Node 24 application toolchain. Consumers do not supply
+`registry-url` or depend on the
 removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
 jobs and disabled automatic package-manager caching for privileged release jobs
-remain unchanged; no permission, dispatch input or signing backend changes.
+remain unchanged, including the newer pre-token issue-label job. No permission,
+dispatch input, artifact name/path/retention, checksum, signing backend or
+recovery transaction changes.
 
 `test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
 trust suite verifies every consumer pin, absence of the affected auth assumptions,
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
-This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+`test_artifact_refresh_does_not_admit_a_previous_or_mutable_pin` preserves
+fail-closed download admission. Container-log and signing-policy tests retain
+always-run evidence upload, bounded retention and no-publication controls.
+Source checks do not establish hosted action execution or installed recovery.
+This refresh is independent of the grouped signing/Docker/Tailscale updates.
 
 ### Native agent API-linked test assets
 
@@ -7539,6 +7672,35 @@ remains required and is not claimed here.
 
 ### Verified unattended-update backup and owned rollback
 
+The unattended updater's service-state and running-PID reads require a successful
+bounded manager command and exactly one complete allowlisted property tuple.
+Both output streams belong to that observation; diagnostic text, blank records
+(including trailing stdout or stderr blanks), duplicates, extra properties and
+an unterminated final property are not update, start, rollback or success consent.
+A completion marker preserves those records through Bash command substitution
+and cannot appear twice or precede another record. Raw manager diagnostics are
+not echoed by the updater. The existing five-second read and one-second kill
+bounds, property-order independence and loaded/masked admission stay unchanged.
+
+An unknown initial observation stops before backup/download/installer mutation.
+An unknown post-installer or post-stop observation retains the saved executable
+and requires explicit service reconciliation, without an automatic second read,
+restart, restore or claimed success. Running identity needs complete reads on
+both sides of the unchanged `/proc` executable-byte comparison; a plausible
+first PID cannot compensate for an incomplete second observation.
+
+The registered `scripts/installtests/pulse_auto_update_test.go` verification
+requires the three manager-diagnostic caller controls in `UpdateServiceState`
+and the diagnostic-bearing first/second identity control in `RunningExecutable`
+from `test_auto_update_service_state.py`. They cover stderr text, a blank stderr
+record, a trailing stdout blank and an unterminated last property through the
+real conditional update/restart/rollback callers, preserving files, identity
+and recovery. Identity controls use a real private ordinary-user child and
+confirm its cleanup, not a live Pulse service. Existing signatures, actual file
+recovery, service deadlines and all original adverse controls remain mandatory.
+This source proof neither attributes #2785 nor establishes native/installed
+recovery; the original supplied-log and signed forward/reverse jobs remain.
+
 `scripts/pulse-auto-update.sh` runs `perform_update` as a conditional, so Bash
 `errexit` is not a substitute for explicit snapshot and restore checks. Before
 executing the signed installer it must have a private unique rollback directory
@@ -7547,6 +7709,14 @@ supported install paths and the optional `VERSION` file. Missing binaries,
 symlinks/non-regular snapshot sources, allocation/copy/comparison failures and
 failed download/signature verification stop before installer mutation. An
 unneeded pre-mutation snapshot and verification files are removed on return.
+
+Both versioned installer and signature transfers ignore ambient curl settings,
+allow only HTTPS (including redirects), and have a five-second connection and
+sixty-second whole-transfer limit. Partial data after connection, HTTP or timeout
+failure cannot reach signature verification or installer execution; there is no
+download retry or alternate source. These per-transfer bounds leave time inside
+the unchanged ten-minute systemd transaction for installation and recovery.
+They do not extend a stop/restart deadline or relax the pinned SSH verifier.
 
 Installer failure, mismatched version and failure to restore a previously active
 service share one rollback path. It stops the service, stages and compares all
@@ -7581,6 +7751,15 @@ prior-active-only restoration, configuration/identity preservation and trap
 cleanup. Exact-parent negative controls must reject ignored snapshot failures
 and loss of the backup after a failed restore. Synthetic proof is not a deployed
 update, native systemd migration or reporter confirmation.
+
+`TestAutoUpdateAssetTransport` uses real curl and disposable trusted HTTPS
+servers to check complete/redirected bytes, certificate refusal, HTTPS-to-HTTP
+refusal and an actual stalled-transfer deadline. `TestAutoUpdateDownloadFailures`
+runs the complete conditional updater with partial connection/HTTP/timeout
+failures for either asset and both prior-active states, requiring unchanged
+binary/version/configuration/identity, no installer/manager mutation, exact
+requests, and removal of all temporary files. These controls do not establish
+published-installer or installed-host recovery.
 
 ### Governed dependency floors for the go-minor-patch group
 
@@ -7873,6 +8052,32 @@ retains the required names, full race execution and separate dependency audit.
 These proofs establish CI source admission, not hosted queue-time relief.
 
 
+### Exhaustive native Unix installer process budgets (18 October 2026)
+
+`scripts/installtests/run_unix_contracts.py` belongs to deployment installability.
+It compiles the native installer test binary once per workflow phase and discovers
+that exact binary's tests, examples and fuzz seeds. The NAS boot-owner preflight
+and remaining inventory are disjoint and exhaustive, retaining binary discovery
+order within each phase. Every root check executes in its own process with the
+existing ten-minute Go alarm, uncached execution and panic-on-exit-zero behavior;
+a successful exit without that root's PASS or explicit SKIP is rejected.
+Inventory growth therefore cannot exhaust a later check's process budget.
+Fixture, installer, transport, cleanup and overall native CI job deadlines do
+not change, nor do the platform-specific reasons for existing explicit skips.
+
+The 18 October Intel run at `6bf9e818e8c261012902da79ac2fc2e4a5b57acc`
+passed the 23 NAS controls, then exhausted the general-1 aggregate ten-minute
+alarm while its active log-sink recovery control had run only 17 seconds. This
+runner change removes the aggregate coupling; native CI remains required to
+prove the complete inventory on Intel. It does not establish installed NAS or
+customer recovery, release qualification, or closure of the reliability target.
+
+`TestNativeUnixContractRunnerPartitionsWithoutDroppingChecks` runs the Python
+controls against a growing synthetic inventory and real compiled Go tests.
+They prove phase coverage, build/discovery/check failure propagation, passing
+tests, explicit skips, examples and fuzz seeds; actual failure, exit zero,
+timeout and unmatched test names must fail.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
@@ -8063,3 +8268,40 @@ nonzero exit. `TestProviderMSPStartupCommandSeparatesDiagnostics` checks three
 consumer shapes with controlled successful stderr; it is not Docker acceptance.
 Hosted mounted-secret/readiness/persistence/refusal/cleanup checks remain required.
 Frontend fixture reformatting retains all assertions and changes no runtime UI.
+
+
+### Current v6 migration guidance: preserved-state upgrade and recovery
+
+The existing `docs/UPGRADE_v6.md` and byte-identical shipped guide are migration
+entry points, not independent generic update or downgrade recipes. Historical
+release and rollback packets remain historical; they grant no compatibility
+claim for an older binary against current migrated data. This active guidance
+supersedes the early-cutover shortcut wording above, not retained release facts.
+
+Preparation distinguishes a configuration export from a consistent full-state
+backup, with matching keys and deployment settings. Existing service/data paths,
+credentials, agent identity and runtime edition survive. The guide routes CLI,
+Docker and Helm users to existing deployment-owned procedures; it does not
+execute an unknown helper, recreate unrelated services, discard configured
+values/volumes or replace private Pro with public Community. Old signing-root
+continuity warnings retain verified trust migration without prescribing a
+reinstall or weakening signatures.
+
+Post-upgrade observations distinguish running version, edition, ordinary
+collector/notification recovery and agent convergence from download/signature
+success. They do not induce notifications or active diagnostic traffic. An
+uncertain attempt retains original stop evidence and backups, uses timer-only
+containment when appropriate, and restores matching data/keys only through the
+stopped-service recovery path. Historical v5 testing requires an isolated,
+disconnected recovery copy; a generic binary downgrade is not data rollback.
+Relay is not offered for new purchases; existing subscribers preserve their
+current-price Pro entitlements and private runtime while subscribed.
+
+Verification: `scripts/tests/test_upgrade_v6_docs.py` checks the complete
+preparation/routes/recovery/compatibility chain and actual local link targets;
+`release_promotion_policy_test.py` preserves the trust warning and current
+procedure routes without forcing the retired shortcuts. Consuming Docs/router
+browser proof at desktop and phone must inspect the rendered safety boundaries,
+keyboard/touch linked recovery navigation and direct/reload fragments. These
+are help qualification, not installed upgrade, native recovery, paid deployment
+or release acceptance.

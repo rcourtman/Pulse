@@ -37,6 +37,10 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
 		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
 		"test_runtime_readback_rejects_post_comparison_drift",
+		"test_primary_command_survives_successful_or_failed_cleanup",
+		"test_primary_timeout_is_not_replaced_by_cleanup_exit",
+		"test_assertion_and_cleanup_only_errors_do_not_invent_primary_command",
+		"test_successful_receipt_retains_no_failure_record",
 		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
 	} {
 		if results[name] != "ok" {
@@ -136,65 +140,47 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	}
 }
 
-// Service-state admission is independent of the signed/metadata transaction
-// matrix below; no native service or published input is used by this fixture.
-func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
+func TestAutoUpdateDownloadFailures(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateServiceState")
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateDownloads")
 	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
+		t.Fatalf("complete updater download-failure controls: %v\n%s", err, out)
 	}
-	// Keep the collector controls part of actual package acceptance, not just
-	// an optional Python check. A green fixture with these methods removed
-	// would otherwise silently lose early-failure and final-line coverage.
-	required := []string{
+	for _, name := range []string{
+		"test_both_complete_downloads_keep_the_exact_signed_installer_handoff",
+		"test_partial_failed_downloads_never_execute_or_mutate_the_install",
+	} {
+		if !strings.Contains(string(out), fmt.Sprintf("%s (", name)) {
+			t.Fatalf("missing updater download control %s:\n%s", name, out)
+		}
+	}
+}
+
+// Service-state admission is independent of the signed/metadata transaction
+// matrix below; no native service or published input is used by this fixture.
+func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_manager_diagnostics_refuse_initial_update_and_restart",
+		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
+		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
 		"test_success_cannot_claim_unverified_running_executable",
 		"test_rollback_keeps_backup_until_restored_running_executable_matches",
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
-	}
-	for _, name := range required {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
-			}
-		}
-		if !passed {
-			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
-		}
-	}
+	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // Keep the full real-sink matrix mandatory, but give it its own existing-size
 // bound rather than exhausting the service-state suite's manager deadlines.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateLogSinks")
-	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("unattended real-log sink controls: %v\n%s", err, out)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_failure_drains_installer_and_preserves_recovery",
-	} {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
-			}
-		}
-		if !passed {
-			t.Fatalf("required real-log sink control %s did not pass:\n%s", name, out)
-		}
-	}
+	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // A real owned process retains its old executable after its disk path changes.
@@ -214,6 +200,7 @@ func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 	for _, name := range []string{
 		"test_actual_process_not_replaced_disk_path_is_checked",
 		"test_complete_stable_main_pid_tuple_is_required",
+		"test_manager_diagnostics_refuse_either_running_identity_read",
 		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
 	} {
 		passed := false
@@ -701,6 +688,7 @@ systemctl() {
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateServiceFunctions(t) + `
+` + extractAutoUpdateFunction(t, "download_update_asset") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then
   echo "RESULT:succeeded"
@@ -835,6 +823,7 @@ systemctl() {
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateServiceFunctions(t) + `
+` + extractAutoUpdateFunction(t, "download_update_asset") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
 echo "LEAKED:$(trap -p RETURN)"

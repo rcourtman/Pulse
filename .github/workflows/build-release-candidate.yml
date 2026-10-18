@@ -362,7 +362,7 @@ jobs:
           done
 
       - name: Upload signed macOS binaries
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries/
@@ -436,7 +436,7 @@ jobs:
 
       - name: Upload legacy signed binaries
         if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: legacy-signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: unsigned-native-agent-binaries/
@@ -447,7 +447,7 @@ jobs:
       - name: Upload unsigned SignPath input
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
         id: upload-unsigned-windows
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: unsigned-native-agent-binaries/
@@ -499,7 +499,7 @@ jobs:
       # re-run against the recorded request days later without a rebuild.
       - name: Upload SignPath signing request record
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-signing-request-${{ github.sha }}-${{ inputs.version }}
           path: windows-signing-request.json
@@ -527,14 +527,14 @@ jobs:
 
       - name: Download legacy signed binaries
         if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: legacy-signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: unsigned-native-agent-binaries
 
       - name: Download SignPath signing request record
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-signing-request-${{ github.sha }}-${{ inputs.version }}
           path: windows-signing-request
@@ -640,7 +640,7 @@ jobs:
           python scripts/write_github_output.py signing_backend $validatedBackend
 
       - name: Upload signed Windows binaries
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries/
@@ -649,7 +649,7 @@ jobs:
           compression-level: 0
 
       - name: Upload Windows signing evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
           path: windows-signing-evidence.json
@@ -708,7 +708,7 @@ jobs:
           cache: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
@@ -854,21 +854,21 @@ jobs:
 
       - name: Download signed macOS binaries
         if: ${{ inputs.require_macos_signing }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
       - name: Download signed Windows binaries
         if: ${{ inputs.require_windows_signing }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
       - name: Download Windows signing evidence
         if: ${{ inputs.require_windows_signing }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
           path: release-candidate-manifest
@@ -985,7 +985,7 @@ jobs:
             --output "${payload_root}/release-container-payload.json"
 
       - name: Upload immutable release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.identity.outputs.artifact_name }}
           path: release/
@@ -995,7 +995,7 @@ jobs:
           overwrite: true
 
       - name: Upload candidate manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.identity.outputs.manifest_artifact_name }}
           path: release-candidate-manifest/
@@ -1004,7 +1004,7 @@ jobs:
           overwrite: true
 
       - name: Upload exact-candidate container payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.identity.outputs.container_artifact_name }}
           path: ${{ runner.temp }}/release-container-payload/

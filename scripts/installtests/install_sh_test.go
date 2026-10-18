@@ -1832,7 +1832,9 @@ func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
 		`qnap_state_dir=$(find_qnap_state_dir || true)`,
 		`aid_paths+=("$qnap_state_dir/agent-id")`,
 		`if [[ -n "$qnap_state_dir" ]] && trusted_connection_state_file "$qnap_state_dir/connection.env"; then`,
-		`remove_qnap_autorun_block "$AUTORUN_PATH"`,
+		`uninstall_nas_platform=$(nas_agent_removal_platform || true)`,
+		`teardown_nas_agent_boot_owner "$uninstall_nas_platform"`,
+		`nas_agent_boot_operation "$platform" observe`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -5478,7 +5480,8 @@ url=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
-        -fsSL) shift ;;
+        --disable|-fsSL) shift ;;
+        --connect-timeout|--max-time|--proto|--proto-redir) shift 2 ;;
         *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
     esac
 done
@@ -5580,8 +5583,9 @@ fi
 				return
 			}
 			logContent, err := os.ReadFile(filepath.Join(tmpDir, "curl.log"))
-			want := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
-			wantSignature := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
+			policy := "--disable -fsSL --connect-timeout 5 --max-time 60 --proto =https --proto-redir =https "
+			want := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
+			wantSignature := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
 			requests := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 			if err != nil || len(requests) != 2 || !strings.HasPrefix(requests[0], want) ||
 				!strings.HasPrefix(requests[1], wantSignature) {
@@ -8563,6 +8567,8 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		t.Fatalf("DSM Upstart retirement and production EXIT cleanup controls: %v\n%s", err, output)
 	}
 	for _, name := range []string{
+		"test_link_fixture_preserves_exclusive_no_target_directory_semantics",
+		"test_link_fixture_exposes_the_old_directory_restore_race",
 		"test_refused_manager_precedes_remote_and_state_erasure",
 		"test_failed_empty_partial_diagnostic_status_cannot_authorise_removal",
 		"test_effective_disabled_config_is_required_after_override_reload",
@@ -8583,7 +8589,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
@@ -8593,14 +8599,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	if runtime.GOOS == "windows" {
 		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_truenas_teardown.py"), "AgentTrueNASTeardown", []string{
 		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
 		"test_foreign_or_indirect_bootstrap_is_not_mutated",
 		"test_missing_activation_target_cannot_hide_an_owned_task",
@@ -8617,13 +8616,36 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
 		"test_ordinary_linux_state_is_not_appliance_evidence",
 		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
-			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
-		}
+	}, 2*time.Minute)
+}
+
+func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASTeardown", []string{
+		"test_complete_process_evidence_is_required_before_boot_or_remote_mutation",
+		"test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled",
+		"test_non_regular_foreign_wrapper_and_unselected_state_preserve_recovery",
+		"test_only_complete_owned_boot_entries_are_admitted",
+		"test_refused_edit_copy_or_prior_recovery_cannot_erase_credentials",
+		"test_concurrent_boot_file_directory_and_symlink_are_not_clobbered",
+		"test_flash_mount_and_unmount_failures_are_not_local_only_permission",
+		"test_watchdog_stops_before_collector_and_ignored_or_refused_signals_retain_state",
+		"test_all_owned_entries_disable_before_signalling_and_remote_erasure",
+		"test_remote_refusal_keeps_disabled_boot_and_exact_local_recovery",
+		"test_reactivation_before_remote_refuses_without_erasure",
+		"test_late_boot_or_process_activation_retains_recovery_after_remote",
+		"test_absent_missing_and_repeated_removal_require_fresh_quiescence",
+		"test_process_observation_returns_roles_not_arguments_and_stops_timeout_child",
+		"test_recovered_ordinary_linux_state_is_not_qnap_platform_authority",
+		"test_live_unraid_boot_shell_is_unknown_not_a_signal_target",
+		"test_actual_generated_watchdogs_and_children_become_quiescent",
+		"test_private_model_uses_selected_isolated_interpreter",
+		"test_timeout_child_absence_requires_observed_exit",
+		"test_control_timing_reports_cumulative_and_per_control_time",
+		"test_private_process_reader_requests_native_basename_and_full_argv",
+		"test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats",
+		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
+	}, 2*time.Minute)
 }
