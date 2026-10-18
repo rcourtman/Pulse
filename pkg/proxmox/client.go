@@ -437,21 +437,32 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	return client, nil
 }
 
-// authenticate performs password-based authentication
+// Initial authentication belongs only to the constructing caller. It has no
+// retained session or other readers whose login must outlive that caller.
 func (c *Client) authenticate(ctx context.Context) error {
-	return c.renewAuthentication(ctx, nil)
+	loginCtx, cancel := context.WithTimeout(ctx, c.sessionRenewalTimeout())
+	defer cancel()
+	auth, _ := c.authSnapshot()
+	return c.authenticatePassword(loginCtx, auth.user+"@"+auth.realm)
+}
+
+func (c *Client) authenticatePassword(ctx context.Context, username string) error {
+	err := c.authenticateJSON(ctx, username, c.config.Password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(ctx, username, c.config.Password)
+	}
+	return err
 }
 
 // expected binds expiry or a 401 to the session actually used by that read.
 // A late rejection of an old ticket cannot trigger another renewal after a
-// concurrent request has already replaced it. Explicit authentication (nil)
-// still owns the existing JSON/form fallback and failed-attempt behaviour.
-func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
+// concurrent request has already replaced it.
+func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	c.authMu.Lock()
-	if expected != nil && c.authGeneration != *expected {
+	if c.authGeneration != expected {
 		c.authMu.Unlock()
 		return nil
 	}
@@ -477,11 +488,7 @@ func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) erro
 	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
 	go func() {
 		defer cancelLogin()
-		password := c.config.Password
-		err := c.authenticateJSON(loginCtx, username, password)
-		if shouldFallbackToForm(err) {
-			err = c.authenticateForm(loginCtx, username, password)
-		}
+		err := c.authenticatePassword(loginCtx, username)
 		c.authMu.Lock()
 		pending.err = err
 		c.authInFlight = nil
@@ -627,7 +634,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 	// Re-authenticate if needed
 	auth, generation := c.authSnapshot()
 	if c.config.Password != "" && auth.tokenName == "" && time.Now().After(auth.expiresAt) {
-		if err := c.renewAuthentication(ctx, &generation); err != nil {
+		if err := c.renewAuthentication(ctx, generation); err != nil {
 			return nil, fmt.Errorf("re-authentication failed: %w", err)
 		}
 		auth, generation = c.authSnapshot()
@@ -689,7 +696,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.
 		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && auth.tokenName == "" {
-			if err := c.renewAuthentication(ctx, &generation); err != nil {
+			if err := c.renewAuthentication(ctx, generation); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
 			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)

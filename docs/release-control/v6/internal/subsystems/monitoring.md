@@ -232,6 +232,14 @@ reads use their own contexts, not the ended construction context. TLS pins,
 CA verification, redirects, first-use admission, auth encodings, retry cadence,
 provider permissions, guest/backup fences and History are unchanged.
 
+Initial PVE login runs synchronously under the caller and the configured total
+login timeout, including JSON/form fallback. It never joins the detached renewal
+used by an accepted session. Later expiry/401 renewal still coalesces by session
+generation under the client's bounded timeout, so cancellation of its starter or
+one waiting read cannot abandon other active readers. Both paths share the same
+password exchange and session parser. Ending an unaccepted constructor now also
+ends its password request, without changing the rendered health outcome.
+
 `TestClientConstructionHonoursContext` in both client packages covers ended
 password/token construction, in-flight JSON/form cancellation/deadlines,
 independent later reads and wrong-pin refusal. Cluster caller-budget controls
@@ -242,6 +250,11 @@ broadcast for desktop/phone consumption: cancellation cannot turn an offline
 server healthy, and accepted construction alone still cannot do so. These are
 secret-free local fixtures, not installed recovery, native guest safety or an
 attribution of any reporter's failure.
+
+`TestClientConstructionHonoursClientTimeout` additionally exercises both login
+encodings under the PVE client's own timeout while its caller remains live.
+Existing shared-renewal starter/waiter cancellation, expiry, late-401, failure
+recovery and stalled-login controls retain the accepted-session boundary.
 
 
 ### Cluster recovery requires a usable polling session
