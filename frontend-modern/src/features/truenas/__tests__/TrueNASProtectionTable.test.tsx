@@ -195,15 +195,15 @@ describe('TrueNAS protection activity evidence', () => {
         emptyDescription="No activity"
       />
     ));
-    const sortButton = screen.getByRole('button', { name: /Reported time/ });
-    expect(screen.queryByRole('button', { name: /Completed/ })).not.toBeInTheDocument();
+    const sortHeader = screen.getByRole('columnheader', { name: /Reported time/ });
+    expect(screen.queryByRole('columnheader', { name: /Completed/ })).not.toBeInTheDocument();
     const rowIDs = () =>
       [...document.querySelectorAll('[data-truenas-protection-row]')].map((row) =>
         row.getAttribute('data-truenas-protection-row'),
       );
-    await fireEvent.click(sortButton);
+    await fireEvent.click(sortHeader);
     expect(rowIDs()).toEqual(['late', 'early', 'missing']);
-    await fireEvent.click(sortButton);
+    await fireEvent.click(sortHeader);
     expect(rowIDs()).toEqual(['early', 'late', 'missing']);
   });
 

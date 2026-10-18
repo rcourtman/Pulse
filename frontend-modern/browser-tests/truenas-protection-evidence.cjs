@@ -192,10 +192,7 @@ const inventory = () => [
       await page.goto(origin + '/browser-tests/truenas-protection-read.html');
       await rows.nth(3).waitFor();
       assert(!(await page.locator('thead').innerText()).includes('Completed'));
-      assert.equal(
-        await page.locator('thead button').filter({ hasText: 'Reported time' }).count(),
-        1,
-      );
+      assert.equal(await page.locator('thead th').filter({ hasText: 'Reported time' }).count(), 1);
       if (width < 768) await activate(page.getByRole('button', { name: 'Filters', exact: true }));
       await activate(page.getByRole('button', { name: 'Attention, 1' }));
       assert.equal(await rows.count(), 1);
