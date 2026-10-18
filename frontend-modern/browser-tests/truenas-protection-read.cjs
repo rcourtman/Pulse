@@ -143,6 +143,7 @@ const point = (id, dataset, outcome = 'success') => ({
         await page.screenshot({
           path: path.join(output, file),
           fullPage: true,
+          animations: 'disabled',
           type: 'jpeg',
           quality: 80,
         });
@@ -174,6 +175,7 @@ const point = (id, dataset, outcome = 'success') => ({
       };
       await activate(page.getByRole('button', { name: 'Refresh', exact: true }));
       await hasCount(2);
+      if (width < 768) await activate(page.getByRole('button', { name: 'Filters', exact: true }));
       await activate(page.getByRole('button', { name: 'Healthy, 1' }));
       await hasCount(1);
       assert.equal(await rows().first().getAttribute('data-truenas-protection-row'), 'snapshot-a');
