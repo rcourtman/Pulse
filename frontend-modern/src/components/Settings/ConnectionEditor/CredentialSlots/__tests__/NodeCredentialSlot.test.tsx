@@ -134,6 +134,61 @@ describe('NodeCredentialSlot', () => {
     },
   );
 
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'retains literal, wrappable %s diagnostics and warnings without altering saved trust',
+    async (nodeType) => {
+      const pin = 'ab'.repeat(32);
+      const message = `certificate fingerprint mismatch: expected ${pin}, got ${'cd'.repeat(32)}\nCheck the independently verified certificate.`;
+      const warning = `<img src="untrusted"> ${'member'.repeat(30)}`;
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode').mockResolvedValue({
+        status: 'error',
+        message,
+        warnings: [warning],
+      });
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const settings = createSettings();
+      render(() => (
+        <NodeCredentialSlot
+          nodeType={nodeType}
+          settings={settings}
+          editingNode={
+            {
+              id: `${nodeType}-fixture`,
+              type: nodeType,
+              name: 'Fixture',
+              host: 'https://saved.example.invalid',
+              user: 'fixture@pam',
+              tokenName: 'fixture@pam!read',
+              hasToken: nodeType !== 'pmg',
+              hasPassword: nodeType === 'pmg',
+              verifySSL: true,
+              fingerprint: pin,
+              status: 'disconnected',
+            } as NodeConfigWithStatus
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Test saved connection' }));
+      const result = await screen.findByRole('status', { name: 'Connection test result' });
+      const messageElement = Array.from(result.querySelectorAll('p')).find(
+        (element) => element.textContent === message,
+      )!;
+      expect(messageElement).toHaveClass('whitespace-pre-wrap');
+      expect(messageElement.parentElement).toHaveClass('min-w-0', '[overflow-wrap:anywhere]');
+      expect(result.querySelector('li')).toHaveTextContent(warning);
+      expect(result.querySelector('li')).toHaveClass('whitespace-pre-wrap');
+      expect(result.querySelector('img')).toBeNull();
+      expect(result).toHaveTextContent('Unsaved changes are not tested');
+      expect(screen.getByLabelText('SSL Fingerprint (optional)')).toHaveValue(pin);
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(`${nodeType}-fixture`);
+      expect(formTest).not.toHaveBeenCalled();
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
   it('discloses and retires an entered-password test through the real form', async () => {
     const formTest = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
       status: 'success',

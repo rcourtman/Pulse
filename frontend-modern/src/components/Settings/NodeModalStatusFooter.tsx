@@ -93,11 +93,13 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 <line x1="9" y1="9" x2="15" y2="15"></line>
               </svg>
             </Show>
-            <div class={`flex-1 ${state.testResultPresentation().textClass}`}>
+            <div
+              class={`min-w-0 flex-1 [overflow-wrap:anywhere] ${state.testResultPresentation().textClass}`}
+            >
               <p class="font-medium">
                 {getNodeModalConnectionTestCopy(state.testResult()!.scope).result}
               </p>
-              <p>{state.testResult()?.message}</p>
+              <p class="whitespace-pre-wrap">{state.testResult()?.message}</p>
               <p class="mt-1 text-xs">
                 {getNodeModalConnectionTestCopy(state.testResult()!.scope).description}
               </p>
@@ -111,7 +113,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                   <p class="text-xs font-semibold opacity-90">Warnings:</p>
                   <ul class="text-xs space-y-0.5 opacity-80">
                     <For each={state.testResult()?.warnings}>
-                      {(warning) => <li>• {warning}</li>}
+                      {(warning) => <li class="whitespace-pre-wrap">• {warning}</li>}
                     </For>
                   </ul>
                 </div>
