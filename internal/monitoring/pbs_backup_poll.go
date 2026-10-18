@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rs/zerolog/log"
 )
@@ -24,6 +25,13 @@ type pbsBackupPoll struct {
 type pbsBackupDatastore struct {
 	models.PBSDatastore
 	namespaceDiscoveryErr error
+}
+
+// A complete empty datastore list can confirm absence. A failed list cannot
+// select cached paths to probe, certify protection, or delete recovery facts.
+type pbsBackupInventory struct {
+	datastores            []pbsBackupDatastore
+	datastoreDiscoveryErr error
 }
 
 type pbsBackupPollContextKey struct{}
@@ -128,16 +136,16 @@ func (m *Monitor) applyPBSBackupEffect(ctx context.Context, instance string, eff
 	}
 }
 
-func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, datastores []pbsBackupDatastore) {
+func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, inventory pbsBackupInventory) {
 	owner, reason := m.beginPBSBackupPoll(instance, time.Now(), client)
 	if owner == nil {
 		log.Debug().Str("instance", instance).Str("reason", reason).Msg("Skipping PBS backup polling this cycle")
 		return
 	}
 	// Namespace slices also belong to this admitted scan, not a later poll.
-	ds := append([]pbsBackupDatastore(nil), datastores...)
-	for i := range ds {
-		ds[i].Namespaces = append([]models.PBSNamespace(nil), ds[i].Namespaces...)
+	inventory.datastores = append([]pbsBackupDatastore(nil), inventory.datastores...)
+	for i := range inventory.datastores {
+		inventory.datastores[i].Namespaces = append([]models.PBSNamespace(nil), inventory.datastores[i].Namespaces...)
 	}
 	go func() {
 		defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", instance))
@@ -145,8 +153,35 @@ func (m *Monitor) pollPBSBackupsAsync(instance string, client *pbs.Client, datas
 		parent := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)
 		ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 		defer cancel()
-		log.Info().Str("instance", instance).Int("datastores", len(ds)).Msg("Starting background PBS backup polling")
-		m.pollPBSBackupInventory(ctx, instance, client, ds)
+		log.Info().Str("instance", instance).Int("datastores", len(inventory.datastores)).Msg("Starting background PBS backup polling")
+		m.pollPBSBackupInventory(ctx, instance, client, inventory)
 		log.Info().Str("instance", instance).Dur("duration", time.Since(owner.started)).Msg("Completed background PBS backup polling")
 	}()
+}
+
+func (m *Monitor) publishPBSBackupDiscoveryFailure(ctx context.Context, instance string, discoveryErr error) {
+	retain := shouldReuseCachedPBSBackups(discoveryErr)
+	rejected := 0
+	if !retain {
+		rejected = 1
+	}
+	// The failed root listing is one unavailable observation, not zero
+	// configured datastores successfully read. No raw point is re-observed.
+	observation, err := buildPBSProtectionProviderObservation(instance, 1, 0, 1, rejected, time.Now().UTC())
+	if err != nil {
+		log.Warn().Err(err).Str("instance", instance).Msg("Failed to build PBS discovery observation")
+		return
+	}
+	m.applyPBSBackupEffect(ctx, instance, func() {
+		if !retain {
+			m.state.UpdatePBSBackups(instance, nil)
+			m.prunePBSBackupCacheTimes(instance, nil)
+			m.syncGuestBackupTimesAndResourceStore()
+		}
+		// Historical recovery facts remain qualified by unavailable/denied
+		// evidence. Only an ordinary complete inventory can reconcile them.
+		m.ingestProtectionProviderObservationsAsync([]recovery.ProtectionProviderObservation{observation})
+		m.checkBackupAlerts(ctx)
+		m.broadcastStateUpdate()
+	})
 }

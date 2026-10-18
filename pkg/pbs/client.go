@@ -895,14 +895,13 @@ func (c *Client) GetDatastoresFiltered(
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := readResponseBodyLimited(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid PBS datastore inventory response")
 	}
 
-	// Check if response is HTML (error page) instead of JSON
+	// Keep the existing actionable HTML diagnosis, without exposing body text.
 	if len(body) > 0 && body[0] == '<' {
 		// If using HTTP, suggest HTTPS
 		if strings.HasPrefix(c.config.Host, "http://") {
@@ -911,24 +910,14 @@ func (c *Client) GetDatastoresFiltered(
 		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
 	}
 
-	var datastoreList struct {
-		Data []struct {
-			Store   string `json:"store"`
-			Comment string `json:"comment,omitempty"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &datastoreList); err != nil {
-		log.Error().
-			Str("response", string(body)).
-			Err(err).
-			Msg("Failed to parse PBS datastore list response")
-		return nil, fmt.Errorf("failed to parse datastore list: %w", err)
+	datastoreList, err := decodeBackupDatastores(body)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PBS datastore inventory response")
 	}
 
 	// Now get status for each datastore
 	var datastores []Datastore
-	for _, ds := range datastoreList.Data {
+	for _, ds := range datastoreList {
 		if include != nil && !include(ds.Store) {
 			continue
 		}

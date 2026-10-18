@@ -1756,5 +1756,5 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	for _, ds := range datastores {
 		observed = append(observed, pbsBackupDatastore{PBSDatastore: ds})
 	}
-	m.pollPBSBackupInventory(ctx, instanceName, client, observed)
+	m.pollPBSBackupInventory(ctx, instanceName, client, pbsBackupInventory{datastores: observed})
 }

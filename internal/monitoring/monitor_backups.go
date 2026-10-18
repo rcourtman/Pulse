@@ -1654,8 +1654,13 @@ type pbsBackupFetchRequest struct {
 	cached    cachedPBSGroup
 }
 
-func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName string, client *pbs.Client, datastores []pbsBackupDatastore) {
+func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName string, client *pbs.Client, inventory pbsBackupInventory) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
+	if inventory.datastoreDiscoveryErr != nil {
+		m.publishPBSBackupDiscoveryFailure(ctx, instanceName, inventory.datastoreDiscoveryErr)
+		return
+	}
+	datastores := inventory.datastores
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
 	existingGroups := m.buildPBSBackupCache(instanceName)

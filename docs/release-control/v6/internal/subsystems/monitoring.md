@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Root PBS datastore discovery owns backup replacement authority
+
+The foreground datastore-list result travels into the same connection/runtime-owned
+background scan as its namespace inputs. A transient or malformed root discovery
+publishes unavailable protection evidence while retaining exact raw backups, cache
+read times and stored recovery points; it probes no cached datastore path. An
+access-rejected discovery withdraws only that connection's raw rows and reusable
+cache, retaining historical points with denied/unavailable evidence. Failed discovery
+does not re-observe those points or acquire reconciliation authority.
+
+A complete empty datastore array is an authoritative inventory and can clear that
+connection's raw/cache/recovery scope. Datastore/backups/global scope-off and cancelled
+foreground polls are not successful emptiness. The existing cadence, actual-return
+occupancy, publication fence, state limits, exclusions and guest/backup operation
+policy remain effective. Before filtering or detail requests, root list admission
+requires a complete bounded HTTP 200 array with unique nonblank datastore identities;
+missing/null, conflicting, truncated or unreadable replies are not empty evidence.
+
+`TestPBSDatastoreInventoryAdmission` covers client admission and closure;
+`TestPBSRootDatastoreDiscoveryRegression` joins ordinary HTTP polling, raw/cache,
+durable points and protection through unavailable/denied/empty/malformed discovery,
+removed-store and independent-connection controls, scope-off, cancellation and
+ordinary recovery. The existing Backups consumer is checked at desktop/narrow widths.
+These are source/consumer proofs, not installed backup/restore, independent guest
+thaw, filesystem writes/liveness or prior-active restoration.
+
 ### PBS backup scans belong to their registered connection and runtime
 
 Background PBS inventory admits the registered client and current runtime
