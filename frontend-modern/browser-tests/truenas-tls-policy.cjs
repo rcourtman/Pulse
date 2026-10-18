@@ -55,11 +55,11 @@ let browser;
         result.requests.push({ width, method: req.method(), path: url.pathname });
         assert.equal(req.method(), 'GET', 'No mutation/probe allowed');
         assert.equal(url.pathname, '/api/truenas/connections');
-        return route.fulfill({ json: { connections: [{
+        return route.fulfill({ json: [{
           id: 'nas-fixture', name: 'NAS fixture', host: 'nas.example.invalid', port: 443,
           apiKey: '********', username: 'fixture', useHttps: true, insecureSkipVerify: false,
           enabled: true, monitorDatasets: true, monitorPools: true, monitorReplication: true,
-        }] } });
+        }] });
       });
       await page.goto(origin + '/browser-tests/connection-evidence.html?platform=truenas');
       const policy = page.getByRole('status', { name: 'TrueNAS form TLS policy' });
