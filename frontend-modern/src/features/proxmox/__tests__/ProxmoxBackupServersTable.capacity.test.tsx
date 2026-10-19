@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import { canonicalizeRealtimeResource } from '@/utils/resourceStateAdapters';
-import { ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
+import { buildBackupServerRows, ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: () => <div>Details</div>,
@@ -223,4 +224,147 @@ describe('PBS datastore capacity evidence', () => {
       expect(cell.querySelector('.bg-red-500')).not.toBeNull();
     },
   );
+});
+
+const countServer = (name: string, instanceId = `pbs-${name}`, id = instanceId): Resource => ({
+  id,
+  type: 'pbs',
+  name,
+  displayName: name,
+  platformId: id,
+  platformType: 'proxmox-pbs',
+  sourceType: 'api',
+  status: 'online',
+  lastSeen: 1_792_000_000_000,
+  pbs: {
+    instanceId,
+    connectionHealth: 'healthy',
+    datastores: [
+      { name: 'tank', total: 1000, used: 400, available: 600, status: 'available' },
+      { name: 'offsite', total: 1000, used: 200, available: 800, status: 'available' },
+    ],
+  },
+});
+const countBackup = (
+  instance: string,
+  datastore = 'tank',
+  id = `${instance}-${datastore}`,
+): PBSBackup => ({
+  id,
+  instance,
+  datastore,
+  namespace: '',
+  backupType: 'vm',
+  vmid: '100',
+  backupTime: '2026-10-19T01:00:00Z',
+  size: 100,
+  files: ['manifest.blob'],
+  protected: false,
+  verified: true,
+});
+const countValues = (servers: Resource[], backups: PBSBackup[]) =>
+  Object.fromEntries(
+    buildBackupServerRows(servers, backups).map((row) => [row.key, row.backupCount]),
+  );
+
+describe('PBS backup count source ownership', () => {
+  it('does not lend a current connection name to another server through its legacy ID alias', () => {
+    const servers = [countServer('backup'), countServer('pbs-backup')];
+    const backups = [countBackup('pbs-backup')];
+    expect(countValues(servers, backups)).toEqual({
+      'pbs-backup:offsite': 0,
+      'pbs-backup:tank': 0,
+      'pbs-pbs-backup:offsite': 0,
+      'pbs-pbs-backup:tank': 1,
+    });
+    expect(countValues([...servers].reverse(), [...backups].reverse())).toEqual(
+      countValues(servers, backups),
+    );
+  });
+
+  it('does not fill a missing datastore from another source even when its own source has entries', () => {
+    expect(
+      countValues(
+        [countServer('backup'), countServer('pbs-backup')],
+        [countBackup('backup', 'offsite'), countBackup('pbs-backup', 'tank')],
+      ),
+    ).toEqual({
+      'pbs-backup:offsite': 1,
+      'pbs-backup:tank': 0,
+      'pbs-pbs-backup:offsite': 0,
+      'pbs-pbs-backup:tank': 1,
+    });
+  });
+
+  it('keeps an unclaimed, unique legacy instance-ID source usable', () => {
+    expect(
+      countValues([countServer('backup')], [countBackup('pbs-backup')])['pbs-backup:tank'],
+    ).toBe(1);
+  });
+
+  it('prefers the whole exact-name inventory over a legacy alias without adding them', () => {
+    expect(
+      countValues(
+        [countServer('backup')],
+        [countBackup('backup', 'offsite'), countBackup('pbs-backup', 'tank')],
+      ),
+    ).toEqual({ 'pbs-backup:offsite': 1, 'pbs-backup:tank': 0 });
+  });
+
+  it('does not duplicate entries across servers with the same configured source name', () => {
+    const actual = countValues(
+      [countServer('duplicate', 'pbs-a'), countServer('duplicate', 'pbs-b')],
+      [countBackup('duplicate')],
+    );
+    expect(Object.values(actual)).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
+  it('does not attribute an ambiguous legacy ID to either unnamed server', () => {
+    expect(
+      Object.values(
+        countValues(
+          [countServer('', 'legacy', 'a'), countServer('', 'legacy', 'b')],
+          [countBackup('legacy')],
+        ),
+      ),
+    ).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
+  it('keeps real empty, missing identity and unrelated inventory distinct', () => {
+    expect(
+      countValues([countServer('backup')], [countBackup('unrelated')])['pbs-backup:tank'],
+    ).toBe(0);
+    expect(countValues([countServer('', '', 'missing')], [])['missing:tank']).toBeUndefined();
+  });
+
+  it('exposes the same scoped count in the compact disclosure through loading, failure and recovery', async () => {
+    const [backups, setBackups] = createSignal([countBackup('pbs-backup')]);
+    const [state, setState] = createSignal<'available' | 'loading' | 'unavailable'>('available');
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable
+        servers={[countServer('backup'), countServer('pbs-backup')]}
+        backups={backups()}
+        backupInventoryState={state()}
+        layoutWidth={() => 320}
+      />
+    ));
+    const toggle = within(
+      container.querySelector('td[title="backup · tank"]') as HTMLElement,
+    ).getByRole('button', { name: 'Expand details for backup' });
+    fireEvent.click(toggle);
+    const region = within(container).getByRole('region', {
+      name: 'Datastore capacity for backup / tank',
+    });
+    expect(region).toHaveTextContent('Backup entries: 0');
+    toggle.focus();
+    setState('loading');
+    await waitFor(() => expect(region).toHaveTextContent('Backup entries: Loading'));
+    setState('unavailable');
+    await waitFor(() => expect(region).toHaveTextContent('Backup entries: Unavailable'));
+    setBackups([countBackup('backup'), countBackup('pbs-backup')]);
+    setState('available');
+    await waitFor(() => expect(region).toHaveTextContent('Backup entries: 1'));
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
 });
