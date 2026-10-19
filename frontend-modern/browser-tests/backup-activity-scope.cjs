@@ -354,6 +354,7 @@ async function capture(page, name) {
       await page.locator('[data-backup-volume-evidence]').innerText(),
       /no positive size reported/,
     );
+    if (width === 320) await activate(page.getByRole('button', { name: /^Filters/ }));
     await activate(page.getByRole('button', { name: /Clear filters/ }));
     await page.waitForURL((url) => !url.searchParams.has('q'));
     await page
