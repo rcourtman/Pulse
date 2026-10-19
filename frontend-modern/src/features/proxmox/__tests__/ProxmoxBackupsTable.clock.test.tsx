@@ -88,8 +88,9 @@ beforeEach(() => {
     },
   });
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await flush(); // Dialog focus restoration also runs when a test fails open.
   resetCreateNonSuspendingQueryCacheForTest();
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
@@ -196,6 +197,141 @@ describe('mounted backup chronology', () => {
       iso(start - 60_000),
     );
     expect(api.apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps restore-point evidence open and focused across live clock updates', async () => {
+    pbs = { data: { backups: [identityPBS({ backupTime: iso(start - 60_000) })] } };
+    mount();
+    await flush();
+    const trigger = screen.getByRole('button', { name: /Backup evidence for east-100/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await flush();
+    const dialog = screen.getByRole('dialog', { name: 'Backup evidence details' });
+    const close = within(dialog).getByRole('button', { name: 'Close backup evidence' });
+    close.focus();
+
+    await vi.advanceTimersByTimeAsync(RELATIVE_TIME_TICK_MS);
+    expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toBe(dialog);
+    expect(document.activeElement).toBe(close);
+    expect(screen.getByRole('button', { name: /Backup evidence for east-100/ })).toBe(trigger);
+    expect(api.apiFetch).toHaveBeenCalledTimes(2);
+    fireEvent.click(close);
+    await flush();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('retains the same evidence dialog when an unknown date moves into its actual day', async () => {
+    pbs = { data: { backups: [identityPBS({ backupTime: iso(start + 5_000) })] } };
+    mount();
+    await flush();
+    const row = rows()[0];
+    const trigger = within(row as HTMLElement).getByRole('button', { name: /Backup evidence/ });
+    expect(within(row as HTMLElement).getByLabelText(/Unknown age/)).toBeInTheDocument();
+    fireEvent.click(trigger);
+    await flush();
+    const dialog = screen.getByRole('dialog', { name: 'Backup evidence details' });
+    const close = within(dialog).getByRole('button', { name: 'Close backup evidence' });
+    close.focus();
+
+    await vi.advanceTimersByTimeAsync(RELATIVE_TIME_TICK_MS);
+    expect(rows()[0]).toBe(row);
+    expect(within(row as HTMLElement).queryByLabelText(/Unknown age/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Unknown date')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toBe(dialog);
+    expect(document.activeElement).toBe(close);
+    fireEvent.click(close);
+    await flush();
+    expect(document.activeElement).toBe(trigger);
+    expect(api.apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates an open point in place when a pending refresh changes verification and order', async () => {
+    const point = identityPBS({ backupTime: iso(start - 60_000), verified: true });
+    pbs = { data: { backups: [point] } };
+    mount();
+    await flush();
+    let finish!: (response: Response) => void;
+    api.apiFetch.mockImplementation((url: string) =>
+      url.endsWith('/pbs')
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve(new Response(JSON.stringify(pve))),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    await flush();
+    const row = rows()[0];
+    const trigger = within(row as HTMLElement).getByRole('button', { name: /Backup evidence/ });
+    fireEvent.click(trigger);
+    await flush();
+    const dialog = screen.getByRole('dialog', { name: 'Backup evidence details' });
+    const close = within(dialog).getByRole('button', { name: 'Close backup evidence' });
+    close.focus();
+    expect(
+      within(dialog).getByRole('heading', { name: 'Verified', exact: true }),
+    ).toBeInTheDocument();
+    finish(
+      new Response(
+        JSON.stringify({
+          data: {
+            backups: [
+              identityPBS({ id: 'newer-point', backupTime: iso(start - 30_000) }),
+              { ...point, verified: false, protected: true },
+            ],
+          },
+        }),
+      ),
+    );
+    await flush();
+
+    expect(rows()).toHaveLength(2);
+    expect(rows()[1]).toBe(row);
+    expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toBe(dialog);
+    expect(document.activeElement).toBe(close);
+    expect(
+      within(dialog).getByRole('heading', { name: 'Unverified', exact: true }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('heading', { name: 'Verified', exact: true }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Prune protected' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(point.id);
+    fireEvent.click(close);
+    await flush();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger).toHaveAccessibleName(/Unverified, prune protected/);
+    expect(api.apiFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('withdraws an open point when its pending source refresh is denied', async () => {
+    pbs = { data: { backups: [identityPBS({ backupTime: iso(start - 60_000) })] } };
+    mount();
+    await flush();
+    let finish!: (response: Response) => void;
+    api.apiFetch.mockImplementation((url: string) =>
+      url.endsWith('/pbs')
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve(new Response(JSON.stringify(pve))),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: /Backup evidence for east-100/ }));
+    await flush();
+    expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toBeInTheDocument();
+    finish(new Response('', { status: 403 }));
+    await flush();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(rows()).toHaveLength(0);
+    expect(screen.getByText(/PBS backup inventory is unavailable/)).toHaveTextContent(
+      'Access denied.',
+    );
+    expect(document.body.style.overflow).not.toBe('hidden');
+    await vi.advanceTimersByTimeAsync(RELATIVE_TIME_TICK_MS);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(rows()).toHaveLength(0);
   });
 
   it('never re-admits a denied source when time changes, and accepts a newly read point between clock ticks', async () => {

@@ -1,4 +1,5 @@
-import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createEffect, createMemo, type Accessor, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -116,8 +117,13 @@ export function ProxmoxRecoverableTable(props: {
       })),
     ]);
   });
+  // The model replaces artifact objects on clock ticks and accepted reads.
+  // Keep each visible point's row/dialog owner by identity, while reconciling
+  // its current fields and removing points that leave the admitted scope.
+  const [stableItems, setStableItems] = createStore<RecoverableTableItem[]>([]);
+  createEffect(() => setStableItems(reconcile(tableItems(), { key: 'key' })));
   const tableWindow = useProxmoxBackupTableWindowing(
-    tableItems,
+    () => [...stableItems],
     () => [layoutMode(), props.artifacts, showDayGroups()],
     () => props.layoutWidth?.() ?? observedWidth.width(),
   );
