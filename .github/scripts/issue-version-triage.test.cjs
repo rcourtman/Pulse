@@ -529,6 +529,76 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
 });
 
+const formattedEmptyTopics = ["None", "None known.", "N/A", "NA", "No", "Not applicable!"]
+  .flatMap(value => ["*", "_", "**", "__", "***", "`"].map(mark => `${mark}${value}${mark}`));
+
+test("formatting an empty topic answer does not declare another problem", () => {
+  for (const value of formattedEmptyTopics) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), false, value);
+  }
+});
+
+test("formatted empty answers cannot hide consequential topic content", () => {
+  for (const value of [
+    "**None**\n\nThe second host loses Docker inventory.",
+    "**None**\n### Separate backup problem\nBackups belong to the wrong host.",
+    "**None** except the second host loses Docker inventory.",
+    "**None", "~~None~~", "[None](https://example.invalid/issue)",
+    "<span>None</span>", "- **None**\n- The second host loses Docker inventory.",
+    "`<!-- None -->`", "No response",
+    "**The second host loses Docker inventory.**",
+  ]) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true, value);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`empty-topic formatting never invents a decomposition task on ${action}`, async () => {
+    for (const value of formattedEmptyTopics) {
+      const { github, calls } = createGithub();
+      const issue = { number: 3100, title: "One monitoring problem",
+        body: `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`,
+        labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest", "operator-reviewed"]
+          .map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+        previousBody: "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0" }) });
+      assert.deepEqual(calls.addLabels, [], value);
+      assert.deepEqual(calls.removeLabel, [], value);
+      assert.deepEqual(calls.createLabel, [], value);
+      assert.deepEqual(calls.createComment, [], value);
+      assert.deepEqual(calls.getLatestRelease, [], value);
+      assert.deepEqual(calls.paginate, [], value);
+    }
+  });
+}
+
+test("formatted empty answers preserve an existing decomposition task", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 3101, title: "One monitoring problem",
+    body: "### Additional actionable topics\n**None**\n\n### Pulse version\n6.5.0",
+    labels: ["bug", "affects-6.5.0", "needs-decomposition", "needs-human", "needs-retest-on-latest"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Additional actionable topics\nA second symptom.\n\n### Pulse version\n6.5.0" }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("a real topic after a formatted empty answer still reaches review", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 3102, title: "One monitoring problem",
+    body: "### Additional actionable topics\n**None**\n\nThe second host loses Docker inventory.\n\n### Pulse version\n6.5.0",
+    labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Additional actionable topics\n**None**\n\n### Pulse version\n6.5.0" }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
 test("edited form headings accept Markdown indentation and closing hashes", () => {
   const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
   for (const newline of ["\n", "\r\n"]) {

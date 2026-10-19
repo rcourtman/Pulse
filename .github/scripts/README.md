@@ -55,6 +55,11 @@ merely because another report first needed the same label.
 Secondary-topic classification still runs independently. Preserving version
 labels must not hide a new symptom or restore a completed decomposition task
 on an unrelated edit. Retest and human-ownership labels remain Community-owned.
+Emphasis or inline code around an otherwise empty answer (`**None**`, `N/A`)
+does not declare a topic. This is limited to the known empty answers: links,
+struck-out text, additional list items and later symptoms still surface
+review. An empty answer never clears an existing decomposition task or disposes
+of topics elsewhere in the conversation.
 
 A comment or unrelated edit can overtake the event that declared a new topic.
 When that same topic field remains in the live report, a delayed declaration
