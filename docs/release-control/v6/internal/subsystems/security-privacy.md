@@ -18,6 +18,18 @@
 
 ## Purpose
 
+### Unix lifecycle fallback credentials are transient
+
+The agent installer's lifecycle scope owns only the temporary mode-0600 bearer
+it creates when no saved runtime/configured/bootstrap file is selected. It arms
+EXIT/INT/TERM cleanup before writing the secret and keeps that cleanup local to
+the call, including command substitutions. Retained credentials and caller-owned
+staging are not deletion authority. Existing binary trust, TLS and private-file
+argv boundaries stay intact; inability to remove the owned file cannot report
+command success. `TestInstallSHLifecycleTemporaryTokenCleanup` checks production
+selection/cleanup against closed peers, including adverse cleanup and preserved
+saved files. This is not a SIGKILL/power-loss or native recovery guarantee.
+
 ### Repeated PVE installer registration cannot revoke an existing token
 
 Automatic root-installer registration treats an existing deterministic monitoring

@@ -715,47 +715,61 @@ prepare_collector_lifecycle_token_file() {
 
     [[ -n "$PULSE_TOKEN" && "$PULSE_TOKEN" != *$'\r'* && "$PULSE_TOKEN" != *$'\n'* ]] || return 1
     temp_token=$(mktemp) || return 1
+    # Record ownership before writing any credential bytes, including when a
+    # signal interrupts preparation rather than the lifecycle command itself.
+    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE="$temp_token"
     chmod 0600 "$temp_token" || { rm -f "$temp_token"; return 1; }
     if ! printf '%s' "$PULSE_TOKEN" > "$temp_token"; then
         rm -f "$temp_token"
         return 1
     fi
     COLLECTOR_LIFECYCLE_TOKEN_FILE="$temp_token"
-    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE="$temp_token"
     return 0
 }
 
 run_collector_lifecycle_command() {
-    local command_name="$1"
-    shift
-    local lifecycle_binary=""
-    local collector_uid=""
-    local lifecycle_rc=1
-    local -a lifecycle_args
+    # Registration/removal also call this through command substitution: its
+    # temporary-file bookkeeping cannot reach the caller's EXIT cleanup. Own
+    # this one transient token in a subshell without replacing caller traps or
+    # deleting retained runtime/bootstrap files or unrelated staged artifacts.
+    (
+        local command_name="$1"
+        shift
+        local lifecycle_binary=""
+        local collector_uid=""
+        local lifecycle_rc=1
+        local -a lifecycle_args
+        COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
+        trap '
+            lifecycle_rc=$?
+            if [[ -n "${COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE:-}" ]] &&
+               ! rm -f -- "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE"; then
+                [[ "$lifecycle_rc" -ne 0 ]] || lifecycle_rc=1
+            fi
+            exit "$lifecycle_rc"
+        ' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
 
-    lifecycle_binary=$(collector_lifecycle_binary) || return 1
-    trusted_lifecycle_regular_file "$lifecycle_binary" 755 || return 1
-    prepare_collector_lifecycle_token_file || return 1
-    lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
-    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
-    if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
-        lifecycle_args+=(--token-owner-uid "$collector_uid")
-    fi
-    [[ -n "$CURL_CA_BUNDLE" ]] && lifecycle_args+=(--cacert "$CURL_CA_BUNDLE")
-    [[ -n "$SERVER_FINGERPRINT" ]] && lifecycle_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
-    lifecycle_args+=("$@")
+        lifecycle_binary=$(collector_lifecycle_binary) || return 1
+        trusted_lifecycle_regular_file "$lifecycle_binary" 755 || return 1
+        prepare_collector_lifecycle_token_file || return 1
+        lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
+        collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+        if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+            lifecycle_args+=(--token-owner-uid "$collector_uid")
+        fi
+        [[ -n "$CURL_CA_BUNDLE" ]] && lifecycle_args+=(--cacert "$CURL_CA_BUNDLE")
+        [[ -n "$SERVER_FINGERPRINT" ]] && lifecycle_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
+        lifecycle_args+=("$@")
 
-    if "$lifecycle_binary" "${lifecycle_args[@]}"; then
-        lifecycle_rc=0
-    else
-        lifecycle_rc=$?
-    fi
-    if [[ -n "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE" ]]; then
-        rm -f "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE"
-    fi
-    COLLECTOR_LIFECYCLE_TOKEN_FILE=""
-    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
-    return "$lifecycle_rc"
+        if "$lifecycle_binary" "${lifecycle_args[@]}"; then
+            lifecycle_rc=0
+        else
+            lifecycle_rc=$?
+        fi
+        return "$lifecycle_rc"
+    )
 }
 
 # verify_agent_server_registration returns:

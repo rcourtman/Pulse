@@ -71,6 +71,26 @@ rename refusals, handled termination, directory races and old open readers.
 Service stop/kill and root ownership are explicit doubles. This is local source
 proof, not native systemd/appliance installation or reporter recovery.
 
+### Temporary Unix lifecycle credentials have their own cleanup scope
+
+Installer registration, uninstall and authority reduction retain the existing
+runtime/configured/bootstrap credential precedence and private `--token-file`
+transport. When only the in-memory bootstrap token is available, the lifecycle
+call owns its temporary file before writing credential bytes. Its isolated
+EXIT/INT/TERM cleanup removes only that file, including inside the registration
+and uninstall command substitutions; caller traps and staged files are separate.
+Stored credentials, agent identity, trust checks, TLS arguments and lifecycle
+output/status remain unchanged. Cleanup failure cannot turn a successful command
+into reported success, or replace an already nonzero command/signal result.
+
+`TestInstallSHLifecycleTemporaryTokenCleanup` runs the extracted production
+selection, command scope and outer cleanup through
+`scripts/tests/test_agent_lifecycle_token_cleanup.py`. Closed-peer controls cover
+all three operations, direct/substitution callers, stored-file precedence,
+returns, handled signals, preparation failures and refused cleanup. They do not
+establish cleanup after SIGKILL/power loss, real binary termination, native
+registration/removal recovery or installed acceptance.
+
 ### Explicit Unix installer transport policy wins over curl defaults
 
 All direct installer curl requests ignore `.curlrc` before processing their
