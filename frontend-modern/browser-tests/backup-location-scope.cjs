@@ -8,7 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { chromium, webkit, expect } = require('playwright/test');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
-const output = path.join(root, 'tmp/backup-location-scope/browser');
+const output = path.join(root, 'tmp/backup-location-scope/browser-v2');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(output, 'binding.json')));
 for (const [file, digest] of Object.entries(binding.files))
@@ -121,7 +121,7 @@ function serve(req, res, next) {
       ['chromium', chromium, false],
       ['webkit', webkit, true],
     ]) {
-      current = { name, requests: [] };
+      current = { name, requests: [], phases: [], localRequests: [] };
       browser = await engine.launch(
         narrow
           ? { headless: true }
@@ -139,7 +139,10 @@ function serve(req, res, next) {
       });
       const page = await context.newPage();
       page.on('pageerror', (error) => report.errors.push(`${name}: ${error.message}`));
-      page.on('request', (req) => assert.equal(new URL(req.url()).origin, origin));
+      page.on('request', (req) => {
+        assert.equal(new URL(req.url()).origin, origin);
+        current.localRequests.push(new URL(req.url()).pathname);
+      });
       const now = new Date('2026-10-19T12:00:00Z');
       await page.clock.install({ time: now });
       await page.clock.pauseAt(now);
@@ -177,10 +180,12 @@ function serve(req, res, next) {
       };
       const rows = () => page.locator('[data-proxmox-backup-row="recoverable"]');
       const visit = async (selected) => {
+        current.phases.push({ phase: 'navigation-start', selected });
         await page.goto(
           `${origin}/browser-tests/backup-location-scope.html?view=date${selected ? `&location=${encodeURIComponent(selected)}` : ''}`,
-          { waitUntil: 'domcontentloaded' },
+          { waitUntil: 'domcontentloaded', timeout: 60000 },
         );
+        current.phases.push({ phase: 'dom-loaded' });
         if (narrow) await page.evaluate(() => document.documentElement.classList.add('dark'));
         await expect(
           page.getByRole('button', { name: 'Refresh backups', exact: true }),
@@ -264,6 +269,7 @@ function serve(req, res, next) {
     assert.deepEqual(report.errors, []);
   } catch (error) {
     report.failure = String(error.stack || error);
+    report.failedCase = current;
     process.exitCode = 1;
   } finally {
     if (browser) {
