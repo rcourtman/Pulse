@@ -16,6 +16,17 @@
 
 ## Purpose
 
+### Unknown agent-installer arguments stop without a prompt
+
+The Unix agent parser rejects an unsupported option or stray value with exit
+16 and a fixed help-directed diagnostic, in text and JSON modes. It does not
+wait for terminal input, including when `--non-interactive` occurs later in the
+argument list. Rejection precedes credential ingress, installed-state recovery
+and platform work; supported values and `--help` retain their existing meaning.
+`TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive` runs the shipped
+script through `agent_argument_errors.py`, including real stdin PTYs and inert
+host-operation sentinels. This is parser proof, not native installation recovery.
+
 ### Legacy agent token-file admission cannot use a truncated prefix
 
 Before installation, update or removal work, the Unix collector/action-token

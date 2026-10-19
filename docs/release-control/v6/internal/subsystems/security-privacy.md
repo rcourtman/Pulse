@@ -18,6 +18,16 @@
 
 ## Purpose
 
+### Unsupported agent-installer arguments are not diagnostic content
+
+The Unix agent parser must not echo an unrecognised option or stray value:
+it may contain a miscopied credential, private path, URL password or terminal
+control characters. Both text and JSON errors use a fixed message and exit 16
+without prompting or reaching credential/host work. The shipped-script controls
+in `agent_argument_errors.py` and its Go hook exercise those inputs and preserve
+caller files. Other installer/runtime diagnostics are not claimed to be
+sanitised; credential selection, redaction, TLS and lifecycle policy are unchanged.
+
 ### Unix lifecycle fallback credentials are transient
 
 The agent installer's lifecycle scope owns only the temporary mode-0600 bearer

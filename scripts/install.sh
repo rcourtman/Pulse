@@ -6148,7 +6148,9 @@ while [[ $# -gt 0 ]]; do
         --pulse-url) require_option_value "$@"; PULSE_URL="$2"; shift 2 ;;
         --output) require_option_value "$@"; OUTPUT_FORMAT="$2"; shift 2 ;;
         --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
-        *) fail "Unknown argument: $1" ;;
+        # An unrecognised word may itself be a credential or private path.
+        # Reject syntax without echoing it or waiting for a later flag/input.
+        *) NON_INTERACTIVE=true fail "Unknown argument. Use --help for usage information." "$EXIT_MISSING_ARGS" ;;
     esac
 done
 
