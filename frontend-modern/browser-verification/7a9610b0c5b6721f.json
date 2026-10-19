@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "base_sha": "3b325768fefbc22a2f437ea0a9a7713ec3913568",
+  "verified_at": "2026-10-19T03:26:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "9770386cad1451295620d65dbc66ac8cc45cab41bdfae08a79c89881c253cf46"
+  },
+  "routes": [
+    "/proxmox/backups/date \u2014 real HTTP inventory readers, recovery model, chart, table and shipped CSS with safe synthetic GET-only observations"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Twelve saved scope cases per engine: all, node, type, workload, PBS/PVE/snapshot, verified/unverified, repository, combined and empty.",
+    "Only completed dated points enter activity; unknown-date notice and missing-size totals share non-day scope.",
+    "Scoped reported volume and ordinary inventory replacement, retaining metric/range and URL filters.",
+    "Eight settled final full-page captures, all inspected through native view_image."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch day selection/clear retain the full scoped timeline.",
+    "Same-page search updates chart and rows together without fetching; clear uses the collapsed Filters toolbar on phone.",
+    "Refresh uses only the ordinary PVE/PBS/posture GETs. Metric and 7-day range controls remain usable after empty scope and clear."
+  ],
+  "evidence": {
+    "runtime_source_sha": "b80efa8a753d8f6c245970fa344215ff8992424c",
+    "browser_source_sha": "3b325768fefbc22a2f437ea0a9a7713ec3913568",
+    "command": "pulse-worker-browser tmp/backup-activity-scope-browser.cjs",
+    "protocol": "frontend-modern/browser-tests/backup-activity-scope.cjs",
+    "build_binding": "BROWSER-BINDING.json in retained lane outcome",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop",
+        "width": 1365,
+        "browser": "141.0.7390.37",
+        "matrices": [
+          {
+            "query": "",
+            "total": 5,
+            "rows": 7,
+            "undated": true
+          },
+          {
+            "query": "?node=pve-1",
+            "total": 4,
+            "rows": 4,
+            "undated": false
+          },
+          {
+            "query": "?type=vm&q=west-workload",
+            "total": 1,
+            "rows": 3,
+            "undated": true
+          },
+          {
+            "query": "?q=east-workload",
+            "total": 4,
+            "rows": 4,
+            "undated": false
+          },
+          {
+            "query": "?source=pbs",
+            "total": 3,
+            "rows": 5,
+            "undated": true
+          },
+          {
+            "query": "?source=archive",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?source=snapshot",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?source=verified",
+            "total": 2,
+            "rows": 3,
+            "undated": true
+          },
+          {
+            "query": "?source=unverified",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?location=pbs%3Apbs-offsite%3Amain",
+            "total": 2,
+            "rows": 3,
+            "undated": false
+          },
+          {
+            "query": "?node=pve-1&type=vm&source=pbs&location=pbs%3Apbs-offsite%3Amain&q=east-workload",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?type=ct",
+            "total": 0,
+            "rows": 0,
+            "undated": false
+          }
+        ],
+        "checks": [
+          "saved scope matrix",
+          "same-page search",
+          "keyboard/touch day selection and clear",
+          "full timeline retained after day selection",
+          "scoped Count/Volume/missing sizes",
+          "same-scope ordinary refresh",
+          "filter clear and range/metric retention",
+          "no filter-triggered read"
+        ]
+      },
+      {
+        "name": "narrow",
+        "width": 320,
+        "browser": "26.0",
+        "matrices": [
+          {
+            "query": "",
+            "total": 5,
+            "rows": 7,
+            "undated": true
+          },
+          {
+            "query": "?node=pve-1",
+            "total": 4,
+            "rows": 4,
+            "undated": false
+          },
+          {
+            "query": "?type=vm&q=west-workload",
+            "total": 1,
+            "rows": 3,
+            "undated": true
+          },
+          {
+            "query": "?q=east-workload",
+            "total": 4,
+            "rows": 4,
+            "undated": false
+          },
+          {
+            "query": "?source=pbs",
+            "total": 3,
+            "rows": 5,
+            "undated": true
+          },
+          {
+            "query": "?source=archive",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?source=snapshot",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?source=verified",
+            "total": 2,
+            "rows": 3,
+            "undated": true
+          },
+          {
+            "query": "?source=unverified",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?location=pbs%3Apbs-offsite%3Amain",
+            "total": 2,
+            "rows": 3,
+            "undated": false
+          },
+          {
+            "query": "?node=pve-1&type=vm&source=pbs&location=pbs%3Apbs-offsite%3Amain&q=east-workload",
+            "total": 1,
+            "rows": 1,
+            "undated": false
+          },
+          {
+            "query": "?type=ct",
+            "total": 0,
+            "rows": 0,
+            "undated": false
+          }
+        ],
+        "checks": [
+          "saved scope matrix",
+          "same-page search",
+          "keyboard/touch day selection and clear",
+          "full timeline retained after day selection",
+          "scoped Count/Volume/missing sizes",
+          "same-scope ordinary refresh",
+          "filter clear and range/metric retention",
+          "no filter-triggered read"
+        ]
+      }
+    ],
+    "captures": [
+      {
+        "file": "tmp/backup-activity-scope/desktop-all-count.png",
+        "sha256": "b29797ae94ba86a34606454d80074d20ba1247ff52babe419712718666a4b2ed"
+      },
+      {
+        "file": "tmp/backup-activity-scope/desktop-repository-count.png",
+        "sha256": "600f26f4a7b5a44db77119a0b474e8563fb823a60028f7f2e63c0986c1643f90"
+      },
+      {
+        "file": "tmp/backup-activity-scope/desktop-empty-scope.png",
+        "sha256": "45dc492daa70fffd27d68dca39a86449ffd316320c5d6a8121601d9ab855dc08"
+      },
+      {
+        "file": "tmp/backup-activity-scope/desktop-scoped-volume.png",
+        "sha256": "276ac4d9ccdce14c511f7948d92472edb58c440c60ec56ae2544f857b097c457"
+      },
+      {
+        "file": "tmp/backup-activity-scope/narrow-all-count.png",
+        "sha256": "cb3ed8f0ea9a12babdde30dd56c304a818fde4832db996cabbf916e9f94dc280"
+      },
+      {
+        "file": "tmp/backup-activity-scope/narrow-repository-count.png",
+        "sha256": "f0a50216a4d4bbebf40ca70e87f682a478c3b06eb8b1f91f3cfe269ea1acd279"
+      },
+      {
+        "file": "tmp/backup-activity-scope/narrow-empty-scope.png",
+        "sha256": "ddf618cc7baff30eefb15124d5a01d29c6ee8a7e22db7a5437a8d52d7fa84863"
+      },
+      {
+        "file": "tmp/backup-activity-scope/narrow-scoped-volume.png",
+        "sha256": "19b1b31c7b98045c4336aa8842dc62caccbfc88df39f5e2e62c50282eb3297a3"
+      }
+    ],
+    "native_pixel_review": "PIXELS.json in retained lane outcome: all eight final PNGs opened natively; empty-state cards fully settled.",
+    "cleanup": {
+      "desktop": true,
+      "narrow": true,
+      "server": true
+    },
+    "limits": "Synthetic collected-data presentation, not native backup/restore/thaw, protected landing or release availability."
+  }
+}
