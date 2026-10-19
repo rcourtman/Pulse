@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "base_sha": "4e4412001bca8bb124ef4ce9177a7ba6b2b18d11",
+  "verified_at": "2026-10-19T04:38:15.218179+00:00",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx": "3578487b9b068646f634189d0ef1f2c2076a2fe8ddf876bd33a1f8caefda55d9"
+  },
+  "routes": [
+    "/patrol/activity#patrol-suppression-rules \u2014 real Patrol Activity/router, HTTP clients and shipped CSS; synthetic tenant-bound rules"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Stalled rule-list read is still pending at 29,999ms and expires at 30,000ms with explicit failure, no empty-list claim and enabled Reload.",
+    "Stalled pre-read, DELETE response and absence readback each expire without accepting late results, showing stale controls, automatic rereads/retries or false success. An accepted fixture DELETE remains uncertain until explicit Reload.",
+    "Normal exact-ID removal still requires a fresh pre-read and absence readback; neighbour, broad, legacy and dismissed decisions remain byte-equivalent.",
+    "All eight final captures opened natively: timeout copy and scope/ID/reason/footer wrap without horizontal clipping; actual rendered theme is light on both profiles, not a dark-theme claim."
+  ],
+  "interactions": [
+    "Chromium desktop uses keyboard focus and Enter for every action. WebKit 320px uses actual touch taps. Cancel is initially focused; expiry restores focus to the stable summary.",
+    "Explicit reload reconciles state after each timeout; three distinct fixture DELETE IDs are sent once each, with no mutation outside the exact selected rules and no repeated DELETE after offered late responses.",
+    "Playwright 1.56.1 matches integration lock. Browser versions: Chromium 141.0.7390.37 and WebKit 26.0. Browser contexts and Vite server close.",
+    "Synthetic clock/network fixture only; no published installation, reporter confirmation, guest thaw, filesystem liveness or native backup recovery is established."
+  ],
+  "evidence": {
+    "protocol": "frontend-modern/browser-tests/patrol-rule-deadline.cjs",
+    "protocol_sha256": "df986d2882df209d83c596911164c2fad34a12db2158c12fca8d0235afd4064d",
+    "source_tree": "f9edbbf70c4281cc0f4bb47b131a856f91022f23",
+    "captures": [
+      {
+        "file": "browser/desktop-load-timeout.png",
+        "sha256": "293405996f0d1aa786499b8a3dbcb3649afa2f45a5dad2a4fe7836630adef628"
+      },
+      {
+        "file": "browser/desktop-delete-pending.png",
+        "sha256": "ab41a4a39a7e0fddf8adf5e67f1d32041516805f671c43c6fbc131a723b7dfa4"
+      },
+      {
+        "file": "browser/desktop-readback-timeout.png",
+        "sha256": "418c424cf844a83d95e69da0f2a2d1fec39ef59d9f3dc2868e76277fa73bda13"
+      },
+      {
+        "file": "browser/desktop-confirmed-removal.png",
+        "sha256": "34396b0023a01b1a14b387049d1bf4b4ce98e6a9b59c337c2f3aa8b244f1c75f"
+      },
+      {
+        "file": "browser/narrow-load-timeout.png",
+        "sha256": "5941c8610f12495fbf0060f9934a0cb6a876f1b18c44ff25f7d5e26b76a36993"
+      },
+      {
+        "file": "browser/narrow-delete-pending.png",
+        "sha256": "c63ae65f6f53a236a65b72c68d676662ad206e2394d9a985e26a9d294b240d65"
+      },
+      {
+        "file": "browser/narrow-readback-timeout.png",
+        "sha256": "92316e75019afb636d44cab0522f4b7e2eaf0ed64e677fa3e6fd06c5e832f5a5"
+      },
+      {
+        "file": "browser/narrow-confirmed-removal.png",
+        "sha256": "4bc6afa645f1971b0a11a11cd49aa2aed67c14e01d8672d011b0539bbbc6c213"
+      }
+    ],
+    "native_pixel_review": "PIXELS.json in retained lane dossier",
+    "cleanup": {
+      "browser": true,
+      "server": true
+    },
+    "raw_result": "BROWSER-RESULT.json in retained lane dossier"
+  }
+}
