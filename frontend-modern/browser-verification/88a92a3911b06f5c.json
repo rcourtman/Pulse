@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "924c9b8e3e45ea5b512e719e4fc1503db5d466ca",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "3d29c6eda870b07c9e64175faada4c5eb5e5abbbe6b5c872ea9007e6a040178e"
+  },
+  "routes": [
+    "/proxmox/replication (production page/query/reader/table via /browser-tests/replication-inventory.html)"
+  ],
+  "states": [
+    "Emitted failed, rejected short-inventory, ambiguous status, successful recovery and connection-scoped empty HTTP responses from Core 5ff10c9168",
+    "Derived metadata error and clean observations, insertion and reordering with independent same-VMID jobs"
+  ],
+  "interactions": [
+    "Nine ordinary 30-second reads per engine; completed response bodies deep-equal the selected frame, no reload or forced refetch",
+    "Failed \u2192 Unknown \u2192 OK updates the same summary, native disclosure, open details and focus owner",
+    "A new error overrides historical OK with zero failures; label/title/route/schedule/duration/comment and omitted fields update in place",
+    "Insertion/reordering keeps disclosure controls unique and independently scoped connections/same-VMID jobs unchanged",
+    "Unknown filter updates to empty after ordinary recovery, OK restores matching jobs and authoritative empty removes only its connection",
+    "Desktop keyboard and narrow touch open the shipped disclosure; later live changes retain its actual DOM focus"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T15:31:47Z",
+  "protocol": "frontend-modern/browser-tests/replication-live-rows.cjs",
+  "protocol_sha256": "fb638eadf88c13557f58cb126bae3ccb7b4f37a209bb4a5145db0896d0b27f68",
+  "execution_source": "924c9b8e3e45ea5b512e719e4fc1503db5d466ca",
+  "execution_tree": "4b1098dfe6111698e1cbe98e355f047704f132f9",
+  "parent_tree": "4b1098dfe6111698e1cbe98e355f047704f132f9",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "contextClosed": true,
+      "browserClosed": true
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "contextClosed": true,
+      "browserClosed": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-unknown-open.png",
+      "sha256": "0afa169cfd7b8ecace138046bc9a5ac5dfc515eb8e4918f7b1560786286def69",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "unknown-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 1440px the toolbar Unknown 1 / Failed 0 agrees with the amber Unknown row. The existing open disclosure says Not reported and explains unknown is not pending; the old error is absent. Independent successful rows remain below it, and the disclosure focus ring is visible."
+    },
+    {
+      "file": "chromium-recovered-open.png",
+      "sha256": "f26db939fe5abd7a14a1e285d5dd7bc7db5af9be4fff57bddd77faeece49babf",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "recovered-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The same open job now shows green OK with matching OK 3 counts and a successful-last-sync explanation that explicitly does not confirm a restore or current guest health. Error text remains absent and the focused disclosure stays open."
+    },
+    {
+      "file": "chromium-changed-error-open.png",
+      "sha256": "4a9d02cc4b3595d245fd2205cdba1f4513dd8d673df79637f034bd476c92c03b",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "changed-error-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "After insertion the focused, expanded renamed job shows Failed despite reported result ok and zero failures. Route, schedule, duration and literal error/comment tags are updated. Full error text is readable in the detail; same-VMID sibling and independent connection remain separate OK rows."
+    },
+    {
+      "file": "chromium-clean-reordered-open.png",
+      "sha256": "6e0c91d5294c8e3aab7f1a83b4a36f7a36456ba82939e65e2952254b7dd9a7d4",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "clean-reordered-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The reordered renamed job stays open with green OK and the safety caveat, updated route/schedule/duration and no stale error or comment. Independent same-VMID jobs remain separate, and the disclosure focus ring is retained."
+    },
+    {
+      "file": "webkit-unknown-open.png",
+      "sha256": "72b14a3eaa43ee63036b95b151723f50b448d25d2249e888f2b37b42bc8908fb",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "unknown-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px dark mode the expanded job has a readable amber Unknown state matching the exposed filter counts, no old error and a wrapping Not reported/unknown-not-pending explanation. Guest/route scanning labels truncate intentionally; their full values are visible in the open details with no horizontal overflow."
+    },
+    {
+      "file": "webkit-recovered-open.png",
+      "sha256": "18262ae518d64ffe417b253c4bdef66c23fc57f138999bec60428f4b3183d37e",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "recovered-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The narrow expanded job changes to green OK with matching counts, a readable wrapped last-sync caveat, updated duration/times and no error. Full guest identity and route remain readable in the details."
+    },
+    {
+      "file": "webkit-changed-error-open.png",
+      "sha256": "0f7602be67f91ec6d7ba7017119c73042d69a8fbe3058c075b4167b2cdaf271a",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "changed-error-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the inserted same-VMID job is separate from the renamed failed job. Its new literal error wraps, and full guest, route, schedule, duration, zero failures and literal comment are readable in the open detail. No markup is interpreted or content cut off horizontally."
+    },
+    {
+      "file": "webkit-clean-reordered-open.png",
+      "sha256": "c07e1fd790ae507faa7a63491ff91d4f36a94a1314889b9f0d1d14d978ed923d",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "clean-reordered-open",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focused": "Collapse details for replication job 100-0",
+        "expanded": [
+          "replication-job-detail-cl-2"
+        ]
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The narrow reordered job remains expanded and changes to green OK without the old error/comment. The safety explanation and updated fields remain readable; the independent connection and same-VMID sibling are distinct rows. No horizontal overflow is visible."
+    }
+  ],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "proof_limits": [
+    "Current committed-source dev preview with saved client/monitor/handler frames and explicitly synthetic metadata controls. No production embed, native provider/TLS, replication, guest health, restore, thaw, filesystem liveness, installed recovery, release or screen-reader speech proof.",
+    "Full isolated frontend type/lint/build/budget execution unavailable before guest creation (proof-capacity-low); not a passed or failed suite."
+  ]
+}
