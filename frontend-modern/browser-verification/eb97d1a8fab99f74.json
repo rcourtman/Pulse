@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "base_sha": "1e5592a64f9ff1e451dc9e52c89d79715e5dd62b",
+  "verified_at": "2026-10-19T02:24:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx": "451625876b4ab757303f0cbf1842bcb2d623fd951cb42968db16559f27bb341a",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "bf99f84b1a41d72911448718c17079127c0976e0a6df4e3691eafa8427a917cf",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "2e221072a17bdecd6a3ea64430c3dcb9bbea2310206f7a2a8dc2921fda6aed90"
+  },
+  "routes": [
+    "/proxmox/backups/date \u2014 production HTTP readers, recovery model, table, activity chart and shipped CSS; synthetic GET-only loopback inventory"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Count with PBS/PVE/guest-snapshot observations with absent or zero reported sizes.",
+    "Volume with no usable sizes: controls remain and the notice distinguishes unavailable values from no activity.",
+    "Partial volume: qualified daily accessible labels and desktop keyboard tooltip; incomplete, future, undated and out-of-window records excluded from size-availability totals.",
+    "Ordinary HTTP replacement with measured sizes, then a truly empty 30-day window with older measured evidence still listed."
+  ],
+  "interactions": [
+    "Desktop native Tab/Enter reaches Volume and retains focus; Shift+Tab/Space returns to Count. 320px WebKit touch selects Volume and Count.",
+    "Refresh backups through production HTTP readers preserves selected metric while replacing unavailable/partial size evidence with measured values.",
+    "Widen to 90d and narrow to 7d, select a day and clear the URL day filter.",
+    "Inspect all eight retained native captures: Count, missing Volume, partial Volume and empty window at both widths. No clipped metric/range/notice content or horizontal page overflow."
+  ],
+  "evidence": {
+    "runtime_source_sha": "1e5592a64f9ff1e451dc9e52c89d79715e5dd62b",
+    "browser_command": "pulse-worker-browser tmp/backup-activity-browser.cjs",
+    "protocol": "frontend-modern/browser-tests/backup-activity-volume.cjs",
+    "preview": "Only the consuming fixture compiled inside governed offline browser sandbox using exact locked dependencies; full production build belongs to source-proof VM.",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop",
+        "width": 1365,
+        "browser": "141.0.7390.37",
+        "checks": [
+          "native metric activation and return",
+          "absent/zero sizes across PBS/PVE/guest snapshots",
+          "partial and unknown daily size labels",
+          "incomplete/future/undated/old exclusion",
+          "ordinary measured replacement",
+          "empty-window range recovery",
+          "day filter and clear"
+        ]
+      },
+      {
+        "name": "narrow",
+        "width": 320,
+        "browser": "26.0",
+        "checks": [
+          "native metric activation and return",
+          "absent/zero sizes across PBS/PVE/guest snapshots",
+          "partial and unknown daily size labels",
+          "incomplete/future/undated/old exclusion",
+          "ordinary measured replacement",
+          "empty-window range recovery",
+          "day filter and clear"
+        ]
+      }
+    ],
+    "captures": [
+      {
+        "file": "tmp/backup-activity-volume/desktop-count.png",
+        "sha256": "0f553c06b6cd0e388895d879812eb9bfc4f9030822576cb9e29e178dd0ffa109"
+      },
+      {
+        "file": "tmp/backup-activity-volume/desktop-missing-volume.png",
+        "sha256": "a4b6d1654f2dc487ecc5ab76eaccdf180e4e736728d6edd0a12be77486a752e9"
+      },
+      {
+        "file": "tmp/backup-activity-volume/desktop-partial-volume.png",
+        "sha256": "9f7e9e6b328ce5ebbab9fc3de2245b7f722ef7039e44f5e74fe36b420d84309c"
+      },
+      {
+        "file": "tmp/backup-activity-volume/desktop-empty-window.png",
+        "sha256": "e6ee2117a44c72cee605b03a12c3a0630c87d81c231b55cac7c0e9636db342da"
+      },
+      {
+        "file": "tmp/backup-activity-volume/narrow-count.png",
+        "sha256": "044c81ed5b6532c2e086ea76ceeeba53fdc179cbead97c4f2bc680fef1a078e9"
+      },
+      {
+        "file": "tmp/backup-activity-volume/narrow-missing-volume.png",
+        "sha256": "3e6ecf76b4d2fa837b270842825a2f876d8fba03d310e0958309fe4a839f6c7b"
+      },
+      {
+        "file": "tmp/backup-activity-volume/narrow-partial-volume.png",
+        "sha256": "4acf531f5ddb0dd230749c45ca0f33a9403da641b818b20b5d9166b11b1c54f6"
+      },
+      {
+        "file": "tmp/backup-activity-volume/narrow-empty-window.png",
+        "sha256": "6f5e805dbed30350625c072ee9d1fdb9a9cd212615f72936aca57e3b63de1e45"
+      }
+    ],
+    "cleanup": {
+      "desktop": true,
+      "narrow": true,
+      "server": true
+    },
+    "limitations": "Collected-data presentation proof, not native backup/guest recovery, protected publication or release availability."
+  }
+}
