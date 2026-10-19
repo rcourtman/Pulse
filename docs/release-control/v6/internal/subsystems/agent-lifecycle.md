@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Malformed Unix installer invocations preserve local state
+
+An unrecognised argument exits 16 before credential reads or lifecycle work,
+without waiting for a terminal confirmation. The fixed error directs callers
+to `--help`; it does not interpolate the unsupported argument. The executable
+parser/PTY controls in `agent_argument_errors.py` (registered by
+`TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive`) preserve caller
+credential bytes, permissions and identity and detect accidental platform work.
+They do not establish service removal, an update or installed acceptance.
+
 ### Cluster peer sensor identity and failure visibility (#3064)
 
 The optional Linux Proxmox peer collector offers the existing supported root

@@ -16,6 +16,30 @@
 
 ## Purpose
 
+### Convergence discovery can recover an exact cancelled API read
+
+Only the existing JSON API/page read helpers admit an exit-1 HTTP/2 `CANCEL`
+diagnostic with no other text. They repeat the identical command and identity
+within the existing three-attempt, one/two-second backoff budget; failed output
+never contributes to the accepted catalogue. Mixed stream/access diagnostics,
+signals, timeouts and malformed successful JSON cannot use this retry. The
+existing HTTP 502/503/504 read policy cannot mask a refusal or second status.
+Mutations, downloads, log reads, exact-source/attestation checks, containment and
+the global promotion lease are unchanged. Focused `CancelledReadTests` cover
+the real closed CLI boundary, discovery consumer and fail-closed alternatives.
+These fixtures are not a successful hosted reconciliation or installed delivery.
+
+### Unknown agent-installer arguments stop without a prompt
+
+The Unix agent parser rejects an unsupported option or stray value with exit
+16 and a fixed help-directed diagnostic, in text and JSON modes. It does not
+wait for terminal input, including when `--non-interactive` occurs later in the
+argument list. Rejection precedes credential ingress, installed-state recovery
+and platform work; supported values and `--help` retain their existing meaning.
+`TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive` runs the shipped
+script through `agent_argument_errors.py`, including real stdin PTYs and inert
+host-operation sentinels. This is parser proof, not native installation recovery.
+
 ### Legacy agent token-file admission cannot use a truncated prefix
 
 Before installation, update or removal work, the Unix collector/action-token

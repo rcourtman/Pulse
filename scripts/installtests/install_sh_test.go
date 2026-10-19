@@ -134,6 +134,30 @@ func TestInstallSHValueArgumentsPreserveExplicitValues(t *testing.T) {
 	}
 }
 
+func TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_argument_errors.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent argument error controls: %v\n%s", err, out)
+	}
+	for _, required := range []string{
+		"test_unknown_input_is_private_in_every_output_and_flag_order",
+		"test_unknown_input_never_waits_on_a_terminal",
+		"test_supported_help_still_exits_without_reading_option_values",
+		"Ran 3 tests", "\nOK\n", "agent argument errors: 76 closed scenarios observed",
+	} {
+		if !strings.Contains(string(out), required) {
+			t.Fatalf("incomplete argument error controls (missing %q):\n%s", required, out)
+		}
+	}
+	if strings.Contains(string(out), "skipped") {
+		t.Fatalf("argument error controls were skipped:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
 func runInstallSHArgumentFixture(t *testing.T, args ...string) (string, int) {
 	t.Helper()
 	dir := t.TempDir()

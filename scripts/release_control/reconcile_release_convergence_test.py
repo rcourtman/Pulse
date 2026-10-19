@@ -107,6 +107,169 @@ class TransientReadTests(unittest.TestCase):
                 sleep.assert_not_called()
 
 
+class CancelledReadTests(unittest.TestCase):
+    diagnostic = "stream error: stream ID 1; CANCEL; received from peer\n"
+
+    def result(self, code=0, stdout="{}", stderr=""):
+        return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
+
+    def test_real_cli_boundary_discards_cancelled_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = root / "calls.json"
+            calls.write_text("[]")
+            peer = root / "closed-gh"
+            peer.write_text(f"#!{sys.executable}\n" + """
+import json
+from pathlib import Path
+import sys
+calls = Path(""" + repr(str(calls)) + """)
+history = json.loads(calls.read_text())
+history.append(sys.argv[1:])
+calls.write_text(json.dumps(history))
+if len(history) == 1:
+    print('[{"id":999}]')
+    print('stream error: stream ID 1; CANCEL; received from peer', file=sys.stderr)
+    sys.exit(1)
+print('[{"id":2}]\\n[{"id":3}]')
+""")
+            peer.chmod(0o700)
+            github = subject.GitHub("rcourtman/Pulse", str(peer))
+            with patch("time.sleep") as sleep, contextlib.redirect_stderr(io.StringIO()) as diagnostic:
+                self.assertEqual([[{"id": 2}], [{"id": 3}]], github.pages("repos/rcourtman/Pulse/releases?per_page=100"))
+            history = json.loads(calls.read_text())
+            self.assertEqual(2, len(history))
+            self.assertEqual(history[0], history[1])
+            self.assertEqual(["api", "--paginate", "repos/rcourtman/Pulse/releases?per_page=100"], history[0])
+            self.assertIn("HTTP/2 CANCEL", diagnostic.getvalue())
+            self.assertNotIn("999", diagnostic.getvalue())
+            sleep.assert_called_once_with(1)
+
+    def test_pages_restart_the_identical_read_without_partial_output(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [self.result(1, '[{"id": 999}]', self.diagnostic),
+                   self.result(1, '[{"id":', self.diagnostic.replace("ID 1", "ID 93")),
+                   self.result(0, '[{"id": 2}]\n[{"id": 3}]')]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            self.assertEqual([[{"id": 2}], [{"id": 3}]], github.pages("repos/rcourtman/Pulse/releases?per_page=100"))
+        self.assertEqual(3, command.call_count)
+        self.assertTrue(all(call == command.call_args_list[0] for call in command.call_args_list))
+        self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_api_retry_preserves_the_selected_identity_without_logging_values(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        output = io.StringIO()
+        with patch.dict(os.environ, {"GH_TOKEN": "synthetic-ambient"}, clear=True), contextlib.redirect_stderr(output):
+            with patch.object(subject.subprocess, "run", side_effect=[self.result(1, "private-partial", self.diagnostic), self.result()]) as command, patch("time.sleep") as sleep:
+                self.assertEqual({}, github.api("repos/rcourtman/Pulse", token="synthetic-selected"))
+        self.assertEqual(2, command.call_count)
+        self.assertEqual(command.call_args_list[0], command.call_args_list[1])
+        self.assertEqual("synthetic-selected", command.call_args.kwargs["env"]["GH_TOKEN"])
+        self.assertNotIn("synthetic", output.getvalue())
+        self.assertNotIn("private-partial", output.getvalue())
+        sleep.assert_called_once_with(1)
+
+    def test_exhausted_cancellation_stops_after_three_reads(self):
+        for method in ("api", "pages"):
+            with self.subTest(method=method):
+                github = subject.GitHub("rcourtman/Pulse", "gh")
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", self.diagnostic)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaisesRegex(subject.ReconciliationError, "GET repos/rcourtman/Pulse/releases"):
+                        getattr(github, method)("repos/rcourtman/Pulse/releases")
+                self.assertEqual(3, command.call_count)
+                self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_other_stream_errors_mixed_diagnostics_and_refusals_are_not_retried(self):
+        details = [self.diagnostic.replace("CANCEL", "REFUSED_STREAM"),
+                   self.diagnostic.replace("CANCEL", "INTERNAL_ERROR"),
+                   self.diagnostic.replace("ID 1", "ID unknown"),
+                   "gh: " + self.diagnostic, self.diagnostic + "\n",
+                   self.diagnostic + "HTTP 403\n", self.diagnostic + "HTTP 504\n",
+                   self.diagnostic + "terminal escape sequences refused\n",
+                   self.diagnostic + "permission denied\n",
+                   "HTTP 403\nHTTP 504", "permission denied (HTTP 504)"]
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for detail in details:
+            with self.subTest(detail=details.index(detail)):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", detail)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        github.pages("repos/rcourtman/Pulse/releases")
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_signals_and_timeout_exit_codes_are_not_transient_reads(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for code in (-15, 124, 130, 143):
+            for detail in (self.diagnostic, "HTTP 504"):
+                with self.subTest(code=code, detail=detail):
+                    with patch.object(subject.subprocess, "run", return_value=self.result(code, "partial", detail)) as command, patch("time.sleep") as sleep:
+                        with self.assertRaises(subject.ReconciliationError):
+                            github.api("repos/rcourtman/Pulse")
+                    self.assertEqual(1, command.call_count)
+                    sleep.assert_not_called()
+
+    def test_mutations_downloads_and_log_reads_never_retry_cancellation(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        operations = [lambda: github.post("repos/rcourtman/Pulse/actions/dispatches"),
+                      lambda: github.post("repos/rcourtman/Pulse/actions/dispatches", {"ref": "main"}),
+                      lambda: github.download_marker("v6.5.0", Path("unused-fixture-output")),
+                      lambda: github.job_log("rcourtman/Pulse", 1)]
+        for index, operation in enumerate(operations):
+            with self.subTest(operation=index):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", self.diagnostic)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        operation()
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_discovery_consumes_only_the_recovered_complete_catalogue(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        published = release("v6.5.0", "2026-10-06T00:54:36Z", prerelease=False)
+        results = [self.result(stdout='{"default_branch":"main"}'),
+                   self.result(stdout=json.dumps({"id": WORKFLOW_ID})),
+                   self.result(1, '[{"tag_name":"v99.0.0"}]', self.diagnostic),
+                   self.result(stdout=json.dumps([published])),
+                   self.result(stdout=json.dumps({"workflow_runs": [run(10, "v6.5.0", "2026-10-06T00:55:00Z")]}))]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            self.assertEqual([10], subject.discover(github))
+        self.assertEqual(5, command.call_count)
+        self.assertEqual(command.call_args_list[2], command.call_args_list[3])
+        self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
+        sleep.assert_called_once_with(1)
+
+    def test_discovery_exhaustion_does_not_progress_to_runs_or_mutation(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [self.result(stdout='{"default_branch":"main"}'),
+                   self.result(stdout=json.dumps({"id": WORKFLOW_ID})),
+                   *[self.result(1, "partial", self.diagnostic)] * 3]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep"):
+            with self.assertRaises(subject.ReconciliationError):
+                subject.discover(github)
+        self.assertEqual(5, command.call_count)
+        self.assertTrue(all(call == command.call_args_list[2] for call in command.call_args_list[2:]))
+        self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
+
+    def test_malformed_success_after_cancellation_is_not_retried_again(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for method in ("api", "pages"):
+            with self.subTest(method=method):
+                with patch.object(subject.subprocess, "run", side_effect=[self.result(1, "partial", self.diagnostic), self.result(stdout='[{"id":')]) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        getattr(github, method)("repos/rcourtman/Pulse/releases")
+                self.assertEqual(2, command.call_count)
+                sleep.assert_called_once_with(1)
+
+    def test_subprocess_exceptions_are_not_replayed(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for failure in (subprocess.TimeoutExpired("gh", 1), PermissionError("synthetic refusal")):
+            with self.subTest(failure=type(failure).__name__):
+                with patch.object(subject.subprocess, "run", side_effect=failure) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(type(failure)):
+                        github.api("repos/rcourtman/Pulse")
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+
 class FailedReadIdentityTests(unittest.TestCase):
     def test_header_bearing_api_failure_names_the_resource_without_retry(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
