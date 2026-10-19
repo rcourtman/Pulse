@@ -224,6 +224,100 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps a job-only unmatched target inspectable without counting it as monitored or recoverable', async () => {
+    mockBackupAPIs();
+    const error = 'Cannot start backup <img src=x onerror="window.__jobInjected=true">';
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? {
+                data: {
+                  guestSnapshots: [],
+                  storageBackups: [],
+                  backupTasks: [identityTask({ status: 'error', error })],
+                },
+              }
+            : { data: { backups: [] } },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    const unmatched = await screen.findByRole('button', { name: /1 unmatched backup target/ });
+    expect(container).toHaveTextContent('0 targets');
+    expect(container).toHaveTextContent('0 restore points');
+    await fireEvent.click(unmatched);
+    const row = container.querySelector<HTMLElement>('[data-proxmox-backup-row="coverage"]')!;
+    expect(row).toHaveTextContent('Guest 100');
+    expect(row).toHaveTextContent('Failed');
+    await fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    expect(detail).toHaveTextContent(error);
+    expect(detail).toHaveTextContent('task-100');
+    expect(detail).toHaveTextContent('east');
+    expect(detail).toHaveTextContent('pve-1');
+    expect(detail.querySelector('img')).toBeNull();
+    expect(container).toHaveTextContent('This backup or job does not match a guest');
+    expect(container).toHaveTextContent('A job alone does not establish a restore point');
+    expect(apiFetchMock.mock.calls).toHaveLength(2);
+  });
+
+  it('reconciles an ambiguous job with live inventory without guessing ownership or refetching inventories', async () => {
+    mockBackupAPIs();
+    apiFetchJSONMock.mockResolvedValue({
+      data: [],
+      policy: {
+        freshnessWindowSeconds: 604800,
+        verificationWindowSeconds: 604800,
+        requireVerification: true,
+      },
+    });
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? {
+                data: {
+                  guestSnapshots: [],
+                  storageBackups: [],
+                  backupTasks: [identityTask({ instance: '', status: 'error' })],
+                },
+              }
+            : { data: { backups: [] } },
+        ),
+      ),
+    );
+    const east = identityGuest('east-100', 'east', 'pve-1');
+    const west = identityGuest('west-100', 'west', 'pve-1');
+    const [workloads, setWorkloads] = createSignal([west, east]);
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+    ));
+    const rowFor = (name: string) =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>('[data-proxmox-backup-row="coverage"]'),
+      ).find((row) => row.textContent?.includes(name))!;
+    await fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup target/ }));
+    expect(rowFor('east-100')).not.toHaveTextContent('Failed');
+    expect(rowFor('west-100')).not.toHaveTextContent('Failed');
+    expect(rowFor('Guest 100')).toHaveTextContent('Failed');
+    setWorkloads([east]);
+    await waitFor(() => expect(rowFor('east-100')).toHaveTextContent('Failed'));
+    expect(
+      screen.queryByRole('button', { name: /unmatched backup target/ }),
+    ).not.toBeInTheDocument();
+    expect(container).toHaveTextContent('1 targets');
+    expect(container).toHaveTextContent('0 restore points');
+    setWorkloads([east, west]);
+    await waitFor(() => expect(rowFor('Guest 100')).toHaveTextContent('Failed'));
+    expect(rowFor('east-100')).not.toHaveTextContent('Failed');
+    expect(rowFor('west-100')).not.toHaveTextContent('Failed');
+    expect(container).toHaveTextContent('2 targets');
+    expect(apiFetchMock.mock.calls).toHaveLength(2);
+  });
+
   it.each([undefined, 0])(
     'keeps Count available when completed backups have no positive size (%s)',
     async (size) => {

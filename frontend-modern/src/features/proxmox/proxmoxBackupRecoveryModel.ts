@@ -116,9 +116,9 @@ export interface WorkloadCoverageRow {
   posture: WorkloadRecoveryPosture;
   postureRank: number;
   protectionPosture?: ProtectionPosture;
-  // True only when a VM/LXC row exists because a backup/task referenced a VMID
-  // with no unambiguous live inventory match (absent or conflicting). Host backups can also carry a
-  // `backup:` key, but they are first-class backup targets, not orphaned guests.
+  // A backup/task referenced a guest ID without an unambiguous live inventory
+  // match (absent or conflicting). Tasks may not supply a VM/LXC type at all.
+  // Host backups remain first-class targets, not orphaned guests.
   isOrphaned: boolean;
 }
 
@@ -535,7 +535,20 @@ function resolveTaskWorkload(
   if (candidate) return candidate;
   // Only PVE-backed orphan rows share this source scope. A PBS namespace that
   // happens to resemble the task node is not evidence that the task owns it.
-  return matchPVEWorkload(pveWorkloadsByVmid.get(vmid) ?? [], task.instance, task.node);
+  return (
+    matchPVEWorkload(pveWorkloadsByVmid.get(vmid) ?? [], task.instance, task.node) ??
+    // `vzdump` describes the job, not the guest type. A failed job can be the
+    // only evidence left after a guest disappears or its identity conflicts.
+    // Keep that evidence without guessing VM/LXC, pooling PBS repositories or
+    // lending its result to another monitored workload.
+    fallbackWorkload(
+      'unknown',
+      vmid,
+      [task.node, task.instance],
+      ['pve-task', task.instance, task.node],
+      task.instance,
+    )
+  );
 }
 
 function newest<T>(items: readonly T[], getMs: (item: T) => number | undefined): T | undefined {
@@ -820,7 +833,9 @@ export function buildProxmoxBackupRecoveryModel(
   for (const task of input.tasks) {
     const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
-    const row = ensureRow(workload, true);
+    // Only inventory/artifacts can resolve another job's missing guest type.
+    // Adding task-only rows to that index makes ownership depend on job order.
+    const row = ensureRow(workload, false);
     const startedMs = parseTimestampMs(task.startTime);
     const candidateTask: CoverageTask = {
       id: task.id,
@@ -886,7 +901,9 @@ export function buildProxmoxBackupRecoveryModel(
       protectionPosture,
       isOrphaned:
         !row.key.startsWith('resource:') &&
-        (row.workload.type === 'vm' || row.workload.type === 'ct'),
+        (row.workload.type === 'vm' ||
+          row.workload.type === 'ct' ||
+          row.workload.type === 'unknown'),
     };
   });
 

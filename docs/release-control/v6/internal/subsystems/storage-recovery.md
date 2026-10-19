@@ -7800,3 +7800,23 @@ withdrawn. The read-only `protection-posture-remount.cjs` HTTP/browser protocol
 exercises the production Backups reader, Coverage and shipped CSS at desktop and
 320px, including keyboard/touch retry and organisation fencing. This is truthful
 monitoring presentation, not guest thaw, filesystem liveness or backup recovery.
+
+### Unmatched guest-scoped backup jobs remain evidence
+
+A positive-VMID PVE job whose `vzdump`/unrecognised type cannot resolve a unique
+live guest or PVE artifact stays in the existing unmatched-target disclosure.
+Its fallback identity includes the complete PVE connection/node scope and VMID,
+not a PBS repository, inferred VM/LXC type or another task's order-dependent row.
+It is Not evaluated, excluded from live health/target counts, and creates no
+restore artifact. VMID-zero aggregate parents still cannot invent guest targets.
+Raw job status, error, provenance, observation/ending times and uncertain
+chronology retain the existing escaped, wrapping, searchable presentation.
+Ordinary inventory changes may resolve or withdraw ownership without changing
+collected jobs, refetching inventories or treating a job as guest recovery.
+
+`proxmoxBackupRecoveryModel.unmatched-jobs.test.ts` covers absent/ambiguous
+owners, source framing, PBS isolation, task order, chronology and valid matches.
+`ProxmoxBackupsTable.test.tsx` checks the actual disclosure, counts, escaping and
+inventory reconciliation; `unmatched-backup-jobs.cjs` exercises real HTTP reads,
+production model/Coverage and CSS by desktop keyboard and 320px touch. Synthetic
+consumer proof does not establish backup/restore, thaw or filesystem liveness.
