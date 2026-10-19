@@ -6264,6 +6264,8 @@
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
+        "pkg/proxmox/replication.go",
+        "pkg/proxmox/replication_response.go",
         "pkg/proxmox/snapshot_inventory_response.go",
         "pkg/proxmox/storage_inventory_response.go",
         "pkg/proxmox/task_response.go",
@@ -6932,9 +6934,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "pkg/proxmox/replication_response_test.go",
+              "internal/api/replication_read_acceptance_test.go",
               "internal/monitoring/replication_read_acceptance_test.go",
-              "internal/api/replication_read_acceptance_test.go"
+              "pkg/proxmox/replication_response_test.go"
             ]
           }
         ],
