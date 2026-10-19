@@ -8788,18 +8788,45 @@ container mode above remains unchanged in purpose. A real native install is
 required for browser updates: Docker detection stays truthful, with no marker
 removal, mock updater, TLS bypass or `PULSE_ALLOW_DOCKER_UPDATES` override.
 
+The workflow also runs `--hosted-native` in an independent first-level VM in
+the fixed `[native, browser]` matrix, with fail-fast disabled. This leg needs no
+Tailscale registration, browser origin or Node preparation. An unavailable
+dedicated browser credential therefore cannot prevent or cancel the native
+result; the overall workflow may still fail, and its two results are separate.
+No new dispatch inputs, host capability or production target are introduced.
+
+Native mode installs the baseline using its own published installer, then
+executes the **selected RC's published `install.sh`** with `--version RC` and
+`--version baseline` for forward and reverse changes. It does not substitute
+the installed `/bin/update` bootstrap, which currently selects stable installer
+code even when given a preview archive version. Browser mode retains its one
+UI apply and documented `/bin/update` recovery; the shadow helper route stays
+unchanged. Neither route proves the cause of #2785's original LXC stop, and no
+old stopped target is touched.
+
 Control is reviewed `main`, bound to `expected_workflow_sha`, its checkout and
 `GITHUB_WORKFLOW_SHA`. Product inputs are only the latest published immutable
 stable and the requested published immutable RC. Peeled commit, release/asset
 IDs, sizes and SHA-256 digests are checked by `release_browser_packet.py`; SSH
-signatures verify before execution. Archives are bounded to512MiB (current
+signatures verify before execution. Both releases' installer and signature
+asset IDs, lengths and hashes are admitted alongside their archives. Hosted
+commands consume tag-separated staged copies, verify the pinned signature and
+server-installer shape for **both** tags before the first host mutation, and
+recheck the chosen installer digest immediately before execution. There is no
+second installer download or latest-installer fallback in the hosted harness.
+Installers are bounded to2MiB. Archives are bounded to512MiB (current
 stable/RC archives are about265MiB), signatures to16KiB, the fixed regular
 server binary to1GiB and expanded inventory to2GiB/4096 entries. Streaming
 hashes avoid allocating an entire archive; anonymous downloads have the same
 archive-size ceiling. Setup-action caches are explicitly disabled in this
 CI-credential-bearing job, and derived command-file outputs use the reviewed
 collision-safe writer. Each installed binary hash must match its
-signed archive, rather than just a reported version. No rebuilt main binary,
+signed archive, rather than just a reported version. Disk and running
+`/proc/MainPID/exe` identities must both match; install/upgrade/rollback receipts
+have distinct phase names so reverse recovery cannot overwrite the baseline.
+Each executed installer receipt binds its installer tag/hash, archive target
+and observed command exit, including a failed forward command. A reverse pass
+cannot erase that failure. No rebuilt main binary,
 frozen-product insertion, candidate re-cut or stable promotion is performed.
 
 A pinned Tailscale action registers an ephemeral project CI node using only
@@ -8847,6 +8874,13 @@ throwaway service/timer, records its result and fails the process on failure;
 the workflow resets the new Serve route after any successful join, including
 partial route setup failure, and its hosted VM is disposed of.
 
+Both hosted modes check the same API-authenticated synthetic settings,
+unchanged encryption key/secret stores, retained data files and original
+auto-update choice plus timer enablement/activity. Both stop their owned
+service/timer in the exit trap and fail on an unconfirmed cleanup; only VM
+disposal is delegated to GitHub. Native receipt names identify that leg and
+cannot establish a browser login, apply, SSE/modal result or browser readback.
+
 Bounded control, signed packet, installer/binary, phase, browser, cleanup and
 redacted settings receipts are retained for seven days. Successful screenshots
 contain only synthetic state. Auth files, bootstrap/API/node tokens, encrypted
@@ -8860,6 +8894,15 @@ previous target's undiagnosed HTTP401 is not diagnosed or cleared by this mode.
 Verification: `scripts/tests/test_release_browser_packet.py` executes immutable
 release/asset/binary identity rejection, worker-mode exclusion, scrubbed command
 environment and cleanup exit controls. `test_release_lifecycle_rehearsal.py`
+executes both native controller directions with distinct synthetic installer
+identities, retains a failing forward exit through successful reverse recovery,
+and checks every state/timer assertion remains connected. Real temporary SSH
+signatures test tag-separated staging and stopping before the mutation boundary
+for size/hash drift, malformed signatures, missing identity, symlinks and a
+signed agent-script substitution, without any network fallback. These ordinary
+offline controls are not systemd installation or published native acceptance.
+That still needs the protected-published workflow's terminal native receipts.
+`test_release_lifecycle_rehearsal.py` also
 executes the recovery-access stop before another browser process can start.
 `scripts/tests/test_release_browser_tailnet.py` executes the actual prerequisite
 and Serve shell with fixed offline node observations: absent dedicated

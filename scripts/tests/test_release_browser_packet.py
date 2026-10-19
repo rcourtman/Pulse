@@ -21,7 +21,8 @@ def release(tag, commit):
             'prerelease': '-rc.' in tag, 'immutable': True, 'published_at': '2026-10-02T19:21:28Z',
             'assets': [{'id': i + 1, 'name': name, 'size': 5, 'digest': 'sha256:' + 'b' * 64,
                         'browser_download_url': f'https://github.com/rcourtman/Pulse/releases/download/{tag}/{name}'}
-                       for i, name in enumerate((f'pulse-{tag}-linux-amd64.tar.gz', f'pulse-{tag}-linux-amd64.tar.gz.sshsig'))]}
+                       for i, name in enumerate((f'pulse-{tag}-linux-amd64.tar.gz', f'pulse-{tag}-linux-amd64.tar.gz.sshsig',
+                                                 'install.sh', 'install.sh.sshsig'))]}
 
 
 class BrowserPacketTest(unittest.TestCase):
@@ -69,6 +70,23 @@ class BrowserPacketTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.bind()
 
+    def test_installer_identity_is_required_bounded_and_not_a_latest_alias(self):
+        for change in ('missing', 'duplicate', 'oversize', 'wrong-url', 'no-digest'):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                candidate = copy.deepcopy(self.candidate)
+                installer = candidate['assets'][2]
+                if change == 'missing':
+                    candidate['assets'].pop(2)
+                elif change == 'duplicate':
+                    candidate['assets'].append(installer)
+                elif change == 'oversize':
+                    installer['size'] = packet.MAX_INSTALLER + 1
+                elif change == 'wrong-url':
+                    installer['browser_download_url'] = 'https://github.com/rcourtman/Pulse/releases/latest/download/install.sh'
+                else:
+                    installer['digest'] = None
+                packet.packet(self.baseline, candidate, 'a' * 40, 'c' * 40, 'v6.4.6-rc.1')
+
     def make_assets(self, root):
         for r in (self.baseline, self.candidate):
             folder = root / r['tag_name']; folder.mkdir()
@@ -76,6 +94,8 @@ class BrowserPacketTest(unittest.TestCase):
                 path = folder / asset['name']
                 if asset['name'].endswith('.sshsig'):
                     path.write_bytes(b'fixture signature - cryptographic verification belongs to SSH workflow')
+                elif asset['name'] == 'install.sh':
+                    path.write_bytes(('fixture-installer-' + r['tag_name']).encode())
                 else:
                     data = ('fixture-' + r['tag_name']).encode()
                     with tarfile.open(path, 'w:gz') as archive:
@@ -89,6 +109,7 @@ class BrowserPacketTest(unittest.TestCase):
             root = Path(tmp); self.make_assets(root)
             result = self.bind(root)
             self.assertEqual(hashlib.sha256(b'fixture-v6.4.6-rc.1').hexdigest(), result['releases'][1]['binary_sha256'])
+            self.assertEqual(hashlib.sha256(b'fixture-installer-v6.4.6-rc.1').hexdigest(), result['releases'][1]['installer_sha256'])
             target = root / self.candidate['tag_name'] / self.candidate['assets'][1]['name']
             target.write_bytes(b'X' * target.stat().st_size)
             with self.assertRaisesRegex(ValueError, 'digest'):
@@ -113,11 +134,13 @@ class BrowserPacketTest(unittest.TestCase):
                         packet.archive_identity(path)
 
     def test_native_mode_refuses_worker_before_install_or_network(self):
-        result = subprocess.run(['bash', ROOT / 'scripts/release_lifecycle_rehearsal.sh', '--hosted-browser',
-                                 '--from', 'v6.4.5', '--to', 'v6.4.6-rc.1'],
-                                env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True)
-        self.assertEqual(2, result.returncode)
-        self.assertIn('fresh disposable public hosted runner', result.stdout)
+        for mode in ('--hosted-browser', '--hosted-native'):
+            with self.subTest(mode=mode):
+                result = subprocess.run(['bash', ROOT / 'scripts/release_lifecycle_rehearsal.sh', mode,
+                                         '--from', 'v6.4.5', '--to', 'v6.4.6-rc.1'],
+                                        env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True)
+                self.assertEqual(2, result.returncode)
+                self.assertIn('fresh disposable public hosted runner', result.stdout)
 
     def test_cleanup_failure_sets_process_exit_and_scrubs_only_ephemeral_auth(self):
         source = (ROOT / 'scripts/release_lifecycle_rehearsal.sh').read_text()
@@ -125,7 +148,7 @@ class BrowserPacketTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); (root / 'state').mkdir(); (root / 'state/browser-auth.json').write_text('throwaway')
             # Execute the real cleanup function with fixture systemctl: not a system/installation proof.
-            script = 'set -u\nOVERALL_STATUS=0; CONTAINER_STARTED=true; HOSTED_BROWSER=true\n'
+            script = 'set -u\nOVERALL_STATUS=0; CONTAINER_STARTED=true; HOSTED_RUNNER=true; HOSTED_MODE=browser\n'
             script += f'WORK_DIR={json.dumps(tmp)}\nprint_diagnostics() {{ :; }}\nsystemctl() {{ return 1; }}\n'
             script += 'cleanup() {' + cleanup + '\ntrap cleanup EXIT\nexit 0\n'
             result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
@@ -136,7 +159,7 @@ class BrowserPacketTest(unittest.TestCase):
     def test_cexec_native_environment_drops_provider_and_registration_secrets(self):
         source = (ROOT / 'scripts/release_lifecycle_rehearsal.sh').read_text()
         function = source.split('cexec() {', 1)[1].split('\nprint_diagnostics()', 1)[0]
-        script = 'HOSTED_BROWSER=true\ncexec() {' + function + '\ncexec env EXTRA=fixture\n'
+        script = 'HOSTED_RUNNER=true\ncexec() {' + function + '\ncexec env EXTRA=fixture\n'
         result = subprocess.run(['bash', '-c', script], env={'PATH': '/usr/bin:/bin',
                                  'GH_TOKEN': 'synthetic-secret', 'TS_OAUTH_SECRET': 'synthetic-secret',
                                  'TS_CI_DEPLOY_OAUTH_CLIENT_ID': 'synthetic-narrow-id',
