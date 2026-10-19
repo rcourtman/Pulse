@@ -98,7 +98,7 @@ describe('DiskDetail', () => {
       'wrap-break-word',
     );
     expect(screen.getByTestId('disk-detail-health')).toHaveTextContent(
-      'current disk health is unconfirmed',
+      'Current disk health is unconfirmed',
     );
   });
 

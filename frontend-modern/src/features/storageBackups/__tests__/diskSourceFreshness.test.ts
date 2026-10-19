@@ -61,7 +61,7 @@ describe('canonical disk source freshness', () => {
       const data = extractPhysicalDiskPresentationData(disk(health));
       const status = getPhysicalDiskHealthStatus(data);
       expect(status.label).toBe('Last known');
-      expect(status.summary).toContain('current disk health is unconfirmed');
+      expect(status.summary).toContain('Current disk health is unconfirmed');
       expect(status.tone).toBe('text-muted');
       expect(getPhysicalDiskNormalizedHealth(disk(health), data)).toBe('unknown');
       expect(getPhysicalDiskTemperaturePresentation(data)).toEqual({
@@ -79,7 +79,7 @@ describe('canonical disk source freshness', () => {
     expect(getPhysicalDiskHealthStatus(data)).toMatchObject({ label: 'Last known risk' });
     expect(getPhysicalDiskHealthStatus(data).summary).toContain('Last reported: Replace Now.');
     expect(getPhysicalDiskHealthStatus(data).summary).toContain(
-      'current disk health is unconfirmed',
+      'Current disk health is unconfirmed',
     );
     expect(getPhysicalDiskNormalizedHealth(resource, data)).toBe('critical');
   });
