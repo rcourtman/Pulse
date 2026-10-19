@@ -29,6 +29,20 @@ guest snapshot polling continues with its existing budget. A later successful
 live task read resumes ordinary partial-file classification, finished archives
 and complete-empty removal. Other connections and direct PBS polling are unchanged.
 
+A successful task response alone is insufficient: without confirmed `Sys.Audit`
+at each online node it may list only the caller's own tasks. The scoped inventory
+keeps those positive rows in the existing bounded live view, including ordinary
+guest-log expansion, but the archive pass retains its previous inventory and age.
+It does not request broader grants or discard observed tasks on a failed permission
+confirmation. When the recent 200-task page fills, a separate bounded `source=active`
+read must finish below its cap before absence can qualify archive output. Active
+rows precede and supersede overlapping recent rows so an older writer survives the
+live projection's 200-parent cap. A failed, malformed, foreign-node or full active
+page cannot qualify the pass; a short, audited active census lets busy nodes
+progress without unbounded history scanning. Ordinary confirmed reads recover
+Running, Finished and complete-empty states. These reads are not an atomic
+task/storage snapshot or a guarantee of multi-guest log attribution.
+
 `pve_backup_task_barrier_test.go` exercises both legacy/scoped adapters through
 the complete scan, unchanged archives, backup ages, repeated failure, running,
 finished and empty recovery. Its emitted snapshots feed the production Backups
@@ -36,6 +50,14 @@ component using `scripts/check-pve-backup-task-barrier.cjs` at desktop and narro
 viewports. These are closed source/consumer fixtures, not guest, thaw, filesystem
 liveness, restore, installed or reporter recovery proof. No provider mutation,
 new guest command, broader permission or new API field is introduced.
+
+`TestPVEArchiveScanRequiresConfirmedTaskVisibility` additionally joins both real
+HTTP adapters, own-only and bounded/failed active views, archive preservation,
+Last Backup, recovery mapping, positive task caps and independent snapshots.
+The companion SDK controls cover permission ambiguity, overlap and an older
+writer outside the newest-200 window; the observed-parent control keeps log
+expansion useful without full audit visibility. No installed recovery follows
+from these fixtures.
 
 ### Bounded backup-log reads make progress past unfinished jobs
 

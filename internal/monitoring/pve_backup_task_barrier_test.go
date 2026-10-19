@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -202,4 +205,193 @@ func TestPVEArchiveReadBarrierColdStartAndHistory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Actual read-only HTTP clients -> ordinary scan -> archive/age/recovery
+// consumers. A 200 response with own-task visibility is not negative evidence
+// of other users' writers; a saturated recent page needs its active census.
+func TestPVEArchiveScanRequiresConfirmedTaskVisibility(t *testing.T) {
+	for _, cluster := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cluster=%t", cluster), func(t *testing.T) {
+			at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			c := &taskBarrierClient{at: at}
+			var snapshotStarted atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				var data any
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					data = []proxmox.Node{{Node: "node", Status: "online"}}
+				case "/api2/json/access/permissions":
+					require.Equal(t, "/nodes/node", r.URL.Query().Get("path"))
+					audit := 1
+					if c.phase == "own-only" || c.phase == "own-empty" {
+						audit = 0
+					}
+					data = map[string]any{"/nodes/node": map[string]int{"Sys.Audit": audit}}
+				case "/api2/json/nodes/node/tasks":
+					c.record("tasks")
+					if c.phase == "active-failed" || c.phase == "active-bounded" || c.phase == "running" {
+						if r.URL.Query().Get("source") == "active" && c.phase != "active-bounded" {
+							if c.phase == "active-failed" {
+								w.WriteHeader(http.StatusForbidden)
+								return
+							}
+							data = []proxmox.Task{{UPID: "current", Type: "vzdump", ID: "100", StartTime: at.Unix()}}
+						} else {
+							tasks := make([]proxmox.Task, 200)
+							for i := range tasks {
+								tasks[i] = proxmox.Task{UPID: fmt.Sprint("recent-", i), Type: "vzdump", ID: "101", Status: "OK", StartTime: at.Add(time.Minute).Unix(), EndTime: at.Add(2 * time.Minute).Unix()}
+							}
+							data = tasks
+						}
+					} else if c.phase == "own-only" || c.phase == "own-empty" {
+						data = []proxmox.Task{}
+					} else {
+						tasks, err := c.GetBackupTasks(r.Context())
+						require.NoError(t, err)
+						data = tasks
+						if tasks == nil {
+							data = []proxmox.Task{}
+						}
+					}
+				case "/api2/json/nodes/node/storage":
+					if snapshotStarted.Load() {
+						// Independent snapshot sizing has no eligible disk store;
+						// do not confuse its read with archive reconciliation.
+						data = []proxmox.Storage{}
+					} else {
+						data, _ = c.GetStorage(r.Context(), "node")
+					}
+				case "/api2/json/nodes/node/storage/archive/content":
+					data, _ = c.GetStorageContent(r.Context(), "node", "archive")
+					if c.phase == "empty" {
+						data = []proxmox.StorageContent{}
+					}
+				case "/api2/json/nodes/node/qemu/100/snapshot":
+					snapshotStarted.Store(true)
+					data, _ = c.GetVMSnapshots(r.Context(), "node", 100)
+				default:
+					t.Errorf("unexpected provider request %s", r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+			}))
+			defer server.Close()
+			cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 2 * time.Second}
+			var client PVEClientInterface
+			if cluster {
+				client = proxmox.NewClusterClient("visibility", cfg, []string{server.URL}, nil)
+			} else {
+				var err error
+				client, err = proxmox.NewClient(cfg)
+				require.NoError(t, err)
+			}
+			m := backupLifecycleMonitor(client)
+			t.Cleanup(func() { awaitBackupProjectionIngest(m) })
+			peer := models.StorageBackup{ID: "independent", Instance: "other", Node: "node", Storage: "archive", VMID: 100, Type: "qemu", Time: at.Add(-time.Hour), CTime: at.Add(-time.Hour).Unix(), Size: 8192}
+			m.state.UpdateStorageBackupsForInstance("other", []models.StorageBackup{peer})
+			frames := map[string]models.PVEBackups{}
+			var held []models.StorageBackup
+			for _, phase := range []string{"initial", "own-only", "own-empty", "active-failed", "active-bounded", "running", "finished", "empty"} {
+				c.phase, c.calls = phase, nil
+				snapshotStarted.Store(false)
+				m.pollPVEBackupsAndSnapshots(context.Background(), "site", client, []proxmox.Node{{Node: "node", Status: "online"}}, map[string]string{"node": "online"}, 2*time.Second)
+				awaitBackupProjectionIngest(m)
+				got := m.PVEBackupsSnapshot()
+				var own []models.StorageBackup
+				for _, b := range got.StorageBackups {
+					if b.Instance == "other" {
+						require.Equal(t, peer, b)
+					} else {
+						own = append(own, b)
+					}
+				}
+				require.Len(t, got.GuestSnapshots, 1)
+				require.Equal(t, "snapshot-"+phase, got.GuestSnapshots[0].Name)
+				if phase == "initial" {
+					require.Len(t, own, 1)
+					held = own
+				}
+				switch phase {
+				case "own-only", "own-empty", "active-failed", "active-bounded":
+					require.Equal(t, held, own, "uncertain task visibility cannot add, renew or erase archives")
+					require.NotContains(t, c.calls, "content")
+				case "running", "finished":
+					require.Len(t, own, 2)
+					for _, b := range own {
+						if b.ID != held[0].ID {
+							require.Equal(t, phase == "running", b.InProgress)
+						}
+					}
+				case "empty":
+					require.Empty(t, own, "confirmed empty recovery retains removal authority")
+				}
+				if phase == "active-failed" || phase == "active-bounded" || phase == "running" {
+					require.Len(t, got.BackupTasks, 200, "keep the existing bounded positive task view")
+				}
+				if phase == "running" {
+					found := false
+					for _, task := range got.BackupTasks {
+						found = found || task.ID == "site-current"
+					}
+					require.True(t, found, "older active writer must survive the live projection cap")
+				}
+				if phase != "empty" {
+					want := held[0].Time
+					if phase == "finished" {
+						want = at
+					}
+					require.True(t, want.Equal(m.state.GetSnapshot().VMs[0].LastBackup), "only a completed archive can advance backup age")
+				}
+				points := proxmoxmapper.FromPVEStorageBackups(own, nil)
+				successes := 0
+				for _, point := range points {
+					if point.Outcome == recovery.OutcomeSuccess {
+						successes++
+					}
+				}
+				want := 1
+				if phase == "finished" {
+					want = 2
+				} else if phase == "empty" {
+					want = 0
+				}
+				require.Equal(t, want, successes)
+				frames[phase] = got
+			}
+			if !cluster {
+				wire, err := json.Marshal(frames)
+				require.NoError(t, err)
+				t.Logf("PVE_ARCHIVE_VISIBILITY_FRAMES=%s", wire)
+			}
+		})
+	}
+}
+
+type limitedTaskLogClient struct{ lifecycleBackupClient }
+
+func (c *limitedTaskLogClient) GetBackupTaskInventory(ctx context.Context) (proxmox.BackupTaskInventory, error) {
+	tasks, err := c.GetBackupTasks(ctx)
+	tasks[0].ID = "" // Observed scheduled parent, not an individual guest task.
+	return proxmox.BackupTaskInventory{Tasks: tasks, UnconfirmedNodes: []string{"node"}}, err
+}
+
+func TestPVEUnconfirmedTaskVisibilityKeepsObservedGuestLogs(t *testing.T) {
+	c := &limitedTaskLogClient{lifecycleBackupClient{label: "parent"}}
+	m := backupLifecycleMonitor(c)
+	// A scheduled parent has no guest ID. Exercise its normal expansion while
+	// archive admission remains unqualified, without requiring broader grants.
+	ready := m.pollBackupTasks(context.Background(), "site", c)
+	require.False(t, ready)
+	got := m.PVEBackupsSnapshot()
+	require.Len(t, got.BackupTasks, 2)
+	byID := map[string]models.BackupTask{}
+	for _, task := range got.BackupTasks {
+		byID[task.ID] = task
+	}
+	require.Equal(t, 100, byID["site-parent-vm100"].VMID)
+	require.Equal(t, "OK", byID["site-parent-vm100"].Status)
+	require.True(t, m.vzdumpJobTaskCache["site|parent"].final)
 }

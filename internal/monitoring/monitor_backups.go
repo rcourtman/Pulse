@@ -1032,7 +1032,7 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 	} else if backupCtx.Err() == nil {
 		log.Warn().
 			Str("instance", instanceName).
-			Msg("Backup task inventory was unavailable; keeping previous archive observations until a successful task read. Guest snapshot collection continues.")
+			Msg("Backup task inventory cannot rule out unseen running backups; keeping previous archive observations until task visibility is confirmed. Guest snapshot collection continues.")
 	}
 
 	backupErr := backupCtx.Err()
@@ -2437,7 +2437,9 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 }
 
 // pollBackupTasks polls backup tasks from a PVE instance. Its result describes
-// only this scan's live collection, not retained rows or history-store success.
+// whether this scan can rule out unseen running writers before reading archive
+// output, not retained rows or history-store success. Positive task observations
+// can still progress when visibility of other users' tasks is unconfirmed.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) bool {
 	if ctx.Err() != nil {
 		return false
@@ -2451,6 +2453,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	var tasks []proxmox.Task
 	var liveErr error
 	var unreadNodes map[string]bool
+	taskVisibilityConfirmed := true
 	if source, ok := client.(interface {
 		GetBackupTaskInventory(context.Context) (proxmox.BackupTaskInventory, error)
 	}); ok {
@@ -2466,6 +2469,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 			// assigned to a readable node during a partial collection.
 			unreadNodes[""] = true
 		}
+		taskVisibilityConfirmed = len(inventory.UnconfirmedNodes) == 0
 	} else {
 		// Legacy adapters expose only all-or-nothing collection semantics.
 		tasks, liveErr = client.GetBackupTasks(ctx)
@@ -2595,7 +2599,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
 		m.persistBackupTaskHistory(ctx, points, collection)
 	})
-	return liveErr == nil && ctx.Err() == nil
+	return liveErr == nil && taskVisibilityConfirmed && ctx.Err() == nil
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one

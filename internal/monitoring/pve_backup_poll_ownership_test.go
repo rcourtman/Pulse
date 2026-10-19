@@ -220,6 +220,9 @@ func TestPVEBackupAsyncOwnsCompleteHTTPScan(t *testing.T) {
 					return
 				case r.URL.Path == "/api2/json/nodes/node/tasks":
 					taskReads.Add(1)
+				case r.URL.Path == "/api2/json/access/permissions":
+					fmt.Fprint(w, `{"data":{"/nodes/node":{"Sys.Audit":1}}}`)
+					return
 				case r.URL.Path == "/api2/json/nodes/node/storage":
 					storageReads.Add(1)
 					stage = "storage"

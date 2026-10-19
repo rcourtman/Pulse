@@ -45,6 +45,8 @@ func TestPVEBackupLifecycleHTTP(t *testing.T) {
 				switch {
 				case r.URL.Path == "/api2/json/nodes":
 					data = []proxmox.Node{{Node: "node", Status: "online"}}
+				case r.URL.Path == "/api2/json/access/permissions":
+					data = map[string]any{"/nodes/node": map[string]int{"Sys.Audit": 1}}
 				case r.URL.Path == "/api2/json/nodes/node/tasks":
 					readStage = "task"
 					id := "100"
