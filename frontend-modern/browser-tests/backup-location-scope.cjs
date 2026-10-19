@@ -5,10 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { chromium, webkit, expect } = require('playwright/test');
+const { webkit, expect } = require('playwright/test');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
-const output = path.join(root, 'tmp/backup-location-scope/browser-v2');
+const output = path.join(root, 'tmp/backup-location-scope/browser-v3');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(output, 'binding.json')));
 for (const [file, digest] of Object.entries(binding.files))
@@ -117,10 +117,9 @@ function serve(req, res, next) {
     });
     await server.listen();
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
-    for (const [name, engine, narrow] of [
-      ['chromium', chromium, false],
-      ['webkit', webkit, true],
-    ]) {
+    // Desktop completed at c4bdb7a45c with these identical product bytes.
+    // Finish only the narrow journey after correcting its collapsed-menu precondition.
+    for (const [name, engine, narrow] of [['webkit', webkit, true]]) {
       current = { name, requests: [], phases: [], localRequests: [] };
       browser = await engine.launch(
         narrow
@@ -154,9 +153,10 @@ function serve(req, res, next) {
         }
       };
       const showFilters = async () => {
-        const search = page.getByPlaceholder('Search backups by workload, node, source, or status');
-        if (!(await search.isVisible()))
+        const menu = page.getByRole('combobox', { name: 'Filter', exact: true });
+        if (!(await menu.isVisible()))
           await activate(page.getByRole('button', { name: /^Filters/ }));
+        await expect(menu).toBeVisible();
       };
       const capture = async (state) => {
         assert.equal(
