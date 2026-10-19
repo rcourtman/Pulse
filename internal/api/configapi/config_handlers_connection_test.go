@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -39,6 +40,16 @@ func TestHandleAddNodePBSTokenCollisionInProcess(t *testing.T) {
 type pbsSetupRoundTrip func(*http.Request) (*http.Response, error)
 
 func (f pbsSetupRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func logPBSSetupResponse(t *testing.T, tag string, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	wire, err := json.Marshal(map[string]any{"status": rec.Code, "headers": rec.Result().Header, "body": rec.Body.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("PBS_SETUP_%s_HTTP=%s", tag, base64.StdEncoding.EncodeToString(wire))
+	t.Logf("PBS_SETUP_%s_WIRE=%s", tag, base64.StdEncoding.EncodeToString(rec.Body.Bytes()))
+}
 
 func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
 	t.Helper()
@@ -106,6 +117,8 @@ func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
 		Name: "existing", Host: "https://existing-pbs.example.test:8007", TokenName: "pulse-monitor@pbs!pulse-pulse-example-test", TokenValue: oldToken, VerifySSL: true,
 	}}}
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+	// Keep first-use key migration inside this fixture, never a host key path.
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
 	h := newTestConfigHandlers(t, cfg)
 	h.reloadFunc = func() error { reloads.Add(1); return nil }
 	if inProcess {
@@ -162,7 +175,7 @@ func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
 	if revoked.Load() || creates.Load() != 1 || deletes.Load() != 0 {
 		t.Fatalf("collision mutated existing token: creates=%d deletes=%d", creates.Load(), deletes.Load())
 	}
-	t.Logf("PBS_SETUP_COLLISION_WIRE=%s", base64.StdEncoding.EncodeToString(rec.Body.Bytes()))
+	logPBSSetupResponse(t, "COLLISION", rec)
 
 	// The suggested existing manual-token route remains usable, without an
 	// extra provisioning attempt or retaining the administrator password.
@@ -182,7 +195,7 @@ func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
 		t.Fatal("manual setup did not persist the deliberate token/verification configuration")
 	}
 	checkReader()
-	t.Logf("PBS_SETUP_MANUAL_WIRE=%s", base64.StdEncoding.EncodeToString(manual.Body.Bytes()))
+	logPBSSetupResponse(t, "MANUAL", manual)
 }
 
 func TestHandleTestConnection(t *testing.T) {
