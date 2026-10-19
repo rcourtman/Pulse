@@ -16,6 +16,22 @@
 
 ## Purpose
 
+### Legacy agent token-file admission cannot use a truncated prefix
+
+Before installation, update or removal work, the Unix collector/action-token
+ingress uses the complete bounded legacy value, not just its first line or a
+NUL-stripped prefix. The compatibility shell read is bounded independently of
+the file-size observation and counts bytes rather than locale characters.
+A bare value or one final newline remains supported through 4096 total bytes;
+invalid input returns the existing missing-argument exit 16 without changing
+the caller's file. Saved legacy recovery returns failure rather than a prefix.
+No credential rotation, retry, service action or permission relaxation is added.
+
+The actual parser/ingress, private-file/parent checks and saved recovery are
+exercised by `scripts/installtests/agent_uninstall_state.py` and its existing Go
+hook. These fixture checks do not establish native appliance/systemd recovery
+or protected/released availability.
+
 ### Agent installer authentication guidance preserves existing recovery state
 
 Unix agent installation retains its non-success exit 18 and unchanged

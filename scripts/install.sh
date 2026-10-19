@@ -5855,6 +5855,8 @@ read_collector_token_file_safely() {
     local collector_uid=""
     local token_value=""
     local token_size=""
+    local consumed_bytes=0
+    local LC_ALL=C
     local -a token_args
 
     [[ -n "$token_path" && "$token_path" == /* ]] || return 1
@@ -5887,9 +5889,18 @@ read_collector_token_file_safely() {
     # command. Only a private regular file under a trusted parent can use this
     # compatibility path; collector-owned state requires the Go reader.
     if trusted_private_lifecycle_regular_file "$token_path"; then
-        token_size=$(wc -c < "$token_path" 2>/dev/null | tr -d ' ' || true)
+        token_size=$(stat -c '%s' "$token_path" 2>/dev/null || stat -f '%z' "$token_path" 2>/dev/null) || return 1
         [[ "$token_size" =~ ^[0-9]+$ && "$token_size" -ge 1 && "$token_size" -le 4096 ]] || return 1
-        IFS= read -r token_value < "$token_path" || true
+        # read stops at the first newline and can discard NUL bytes. Account
+        # for every byte, under a byte locale, so neither can hide extra state.
+        # A bare value or exactly one final newline remains compatible; bound
+        # the read as well as the size observation if the file changes.
+        if IFS= read -r -n 4097 token_value < "$token_path"; then
+            consumed_bytes=$((${#token_value} + 1))
+        else
+            consumed_bytes=${#token_value}
+        fi
+        [[ "$token_size" -eq "$consumed_bytes" ]] || return 1
         if [[ -n "$token_value" && "$token_value" != *$'\r'* && "$token_value" != *$'\n'* ]]; then
             printf '%s\n' "$token_value"
             return 0
