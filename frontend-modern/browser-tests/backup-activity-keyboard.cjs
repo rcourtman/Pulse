@@ -206,6 +206,8 @@ function serve(req, res, next) {
       await expect(group).toBeVisible();
       await activate(oneYear);
       await expect(days).toHaveCount(365);
+      const latestDateLabel = (await days.last().getAttribute('aria-label')).split(':')[0];
+      current.latestDateLabel = latestDateLabel;
       await expect(group.locator('button[tabindex="0"]')).toHaveCount(1);
       await oneYear.focus();
       await page.keyboard.press('Tab');
@@ -235,7 +237,7 @@ function serve(req, res, next) {
         'Arrow/Home/End focus does not select or wrap; native Enter selects the existing date filter',
       );
       await page.keyboard.press('Enter');
-      const remembered = group.getByRole('button', { name: /^Mon, Oct 19:/ });
+      const remembered = group.locator(`button[aria-label^="${latestDateLabel}:"]`);
       await expect(remembered).toHaveAttribute('aria-pressed', 'true');
       assert.equal(new URL(page.url()).searchParams.get('day'), '2026-10-19');
       await expect(page.locator('[data-proxmox-backup-row="recoverable"]')).toHaveCount(1);
@@ -257,7 +259,7 @@ function serve(req, res, next) {
       );
       await capture('live-window-focus');
       await activate(page.getByRole('button', { name: 'Volume', exact: true }));
-      await expect(remembered).toHaveAccessibleName('Mon, Oct 19: 1.00 KB, selected');
+      await expect(remembered).toHaveAccessibleName(`${latestDateLabel}: 1.00 KB, selected`);
       assert(await remembered.evaluate((el) => el === window.__rememberedBackupDay));
       await oneYear.focus();
       await page.keyboard.press('Tab');
@@ -275,11 +277,13 @@ function serve(req, res, next) {
       await expect(search).toBeFocused();
       check('Native Space clears the day and Tab still reaches filters without a trap');
       await activate(page.getByRole('button', { name: '7d', exact: true }));
-      const old = group.getByRole('button', { name: /^Sun, Oct 18:/ });
+      const old = days.nth(4); // Seven local days, 14 through 20 October.
+      const oldDateLabel = (await old.getAttribute('aria-label')).split(':')[0];
+      current.oldDateLabel = oldDateLabel;
       await activate(old);
       await expect(old).toHaveAttribute('aria-pressed', 'true');
       await expect(group.locator('button[tabindex="0"]')).toHaveAccessibleName(
-        'Sun, Oct 18: 2.00 KB, selected',
+        `${oldDateLabel}: 2.00 KB, selected`,
       );
       assert.equal(new URL(page.url()).searchParams.get('day'), '2026-10-18');
       assert.equal(new URL(page.url()).searchParams.get('source'), 'archive');
