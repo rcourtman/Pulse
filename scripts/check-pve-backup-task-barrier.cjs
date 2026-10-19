@@ -20,14 +20,34 @@ const { chromium } = require('playwright');
   }
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   process.chdir(root);
+  let activePhase = 'initial';
+  let activeReads;
   const server = await createServer({
     root,
     configFile: path.join(root, 'vite.config.ts'),
+    cacheDir: path.join(out, 'vite-cache'),
+    logLevel: 'error',
+    optimizeDeps: { noDiscovery: true, include: ['solid-js', 'solid-js/web', '@solidjs/router'] },
     server: { host: '127.0.0.1', port: 5198, strictPort: true },
     plugins: [{ name: 'archive-task-barrier-consumer', configureServer(server) {
-      server.middlewares.use((req, _res, next) => {
-        if (req.url?.startsWith('/proxmox/backups/')) req.url = '/browser-tests/backups.html';
-        next();
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url, 'http://fixture.invalid').pathname;
+        if (pathname.startsWith('/proxmox/backups/')) req.url = '/browser-tests/backups.html';
+        let payload;
+        if (pathname === '/fixture/workloads') payload = ['site', 'other'].map((instance) => ({
+          id: `${instance}:node:100`, type: 'vm', name: instance === 'site' ? 'fixture-guest' : 'independent-guest',
+          displayName: instance === 'site' ? 'fixture-guest' : 'independent-guest', platformId: instance,
+          platformType: 'proxmox-pve', sourceType: 'api', status: 'running', lastSeen: Date.now(),
+          proxmox: { vmid: 100, node: 'node', instance },
+        }));
+        else if (pathname === '/api/backups/pve') {
+          activeReads[activePhase]++;
+          payload = { data: frames[activePhase] };
+        } else if (pathname === '/api/backups/pbs') payload = { data: { backups: [] } };
+        else if (pathname.startsWith('/api/')) payload = { data: [], policy: { freshnessWindowSeconds: 86400, verificationWindowSeconds: 604800, requireVerification: false } };
+        if (payload === undefined) return next();
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(payload));
       });
     } }],
   });
@@ -43,21 +63,8 @@ const { chromium } = require('playwright');
       page.on('pageerror', (error) => errors.push(error.message));
       let phase = 'initial';
       const reads = Object.fromEntries(phases.map((p) => [p, 0]));
-      await page.route('**/fixture/workloads', (route) => route.fulfill({ json: ['site', 'other'].map((instance) => ({
-        id: `${instance}:node:100`, type: 'vm', name: instance === 'site' ? 'fixture-guest' : 'independent-guest',
-        displayName: instance === 'site' ? 'fixture-guest' : 'independent-guest', platformId: instance,
-        platformType: 'proxmox-pve', sourceType: 'api', status: 'running', lastSeen: Date.now(),
-        proxmox: { vmid: 100, node: 'node', instance },
-      })) }));
-      await page.route((url) => url.pathname.startsWith('/api/'), (route) => {
-        const pathname = new URL(route.request().url()).pathname;
-        if (pathname === '/api/backups/pve') {
-          reads[phase]++;
-          return route.fulfill({ json: { data: frames[phase] } });
-        }
-        if (pathname === '/api/backups/pbs') return route.fulfill({ json: { data: { backups: [] } } });
-        return route.fulfill({ json: { data: [], policy: { freshnessWindowSeconds: 86400, verificationWindowSeconds: 604800, requireVerification: false } } });
-      });
+      activePhase = phase;
+      activeReads = reads;
       const rows = page.locator('[data-proxmox-backup-row="recoverable"]');
       const current = page.locator('[data-proxmox-backup-key*="-current.vma.zst"]');
       const snapshots = [];
@@ -70,9 +77,11 @@ const { chromium } = require('playwright');
         assert(reads[phase] > count, 'refresh must consume the actual selected producer frame');
       };
       await page.goto('http://127.0.0.1:5198/proxmox/backups/date', { waitUntil: 'commit' });
-      await page.getByText('fixture-guest', { exact: true }).first().waitFor();
+      await page.waitForFunction(() => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]').length === 3);
+      await rows.first().waitFor({ state: 'visible' });
       for (const next of phases) {
         phase = next;
+        activePhase = phase;
         if (phase !== 'initial') await refresh();
         const count = phase === 'empty' ? 2 : ['running', 'finished'].includes(phase) ? 4 : 3;
         await page.waitForFunction((count) => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]').length === count, count);
