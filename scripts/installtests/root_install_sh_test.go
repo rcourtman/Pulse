@@ -2494,7 +2494,7 @@ func TestRootInstallAutoUpdateSettingsPublication(t *testing.T) {
 func TestRootInstallStartRequiresObservedActivityAndCallerPropagation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_start.py"), "-v")
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_start.py"), "-v", "ServerInstallerStart")
 	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -2515,6 +2515,17 @@ func TestRootInstallStartRequiresObservedActivityAndCallerPropagation(t *testing
 	if !strings.Contains(string(out), "\nRan 6 tests in ") || !strings.Contains(string(out), "\nOK\n") {
 		t.Fatalf("incomplete server startup verdict:\n%s", out)
 	}
+}
+
+func TestServerStartupWaitSharesOneWallClockBudget(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_installer_start.py"), "ServiceStartDeadline", []string{
+		"test_slow_inactive_reads_share_the_wall_clock_budget",
+		"test_term_resistant_read_uses_the_remaining_budget_not_five_seconds",
+		"test_active_and_delayed_start_still_require_the_exact_service_read",
+		"test_failed_plausible_active_result_does_not_admit_success",
+		"test_zero_budget_performs_no_manager_read",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // Reported on #1663: reinstalling after `rm -rf /etc/pulse` reached

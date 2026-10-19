@@ -9,13 +9,19 @@ network, privileged installation or installed recovery is exercised.
 import json
 import os
 from pathlib import Path
+import shlex
+import shutil
+import signal
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh")).resolve()
+UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/pulse-auto-update.sh")).resolve()
 
 MANAGER = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -62,14 +68,15 @@ print_info() { printf 'INFO: %s\n' "$*"; }
 print_warn() { printf 'WARN: %s\n' "$*" >&2; }
 print_error() { printf 'ERROR: %s\n' "$*" >&2; }
 print_success() { printf 'SUCCESS: %s\n' "$*"; }
-# Keep the production waiter/command statuses, eliminating only wall-clock
-# delay. No timeout/sleep can execute an arbitrary or host service operation.
+# Keep the production waiter/command statuses, advancing the shell clock for
+# skipped sleeps. Real deadlines are exercised separately below. No double
+# can execute an arbitrary or host service operation.
 timeout() {
-    [[ "$1" == -k && "$2" == 1 && "$3" == 5 && "$4" == systemctl ]] || return 97
+    [[ "$1" == -k && "$2" == 1 && "$3" =~ ^[1-5]$ && "$4" == systemctl ]] || return 97
     shift 3
     "$@"
 }
-sleep() { [[ "$1" == 1 || "$1" == 3 ]]; }
+sleep() { [[ "$1" == 1 || "$1" == 3 ]] || return 97; SECONDS=$((SECONDS + $1)); }
 journalctl() { printf 'unexpected-journal-read\n' >> "$FIXTURE/events"; return 97; }
 SERVICE_NAME=pulse-fixture
 PULSE_WAS_ACTIVE="$PRIOR_ACTIVE"
@@ -204,5 +211,147 @@ class ServerInstallerStart(unittest.TestCase):
                     self.assertIn(["is-active", "--quiet", "pulse-fixture"], calls)
 
 
+DEADLINE_MANAGER = r'''
+import json, os, signal, sys, time
+from pathlib import Path
+f = Path(os.environ["FIXTURE"])
+args = sys.argv[1:]
+expected = (["is-active", "--quiet", "pulse-fixture@department"]
+            if os.environ["KIND"] == "installer" else
+            ["show", "pulse-fixture@department", "--no-pager",
+             "--property=LoadState", "--property=ActiveState"])
+if args != expected:
+    sys.exit(97)  # This double cannot perform a service action.
+with (f / "calls").open("a") as out:
+    out.write(json.dumps(args) + "\n")
+with (f / "pids").open("a") as out:
+    out.write(str(os.getpid()) + "\n")
+count = len((f / "calls").read_text().splitlines())
+mode = os.environ["MODE"]
+if mode == "hang":
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+state = "active" if mode in ("active", "hang", "error") or (mode == "delayed" and count == 2) else "inactive"
+if os.environ["KIND"] == "updater":
+    print("LoadState=loaded\nActiveState=" + state, flush=True)
+# Finite even on an old source or an ineffective TERM-only timeout.
+time.sleep(8 if mode == "hang" else float(os.environ["READ_DELAY"]))
+sys.exit(1 if mode == "error" else (0 if os.environ["KIND"] == "updater" or state == "active" else 3))
+'''
+
+DEADLINE_HARNESS = r'''
+source "$SCRIPT"
+log() { printf '[%s] %s\n' "$1" "${*:2}" >&2; }
+timeout() {
+    printf '%s\n' "$*" >> "$FIXTURE/timeouts"
+    command timeout "$@"
+}
+status=0
+wait_for_service_active pulse-fixture@department "$BUDGET" || status=$?
+printf 'STATUS=%s\n' "$status"
+exit "$status"
+'''
+
+DEADLINE_TRACES = []
+
+
+class ServiceStartDeadline(unittest.TestCase):
+    """Real clock/timeout controls; never a host manager or installed recovery."""
+
+    def exercise(self, kind, mode, *, budget=3, delay=0):
+        self.assertIsNotNone(shutil.which("timeout"), "native fixture needs coreutils timeout")
+        with tempfile.TemporaryDirectory(prefix="pulse-start-deadline-") as temporary:
+            f = Path(temporary)
+            tools = f / "tools"
+            tools.mkdir()
+            model = f / "manager.py"
+            model.write_text(DEADLINE_MANAGER)
+            manager = tools / "systemctl"
+            manager.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                               + " -I -S " + shlex.quote(str(model)) + ' "$@"\n')
+            manager.chmod(0o700)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
+            env.update(SCRIPT=str(INSTALLER if kind == "installer" else UPDATER),
+                       FIXTURE=str(f), KIND=kind, MODE=mode, BUDGET=str(budget),
+                       READ_DELAY=str(delay), PATH=str(tools) + os.pathsep + os.environ["PATH"])
+            started = time.monotonic()
+            process = subprocess.Popen(["bash", "-c", DEADLINE_HARNESS], cwd=f, env=env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, start_new_session=True)
+            try:
+                stdout, stderr = process.communicate(timeout=15)
+            finally:
+                if process.poll() is None:
+                    # Only the fixture's private process group, never a host unit.
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.communicate(timeout=3)
+            elapsed = time.monotonic() - started
+            calls = (f / "calls").read_text().splitlines() if (f / "calls").exists() else []
+            timeouts = (f / "timeouts").read_text().splitlines() if (f / "timeouts").exists() else []
+            states = []
+            for pid in (f / "pids").read_text().splitlines() if (f / "pids").exists() else []:
+                try:
+                    if sys.platform.startswith("linux"):
+                        states.append(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0])
+                    else:
+                        os.kill(int(pid), 0)
+                        states.append("present")
+                except ProcessLookupError:
+                    states.append("absent")
+                except FileNotFoundError:
+                    states.append("absent")
+            trace = dict(kind=kind, mode=mode, budget=budget, read_delay=delay,
+                         elapsed_seconds=round(elapsed, 6), exit=process.returncode,
+                         reads=len(calls), timeouts=timeouts, manager_process_states=states)
+            DEADLINE_TRACES.append(trace)
+            self.assertTrue(all(state in ("absent", "Z") for state in states), trace)
+            return process.returncode, stdout + stderr, trace
+
+    def test_slow_inactive_reads_share_the_wall_clock_budget(self):
+        # The final 1.1-second read has only one second left. Its timeout is
+        # unknown state to the updater (2), never settled rollback consent (1).
+        for kind, expected in (("installer", 1), ("updater", 2)):
+            with self.subTest(kind=kind):
+                status, output, trace = self.exercise(kind, "inactive", delay=1.1)
+                self.assertEqual(status, expected, output)
+                self.assertLess(trace["elapsed_seconds"], 5, trace)
+                self.assertLessEqual(trace["reads"], 2, trace)
+                self.assertTrue(trace["timeouts"][0].startswith("-k 1 3 systemctl "), trace)
+
+    def test_term_resistant_read_uses_the_remaining_budget_not_five_seconds(self):
+        for kind, expected in (("installer", 1), ("updater", 2)):
+            with self.subTest(kind=kind):
+                status, output, trace = self.exercise(kind, "hang", budget=1)
+                self.assertEqual(status, expected, output)
+                self.assertLess(trace["elapsed_seconds"], 4, trace)
+                self.assertEqual(trace["reads"], 1, trace)
+                self.assertTrue(trace["timeouts"][0].startswith("-k 1 1 systemctl "), trace)
+
+    def test_active_and_delayed_start_still_require_the_exact_service_read(self):
+        for kind in ("installer", "updater"):
+            for mode, reads in (("active", 1), ("delayed", 2)):
+                with self.subTest(kind=kind, mode=mode):
+                    status, output, trace = self.exercise(kind, mode, budget=5)
+                    self.assertEqual(status, 0, output)
+                    self.assertEqual(trace["reads"], reads, trace)
+                    self.assertLess(trace["elapsed_seconds"], 5, trace)
+
+    def test_failed_plausible_active_result_does_not_admit_success(self):
+        for kind, expected in (("installer", 1), ("updater", 2)):
+            with self.subTest(kind=kind):
+                status, output, _ = self.exercise(kind, "error", budget=1)
+                self.assertEqual(status, expected, output)
+
+    def test_zero_budget_performs_no_manager_read(self):
+        for kind, expected in (("installer", 1), ("updater", 2)):
+            with self.subTest(kind=kind):
+                status, output, trace = self.exercise(kind, "active", budget=0)
+                self.assertEqual(status, expected, output)
+                self.assertEqual(trace["reads"], 0, trace)
+                self.assertEqual(trace["timeouts"], [], trace)
+
+
 if __name__ == "__main__":
-    unittest.main()
+    result = unittest.main(exit=False).result
+    for trace in DEADLINE_TRACES:
+        print("Startup deadline trace: " + json.dumps(trace, sort_keys=True), flush=True)
+    sys.exit(0 if result.wasSuccessful() else 1)

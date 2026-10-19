@@ -423,12 +423,14 @@ download_update_asset() {
 # plausible partial result grants an update, restart or rollback.
 read_update_service_state() {
     local service_name=$1 observation="" line="" load="" state=""
+    local probe_seconds="${2:-5}"
+    [[ "$probe_seconds" =~ ^[1-5]$ ]] || return 1
     local seen_load=false seen_state=false read_completed=false
     # Keep diagnostics in the same observation and preserve trailing blank
     # records. Command substitution otherwise discards them, turning an
     # incomplete manager reply into consent for update/restart/rollback.
     # The completion marker also requires the last property to end normally.
-    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
+    if ! observation=$(LC_ALL=C timeout -k 1 "$probe_seconds" systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
         printf '%s' '__pulse_state_read_completed__'); then
         log error "Cannot read Pulse service state ($service_name); reconcile service state before retrying" >&2
         return 1
@@ -551,15 +553,20 @@ stop_update_service_for_rollback() {
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    local elapsed=0 state=""
+    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
+    local deadline=$((SECONDS + timeout_seconds)) remaining=0 probe_seconds=0 state=""
 
-    while (( elapsed < timeout_seconds )); do
-        state=$(read_update_service_state "$service_name") || return 2
+    # Include manager latency in the same budget as the sleeps. An uncertain
+    # or late observation keeps return 2: it must not become rollback consent.
+    while (( (remaining = deadline - SECONDS) > 0 )); do
+        probe_seconds=$remaining
+        (( probe_seconds <= 5 )) || probe_seconds=5
+        state=$(read_update_service_state "$service_name" "$probe_seconds") || return 2
+        (( SECONDS < deadline )) || return 2
         if [[ "$state" == active ]]; then
             return 0
         fi
         sleep 1
-        ((elapsed += 1))
     done
 
     return 1
