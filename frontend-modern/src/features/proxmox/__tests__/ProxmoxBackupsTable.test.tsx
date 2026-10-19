@@ -125,7 +125,7 @@ const pbsPayload = {
 };
 
 function mockBackupAPIs(
-  state: 'protected' | 'attention' = 'protected',
+  state: 'protected' | 'attention' | 'unprotected' | 'unknown' = 'protected',
   pbsResponse: typeof pbsPayload = pbsPayload,
 ) {
   apiFetchMock.mockImplementation((url: string) => {
@@ -1386,6 +1386,105 @@ describe('ProxmoxBackupsTable', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/backups/coverage');
       expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+    });
+  });
+
+  describe('global health count navigation', () => {
+    const scopes = [
+      'node=missing-node',
+      'type=vm',
+      'q=not-a-collected-workload',
+      'location=missing-repository',
+      'node=missing-node&type=vm&q=not-a-collected-workload&location=missing-repository',
+    ];
+
+    it.each(
+      (['protected', 'attention', 'unprotected', 'unknown'] as const).flatMap((state) =>
+        scopes.map((scope) => ({ state, scope })),
+      ),
+    )(
+      'reveals the $state count instead of retaining hiding scope $scope',
+      async ({ state, scope }) => {
+        mockBackupAPIs(state);
+        window.history.replaceState(
+          {},
+          '',
+          `/proxmox/backups/coverage?${scope}&posture=${state}&presentation=kept`,
+        );
+        const { container } = renderInRouter(() => (
+          <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+        ));
+        const count = await screen.findByRole('button', { name: `1 ${state}` });
+        expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(0);
+        // A posture plus an unrelated hiding filter is not the complete set
+        // named by this estate-wide count. Selecting it must not toggle off.
+        expect(count).toHaveAttribute('aria-pressed', 'false');
+        count.focus();
+        await fireEvent.click(count);
+        await waitFor(() => {
+          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+          expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+          const params = new URLSearchParams(window.location.search);
+          expect(params.get('posture')).toBe(state);
+          for (const key of ['node', 'type', 'q', 'location']) expect(params.get(key)).toBeNull();
+          expect(params.get('presentation')).toBe('kept');
+        });
+        expect(count).toHaveAttribute('aria-pressed', 'true');
+        expect(count).toHaveFocus();
+        expect(apiFetchMock).toHaveBeenCalledTimes(2);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each(['/proxmox/backups/date', '/proxmox/backups?view=coverage'])(
+      'opens complete Coverage from %s without carrying hidden scope or date facets',
+      async (route) => {
+        mockBackupAPIs('attention');
+        window.history.replaceState(
+          {},
+          '',
+          `${route}${route.includes('?') ? '&' : '?'}node=missing&type=vm&q=hidden&location=missing&source=verified&day=2026-05-25&presentation=kept`,
+        );
+        const { container } = renderInRouter(() => (
+          <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+        ));
+        await fireEvent.click(await screen.findByRole('button', { name: '1 attention' }));
+        await waitFor(() => {
+          expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+          expect(window.location.search).toBe('?presentation=kept&posture=attention');
+          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+        });
+        expect(apiFetchMock).toHaveBeenCalledTimes(2);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('keeps an active zero count reachable without marking a scoped set complete', async () => {
+      mockBackupAPIs('protected');
+      window.history.replaceState({}, '', '/proxmox/backups/coverage?posture=attention&node=pve-a');
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const count = await screen.findByRole('button', { name: '0 attention' });
+      expect(count).toHaveAttribute('aria-pressed', 'false');
+      await fireEvent.click(count);
+      await waitFor(() => expect(window.location.search).toBe('?posture=attention'));
+      expect(count).toHaveAttribute('aria-pressed', 'true');
+      await fireEvent.click(count);
+      await waitFor(() => expect(window.location.search).toBe(''));
+      expect(screen.queryByRole('button', { name: '0 attention' })).toBeNull();
+    });
+
+    it('explains global scope before the protection policy arrives', async () => {
+      mockBackupAPIs();
+      apiFetchJSONMock.mockReturnValue(new Promise(() => {}));
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const note = await screen.findByText(
+        /Counts cover all targets\. Choose a count to clear other filters/,
+      );
+      expect(note).not.toHaveTextContent('Attention: the newest backup');
     });
   });
 

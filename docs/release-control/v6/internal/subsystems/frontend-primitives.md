@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Global backup counts reveal their complete target set
+
+The Backups health strip keeps estate-wide warnings visible, independent of
+list scope. Its actions clear all backup search/scope/date facets atomically
+and open canonical Coverage for the chosen posture; unrelated URL state stays.
+Pressed means the whole counted set is selected, not a posture hidden behind
+other filters. An active zero count remains a reachable button until cleared.
+Regular inline/sheet filters retain scoped selection. Focus and scroll stay
+with the count, and persistent wrapping copy explains the global action even
+before policy arrives. No verdict or inventory/protection read is added.
+`ProxmoxBackupsTable.test.tsx` and `backup-health-counts.cjs` cover the real
+consumer's URL, keyboard, touch, zero-count and unmatched-evidence boundaries.
+
 Backup workload presentation preserves the backend's exact configured connection
 identity, including case, when mapping files, snapshots and jobs to live or
 unmatched rows. Native hostname aliases remain case-insensitive; they do not
