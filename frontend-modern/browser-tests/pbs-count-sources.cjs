@@ -279,12 +279,20 @@ function serve(req, res, next) {
       await expectCount('pbs-backup', 'tank', 2);
       await open('archive', 'tank');
       await expectCount('archive', 'tank', 1);
+      // This table intentionally owns one open datastore disclosure. Return to
+      // the target before testing live replacement; other sources were checked
+      // through their own native disclosure, not assumed to remain mounted.
+      await open('backup', 'tank');
+      await expectCount('backup', 'tank', 0);
       await capture('isolated');
       current.phase = 'empty';
       await activate(page.getByRole('button', { name: 'Refresh backups', exact: true }));
       await expectCount('backup', 'tank', 0);
-      await expectCount('pbs-backup', 'tank', 2);
       await page.getByRole('button', { name: 'Refresh backups', exact: true }).waitFor();
+      await open('pbs-backup', 'tank');
+      await expectCount('pbs-backup', 'tank', 2);
+      await open('backup', 'tank');
+      await expectCount('backup', 'tank', 0);
       current.phase = 'failure';
       await activate(page.getByRole('button', { name: 'Refresh backups', exact: true }));
       await detail('backup', 'tank').getByText('Unavailable', { exact: true }).waitFor();
@@ -313,7 +321,6 @@ function serve(req, res, next) {
       delayed();
       delayed = undefined;
       await expectCount('backup', 'tank', 1);
-      await expectCount('pbs-backup', 'tank', 2);
       check(
         await toggle.evaluate(
           (el) =>
@@ -324,6 +331,10 @@ function serve(req, res, next) {
         'Retry recovery keeps the same open disclosure and actual focus',
       );
       await capture('recovered');
+      await open('pbs-backup', 'tank');
+      await expectCount('pbs-backup', 'tank', 2);
+      await open('archive', 'tank');
+      await expectCount('archive', 'tank', 1);
       await page.evaluate(() => window.__pbsCountSources.setAmbiguous(true));
       await open('duplicate', 'tank');
       await expectCount('duplicate', 'tank', 'Unknown');
