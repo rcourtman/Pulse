@@ -39,8 +39,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     enabled: () => boolean;
     realtimeEnabled?: () => boolean;
     reportBackgroundErrors?: boolean;
+    readTimeoutMs?: number;
   }) => {
     expect(options.reportBackgroundErrors).toBe(true);
+    expect(options.readTimeoutMs).toBe(20_000);
     queryState.query = options.query;
     queryState.enabled = options.enabled();
     queryState.realtimeEnabled = options.realtimeEnabled;

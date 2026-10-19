@@ -114,6 +114,7 @@ export const GuestPhysicalDisks: Component<{
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
     reportBackgroundErrors: true,
+    readTimeoutMs: 20_000,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
@@ -160,7 +161,8 @@ export const GuestPhysicalDisks: Component<{
         <div class="space-y-2 rounded-md border border-border p-3 text-xs text-muted">
           <p role="status">
             Physical disk details are unavailable. Previously loaded disk readings are hidden until
-            a read succeeds. Retry reads Pulse's collected inventory, not a guest probe.
+            a read succeeds. Reads stop waiting after 20 seconds. Retry reads Pulse's collected
+            inventory, not a guest probe.
           </p>
           <Button
             size="sm"

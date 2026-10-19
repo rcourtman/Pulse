@@ -1372,13 +1372,19 @@ const seedUnifiedResourcesCacheFromAllResources = (
   return entry;
 };
 
+type UnifiedResourcesReadOptions = { signal: AbortSignal; expectedOrgID: string };
+
 const fetchUnifiedResourcesPage = async (
   normalizedQuery: string,
   page: number,
+  read?: UnifiedResourcesReadOptions,
 ): Promise<ReturnType<typeof resolveResourcesPayload>> => {
+  read?.signal.throwIfAborted();
   const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
     cache: 'no-store',
+    ...read,
   });
+  read?.signal.throwIfAborted();
   if (!response.ok) {
     const message = await readAPIErrorMessage(
       response,
@@ -1388,10 +1394,14 @@ const fetchUnifiedResourcesPage = async (
   }
 
   const payload = (await response.json()) as APIListResponse | APIResource[];
+  read?.signal.throwIfAborted();
   return resolveResourcesPayload(payload);
 };
 
-async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSnapshot> {
+async function fetchUnifiedResources(
+  query: string,
+  read?: UnifiedResourcesReadOptions,
+): Promise<UnifiedResourcesSnapshot> {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
 
   // Only the first page has to be fetched before we know how many there are.
@@ -1401,14 +1411,14 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
   // larger than one page. The outer loop repeats only when the estate grew a
   // page while the fan-out was in flight, preserving the previous
   // keep-walking-while-totalPages-grows behaviour.
-  const pages = [await fetchUnifiedResourcesPage(normalizedQuery, 1)];
+  const pages = [await fetchUnifiedResourcesPage(normalizedQuery, 1, read)];
   let totalPages = pages[0].totalPages;
 
   while (pages.length < totalPages) {
     const firstMissingPage = pages.length + 1;
     const fetched = await Promise.all(
       Array.from({ length: totalPages - pages.length }, (_, index) =>
-        fetchUnifiedResourcesPage(normalizedQuery, firstMissingPage + index),
+        fetchUnifiedResourcesPage(normalizedQuery, firstMissingPage + index, read),
       ),
     );
     pages.push(...fetched);
@@ -1434,10 +1444,40 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
   };
 }
 
+// A shared query owns the complete read, including API-client delays, response
+// bodies and every page. Race before writing the cache: abort alone cannot
+// retire an uncooperative transport/body or release the shared single flight.
+const fetchUnifiedResourcesWithinDeadline = async (
+  query: string,
+  readTimeoutMs?: number,
+): Promise<UnifiedResourcesSnapshot> => {
+  if (readTimeoutMs === undefined) return fetchUnifiedResources(query);
+  const controller = new AbortController();
+  let timer!: ReturnType<typeof setTimeout>;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('Collected inventory read timed out.'));
+      controller.abort();
+    }, readTimeoutMs);
+  });
+  try {
+    return await Promise.race([
+      expired,
+      fetchUnifiedResources(query, {
+        signal: controller.signal,
+        expectedOrgID: normalizeOrgScope(getOrgID()),
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const fetchUnifiedResourcesShared = async (
   entry: UnifiedResourcesCacheEntry,
   query: string,
   force = false,
+  readTimeoutMs?: number,
 ): Promise<Resource[]> => {
   if (!force && hasFreshUnifiedResourcesCache(entry)) {
     return entry.resources;
@@ -1448,7 +1488,7 @@ const fetchUnifiedResourcesShared = async (
   }
 
   const request = (async () => {
-    const fetched = await fetchUnifiedResources(query);
+    const fetched = await fetchUnifiedResourcesWithinDeadline(query, readTimeoutMs);
     const now = Date.now();
     setUnifiedResourcesCache(
       entry,
@@ -1503,6 +1543,8 @@ type UseUnifiedResourcesOptions = {
   realtimeEnabled?: Accessor<boolean>;
   /** Surface failed revalidation when a consumer must withdraw live-looking evidence. */
   reportBackgroundErrors?: boolean;
+  /** Complete shared-read deadline; callers sharing a cache key use the same policy. */
+  readTimeoutMs?: number;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
@@ -1512,6 +1554,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
   const reportBackgroundErrors = options?.reportBackgroundErrors === true;
+  const readTimeoutMs = options?.readTimeoutMs;
   const localFilter = parseUnifiedResourcesLocalFilter(query);
   const supportsCanonicalWsHydration = query === '' || localFilter !== null;
   const prefersWsInitialHydration =
@@ -1613,6 +1656,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           entryForRequest,
           query,
           shouldForceNetwork,
+          readTimeoutMs,
         );
         if (!isCurrentRequest()) {
           return resources as unknown as Resource[];
