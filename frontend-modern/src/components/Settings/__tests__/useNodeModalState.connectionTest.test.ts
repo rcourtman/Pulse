@@ -8,7 +8,7 @@ import { useNodeModalState, type NodeModalState } from '../useNodeModalState';
 vi.mock('@/api/nodes', () => ({
   NodesAPI: { testConnection: vi.fn(), testExistingNode: vi.fn() },
 }));
-vi.mock('@/utils/logger', () => ({ logger: { error: vi.fn(), debug: vi.fn() } }));
+vi.mock('@/utils/logger', () => ({ logger: { error: vi.fn(), debug: vi.fn(), info: vi.fn() } }));
 
 type NodeType = NodeModalProps['nodeType'];
 type TestResponse = Awaited<ReturnType<typeof NodesAPI.testConnection>>;
@@ -71,6 +71,34 @@ afterEach(() => {
 });
 
 describe('node connection-test evidence', () => {
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'blocks an impossible new %s pin locally and sends only an explicit corrected test',
+    async (type) => {
+      const { state } = mount(type, false);
+      state.updateField('host', 'https://fixture.example.invalid');
+      state.updateField('authType', 'password');
+      state.updateField('user', 'fixture@pam');
+      state.updateField('password', 'synthetic-only-password');
+      state.updateField('fingerprint', 'SHA256:' + 'ab'.repeat(32));
+      await state.handleTestConnection();
+      expect(state.fingerprintError()).toContain('exactly 64 hexadecimal characters');
+      expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+      expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+      expect(state.testResult()).toBeNull();
+
+      const corrected = 'CD:'.repeat(31) + 'CD';
+      state.updateField('fingerprint', corrected);
+      expect(state.fingerprintError()).toBeNull();
+      expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+      vi.mocked(NodesAPI.testConnection).mockResolvedValue(success);
+      await state.handleTestConnection();
+      expect(NodesAPI.testConnection).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ fingerprint: corrected, verifySSL: true }),
+      );
+      expect(state.testResult()).toMatchObject({ scope: 'form', status: 'success' });
+    },
+  );
+
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'tests only the saved %s record without a new secret',
     async (type) => {

@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "base_sha": "ab37d0aab69fd33161b92f839be78119f4769c2e",
+  "verified_at": "2026-10-19T05:09:45.923043Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+    "frontend-modern/src/components/Settings/nodeFingerprintValidation.ts",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "f8633093dd98a7a79d734ff60e670e326c3ab0d6dd89d9ba48aeeab537f64555",
+    "frontend-modern/src/components/Settings/nodeFingerprintValidation.ts": "e6c1596b69a6f96ff2235c63a63c6614cf14d7e2c9de9962962e27d91b24e6fd",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "1f008f0b96e1c39ac78666d258eaa152517fed7246081b26d8bf6339632e55bf"
+  },
+  "routes": [
+    "/settings/infrastructure \u2014 actual NodeCredentialSlot, node state hook, monitoring/status/authentication sections, NodesAPI and apiClient consumed through the offline node-fingerprint-validation fixture"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Malformed SHA256-labelled, truncated and nonhex pins remain visible with an associated inline error, aria-invalid and native invalidity. Native Save activation focuses the field without making a request.",
+    "Corrected colon-separated uppercase pins remove the field error; explicit PUT and GET readback retain exact bytes, verification and stored credentials. There is no automatic probe or save.",
+    "A saved-record test consumes none of the malformed unsaved draft. An entered-settings test with an impossible pin sends no credentials; a corrected-format synthetic certificate mismatch remains an error, not verified trust.",
+    "All 14 captures opened natively. Red field errors, corrected form-policy notices and failure/action layouts stay within desktop and 320px viewports. Native validation bubbles are visible, and transiently overlay the repeated inline error; no unobstructed-inline claim. Long pins use native single-line input scrolling, not page overflow."
+  ],
+  "interactions": [
+    "Chromium 141.0.7390.37 at 1365px uses focus and Enter; WebKit 26.0 at 320px uses touch taps. Playwright 1.56.1 matches the integration lock.",
+    "Six source-bound PVE/PBS/PMG journeys. Each makes exactly one saved-record test, one valid save, one readback and one explicit corrected entered-settings test; malformed operations never dispatch, and no retries, add/delete or certificate acquisition occur.",
+    "Same-origin synthetic HTTP fixtures only, with the real CSRF cookie/header and production clients. This does not exercise the Go update handler, cryptographic trust, installed renewal, guest recovery, publication or a reporter installation.",
+    "Both browser engines/contexts and the Vite server closed; browser client exit 0, no page errors."
+  ],
+  "evidence": {
+    "source_commit": "ab37d0aab69fd33161b92f839be78119f4769c2e",
+    "source_tree": "a031b32de21eb34dddbee52c6b43de106ad7abd8",
+    "protocol": "frontend-modern/browser-tests/node-fingerprint-validation.cjs",
+    "protocol_sha256": "3047c917e9246fcb5b8aac7fb73758fe17ed90fca3c7a1b88a599e4f6aa68bd9",
+    "raw_result": "BROWSER-RESULT.json in retained Web dossier",
+    "native_pixel_review": "PIXELS.json in retained Web dossier",
+    "captures": [
+      {
+        "file": "browser/chromium-pve-invalid-pin.png",
+        "sha256": "72bbc6b2e09fc187233de36136ffcb34f60a556ac74639aca13c734a87fe28d0"
+      },
+      {
+        "file": "browser/chromium-pve-corrected-pin.png",
+        "sha256": "5a8e5aaebcabf95a44a5fffc9bfc58974010146bb0bdc5a14436925b5edbf28b"
+      },
+      {
+        "file": "browser/chromium-pve-valid-format-not-trust.png",
+        "sha256": "6dbeaf913580d9091cca7d424f68ba87f693d581a080c0b6815b1c8142029fc8"
+      },
+      {
+        "file": "browser/chromium-pbs-invalid-pin.png",
+        "sha256": "b8f9ee45d96665e4c40a044916a0c724b86c617ec1660ccf6709ffd125c7021c"
+      },
+      {
+        "file": "browser/chromium-pbs-corrected-pin.png",
+        "sha256": "ed64e6fc1a0d825e7e26a7213cbfb387c899e9ad33362ae447050e461c461f88"
+      },
+      {
+        "file": "browser/chromium-pmg-invalid-pin.png",
+        "sha256": "561c9792566f8453c1d911d7b4be1c9456af73e006867a8ed6802c5de46f2f65"
+      },
+      {
+        "file": "browser/chromium-pmg-corrected-pin.png",
+        "sha256": "a8a2c446fcc5af2423a16251f8441b03341951d6bf5136e2ba4e03bc4bd9daa2"
+      },
+      {
+        "file": "browser/webkit-pve-invalid-pin.png",
+        "sha256": "6856437354ea10da07d435f92130107e31496e904dc29c2afecf098c03e7bead"
+      },
+      {
+        "file": "browser/webkit-pve-corrected-pin.png",
+        "sha256": "47df6fe07b2e69ccc5c1b074b1ee633a86af0a6ccfab1f711f705d6fc3f04799"
+      },
+      {
+        "file": "browser/webkit-pve-valid-format-not-trust.png",
+        "sha256": "2ab9e474935711416735b191fc7752f387399fa75c137d640c47f809ee94a435"
+      },
+      {
+        "file": "browser/webkit-pbs-invalid-pin.png",
+        "sha256": "565b24f853b947e3b16fa2e6d96aa8ffa742c6bc18f6dc90858cfe1858e0aa0c"
+      },
+      {
+        "file": "browser/webkit-pbs-corrected-pin.png",
+        "sha256": "0951c58fc288f72554cc6b0dfecb89e24fa96adf1a32cca6a8a2025264929ed3"
+      },
+      {
+        "file": "browser/webkit-pmg-invalid-pin.png",
+        "sha256": "e3e43550c12543e720b9ddfa8caeaf249c1fdd59196ff550623a6bcf3feda736"
+      },
+      {
+        "file": "browser/webkit-pmg-corrected-pin.png",
+        "sha256": "e2ab358b0f9213b108ccf14f225ee9cf2de2551f306795355073bd8c30e9eb63"
+      }
+    ],
+    "cleanup": {
+      "browser": true,
+      "server": true
+    }
+  }
+}
