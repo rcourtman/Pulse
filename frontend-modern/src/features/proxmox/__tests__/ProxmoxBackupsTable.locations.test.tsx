@@ -125,7 +125,7 @@ describe('Backups exact location filters', () => {
     expect(locations()).toHaveLength(0);
     const chip = screen.getByRole('button', { name: 'Backup location: Ambiguous saved location' });
     await fireEvent.click(chip);
-    await fireEvent.click(screen.getByRole('option', { name: 'pbs-server / Main', exact: true }));
+    await fireEvent.click(screen.getByRole('option', { name: 'pbs-server / Main' }));
     await waitFor(() => expect(locations()).toHaveLength(1));
     expect(locations()[0]).toContain('pbs-server / Main / (root)');
     expect(
