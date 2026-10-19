@@ -225,7 +225,7 @@ function serve(req, res, next) {
       };
       const verifyRetained = async (risk) => {
         await expect(detail()).toContainText('current disk health is unconfirmed');
-        await expect(page.getByText('Live I/O (30m)', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(0);
         await expect(page.getByText('Last known temperature', { exact: true })).toBeVisible();
         const value = page
           .getByText('CRC Errors', { exact: true })
@@ -249,7 +249,7 @@ function serve(req, res, next) {
       if (narrow) await row().getByText('Guest SATA', { exact: true }).tap();
       else await activate(row().getByRole('button', { name: 'Expand Guest SATA', exact: true }));
       await expect(detail()).toContainText('Healthy');
-      await expect(page.getByText('Live I/O (30m)', { exact: true })).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(1);
       await capture('storage-current');
 
       await refresh('stale');
@@ -291,7 +291,7 @@ function serve(req, res, next) {
         'data-temperature-reading',
         'current',
       );
-      await expect(page.getByText('Live I/O (30m)', { exact: true })).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(1);
       await expect(page.getByText('Last known temperature', { exact: true })).toHaveCount(0);
       assert(
         await guestRow.evaluate((element) => element.open),
