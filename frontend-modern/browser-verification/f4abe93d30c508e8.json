@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2ed76d871da4fc1ad0f2982b3f6fbe157705e517",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StorageDetailMetricCard.tsx",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StorageDetailMetricCard.tsx": "2c5ae51ce391e65af04a0fee6e99ab41769da9bf074c4924c929f35b25cfd24a",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "c55923cd9c97ea491aaa0cd7aeee3c18992a7e0ca2a87b67690a9cf394fe0471",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "c8a4eb4c7aaddda17ae84ae28fa2a9cdf27cd619887e0245db43cb14613b0730",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "aabaa84e549bfac0d14bb65c4960f7bff3c4b32aa5b2c091d15aedee64ce6a40",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts": "f2905174f76d4137b6a7a1317dbdfc1cd3abe198eb7e6cdba2fb59c046f08c89"
+  },
+  "routes": [
+    "Existing Storage physical-disk table/detail and guest Overview through /browser-tests/disk-source-freshness.html: ordinary HTTP API client/resource owner, production presenters/consumers and shipped CSS. No product route added."
+  ],
+  "states": [
+    "A successful inventory read with canonical telemetry_stale is Last known, not Healthy or Running Hot; stale metadata also survives a stronger alert verdict.",
+    "Retained failed SMART evidence remains Last known risk (Past risk compact), adverse counters remain readable and neutral, and expired rows do not enter the healthy filter.",
+    "Expired reports retain historical identity/charts but withdraw live I/O. Canonical recovery restores current values and live I/O without closing selected details.",
+    "Last known temperature wraps fully inside Storage table cards and guest cards at 320px; both label and page bounds are checked."
+  ],
+  "interactions": [
+    "Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 desktop keyboard/focus/Enter; WebKit 26.0 320px dark/touch, including opening folded mobile charts.",
+    "Two complete HTTP consumer journeys, 14 final captures opened with native view_image and actual image content inspected; no fixture/page errors. All protocol browser/context and Vite closures completed; client and enclosing exec returned 0.",
+    "Prior failed protocols and a DOM-passing but pixel-rejected clipped-label run are retained in the lane dossier. Pixel review caused the label-wrap correction before this accepted pass. This is synthetic read-only UI proof, not native guest recovery or a whole-source build."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T07:37:48.463673Z",
+  "evidence": {
+    "source_commit": "2ed76d871da4fc1ad0f2982b3f6fbe157705e517",
+    "source_tree": "d4113d07e3ddf75f34c97d10387075bb8608c552",
+    "bound_inputs": 3039,
+    "protocol": "frontend-modern/browser-tests/disk-source-freshness.cjs",
+    "protocol_sha256": "26eb8ff0c0c029c61a61366d25cf0dc2afbaff686b07ddee8f8970db1fb7ebd0",
+    "raw_result": "BROWSER-RESULT.json in retained Web dossier",
+    "captures": [
+      {
+        "file": "chromium-storage-current.png",
+        "sha256": "a4c106669f7c4905a46dd005fbb0c21e05f2218f4fa9bcfc4fee0523ec4ad984"
+      },
+      {
+        "file": "chromium-storage-expired.png",
+        "sha256": "73561e4abf22a4924a742a8622217b9a85ff340b0b1d0cda775ad044074eccef"
+      },
+      {
+        "file": "chromium-storage-retained-risk.png",
+        "sha256": "20e0d5858459898f20cca8a90911d9f389ff971ddc357af2e97a59d8062647a3"
+      },
+      {
+        "file": "chromium-guest-retained-risk.png",
+        "sha256": "0058e61cd6af06906aa6ca14bb6d21856f4e913f4d0e283b829948fa79d8344a"
+      },
+      {
+        "file": "chromium-guest-expired.png",
+        "sha256": "6dfce1e6f274466d433cf583a1df38ebde6f225eb37bffdacdb4dacc9886eb18"
+      },
+      {
+        "file": "chromium-guest-recovered.png",
+        "sha256": "abe531bf1f9aec14f480284ea6318f01d55f672db56176e254969a34aa3c80eb"
+      },
+      {
+        "file": "chromium-storage-recovered.png",
+        "sha256": "c94b7863e62a1672affda03a51d6c64958ebb287e36aa51392e4f8799df26917"
+      },
+      {
+        "file": "webkit-storage-current.png",
+        "sha256": "174156d7d00d67fa2ae709e695fe0db78ac4a295c897e46651ffc58a9eb10506"
+      },
+      {
+        "file": "webkit-storage-expired.png",
+        "sha256": "60109c97caf0563d84695f2176b6a873fd009086d537804655012d74307ee1e8"
+      },
+      {
+        "file": "webkit-storage-retained-risk.png",
+        "sha256": "dc855555825ed1438cb7ae590dc3c030cebab6ae7d9e0676009ec934886b004c"
+      },
+      {
+        "file": "webkit-guest-retained-risk.png",
+        "sha256": "2494af6ad359312cd838f637c3a9afa5293455bb4f1c9ba378c92890bcb59b1a"
+      },
+      {
+        "file": "webkit-guest-expired.png",
+        "sha256": "14a3bc760dc481e6a9bb7034c985b13f00937bfa3b2c39cd633777100e4dc761"
+      },
+      {
+        "file": "webkit-guest-recovered.png",
+        "sha256": "96379fd42b4369efd27e172e202eb7bcfd22d14558342115d17c9dfcec9a36f6"
+      },
+      {
+        "file": "webkit-storage-recovered.png",
+        "sha256": "83fde024963fbbf3e9ae72831ff585658d601dab99b032a8e190bf3960e2614d"
+      }
+    ]
+  }
+}
