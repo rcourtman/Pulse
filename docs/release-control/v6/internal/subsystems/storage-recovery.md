@@ -7738,3 +7738,10 @@ SMART consumers, single-flight retry, failed retry and populated/empty recovery.
 at desktop and 320px, including stopped chart reads and an old-organisation
 response retired by the existing source fence. These are synthetic browser and
 source proofs, not guest thaw, filesystem liveness, installed or restore proof.
+
+The guest child reader opts into background-error reporting and keeps failed
+read state through its tenant/query cache remount. No previously failed snapshot
+becomes a successful read merely by closing/reopening the drawer. Retry's local
+busy owner resets on organisation change and ignores old-scope settlement, while
+the existing source owner fences the response. Other resource consumers retain
+their previous defaults; no shared polling or collection behaviour changes.

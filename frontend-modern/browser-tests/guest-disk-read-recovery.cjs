@@ -62,7 +62,7 @@ function serve(req, res, next) {
   try {
     assert.equal(req.method, 'GET', 'No mutations, guest actions or probes');
     const url = new URL(req.url, 'http://fixture.invalid');
-    const org = req.headers['x-org-id'] || 'default';
+    const org = req.headers['x-pulse-org-id'] || 'default';
     current.requests.push({ path: req.url, method: req.method, org });
     if (url.pathname === '/api/resources') {
       assert.equal(url.searchParams.get('type'), 'physical_disk');
@@ -106,10 +106,9 @@ function serve(req, res, next) {
     }
     assert(
       [
-        '/api/license/runtime',
-        '/api/license/capabilities',
-        '/api/license/features',
+        '/api/license/runtime-capabilities',
         '/api/alerts/config',
+        '/api/alerts/active',
         '/api/security/status',
       ].includes(url.pathname),
       `Unexpected API: ${url.pathname}`,
@@ -119,7 +118,9 @@ function serve(req, res, next) {
       200,
       url.pathname.startsWith('/api/license/')
         ? { capabilities: [], limits: [], max_history_days: 7, runtime: { build: 'community' } }
-        : {},
+        : url.pathname === '/api/alerts/active'
+          ? []
+          : { enabled: true, activationState: 'active' },
     );
   } catch (error) {
     report.errors.push(String(error.stack || error));
@@ -242,6 +243,23 @@ function serve(req, res, next) {
       assert(!/PRIVATE_(PROVIDER_TEXT|DENIAL_DETAIL)/.test(await page.locator('body').innerText()));
       await capture('access-denied');
 
+      current.mode = 'hold';
+      const beforeRemount = resourceReads();
+      await activate(page.getByRole('button', { name: 'Close guest details' }));
+      await expect(retry()).toHaveCount(0);
+      await activate(page.getByRole('button', { name: 'Reopen guest details' }));
+      await expect.poll(() => current.held.length).toBe(1);
+      await expect(retry()).toBeVisible();
+      await expect(card()).toHaveCount(0);
+      assert.equal(resourceReads(), beforeRemount + 1, 'Failed warm cache must be revalidated');
+      await activate(retry());
+      await expect(retry()).toBeDisabled();
+      assert.equal(resourceReads(), beforeRemount + 1, 'Explicit retry coalesces a remount read');
+      await capture('remount-unavailable');
+      reply(current.held.shift(), 403, { error: 'PRIVATE_REMOUNT_DETAIL' });
+      await expect(retry()).toBeEnabled();
+      await expect(card()).toHaveCount(0);
+
       current.mode = 'normal';
       current.temperature = 48;
       await activate(retry());
@@ -291,6 +309,8 @@ function serve(req, res, next) {
   } catch (error) {
     report.result = 'failed';
     report.errors.push(String(error.stack || error));
+    if (current)
+      report.failedCase = { name: current.name, mode: current.mode, requests: current.requests };
     process.exitCode = 1;
   } finally {
     if (browser) await browser.close();

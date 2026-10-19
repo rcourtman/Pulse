@@ -1,5 +1,5 @@
 // Production guest Overview and scoped resource reader; synthetic HTTP only.
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { GuestDrawerOverview } from '../src/components/Workloads/GuestDrawerOverview';
 import { eventBus } from '../src/stores/events';
@@ -38,6 +38,7 @@ const guest = {
 
 function Fixture() {
   const [shown, setShown] = createSignal(true);
+  const [open, setOpen] = createSignal(true);
   return (
     <main class="mx-auto max-w-3xl space-y-3 p-3 text-base-content">
       <h1 class="text-lg font-semibold">Guest disk read recovery</h1>
@@ -49,6 +50,9 @@ function Fixture() {
           }
         >
           Refresh collected inventory
+        </button>
+        <button type="button" onClick={() => setOpen(!open())}>
+          {open() ? 'Close guest details' : 'Reopen guest details'}
         </button>
         <button type="button" onClick={() => setShown(!shown())}>
           {shown() ? 'Hide overview' : 'Show overview'}
@@ -63,27 +67,29 @@ function Fixture() {
           Switch organisation
         </button>
       </nav>
-      <div class={shown() ? '' : 'hidden'}>
-        <GuestDrawerOverview
-          guest={guest}
-          guestOsSummary="Debian 13"
-          agentHeading="Agent"
-          agentLabel="Connected"
-          agentTitle="Connected"
-          hasAgentInfo={true}
-          hasFilesystemDetails={false}
-          hasNetworkInterfaces={false}
-          hasOsInfo={true}
-          hasWorkloadActionAgent={false}
-          showInGuestAgentInstallCue={false}
-          ipAddresses={[]}
-          networkInterfaces={[]}
-          normalizedTags={[]}
-          backupPresentation={null}
-          workloadActionAgentTitle=""
-          historyEnabled={shown()}
-        />
-      </div>
+      <Show when={open()}>
+        <div class={shown() ? '' : 'hidden'}>
+          <GuestDrawerOverview
+            guest={guest}
+            guestOsSummary="Debian 13"
+            agentHeading="Agent"
+            agentLabel="Connected"
+            agentTitle="Connected"
+            hasAgentInfo={true}
+            hasFilesystemDetails={false}
+            hasNetworkInterfaces={false}
+            hasOsInfo={true}
+            hasWorkloadActionAgent={false}
+            showInGuestAgentInstallCue={false}
+            ipAddresses={[]}
+            networkInterfaces={[]}
+            normalizedTags={[]}
+            backupPresentation={null}
+            workloadActionAgentTitle=""
+            historyEnabled={shown()}
+          />
+        </div>
+      </Show>
     </main>
   );
 }

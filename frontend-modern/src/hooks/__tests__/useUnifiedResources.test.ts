@@ -796,6 +796,72 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it.each([false, true])(
+    'reports failed background revalidation only when opted in (%s)',
+    async (reportBackgroundErrors) => {
+      setWsConnected(false);
+      setWsState('resources', []);
+      apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+      let dispose = () => {};
+      let result!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+      createRoot((stop) => {
+        dispose = stop;
+        result = useUnifiedResources({ reportBackgroundErrors });
+      });
+      try {
+        await waitForResourceCount(() => result.resources().length);
+        const failure = new Error('unavailable');
+        apiFetchMock.mockRejectedValue(failure);
+        window.dispatchEvent(new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT));
+        await waitForValue(() => apiFetchMock.mock.calls.length, 2);
+        // Drain the background owner, which deliberately catches its rejection.
+        for (let i = 0; i < 20; i++) await flushAsync();
+        expect(result.error()).toBe(reportBackgroundErrors ? failure : undefined);
+        expect(result.resources()[0].id).toBe(v2Resource.id);
+        apiFetchMock.mockResolvedValue(resourceResponse([{ ...v2Resource, name: 'recovered' }]));
+        await result.refetch();
+        expect(result.error()).toBeUndefined();
+        expect(result.resources()[0].name).toBe('recovered');
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('does not revive a failed opted-in snapshot from a warm cache on remount', async () => {
+    setWsConnected(false);
+    setWsState('resources', []);
+    apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+    let dispose = () => {};
+    let first!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+    createRoot((stop) => {
+      dispose = stop;
+      first = useUnifiedResources({ reportBackgroundErrors: true });
+    });
+    await waitForResourceCount(() => first.resources().length);
+    const failure = new Error('unavailable');
+    apiFetchMock.mockRejectedValue(failure);
+    await expect(first.refetch()).rejects.toBe(failure);
+    dispose();
+    const pending = deferred<ReturnType<typeof resourceResponse>>();
+    apiFetchMock.mockReturnValue(pending.promise);
+    let second!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+    createRoot((stop) => {
+      dispose = stop;
+      second = useUnifiedResources({ reportBackgroundErrors: true });
+    });
+    try {
+      expect(second.error()).toBe(failure);
+      await waitForValue(() => apiFetchMock.mock.calls.length, 3);
+      expect(second.error()).toBe(failure);
+      pending.resolve(resourceResponse([]));
+      await waitForValue(() => second.error(), undefined);
+      expect(second.resources()).toHaveLength(0);
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps an attached availability check distinct from its host across REST and websocket updates', async () => {
     const host = createWsResource({
       id: 'agent-core2026',

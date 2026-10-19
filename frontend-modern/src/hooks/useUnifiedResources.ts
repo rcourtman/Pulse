@@ -588,6 +588,8 @@ type UnifiedResourcesSnapshot = {
 };
 
 type UnifiedResourcesCacheEntry = {
+  /** Failed opted-in revalidation stays failed through a cache remount. */
+  readError?: unknown;
   resources: Resource[];
   policyPosture: ResourcePolicyPostureSummary | null;
   aggregations: UnifiedResourceAggregations | null;
@@ -1152,7 +1154,9 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
 };
 
 const hasFreshUnifiedResourcesCache = (entry: UnifiedResourcesCacheEntry) =>
-  entry.hasSnapshot && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+  entry.readError === undefined &&
+  entry.hasSnapshot &&
+  Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
 
 const setUnifiedResourcesCache = (
   entry: UnifiedResourcesCacheEntry,
@@ -1163,6 +1167,7 @@ const setUnifiedResourcesCache = (
   facets: UnifiedResourceFacets | null = entry.facets,
 ) => {
   entry.resources = resources;
+  entry.readError = undefined;
   entry.policyPosture = policyPosture;
   entry.aggregations = aggregations;
   entry.facets = facets;
@@ -1496,6 +1501,8 @@ type UseUnifiedResourcesOptions = {
   enabled?: Accessor<boolean>;
   /** Keep cached/background data inert while another retained route is visible. */
   realtimeEnabled?: Accessor<boolean>;
+  /** Surface failed revalidation when a consumer must withdraw live-looking evidence. */
+  reportBackgroundErrors?: boolean;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
@@ -1504,6 +1511,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const initialHydration = options?.initialHydration ?? 'immediate';
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
+  const reportBackgroundErrors = options?.reportBackgroundErrors === true;
   const localFilter = parseUnifiedResourcesLocalFilter(query);
   const supportsCanonicalWsHydration = query === '' || localFilter !== null;
   const prefersWsInitialHydration =
@@ -1539,7 +1547,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   );
   const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(initialFacets);
   const [loading, setLoading] = createSignal(!hasCachedResources);
-  const [error, setError] = createSignal<unknown>(undefined);
+  const [error, setError] = createSignal<unknown>(
+    reportBackgroundErrors ? cacheEntry.readError : undefined,
+  );
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
   let initialHydrationHandle: ReturnType<typeof setTimeout> | undefined;
@@ -1620,7 +1630,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         });
         return fetched;
       } catch (err) {
-        if (!background && isCurrentRequest()) {
+        if ((!background || reportBackgroundErrors) && isCurrentRequest()) {
+          if (reportBackgroundErrors) entryForRequest.readError = err;
           setError(err);
         }
         throw err;
@@ -2112,7 +2123,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const scopedAggregations = cacheEntry.aggregations;
     const scopedFacets = cacheEntry.facets;
     batch(() => {
-      setError(undefined);
+      setError(reportBackgroundErrors ? cacheEntry.readError : undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
       setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);

@@ -38,7 +38,9 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     query: string;
     enabled: () => boolean;
     realtimeEnabled?: () => boolean;
+    reportBackgroundErrors?: boolean;
   }) => {
+    expect(options.reportBackgroundErrors).toBe(true);
     queryState.query = options.query;
     queryState.enabled = options.enabled();
     queryState.realtimeEnabled = options.realtimeEnabled;
@@ -357,5 +359,39 @@ describe('GuestPhysicalDisks', () => {
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
     expect(screen.queryByText('Healthy')).toBeNull();
     expect(queryState.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an unanswered old-organisation retry disable or settle a new-organisation retry', async () => {
+    queryState.error = new Error('unavailable');
+    let finishOld!: () => void;
+    let finishNew!: () => void;
+    queryState.refetch
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve;
+          }),
+      );
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    eventBus.emit('org_switched', 'other-org');
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(queryState.refetch).toHaveBeenCalledTimes(2);
+    expect(button).toBeDisabled();
+    finishOld();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(button).toBeDisabled();
+    finishNew();
+    await waitFor(() => expect(button).toBeEnabled());
   });
 });

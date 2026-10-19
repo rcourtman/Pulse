@@ -1,4 +1,4 @@
-import { For, Show, Suspense, createSignal, lazy, type Component } from 'solid-js';
+import { For, Show, Suspense, createSignal, lazy, onCleanup, type Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
@@ -13,6 +13,7 @@ import {
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
+import { eventBus } from '@/stores/events';
 
 // SMART history and chart controls are only needed after a disk row is opened.
 // Keep their Storage detail module out of the initial Workloads surface.
@@ -112,12 +113,26 @@ export const GuestPhysicalDisks: Component<{
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
+    reportBackgroundErrors: true,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
   const [retrying, setRetrying] = createSignal(false);
+  let retryGeneration = 0;
+  // The same guest id may exist in another organisation. Its read must not
+  // inherit an unanswered retry's busy state, or its eventual settlement.
+  const resetRetry = () => {
+    retryGeneration += 1;
+    setRetrying(false);
+  };
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', resetRetry);
+  onCleanup(() => {
+    unsubscribeOrgSwitch();
+    retryGeneration += 1;
+  });
   const retry = async () => {
     if (retrying() || source.loading()) return;
+    const generation = ++retryGeneration;
     setRetrying(true);
     try {
       // This only rereads Pulse's scoped inventory; it never probes the guest.
@@ -125,7 +140,7 @@ export const GuestPhysicalDisks: Component<{
     } catch {
       // The query owns its failure state. Provider text may contain private data.
     } finally {
-      setRetrying(false);
+      if (generation === retryGeneration) setRetrying(false);
     }
   };
   const disks = () =>
