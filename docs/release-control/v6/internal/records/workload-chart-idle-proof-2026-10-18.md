@@ -404,3 +404,145 @@ variants. These native timings are diagnostic. Complete logs, exits, source
 and executable manifests and the 120-row raw sample table are retained in
 `ordinal-query-qualified`. Fresh paired CI and the unchanged strict proof on
 observed idle capacity remain required after source landing.
+
+
+## Resource projection source CI
+
+The resource projection fix is PR [3071](https://github.com/rcourtman/Pulse/pull/3071),
+head `7a622c0b76c80ba8f0132b7160eff0845d3a30fd`. Its synthetic merge
+`46352ca225b622f648fc2e78cf9a17ae7aa0fbc4` has tree
+`1167ea00648b79f70c63c8b5f6bf22c17cd12927` and parents
+`5153c4ccda35cc50f12f32e3f6b98a87cb90f6b5` and that head.
+
+The hosted strict job in [run 39224836563](https://github.com/rcourtman/Pulse/actions/runs/39224836563)
+failed its capacity assertion. Its latency assertion returned zero, with
+p50 47.929794 ms, p95 59.739126 ms and p99 65.328068 ms against the unchanged
+90 ms budget. Two of twelve measurement intervals contained unrelated
+background CPU activity: 25.3731343% and 19.6517413%. Process
+`provjobd4007867`, PID 1874, accounted for 25.1243781% and 19.6517413%
+respectively. Guest, steal and swap were zero. The final admission streak
+lasted 30.003 s after an earlier iowait reset. All eleven admission samples,
+twelve measurement samples and three after samples remain retained.
+
+This four-CPU AMD EPYC 9V45 runner used Go 1.26.9 and GOMAXPROCS=2. Its fixed
+executable SHA-256 was
+`d167646d0a60ccd3e59d553f7af4809465a662baa1364359f2e12da33133c016`.
+Artifact `12174035104` has GitHub digest
+`2e1fc1835fba3727a2bd443db13bb0309e7d3b4eeae6dc1adcec72c4eaab7441`.
+The complete log and artifact remain in the task's `pr-3071` evidence cache.
+The assertion's passing latency on this contaminated, faster CPU profile does
+not resolve the valid two-CPU idle failure or establish the SLO.
+
+
+The paired benchmark job passed against source base `5153c4ccda35cc50f12f32e3f6b98a87cb90f6b5`
+on the same runner with the candidate synthetic merge above. Linux amd64 used
+Go 1.26.9, runtime-default GOMAXPROCS (four CPUs, AMD EPYC 9V74), ten alternating
+100 ms samples per case, and the affected metrics, API, monitoring and Docker
+agent packages. Fixed metrics/API baseline executable SHA-256 values were
+`b6b923b696ff36ece869ea087473261227e550299e6d08d88c217cf049a9d193` and
+`6df27385f96c9a38973e3c2d4e4dce8095d7de9f94f326f4569c03fab3967617`.
+Candidate values were
+`dd71fef1568dd33798311bb3a91ab798de6663dbc91ac258e3bf42cb111e8691` and
+`ce1bf8b34ec93954113fc67c95895d5bfd1f02d979d089a59130ae5fe221ac18`.
+Every round retained the same executable identities for its variant.
+
+Cold-chart time was 75.76 to 67.32 ms (-11.14%, p<0.001), bytes were
+21.47 to 18.78 MiB (-12.50%, p<0.001), and allocation counts were about
+508,200 to 340,900 (-32.92%, p<0.001). Raw batch reads for 10/50/100 resources
+improved by 7.35%/4.25%/6.46%, with allocation counts lower by about 32.8%.
+Guest chart batches for 10/50 guests improved by 13.18%/17.47%, and node chart
+batches for 5/20 nodes by 11.88%/11.72%. Their bytes and allocations also fell.
+These are relative benchmark comparisons, not an idle absolute SLO proof.
+
+All dimensions and adverse observations are retained. Single-resource
+`Query/no-downsample` time rose 4.16% (p=0.023), `QueryAll/4-metrics` rose
+7.94% (p<0.001), `QueryAllBatch/1` rose 5.93% (p=0.015), and the 500-node
+single-resource dashboard case rose 6.52% (p<0.001). These cases retain their
+single-resource SQL path. The unrelated empty scoped replication projection
+rose 8.19% (264.3 to 286.0 ns, p=0.009). Chart HTTP-transfer time was unchanged
+statistically, while its bytes rose 1.32% (p=0.045) and counts stayed at 88.
+Small rollup time was 4.205 to 4.233 ms (p=0.684), bytes 3.135 to 3.127 KiB
+(p=0.382), and allocation count 106 in both. The fleet rollup and synchronous
+write times showed no significant difference. The existing comparison script
+reported no regression above 10% at p<0.05 across all reported dimensions.
+
+Artifact `12173808657` has GitHub digest
+`6cb173462755af1694ca076a5709e29d824db937f55bf692786edf312fea7e4b`.
+The complete job log SHA-256 is
+`c837153cf27a4579899a818ff5abb7b856862feed0a8d249a988147a9b14edb8`.
+Full raw baseline/candidate samples, comparison, source/toolchain/executable
+metadata and hashes remain in `pr-3071/bench-results` and the surrounding
+CI evidence directory. No samples or adverse dimensions were discarded.
+
+
+All nine required source contexts passed at head
+`7a622c0b76c80ba8f0132b7160eff0845d3a30fd`. PR 3071 merged through the
+protected source path as `062a114a04bd47440166ee03a77987a92f6e5072`, with
+parents `5153c4ccda35cc50f12f32e3f6b98a87cb90f6b5` and the reviewed head.
+Its tree `1167ea00648b79f70c63c8b5f6bf22c17cd12927` exactly matches the
+tested synthetic merge. No source or benchmark threshold changed after CI.
+The capacity-invalid hosted job remains a failed optional check.
+
+A single new two-CPU disposable proof was dispatched as
+[run 39227530240](https://github.com/rcourtman/pulse-enterprise/actions/runs/39227530240)
+against that verified current public main. The private control remained
+`4f8f9542ee122471c0bfe4f51334e7ef0d19796b` and workflow SHA-256 remained
+`7e50e49c83af4369d9475398be4c0dd78caf47772932e51b962fc3198e802dbc`.
+The source guard runs before toolchain/source execution, and the existing
+`pulse-ci-vm-large` two-vCPU disposable profile and strict 90 ms guard are
+unchanged. Its complete result is recorded below.
+
+
+## Strict idle-worker result after the resource projection fix
+
+Run [39227530240](https://github.com/rcourtman/pulse-enterprise/actions/runs/39227530240),
+job `117977361541`, passed both the latency and capacity assertions on the exact
+merged source above. The strict test reported p50 **71.134985 ms**, p95
+**82.450475 ms**, p99 **87.493719 ms** and **SLO=90ms**. All 200 cold-router
+measurements remain included. The process returned zero and
+`capacity_errors` was empty. This establishes the selected local chart SLO on
+this observed idle worker, with 7.549525 ms of p95 headroom. The earlier valid
+90.425504 ms failure remains retained and was not rounded into a pass.
+
+The disposable profile again exposed two Intel Xeon CPUs at 3.30 GHz. It used
+Go 1.26.9 linux/amd64, GOMAXPROCS=2 and `-test.cpu=2`, actual Actions identity,
+and `PULSE_STRICT_LOCAL_API_SLOS=true`. No runner profile, benchmark sample
+count, source guard, chart sampling, point limit or threshold changed. The
+fixed test executable's SHA-256 was
+`79b0378999e4a718516f4000f531b26b553a547dbb1a4a8a00444ee133334e01`
+before and after execution.
+
+All ten admission rows, including earlier streak resets, are retained. The
+final six rows established 30.003642559 s of quiet capacity with at least
+99.7998% idle CPU and at most 0.10011% iowait. The seventeen concurrent
+measurement rows had 0–2% background CPU, zero guest and steal time, and no
+swap. Measurement iowait of up to 2% remains included in latency and receipts
+under the existing own-I/O policy. The three after rows had at least
+99.89979% idle CPU, no iowait, guest, steal or swap. No contention was waived
+and no unchanged proof was retried.
+
+The full job log SHA-256 is
+`02fbd543c5d22534ad2ba799fa761118eb0737b17537adc3cd9832105dde3826`.
+All ten textual files were extracted with exact original byte counts and
+SHA-256 verification, with an extraction manifest covering the original log.
+Raw job/run metadata, the complete log, all samples and separate diagnostics
+reside in `pr-3071/private-proof-39227530240` in the SSD task cache and in the
+native task's `ordinal-idle-evidence/private-proof-39227530240` directory.
+The transferred package is independently checksum-verified. The seventeen
+source-CI evidence files also passed native transfer verification. No private
+raw diagnostic artifact was uploaded to Actions.
+
+The separate CPU diagnostic measured 67.760918 ms/op, 18,889,418 B/op and
+340,871 allocations. Its compilation log SHA-256 is
+`faa256f5cfb09213b585b1130055e40b3131dbdecbcb1fe389bd8966a241baa9`.
+CPU and cumulative CPU report hashes are
+`d25f3c63061d01291bae9686ef823ddaef346d8438fc10397b43d73c9d2de8e3` and
+`ca2e5a78401a8ac02bc6f708ae82a53a556fb563cd82a2a0834ab5324a9433aa`.
+These diagnostics followed the strict measurement and do not substitute for
+its p95 result. The executable and raw CPU profile were confined to the
+disposable VM.
+
+The narrow source/query and idle-capacity investigation is complete at this
+scope. Broader L10 remains partial with bounded residual tracking through
+`performance-post-rc-headroom`. This measurement does not close the lane or
+qualify a release.
