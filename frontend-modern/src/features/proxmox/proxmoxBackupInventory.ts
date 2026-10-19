@@ -6,6 +6,19 @@ import type {
   PVEBackupsPayload,
   StorageBackup,
 } from '@/types/api';
+import { apiFetch } from '@/utils/apiClient';
+
+// These are reads of already-collected snapshots, not backup/guest operations.
+// Allow the client's existing two-minute Retry-After delay, but never leave the
+// manual refresh/retry controls blocked by unanswered headers or a partial body.
+export const BACKUP_INVENTORY_READ_TIMEOUT_MS = 150_000;
+
+export class BackupInventoryTimeoutError extends Error {
+  constructor() {
+    super('The inventory read timed out. Missing restore points do not mean no backups exist.');
+    this.name = 'BackupInventoryTimeoutError';
+  }
+}
 
 export class BackupInventoryFormatError extends Error {
   constructor() {
@@ -130,4 +143,54 @@ export async function readBackupInventoryJSON(response: Response): Promise<unkno
   } catch {
     throw new BackupInventoryFormatError();
   }
+}
+
+async function fetchBackupInventory<T>(
+  source: 'pve' | 'pbs',
+  parse: (payload: unknown) => T,
+  signal: AbortSignal,
+): Promise<T> {
+  signal.throwIfAborted();
+  const controller = new AbortController();
+  let cancel!: () => void;
+  let timer!: ReturnType<typeof setTimeout>;
+  const interrupted = new Promise<never>((_resolve, reject) => {
+    cancel = () => {
+      reject(signal.reason);
+      controller.abort();
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    timer = setTimeout(() => {
+      // Settle locally even if the transport ignores abort. Aborting alone
+      // cannot release the query owner or retire an uncooperative late body.
+      reject(new BackupInventoryTimeoutError());
+      controller.abort();
+    }, BACKUP_INVENTORY_READ_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      interrupted,
+      (async () => {
+        const response = await apiFetch(`/api/backups/${source}`, { signal: controller.signal });
+        if (!response.ok) {
+          throw Object.assign(
+            new Error(`Failed to load ${source.toUpperCase()} backups (${response.status})`),
+            { status: response.status },
+          );
+        }
+        return parse(await readBackupInventoryJSON(response));
+      })(),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', cancel);
+  }
+}
+
+export function fetchPVEBackupInventory(signal: AbortSignal): Promise<PVEBackupsPayload> {
+  return fetchBackupInventory('pve', parsePVEBackupInventory, signal);
+}
+
+export function fetchPBSBackupInventory(signal: AbortSignal): Promise<PBSBackupsPayload> {
+  return fetchBackupInventory('pbs', parsePBSBackupInventory, signal);
 }

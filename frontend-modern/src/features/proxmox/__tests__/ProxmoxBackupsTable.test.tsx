@@ -1640,6 +1640,24 @@ describe('independent Proxmox backup inventory reads', () => {
     },
   );
 
+  it('releases both unanswered inventory reads without claiming empty backups or hiding known server health', async () => {
+    vi.useFakeTimers();
+    apiFetchMock.mockImplementation(() => new Promise(() => {}));
+    mountBackupReadState();
+    await vi.advanceTimersByTimeAsync(150_000);
+    expect(screen.getByText('Could not load Proxmox backup inventory')).toBeInTheDocument();
+    expect(screen.getAllByText(/The inventory read timed out/)).toHaveLength(2);
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(serverTable()).toHaveTextContent('pbs-main');
+    expect(serverTable()).toHaveTextContent('40.0%');
+    expect(serverTable()).toHaveTextContent('Unavailable');
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Retry PVE inventory' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeEnabled();
+    expect(sourceCalls('pve')).toHaveLength(1);
+    expect(sourceCalls('pbs')).toHaveLength(1);
+  });
+
   it('retries both failed inventories and allows the first recovered source to render', async () => {
     apiFetchMock.mockResolvedValue(new Response('{}', { status: 500 }));
     mountBackupReadState();

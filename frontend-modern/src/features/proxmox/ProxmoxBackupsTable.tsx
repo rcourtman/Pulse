@@ -12,7 +12,6 @@ import {
   PROXMOX_BACKUPS_QUERY_PARAMS,
   type ProxmoxBackupsView,
 } from '@/routing/resourceLinks';
-import { apiFetch } from '@/utils/apiClient';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import {
   PlatformErrorState,
@@ -73,9 +72,9 @@ import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 import {
   BackupInventoryFormatError,
-  parsePBSBackupInventory,
-  parsePVEBackupInventory,
-  readBackupInventoryJSON,
+  BackupInventoryTimeoutError,
+  fetchPBSBackupInventory,
+  fetchPVEBackupInventory,
 } from './proxmoxBackupInventory';
 
 // One backups surface, two operator views: a chronological recoverable-artifact
@@ -97,26 +96,6 @@ const EMPTY_PBS_BACKUPS: PBSBackupsPayload = { backups: [] };
 const BACKUP_READ_NOTICE_CLASS =
   'rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100';
 
-async function fetchPVEBackups(signal: AbortSignal): Promise<PVEBackupsPayload> {
-  const response = await apiFetch('/api/backups/pve', { signal });
-  if (!response.ok) {
-    throw Object.assign(new Error(`Failed to load PVE backups (${response.status})`), {
-      status: response.status,
-    });
-  }
-  return parsePVEBackupInventory(await readBackupInventoryJSON(response));
-}
-
-async function fetchPBSBackups(signal: AbortSignal): Promise<PBSBackupsPayload> {
-  const response = await apiFetch('/api/backups/pbs', { signal });
-  if (!response.ok) {
-    throw Object.assign(new Error(`Failed to load PBS backups (${response.status})`), {
-      status: response.status,
-    });
-  }
-  return parsePBSBackupInventory(await readBackupInventoryJSON(response));
-}
-
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
   workloads?: readonly Resource[];
@@ -126,12 +105,12 @@ export const ProxmoxBackupsTable: Component<{
   // on org changes/disposal. No new polling or cross-route inventory cache.
   const backups = createNonSuspendingQuery({
     source: () => 'pve',
-    fetcher: (_source, signal) => fetchPVEBackups(signal),
+    fetcher: (_source, signal) => fetchPVEBackupInventory(signal),
     initialValue: EMPTY_PVE_BACKUPS,
   });
   const pbsBackups = createNonSuspendingQuery({
     source: () => 'pbs',
-    fetcher: (_source, signal) => fetchPBSBackups(signal),
+    fetcher: (_source, signal) => fetchPBSBackupInventory(signal),
     initialValue: EMPTY_PBS_BACKUPS,
   });
   const inventorySources = [
@@ -714,6 +693,12 @@ export const ProxmoxBackupsTable: Component<{
                   {' '}
                   The response format is invalid. Missing restore points do not mean no backups
                   exist.
+                </Show>
+                <Show when={query.error() instanceof BackupInventoryTimeoutError}>
+                  {' '}
+                  The inventory read timed out. Missing restore points do not mean no backups exist.
+                  Retry reads Pulse’s collected inventory; it does not start a backup or contact
+                  guests.
                 </Show>
               </span>
               <Show when={query.error()}>

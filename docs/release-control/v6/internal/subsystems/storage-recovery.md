@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### An unanswered backup inventory read releases the manual retry path
+
+PVE and PBS snapshot reads each have one 150-second browser deadline, including
+API-client preparation, the existing bounded Retry-After delay, response headers
+and JSON body. An expired read becomes source-local Unavailable, not an empty
+inventory. Its late answer cannot replace the result of an explicit retry or
+another organisation. Existing failed-source withdrawal and independent inventory,
+server health, filters and protection-posture ownership remain unchanged. Abort
+releases the browser wait; it is not proof of server-side collection cancellation.
+No polling, retry after expiry, backup or guest operation is added. Retry only
+reads Pulse's already-collected snapshot; it does not establish guest recovery.
+
+`ProxmoxBackupsTable.deadline.test.tsx` covers headers/body under one budget,
+uncooperative late answers, isolated retry, source withdrawal, access denial,
+organisation replacement and disposal. `ProxmoxBackupsTable.test.tsx` covers both
+sources timing out without losing separately known PBS health. The source-bound
+`backup-inventory-deadline.cjs` protocol exercises the actual HTTP readers, router,
+table and CSS by desktop keyboard and 320px touch. These are synthetic read/retry
+proofs, not native collection, backup completion, thaw or filesystem liveness.
+
 ### Backup activity belongs to the selected evidence scope
 
 By date applies the same workload search, node, type, backup-location and
