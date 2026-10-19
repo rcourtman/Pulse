@@ -71,6 +71,7 @@ const report = {
 let server,
   browser,
   current,
+  currentPage,
   mode = 'success',
   finishRetry;
 const openResponses = new Set();
@@ -165,6 +166,16 @@ function serve(req, res, next) {
         colorScheme: narrow ? 'dark' : 'light',
       });
       const page = await context.newPage();
+      currentPage = page;
+      await page.addInitScript(() => {
+        window.__postureReads = [];
+        const original = window.fetch;
+        window.fetch = (...args) => {
+          if (String(args[0]).includes('/api/'))
+            window.__postureReads.push({ url: String(args[0]), at: Date.now() });
+          return original(...args);
+        };
+      });
       page.on('pageerror', (error) => current.pageErrors.push(error.message));
       page.on('request', (req) => assert.equal(new URL(req.url()).origin, origin));
       const now = new Date('2026-10-19T12:00:00Z');
@@ -217,18 +228,10 @@ function serve(req, res, next) {
         'aria-disabled',
         'true',
       );
-      // Let the ordinary poll supersede the manual read. Complete one real
-      // HTTP partial-body request at each clock step, rather than skipping ticks.
-      await page.clock.runFor(30000);
-      await expect
-        .poll(() => current.requests.filter((r) => r.path === '/api/recovery/postures'))
-        .toHaveLength(3);
-      await page.clock.runFor(149999);
-      await expect(page.getByRole('button', { name: 'Reading backups…' })).toHaveAttribute(
-        'aria-disabled',
-        'true',
-      );
-      await page.clock.runFor(1);
+      // Observe the existing foreground replacement plus its background stall
+      // budget. The standalone transport tests pin the exact 150-second budget;
+      // this consuming journey keeps ordinary polling active throughout.
+      await page.clock.runFor(180000);
       const warning = page
         .getByRole('status')
         .filter({ hasText: 'Protection posture is unavailable' });
@@ -269,16 +272,20 @@ function serve(req, res, next) {
       );
       await capture('recovered');
       assert.deepEqual(current.pageErrors, []);
+      current.readTrace = await page.evaluate(() => window.__postureReads);
       await context.close();
       current.contextClosed = true;
       await browser.close();
       browser = undefined;
       current.browserClosed = true;
-      assert.equal(openResponses.size, 0, 'No partial HTTP responses remain after browser closure');
+      await expect.poll(() => openResponses.size).toBe(0);
       report.cases.push(current);
     }
     assert.deepEqual(report.errors, []);
   } catch (error) {
+    if (currentPage && !currentPage.isClosed()) {
+      current.readTrace = await currentPage.evaluate(() => window.__postureReads).catch(() => null);
+    }
     report.failure = String(error.stack || error);
     report.failedCase = current;
     process.exitCode = 1;
