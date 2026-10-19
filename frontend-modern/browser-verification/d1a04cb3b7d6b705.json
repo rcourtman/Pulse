@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c424c98c59f0a90f5ec8d1d4f44c574e46d082f1",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "f55a882d2cc7fb471dd877b9b69794bc7aa5ae9674eb5d9298e8ecd756d6fb3c",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "42e727b78b0abff2344ff6a3899ac522206d783756eb4af09a71d298f2aa887e"
+  },
+  "routes": [
+    "Existing guest Overview and physical-disk SMART consumer through /browser-tests/guest-disk-read-recovery.html, the ordinary HTTP API client/resource hook and shipped CSS. No product route added."
+  ],
+  "states": [
+    "Cold stalled headers become unavailable after 20 seconds; no timeout retry loop. Populated success restores the normal expanded SMART consumer.",
+    "A stalled successful/error body withdraws retained SMART evidence and releases one explicit Retry; aborted transports close.",
+    "The first page and parallel pages share one allowance; no incomplete inventory or extended per-page budget. Actual API Retry-After is cancelled without a later request.",
+    "Failed warm-cache revalidation coalesces an explicit Retry. Populated recovery is collapsed, empty success invents no health verdict, and old-organisation settlement cannot replace the current scope."
+  ],
+  "interactions": [
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 desktop keyboard/Enter and WebKit 26.0 320px dark/touch.",
+    "All 18 final captures were opened with native view_image and actual pixels inspected. Provider text is absent; withdrawn SMART charts stop polling; the narrow Retry target is at least 44 by 44 pixels.",
+    "Two completed journeys, no fixture/page errors. The protocol explicitly closes contexts/browsers, held responses and Vite. Client exit printed by shell is 0; enclosing exec returned 143 without an observed cause/initiator. Both facts are retained separately, not represented as whole-command exit 0."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T07:02:09.789939Z",
+  "evidence": {
+    "source_commit": "c424c98c59f0a90f5ec8d1d4f44c574e46d082f1",
+    "source_tree": "86adb1bcc28bc060e42524ddc40dc0c7a5d443ce",
+    "bound_inputs": 3666,
+    "protocol": "frontend-modern/browser-tests/guest-disk-read-recovery.cjs",
+    "protocol_sha256": "d0493845954b449d481013b6a89116f86321d7db80b4687db62e49f3e1eccdae",
+    "raw_result": "BROWSER-RESULT.json in retained Web dossier",
+    "native_pixel_review": "PIXELS.json in retained Web dossier",
+    "execution_observation": "BROWSER-EXECUTION.json in retained Web dossier",
+    "captures": [
+      {
+        "file": "chromium-initial-timeout.png",
+        "sha256": "c0dee6e8f443a0d99896bf1e2f9d37f1e831f238e9648a8c700ca4aa90f54b0d"
+      },
+      {
+        "file": "chromium-recovered-expanded.png",
+        "sha256": "094be6166d9b5660cd5e1b6524a584d9194bf997c359e92b708b11990c86d974"
+      },
+      {
+        "file": "chromium-background-body-timeout.png",
+        "sha256": "8339df88d902772a52152b2d5b15f0136fa1cbcb1572dd43f66773cb9982e0a4"
+      },
+      {
+        "file": "chromium-retry-pending.png",
+        "sha256": "872562b29c6ad7850e9daa1fb78ae67a3e3b730c41b1502d2d7508575e4dbfb3"
+      },
+      {
+        "file": "chromium-retry-timeout.png",
+        "sha256": "c0dee6e8f443a0d99896bf1e2f9d37f1e831f238e9648a8c700ca4aa90f54b0d"
+      },
+      {
+        "file": "chromium-pagination-timeout.png",
+        "sha256": "c0dee6e8f443a0d99896bf1e2f9d37f1e831f238e9648a8c700ca4aa90f54b0d"
+      },
+      {
+        "file": "chromium-rate-limit-timeout.png",
+        "sha256": "c0dee6e8f443a0d99896bf1e2f9d37f1e831f238e9648a8c700ca4aa90f54b0d"
+      },
+      {
+        "file": "chromium-read-recovered.png",
+        "sha256": "89b1209e7451356d3657eec22587d6587ebf486b1a0e9fb5430184dd8ae90406"
+      },
+      {
+        "file": "chromium-organisation-fenced.png",
+        "sha256": "d288790575c7941d6564d02b47d70fae80cc337fdb63ae6a35eb71ebb452676d"
+      },
+      {
+        "file": "webkit-initial-timeout.png",
+        "sha256": "f76a172e396f866e8f3cf7487b6ed7d207f1722e7ca47f8bc0973fb7e39e1b82"
+      },
+      {
+        "file": "webkit-recovered-expanded.png",
+        "sha256": "6b731271299e3355f2905866c6a8ff1c0f5b81a9e94a08010531b60e9a9ee180"
+      },
+      {
+        "file": "webkit-background-body-timeout.png",
+        "sha256": "f76a172e396f866e8f3cf7487b6ed7d207f1722e7ca47f8bc0973fb7e39e1b82"
+      },
+      {
+        "file": "webkit-retry-pending.png",
+        "sha256": "d7af972d6c251e8daee589ccdad62490857cd6df368ee0ff314a5bf50ad27059"
+      },
+      {
+        "file": "webkit-retry-timeout.png",
+        "sha256": "8dd10e4f704b4b2939e0909d10f21facc22839b3a5a094c1ec6d55d4e401dc88"
+      },
+      {
+        "file": "webkit-pagination-timeout.png",
+        "sha256": "8dd10e4f704b4b2939e0909d10f21facc22839b3a5a094c1ec6d55d4e401dc88"
+      },
+      {
+        "file": "webkit-rate-limit-timeout.png",
+        "sha256": "8e71270693681706344bdeac5f948687edc9ded6b6b924d0b2b3ed26fa14dc33"
+      },
+      {
+        "file": "webkit-read-recovered.png",
+        "sha256": "c6025186844d105118c9cf8040299fb7beb358214bd43a2b583d5576d612deca"
+      },
+      {
+        "file": "webkit-organisation-fenced.png",
+        "sha256": "3544aa2ab9955e2ad590eb1b80e3af98dd12ee57b3ec7ca99eb1d3f7e6c0c222"
+      }
+    ]
+  }
+}
