@@ -143,6 +143,8 @@ func TestVzdumpLogBudgetHTTPBacklogRecovery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		switch {
+		case r.URL.Path == "/api2/json/access/permissions":
+			fmt.Fprint(w, `{"data":{"/nodes/node":{"Sys.Audit":1}}}`)
 		case r.URL.Path == "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
 		case r.URL.Path == "/api2/json/nodes/node/tasks":
