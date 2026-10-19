@@ -26,6 +26,8 @@ unmatched rows. Native hostname aliases remain case-insensitive; they do not
 override a known different connection. PBS connection-name hints follow the same
 exact comparison. Both Backups consumers expose the resulting independent
 ownership without changing server posture or adding provider/guest operations.
+Coverage ties have deterministic full-identity order, independent of observation
+order, preserving the focused disclosure through otherwise unchanged refreshes.
 
 ### PBS count disclosure shares its table presentation
 

@@ -413,7 +413,7 @@ export const ProxmoxBackupsTable: Component<{
     });
     const sortKey = coverageSortKey();
     const direction = coverageSortDirection();
-    list.sort((a, b) => {
+    const compare = (a: WorkloadCoverageRow, b: WorkloadCoverageRow) => {
       switch (sortKey) {
         case 'posture':
           return cmpNumber(a.postureRank, b.postureRank, direction);
@@ -424,7 +424,11 @@ export const ProxmoxBackupsTable: Component<{
         case 'task':
           return cmpNumber(a.latestTask?.startedMs, b.latestTask?.startedMs, direction);
       }
-    });
+    };
+    // Equal names/postures/times must not inherit response order. Moving a
+    // focused disclosure's DOM row blurs it even when keyed state survives.
+    // Compare full identity, not the case-folded display-string comparator.
+    list.sort((a, b) => compare(a, b) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     return list;
   });
 

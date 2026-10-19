@@ -224,6 +224,46 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps tied Coverage rows and focused evidence stable when observations reorder', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data:
+            url === '/api/backups/pve'
+              ? { storageBackups: [], guestSnapshots: [], backupTasks: [] }
+              : { backups: [] },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const upper = { ...identityGuest('upper-100', 'East', 'pve-upper'), name: 'database' };
+    const lower = { ...identityGuest('lower-100', 'east', 'pve-lower'), name: 'database' };
+    const [workloads, setWorkloads] = createSignal([upper, lower]);
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+    ));
+    const rows = () =>
+      Array.from(container.querySelectorAll('[data-proxmox-backup-row="coverage"]'));
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const order = rows().map((row) => row.getAttribute('data-proxmox-coverage-key'));
+    const target = container.querySelector('[data-proxmox-coverage-key="resource:upper-100"]')!;
+    const toggle = within(target as HTMLElement).getByRole('button');
+    await fireEvent.click(toggle);
+    toggle.focus();
+    expect(document.activeElement).toBe(toggle);
+    setWorkloads([{ ...lower }, { ...upper }]);
+    await waitFor(() =>
+      expect(rows().map((row) => row.getAttribute('data-proxmox-coverage-key'))).toEqual(order),
+    );
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toHaveTextContent(
+      'Connection: East',
+    );
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps yearly activity keyboard navigation separate from the scoped restore-point filter', async () => {
     mockBackupAPIs();
     apiFetchMock.mockImplementation((url: string) =>
