@@ -7678,9 +7678,11 @@ accessible collected-evidence proof, not native recovery or release availability
 
 ### Coverage keeps the native job identity and recorded interval inspectable
 
-Expanded latest and unorderable job evidence keeps the literal native job ID and
+Expanded latest and unorderable job evidence keeps the literal collected job ID and
 reported end beside its start and original observation time. Latest-job IDs and
-reported start/end strings are searchable locally. Recorded duration requires
+reported start/end strings are searchable locally. The ID is the unchanged API
+identifier, including any Pulse instance prefix or per-guest suffix around a
+parent UPID; it is not presented as an extracted raw Proxmox UPID. Recorded duration requires
 usable, non-future start/end times in order; an equal timestamp is a recorded
 zero-second interval, not an absent reading. Missing, invalid, reversed and
 future end values retain their raw text without a formatted end or invented live

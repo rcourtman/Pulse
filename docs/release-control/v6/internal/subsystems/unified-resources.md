@@ -8911,9 +8911,11 @@ Neither establishes native backup, guest safety or installed fleet recovery.
 
 ### Proxmox Coverage job identity and interval remain source-scoped
 
-The existing expanded Coverage evidence shows the selected native job ID and
+The existing expanded Coverage evidence shows the selected collected job ID and
 reported end/duration; local search includes that selected ID and recorded
-start/end. Unorderable jobs keep their individual raw values without becoming a
+start/end. The unchanged API identifier can contain an instance prefix and a
+per-guest suffix around its parent UPID; no raw-UPID extraction is implied.
+Unorderable jobs keep their individual raw values without becoming a
 latest result. Invalid, missing, future or reversed times cannot produce an
 elapsed duration. Zero-second recorded intervals remain explicit. Original job
 connection/node and observation provenance do not change, and job timing does

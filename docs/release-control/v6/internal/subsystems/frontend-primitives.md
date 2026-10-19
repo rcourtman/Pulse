@@ -10450,7 +10450,9 @@ replacement, native activation, literal text, focus and nested-table retention.
 ### Backup job interval uses existing read-only disclosure primitives
 
 Proxmox Coverage's existing native disclosure and wrapping definition list now
-include the literal job ID, reported end and recorded duration. Timestamp text
+include the literal collected job ID, reported end and recorded duration. The
+identifier stays byte-for-byte as supplied, including any instance/guest scope;
+it is not labelled as an extracted raw Proxmox UPID. Timestamp text
 includes seconds and timezone; invalid values remain escaped plain text, never
 markup or a made-up running timer. The existing platform date/duration formatters
 are reused without changing their contracts. `ProxmoxCoverageTable.taskDetail.test.tsx`
