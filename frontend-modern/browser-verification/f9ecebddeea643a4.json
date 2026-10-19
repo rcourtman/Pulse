@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9043c5f7408ca111f639fa3c82df8d50290470b1",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "909d0e90039954844e3b6dfd94d67f1029f1a0db37915a5c7432e2fbd6cb51da",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "e2e025b1b1b56b4b9a25b4bf41c9314357d3f27c87e0351628d4830325247444"
+  },
+  "routes": [
+    "/proxmox/backups/date (existing production component/API readers/router, offline synthetic HTTP through /browser-tests/backup-inventory.html?view=date&q=backup-guest)"
+  ],
+  "states": [
+    "Exact 150-second PVE/PBS unanswered-header and partial-JSON-body timeout; incomplete inventory is not absent backups.",
+    "Explicit isolated retry restores collected evidence. Timed-out source points withdraw; other-source points and known server health remain.",
+    "403 is access denial, not timeout. Both inventories unavailable keeps PBS identity and usable Refresh.",
+    "Existing 120-second Retry-After completes within the whole-read deadline; no automatic timeout retry or guest/mutation endpoint."
+  ],
+  "interactions": [
+    "Playwright 1.56.1 matches the integration lock. Six actual HTTP reader/table journeys: Chromium 141.0.7390.37 desktop focus/Enter; WebKit 26.0 320px touch.",
+    "Explicit Retry and Refresh preserve the URL search. Four source journeys each cover header/body timeout, subsequent denial/recovery and 429 wait; two both-source journeys cover total inventory unavailability.",
+    "All 14 final captures opened through native view_image, with actual image content presented to the model. Browser/context, held responses and Vite close; client exit 0, no page or fixture errors."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T05:56:07Z",
+  "evidence": {
+    "source_commit": "9043c5f7408ca111f639fa3c82df8d50290470b1",
+    "source_tree": "63ece4b175b0ff33ac74ac2c33e0ad3e68f61132",
+    "protocol": "frontend-modern/browser-tests/backup-inventory-deadline.cjs",
+    "protocol_sha256": "20ed871606fb4be8ceb9d6e56fee25099a93c8b5af370c05a273d2f6a8d0776e",
+    "bound_inputs": 2547,
+    "raw_result": "BROWSER-RESULT.json in the retained Web dossier",
+    "native_pixel_review": "PIXELS.json in the retained Web dossier",
+    "captures": [
+      {
+        "file": "browser/chromium-pve-header-timeout.png",
+        "sha256": "bf3b872b545b6156ea3e6339c6dc963d0605e2c3ab0e0bb1755776a64b7f834e"
+      },
+      {
+        "file": "browser/chromium-pve-body-timeout.png",
+        "sha256": "7c5cd74e74b773363ec22a0043ce910e7c8f924e5384dda1d819c7fb629792b1"
+      },
+      {
+        "file": "browser/chromium-pve-explicit-recovery.png",
+        "sha256": "a8e89d2abb6b8b1a7615e60bb7bac9d38192c56631bbf52415f50fc5e1fb05d9"
+      },
+      {
+        "file": "browser/chromium-pbs-header-timeout.png",
+        "sha256": "d75b36a1964ad74577d61a8cb48fed4e88a680a907087cbb9c0d24e2449a38cf"
+      },
+      {
+        "file": "browser/chromium-pbs-body-timeout.png",
+        "sha256": "d45868305da67e65959823bcdd9ced78f6eaf2da4fae18962cfe0e07f0f81291"
+      },
+      {
+        "file": "browser/chromium-pbs-explicit-recovery.png",
+        "sha256": "a8e89d2abb6b8b1a7615e60bb7bac9d38192c56631bbf52415f50fc5e1fb05d9"
+      },
+      {
+        "file": "browser/chromium-both-unavailable.png",
+        "sha256": "f3f36a7c550b4513716ad5d18b438e2a867f1f1272c930f29039e780d5ee6565"
+      },
+      {
+        "file": "browser/webkit-pve-header-timeout.png",
+        "sha256": "c08c4793491b18bbae34b2906106487330afcdf72f2f596c0c14d3c2c22084a7"
+      },
+      {
+        "file": "browser/webkit-pve-body-timeout.png",
+        "sha256": "e5414def555c1911c61269faeaeee316cfcc2d701f4e330e2944b317a9cb2fb5"
+      },
+      {
+        "file": "browser/webkit-pve-explicit-recovery.png",
+        "sha256": "130630ab3f71b63c8b5b99d91c1035e48a6e3c5f511f41860fa9e813826f69a8"
+      },
+      {
+        "file": "browser/webkit-pbs-header-timeout.png",
+        "sha256": "c74d230bcfdff8a9bb775732d30c0302b1e21bb320a6bcd2551e9eab63d1e097"
+      },
+      {
+        "file": "browser/webkit-pbs-body-timeout.png",
+        "sha256": "4b46c68a87a1688b4a5821aa78526712d13f572ece1fc26d501608cf45550a41"
+      },
+      {
+        "file": "browser/webkit-pbs-explicit-recovery.png",
+        "sha256": "130630ab3f71b63c8b5b99d91c1035e48a6e3c5f511f41860fa9e813826f69a8"
+      },
+      {
+        "file": "browser/webkit-both-unavailable.png",
+        "sha256": "88b251aebc03aed048f7b7429bc3ccb6488e5fbf0cf6b58cfe04c1508b62160b"
+      }
+    ]
+  },
+  "limitations": [
+    "Synthetic consuming-surface proof only, not native collection, restore/thaw, filesystem liveness, protected publication or release.",
+    "Browser abort settles the local wait; it does not prove server collection stopped. Existing read-only API retries remain within the deadline.",
+    "The initial protocol failed its rate-limit timing assertion and cleaned up; 9043c5f740 corrects client-side synchronisation without changing runtime bytes. That failed run and its three inspected captures remain separately retained.",
+    "Broader source VM returned client 2 / proof-capacity-low before execution. No full type/lint/suite/embed/build/budget pass is inferred."
+  ]
+}
