@@ -58,7 +58,7 @@ func TestHandleWorkloadCharts_RetainedBatchTierChanges(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}
-		a, b := response.ChartData[vms[0].ID]["cpu"], response.ChartData[vms[1].ID]["cpu"]
+		a, b := response.ChartData["lab:pve1:101"]["cpu"], response.ChartData["lab:pve1:102"]["cpu"]
 		if len(a) != wantPoints || a[0].Value != 10 || a[len(a)-1].Value != wantTail || len(b) != 20 || b[0].Value != 30 || b[len(b)-1].Value != 49 {
 			t.Fatalf("lost history, tail or attribution: a=%+v b=%+v", a, b)
 		}
