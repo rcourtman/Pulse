@@ -986,7 +986,11 @@ describe('ProxmoxBackupsTable', () => {
         });
       }
       await vi.advanceTimersByTimeAsync(30_000);
-      await screen.findByText(/Protection posture is unavailable/);
+      const unavailable = await screen.findByText(/Protection posture is unavailable/);
+      expect(unavailable).toHaveTextContent('Each read stops waiting after 150 seconds.');
+      expect(unavailable).toHaveTextContent(
+        "Retry reads Pulse's collected evidence, not a guest probe.",
+      );
       expect(coverageRow()).toHaveTextContent('Unknown');
       expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
       expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
