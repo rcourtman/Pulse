@@ -58,12 +58,10 @@ describe('backup-identity: native ownership rather than first label match', () =
       expect(owner('pbs-lower')).toBe('lower-100');
       expect(result.coverageRows).toHaveLength(2);
       expect(
-        result.coverageRows.find((row) => row.workload.resourceId === 'upper-100')?.latestTask
-          ?.id,
+        result.coverageRows.find((row) => row.workload.resourceId === 'upper-100')?.latestTask?.id,
       ).toBe('upper-job');
       expect(
-        result.coverageRows.find((row) => row.workload.resourceId === 'lower-100')?.latestTask
-          ?.id,
+        result.coverageRows.find((row) => row.workload.resourceId === 'lower-100')?.latestTask?.id,
       ).toBe('lower-job');
     },
   );
