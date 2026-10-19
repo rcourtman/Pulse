@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Backup chart controls survive an empty metric
+
+The existing backup activity chart keeps its native metric and range controls
+mounted when the selected value/window has no positive readings. Missing or zero
+reported sizes are qualified unavailable value observations, not proof of no
+completed activity or a zero-byte backup. Count remains reachable by keyboard
+and touch; partial daily volume has the same qualification in accessible names
+and tooltips. Empty windows retain range navigation. Ordinary HTTP replacement
+updates the existing chart without resetting its selected controls. The production
+table/presentation regressions and `backup-activity-volume.cjs` exercise desktop
+and 320px touch CSS/interaction. No route or backup/guest action is introduced.
+
 ### PBS datastore capacity explanations are not hover-only
 
 Unavailable and Unknown capacity cells open the existing full-width resource

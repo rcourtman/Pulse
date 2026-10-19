@@ -8,6 +8,20 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Backup activity without size readings
+
+Run the backup activity presentation and consuming Backups table tests. Build
+`build-coverage-workload-identity.mjs <full-source-SHA>`, then run
+`backup-activity-volume.cjs`. With recent completed PBS, PVE and guest-snapshot
+observations without positive sizes, switch Count to Volume and back using the
+keyboard and 320px touch. The chart must retain its metric/range controls, explain
+unavailable sizes and never claim no activity or a zero-byte backup. Check partial
+daily totals, tooltip/accessibility qualification, native captures and wrapping.
+Refresh to measured, partial and genuinely empty-window observations; retain the
+metric, widen/narrow the range and use/clear the day filter. Running, invalid/future
+and old observations must not inflate unavailable-size activity. Only fixture GETs
+are allowed. This proves collected-data presentation, not backup/guest recovery.
+
 ## PBS datastore capacity access
 
 Build `build-pbs-capacity-details.mjs <full-source-SHA>` and run

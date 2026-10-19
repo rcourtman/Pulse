@@ -72,6 +72,9 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
   const hasSelection = () => props.selectedDateKey() !== null;
   const metricMode = (): BackupActivityMetricMode =>
     props.metricMode?.() ?? props.metricToggle?.mode() ?? 'count';
+  const unmeasuredCount = () =>
+    points().reduce((sum, point) => sum + (point.unmeasuredCount ?? 0), 0);
+  const hasMeasuredActivity = () => points().some((point) => point.total > 0);
 
   const axisTicks = () =>
     getRecoveryTimelineAxisTicks(points().length, false, props.timeline().labelEvery);
@@ -169,11 +172,23 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
         </div>
       </div>
 
+      <Show when={metricMode() === 'volume'}>
+        <p class="mb-2 text-[11px] text-muted" data-backup-volume-evidence>
+          Volume includes reported positive sizes only.
+          <Show when={unmeasuredCount() > 0}>
+            {' '}
+            {unmeasuredCount()} completed restore {unmeasuredCount() === 1 ? 'point' : 'points'} in
+            this window {unmeasuredCount() === 1 ? 'has' : 'have'} no positive size reported.
+          </Show>
+        </p>
+      </Show>
       <Show
-        when={points().length > 0}
+        when={hasMeasuredActivity()}
         fallback={
-          <div class="flex h-24 items-center justify-center text-xs text-muted">
-            No activity in the selected window.
+          <div class="flex min-h-24 items-center justify-center px-2 py-3 text-xs text-muted">
+            {metricMode() === 'volume' && unmeasuredCount() > 0
+              ? 'Completed restore points exist in this window, but no positive sizes were reported. Use Count to view activity.'
+              : `No completed restore-point activity in the selected ${props.range()}-day window.`}
           </div>
         }
       >
@@ -221,6 +236,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               isSelected(),
                               props.noun,
                               metricMode(),
+                              point.unmeasuredCount,
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
                             onClick={() => props.onToggleDay(point.key)}
@@ -325,6 +341,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                           t().point.total,
                           props.noun,
                           metricMode(),
+                          t().point.unmeasuredCount,
                         )}
                       </div>
                     </div>
@@ -341,6 +358,9 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                         t().point,
                         props.segmentKinds,
                         metricMode(),
+                      ).filter(
+                        (row) =>
+                          metricMode() !== 'volume' || !t().point.unmeasuredCount || row.count > 0,
                       )}
                     >
                       {(row) => (

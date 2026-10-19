@@ -535,9 +535,6 @@ export const ProxmoxBackupsTable: Component<{
       },
     ),
   );
-  const hasRecoverableActivityInRange = createMemo(() =>
-    recoverableTimeline().points.some((point) => point.total > 0),
-  );
 
   const filteredRecoverableArtifacts = createMemo(() => {
     const term = search().trim().toLowerCase();
@@ -880,49 +877,21 @@ export const ProxmoxBackupsTable: Component<{
                   unknown. They are excluded from the activity chart and day filters.
                 </p>
               </Show>
-              <Show
-                when={hasRecoverableActivityInRange()}
-                fallback={
-                  <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      No completed restore-point activity in the selected {chartRange()}-day window.
-                    </span>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        onClick={() => setChartRange(90)}
-                      >
-                        Show 90 days
-                      </button>
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        onClick={() => setChartRange(365)}
-                      >
-                        Show 1 year
-                      </button>
-                    </div>
-                  </div>
+              <BackupActivityChart
+                title={
+                  recoverableMetricMode() === 'volume'
+                    ? 'Reported backup volume per day'
+                    : 'Backups per day'
                 }
-              >
-                <BackupActivityChart
-                  title={
-                    recoverableMetricMode() === 'volume'
-                      ? 'Backup volume per day'
-                      : 'Backups per day'
-                  }
-                  noun="backup"
-                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                  range={chartRange}
-                  onRangeChange={setChartRange}
-                  timeline={recoverableTimeline}
-                  selectedDateKey={selectedDateKey}
-                  onToggleDay={toggleDay}
-                  metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
-                />
-              </Show>
+                noun="backup"
+                segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                range={chartRange}
+                onRangeChange={setChartRange}
+                timeline={recoverableTimeline}
+                selectedDateKey={selectedDateKey}
+                onToggleDay={toggleDay}
+                metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+              />
             </Show>
 
             <FilterBar

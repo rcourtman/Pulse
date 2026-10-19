@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Missing backup sizes do not erase activity or its controls
+
+The existing By date chart retains Count, Volume and all range controls even
+when the selected metric/window has no positive values. Completed restore points
+without a positive reported size remain countable activity, not zero-byte backups
+or an empty activity window. Volume includes only reported positive sizes and
+qualifies missing-size observations in its window notice and daily accessible/
+tooltip totals. A day with no usable size is unavailable, not 0 B. Incomplete,
+undated, future and out-of-window entries cannot become missing-size activity.
+Ordinary inventory replacement updates the notice and totals without resetting
+the selected metric/range. This changes no source reads, completion predicate,
+backup/guest operations, protection posture or native recovery verdict.
+
+`ProxmoxBackupsTable.test.tsx` and `proxmoxBackupActivityPresentation.test.ts`
+cover absent/zero sizes, partial daily volume, replacement and empty-window
+navigation. `backup-activity-volume.cjs` consumes the actual HTTP readers/model/
+chart/CSS at desktop and 320px touch widths. These are synthetic presentation
+proofs, not native backup, restore, thaw or installed-recovery acceptance.
+
 ### PBS datastore capacity explanations are not hover-only
 
 Unavailable and Unknown capacity cells open the existing full-width resource
