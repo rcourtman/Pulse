@@ -96,6 +96,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
     captures = [];
   let browser;
   let passed = false;
+  let incompleteContext;
   try {
     for (const [name, engine, width, height] of [
       ['desktop', chromium, 1365, 1000],
@@ -120,6 +121,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         const errors = [],
           offOrigin = [],
           checks = [];
+        incompleteContext = { name, transport, width, height, errors, offOrigin, checks };
         const requestStart = apiRequests.length;
         page.on('pageerror', (error) => errors.push(error.message));
         await page.route('**/*', (route) => {
@@ -207,7 +209,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         assert.equal(
           await warning.getAttribute('aria-expanded'),
           'true',
-          'one activation must open, not double-toggle',
+          'one activation must open the disclosure',
         );
         let region = page.getByRole('region', {
           name: `Datastore capacity for ${serverName} / ${storeName}`,
@@ -366,6 +368,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           binding_sha256: hash(path.join(staticRoot, 'binding.json')),
           clientVersion,
           journeys,
+          incompleteContext: passed ? undefined : incompleteContext,
           captures,
           cleanup: { browserClosed: true, serverClosed: true },
         },

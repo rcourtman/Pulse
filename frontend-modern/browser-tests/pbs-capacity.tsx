@@ -6,6 +6,7 @@ import { Route, Router } from '@solidjs/router';
 import type { Resource, ResourcePBSDatastore } from '../src/types/resource';
 import { canonicalizeRealtimeResource } from '../src/utils/resourceStateAdapters';
 import { ProxmoxBackupsTable } from '../src/features/proxmox/ProxmoxBackupsTable';
+import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import '../src/index.css';
 
 const states = ['Healthy', 'Failure', 'Unknown', 'Offline', 'Zero', 'Full', 'Error', 'No stores'];
@@ -91,9 +92,15 @@ function Fixture() {
 
 render(
   () => (
-    <Router>
-      <Route path="/*" component={Fixture} />
-    </Router>
+    <WebSocketContext.Provider
+      value={{ state: { pmg: [] }, activeAlerts: {}, connected: () => false } as any}
+    >
+      <DarkModeContext.Provider value={() => document.documentElement.classList.contains('dark')}>
+        <Router>
+          <Route path="/*" component={Fixture} />
+        </Router>
+      </DarkModeContext.Provider>
+    </WebSocketContext.Provider>
   ),
   document.getElementById('root')!,
 );
