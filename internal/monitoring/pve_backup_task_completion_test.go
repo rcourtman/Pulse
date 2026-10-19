@@ -113,7 +113,8 @@ func TestPVEFinishedLogRejectionDoesNotPoisonCache(t *testing.T) {
 	}
 	m := &Monitor{state: models.NewState()}
 	m.pollBackupTasks(context.Background(), "proof", client)
-	if got := m.state.GetSnapshot().PVEBackups.BackupTasks; len(got) != 1 || got[0].VMID != 0 || len(m.vzdumpJobTaskCache) != 0 {
+	entry := m.vzdumpJobTaskCache["proof|job"]
+	if got := m.state.GetSnapshot().PVEBackups.BackupTasks; len(got) != 1 || got[0].VMID != 0 || len(entry.tasks) != 0 || entry.final || entry.historyComplete {
 		t.Errorf("incomplete finished log published/cached guest success: %+v", got)
 	}
 	healthy.Store(true)

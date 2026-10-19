@@ -2594,6 +2594,7 @@ type vzdumpJobTaskCacheEntry struct {
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
+	lastAttempt     time.Time // Scheduling only; never renews task ObservedAt.
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
@@ -2604,8 +2605,8 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // synthesizeVzdumpJobGuestTasks expands multi-guest vzdump job runs into one
 // synthetic per-guest task each by parsing the job's task log. Results are
 // cached by instance|UPID; logs of finished jobs are immutable, so those are
-// fetched only once. Running jobs are re-parsed every cycle to pick up guests
-// as the job progresses.
+// fetched only once after complete attribution. Unfinished jobs share the
+// bounded read budget fairly across cycles as their logs progress.
 func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string, prune bool, unreadNodes map[string]bool) []models.BackupTask {
 	if len(jobTasks) == 0 {
 		if prune {
@@ -2616,9 +2617,16 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 
 	now := time.Now().UTC()
 	seen := make(map[string]struct{}, len(jobTasks))
-	var synthesized []models.BackupTask
-	fetches := 0
+	type pendingJob struct {
+		job   models.BackupTask
+		upid  string
+		key   string
+		entry vzdumpJobTaskCacheEntry
+	}
+	jobs := make([]pendingJob, 0, len(jobTasks))
+	var pending []int
 
+	m.mu.RLock()
 	for _, jobTask := range jobTasks {
 		if unreadNodes[jobTask.Node] {
 			continue // Report backfill cannot renew an unread node's live cache.
@@ -2627,57 +2635,62 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		key := instanceName + "|" + upid
 		seen[key] = struct{}{}
 
-		m.mu.RLock()
-		entry, cached := m.vzdumpJobTaskCache[key]
-		m.mu.RUnlock()
-
-		if cached && entry.final {
-			synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
-			continue
+		entry := m.vzdumpJobTaskCache[key]
+		if !entry.final {
+			pending = append(pending, len(jobs))
 		}
+		jobs = append(jobs, pendingJob{job: jobTask, upid: upid, key: key, entry: entry})
+	}
+	m.mu.RUnlock()
 
+	// Provider order is newest-first. Always retrying its first 25 unfinished
+	// logs can permanently hide later guests when those logs remain incomplete
+	// or unreadable. Read never/least-recently attempted jobs first, including
+	// failed requests and reads that consume the remaining context budget.
+	// Keep publication in provider order, independently of this read schedule.
+	sort.SliceStable(pending, func(i, j int) bool {
+		return jobs[pending[i]].entry.lastAttempt.Before(jobs[pending[j]].entry.lastAttempt)
+	})
+	for fetches, index := range pending {
 		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
-			// Serve a stale non-final entry if we have one; the next cycle
-			// will catch up.
-			if cached {
-				synthesized = append(synthesized, entry.tasks...)
-			}
-			continue
+			break
 		}
-		fetches++
-
-		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
+		job := &jobs[index]
+		job.entry.node = job.job.Node
+		job.entry.lastAttempt = time.Now().UTC()
+		logLines, err := client.GetTaskLog(ctx, job.job.Node, job.upid)
 		if err != nil {
 			log.Debug().Err(err).
 				Str("instance", instanceName).
-				Str("upid", upid).
+				Str("upid", job.upid).
 				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
-			if cached {
-				synthesized = append(synthesized, entry.tasks...)
-			}
-			continue
+		} else {
+			// A successful read renews the observation; a failed attempt only
+			// changes scheduling metadata, never the prior guest evidence.
+			guestTasks, attributed := parseVzdumpJobLog(job.job, job.upid, logLines)
+			job.entry.tasks = refreshObservedAt(guestTasks, now)
+			historyComplete := attributed && backupGuestLogComplete(job.job, logLines, guestTasks)
+			job.entry.final = historyComplete
+			job.entry.historyComplete = historyComplete
 		}
-
-		// Store the successful read's receipt in the cache itself, not just in
-		// the published copy. A later failed non-final read must retain this
-		// original time rather than renew it or fall back to a zero timestamp.
-		guestTasks, attributed := parseVzdumpJobLog(jobTask, upid, logLines)
-		guestTasks = refreshObservedAt(guestTasks, now)
-		historyComplete := attributed && backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.applyPVEBackupEffect(ctx, instanceName, func() {
 			m.mu.Lock()
 			if m.vzdumpJobTaskCache == nil {
 				m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
 			}
-			m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
-				node:            jobTask.Node,
-				tasks:           guestTasks,
-				final:           historyComplete,
-				historyComplete: historyComplete,
-			}
+			m.vzdumpJobTaskCache[job.key] = job.entry
 			m.mu.Unlock()
 		})
-		synthesized = append(synthesized, guestTasks...)
+	}
+
+	var synthesized []models.BackupTask
+	for _, job := range jobs {
+		if job.entry.final {
+			synthesized = append(synthesized, refreshObservedAt(job.entry.tasks, now)...)
+		} else {
+			// Failed or deferred reads preserve the original observation time.
+			synthesized = append(synthesized, job.entry.tasks...)
+		}
 	}
 
 	if prune {
