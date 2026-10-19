@@ -1032,7 +1032,7 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 	} else if backupCtx.Err() == nil {
 		log.Warn().
 			Str("instance", instanceName).
-			Msg("Backup task inventory cannot rule out unseen running backups; keeping previous archive observations until task visibility is confirmed. Guest snapshot collection continues.")
+			Msg("Backup tasks cannot safely qualify new archive output; keeping previous archive observations until task visibility and writer scope are confirmed. Guest snapshot collection continues.")
 	}
 
 	backupErr := backupCtx.Err()
@@ -2479,8 +2479,22 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 	}
 	liveIDs := make(map[string]bool, len(tasks))
+	unscopedWriter := false
 	for _, task := range tasks {
 		liveIDs[task.UPID] = true
+		// A scheduled vzdump parent has no guest ID. Its bounded log may be
+		// unavailable, deferred, or only a prefix (even after a guest finishes),
+		// so synthesized guest rows cannot rule out another growing archive.
+		// Retain archives until the live parent ends rather than inventing a
+		// completed restore point or guessing which file it is still writing.
+		// Evaluate the actual live read before history can replace its verdict.
+		if task.Type == "vzdump" && task.EndTime <= 0 {
+			status := strings.ToLower(strings.TrimSpace(task.Status))
+			vmid, err := strconv.Atoi(task.ID)
+			if (status == "" || status == "running") && (err != nil || vmid <= 0) {
+				unscopedWriter = true
+			}
+		}
 	}
 	m.mu.RLock()
 	hasHistoryStore := m.recoveryManager != nil
@@ -2599,7 +2613,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
 		m.persistBackupTaskHistory(ctx, points, collection)
 	})
-	return liveErr == nil && taskVisibilityConfirmed && ctx.Err() == nil
+	return liveErr == nil && taskVisibilityConfirmed && !unscopedWriter && ctx.Err() == nil
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one

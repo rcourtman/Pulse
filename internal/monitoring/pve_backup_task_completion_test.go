@@ -26,6 +26,12 @@ func TestPVEBackupTasksPublishOnlyCompletedEvidence(t *testing.T) {
 		switch r.URL.Path {
 		case "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"},{"node":"pve2","status":"online"}]}`)
+		case "/api2/json/access/permissions":
+			path := r.URL.Query().Get("path")
+			if path != "/nodes/pve1" && path != "/nodes/pve2" {
+				t.Errorf("unexpected permission scope %q", path)
+			}
+			fmt.Fprintf(w, `{"data":{%q:{"Sys.Audit":1}}}`, path)
 		case "/api2/json/nodes/pve1/tasks":
 			fmt.Fprintf(w, `{"data":[{"upid":"single","node":"pve1","type":"vzdump","id":"100","status":"OK","starttime":%d,"endtime":%d}]}`, now-120, now)
 		case "/api2/json/nodes/pve2/tasks":
@@ -93,6 +99,11 @@ func TestPVEFinishedLogRejectionDoesNotPoisonCache(t *testing.T) {
 		switch {
 		case r.URL.Path == "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/access/permissions":
+			if path := r.URL.Query().Get("path"); path != "/nodes/pve1" {
+				t.Errorf("unexpected permission scope %q", path)
+			}
+			fmt.Fprint(w, `{"data":{"/nodes/pve1":{"Sys.Audit":1}}}`)
 		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
 			fmt.Fprint(w, `{"data":[{"upid":"job","node":"pve1","type":"vzdump","status":"OK","starttime":1792028280,"endtime":1792028400}]}`)
 		case strings.HasSuffix(r.URL.Path, "/log"):

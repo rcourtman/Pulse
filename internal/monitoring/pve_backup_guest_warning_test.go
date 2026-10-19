@@ -105,6 +105,9 @@ func testPVEGuestLogProblemSurvivesPollingCacheAndReports(t *testing.T, prefix, 
 		switch {
 		case r.URL.Path == "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/access/permissions":
+			require.Equal(t, "/nodes/pve1", r.URL.Query().Get("path"))
+			fmt.Fprint(w, `{"data":{"/nodes/pve1":{"Sys.Audit":1}}}`)
 		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
 			upid, status, end := "warn-job", "", int64(0)
 			if phase.Load() > 0 {
