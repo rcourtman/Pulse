@@ -48,6 +48,7 @@ func newSteadyStateStore(tb testing.TB, layout string) (*Store, string) {
 		tb.Fatalf("startup maintenance: %v", err)
 	}
 	if layout == "metric-major" {
+		issue1124InstallRowidSchema(tb, store)
 		if _, err := store.db.Exec(`
 			DROP INDEX idx_metrics_query_all;
 			CREATE INDEX idx_metrics_query_all

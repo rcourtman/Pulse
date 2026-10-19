@@ -7458,6 +7458,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pkg/metrics/clustered_layout_test.go",
+              "pkg/metrics/identity_index_test.go",
+              "pkg/metrics/issue1124_write_amplification_test.go",
               "pkg/metrics/store_additional_test.go",
               "pkg/metrics/store_bench_test.go",
               "pkg/metrics/store_docker_observation_contract_test.go",
