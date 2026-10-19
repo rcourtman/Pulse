@@ -160,7 +160,7 @@ const result = {
         return text.replace(/\s+/g, ' ');
       });
       for (const phrase of [
-        'not a complete or permanent native task history',
+        'Neither is a complete or permanent native task history',
         'not a globally unique guest identity',
         'date, seconds and timezone',
         'compare the same instant',

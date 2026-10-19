@@ -39,9 +39,20 @@ function entry(): HTMLElement {
 const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+// Group shortcuts are navigation, not symptom rows. Keep the explicit full
+// workflow matrix below so omitting a symptom's label or destination still fails.
+const workflowRows = (section: HTMLElement): HTMLElement[] =>
+  [...section.querySelectorAll<HTMLElement>('li')].filter(
+    (row) => row.firstElementChild?.tagName === 'STRONG',
+  );
+
 // Name each shipped workflow and its destinations rather than accepting an
 // aggregate row/link count, which cannot detect a missing or misrouted entry.
 const workflowDestinations = [
+  [
+    'Private information was posted:',
+    ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
+  ],
   [
     'Not sure which version is affected:',
     ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
@@ -66,19 +77,19 @@ const workflowDestinations = [
     ['/docs/AUTO_UPDATE#update-failed', '/docs/DOCKER#check-a-failed-or-pending-workload-update'],
   ],
   [
-    'Agent host is missing or reporting is rejected:',
-    [
-      '/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403',
-      '/docs/UNIFIED_AGENT#agent-is-healthy-locally-but-host-reports-are-stale',
-    ],
-  ],
-  [
     'Proxmox or PBS reports a certificate error:',
     ['/docs/TROUBLESHOOTING#proxmox-or-pbs-certificate-validation-failed'],
   ],
   [
     'Copied agent install or removal command failed:',
     ['/docs/UNIFIED_AGENT#copied-agent-command-fails-before-installation'],
+  ],
+  [
+    'Agent host is missing or reporting is rejected:',
+    [
+      '/docs/UNIFIED_AGENT#agent-lookup-returns-http-401-or-403',
+      '/docs/UNIFIED_AGENT#agent-is-healthy-locally-but-host-reports-are-stale',
+    ],
   ],
   [
     'Guest readings are missing or disagree:',
@@ -103,16 +114,24 @@ const workflowDestinations = [
     ],
   ],
   [
-    'A PBS job says Healthy despite an error, warning or running status:',
-    ['/docs/PBS#a-pbs-job-looks-healthy-but-its-status-disagrees'],
-  ],
-  ['Backup rows look duplicated or copies are missing:', ['/docs/PBS#duplicate-backups']],
-  [
     'Mail Gateway Test succeeds but collection fails:',
     [
       '/docs/MAIL_GATEWAY#troubleshooting-without-changing-the-gateway',
       '/docs/MAIL_GATEWAY#cluster-response-or-backup-lookup-errors',
     ],
+  ],
+  [
+    'A PBS job says Healthy despite an error, warning or running status:',
+    ['/docs/PBS#a-pbs-job-looks-healthy-but-its-status-disagrees'],
+  ],
+  [
+    'Backup activity has no volume or the chart and row counts differ:',
+    ['/docs/PBS#backup-activity-has-no-volume-or-fewer-rows-than-expected'],
+  ],
+  ['Backup rows look duplicated or copies are missing:', ['/docs/PBS#duplicate-backups']],
+  [
+    "Coverage's job identity, timing or latest result is unclear:",
+    ['/docs/PBS#read-backup-job-identity-and-timing', '/docs/PBS#latest-backup-job-is-unknown'],
   ],
   [
     'RAID is reported degraded despite a spare:',
@@ -142,10 +161,6 @@ const workflowDestinations = [
     ['/docs/TROUBLESHOOTING#a-usage-alert-stays-open-after-usage-drops'],
   ],
   ['The UI stalled after enabling Debug:', ['/docs/CONFIGURATION#if-debug-makes-the-ui-unusable']],
-  [
-    'Private information was posted:',
-    ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
-  ],
 ] as const;
 
 describe('troubleshooting workflow entry', () => {
@@ -153,9 +168,9 @@ describe('troubleshooting workflow entry', () => {
     const section = entry();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
-    expect(
-      [...section.querySelectorAll('li')].map((row) => prose(row.querySelector('strong')!)),
-    ).toEqual(workflowDestinations.map(([label]) => label));
+    expect(workflowRows(section).map((row) => prose(row.querySelector('strong')!))).toEqual(
+      workflowDestinations.map(([label]) => label),
+    );
     expect(section.querySelector('pre')).toBeNull();
     const beforeList = [...section.children]
       .slice(
@@ -174,7 +189,7 @@ describe('troubleshooting workflow entry', () => {
   it('keeps server updates, workload updates and reporting acceptance distinct', () => {
     const section = entry();
     const row = (label: string) => {
-      const rows = [...section.querySelectorAll('li')].filter((element) =>
+      const rows = workflowRows(section).filter((element) =>
         prose(element.querySelector('strong') as HTMLElement).startsWith(label),
       );
       expect(rows, label).toHaveLength(1);
@@ -211,7 +226,7 @@ describe('troubleshooting workflow entry', () => {
   it('routes every entry to an existing shipped heading in the production viewer', () => {
     const section = entry();
     for (const [label, destinations] of workflowDestinations) {
-      const rows = [...section.querySelectorAll('li')].filter(
+      const rows = workflowRows(section).filter(
         (row) => prose(row.querySelector('strong')!) === label,
       );
       expect(rows, label).toHaveLength(1);
@@ -220,7 +235,20 @@ describe('troubleshooting workflow entry', () => {
         label,
       ).toEqual(destinations);
     }
-    const links = [...section.querySelectorAll('a[href]')];
+    const shortcuts = [...section.querySelectorAll('a[href^="#"]')];
+    expect(shortcuts.map((link) => link.getAttribute('href'))).toEqual([
+      '#sign-in-access-and-updates',
+      '#missing-or-incorrect-readings',
+      '#backups-and-storage',
+      '#notifications-and-performance',
+    ]);
+    for (const shortcut of shortcuts) {
+      const target = renderGuide('TROUBLESHOOTING').querySelector(shortcut.getAttribute('href')!);
+      expect(target?.tagName).toBe('H3');
+    }
+    const links = [...section.querySelectorAll('a[href]')].filter(
+      (link) => !link.getAttribute('href')!.startsWith('#'),
+    );
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/docs/VM_DISK_MONITORING#backup-safety',
       ...workflowDestinations.flatMap(([, destinations]) => [...destinations]),
