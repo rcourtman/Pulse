@@ -109,6 +109,33 @@ def private_server(cert, key, status=200, installer=None, installer_path="/insta
     return server(cert, key, status, installer, installer_path, response=PRIVATE_RESPONSE)
 
 
+class PBSExistingCredentialGuideTest(unittest.TestCase):
+    """Read-only documentation checks; no listener, provisioning or secrets."""
+
+    def test_existing_credentials_are_decided_before_provisioning(self):
+        text = DOC.read_text()
+        before, provision = text.split("### Method 1: API-Only Connection (Recommended)", 1)
+        guidance = " ".join(before.split("### Before changing an existing connection\n", 1)[1].split())
+        for phrase in (
+            "Settings → Infrastructure", "listing an existing token does not recover that secret",
+            "Edit that connection rather than removing and re-adding it",
+            "**Token ID** unchanged", "blank does not clear it",
+            "**API Token → Manual Token Setup**", "Token creation is not needed",
+            "Do not delete or recreate that token", "another reader may still depend on it",
+            "separate, distinctly named, least-privilege `Audit` token",
+            "blank cannot move a saved secret to another ID or a new connection",
+            "Do not switch to **Username & Password** or rerun assisted setup",
+            "replacing a token is not a diagnosis",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guidance)
+        self.assertNotIn("```", guidance, "Existing-token recovery must not execute provisioning")
+        self.assertIn("on a new\nsetup", provision.lower())
+        self.assertIn("[connection checks](#connection-failed-error)", guidance)
+        self.assertIn("[below](#method-1-api-only-connection-recommended)", guidance)
+        self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
+
+
 class PBSDocsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
