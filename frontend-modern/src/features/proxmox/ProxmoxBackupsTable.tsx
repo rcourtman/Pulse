@@ -727,7 +727,7 @@ export const ProxmoxBackupsTable: Component<{
                 <Show when={query.error() instanceof BackupInventoryTimeoutError}>
                   {' '}
                   The inventory read timed out. Missing restore points do not mean no backups exist.
-                  Retry reads Pulse’s collected inventory; it does not start a backup or contact
+                  Retry reads Pulse’s collected inventory. It does not start a backup or contact
                   guests.
                 </Show>
               </span>
