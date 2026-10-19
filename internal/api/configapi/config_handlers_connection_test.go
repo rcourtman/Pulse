@@ -170,7 +170,7 @@ func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
 		"tokenName": cfg.PBSInstances[0].TokenName, "tokenValue": oldToken, "verifySSL": true})
 	manual := httptest.NewRecorder()
 	h.HandleAddNode(manual, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
-	if manual.Code != http.StatusOK || len(cfg.PBSInstances) != 2 || reloads.Load() != 1 {
+	if manual.Code != http.StatusCreated || len(cfg.PBSInstances) != 2 || reloads.Load() != 1 {
 		t.Fatalf("manual saved-token setup failed: status=%d body=%s", manual.Code, manual.Body.String())
 	}
 	added := cfg.PBSInstances[1]
