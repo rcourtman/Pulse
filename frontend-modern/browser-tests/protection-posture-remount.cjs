@@ -229,7 +229,7 @@ function serve(req, res, next) {
           'backup-guest',
         );
         await expect(page.locator('[data-inline-detail-for="resource:ct-112"]')).toContainText(
-          'PBS snapshot',
+          'pbs-main / main / (root)',
         );
       };
       await expectPosture(narrow ? 'Prot.' : 'Protected');
