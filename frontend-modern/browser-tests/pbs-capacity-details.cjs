@@ -315,12 +315,33 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         assert(await summaryToggle.evaluate((node) => document.activeElement === node));
         const focus = await summaryToggle.evaluate((node) => {
           const b = node.getBoundingClientRect();
-          return { width: b.width, height: b.height };
+          const style = getComputedStyle(node);
+          return {
+            width: b.width,
+            height: b.height,
+            display: style.display,
+            visibility: style.visibility,
+            clip: style.clip,
+            clipPath: style.clipPath,
+            opacity: style.opacity,
+            shadow: style.boxShadow,
+          };
         });
+        checks.push({ state: 'close focus returned', focus });
+        // The existing chevron reveals its glyph on focus. Verify visibility,
+        // not an invented minimum size for that glyph; the row is tappable.
         assert(
-          focus.width >= 20 && focus.height >= 20,
+          focus.width > 1 &&
+            focus.height > 1 &&
+            focus.display !== 'none' &&
+            focus.visibility === 'visible' &&
+            focus.clip === 'auto' &&
+            focus.clipPath === 'none' &&
+            Number(focus.opacity) > 0,
           'focus-restored disclosure must be visible',
         );
+        if (!phone) assert(focus.shadow.includes('2px'), 'desktop keyboard focus ring');
+        await capture('focus-return', summaryToggle);
         await activate(summaryToggle);
         await region.getByText(/Used: 95\.0%/).waitFor();
         await update('No stores');
