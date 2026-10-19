@@ -1059,7 +1059,11 @@ describe('ProxmoxBackupsTable', () => {
         <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
       ));
       const coverageRow = () => container.querySelector('[data-proxmox-backup-row="coverage"]')!;
+      const healthFootnote = () => container.querySelector('[data-coverage-strip-footnote]')!;
+      const scopeGuidance =
+        /^Counts cover all targets\. Choose a count to clear other filters and show those targets\.$/;
       await waitFor(() => expect(coverageRow()).toHaveTextContent('Protected'));
+      expect(healthFootnote()).toHaveTextContent('Attention: the newest backup is older than 7 days,');
       fireEvent.click(screen.getByRole('button', { name: /expand.*pbs-docker/i }));
       await screen.findByText('Restore evidence');
       const details = container.querySelector('[data-inline-detail-for="resource:ct-112"]');
@@ -1088,7 +1092,9 @@ describe('ProxmoxBackupsTable', () => {
       expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
       expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
       expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_FAILURE');
-      expect(container.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+      // Static count guidance remains, but no rule may survive the failed
+      // policy read. The complete footnote must contain only that guidance.
+      expect(healthFootnote()).toHaveTextContent(scopeGuidance);
       expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
         '0protected',
       );
@@ -1099,11 +1105,13 @@ describe('ProxmoxBackupsTable', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
       expect(screen.getByRole('button', { name: 'Retrying protection posture…' })).toBeDisabled();
       expect(coverageRow()).toHaveTextContent('Unknown');
+      expect(healthFootnote()).toHaveTextContent(scopeGuidance);
       const retryReads = apiFetchJSONMock.mock.calls.length;
       fireEvent.click(screen.getByRole('button', { name: 'Retrying protection posture…' }));
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(retryReads);
       finishRetry({
         ...validPosture,
+        policy: { ...validPosture.policy, freshnessWindowSeconds: 86_400 },
         data: validPosture.data.map((posture: object) => ({
           ...posture,
           state: 'attention',
@@ -1114,6 +1122,8 @@ describe('ProxmoxBackupsTable', () => {
       expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
       expect(details).toHaveTextContent('The latest provider job needs attention.');
       expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
+      expect(healthFootnote()).toHaveTextContent('Attention: the newest backup is older than 1 day,');
+      expect(healthFootnote()).not.toHaveTextContent('older than 7 days');
       expect(apiFetchMock).toHaveBeenCalledTimes(inventoryReads);
     },
   );
