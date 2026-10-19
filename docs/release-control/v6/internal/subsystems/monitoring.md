@@ -17,6 +17,22 @@
 
 ## Purpose
 
+### Bounded backup-log reads make progress past unfinished jobs
+
+The existing 25-log per-poll budget serves never/least-recently attempted
+multi-guest jobs before retrying others. Failed, empty, ambiguous or running
+logs cannot monopolise every cycle and hide later guests forever in a stable
+backlog. Request order follows private attempt metadata; published tasks retain
+provider order. Failed/deferred reads retain their original guest evidence and
+observation time. Offline scopes, immutable qualified results, connection/runtime
+withdrawal and cache pruning retain their existing boundaries. Attempt metadata
+is not guest evidence, report completeness or a restore artifact.
+
+`pve_backup_log_budget_test.go` covers sustained unfinished logs, reordered
+inventories, child cancellation, scope/retention and ordinary HTTP backlog
+recovery through state/cache and reporting reducers. The provider request cap,
+API shape and QGA/guest operations are unchanged.
+
 ### Per-guest backup success requires matching section markers
 
 A multi-guest vzdump finish must match exactly one active start for that guest.
