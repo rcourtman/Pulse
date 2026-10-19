@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { chromium, webkit, expect } = require('playwright/test');
+const { webkit, expect } = require('playwright/test');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
 const output = path.join(root, 'tmp/posture-read/browser');
@@ -139,10 +139,9 @@ function serve(req, res, next) {
     });
     await server.listen();
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
-    for (const [name, engine, narrow] of [
-      ['chromium', chromium, false],
-      ['webkit', webkit, true],
-    ]) {
+    // The desktop journey completed at 3ef1e8a815 with identical product bytes.
+    // Continue only the unfinished compact/touch consumer.
+    for (const [name, engine, narrow] of [['webkit', webkit, true]]) {
       mode = 'success';
       finishRetry = undefined;
       current = {
@@ -215,7 +214,7 @@ function serve(req, res, next) {
       if (narrow) await page.evaluate(() => document.documentElement.classList.add('dark'));
       const coverage = page.locator('[data-proxmox-backup-row="coverage"]');
       await expect(coverage).toHaveCount(1);
-      await expect(coverage).toContainText('Protected');
+      await expect(coverage).toContainText(narrow ? 'Prot.' : 'Protected');
       const expand = page.getByRole('button', { name: /expand.*east-guest/i });
       if (narrow) await coverage.tap();
       else await activate(expand);
@@ -241,7 +240,7 @@ function serve(req, res, next) {
         "Retry reads Pulse's collected evidence, not a guest probe.",
       );
       await expect(coverage).toContainText('Unknown');
-      await expect(coverage).not.toContainText('Protected');
+      await expect(coverage).not.toContainText(narrow ? 'Prot.' : 'Protected');
       await expect(detail).toContainText('vzdump-qemu-100.vma.zst');
       await expect(
         page.getByRole('button', { name: 'Refresh backups', exact: true }),
@@ -261,7 +260,7 @@ function serve(req, res, next) {
       assert.equal(current.requests.length, before, 'No duplicate pending retry');
       await capture('retrying');
       finishRetry();
-      await expect(coverage).toContainText('Needs attention');
+      await expect(coverage).toContainText(narrow ? 'Attn.' : 'Needs attention');
       await expect(warning).toHaveCount(0);
       await expect(detail).toContainText('A new evaluation needs attention.');
       await expect(detail).toContainText('vzdump-qemu-100.vma.zst');
