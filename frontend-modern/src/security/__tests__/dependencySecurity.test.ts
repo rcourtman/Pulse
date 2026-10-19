@@ -112,20 +112,12 @@ describe('frontend dependency security floors', () => {
   });
 
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
-    // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
-    expect(manifest.devDependencies.vitest).toBe('^4.1.11');
-    expect(manifest.devDependencies['@vitest/coverage-v8']).toBe('^4.1.11');
-    const runner = lockedVersions('vitest');
-    expect(runner).toHaveLength(1);
-    for (const name of ['vitest', '@vitest/mocker', '@vitest/coverage-v8']) {
-      const versions = lockedVersions(name);
-      expect(versions).not.toHaveLength(0);
-      for (const version of versions) {
-        expect(version).not.toContain('-');
-        expect(atLeast(version, [4, 1, 11]), `${name} ${version} is vulnerable`).toBe(true);
-        expect(version, `${name} must match the runner`).toBe(runner[0]);
-      }
-    }
+    const check = fileURLToPath(
+      new URL('../../../../scripts/check-frontend-vitest.mjs', import.meta.url),
+    );
+    expect(execFileSync(process.execPath, [check], { encoding: 'utf8' })).toContain(
+      'reviewed 4.x floors and exact runner/mocker/coverage alignment retained',
+    );
   });
 
   it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {

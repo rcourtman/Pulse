@@ -5833,6 +5833,15 @@ exhaustion (GHSA-2883-xcg3-v3hh) through the locked development graph. The
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proof must
 check manifest floors and all installed lockfile copies, including nested
 copies; a successful production build alone does not establish this property.
+The dependency-free `scripts/check-frontend-vitest.mjs` check also runs before
+ordinary frontend dependency installation. Stable caret floors on reviewed
+Vitest 4.x may advance beyond `4.1.11` without a historical text-pin failure;
+the lock must satisfy both declarations, retain their root-lock copies and
+exactly align every runner/mocker/coverage copy. Broad or malformed ranges,
+prereleases, unreviewed majors, missing packages and mismatched nested copies
+remain failures. `scripts/tests/check-frontend-vitest.test.mjs` exercises those
+admissions and refusals; graph admission is not dependency acquisition, an
+audit pass or consuming application qualification.
 Vitest migration must preserve test assertions while using constructable
 constructor mocks and explicit standalone mock-history cleanup. Dependency
 updates must retain the required full-graph audit rather than suppressing it.

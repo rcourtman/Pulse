@@ -266,6 +266,11 @@ jobs:
           node --test scripts/tests/check-frontend-serialization.test.mjs
           node scripts/check-frontend-serialization.mjs
 
+      - name: Check reviewed Vitest dependency alignment
+        run: |
+          node --test scripts/tests/check-frontend-vitest.test.mjs
+          node scripts/check-frontend-vitest.mjs
+
       - name: Install frontend dependencies
         working-directory: frontend-modern
         # The explicit bounded audit below owns the advisory verdict. Avoid
