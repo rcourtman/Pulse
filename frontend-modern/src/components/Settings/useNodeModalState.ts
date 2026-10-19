@@ -21,6 +21,7 @@ import {
   deriveNameFromHost,
   type NodeModalProps,
 } from './nodeModalModel';
+import { getNodeFingerprintError } from './nodeFingerprintValidation';
 
 type NodeModalTestResult = {
   status: string;
@@ -45,6 +46,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
+  const fingerprintError = createMemo(() => getNodeFingerprintError(formData().fingerprint));
   const [quickSetupBootstrap, setQuickSetupBootstrap] = createSignal<{
     cacheKey: string;
     response: ProxmoxSetupCommandResponse;
@@ -541,6 +543,12 @@ export const useNodeModalState = (props: NodeModalProps) => {
       return;
     }
 
+    const pinError = fingerprintError();
+    if (pinError) {
+      notificationStore.error(pinError);
+      return;
+    }
+
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
     if (!normalizedName) {
       notificationStore.error('Node name is required');
@@ -646,6 +654,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
     if (isTesting() || props.isOpen === false) return;
     const data = formData();
     const scope = connectionTestScope();
+    // A saved-record test does not consume this draft. Do not block it or
+    // send draft inputs alongside saved credentials. An entered-settings
+    // test must not send credentials with an impossible pin.
+    const pinError = scope === 'form' ? fingerprintError() : null;
+    if (pinError) {
+      notificationStore.error(pinError);
+      return;
+    }
     const generation = ++connectionTestGeneration;
     const isCurrent = () => generation === connectionTestGeneration && props.isOpen !== false;
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
@@ -733,6 +749,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   return {
+    fingerprintError,
     agentCommandError,
     agentInstallCommand,
     agentInstallInsecure,

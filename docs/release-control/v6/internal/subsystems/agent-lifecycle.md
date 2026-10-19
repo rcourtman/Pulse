@@ -10285,18 +10285,31 @@ only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
 
-### Connection edit tests retain credentials and use draft TLS (16 October 2026)
+### Connection edit tests separate saved credentials from draft trust
 
-The shared node modal sends its current SSL verification flag and fingerprint
-when testing with retained PVE, PBS or PMG credentials. It uses the saved-node
-probe endpoint so stored secrets do not need to be returned to the browser.
-Testing does not save the edits. Replacing credentials continues to use the
-provided-configuration probe with the edited TLS settings.
+Without a newly entered secret, the shared PVE/PBS/PMG editor tests only the
+saved record. It sends no draft address, account or TLS settings alongside
+retained credentials. A newly entered secret uses the provided-configuration
+test with the draft settings. Testing never saves edits; a saved-record result
+cannot establish that an unsaved pin works.
 
 `useNodeModalState.connectionTest.test.ts` covers retained and replaced credentials,
-edited pins and clearing a pin. `frontend-modern/src/api/__tests__/nodes.test.ts`
+retirement of obsolete evidence and local validation. `frontend-modern/src/api/__tests__/nodes.test.ts`
 is the direct shared transport proof. The existing node setup Settings proof
 routes remain required for the modal surface.
+
+Before save or an entered-settings test, a nonempty certificate pin must contain
+exactly 64 hexadecimal characters after removing colons, matching the existing
+Proxmox TLS client. Case and colon placement are preserved. Spaces, labels,
+truncated/non-hex values and separator-only input remain visible and invalid;
+the editor never trims, clears, replaces a pin or changes verification to make
+it pass. A local field error and native form validation focus the invalid input.
+Empty optional pins retain the existing policy; valid format is not trust.
+Saved-record tests remain usable with a malformed unsaved draft because they
+do not consume it. No new probe, saved-secret transport, setup command, backend
+validation or installed renewal guarantee is introduced. The fingerprint and
+monitoring-section tests and `node-fingerprint-validation.cjs` cover correction,
+preserved settings and desktop/320px keyboard/touch save and test journeys.
 
 The shared footer stacks its action groups on narrow screens and wraps controls
 within each group. Delete, Test, Pause, Cancel and Save must remain visible and
