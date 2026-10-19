@@ -5001,9 +5001,11 @@ build_exec_args_array() {
 
 xml_escape() {
     local value="$1"
-    value="${value//&/&amp;}"
-    value="${value//</&lt;}"
-    value="${value//>/&gt;}"
+    # Bash 5.2's patsub_replacement treats an unescaped & as the match.
+    # Quote it explicitly so both old and new Bash emit literal XML entities.
+    value="${value//&/\&amp;}"
+    value="${value//</\&lt;}"
+    value="${value//>/\&gt;}"
     printf '%s' "$value"
 }
 
@@ -6421,10 +6423,37 @@ shell_export_value() {
     printf '"%s"' "$value"
 }
 
+systemd_environment_value() {
+    local value="$1"
+    local escaped="" character="" code=0 index=0
+    local LC_ALL=C
+
+    # Environment= uses systemd C-style quoting, not shell quoting. In
+    # particular % specifiers expand even inside quotes. Keep each complete
+    # assignment on one physical line and preserve the caller's literal bytes.
+    for ((index = 0; index < ${#value}; index++)); do
+        character="${value:index:1}"
+        case "$character" in
+            \\) escaped+="\\\\" ;;
+            '"') escaped+='\"' ;;
+            '%') escaped+='%%' ;;
+            *)
+                printf -v code '%d' "'$character"
+                if ((code < 32 || code == 127)); then
+                    printf -v character '\\x%02x' "$code"
+                fi
+                escaped+="$character"
+                ;;
+        esac
+    done
+    printf '"%s"' "$escaped"
+}
+
 append_service_env() {
     local env_key="$1"
     local env_val="$2"
     local shell_value=""
+    local systemd_value=""
     local plist_key=""
     local plist_value=""
 
@@ -6433,7 +6462,8 @@ append_service_env() {
     fi
 
     shell_value="$(shell_export_value "$env_val")"
-    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${env_key}=${env_val}\""
+    systemd_value="$(systemd_environment_value "${env_key}=${env_val}")"
+    SYSTEMD_ENV_LINES+=$'\n'"Environment=${systemd_value}"
     SHELL_EXPORT_LINES+=$'\n'"export ${env_key}=${shell_value}"
     UPSTART_ENV_LINES+=$'\n'"env ${env_key}=${env_val}"
     if [[ -n "$SED_EXPORT_LINES" ]]; then

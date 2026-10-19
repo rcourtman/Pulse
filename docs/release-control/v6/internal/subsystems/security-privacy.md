@@ -3760,3 +3760,19 @@ the shell compatibility path gains no claim of descriptor-race safety.
 both ingress consumers, saved recovery and unreadable/symlink/FIFO refusal with
 unchanged private files and no host actions. Native and installed acceptance
 remain separate from these closed source controls.
+
+### Installer service values cannot become systemd directives or XML markup
+
+The agent installer's service accumulator serializes literal values for the
+consumer grammar. systemd assignments quote C-style bytes and escape percent
+specifiers rather than interpolating raw text into `Environment=`. Newlines
+and quotes inside a CA path remain data, not additional environment entries
+or ExecStart directives. Plist XML entities escape ampersands literally even
+when Bash 5.2's `patsub_replacement` is enabled; value text cannot become markup.
+Shell exports retain their existing non-evaluating quoted representation.
+
+`TestInstallSHServiceEnvironmentPreservesLiteralValues` includes actual native
+unit-parser readback, inert directive/shell-substitution controls, XML parsing
+and first-key ownership. No unit is started, no token is read or disclosed and
+no service, TLS, command, profile or credential authority is widened. Native
+service execution and customer recovery remain separate acceptance.

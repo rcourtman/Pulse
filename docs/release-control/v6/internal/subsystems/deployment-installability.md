@@ -9194,3 +9194,20 @@ The complete-parser text/JSON and valid-value controls are
 `TestInstallSHValueArgumentsPreserveExplicitValues` in
 `scripts/installtests/install_sh_test.go`. They do not qualify an installed
 upgrade, rollback or removal, and do not replace native platform checks.
+
+### Agent CA paths are data in generated service configuration
+
+A custom CA path must reach `SSL_CERT_FILE` byte-for-byte in the generated
+systemd environment, even when it contains quotes, backslashes, percent
+specifiers, whitespace or line breaks. Each assignment occupies one physical
+unit-file line; an embedded value cannot replace ExecStart. A successful
+`systemd-analyze verify` exit is insufficient: it may silently accept a changed
+path or ignore an assignment. Verification reads back the exact effective
+value and unchanged command and hardening from the native parser.
+
+`scripts/installtests/agent_systemd_environment.py`, registered by
+`TestInstallSHServiceEnvironmentPreservesLiteralValues`, also checks literal
+plist environment/argument data and the existing shell-export, Upstart-text
+and sed-text outputs. It does not start/reload/install units, exercise Upstart
+or launchd, or qualify installed certificate/registration recovery. No TLS
+bypass, new dependency graph or credential/identity replacement is introduced.
