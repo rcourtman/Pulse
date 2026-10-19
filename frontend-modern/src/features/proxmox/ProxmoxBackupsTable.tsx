@@ -515,10 +515,31 @@ export const ProxmoxBackupsTable: Component<{
     'snapshot',
   ];
 
+  // The chart and list describe the same target/repository scope. A selected
+  // day narrows only the list, so the rest of the timeline remains navigable.
+  const scopedRecoverableArtifacts = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = recoverableFilter();
+    return recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (!nodeMatches(artifact.workload.node)) return false;
+      if (!typeMatches(artifact.workload.type)) return false;
+      if (!locationMatches(artifact)) return false;
+      if (
+        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
+        artifact.sourceKind !== filter
+      ) {
+        return false;
+      }
+      if (filter === 'verified' && artifact.verified !== true) return false;
+      if (filter === 'unverified' && artifact.verified !== false) return false;
+      return recoverableArtifactMatchesSearch(artifact, term);
+    });
+  });
+
   const recoverableTimeline = createMemo(() =>
     buildBackupActivityTimeline<RecoverableArtifact>(
       chartRange(),
-      recoveryModel().recoverableArtifacts.filter(isCompletedRecoveryArtifact),
+      scopedRecoverableArtifacts().filter(isCompletedRecoveryArtifact),
       (artifact) => artifact.createdMs,
       (artifact) =>
         artifact.sourceKind === 'pbs'
@@ -537,30 +558,13 @@ export const ProxmoxBackupsTable: Component<{
   );
 
   const filteredRecoverableArtifacts = createMemo(() => {
-    const term = search().trim().toLowerCase();
-    const filter = recoverableFilter();
     const dateKey = selectedDateKey();
-    const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
-      if (!nodeMatches(artifact.workload.node)) return false;
-      if (!typeMatches(artifact.workload.type)) return false;
-      if (!locationMatches(artifact)) return false;
-      if (
-        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
-        artifact.sourceKind !== filter
-      ) {
-        return false;
-      }
-      if (filter === 'verified' && artifact.verified !== true) return false;
-      if (filter === 'unverified' && artifact.verified !== false) return false;
-      if (
-        dateKey &&
-        (artifact.createdMs === undefined ||
-          recoveryDateKeyFromTimestamp(artifact.createdMs) !== dateKey)
-      ) {
-        return false;
-      }
-      return recoverableArtifactMatchesSearch(artifact, term);
-    });
+    const list = scopedRecoverableArtifacts().filter(
+      (artifact) =>
+        !dateKey ||
+        (artifact.createdMs !== undefined &&
+          recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey),
+    );
     const sortKey = recoverableSortKey();
     const direction = recoverableSortDirection();
     list.sort((a, b) => {
@@ -867,8 +871,12 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
 
             <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
+              <p class="text-xs text-muted" data-backup-activity-scope>
+                Activity uses the filters below. Selecting a day filters the list without narrowing
+                the chart.
+              </p>
               <Show
-                when={recoveryModel().recoverableArtifacts.some(
+                when={scopedRecoverableArtifacts().some(
                   (artifact) => artifact.createdMs === undefined,
                 )}
               >

@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Backup activity belongs to the selected evidence scope
+
+By date applies the same workload search, node, type, backup-location and
+source/verification filters to the activity timeline and artifact list. The
+unknown-date notice also belongs to that scope, rather than unrelated targets.
+Count, reported Volume and missing-size totals continue to exclude incomplete,
+undated, future and out-of-window records. Selecting a day filters only the list:
+it must not collapse the timeline and strand navigation to another day. The
+scope is re-evaluated on ordinary inventory replacement without resetting
+filters, range or metric, or adding another read. Fleet-wide backup health and
+protection assessments are unchanged. This is collected-evidence attribution,
+not native backup, restore, thaw or filesystem-liveness proof.
+
+`ProxmoxBackupsTable.activityScope.test.tsx` and `backup-activity-scope.cjs`
+exercise two targets, multiple repositories, all existing scope facets,
+verification/completion boundaries, empty scopes, day navigation, live filtering,
+missing sizes, refresh and clear through the production chart/list consumers.
+
 ### Missing backup sizes do not erase activity or its controls
 
 The existing By date chart retains Count, Volume and all range controls even
