@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup chart and list share non-day filter ownership
+
+`ProxmoxBackupsTable` derives one non-day artifact scope for the existing By date
+chart, list and unknown-date notice. Sorting and day selection operate on a copy
+for the list and cannot change the timeline's source collection. The visible
+scope explanation states the day exception. Empty filtered scopes retain metric
+and range controls. Reactive search, saved URLs and ordinary refresh must update
+both consumers without another fetch or a new route. Desktop keyboard and 320px
+touch browser proof checks scoped counts, reported sizes, day selection, clear,
+and wrapping with the shipped chart/table/CSS; protection summaries stay global.
+
 ### Backup chart controls survive an empty metric
 
 The existing backup activity chart keeps its native metric and range controls

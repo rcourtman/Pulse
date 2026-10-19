@@ -1462,6 +1462,21 @@ as verification progresses:
   completion, guest thaw, filesystem writes or installed recovery acceptance.
 
 
+### Backup activity scope integrity
+
+- `ProxmoxBackupsTable.activityScope.test.tsx` must bind chart counts/volumes,
+  missing-size totals and unknown-date notices to the list's non-day filters.
+  Cover workload search, node/type, source/verification, repository, combined and
+  empty scopes with independent targets. Day selection must narrow the list
+  without discarding other timeline days; sorting cannot mutate shared scope.
+- `backup-activity-scope.cjs` must exercise the real HTTP inventory readers,
+  model, chart/list and CSS at desktop and 320px. Check saved filter hydration,
+  live search, keyboard/touch day selection and clear, metric/range selection,
+  ordinary replacement and no extra read caused by filtering. Inspect actual
+  pixels for full-fleet, scoped-repository, scoped-volume and empty-scope states.
+- These synthetic consumer checks do not establish backup success, independent
+  thaw, filesystem liveness, installed recovery or release availability.
+
 ### Accessible backup artifact state evidence
 
 - `proxmoxBackupsTableShared.test.tsx` must disclose verified, unverified,
