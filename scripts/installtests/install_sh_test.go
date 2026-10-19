@@ -2777,6 +2777,7 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 ` + extractInstallShellFunction(t, "xml_escape") + `
 ` + extractInstallShellFunction(t, "service_env_has_key") + `
 ` + extractInstallShellFunction(t, "shell_export_value") + `
+` + extractInstallShellFunction(t, "systemd_environment_value") + `
 ` + extractInstallShellFunction(t, "append_service_env") + `
 ` + extractInstallShellFunction(t, "finalize_plist_env_block") + `
 		append_service_env "DOCKER_HOST" "unix:///run/user/1000/docker.sock"
@@ -2814,6 +2815,19 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 	if strings.Contains(got, "unix:///run/user/2000/docker.sock") {
 		t.Fatalf("service env accumulator did not ignore duplicate key:\n%s", got)
 	}
+}
+
+func TestInstallSHServiceEnvironmentPreservesLiteralValues(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("systemd's native unit parser is Linux-specific")
+	}
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_environment.py"), "AgentSystemdEnvironment", []string{
+		"test_literal_ca_paths_survive_the_native_parser",
+		"test_embedded_directives_remain_one_environment_value",
+		"test_multiple_values_and_first_key_ownership_are_preserved",
+		"test_other_service_formats_keep_their_literal_contract",
+		"test_plist_metacharacters_remain_literal_across_bash_replacement_modes",
+	}, 30*time.Second)
 }
 
 // TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket pins the fix

@@ -10484,3 +10484,20 @@ credentials are unchanged; no enrolment, removal or lifecycle operation is
 issued. The existing manual-token path can use a known saved secret.
 `TestHandleAddNodePBSTokenCollisionPreservesConfig` covers configuration,
 persistence, reload exclusion and subsequent manual-token setup.
+
+### Literal installer values survive service serialization
+
+The Unix agent service environment retains each complete caller value across
+serialization. systemd `Environment=` uses its own C-style quoting, including
+literal percent signs rather than specifier expansion; quotes, backslashes and
+control bytes cannot change the assignment or introduce another directive.
+The existing first-key-wins accumulator and profile/credential precedence stay
+unchanged. Launchd environment and ProgramArguments XML escape metacharacters
+literally with either Bash replacement behaviour, including Bash 5.2.
+
+`TestInstallSHServiceEnvironmentPreservesLiteralValues` runs the actual
+accumulator/unit renderer through `systemd-analyze verify` and checks its
+effective environment and command, not its exit alone. It also consumes the
+actual XML producers with a plist parser and checks shell-export round trips.
+These are disposable parser proofs, not a running systemd/launchd agent,
+installed TLS recovery or a change to the saved-state/transport contract.
