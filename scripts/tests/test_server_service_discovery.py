@@ -579,7 +579,9 @@ sys.exit(1 if mode == "failed" else 0)
         self.assertGreaterEqual(len(reads), 10)
         for line in reads:
             with self.subTest(command=line):
-                self.assertIn("timeout -k 1 5 systemctl ", line)
+                self.assertTrue("timeout -k 1 5 systemctl " in line or
+                                'timeout -k 1 "$probe_seconds" systemctl is-active --quiet "$service_name"' in line,
+                                line)
 
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
     def test_real_systemctl_on_a_host_without_pulse_units_selects_the_default(self):

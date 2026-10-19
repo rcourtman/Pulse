@@ -790,6 +790,34 @@ manager timeout on the same backstop. Startup and update-resilience fixtures
 retain successful/failed activation and prior-active semantics with the exact
 timeout argument frame; no host service or trusted release is exercised.
 
+### Server startup polls share a wall-clock budget
+
+The root installer and unattended helper count manager execution as well as
+polling sleeps against each existing startup wait (normally twenty seconds).
+Each read gets at most five seconds and never more than the remaining wait,
+with the unchanged one-second kill backstop. No new read starts after the
+budget expires, and a late successful response cannot establish timely startup.
+This bounds a wait, not the complete install/update transaction. The installer
+keeps its one existing prior-active start retry and confirmed-start completion.
+
+Unattended reads retain their complete property-tuple admission. A failed,
+truncated, timed-out or late read keeps the uncertainty result (2), rather than
+becoming settled-inactive rollback consent (1). Prior activity, executable
+verification, signature checks, retained backup and recovery rules are unchanged.
+
+`TestServerStartupWaitSharesOneWallClockBudget` requires the real-clock
+`ServiceStartDeadline` controls in `test_server_installer_start.py` for both
+producers: slow inactive reads, finite TERM-resistant reads, exact custom-unit
+immediate/delayed activation, plausible failed active output and a zero budget.
+Each private manager's process state is read back after termination. The
+connected `UpdateServiceState` deadline control also requires the completed
+new install and original backup to survive uncertainty with no restart,
+rollback, running-executable assertion or success message. Existing
+startup and updater transaction controls use a virtual polling clock instead
+of real sleeps; they do not substitute for these real deadline controls. None
+of these fixtures establishes native/systemd or published-binary recovery,
+explains #2785's original stop, or clears the stopped guest investigations.
+
 ### Unattended restoration requires observed service state
 
 Before backup, download, installer invocation or restart-trap setup, the

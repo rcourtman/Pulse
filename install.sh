@@ -5208,17 +5208,23 @@ ensure_systemd_service_installed() {
 # (#1323: on unprivileged LXC the installer's restart can silently fail).
 PULSE_WAS_ACTIVE="false"
 
-# Poll until the service is active, up to timeout_seconds (default 20).
+# One wall-clock budget includes manager reads AND polling sleeps. A stalled
+# final read gets only the remaining budget, plus the one-second kill backstop.
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    local elapsed=0
-    while (( elapsed < timeout_seconds )); do
-        if timeout -k 1 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 1
+    local deadline=$((SECONDS + timeout_seconds)) remaining=0 probe_seconds=0
+    while (( (remaining = deadline - SECONDS) > 0 )); do
+        probe_seconds=$remaining
+        (( probe_seconds <= 5 )) || probe_seconds=5
+        if timeout -k 1 "$probe_seconds" systemctl is-active --quiet "$service_name" 2>/dev/null; then
+            # A late answer is not completion within the startup budget.
+            (( SECONDS < deadline )) || return 1
             return 0
         fi
+        (( SECONDS < deadline )) || break
         sleep 1
-        ((elapsed += 1))
     done
     return 1
 }
