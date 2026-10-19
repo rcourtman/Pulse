@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup chart and list share non-day filter ownership
+
+`ProxmoxBackupsTable` derives one non-day artifact scope for the existing By date
+chart, list and unknown-date notice. Sorting and day selection operate on a copy
+for the list and cannot change the timeline's source collection. The visible
+scope explanation states the day exception. Empty filtered scopes retain metric
+and range controls. Reactive search, saved URLs and ordinary refresh must update
+both consumers without another fetch or a new route. Desktop keyboard and 320px
+touch browser proof checks scoped counts, reported sizes, day selection, clear,
+and wrapping with the shipped chart/table/CSS; protection summaries stay global.
+
 ### Backup chart controls survive an empty metric
 
 The existing backup activity chart keeps its native metric and range controls
@@ -10422,3 +10433,16 @@ remain literal; a successful status with a separate error stays Unknown.
 `ProxmoxCoverageTable.taskDetail.test.tsx` and `backup-failure-status.cjs` cover
 full status visibility, narrow wrapping, keyboard/touch refresh and stale-error
 withdrawal. No shared primitive, mutation control or provider operation is added.
+
+
+### Backup artifact evidence reuses the shared modal boundary
+
+`ArtifactStateBadge` keeps MetadataBadge tones and adds one labelled native
+read-only disclosure per mounted artifact in By date and expanded Coverage.
+The shared Dialog owns focus containment, Escape/backdrop dismissal, background
+inertness and scroll locking; the trigger restores focus without activating an
+enclosing row. The phone target is at least 44px tall and the modal's complete
+provider identifiers wrap inside its scrollable body, not the narrow state cell.
+There is no new route, mutation, inventory fetch or global listener while closed.
+Unit and desktop/320px browser checks cover state/prune separation, live
+replacement, native activation, literal text, focus and nested-table retention.

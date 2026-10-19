@@ -1460,3 +1460,33 @@ as verification progresses:
   boundary. No recurring full-inventory polling or guest command is introduced.
 - This is presentation/read recovery, not native inventory freshness, backup
   completion, guest thaw, filesystem writes or installed recovery acceptance.
+
+
+### Backup activity scope integrity
+
+- `ProxmoxBackupsTable.activityScope.test.tsx` must bind chart counts/volumes,
+  missing-size totals and unknown-date notices to the list's non-day filters.
+  Cover workload search, node/type, source/verification, repository, combined and
+  empty scopes with independent targets. Day selection must narrow the list
+  without discarding other timeline days; sorting cannot mutate shared scope.
+- `backup-activity-scope.cjs` must exercise the real HTTP inventory readers,
+  model, chart/list and CSS at desktop and 320px. Check saved filter hydration,
+  live search, keyboard/touch day selection and clear, metric/range selection,
+  ordinary replacement and no extra read caused by filtering. Inspect actual
+  pixels for full-fleet, scoped-repository, scoped-volume and empty-scope states.
+- These synthetic consumer checks do not establish backup success, independent
+  thaw, filesystem liveness, installed recovery or release availability.
+
+### Accessible backup artifact state evidence
+
+- `proxmoxBackupsTableShared.test.tsx` must disclose verified, unverified,
+  unknown, running, failed, file and snapshot explanations, retain precedence
+  over contradictory flags, separate prune protection, withdraw replaced text
+  and isolate adjacent records and enclosing row actions.
+- `backup-artifact-evidence.cjs` must consume PVE/PBS inventory through the real
+  reader/model and both By date and expanded Coverage. At desktop and 320px,
+  inspect the collapsed affordance and disclosed evidence; verify keyboard/touch
+  activation, focus return/containment, complete wrapping, literal provider
+  text, ordinary replacement and no new request when disclosing evidence.
+- These checks establish access to collected evidence, not a successful restore,
+  guest responsiveness, thaw, installed recovery or published availability.

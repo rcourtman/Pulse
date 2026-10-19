@@ -160,11 +160,13 @@ class DependabotConfigTest(unittest.TestCase):
                 "lucide-solid",
                 "vitest",
                 "@vitest/coverage-v8",
+                "jsdom",
+                "vite",
             },
         )
         for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
             self.assertEqual(ignored[browser_runtime], all_semver)
-        # These majors require an explicit toolchain or icon-import migration.
+        # These majors require an explicit toolchain, DOM or import migration.
         # Minor and patch version updates must remain eligible for Dependabot.
         for dependency in (
             "typescript",
@@ -173,6 +175,8 @@ class DependabotConfigTest(unittest.TestCase):
             "lucide-solid",
             "vitest",
             "@vitest/coverage-v8",
+            "jsdom",
+            "vite",
         ):
             self.assertEqual(
                 ignored[dependency],

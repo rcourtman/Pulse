@@ -17,6 +17,21 @@
 
 ## Purpose
 
+### Per-guest backup success requires matching section markers
+
+A multi-guest vzdump finish must match exactly one active start for that guest.
+Missing, repeated, reversed or overlapping markers cannot invent guest success,
+erase an explicit failure, or seal an immutable log cache. Affected results use
+existing Unknown/detail fields; well-formed siblings retain their own outcomes.
+An ordinary corrected read replaces the uncertain result and may qualify the
+finished-job cache. Failed reads retain the original observation time. Reports
+keep ambiguous attribution partial and do not advance that guest's last-success.
+No task result creates a restore artifact or proves guest/filesystem recovery.
+
+`pve_backup_log_attribution_test.go` exercises marker ordering, failure precedence,
+HTTP polling, cache/read failure, corrected reads and reporting consumers. This
+changes no provider request budget, QGA admission, guest operation or API shape.
+
 ### Backup inventory readers do not clone unrelated estate state
 
 PVE archive collection reads running tasks and held archives together through
@@ -4774,6 +4789,20 @@ named and default organizations. The custom event envelope stays unchanged.
     `internal/monitoring/monitor_alert_intent_test.go`, and
     `TestClusterClient_GetTaskLog` in
     `pkg/proxmox/cluster_client_api_test.go`.
+
+    A guest-scoped `ERROR:` line without the explicit `Backup of VM ...
+    failed` verdict must not become clean success on `Finished Backup`.
+    Keep that guest running until completion; then publish `warning` with
+    a fixed logged-error summary, not the private log text. This does not
+    establish a failed archive or guest recovery. An explicit guest failure
+    retains precedence; job-wide/quoted errors and clean sibling guests
+    remain independent. The next clean job replaces the warning normally.
+    `TestVzdumpGuestWarningsDoNotBecomeSuccess`,
+    `TestVzdumpGuestWarningScopeAndFailurePrecedence`, and
+    `TestPVEGuestLogErrorSurvivesPollingCacheAndReports` in
+    `internal/monitoring/pve_backup_guest_warning_test.go` cover parsing,
+    real read-only HTTP polling, immutable cache, live inventory and report
+    counts/last-success without operating a guest or backup.
 
 14. A TrueNAS app container reported as `EXITED` is a completed workload and
     must raise no incident. TrueNAS classifies container exits before Pulse

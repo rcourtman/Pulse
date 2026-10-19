@@ -26,6 +26,7 @@ func TestVzdumpGuestWarningsDoNotBecomeSuccess(t *testing.T) {
 	}{
 		{"warn", "WARN: synthetic-private-guest-detail"},
 		{"warning", "WARNING: synthetic-private-guest-detail"},
+		{"logged-error", "ERROR: synthetic-private-guest-detail"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, finished := range []bool{false, true} {
@@ -35,7 +36,7 @@ func TestVzdumpGuestWarningsDoNotBecomeSuccess(t *testing.T) {
 					job.EndTime = start.Add(2 * time.Minute)
 					lines = append(lines, "INFO: Finished Backup of VM 100 (00:01:00)", "INFO: Starting Backup of VM 200 (lxc)", "INFO: Finished Backup of VM 200 (00:01:00)", "TASK WARNINGS: 1")
 				}
-				tasks := parseVzdumpJobLog(job, "job", testLogLines(lines...))
+				tasks, _ := parseVzdumpJobLog(job, "job", testLogLines(lines...))
 				if !finished {
 					require.Len(t, tasks, 1)
 					require.Equal(t, "running", tasks[0].Status, "a warning cannot finish a running guest backup")
@@ -65,9 +66,16 @@ func TestVzdumpGuestWarningScopeAndFailurePrecedence(t *testing.T) {
 		{"failure-after-warning", "error", "fixture storage unavailable", []string{"INFO: Starting Backup of VM 100 (qemu)", "WARN: log detail", "ERROR: Backup of VM 100 failed - fixture storage unavailable", "TASK ERROR: job errors"}},
 		{"warning-after-failure", "error", "fixture storage unavailable", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: Backup of VM 100 failed - fixture storage unavailable", "WARN: log detail", "TASK ERROR: job errors"}},
 		{"unfinished-with-warning", "error", "backup job ended before guest backup completed", []string{"INFO: Starting Backup of VM 100 (qemu)", "WARN: log detail", "TASK WARNINGS: 1"}},
+		{"outside-section-errors", "OK", "", []string{"ERROR: job-level error", "INFO: Starting Backup of VM 100 (qemu)", "INFO: Finished Backup of VM 100 (00:01:00)", "ERROR: job-level error", "TASK ERROR: job errors"}},
+		{"quoted-error", "OK", "", []string{"INFO: Starting Backup of VM 100 (qemu)", "INFO: guest name is ERROR: text", "INFO: Finished Backup of VM 100 (00:01:00)", "TASK OK"}},
+		{"logged-error-then-warning", "warning", "Backup completed with logged errors; review the original Proxmox task log.", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: private detail", "WARN: private detail", "INFO: Finished Backup of VM 100 (00:01:00)", "TASK OK"}},
+		{"warning-then-logged-error", "warning", "Backup completed with logged errors; review the original Proxmox task log.", []string{"INFO: Starting Backup of VM 100 (qemu)", "WARN: private detail", "ERROR: private detail", "INFO: Finished Backup of VM 100 (00:01:00)", "TASK OK"}},
+		{"failure-after-logged-error", "error", "fixture storage unavailable", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: private detail", "ERROR: Backup of VM 100 failed - fixture storage unavailable", "INFO: Finished Backup of VM 100 (00:01:00)", "TASK ERROR: job errors"}},
+		{"logged-error-after-failure", "error", "fixture storage unavailable", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: Backup of VM 100 failed - fixture storage unavailable", "ERROR: private detail", "INFO: Finished Backup of VM 100 (00:01:00)", "TASK ERROR: job errors"}},
+		{"unfinished-with-logged-error", "error", "backup job ended before guest backup completed", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: private detail", "TASK ERROR: job errors"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tasks := parseVzdumpJobLog(job, "job", testLogLines(tc.lines...))
+			tasks, _ := parseVzdumpJobLog(job, "job", testLogLines(tc.lines...))
 			require.Len(t, tasks, 1)
 			require.Equal(t, tc.status, tasks[0].Status)
 			require.Equal(t, tc.detail, tasks[0].Error)
@@ -79,6 +87,15 @@ func TestVzdumpGuestWarningScopeAndFailurePrecedence(t *testing.T) {
 // payload and existing recovery/report reducers. No guest/QGA, backup operation,
 // database, native host or installed recovery is exercised.
 func TestPVEGuestWarningSurvivesPollingCacheAndReports(t *testing.T) {
+	testPVEGuestLogProblemSurvivesPollingCacheAndReports(t, "WARN:", "Backup completed with warnings; review the original Proxmox task log.")
+}
+
+func TestPVEGuestLogErrorSurvivesPollingCacheAndReports(t *testing.T) {
+	testPVEGuestLogProblemSurvivesPollingCacheAndReports(t, "ERROR:", "Backup completed with logged errors; review the original Proxmox task log.")
+}
+
+func testPVEGuestLogProblemSurvivesPollingCacheAndReports(t *testing.T, prefix, detail string) {
+	t.Helper()
 	var phase, logReads atomic.Int32
 	start := time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +118,7 @@ func TestPVEGuestWarningSurvivesPollingCacheAndReports(t *testing.T) {
 			logReads.Add(1)
 			lines := []string{"WARN: job-wide warning is not a guest result", "INFO: Starting Backup of VM 100 (qemu)"}
 			if phase.Load() < 3 {
-				lines = append(lines, "WARN: synthetic-private-guest-detail /path <img src=unexpected>")
+				lines = append(lines, prefix+" synthetic-private-guest-detail /path <img src=unexpected>")
 			}
 			if phase.Load() > 0 {
 				lines = append(lines, "INFO: Finished Backup of VM 100 (00:01:00)", "INFO: Starting Backup of VM 200 (lxc)", "INFO: Finished Backup of VM 200 (00:01:00)", "TASK OK")
@@ -143,6 +160,11 @@ func TestPVEGuestWarningSurvivesPollingCacheAndReports(t *testing.T) {
 		require.Equal(t, step.wantStatus, byVMID[100].Status, step.name)
 		if step.phase > 0 {
 			require.Equal(t, "OK", byVMID[200].Status, "clean sibling")
+			if step.phase < 3 {
+				require.Equal(t, detail, byVMID[100].Error, "only a fixed summary leaves the original log")
+			} else {
+				require.Empty(t, byVMID[100].Error, "the next clean job clears the old summary")
+			}
 			points, err := proxmoxmapper.FromPVEBackupTasksWithEvidence(snapshot.BackupTasks, nil, time.Now().UTC())
 			require.NoError(t, err)
 			parent := byVMID[0]

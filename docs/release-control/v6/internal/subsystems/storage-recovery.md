@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Backup activity belongs to the selected evidence scope
+
+By date applies the same workload search, node, type, backup-location and
+source/verification filters to the activity timeline and artifact list. The
+unknown-date notice also belongs to that scope, rather than unrelated targets.
+Count, reported Volume and missing-size totals continue to exclude incomplete,
+undated, future and out-of-window records. Selecting a day filters only the list:
+it must not collapse the timeline and strand navigation to another day. The
+scope is re-evaluated on ordinary inventory replacement without resetting
+filters, range or metric, or adding another read. Fleet-wide backup health and
+protection assessments are unchanged. This is collected-evidence attribution,
+not native backup, restore, thaw or filesystem-liveness proof.
+
+`ProxmoxBackupsTable.activityScope.test.tsx` and `backup-activity-scope.cjs`
+exercise two targets, multiple repositories, all existing scope facets,
+verification/completion boundaries, empty scopes, day navigation, live filtering,
+missing sizes, refresh and clear through the production chart/list consumers.
+
 ### Missing backup sizes do not erase activity or its controls
 
 The existing By date chart retains Count, Volume and all range controls even
@@ -7639,3 +7657,21 @@ status/error separation, wrapping, markup-shaped text and same-open recovery.
 `backup-failure-status.cjs` exercises the actual HTTP reader, model, search and
 Coverage disclosure at desktop and 320px. This is failure visibility, not native
 backup completion, guest thaw, filesystem liveness or installed recovery.
+
+
+### Backup artifact state meanings are readable without hover
+
+By date and expanded Coverage evidence use one native button for each artifact's
+state and optional prune-protection badge. Its read-only dialog keeps the full
+record, repository location and workload beside the existing explanation.
+Verification is not a restore test or guest-thaw evidence; prune protection is
+not verification or workload protection. Running/failed artifacts remain
+incomplete and guest snapshots remain distinct from separate backups. No
+collection, guest operation, API request, posture or completion rule changes.
+
+The disclosure updates with its record and restores focus on dismissal.
+`proxmoxBackupsTableShared.test.tsx` covers all states, contradictory flags,
+withdrawal, adjacent records and literal provider text. The source-bound
+`backup-artifact-evidence.cjs` protocol exercises the actual inventory readers,
+model and both consuming tables with desktop keyboard and 320px touch. This is
+accessible collected-evidence proof, not native recovery or release availability.
