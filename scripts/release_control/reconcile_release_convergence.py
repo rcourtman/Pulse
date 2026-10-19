@@ -243,6 +243,25 @@ def api_read_subject(endpoint: str) -> str:
     return "GitHub API read"
 
 
+def transient_api_read_failure(returncode: int, diagnostic: str) -> str | None:
+    """Classify a failed read, never a signal, refusal or mixed stream error."""
+    if returncode != 1:
+        return None
+    if re.fullmatch(r"stream error: stream ID [0-9]+; CANCEL; received from peer\n?", diagnostic):
+        return "HTTP/2 CANCEL"
+    # A status elsewhere in a stream/access diagnostic cannot turn that
+    # failure into permission to retry. Keep the established 5xx read policy,
+    # but do not let a second HTTP status hide an authentication refusal.
+    if "stream error:" in diagnostic or re.search(
+        r"\b(?:refused|refusal|denied|forbidden|unauthori[sz]ed)\b", diagnostic, re.IGNORECASE
+    ):
+        return None
+    statuses = re.findall(r"\bHTTP ([0-9]{3})\b", diagnostic)
+    if statuses in (["502"], ["503"], ["504"]):
+        return "HTTP " + statuses[0]
+    return None
+
+
 class GitHub:
     def __init__(
         self,
@@ -280,15 +299,16 @@ class GitHub:
                 text=True,
                 env=env,
             )
+            transient = transient_api_read_failure(result.returncode, result.stderr or "")
             if (
                 result.returncode == 0
                 or not retry_read
                 or attempt == 2
-                or re.search(r"\bHTTP (502|503|504)\b", result.stderr or "") is None
+                or transient is None
             ):
                 break
             print(
-                f"Transient GitHub API read failure; retry {attempt + 1}/2.",
+                f"Transient GitHub API read failure ({transient}); retry {attempt + 1}/2.",
                 file=sys.stderr,
             )
             time.sleep(attempt + 1)
