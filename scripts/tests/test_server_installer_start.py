@@ -65,8 +65,8 @@ print_success() { printf 'SUCCESS: %s\n' "$*"; }
 # Keep the production waiter/command statuses, eliminating only wall-clock
 # delay. No timeout/sleep can execute an arbitrary or host service operation.
 timeout() {
-    [[ "$1" == 5 && "$2" == systemctl ]] || return 97
-    shift
+    [[ "$1" == -k && "$2" == 1 && "$3" == 5 && "$4" == systemctl ]] || return 97
+    shift 3
     "$@"
 }
 sleep() { [[ "$1" == 1 || "$1" == 3 ]]; }

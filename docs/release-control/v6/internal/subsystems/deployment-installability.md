@@ -737,6 +737,32 @@ execute the actual unattended helper's selection and
 `perform_update` entry/handoff with a fake installer, including timeout and
 failed/partial inventory before any service observation or installer call.
 
+### Installer manager waits include termination of an unresponsive command
+
+Every root installer `systemctl` command with a five-second timeout also has
+a one-second kill backstop. A manager that ignores TERM must not hold the
+installer indefinitely, including during the initial replacement observation,
+stop, post-stop readback, timer activation/readback and startup checks. These
+are per-command bounds, not a new whole-install or readiness-poll deadline.
+Existing legacy reload tolerance is unchanged; the strict automatic-update
+reload still requires its confirmed result.
+
+A timed-out replacement observation or stop remains uncertain. It refuses
+the archive/source replacement without a second attempt or restart, preserves
+the installed executable and removes the caller's private staging. Partial
+plausible output cannot admit replacement. This does not establish why a
+particular installed service stopped or provide native recovery evidence.
+
+`TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads` requires the
+connected archive/source controls in `test_server_service_discovery.py` for
+TERM-resistant initial observations, stops and readbacks. They execute the
+production transaction against private files and a finite confined manager,
+checking the real deadline, unchanged executable, cleared staging and exact
+non-replayed call sequence. A separate inventory control keeps every installer
+manager timeout on the same backstop. Startup and update-resilience fixtures
+retain successful/failed activation and prior-active semantics with the exact
+timeout argument frame; no host service or trusted release is exercised.
+
 ### Unattended restoration requires observed service state
 
 Before backup, download, installer invocation or restart-trap setup, the

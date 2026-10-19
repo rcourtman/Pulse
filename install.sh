@@ -601,11 +601,12 @@ handle_install_interrupt() {
     exit 1
 }
 
-# Wrapper for systemctl commands that might hang in unprivileged containers
+# Bound each systemctl command even when it ignores TERM. A timeout remains
+# an uncertain manager result, never evidence that a service stopped.
 safe_systemctl() {
     local action="$1"
     shift
-    timeout 5 systemctl "$action" "$@" 2>/dev/null || {
+    timeout -k 1 5 systemctl "$action" "$@" 2>/dev/null || {
         if [[ "$action" == "daemon-reload" ]]; then
             # daemon-reload hanging is common in unprivileged containers, silent fail is OK
             return 0
@@ -624,7 +625,7 @@ safe_systemctl() {
 stop_pulse_for_replacement() {
     local service_name="$1"
     local state=""
-    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not read Pulse service state ($service_name); refusing binary replacement"
         return 1
     fi
@@ -643,7 +644,7 @@ stop_pulse_for_replacement() {
         print_error "Could not stop Pulse ($service_name); refusing binary replacement. Check service state before retrying."
         return 1
     fi
-    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not confirm Pulse stopped ($service_name); refusing binary replacement"
         return 1
     fi
@@ -5055,7 +5056,7 @@ setup_auto_updates() {
         return 0
     fi
     local timer_state=""
-    if ! timer_state=$(timeout 5 systemctl is-enabled -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "enabled" ]]; then
+    if ! timer_state=$(timeout -k 1 5 systemctl is-enabled -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "enabled" ]]; then
         print_warn "Automatic-update settings were saved, but persistent timer enablement was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
@@ -5066,7 +5067,7 @@ setup_auto_updates() {
         ENABLE_AUTO_UPDATES=false
         return 0
     fi
-    if ! timer_state=$(timeout 5 systemctl is-active -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "active" ]]; then
+    if ! timer_state=$(timeout -k 1 5 systemctl is-active -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "active" ]]; then
         print_warn "Automatic-update settings were saved, but timer activity was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
@@ -5181,7 +5182,7 @@ wait_for_service_active() {
     local timeout_seconds="${2:-20}"
     local elapsed=0
     while (( elapsed < timeout_seconds )); do
-        if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        if timeout -k 1 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
             return 0
         fi
         sleep 1
@@ -5232,7 +5233,7 @@ start_pulse() {
     # cat covers units living elsewhere.
     if command -v systemctl >/dev/null 2>&1 \
         && [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] \
-        && ! timeout 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+        && ! timeout -k 1 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
         print_error "systemd unit ${SERVICE_NAME}.service does not exist; Pulse was not started"
         print_info "Re-run the installer to recreate the service unit"
         return 1

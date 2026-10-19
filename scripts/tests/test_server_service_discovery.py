@@ -26,14 +26,30 @@ QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
          "pulse-backend.service", "pulse.service"]
 # What systemctl prints when the listing itself fails, as opposed to matching nothing.
 FAILED_LISTING = "Failed to get unit file list: No such file or directory\n"
+MANAGER_DEADLINE_TRACES = []
 
 SYSTEMCTL = r'''#!/usr/bin/env python3
-import json, os, sys, time
+import json, os, signal, sys, time
 from pathlib import Path
 f = Path(os.environ["FIXTURE"])
 args = sys.argv[1:]
 with (f / "calls").open("a") as stream:
     stream.write(json.dumps(args) + "\n")
+if args[0] == "show":
+    count = int((f / "state-reads").read_text()) + 1 if (f / "state-reads").exists() else 1
+    (f / "state-reads").write_text(str(count))
+    phase = "initial" if count == 1 else "readback"
+else:
+    phase = args[0]
+if os.environ.get("MANAGER_FAULT") == phase:
+    # A TERM-only timeout cannot bound this manager. It emits plausible state
+    # before hanging, so the caller must also refuse its incomplete result.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    if args[0] == "show":
+        print("inactive" if (f / "stopped").exists() else "active", flush=True)
+    (f / "blocked-manager.pid").write_text(str(os.getpid()))
+    # Finite even on the broken parent, leaving no unbounded fixture process.
+    time.sleep(10)
 if args[0] == "list-unit-files":
     mode = os.environ["MODE"]
     if mode == "real":
@@ -203,7 +219,7 @@ exit "$status"
 
 class ServiceDiscovery(unittest.TestCase):
     def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
-                    producer="installer", err="", units_present=True):
+                    producer="installer", err="", units_present=True, manager_fault=""):
         with tempfile.TemporaryDirectory(prefix="pulse-service-discovery-") as directory:
             f = Path(directory)
             for name in ["bin", "install/bin", "config", "units", "root/etc/systemd/system"]:
@@ -238,7 +254,7 @@ class ServiceDiscovery(unittest.TestCase):
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), UPDATER=str(UPDATER),
                        PRODUCER=producer, FLOW=flow, MODE=mode,
-                       ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err,
+                       ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err, MANAGER_FAULT=manager_fault,
                        REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
                        PATH=str(f / "bin") + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
@@ -258,7 +274,10 @@ class ServiceDiscovery(unittest.TestCase):
                         if (f / "installer-service").exists() else None,
                         process_readback_service=(f / "process-readback-service").read_text()
                         if (f / "process-readback-service").exists() else None,
-                        broken_pipe=(f / "broken-pipe").exists())
+                        broken_pipe=(f / "broken-pipe").exists(),
+                        blocked_pid=int((f / "blocked-manager.pid").read_text())
+                        if (f / "blocked-manager.pid").exists() else None,
+                        staging=[p.name for p in (f / "install").rglob(".pulse-*")])
 
     def assert_refused(self, e):
         self.assertNotEqual(e["result"].returncode, 0, e["result"])
@@ -386,6 +405,47 @@ class ServiceDiscovery(unittest.TestCase):
                 self.assertNotIn(["stop", "pulse"], e["calls"])
                 self.assertFalse(e["broken_pipe"])
 
+    def test_replacement_manager_deadlines_kill_term_resistant_reads_and_stop(self):
+        for flow in ("archive", "build"):
+            for phase in ("initial", "stop", "readback"):
+                with self.subTest(flow=flow, phase=phase):
+                    e = self.run_fixture(flow=flow, explicit="pulse-backend", manager_fault=phase)
+                    # Read only the disposable manager's PID, not the host
+                    # manager. A zombie is no longer executing; native service
+                    # recovery and descendant cleanup are not claimed here.
+                    self.assertIsNotNone(e["blocked_pid"])
+                    try:
+                        state = Path(f"/proc/{e['blocked_pid']}/stat").read_text().rsplit(")", 1)[1].split()[0]
+                    except FileNotFoundError:
+                        state = "absent"
+                    MANAGER_DEADLINE_TRACES.append(dict(control="installer-manager-deadline", flow=flow,
+                                                       phase=phase, seconds=e["seconds"],
+                                                       exit_code=e["result"].returncode,
+                                                       binary_unchanged=e["binary"] == e["old"],
+                                                       staging=e["staging"], calls=e["calls"],
+                                                       manager_state=state))
+                    self.assertEqual(e["result"].returncode, 1, e["result"])
+                    self.assertGreaterEqual(e["seconds"], 5.5, e["result"])
+                    self.assertLess(e["seconds"], 8.5, e["result"])
+                    self.assertEqual(e["binary"], e["old"])
+                    self.assertEqual(e["staging"], [])
+                    self.assertEqual(e["mutations"], "")
+                    expected = [["show", "pulse-backend", "--property=ActiveState", "--value"]]
+                    if phase != "initial":
+                        expected.append(["stop", "pulse-backend"])
+                    if phase == "readback":
+                        expected.append(expected[0])
+                    self.assertEqual(e["calls"], expected)
+                    self.assertIn(state, ("absent", "Z"))
+
+    def test_every_installer_systemctl_timeout_has_a_kill_backstop(self):
+        reads = [line.strip() for line in INSTALLER.read_text().splitlines()
+                 if not line.lstrip().startswith("#") and "timeout " in line and " systemctl " in line]
+        self.assertGreaterEqual(len(reads), 10)
+        for line in reads:
+            with self.subTest(command=line):
+                self.assertIn("timeout -k 1 5 systemctl ", line)
+
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
     def test_real_systemctl_on_a_host_without_pulse_units_selects_the_default(self):
         # Real systemctl, empty unit root: the genuine exit status for "nothing matched".
@@ -442,4 +502,9 @@ class ServiceDiscovery(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    program = unittest.main(exit=False)
+    # Emit after unittest's result lines: the Go caller requires each mandatory
+    # method's complete "... ok" record, including in combined output.
+    for trace in MANAGER_DEADLINE_TRACES:
+        print(json.dumps(trace), flush=True)
+    raise SystemExit(0 if program.result.wasSuccessful() else 1)

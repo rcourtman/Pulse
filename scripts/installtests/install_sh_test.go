@@ -4768,6 +4768,8 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
 		"test_only_silent_exit_one_is_admitted_as_absence",
 		"test_blank_line_output_is_not_a_silent_failed_inventory",
+		"test_replacement_manager_deadlines_kill_term_resistant_reads_and_stop",
+		"test_every_installer_systemctl_timeout_has_a_kill_backstop",
 	} {
 		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
 			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
