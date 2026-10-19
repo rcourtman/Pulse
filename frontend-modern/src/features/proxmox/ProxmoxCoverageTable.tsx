@@ -8,6 +8,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
   formatPlatformTableDateTimeValue,
+  formatPlatformTableDurationValue,
   formatPlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -193,6 +194,10 @@ function CoverageTaskProvenanceNote() {
         The job location is recorded at the time of the backup. The workload may now be on another
         node.
       </p>
+      <p class="mt-2 text-muted">
+        Reported end and recorded duration describe the job history, not evidence of guest thaw or
+        filesystem writes. Unknown duration is not a live elapsed time.
+      </p>
     </>
   );
 }
@@ -216,10 +221,8 @@ function CoverageTaskDetail(props: { task: CoverageTask; latest?: boolean }) {
         {props.latest ? 'Latest backup job' : 'Collected backup job'}
       </h4>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
-        <Show when={!props.latest}>
-          <dt class="text-muted">Job ID</dt>
-          <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.id}</dd>
-        </Show>
+        <dt class="text-muted">Job ID</dt>
+        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.id}</dd>
         <dt class="text-muted">Result</dt>
         <dd
           class={`min-w-0 whitespace-pre-wrap wrap-anywhere ${statusWordToneClass(taskWordVariant(props.task.label))}`}
@@ -255,9 +258,34 @@ function CoverageTaskDetail(props: { task: CoverageTask; latest?: boolean }) {
             }
           >
             <time dateTime={props.task.startedAt}>
-              {formatPlatformTableDateTimeValue(props.task.startedAt)}
+              {formatPlatformTableDateTimeValue(props.task.startedAt, {
+                dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
+              })}
             </time>
           </Show>
+        </dd>
+        <dt class="text-muted">Reported end</dt>
+        <dd class="min-w-0 whitespace-normal wrap-anywhere" data-backup-task-end>
+          <Show
+            when={props.task.durationSeconds !== undefined}
+            fallback={
+              props.task.endedAt ? `Unknown · reported: ${props.task.endedAt}` : 'Not reported'
+            }
+          >
+            <time dateTime={props.task.endedAt}>
+              {formatPlatformTableDateTimeValue(props.task.endedAt, {
+                dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
+              })}
+            </time>
+          </Show>
+        </dd>
+        <dt class="text-muted">Recorded duration</dt>
+        <dd class="min-w-0 whitespace-normal wrap-anywhere" data-backup-task-duration>
+          {props.task.durationSeconds === undefined
+            ? 'Unknown'
+            : props.task.durationSeconds === 0
+              ? '0s'
+              : formatPlatformTableDurationValue(props.task.durationSeconds)}
         </dd>
         <dt class="text-muted">Last observed</dt>
         <dd class="min-w-0 whitespace-normal wrap-anywhere">

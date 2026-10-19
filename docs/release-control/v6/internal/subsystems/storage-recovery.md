@@ -7675,3 +7675,22 @@ withdrawal, adjacent records and literal provider text. The source-bound
 `backup-artifact-evidence.cjs` protocol exercises the actual inventory readers,
 model and both consuming tables with desktop keyboard and 320px touch. This is
 accessible collected-evidence proof, not native recovery or release availability.
+
+### Coverage keeps the native job identity and recorded interval inspectable
+
+Expanded latest and unorderable job evidence keeps the literal native job ID and
+reported end beside its start and original observation time. Latest-job IDs and
+reported start/end strings are searchable locally. Recorded duration requires
+usable, non-future start/end times in order; an equal timestamp is a recorded
+zero-second interval, not an absent reading. Missing, invalid, reversed and
+future end values retain their raw text without a formatted end or invented live
+elapsed time. Source status, latest-job selection, protection and artifact
+completion remain independent. Reported end/duration never establish guest thaw,
+filesystem writes or native backup recovery. No collection or guest request is
+added.
+
+`proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.taskDetail.test.tsx` cover exact selection/search, timing
+admission, literal provider text and same-open replacement. The source-bound
+`backup-job-interval.cjs` protocol consumes the ordinary HTTP inventory readers,
+model and Coverage table at desktop/320px with safe synthetic job history.
