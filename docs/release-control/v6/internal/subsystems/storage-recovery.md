@@ -7729,8 +7729,8 @@ failed retry leaves evidence withdrawn, and a successful empty response does not
 invent an empty health verdict. Recovered rows start collapsed, so their chart
 readers do not silently resume. This is an explicit read of Pulse's already-
 collected, guest-scoped inventory, not a probe, backup, guest operation, new poll
-or native recovery. Shared query/cache, organisation fences, collection freshness
-metadata and other Storage consumers are unchanged.
+or native recovery. Query/cache key ownership, organisation fences and collection
+freshness metadata remain intact; other Storage consumers keep their defaults.
 
 `GuestPhysicalDisks.test.tsx` exercises retained success -> failed read, withdrawn
 SMART consumers, single-flight retry, failed retry and populated/empty recovery.
