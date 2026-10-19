@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "39464d13ecc8ecf1a4fefe0c997ea106181f9f49",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "ca12b060adf2d0918b9e295c77957351e63b8b6f850cba3d57385c6e18e925e2",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "0ab1d4e3033827fe722747f9d93259e22794a575731443fc21e8754e63b1eb77"
+  },
+  "routes": [
+    "Existing Proxmox guest Overview and physical-disk SMART detail, mounted through /browser-tests/guest-disk-read-recovery.html with the production HTTP reader and CSS. No product route added."
+  ],
+  "states": [
+    "Previously fulfilled disk/SMART evidence withdraws on a failed ordinary background metadata/REST read, including a final HTTP 403.",
+    "One explicit retry remains disabled/pending; rejection and a failed warm remount keep the old snapshot withdrawn. Remount and explicit retry coalesce.",
+    "Successful populated recovery returns 48\u00b0C and collapsed SMART detail; successful empty inventory creates no phantom disk or unavailable claim.",
+    "Existing organisation source fence retires an old-org response; local retry state resets on org changes. Other resource consumers keep their default background behaviour."
+  ],
+  "interactions": [
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 desktop keyboard and WebKit 26.0 at 320px with touch/dark theme.",
+    "Production API client/resource hook -> guest Overview -> lazy SMART detail/history. Withdrawal stops chart reads; explicit Retry is source-scoped and uses only GET collected-inventory endpoints.",
+    "All 14 final captures opened natively; actual image content reached the model. No page/fixture errors; browser/contexts, held responses and Vite close."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T06:36:53.065255Z",
+  "evidence": {
+    "source_commit": "39464d13ecc8ecf1a4fefe0c997ea106181f9f49",
+    "source_tree": "3591ad3710b2cd7cbe7088a0ce4541e0979aae47",
+    "protocol": "frontend-modern/browser-tests/guest-disk-read-recovery.cjs",
+    "protocol_sha256": "a895218c0ad56fbf0457b3821fbd8404a9da21e9b8cc638f812e34a3b97895ce",
+    "bound_inputs": 3667,
+    "raw_result": "BROWSER-RESULT.json in retained Web dossier",
+    "native_pixel_review": "PIXELS.json in retained Web dossier",
+    "captures": [
+      {
+        "file": "browser/chromium-expanded-current.png",
+        "sha256": "75eef807a1fca45699ab506d39037b2d4b0bd53e66f4d412b49ed90987a19e3e"
+      },
+      {
+        "file": "browser/chromium-read-failed.png",
+        "sha256": "ca653aa1b443c0615c22774f2d10ff5d622742e74e3c9eeb2b666b22d60fc54b"
+      },
+      {
+        "file": "browser/chromium-retry-pending.png",
+        "sha256": "7f89f3d9dce75a54c744aad23147169d697761634f670acfdf2b4ac809ed6629"
+      },
+      {
+        "file": "browser/chromium-access-denied.png",
+        "sha256": "27537684d466c6e541a0075e625e4a51d667e530b94b644d8c4a49823755bf8a"
+      },
+      {
+        "file": "browser/chromium-remount-unavailable.png",
+        "sha256": "7f89f3d9dce75a54c744aad23147169d697761634f670acfdf2b4ac809ed6629"
+      },
+      {
+        "file": "browser/chromium-read-recovered.png",
+        "sha256": "7bc87d93a97fc253e8054573afdc9a3de53e90a18dd1bf637c25eb2c38f21159"
+      },
+      {
+        "file": "browser/chromium-organisation-fenced.png",
+        "sha256": "d023d5ac7c1dc08ff47e766f8349115f8bd03885bb48dc46aa7e2a0296986731"
+      },
+      {
+        "file": "browser/webkit-expanded-current.png",
+        "sha256": "7315019965437bf28d312b5418e14c3040be55570d369fe412e414d08f519f05"
+      },
+      {
+        "file": "browser/webkit-read-failed.png",
+        "sha256": "927a3c14f912451a3b25849f43c6331dfca62c23fce853157e739161ffaee102"
+      },
+      {
+        "file": "browser/webkit-retry-pending.png",
+        "sha256": "e5e5a2263b51ecf97aeea0b18859dd870475ff364ae5903e3c745860f6c0df19"
+      },
+      {
+        "file": "browser/webkit-access-denied.png",
+        "sha256": "8f41a943eda98c18a0d79c9fb6b91d53933fd45a5d225feb8775df9a9784e3bb"
+      },
+      {
+        "file": "browser/webkit-remount-unavailable.png",
+        "sha256": "07f187bed03bc397f2952475bbd82f34c8a30c2ef09ea7387f683529e5c17786"
+      },
+      {
+        "file": "browser/webkit-read-recovered.png",
+        "sha256": "9c03650be4a3323beb1da8657f856070f5cc393e8bff4dcbfbec1e293be2ceef"
+      },
+      {
+        "file": "browser/webkit-organisation-fenced.png",
+        "sha256": "3544aa2ab9955e2ad590eb1b80e3af98dd12ee57b3ec7ca99eb1d3f7e6c0c222"
+      }
+    ]
+  }
+}

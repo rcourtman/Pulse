@@ -8923,3 +8923,21 @@ not settle workload protection, current guest state, thaw or filesystem writes.
 `ProxmoxCoverageTable.taskDetail.test.tsx` exercises literal wrapping and live
 replacement; `backup-job-interval.cjs` consumes the real HTTP/model/table surface
 at desktop and 320px. No resource identity, routing, polling or operation changes.
+
+### Guest physical-disk revalidation failures remain visible through remounts
+
+The scoped guest disk reader opts into reported background errors. Its ordinary
+metadata/REST revalidation failure reaches the same error state as a foreground
+read, so its Overview can withdraw retained current-looking SMART views. This
+opt-in keeps the failed state with that tenant/query cache entry; a warm remount
+must revalidate it rather than laundering the old successful snapshot into a
+successful read. A successful scoped response or canonical snapshot clears it.
+Other consumers retain their existing background-error behaviour and cache
+ownership. Query and organisation keys, pagination, cancellation fences, WebSocket
+projection, collection and polling cadence are unchanged.
+
+`useUnifiedResources.test.ts` covers default/opted-in failure reporting, warm
+failed-cache remount and successful recovery. The child component's tests and
+`guest-disk-read-recovery.cjs` connect the opt-in to actual Overview withdrawal,
+explicit/coalesced retries, empty success and retired old-tenant responses at
+desktop/320px. These are read-only synthetic consumers, not guest-safety recovery.

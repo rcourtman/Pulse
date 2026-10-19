@@ -13,6 +13,9 @@ const queryState = vi.hoisted(() => ({
   // Set to a signal accessor to drive live resource updates.
   accessor: undefined as (() => Resource[]) | undefined,
   error: undefined as unknown,
+  errorAccessor: undefined as (() => unknown) | undefined,
+  loading: false,
+  refetch: vi.fn(),
   query: '',
   enabled: false,
   realtimeEnabled: undefined as (() => boolean) | undefined,
@@ -35,13 +38,17 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     query: string;
     enabled: () => boolean;
     realtimeEnabled?: () => boolean;
+    reportBackgroundErrors?: boolean;
   }) => {
+    expect(options.reportBackgroundErrors).toBe(true);
     queryState.query = options.query;
     queryState.enabled = options.enabled();
     queryState.realtimeEnabled = options.realtimeEnabled;
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
-      error: () => queryState.error,
+      error: () => queryState.errorAccessor?.() ?? queryState.error,
+      loading: () => queryState.loading,
+      refetch: queryState.refetch,
     };
   },
 }));
@@ -79,6 +86,9 @@ describe('GuestPhysicalDisks', () => {
     queryState.resources = [];
     queryState.accessor = undefined;
     queryState.error = undefined;
+    queryState.errorAccessor = undefined;
+    queryState.loading = false;
+    queryState.refetch.mockReset();
     queryState.query = '';
     queryState.enabled = false;
     queryState.realtimeEnabled = undefined;
@@ -259,5 +269,129 @@ describe('GuestPhysicalDisks', () => {
     queryState.error = new Error('unavailable');
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     expect(screen.getByRole('status')).toHaveTextContent('Physical disk details are unavailable.');
+  });
+
+  it.each([401, 403, 503])(
+    'withdraws previously healthy disk and SMART details after HTTP %s',
+    async (status) => {
+      const [error, setError] = createSignal<unknown>();
+      queryState.errorAccessor = error;
+      queryState.resources = [disk];
+      render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+      const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+      row.open = true;
+      fireEvent(row, new Event('toggle'));
+      await screen.findAllByText('Reallocated Sectors');
+      expect(screen.getAllByText('Healthy').length).toBeGreaterThan(0);
+
+      setError(Object.assign(new Error('PRIVATE_PROVIDER_TEXT'), { status }));
+      expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+      expect(screen.queryByText('45°C')).toBeNull();
+      expect(screen.queryByTestId('history-chart')).toBeNull();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Physical disk details are unavailable.',
+      );
+      expect(screen.getByRole('status')).toHaveTextContent('not a guest probe');
+      expect(screen.queryByText(/PRIVATE_PROVIDER_TEXT/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Retry physical disk details' })).toBeEnabled();
+      expect(queryState.refetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps failed readings withdrawn throughout a single explicit retry, then renders its new result collapsed', async () => {
+    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
+    const [resources, setResources] = createSignal<Resource[]>([disk]);
+    queryState.errorAccessor = error;
+    queryState.accessor = resources;
+    let finish!: () => void;
+    queryState.refetch.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(queryState.refetch).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Retrying');
+    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+
+    setResources([{ ...disk, physicalDisk: { ...disk.physicalDisk!, temperature: 48 } }]);
+    setError(undefined);
+    finish();
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.getByText('48°C')).toBeInTheDocument();
+    expect(screen.queryByText('45°C')).toBeNull();
+    expect((screen.getByTestId('guest-physical-disk') as HTMLDetailsElement).open).toBe(false);
+    expect(screen.queryByTestId('history-chart')).toBeNull();
+  });
+
+  it('contains a rejected retry without exposing its error or losing the next explicit attempt', async () => {
+    queryState.resources = [disk];
+    queryState.error = new Error('unavailable');
+    queryState.refetch.mockRejectedValue(new Error('PRIVATE_RETRY_PAYLOAD'));
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+    expect(screen.queryByText(/PRIVATE_RETRY_PAYLOAD/)).toBeNull();
+    fireEvent.click(button);
+    await waitFor(() => expect(queryState.refetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(button).toBeEnabled());
+  });
+
+  it('does not turn a successful empty retry into unavailable disks or a healthy phantom disk', async () => {
+    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
+    const [resources, setResources] = createSignal<Resource[]>([disk]);
+    queryState.errorAccessor = error;
+    queryState.accessor = resources;
+    queryState.refetch.mockImplementation(async () => {
+      setResources([]);
+      setError(undefined);
+    });
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry physical disk details' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+    expect(screen.queryByText('Healthy')).toBeNull();
+    expect(queryState.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an unanswered old-organisation retry disable or settle a new-organisation retry', async () => {
+    queryState.error = new Error('unavailable');
+    let finishOld!: () => void;
+    let finishNew!: () => void;
+    queryState.refetch
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve;
+          }),
+      );
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    eventBus.emit('org_switched', 'other-org');
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(queryState.refetch).toHaveBeenCalledTimes(2);
+    expect(button).toBeDisabled();
+    finishOld();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(button).toBeDisabled();
+    finishNew();
+    await waitFor(() => expect(button).toBeEnabled());
   });
 });

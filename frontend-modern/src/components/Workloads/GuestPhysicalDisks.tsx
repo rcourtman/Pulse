@@ -1,4 +1,5 @@
-import { For, Show, Suspense, createSignal, lazy, type Component } from 'solid-js';
+import { For, Show, Suspense, createSignal, lazy, onCleanup, type Component } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -12,6 +13,7 @@ import {
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
+import { eventBus } from '@/stores/events';
 
 // SMART history and chart controls are only needed after a disk row is opened.
 // Keep their Storage detail module out of the initial Workloads surface.
@@ -111,20 +113,65 @@ export const GuestPhysicalDisks: Component<{
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
+    reportBackgroundErrors: true,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
+  const [retrying, setRetrying] = createSignal(false);
+  let retryGeneration = 0;
+  // The same guest id may exist in another organisation. Its read must not
+  // inherit an unanswered retry's busy state, or its eventual settlement.
+  const resetRetry = () => {
+    retryGeneration += 1;
+    setRetrying(false);
+  };
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', resetRetry);
+  onCleanup(() => {
+    unsubscribeOrgSwitch();
+    retryGeneration += 1;
+  });
+  const retry = async () => {
+    if (retrying() || source.loading()) return;
+    const generation = ++retryGeneration;
+    setRetrying(true);
+    try {
+      // This only rereads Pulse's scoped inventory; it never probes the guest.
+      await source.refetch();
+    } catch {
+      // The query owns its failure state. Provider text may contain private data.
+    } finally {
+      if (generation === retryGeneration) setRetrying(false);
+    }
+  };
   const disks = () =>
-    source
-      .resources()
-      .filter((resource) => resource.type === 'physical_disk' && resource.parentId === parentId);
+    // A retained successful snapshot is not a current successful read. Remove
+    // its rows and expanded SMART/history consumer until this query recovers.
+    source.error()
+      ? []
+      : source
+          .resources()
+          .filter(
+            (resource) => resource.type === 'physical_disk' && resource.parentId === parentId,
+          );
 
   return (
     <>
       <Show when={source.error()}>
-        <p class="text-xs text-muted" role="status">
-          Physical disk details are unavailable.
-        </p>
+        <div class="space-y-2 rounded-md border border-border p-3 text-xs text-muted">
+          <p role="status">
+            Physical disk details are unavailable. Previously loaded disk readings are hidden until
+            a read succeeds. Retry reads Pulse's collected inventory, not a guest probe.
+          </p>
+          <Button
+            size="sm"
+            class="min-h-11 min-w-11 sm:min-h-0"
+            aria-label="Retry physical disk details"
+            disabled={retrying() || source.loading()}
+            onClick={() => void retry()}
+          >
+            {retrying() || source.loading() ? 'Retrying…' : 'Retry'}
+          </Button>
+        </div>
       </Show>
       <Show when={disks().length > 0}>
         <InfoCardFrame data-testid="guest-physical-disks">

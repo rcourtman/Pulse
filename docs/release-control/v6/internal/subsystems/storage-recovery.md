@@ -7716,3 +7716,32 @@ added.
 admission, literal provider text and same-open replacement. The source-bound
 `backup-job-interval.cjs` protocol consumes the ordinary HTTP inventory readers,
 model and Coverage table at desktop/320px with safe synthetic job history.
+
+
+### Failed guest physical-disk reads withdraw retained live-looking SMART views
+
+The guest Overview's scoped child-inventory reader can retain a fulfilled snapshot
+through a failed read. On a reported query error the consumer withdraws its disk
+rows, current-looking health/temperature and expanded SMART/history view until a
+read succeeds. The error notice keeps provider text private and offers a named,
+keyboard/touch-operable Retry. One in-flight retry is disabled and labelled; a
+failed retry leaves evidence withdrawn, and a successful empty response does not
+invent an empty health verdict. Recovered rows start collapsed, so their chart
+readers do not silently resume. This is an explicit read of Pulse's already-
+collected, guest-scoped inventory, not a probe, backup, guest operation, new poll
+or native recovery. Query/cache key ownership, organisation fences and collection
+freshness metadata remain intact; other Storage consumers keep their defaults.
+
+`GuestPhysicalDisks.test.tsx` exercises retained success -> failed read, withdrawn
+SMART consumers, single-flight retry, failed retry and populated/empty recovery.
+`guest-disk-read-recovery.cjs` consumes the real HTTP/resource hook/Overview/CSS
+at desktop and 320px, including stopped chart reads and an old-organisation
+response retired by the existing source fence. These are synthetic browser and
+source proofs, not guest thaw, filesystem liveness, installed or restore proof.
+
+The guest child reader opts into background-error reporting and keeps failed
+read state through its tenant/query cache remount. No previously failed snapshot
+becomes a successful read merely by closing/reopening the drawer. Retry's local
+busy owner resets on organisation change and ignores old-scope settlement, while
+the existing source owner fences the response. Other resource consumers retain
+their previous defaults; no shared polling or collection behaviour changes.
