@@ -296,6 +296,12 @@ function serve(req, res, next) {
           await target.press('Enter');
         }
       };
+      const openRow = async (target) => {
+        // Compact rows expose their existing full-row touch interaction; the
+        // keyboard-only chevron is deliberately visually hidden until focused.
+        if (spec.touch) await target.locator('td').first().tap();
+        else await activate(target.getByRole('button'));
+      };
       const row = (id) => page.locator(`[data-proxmox-coverage-key="resource:${id}"]`);
       const detail = (id) => page.locator(`[data-inline-detail-for="resource:${id}"]`);
       const replace = (workloads) =>
@@ -339,7 +345,7 @@ function serve(req, res, next) {
         ['upper', 'East'],
         ['lower', 'east'],
       ]) {
-        await activate(row(`${kind}-100`).getByRole('button'));
+        await openRow(row(`${kind}-100`));
         const text = await detail(`${kind}-100`).innerText();
         check(
           text.includes(`${kind}-job`) &&
@@ -421,12 +427,19 @@ function serve(req, res, next) {
       );
       const unmatched = page.getByRole('button', { name: /1 unmatched backup target/ });
       await activate(unmatched);
-      const orphan = page
-        .locator('[data-proxmox-backup-row="coverage"]')
-        .filter({ hasText: 'Connection: East' });
+      // Text locators case-fold by default. Select the real unmatched identity,
+      // never a visually similar case-distinct live connection or first match.
+      const orphan = page.locator(
+        '[data-proxmox-backup-row="coverage"][data-proxmox-coverage-key^="backup:"]',
+      );
+      check((await orphan.count()) === 1, 'Exactly one unmatched PVE source owner');
       await orphan.getByText(spec.touch ? 'N/A' : 'Not evaluated', { exact: true }).waitFor();
-      await activate(orphan.getByRole('button'));
+      await openRow(orphan);
       const key = await orphan.getAttribute('data-proxmox-coverage-key');
+      check(
+        decodeURIComponent(key).includes('"East"'),
+        'Unmatched identity retains exact connection case',
+      );
       const orphanDetail = page.locator(`[data-inline-detail-for="${key}"]`);
       const orphanText = await orphanDetail.innerText();
       check(
