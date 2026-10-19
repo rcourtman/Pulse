@@ -67,10 +67,101 @@ const deferred = () => {
 
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose());
+  vi.useRealTimers();
   vi.resetAllMocks();
 });
 
 describe('node connection-test evidence', () => {
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'bounds an unanswered saved %s test without saving or retrying',
+    async (type) => {
+      vi.useFakeTimers();
+      const { state } = mount(type);
+      const pending = deferred();
+      vi.mocked(NodesAPI.testExistingNode).mockReturnValueOnce(pending.promise);
+      const running = state.handleTestConnection();
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(state.isTesting()).toBe(true);
+      expect(state.testResult()).toBeNull();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(state.isTesting()).toBe(false);
+      expect(state.testResult()).toMatchObject({
+        status: 'error',
+        scope: 'saved',
+        message: expect.stringContaining('server may still be testing'),
+      });
+      expect(state.testResult()?.message).toContain('Nothing was saved');
+      expect(vi.mocked(NodesAPI.testExistingNode).mock.calls[0][2]?.aborted).toBe(true);
+      expect(NodesAPI.testExistingNode).toHaveBeenCalledTimes(1);
+      expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+      pending.resolve(success);
+      await running;
+      expect(state.testResult()?.status).toBe('error');
+    },
+  );
+
+  it.each(['success', 'error'])(
+    'ignores a late entered-settings %s after the deadline and a new explicit test',
+    async (outcome) => {
+      vi.useFakeTimers();
+      const { state } = mount('pve', false);
+      state.updateField('host', 'https://fixture.example.invalid');
+      state.updateField('authType', 'password');
+      state.updateField('user', 'fixture@pam');
+      state.updateField('password', 'synthetic-only-password');
+      const pending = deferred();
+      vi.mocked(NodesAPI.testConnection).mockReturnValueOnce(pending.promise);
+      const running = state.handleTestConnection();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(state.isTesting()).toBe(false);
+      expect(state.testResult()?.scope).toBe('form');
+      expect(state.testResult()?.message).toContain('Nothing was saved');
+      expect(NodesAPI.testConnection).toHaveBeenCalledTimes(1);
+
+      const next = deferred();
+      vi.mocked(NodesAPI.testConnection).mockReturnValueOnce(next.promise);
+      const nextRunning = state.handleTestConnection();
+      if (outcome === 'success') pending.resolve(success);
+      else pending.reject(new Error('Obsolete fixture failure'));
+      await running;
+      expect(state.isTesting()).toBe(true);
+      expect(state.testResult()).toBeNull();
+      next.resolve({ ...success, message: 'New explicit result' });
+      await nextRunning;
+      expect(state.testResult()?.message).toBe('New explicit result');
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('releases an obsolete unanswered test at the deadline without reviving evidence', async () => {
+    vi.useFakeTimers();
+    const { state } = mount();
+    vi.mocked(NodesAPI.testExistingNode).mockReturnValueOnce(deferred().promise);
+    const running = state.handleTestConnection();
+    state.updateField('fingerprint', 'cd'.repeat(32));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(state.isTesting()).toBe(false);
+    expect(state.testResult()).toBeNull();
+    await running;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('aborts and clears the deadline on disposal, without publishing a result or retesting', async () => {
+    vi.useFakeTimers();
+    const { state, dispose } = mount();
+    vi.mocked(NodesAPI.testExistingNode).mockReturnValueOnce(deferred().promise);
+    const running = state.handleTestConnection();
+    const signal = vi.mocked(NodesAPI.testExistingNode).mock.calls[0][2]!;
+    expect(signal.aborted).toBe(false);
+    dispose();
+    await running;
+    expect(signal.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(state.testResult()).toBeNull();
+    await state.handleTestConnection();
+    expect(NodesAPI.testExistingNode).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'blocks an impossible new %s pin locally and sends only an explicit corrected test',
     async (type) => {
@@ -94,6 +185,7 @@ describe('node connection-test evidence', () => {
       await state.handleTestConnection();
       expect(NodesAPI.testConnection).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ fingerprint: corrected, verifySSL: true }),
+        expect.any(AbortSignal),
       );
       expect(state.testResult()).toMatchObject({ scope: 'form', status: 'success' });
     },
@@ -111,7 +203,11 @@ describe('node connection-test evidence', () => {
       state.updateField('tokenName', 'different@pam!read');
       expect(state.connectionTestScope()).toBe('saved');
       await state.handleTestConnection();
-      expect(NodesAPI.testExistingNode).toHaveBeenCalledExactlyOnceWith(`${type}-fixture`);
+      expect(NodesAPI.testExistingNode).toHaveBeenCalledExactlyOnceWith(
+        `${type}-fixture`,
+        undefined,
+        expect.any(AbortSignal),
+      );
       expect(NodesAPI.testConnection).not.toHaveBeenCalled();
       expect(state.testResult()).toMatchObject({ scope: 'saved', status: 'success' });
     },
@@ -136,6 +232,7 @@ describe('node connection-test evidence', () => {
           fingerprint: 'cd'.repeat(32),
           [auth === 'token' ? 'tokenValue' : 'password']: 'fixture-only-secret',
         }),
+        expect.any(AbortSignal),
       );
       expect(state.testResult()).toMatchObject({ scope: 'form', status: 'success' });
     },

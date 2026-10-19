@@ -246,6 +246,31 @@ describe('NodesAPI', () => {
   });
 
   describe('testConnection', () => {
+    it('passes an explicit deadline signal without automatic probe retries', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'success' });
+      const controller = new AbortController();
+      const node = makePveNode();
+      await NodesAPI.testConnection(node, controller.signal);
+      expect(apiFetchJSON).toHaveBeenCalledExactlyOnceWith('/api/config/nodes/test-connection', {
+        method: 'POST',
+        body: JSON.stringify(node),
+        signal: controller.signal,
+        retry: false,
+      });
+    });
+
+    it('keeps a bounded saved-record test body separate from draft credentials', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'success' });
+      const controller = new AbortController();
+      await NodesAPI.testExistingNode('node/1', undefined, controller.signal);
+      expect(apiFetchJSON).toHaveBeenCalledExactlyOnceWith('/api/config/nodes/node%2F1/test', {
+        method: 'POST',
+        body: undefined,
+        signal: controller.signal,
+        retry: false,
+      });
+    });
+
     it('tests connection to a node', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'ok' });
 

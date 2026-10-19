@@ -104,7 +104,11 @@ describe('Proxmox certificate pin draft validation', () => {
     vi.mocked(NodesAPI.testExistingNode).mockResolvedValue({ status: 'success' });
     state.updateField('fingerprint', 'malformed-draft');
     await state.handleTestConnection();
-    expect(NodesAPI.testExistingNode).toHaveBeenCalledExactlyOnceWith('fixture-source');
+    expect(NodesAPI.testExistingNode).toHaveBeenCalledExactlyOnceWith(
+      'fixture-source',
+      undefined,
+      expect.any(AbortSignal),
+    );
     expect(NodesAPI.testConnection).not.toHaveBeenCalled();
     expect(state.testResult()).toMatchObject({ scope: 'saved', status: 'success' });
     expect(state.formData().fingerprint).toBe('malformed-draft');

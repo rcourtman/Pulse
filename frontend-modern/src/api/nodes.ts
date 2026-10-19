@@ -229,7 +229,10 @@ export class NodesAPI {
     });
   }
 
-  static async testConnection(node: NodeConfig): Promise<{
+  static async testConnection(
+    node: NodeConfig,
+    signal?: AbortSignal,
+  ): Promise<{
     status: string;
     message?: string;
     isCluster?: boolean;
@@ -241,12 +244,16 @@ export class NodesAPI {
     return apiFetchJSON(`${this.baseUrl}/test-connection`, {
       method: 'POST',
       body: JSON.stringify(node),
+      // A bounded editor test must not dispatch a later CSRF/org retry after
+      // its result has been retired. Unbounded callers keep existing defaults.
+      ...(signal ? { signal, retry: false } : {}),
     });
   }
 
   static async testExistingNode(
     nodeId: string,
     tls?: NodeConnectionTestTLSOptions,
+    signal?: AbortSignal,
   ): Promise<{
     status: string;
     message?: string;
@@ -256,6 +263,7 @@ export class NodesAPI {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}/test`, {
       method: 'POST',
       body: tls === undefined ? undefined : JSON.stringify(tls),
+      ...(signal ? { signal, retry: false } : {}),
     });
   }
 

@@ -10293,6 +10293,20 @@ retained credentials. A newly entered secret uses the provided-configuration
 test with the draft settings. Testing never saves edits; a saved-record result
 cannot establish that an unsaved pin works.
 
+The editor bounds each explicit connection test to 30 seconds, including CSRF
+preparation and response-body consumption. On expiry it aborts the browser wait,
+retires late results and restores the test control without saving, automatically
+retrying or claiming that the endpoint is untrusted or the server stopped. The
+message states that the server may still be testing. An explicit new test is
+required; an edit alone does not dispatch one. Disposing the editor releases the
+wait and timer without publishing a result. Signal-bound test calls disable
+automatic CSRF/organisation retries; other API callers retain their defaults.
+`useNodeModalState.connectionTest.test.ts` covers exact deadline, late success/error,
+new-test isolation and disposal. `node-connection-deadline.cjs` exercises the
+production editor/client against held HTTP headers, held bodies and held CSRF
+preparation, with desktop keyboard and 320px touch interaction. This is browser
+wait recovery, not installed certificate renewal or guest recovery.
+
 `useNodeModalState.connectionTest.test.ts` covers retained and replaced credentials,
 retirement of obsolete evidence and local validation. `frontend-modern/src/api/__tests__/nodes.test.ts`
 is the direct shared transport proof. The existing node setup Settings proof

@@ -32,16 +32,21 @@ type NodeModalTestResult = {
 };
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
+const CONNECTION_TEST_DEADLINE_MS = 30_000;
+const CONNECTION_TEST_TIMEOUT_MESSAGE =
+  'No connection result after 30 seconds. The server may still be testing. Nothing was saved. Check the endpoint before testing again.';
 
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
   let connectionTestGeneration = 0;
+  let connectionTestController: AbortController | undefined;
   const invalidateConnectionTest = () => {
     connectionTestGeneration++;
     setTestResult(null);
     // Invalidating UI evidence does not cancel a live request. Keep the test
-    // button disabled until it settles; edits must not start overlapping probes.
+    // button disabled until it settles or reaches its deadline; edits must not
+    // start overlapping probes.
   };
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
@@ -107,6 +112,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     disposed = true;
     bootstrapGeneration++;
     connectionTestGeneration++;
+    connectionTestController?.abort();
     clearQuickSetupState();
   });
 
@@ -651,7 +657,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const handleTestConnection = async () => {
-    if (isTesting() || props.isOpen === false) return;
+    if (disposed || isTesting() || props.isOpen === false) return;
     const data = formData();
     const scope = connectionTestScope();
     // A saved-record test does not consume this draft. Do not block it or
@@ -663,7 +669,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       return;
     }
     const generation = ++connectionTestGeneration;
-    const isCurrent = () => generation === connectionTestGeneration && props.isOpen !== false;
+    const isCurrent = () =>
+      !disposed && generation === connectionTestGeneration && props.isOpen !== false;
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
 
     if (!data.name.trim() && normalizedName) {
@@ -704,6 +711,22 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setIsTesting(true);
     setTestResult(null);
 
+    const controller = new AbortController();
+    connectionTestController = controller;
+    let timedOut = false;
+    let rejectAborted!: () => void;
+    // Race the entire operation, not only fetch headers. CSRF preparation or
+    // response-body consumption can also stall, and a retired transport may
+    // still resolve. Aborting the browser is not proof the server stopped.
+    const aborted = new Promise<never>((_, reject) => {
+      rejectAborted = () => reject(new Error('Connection test cancelled'));
+      controller.signal.addEventListener('abort', rejectAborted, { once: true });
+    });
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, CONNECTION_TEST_DEADLINE_MS);
+
     try {
       // Saved credentials stay on the saved record. Never combine them with
       // an unsaved endpoint, account or trust policy in the browser.
@@ -712,10 +735,12 @@ export const useNodeModalState = (props: NodeModalProps) => {
         message?: string;
         isCluster?: boolean;
         warnings?: string[];
-      } =
+      } = await Promise.race([
         scope === 'saved'
-          ? await NodesAPI.testExistingNode(props.editingNode!.id)
-          : await NodesAPI.testConnection(testData as NodeConfig);
+          ? NodesAPI.testExistingNode(props.editingNode!.id, undefined, controller.signal)
+          : NodesAPI.testConnection(testData as NodeConfig, controller.signal),
+        aborted,
+      ]);
       if (!isCurrent()) return;
       setTestResult({
         status:
@@ -733,17 +758,20 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
     } catch (error) {
       if (!isCurrent()) return;
-      logger.error('Test connection error:', error);
+      if (!timedOut) logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {
         errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
       }
       setTestResult({
         status: 'error',
-        message: errorMessage,
+        message: timedOut ? CONNECTION_TEST_TIMEOUT_MESSAGE : errorMessage,
         scope,
       });
     } finally {
+      clearTimeout(deadline);
+      controller.signal.removeEventListener('abort', rejectAborted);
+      connectionTestController = undefined;
       setIsTesting(false);
     }
   };
