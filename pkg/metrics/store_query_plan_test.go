@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 
 	_ "modernc.org/sqlite"
 )
@@ -550,10 +553,119 @@ func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
 							if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
 								t.Fatalf("unaggregated read sorts despite time-ordered index: %s", plan)
 							}
+							if len(ids) > 1 && strings.Contains(line, "MERGE (UNION ALL)") {
+								t.Fatalf("raw fleet read merges repeated identity strings across tiers: %s", plan)
+							}
 						}
 					})
 				}
 			}
 		}
+	}
+}
+
+func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
+	for _, clustered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("clustered_%t", clustered), func(t *testing.T) {
+			db := newPlanTestDB(t)
+			if clustered {
+				if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID;
+					CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := &Store{db: pdb.Wrap(db, "retained-resource-number-test")}
+			store.clusteredMetrics.Store(clustered)
+			start := time.Unix(1_800_003_600, 0)
+			end := start.Add(3 * time.Hour)
+			ids := make([]string, queryAllBatchChunkSize+3)
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			insert, err := tx.Prepare(`INSERT INTO metrics(resource_type,resource_id,metric_type,value,min_value,max_value,timestamp,tier) VALUES (?,?,?,?,?,?,?,?)`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range ids {
+				// Deliberately reverse lexical order, including IDs beyond the
+				// chunk boundary. A resource number belongs only to its statement.
+				ids[i] = fmt.Sprintf("guest-'-%04d", len(ids)-i)
+				for _, metric := range []string{"cpu", "memory", "unrequested"} {
+					for _, row := range []struct {
+						offset    int64
+						tier      Tier
+						value     float64
+						low, high any
+					}{
+						{60, TierMinute, 10, float64(0), float64(20)},
+						{65, TierRaw, 999, nil, nil}, // owned by the minute bucket
+						{180, TierRaw, 30, nil, nil},
+						{300, TierMinute, 50, nil, nil},
+						{15, TierRaw, 5, nil, nil}, // emitted after minute, must sort
+						{0, TierHourly, -100, nil, nil},
+						{-1, TierRaw, -999, nil, nil},
+						{3*3600 + 1, TierRaw, -999, nil, nil},
+					} {
+						if _, err := insert.Exec("vm", ids[i], metric, row.value+float64(i), row.low, row.high, start.Unix()+row.offset, string(row.tier)); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if _, err := insert.Exec("container", ids[i], "cpu", 9999, nil, nil, start.Unix()+60, string(TierMinute)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := insert.Exec("vm", "outside-scope", "cpu", 9999, nil, nil, start.Unix()+60, string(TierMinute)); err != nil {
+				t.Fatal(err)
+			}
+			if err := insert.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+
+			check := func(requested, filters []string, step int64) {
+				t.Helper()
+				full, err := store.QueryMetricTypesBatch("vm", requested, filters, start, end, step)
+				if err != nil {
+					t.Fatal(err)
+				}
+				values, err := store.QueryMetricValuesBatch("vm", requested, filters, start, end, step)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertMetricValueProjection(t, full, values)
+				seen := make(map[string]bool)
+				for _, id := range requested {
+					id = normalizeMetricIdentifier(id)
+					if id == "" || seen[id] {
+						continue
+					}
+					seen[id] = true
+					one, err := store.QueryMetricTypesBatch("vm", []string{id}, filters, start, end, step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(full[id], one[id]) {
+						t.Fatalf("scope/order changed for %q step=%d: batch=%+v single=%+v", id, step, full[id], one[id])
+					}
+				}
+				if _, exists := full["outside-scope"]; exists {
+					t.Fatal("unrequested resource returned")
+				}
+				if len(full) != len(seen)-1 { // one requested ID is deliberately absent
+					t.Fatalf("resource count=%d requested distinct=%d", len(full), len(seen))
+				}
+			}
+			for _, filters := range [][]string{nil, {"cpu"}, {"memory", "cpu", "absent"}} {
+				for _, step := range []int64{0, 1, 60} {
+					check([]string{ids[2], ids[0], ids[1], ids[2], "", "missing"}, filters, step)
+					check([]string{ids[1], ids[2], ids[0], "missing"}, filters, step)
+				}
+			}
+			check(append(append([]string{}, ids...), "missing", ids[0]), nil, 0)
+		})
 	}
 }

@@ -254,3 +254,153 @@ the final native proof exercises all affected rollup paths and boundaries.
 All nine required source checks for `fc58c597caf0051389c7bb3a5a6e10e7dfb3ac9b`
 ultimately passed, including REST-0 at 23:57:41Z. Its allocation flag and
 capacity-invalidated SLO are preserved separately from those source checks.
+
+
+## Final source comparison and absolute qualification
+
+The final shared-binding head is
+`e9dbca7c2b7159e84b922eeb5e4895ad4bb95611`. Its hosted proof in
+[run 39180037366](https://github.com/rcourtman/Pulse/actions/runs/39180037366)
+used synthetic merge `1cbbe76f2d6e063c3c59508f6da7c8688cbc82b3`, tree
+`7ab6a9f73e466e362e2fd45f877c480f4d2fe160`, with current main parent
+`6209d03d5a3895005f48b365cc2eeb8f1483f072` and that final PR head. The runner
+exposed four AMD EPYC 7763 CPUs, Go 1.26.9 and GOMAXPROCS=2. Fixed executable
+SHA-256: `74965528935c2a0da9c21dc9b33d874727aa12e430ab6916244f0b44088bbe25`.
+
+This hosted attempt failed both the explicit latency assertion and capacity
+validation: p50 85.225129 ms, p95 119.002157 ms and p99 122.928564 ms. Four of
+21 proof intervals recorded 12.16% to 25.56% background CPU, predominantly
+`provjobd2939212`. Admission's six intervals were at least 98.998% idle and the
+three after intervals at least 99.649% idle; no guest, steal or swap activity
+was recorded. Quiet admission does not excuse interference during measurement.
+All intervals and the adverse result remain retained. Artifact
+[12154824982](https://github.com/rcourtman/Pulse/actions/runs/39180037366/artifacts/12154824982)
+has GitHub digest
+`ed22be6f8ebc55bebeb5d5ba6015159b206f6f6271192d8c93665608bc6ddb7f6`.
+The entire job log and a per-file hash manifest are retained in the task's
+`pr-3070/publication-e9dbca` evidence directory. This attempt does not establish
+the idle-worker SLO.
+
+
+The final paired comparison passed. It sampled baseline
+`ed4a2c6b54ee1d139d5f198950c53b403596c17c` (tree
+`d11056db9ba2b097525b90000a550695b3a3355c`) and synthetic merge
+`1cbbe76f2d6e063c3c59508f6da7c8688cbc82b3` on the same Intel Xeon Platinum
+8573C worker, Go 1.26.9, runtime-default GOMAXPROCS, ten alternating 100 ms
+samples each. Four-hour cold charts improved 117.84 to 79.53 ms (-32.51%,
+p < 0.001); warm-handler and HTTP-transfer differences were not significant.
+Cold-chart allocation volume remained 21.47 MiB and approximately 508,200
+allocations. Small rollups improved 3.400 to 3.205 ms (-5.73%, p < 0.001),
+with 3.106 to 3.126 KiB (+0.64%) and 100 to 106 allocations (+6%). The
+500-node rollup improved 101.20 to 81.24 ms (-19.73%, p < 0.001), with
+3.875 to 3.480 KiB (-10.18%) and median 109 allocations in both samples.
+The 100-point write batch measured 1.568 to 1.672 ms (+6.58%, p = 0.007).
+The complete time, bytes and allocation comparison raised no flags against
+the unchanged >10%, p < 0.05 rule; the smaller increases are retained.
+Artifact
+[12156880181](https://github.com/rcourtman/Pulse/actions/runs/39180037366/artifacts/12156880181)
+has GitHub digest
+`d0d5af9567df10b4aa8b12e4d9495138b0ab3dd9026b03188161211edbf9ad6b`.
+Baseline/candidate metrics executable SHA-256 values were
+`52c6ab5b03a351a4a2ecdbff7875bd834a6eeb47647cae1daf463a2e51216173` and
+`c6b9500e6f752acde29a0c3441edfb0de3e39098ee05d5cddb2b08dbc245f9d3`.
+Full metadata retain the other affected-package executable identities and
+all 20 sample timestamps.
+
+All nine required source checks passed at the final PR head. Protected
+[PR 3070](https://github.com/rcourtman/Pulse/pull/3070) merged at
+2026-10-19T00:36:33Z as `5153c4ccda35cc50f12f32e3f6b98a87cb90f6b5`, with
+the same tree `7ab6a9f73e466e362e2fd45f877c480f4d2fe160` as the tested synthetic
+merge. That source landing neither waives the capacity-invalidated hosted
+proof nor constitutes release qualification.
+
+## Observed idle failure and remaining row-boundary cost
+
+The next disposable proof,
+[run 39181569505](https://github.com/rcourtman/pulse-enterprise/actions/runs/39181569505),
+used that exact landed public source, private control
+`4f8f9542ee122471c0bfe4f51334e7ef0d19796b`, Go 1.26.9 and two Intel Xeon
+3.30 GHz vCPUs with GOMAXPROCS=2. The fixed executable SHA-256 was
+`416ac833fc16778efe0fe09e94775d25e93ffe8fde0d4bf0e1b42d060f0beed9`.
+This time capacity validation passed: six admission samples established
+30.003 seconds of quiet capacity (at least 98.596% idle), all 19 measurement
+intervals had at most 2% background CPU, and guest, steal and swap were zero.
+The three after samples were at least 99.4% idle. The unchanged strict test
+still failed: p50 77.749800 ms, p95 90.425504 ms and p99 98.667173 ms against
+90 ms. The 0.425504 ms miss remains a failure; rounding or another unchanged
+attempt does not establish the SLO.
+
+All ten retained textual files were extracted with original byte counts and
+SHA-256 hashes verified. The complete job log SHA-256 is
+`b1f55ca54d3dc9b500eb1cde3e12db7950d4a037020d1b737964ebe6cc4b63d6`.
+The package also resides in the native task's
+`idle-evidence/private-proof-39181569505` directory, with its per-file manifest
+verified after transfer. No Actions diagnostic artifact was published.
+
+The separate diagnostic measured 78.198713 ms/op, 22,322,470 B/op and 508,181
+allocations. Its profile attributed 77.81% cumulative CPU to the retained
+reader, 63.66% to `database/sql.Rows.Next`, 40.78% to SQLite's VM and 11.79%
+to record comparisons. Text-column decoding accounted for 12.62%. These CPU
+samples include the benchmark's setup; they are attribution evidence, not a
+replacement SLO measurement.
+
+A bounded linear metric-filter experiment returned identical observations
+but did not demonstrate a consistent timing improvement, so the production
+membership predicate remains unchanged. A second alternating probe replaced
+repeated resource-ID text columns with a request-local integer and explicitly
+ordered completed series in Go. Both variants returned 36,000 observations
+with digest
+`0720c6e78804f01075db817e20fb5920f078519523af67e5fce7b2d1db04f8b0`.
+Twelve native rounds had median 58.2208005 ms for text identities versus
+51.237231 ms for resource numbers. The new plan retained bounded primary
+ranges and no temporary value sort. Shared-worker timings remain diagnostic.
+
+The shared retained reader now binds a bounded requested-resource table for
+raw fleet reads and returns the statement-local resource number rather than
+decoding/copying its resource ID for every observation. Numbers resolve against
+that statement's normalized resource list and never become persisted or public
+identity. The same metric/tier/time predicates and coverage probes select the
+observations. Completed detached series explicitly restore stable timestamp
+order in Go, removing SQLite's merge of tier branches by repeated identity
+strings. Single-resource reads and ordered streamed display buckets retain
+their existing paths and bounds. Regression coverage compares both point
+projections with single-resource reads on rowid and clustered layouts, including
+mixed tiers, nullable/zero extrema, reused names in another resource type,
+unrequested metrics, reordered scopes, missing/duplicate IDs and the
+500-resource chunk boundary. Final qualification is recorded below.
+
+The candidate passed the native full metrics suite, retained-reader correctness
+and query-plan checks, retained race checks (31.366 s), chart API tests, selected
+downstream chart sampling/SLO tests (24.315 s), and v5 metrics compatibility
+(0.143 s). The probe was hash-checked and moved outside the package before
+compiling either baseline or candidate. All qualification exits were zero.
+
+The baseline metrics/API executable SHA-256 values were
+`ce878df8c9df1193b457742ef913dac8073f29777b53aeb9148fecfd8b9a1686` and
+`ce964286839a7621c149a0ee3b7ffec06a1114f999f70a1053bc3c0b34159469`.
+The corresponding candidate values were
+`3de1f7a264c1b09a2cb89d2c4440fa4b66417576853b4755757c255665ef5b79` and
+`51c7b0cdb6d2fa371b9513e355f4a681e9b4bb134732f6967fd009ed4f0becd4`.
+Four source hashes are retained in `ordinal-query/candidate-source.sha256`;
+`store.go` is `535bce025ab3e544b6104bbd537b9c40022debdad0b96df91e6d5469c4162cba`
+and `store_query_plan_test.go` is
+`5aa9149ea8c4e1e201112fbe83d636240d1435f5bee8b686c87506e3d4b4f9b3`.
+
+Ten alternating native 100 ms samples per variant/case, with fixed binaries
+and GOMAXPROCS=2, measured cold-chart median allocation volume of 22,509,840
+versus 19,696,848 bytes (-12.50%) and counts of 508,193 versus 340,887.5
+(-32.92%). Median chart times were 102.660828 versus 103.846864 ms; their
+respective full ranges were 87.728537–134.246896 and
+85.662542–146.783133 ms. The adverse median and all samples remain retained.
+This shared-worker comparison establishes neither a chart latency improvement
+nor the absolute budget.
+
+Batch-read medians for 10, 50 and 100 resources were respectively
+7.429404/5.795782, 36.9792995/31.2997015 and 69.734954/62.305637 ms
+(baseline/candidate). The unchanged single-resource path measured
+0.6401185/0.5719735 ms. The unchanged streamed 50-resource display-bucket path
+measured 43.810747/44.7852855 ms, with median 120,605 allocations in both
+variants. These native timings are diagnostic. Complete logs, exits, source
+and executable manifests and the 120-row raw sample table are retained in
+`ordinal-query-qualified`. Fresh paired CI and the unchanged strict proof on
+observed idle capacity remain required after source landing.
