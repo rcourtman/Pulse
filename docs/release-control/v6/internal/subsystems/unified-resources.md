@@ -1796,6 +1796,18 @@ truncated line, and the narrower layouts drop the error, schedule, duration,
 and failure columns, so the reason a job failed must never depend on the
 column being present or wide enough. Replication search matches that error
 text.
+Live replication observations reconcile into the mounted row store. Its verdict,
+indicator, interpretation, error, comment, guest label and route must therefore
+remain reactive, including removal of optional fields, without remounting the
+row or closing its disclosure. A Failed → Unknown → OK transition withdraws the
+old error rather than showing a new count beside an old verdict; a new error
+overrides a historical OK result. Disclosure ownership follows the scoped job ID,
+not a shared VMID or a mutable label, and control IDs stay unique after insertion
+or reordering. `ProxmoxReplicationTable.test.tsx` checks mounted element/focus
+continuity and independent jobs; `replication-live-rows.cjs` exercises the actual
+page, HTTP reader, ordinary polling, filters and disclosure at desktop and phone
+widths. This proves presentation of collected evidence, not native replication,
+guest health, restore or operational recovery.
 `ProxmoxCephTable` and `ProxmoxMailGatewayTable` size every visible column
 through `getPlatformTableWeightedColumnWidthStyle` above their phone
 projections. A fixed-layout table that sizes only its always-on columns leaves

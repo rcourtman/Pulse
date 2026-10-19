@@ -48,6 +48,174 @@ describe('ProxmoxReplicationTable', () => {
   );
   const jobRow = () => screen.getByRole('cell', { name: '100 (web)' }).closest('tr')!;
 
+  it.each([400, 1440])(
+    'updates the mounted verdict, details and labels without losing disclosure focus at %ipx',
+    async (width) => {
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+      vi.spyOn(Date, 'now').mockReturnValue(1_700_000_300_000);
+      const initial = replicationJob({
+        lastSyncStatus: 'error',
+        error: 'Original snapshot unavailable',
+        comment: 'Original comment',
+        failCount: 2,
+      });
+      const [jobs, setJobs] = createSignal([initial]);
+      render(() => (
+        <ProxmoxReplicationTable
+          jobs={jobs()}
+          error={undefined}
+          onRetry={() => undefined}
+          emptyIcon={<span />}
+          emptyTitle="No replication jobs"
+          emptyDescription="Replication jobs appear here."
+        />
+      ));
+      const liveRow = () =>
+        screen.getByRole('cell', { name: width === 400 ? '100 web' : '100 (web)' }).closest('tr')!;
+      const row = liveRow();
+      const toggle = within(row).getByRole('button', {
+        name: 'Expand details for replication job 100-0',
+      });
+      toggle.focus();
+      await fireEvent.click(toggle);
+      const controls = toggle.getAttribute('aria-controls')!;
+      const detail = document.getElementById(controls)!;
+      const field = (label: string) =>
+        within(detail).getByText(label, { selector: 'dt' }).nextElementSibling!;
+      const retained = () => {
+        expect(liveRow()).toBe(row);
+        expect(document.getElementById(controls)).toBe(detail);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle).toHaveFocus();
+      };
+      retained();
+      expect(within(row).getByText('Failed', { exact: true })).toBeVisible();
+      expect(field('Error')).toHaveTextContent('Original snapshot unavailable');
+
+      // Omitting optional fields is how an unrecognised provider result is
+      // projected. It must also remove the previous error and comment.
+      const unknown = { ...initial, lastSyncStatus: undefined };
+      delete unknown.error;
+      delete unknown.comment;
+      delete unknown.failCount;
+      setJobs([unknown]);
+      retained();
+      expect(within(row).getByText('Unknown', { exact: true })).toHaveClass('text-amber-600');
+      expect(screen.getByRole('button', { name: 'Unknown, 1' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Failed, 0' })).toBeInTheDocument();
+      expect(within(detail).queryByText('Error', { selector: 'dt' })).toBeNull();
+      expect(within(detail).queryByText('Comment', { selector: 'dt' })).toBeNull();
+      expect(field('Reported last result')).toHaveTextContent('Not reported');
+      expect(field('Interpretation')).toHaveTextContent('This does not mean a sync is pending');
+
+      setJobs([replicationJob()]);
+      retained();
+      expect(within(row).getByText('OK', { exact: true })).toHaveClass('text-emerald-600');
+      expect(field('Interpretation')).toHaveTextContent('last reported sync succeeded');
+
+      // Conversely a newly reported error must not stay hidden behind an OK
+      // result, and every derived label must track the same new observation.
+      setJobs([
+        replicationJob({
+          guestName: 'renamed',
+          sourceNode: 'new-source',
+          targetNode: 'new-target',
+          schedule: '*/30',
+          error: '<b>New snapshot error</b>',
+          comment: 'New comment',
+          failCount: 0,
+          lastSyncUnix: 1_700_000_240,
+          nextSyncUnix: 1_700_000_900,
+          lastSyncDurationSeconds: 8,
+        }),
+      ]);
+      expect(
+        screen
+          .getByRole('cell', { name: width === 400 ? '100 renamed' : '100 (renamed)' })
+          .closest('tr'),
+      ).toBe(row);
+      expect(document.getElementById(controls)).toBe(detail);
+      expect(toggle).toHaveFocus();
+      expect(within(row).getByText('Failed', { exact: true })).toHaveClass('text-red-600');
+      expect(field('Guest')).toHaveTextContent('100 (renamed)');
+      expect(field('Route')).toHaveTextContent('new-source → new-target');
+      expect(field('Schedule')).toHaveTextContent('*/30');
+      expect(field('Last sync')).toHaveTextContent('1m ago');
+      expect(field('Next sync')).toHaveTextContent('in 10m');
+      expect(field('Duration')).toHaveTextContent('8s');
+      expect(field('Failures')).toHaveTextContent('0');
+      expect(field('Comment')).toHaveTextContent('New comment');
+      expect(field('Error')).toHaveTextContent('<b>New snapshot error</b>');
+      expect(field('Error').querySelector('b')).toBeNull();
+      expect(field('Interpretation')).toHaveTextContent(
+        'previous successful sync does not override',
+      );
+
+      setJobs([replicationJob({ enabled: false })]);
+      expect(within(row).getByText('Disabled', { exact: true })).toHaveClass('text-muted');
+      expect(field('Interpretation')).toHaveTextContent('job is disabled');
+      expect(field('Next sync')).toHaveTextContent('—');
+      expect(within(detail).queryByText('Error', { selector: 'dt' })).toBeNull();
+      expect(toggle).toHaveFocus();
+    },
+  );
+
+  it('keeps same-VMID jobs independent and controls unique after live insertion and reordering', async () => {
+    const first = replicationJob({ id: 'site-a-100-0', instance: 'site-a' });
+    const sibling = replicationJob({
+      id: 'site-a-100-1',
+      instance: 'site-a',
+      jobId: '100-1',
+      guestName: 'sibling',
+    });
+    const independent = replicationJob({
+      id: 'site-b-100-0',
+      instance: 'site-b',
+      guestName: 'independent',
+    });
+    const [jobs, setJobs] = createSignal([first, sibling, independent]);
+    render(() => (
+      <ProxmoxReplicationTable
+        jobs={jobs()}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+    const row = jobRow();
+    const toggle = within(row).getByRole('button');
+    toggle.focus();
+    await fireEvent.click(toggle);
+    const controls = toggle.getAttribute('aria-controls')!;
+    const detail = document.getElementById(controls)!;
+
+    // The former index-based control ID collides with a new row at index 0.
+    setJobs([
+      replicationJob({ id: 'site-c-100-0', instance: 'site-c', guestName: 'inserted' }),
+      independent,
+      { ...first, error: 'Only site-a failed' },
+      sibling,
+    ]);
+    expect(jobRow()).toBe(row);
+    expect(document.getElementById(controls)).toBe(detail);
+    expect(toggle).toHaveFocus();
+    expect(within(row).getByText('Failed', { exact: true })).toBeVisible();
+    for (const name of ['sibling', 'independent', 'inserted']) {
+      const other = screen.getByRole('cell', { name: `100 (${name})` }).closest('tr')!;
+      expect(within(other).getByText('OK', { exact: true })).toBeVisible();
+      expect(within(other).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+    }
+    const ids = [...document.querySelectorAll('button[aria-controls]')].map((b) =>
+      b.getAttribute('aria-controls'),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(detail.querySelector('[data-replication-job-error]')).toHaveTextContent(
+      'Only site-a failed',
+    );
+  });
+
   it.each([
     ['ok', { lastSyncStatus: 'ok' }, 'OK'],
     ['success alias', { lastSyncStatus: ' success ' }, 'OK'],

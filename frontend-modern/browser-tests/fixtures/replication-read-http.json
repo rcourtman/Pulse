@@ -1,0 +1,286 @@
+{
+  "ambiguous-status": {
+    "data": [
+      {
+        "enabled": true,
+        "guest": "100",
+        "guestId": 100,
+        "guestName": "protected-replica",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-100-0",
+        "instance": "site-a",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:13:04.126810764+01:00",
+        "schedule": "*/5",
+        "sourceNode": "node-a",
+        "targetNode": "node-b"
+      },
+      {
+        "durationHuman": "00:00:09",
+        "durationSeconds": 9,
+        "enabled": true,
+        "guest": "101",
+        "guestId": 101,
+        "guestName": "successful-sibling",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-101-0",
+        "instance": "site-a",
+        "jobId": "101-0",
+        "lastPolled": "2026-10-19T12:13:04.126810764+01:00",
+        "lastSyncDurationHuman": "00:00:09",
+        "lastSyncDurationSeconds": 9,
+        "lastSyncStatus": "ok",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:15:00Z",
+        "nextSyncUnix": 1792408500,
+        "schedule": "*/15",
+        "sourceNode": "node-a",
+        "targetNode": "node-c"
+      },
+      {
+        "enabled": true,
+        "guestId": 100,
+        "guestName": "independent-replica",
+        "id": "site-b-100-0",
+        "instance": "site-b",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:00:00+01:00",
+        "lastSyncStatus": "ok",
+        "sourceNode": "peer-a",
+        "targetNode": "peer-b"
+      }
+    ],
+    "meta": {
+      "total": 3
+    }
+  },
+  "empty": {
+    "data": [
+      {
+        "enabled": true,
+        "guestId": 100,
+        "guestName": "independent-replica",
+        "id": "site-b-100-0",
+        "instance": "site-b",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:00:00+01:00",
+        "lastSyncStatus": "ok",
+        "sourceNode": "peer-a",
+        "targetNode": "peer-b"
+      }
+    ],
+    "meta": {
+      "total": 1
+    }
+  },
+  "initial": {
+    "data": [
+      {
+        "durationHuman": "00:00:10",
+        "durationSeconds": 10,
+        "enabled": true,
+        "error": "Synthetic source snapshot unavailable",
+        "failCount": 2,
+        "guest": "100",
+        "guestId": 100,
+        "guestName": "protected-replica",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-100-0",
+        "instance": "site-a",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:13:04.126715925+01:00",
+        "lastSyncDurationHuman": "00:00:10",
+        "lastSyncDurationSeconds": 10,
+        "lastSyncStatus": "error",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:05:00Z",
+        "nextSyncUnix": 1792407900,
+        "schedule": "*/5",
+        "sourceNode": "node-a",
+        "targetNode": "node-b"
+      },
+      {
+        "durationHuman": "00:00:09",
+        "durationSeconds": 9,
+        "enabled": true,
+        "guest": "101",
+        "guestId": 101,
+        "guestName": "successful-sibling",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-101-0",
+        "instance": "site-a",
+        "jobId": "101-0",
+        "lastPolled": "2026-10-19T12:13:04.126715925+01:00",
+        "lastSyncDurationHuman": "00:00:09",
+        "lastSyncDurationSeconds": 9,
+        "lastSyncStatus": "ok",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:15:00Z",
+        "nextSyncUnix": 1792408500,
+        "schedule": "*/15",
+        "sourceNode": "node-a",
+        "targetNode": "node-c"
+      },
+      {
+        "enabled": true,
+        "guestId": 100,
+        "guestName": "independent-replica",
+        "id": "site-b-100-0",
+        "instance": "site-b",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:00:00+01:00",
+        "lastSyncStatus": "ok",
+        "sourceNode": "peer-a",
+        "targetNode": "peer-b"
+      }
+    ],
+    "meta": {
+      "total": 3
+    }
+  },
+  "recovered": {
+    "data": [
+      {
+        "durationHuman": "00:00:08",
+        "durationSeconds": 8,
+        "enabled": true,
+        "guest": "100",
+        "guestId": 100,
+        "guestName": "protected-replica",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-100-0",
+        "instance": "site-a",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:13:04.126818544+01:00",
+        "lastSyncDurationHuman": "00:00:08",
+        "lastSyncDurationSeconds": 8,
+        "lastSyncStatus": "ok",
+        "lastSyncTime": "2026-10-19T11:10:00Z",
+        "lastSyncUnix": 1792408200,
+        "nextSyncTime": "2026-10-19T11:15:00Z",
+        "nextSyncUnix": 1792408500,
+        "schedule": "*/5",
+        "sourceNode": "node-a",
+        "state": "ok",
+        "status": "ok",
+        "targetNode": "node-b"
+      },
+      {
+        "durationHuman": "00:00:09",
+        "durationSeconds": 9,
+        "enabled": true,
+        "guest": "101",
+        "guestId": 101,
+        "guestName": "successful-sibling",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-101-0",
+        "instance": "site-a",
+        "jobId": "101-0",
+        "lastPolled": "2026-10-19T12:13:04.126818544+01:00",
+        "lastSyncDurationHuman": "00:00:09",
+        "lastSyncDurationSeconds": 9,
+        "lastSyncStatus": "ok",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:15:00Z",
+        "nextSyncUnix": 1792408500,
+        "schedule": "*/15",
+        "sourceNode": "node-a",
+        "targetNode": "node-c"
+      },
+      {
+        "enabled": true,
+        "guestId": 100,
+        "guestName": "independent-replica",
+        "id": "site-b-100-0",
+        "instance": "site-b",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:00:00+01:00",
+        "lastSyncStatus": "ok",
+        "sourceNode": "peer-a",
+        "targetNode": "peer-b"
+      }
+    ],
+    "meta": {
+      "total": 3
+    }
+  },
+  "short-inventory": {
+    "data": [
+      {
+        "durationHuman": "00:00:10",
+        "durationSeconds": 10,
+        "enabled": true,
+        "error": "Synthetic source snapshot unavailable",
+        "failCount": 2,
+        "guest": "100",
+        "guestId": 100,
+        "guestName": "protected-replica",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-100-0",
+        "instance": "site-a",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:13:04.126715925+01:00",
+        "lastSyncDurationHuman": "00:00:10",
+        "lastSyncDurationSeconds": 10,
+        "lastSyncStatus": "error",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:05:00Z",
+        "nextSyncUnix": 1792407900,
+        "schedule": "*/5",
+        "sourceNode": "node-a",
+        "targetNode": "node-b"
+      },
+      {
+        "durationHuman": "00:00:09",
+        "durationSeconds": 9,
+        "enabled": true,
+        "guest": "101",
+        "guestId": 101,
+        "guestName": "successful-sibling",
+        "guestNode": "node-a",
+        "guestType": "qemu",
+        "id": "site-a-101-0",
+        "instance": "site-a",
+        "jobId": "101-0",
+        "lastPolled": "2026-10-19T12:13:04.126715925+01:00",
+        "lastSyncDurationHuman": "00:00:09",
+        "lastSyncDurationSeconds": 9,
+        "lastSyncStatus": "ok",
+        "lastSyncTime": "2026-10-19T11:00:00Z",
+        "lastSyncUnix": 1792407600,
+        "nextSyncTime": "2026-10-19T11:15:00Z",
+        "nextSyncUnix": 1792408500,
+        "schedule": "*/15",
+        "sourceNode": "node-a",
+        "targetNode": "node-c"
+      },
+      {
+        "enabled": true,
+        "guestId": 100,
+        "guestName": "independent-replica",
+        "id": "site-b-100-0",
+        "instance": "site-b",
+        "jobId": "100-0",
+        "lastPolled": "2026-10-19T12:00:00+01:00",
+        "lastSyncStatus": "ok",
+        "sourceNode": "peer-a",
+        "targetNode": "peer-b"
+      }
+    ],
+    "meta": {
+      "total": 3
+    }
+  }
+}

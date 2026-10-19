@@ -1,4 +1,12 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -614,20 +622,24 @@ export const ProxmoxReplicationTable: Component<{
                 body={
                   <>
                     <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
-                      {(job, index) => {
-                        const classification = classifyJob(job);
-                        const ind = indicatorFor(classification);
+                      {(job) => {
+                        // Windowed rows reconcile observations into the same store.
+                        // Keep derived fields reactive without remounting the row
+                        // or discarding an operator's open details and focus.
+                        const classification = createMemo(() => classifyJob(job));
+                        const ind = createMemo(() => indicatorFor(classification()));
                         const next = () => nextSyncFor(job, now());
-                        const sourceNode = (job.sourceNode ?? '').trim() || '—';
-                        const targetNode = (job.targetNode ?? '').trim() || '—';
-                        const guestLabel = formatGuestLabel(job);
-                        const jobKey = `${job.id}:${job.jobId}:${job.guestId ?? index()}`;
-                        const detailRowId = `replication-job-detail-${index()}`;
-                        const errorText = (job.error ?? '').trim();
-                        const comment = (job.comment ?? '').trim();
-                        const isExpanded = () => expandedJobKey() === jobKey;
+                        const sourceNode = () => (job.sourceNode ?? '').trim() || '—';
+                        const targetNode = () => (job.targetNode ?? '').trim() || '—';
+                        const guestLabel = () => formatGuestLabel(job);
+                        // IDs belong to mounted disclosures, not changing list
+                        // positions or VMIDs shared by independent connections.
+                        const detailRowId = `replication-job-detail-${createUniqueId()}`;
+                        const errorText = () => (job.error ?? '').trim();
+                        const comment = () => (job.comment ?? '').trim();
+                        const isExpanded = () => expandedJobKey() === job.id;
                         const toggleDetails = () => {
-                          setExpandedJobKey(isExpanded() ? null : jobKey);
+                          setExpandedJobKey(isExpanded() ? null : job.id);
                         };
                         return (
                           <>
@@ -640,7 +652,7 @@ export const ProxmoxReplicationTable: Component<{
                             >
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('name')} text-base-content ${mobilePaddingClass()}`}
-                                title={guestLabel}
+                                title={guestLabel()}
                               >
                                 <div class="flex min-w-0 items-center gap-2">
                                   <PlatformResourceDetailToggleButton
@@ -654,7 +666,7 @@ export const ProxmoxReplicationTable: Component<{
                                   >
                                     {isCompact()
                                       ? formatMobileReplicationGuestLabel(job)
-                                      : guestLabel}
+                                      : guestLabel()}
                                   </span>
                                 </div>
                               </TableCell>
@@ -665,15 +677,15 @@ export const ProxmoxReplicationTable: Component<{
                                   <Show when={!isCompact()}>
                                     <StatusDot
                                       size="sm"
-                                      variant={ind.variant}
-                                      title={ind.label}
+                                      variant={ind().variant}
+                                      title={ind().label}
                                       ariaHidden
                                     />
                                   </Show>
                                   <span
-                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
+                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind().tone}`}
                                   >
-                                    {ind.label}
+                                    {ind().label}
                                   </span>
                                 </div>
                               </TableCell>
@@ -691,17 +703,17 @@ export const ProxmoxReplicationTable: Component<{
                                   when={isCompact()}
                                   fallback={
                                     <span class="inline-flex items-center gap-1 font-mono text-[11px]">
-                                      <span>{sourceNode}</span>
+                                      <span>{sourceNode()}</span>
                                       <ArrowRightIcon
                                         class="h-3 w-3 text-muted"
                                         aria-hidden="true"
                                       />
-                                      <span>{targetNode}</span>
+                                      <span>{targetNode()}</span>
                                     </span>
                                   }
                                 >
                                   <span class="font-mono text-[10px]">
-                                    {sourceNode}→{targetNode}
+                                    {sourceNode()}→{targetNode()}
                                   </span>
                                 </Show>
                               </TableCell>
@@ -768,14 +780,14 @@ export const ProxmoxReplicationTable: Component<{
                                   class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                 >
                                   <Show
-                                    when={errorText}
+                                    when={errorText()}
                                     fallback={<span class="text-muted">—</span>}
                                   >
                                     <span
                                       class="block truncate text-red-600 dark:text-red-300"
-                                      title={errorText}
+                                      title={errorText()}
                                     >
-                                      {errorText}
+                                      {errorText()}
                                     </span>
                                   </Show>
                                 </TableCell>
@@ -793,13 +805,13 @@ export const ProxmoxReplicationTable: Component<{
                                     the expansion is where the whole job is always readable,
                                     starting with why it failed. */}
                                 <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[10px] leading-4 sm:text-xs sm:leading-5">
-                                  <Show when={errorText}>
+                                  <Show when={errorText()}>
                                     <dt class="font-semibold text-muted">Error</dt>
                                     <dd
                                       class="wrap-break-word text-red-600 dark:text-red-300"
                                       data-replication-job-error
                                     >
-                                      {errorText}
+                                      {errorText()}
                                     </dd>
                                   </Show>
                                   <dt class="font-semibold text-muted">Reported last result</dt>
@@ -808,17 +820,17 @@ export const ProxmoxReplicationTable: Component<{
                                   </dd>
                                   <dt class="font-semibold text-muted">Interpretation</dt>
                                   <dd class="wrap-anywhere text-base-content">
-                                    {resultExplanation(classification)}
+                                    {resultExplanation(classification())}
                                   </dd>
                                   <dt class="font-semibold text-muted">Guest</dt>
-                                  <dd class="break-all text-base-content">{guestLabel}</dd>
+                                  <dd class="break-all text-base-content">{guestLabel()}</dd>
                                   <dt class="font-semibold text-muted">Job</dt>
                                   <dd class="break-all font-mono text-base-content">
                                     {job.jobId || job.id}
                                   </dd>
                                   <dt class="font-semibold text-muted">Route</dt>
                                   <dd class="font-mono text-base-content">
-                                    {sourceNode} → {targetNode}
+                                    {sourceNode()} → {targetNode()}
                                   </dd>
                                   <dt class="font-semibold text-muted">Schedule</dt>
                                   <dd class="font-mono text-base-content">{job.schedule || '—'}</dd>
@@ -845,9 +857,9 @@ export const ProxmoxReplicationTable: Component<{
                                   <dd class="tabular-nums text-base-content">
                                     {job.failCount ?? 0}
                                   </dd>
-                                  <Show when={comment}>
+                                  <Show when={comment()}>
                                     <dt class="font-semibold text-muted">Comment</dt>
-                                    <dd class="wrap-break-word text-base-content">{comment}</dd>
+                                    <dd class="wrap-break-word text-base-content">{comment()}</dd>
                                   </Show>
                                 </dl>
                               </InlineDetailTableRow>
