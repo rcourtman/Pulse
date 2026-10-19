@@ -5776,7 +5776,8 @@ both against Docker Hub and GHCR. A Docker Hub 502 during a blob copy failed the
 first beta, but idempotence alone does not permit repeating a refusal. Only an
 exit-1 blob-transfer diagnostic ending in HTTP 502/503/504 can retry, up to four
 times with doubling backoff from 10 seconds. Every diagnostic line must match
-the recognised transfer form. Access/authentication refusals, mixed or unknown
+the recognised transfer form, not arbitrary error text before/after a 5xx.
+Access/authentication refusals, mixed or unknown
 errors, trust/policy failures and nonordinary exits stop immediately, preserving
 the command exit and diagnostic, without another registry/reference. Only a
 successful attempt's stdout is admitted; private diagnostic staging is removed

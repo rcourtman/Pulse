@@ -68,7 +68,7 @@ trap cleanup_registry_diagnostic EXIT
 transient_registry_diagnostic() {
     LC_ALL=C awk '
         tolower($0) ~ /denied|forbidden|unauthorized|insufficient_scope|authentication required|authorization failed/ { unknown = 1; next }
-        /^(ERROR: )?failed to copy: .*unexpected status.*(502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout)$/ { seen = 1; next }
+        /^(ERROR: )?failed to copy: (httpReadSeeker: failed open: )?unexpected status( code)?( from (GET|HEAD) request to https:\/\/[^[:space:]]+| https:\/\/[^[:space:]]+)?[:]? (502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout)$/ { seen = 1; next }
         { unknown = 1 }
         END { exit !(seen && !unknown) }
     ' "$diagnostic"

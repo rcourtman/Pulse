@@ -276,6 +276,9 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
             "ERROR: failed to copy: DENIED; unexpected status 502 Bad Gateway",
             "ERROR: failed to copy: FORBIDDEN; unexpected status 502 Bad Gateway",
             "ERROR: failed to copy: Unauthorized; unexpected status 502 Bad Gateway",
+            "ERROR: failed to copy: x509: unknown authority; unexpected status 502 Bad Gateway",
+            "ERROR: failed to copy: signature verification failed; unexpected status 502 Bad Gateway",
+            "ERROR: failed to copy: unexpected status (unknown failure) 502 Bad Gateway",
             "ERROR: failed to copy: unexpected status 429 Too Many Requests",
         )
         for diagnostic in diagnostics:
@@ -313,6 +316,8 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
             "ERROR: failed to copy: unexpected status 503 Service Unavailable",
             "ERROR: failed to copy: unexpected status 504 Gateway Timeout",
             "failed to copy: unexpected status from GET request to https://registry.example/v2/blob: 502 Bad Gateway",
+            "ERROR: failed to copy: unexpected status from HEAD request to https://registry.example/v2/blob: 503 Service Unavailable",
+            "failed to copy: httpReadSeeker: failed open: unexpected status code https://registry.example/v2/blob: 502 Bad Gateway",
         ):
             for tool in ("docker", "gh"):
                 with self.subTest(tool=tool, diagnostic=diagnostic):
