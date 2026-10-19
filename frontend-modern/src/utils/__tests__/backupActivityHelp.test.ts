@@ -80,7 +80,7 @@ describe('backup activity evidence help', () => {
     const content = section();
     const words = content.textContent?.replace(/\s+/g, ' ');
     for (const phrase of [
-      'not just the rows matching',
+      'The activity chart and table use the same search, node, type, source',
       'Clear date filter',
       "browser's local timezone",
       'not datastore space used, free space or bytes transferred',

@@ -285,12 +285,13 @@ count of successful backup jobs or distinct protected guests.
 | Volume shows some sizes and also reports points without a positive size | Treat the total as partial, not the size of all backups. Compare the same point's existing provider record if you already have it. |
 | A listed point does not appear in the chart | Compare its **Created** date with the selected range. Running, incomplete, undated and future-dated points do not contribute to completed activity; older points can remain in the table outside the chart window. |
 
-The activity chart covers the collected inventory, not just the rows matching
-the table's search, node, type, source or location filters. Selecting a chart
-day filters those rows further; **Clear date filter** removes that selection.
-Keep the range and active filters with a disagreement rather than comparing
-an unfiltered chart total with a filtered row count. Calendar days use your
-browser's local timezone.
+The activity chart and table use the same search, node, type, source,
+verification and location filters. Selecting a chart day narrows only the
+table; the rest of the timeline stays available. **Clear date filter** removes
+that day selection. The chart's range still excludes older activity even when
+older points remain in the table. Compare the same filters, dates and completed
+records before comparing totals, and retain those choices with a disagreement.
+Calendar days use your browser's local timezone.
 
 Reported volume is not datastore space used, free space or bytes transferred.
 PBS deduplication and shared copies mean it is not a storage-capacity estimate.

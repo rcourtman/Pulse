@@ -159,7 +159,7 @@ const result = {
       for (const phrase of [
         'it is not a zero-byte backup',
         'Treat the total as partial',
-        'not just the rows matching',
+        'The activity chart and table use the same search, node, type, source',
         'Clear date filter',
         "browser's local timezone",
         'not datastore space used, free space or bytes transferred',
@@ -171,7 +171,7 @@ const result = {
         'scope',
         page
           .locator('article p')
-          .filter({ hasText: 'The activity chart covers the collected inventory' }),
+          .filter({ hasText: 'The activity chart and table use the same search' }),
       );
       const coverage = page.getByRole('link', { name: 'Coverage checks', exact: true });
       await activate(coverage);
