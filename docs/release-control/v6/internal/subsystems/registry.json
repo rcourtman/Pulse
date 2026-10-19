@@ -6741,6 +6741,7 @@
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/pve_backup_guest_warning_test.go",
+              "internal/monitoring/pve_backup_log_attribution_test.go",
               "internal/monitoring/pve_disabled_storage_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",

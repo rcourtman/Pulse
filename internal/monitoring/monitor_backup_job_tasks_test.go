@@ -31,7 +31,7 @@ func TestParseVzdumpJobLogFinishedJob(t *testing.T) {
 		EndTime:   start.Add(10 * time.Minute),
 	}
 
-	tasks := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
+	tasks, _ := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
 		"INFO: starting new backup job: vzdump 101 102 103 --mode snapshot --storage pbs",
 		"INFO: Starting Backup of VM 101 (qemu)",
 		"INFO: creating Proxmox Backup Server archive 'vm/101/2026-07-25T02:00:01Z'",
@@ -96,7 +96,7 @@ func TestParseVzdumpJobLogRunningJob(t *testing.T) {
 		StartTime: start,
 	}
 
-	tasks := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
+	tasks, _ := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
 		"INFO: Starting Backup of VM 101 (qemu)",
 		"INFO: Finished Backup of VM 101 (00:00:45)",
 		"INFO: Starting Backup of VM 102 (lxc)",
@@ -125,7 +125,7 @@ func TestParseVzdumpJobLogJobDiedMidGuest(t *testing.T) {
 		EndTime:   start.Add(time.Minute),
 	}
 
-	tasks := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
+	tasks, _ := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines(
 		"INFO: Starting Backup of VM 101 (qemu)",
 	))
 
@@ -147,7 +147,7 @@ func TestParseVzdumpJobLogNoGuestMarkers(t *testing.T) {
 		Type:      "vzdump",
 		StartTime: time.Now(),
 	}
-	if tasks := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines("INFO: nothing to do")); tasks != nil {
+	if tasks, _ := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines("INFO: nothing to do")); tasks != nil {
 		t.Errorf("expected no synthetic tasks, got %+v", tasks)
 	}
 }
