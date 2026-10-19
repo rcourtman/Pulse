@@ -275,8 +275,16 @@ function serve(req, res, next) {
 
         // Preserve the client's existing two-minute idempotent 429 wait.
         current.modes[source] = 'rate-limit';
+        const waiting = page.waitForEvent('console', {
+          predicate: (message) =>
+            message.text().includes('Rate limit hit, retrying GET after 120000ms'),
+        });
         await activate(page.getByRole('button', { name: 'Refresh backups', exact: true }));
-        await expect.poll(() => count(source)).toBe(6);
+        await waiting;
+        // Seeing the server request is not proof the browser received 429 and
+        // installed its delay. Yield through that client turn before advancing.
+        await page.evaluate(() => Promise.resolve());
+        assert.equal(count(source), 6);
         await page.clock.fastForward(119_999);
         assert.equal(count(source), 6);
         await page.clock.fastForward(1);
