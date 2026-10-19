@@ -91,6 +91,25 @@ returns, handled signals, preparation failures and refused cleanup. They do not
 establish cleanup after SIGKILL/power loss, real binary termination, native
 registration/removal recovery or installed acceptance.
 
+### Legacy Unix token recovery accounts for the complete file
+
+The root/private-file compatibility reader admits a nonempty value of at most
+4096 bytes, with no newline or exactly one final newline. It compares the
+bounded shell read with the observed file size in a byte locale: a second line,
+extra newline or discarded NUL cannot silently select a credential prefix.
+Collector and separate action-token ingress stop before host work on invalid
+files; saved legacy-token recovery returns no value. Valid bytes are not shell
+syntax: quotes and assignment prefixes remain literal credential contents.
+Caller files, saved identity, credential precedence and the descriptor-safe Go
+reader are unchanged. This is not a new race-safe descriptor implementation.
+
+`agent_uninstall_state.py`, registered by
+`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing`, executes both
+ingress paths and saved-token recovery using the production private-file/parent
+checks. It retains file bytes/modes/inodes and proves no service/transport/state
+operations for invalid ingress. Service and transport peers remain inert;
+native installation, TLS and installed recovery require separate proof.
+
 ### Explicit Unix installer transport policy wins over curl defaults
 
 All direct installer curl requests ignore `.curlrc` before processing their

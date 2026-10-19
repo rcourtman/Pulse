@@ -3723,3 +3723,18 @@ checks remain before generation and delivery. Missing private rendering fails
 explicitly. `pkg/server/server_test.go` retains runtime identity separation.
 Backup reporting tests cover missing renderer and unchanged entitlement refusal.
 The live disposable Pro runtime proof exercises actual registered rendering.
+
+### Legacy Unix credential reads cannot hide extra file bytes
+
+The root-owned compatibility path in `read_collector_token_file_safely` retains
+the existing private regular-file and trusted-parent checks. A byte-counted,
+bounded read additionally rejects multiline, extra-newline and NUL-discarded
+contents before collector/action-token ingress can proceed. Values and caller
+files are not repaired, rewritten or deleted. The single-open descriptor-safe
+Go reader, credential precedence, TLS and lifecycle authority are unchanged;
+the shell compatibility path gains no claim of descriptor-race safety.
+
+`agent_uninstall_state.py` exercises malformed/limit/UTF-8/literal-value cases,
+both ingress consumers, saved recovery and unreadable/symlink/FIFO refusal with
+unchanged private files and no host actions. Native and installed acceptance
+remain separate from these closed source controls.
