@@ -258,8 +258,8 @@ type maintenanceRequest struct {
 }
 
 var (
-	startupMaintenanceHook       func()
-	metricsIdentityMigrationHook func()
+	startupMaintenanceHook        func()
+	metricsClusteredMigrationHook func(string)
 )
 
 // Store provides persistent metrics storage
@@ -295,14 +295,15 @@ type Store struct {
 	stopOnce                   sync.Once
 	stopping                   atomic.Bool
 	syncWaitWarnNano           atomic.Int64
-	identityMigrationPending   atomic.Bool
+	clusteredMetrics           atomic.Bool
 	startupMaintenanceActive   atomic.Bool
 	commercialRetentionSeconds atomic.Int64
 	commercialPurgeEligibleAt  atomic.Int64
 
 	// startupHook is captured once at construction so a store that outlives
 	// the test that built it never invokes a later test's hook.
-	startupHook func()
+	startupHook            func()
+	clusteredMigrationHook func(string)
 }
 
 // SetCommercialHistoryRetention applies a delayed commercial ceiling to the
@@ -387,15 +388,16 @@ func NewStore(config StoreConfig) (*Store, error) {
 	db := pdb.Wrap(rawDB, "metrics")
 
 	store := &Store{
-		db:                db,
-		config:            config,
-		buffer:            make([]bufferedMetric, 0, config.WriteBufferSize),
-		writeCh:           make(chan writeRequest, 100), // Buffer for write batches
-		maintenanceCh:     make(chan maintenanceRequest, 1),
-		stopCh:            make(chan struct{}),
-		doneCh:            make(chan struct{}),
-		maintenanceDoneCh: make(chan struct{}),
-		startupHook:       startupMaintenanceHook,
+		db:                     db,
+		config:                 config,
+		buffer:                 make([]bufferedMetric, 0, config.WriteBufferSize),
+		writeCh:                make(chan writeRequest, 100), // Buffer for write batches
+		maintenanceCh:          make(chan maintenanceRequest, 1),
+		stopCh:                 make(chan struct{}),
+		doneCh:                 make(chan struct{}),
+		maintenanceDoneCh:      make(chan struct{}),
+		startupHook:            startupMaintenanceHook,
+		clusteredMigrationHook: metricsClusteredMigrationHook,
 	}
 
 	// Initialize schema
@@ -453,27 +455,11 @@ func NewStore(config StoreConfig) (*Store, error) {
 func (s *Store) initSchema() error {
 	schema := `
 		-- Main metrics table
-		CREATE TABLE IF NOT EXISTS metrics (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			resource_type TEXT NOT NULL,
-			resource_id TEXT NOT NULL,
-			metric_type TEXT NOT NULL,
-			value REAL NOT NULL,
-			min_value REAL,
-			max_value REAL,
-			timestamp INTEGER NOT NULL,
-			tier TEXT NOT NULL DEFAULT 'raw'
-		);
+		CREATE TABLE IF NOT EXISTS metrics (` + metricsTableColumns + `) WITHOUT ROWID;
 
 		-- Index for retention pruning
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time 
 		ON metrics(tier, timestamp);
-
-		-- Identity and range-read index. Created non-unique here so reads
-		-- can name it on every schema generation; ensureMetricsIdentityIndex
-		-- makes it the unique identity index.
-		CREATE INDEX IF NOT EXISTS idx_metrics_query_all
-		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
 
 		-- Metadata table for tracking rollup state
 		CREATE TABLE IF NOT EXISTS metrics_meta (
@@ -487,8 +473,21 @@ func (s *Store) initSchema() error {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
-	if err := s.ensureMetricsIdentityIndex(); err != nil {
-		return err
+	clustered, err := metricsTableIsClustered(context.Background(), s.db.DB)
+	if err != nil {
+		return fmt.Errorf("inspect metrics physical layout: %w", err)
+	}
+	s.clusteredMetrics.Store(clustered)
+	if !clustered {
+		// Existing rowid stores continue serving on their authoritative index
+		// until deferred maintenance can atomically replace the table.
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_metrics_query_all
+			ON metrics(resource_type, resource_id, tier, timestamp, metric_type)`); err != nil {
+			return err
+		}
+		if err := s.ensureMetricsIdentityIndex(); err != nil {
+			return err
+		}
 	}
 	if err := s.initAvailabilityHistorySchema(); err != nil {
 		return err
@@ -498,7 +497,7 @@ func (s *Store) initSchema() error {
 	return nil
 }
 
-// metricsIdentityIndex is the one B-tree that enforces sample identity and
+// metricsIdentityIndex is the legacy B-tree that enforces sample identity and
 // serves every range read. Its columns are time-major within a resource, so
 // the samples one poll writes for a resource share leaf pages. The retired
 // metric-major order gave every series its own insertion point, and each
@@ -531,10 +530,10 @@ func (s *Store) ensureMetricsIdentityIndex() error {
 	}
 	if current || retiredUnique {
 		// Identity is already enforced by a unique index. Keep serving with
-		// that crash-safe schema and defer the O(rows) rebuild to the
+		// that crash-safe schema and defer the O(rows) table replacement to the
 		// startup-maintenance worker so NewStore latency stays bounded.
-		s.identityMigrationPending.Store(true)
-		log.Info().Strs("retired_indexes", retired).Msg("Scheduled metrics identity index consolidation")
+		// Rebuilding its index first would immediately discard that work.
+		log.Info().Strs("retired_indexes", retired).Msg("Scheduled clustered metrics table migration")
 		return nil
 	}
 
@@ -573,6 +572,16 @@ func (s *Store) existingRetiredMetricsIdentityIndexes() (existing []string, anyU
 }
 
 func (s *Store) migrateMetricsIdentityIndex() error {
+	// Another handle may have completed the physical upgrade while this
+	// store's deferred maintenance was queued. Do not rebuild a redundant tree.
+	clustered, err := metricsTableIsClustered(context.Background(), s.db.DB)
+	if err != nil {
+		return fmt.Errorf("inspect metrics layout before identity migration: %w", err)
+	}
+	if clustered {
+		s.clusteredMetrics.Store(true)
+		return nil
+	}
 	if err := s.replaceMetricsIdentityIndex(); err == nil {
 		log.Info().Msg("Consolidated metrics identity index")
 		return nil
@@ -611,17 +620,12 @@ func (s *Store) replaceMetricsIdentityIndex() error {
 		if _, err := tx.Exec(`DROP INDEX IF EXISTS ` + metricsIdentityIndex); err != nil {
 			return fmt.Errorf("drop non-unique identity index: %w", err)
 		}
-		if metricsIdentityMigrationHook != nil {
-			metricsIdentityMigrationHook()
-		}
 		if _, err := tx.Exec(`
 			CREATE UNIQUE INDEX ` + metricsIdentityIndex + `
 			ON metrics(` + strings.Join(metricsIdentityColumns, ", ") + `)
 		`); err != nil {
 			return fmt.Errorf("create unique identity index: %w", err)
 		}
-	} else if metricsIdentityMigrationHook != nil {
-		metricsIdentityMigrationHook()
 	}
 	for _, name := range retiredMetricsIdentityIndexes {
 		if _, err := tx.Exec(`DROP INDEX IF EXISTS ` + name); err != nil {
@@ -762,6 +766,10 @@ func (s *Store) migrateAutoVacuum() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	s.migrateAutoVacuumContext(ctx)
+}
+
+func (s *Store) migrateAutoVacuumContext(ctx context.Context) {
 	// auto_vacuum is only a per-connection setting until a VACUUM on that same
 	// connection rewrites the file header. Running the pragma and the VACUUM on
 	// separate pool connections could leave the file at NONE, so pin both to one
@@ -1092,7 +1100,7 @@ func (s *Store) runStartupMaintenance() {
 	start := time.Now()
 
 	// Signal the ingestion worker that the write lock may be held for a long
-	// time by the deferred identity-index rebuild and the auto-vacuum VACUUM.
+	// time by the deferred table migration and the auto-vacuum VACUUM.
 	// Without this a large legacy database drops every metric batch enqueued
 	// during the one-time upgrade (#2079 finding 5).
 	s.startupMaintenanceActive.Store(true)
@@ -1102,10 +1110,20 @@ func (s *Store) runStartupMaintenance() {
 		s.startupHook()
 	}
 
-	if s.identityMigrationPending.Swap(false) {
-		if err := s.migrateMetricsIdentityIndex(); err != nil {
-			log.Error().Err(err).Msg("Deferred metrics identity index consolidation failed")
+	// Share the existing half-hour rewrite budget between physical layout
+	// and auto-vacuum, and interrupt both when the Store is closed.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-s.stopCh:
+			cancel()
+		case <-ctx.Done():
 		}
+	}()
+
+	if err := s.migrateClusteredMetrics(ctx); err != nil {
+		log.Warn().Err(err).Msg("Clustered metrics migration deferred until next startup")
 	}
 
 	// Run retention before the deferred auto-vacuum conversion so restart
@@ -1113,7 +1131,7 @@ func (s *Store) runStartupMaintenance() {
 	// potentially rewrites the file.
 	s.runRetention()
 	s.runAvailabilityRetention()
-	s.migrateAutoVacuum()
+	s.migrateAutoVacuumContext(ctx)
 
 	log.Info().Dur("duration", time.Since(start)).Msg("Deferred metrics startup maintenance completed")
 }
@@ -1614,7 +1632,7 @@ type retainedQueryShape struct {
 	resources, metrics     int
 	tiers                  [4]Tier
 	aggregate, groupSeries bool
-	valuesOnly             bool
+	valuesOnly, clustered  bool
 }
 
 func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) []interface{} {
@@ -1642,7 +1660,11 @@ func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []str
 }
 
 func (s *Store) retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
-	shape := retainedQueryShape{resources: len(resourceIDs), metrics: len(metricTypes), aggregate: stepSecs > 1, groupSeries: groupSeries, valuesOnly: valuesOnly}
+	return s.retainedQuerySQLForIndex(s.metricsReadIndex(), resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+}
+
+func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
+	shape := retainedQueryShape{resources: len(resourceIDs), metrics: len(metricTypes), aggregate: stepSecs > 1, groupSeries: groupSeries, valuesOnly: valuesOnly, clustered: index == clusteredMetricsIndex}
 	cacheable := len(tiers) <= len(shape.tiers)
 	copy(shape.tiers[:], tiers)
 	if cacheable {
@@ -1653,7 +1675,7 @@ func (s *Store) retainedQuerySQL(resourceType string, resourceIDs, metricTypes [
 			return query, retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
 		}
 	}
-	query, params := retainedQuerySQL(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+	query, params := retainedQuerySQLWithIndex(index, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
 	if cacheable {
 		s.queryMu.Lock()
 		if len(s.readQueryShapes) < maxRetainedReadStatements {
@@ -1673,6 +1695,10 @@ func (s *Store) retainedQuerySQL(resourceType string, resourceIDs, metricTypes [
 // Presence never establishes continuous collection or per-series coverage.
 // Every probe is restricted to the requested identities and timestamp window.
 func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
+	return retainedQuerySQLWithIndex(metricsIdentityIndex, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+}
+
+func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
 	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
 	identityColumns := ""
 	if len(resourceIDs) != 1 {
@@ -1696,7 +1722,6 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 	endParam := startParam + 1
 	tierParam := endParam + 1
 	stepParam := tierParam + len(tiers)
-	index := metricsIdentityIndex
 	scope := func(alias string, tierIndex int) string {
 		clause := alias + ".resource_type = :p1 AND " + alias + ".resource_id IN (" + idSlots + ")"
 		if len(metricTypes) > 0 {
@@ -1806,6 +1831,16 @@ func (s *Store) retainedReadStatement(query string) (*pdb.InstrumentedStmt, erro
 }
 
 func queryRetainedChunk[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
+	result, err := queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, projection)
+	if err != nil && s.refreshClusteredMetrics(err) {
+		return queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, projection)
+	}
+	return result, err
+}
+
+func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
+	// Keep the index selection fixed for this read snapshot across cutover.
+	index := s.metricsReadIndex()
 	var tx *pdb.InstrumentedTx
 	var err error
 	if stepSecs > 1 {
@@ -1817,7 +1852,6 @@ func queryRetainedChunk[T any](s *Store, resourceType string, resourceIDs []stri
 		// order the value projection for each presence probe.
 		idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")
 		presenceScope := "resource_type = ? AND resource_id IN (" + idSlots + ")"
-		index := metricsIdentityIndex
 		if len(metricTypes) > 0 {
 			presenceScope += " AND metric_type IN (" + strings.TrimSuffix(strings.Repeat("?,", len(metricTypes)), ",") + ")"
 		}
@@ -1881,7 +1915,7 @@ func queryRetainedChunk[T any](s *Store, resourceType string, resourceIDs []stri
 	if streamBuckets {
 		queryStep = 0
 	}
-	sqlQuery, params := s.retainedQuerySQL(resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
+	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
 
 	queryRows := func() (*sql.Rows, error) { return tx.Query(sqlQuery, params...) }
 	if tx == nil {
@@ -2325,7 +2359,7 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec(`
+	query := `
 		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 		SELECT
 			resource_type,
@@ -2339,7 +2373,12 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 		FROM metrics
 		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
 		GROUP BY resource_type, resource_id, metric_type, bucket_ts
-	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs)
+	`
+	params := []interface{}{bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs}
+	if s.clusteredMetrics.Load() {
+		query = clusteredMetricsRollupSQL
+	}
+	_, err = tx.Exec(query, params...)
 	if err != nil {
 		log.Warn().Err(err).
 			Str("from", string(fromTier)).
