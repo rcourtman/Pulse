@@ -214,6 +214,27 @@ distinction matters, use an existing, locally reviewed error code or redacted
 explanation, never a raw response, Debug capture or replay. Historical errors
 and other exports are not retroactively scrubbed; the full entry remains private.
 
+### Sign-in and access reports
+
+Use the full thread's existing sign-in method or provider type, original time
+and redacted error. Distinguish refused sign-in from a successful login with a
+denied page or action. Retain whether it followed a provider save, including an
+unchanged save, without making another attempt a condition of reporting. A
+successful provider Test checks discovery, not sign-in or permissions; a blank
+Client Secret field does not prove the saved secret is lost.
+
+Keep any working administrator session open. Do not request sign-out, another
+save or login, provider recreation, secret rotation, Debug logging or relaxed
+TLS/access restrictions just to complete a report. Use consistent aliases for
+users and groups. Keep passwords, client secrets, authorization codes, tokens,
+cookies, full callback URLs and claim/configuration dumps private; use only an
+existing locally reviewed, redacted error, not a HAR export or Copy as cURL
+command. Unknown context is valid; existing reports need no refile or repeated
+workaround. Use [safe SSO diagnosis](OIDC.md#safe-diagnosis) or the appropriate
+[sign-in recovery path](TROUBLESHOOTING.md#cannot-login--401-unauthorized), not a
+local password reset for an SSO failure. Intake guidance is not evidence that
+the login or save defect is repaired.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:
