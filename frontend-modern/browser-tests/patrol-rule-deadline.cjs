@@ -255,6 +255,13 @@ async function capture(page, section, name, state, viewport = false) {
       return route.fulfill({ json });
     });
     const section = page.locator('#patrol-suppression-rules');
+    const activate = async (control) => {
+      if (width === 320) await control.tap();
+      else {
+        await control.focus();
+        await page.keyboard.press('Enter');
+      }
+    };
     const reload = () => section.getByRole('button', { name: 'Reload rules', exact: true });
     const ruleRequests = () =>
       result.requests.filter((r) => r.path.startsWith('/api/ai/patrol/suppressions'));
@@ -289,7 +296,7 @@ async function capture(page, section, name, state, viewport = false) {
     await capture(page, section, name, 'load-timeout');
     phase = 'idle';
     await releaseDelayed();
-    await reload().click();
+    await activate(reload());
     await section
       .getByRole('button', { name: 'Remove rule for Preflight VM, backup', exact: true })
       .waitFor();
@@ -304,9 +311,9 @@ async function capture(page, section, name, state, viewport = false) {
     ]) {
       phase = stage;
       accepted = false;
-      await section
-        .getByRole('button', { name: `Remove rule for ${target} VM, backup`, exact: true })
-        .click();
+      await activate(
+        section.getByRole('button', { name: `Remove rule for ${target} VM, backup`, exact: true }),
+      );
       const dialog = page.getByRole('dialog', { name: 'Remove suppression rule?' });
       await dialog.waitFor();
       await dialog.evaluate((element) =>
@@ -318,7 +325,7 @@ async function capture(page, section, name, state, viewport = false) {
           .evaluate((element) => element === document.activeElement),
       );
       const beforeDeletes = deleted().length;
-      await dialog.getByRole('button', { name: 'Remove this rule', exact: true }).click();
+      await activate(dialog.getByRole('button', { name: 'Remove this rule', exact: true }));
       await dialog.getByRole('button', { name: 'Verifying removal…' }).waitFor();
       assert(await dialog.getByRole('button', { name: 'Cancel', exact: true }).isDisabled());
       // Wait for the requested stage to reach its deliberately held HTTP response.
@@ -333,6 +340,10 @@ async function capture(page, section, name, state, viewport = false) {
         .filter({ hasText: 'Removal could not be confirmed. The request timed out.' })
         .waitFor();
       assert(await reload().isEnabled());
+      assert(
+        await section.locator('summary').evaluate((element) => element === document.activeElement),
+        'expired confirmation returns focus to the stable summary',
+      );
       assert.equal(await section.getByRole('status').count(), 0);
       assert.equal(await section.getByRole('button', { name: /^Remove rule for/ }).count(), 0);
       assert.equal(deleted().length, beforeDeletes + (stage === 'preflight' ? 0 : 1));
@@ -351,7 +362,7 @@ async function capture(page, section, name, state, viewport = false) {
       );
       if (stage === 'readback') await capture(page, section, name, 'readback-timeout');
       phase = 'idle';
-      await reload().click();
+      await activate(reload());
       await section.getByText(`Rule ID: ${neighbour.id}`, { exact: true }).waitFor();
       assert.equal(
         await section.getByText(`Rule ID: ${manual(target).id}`, { exact: true }).count(),
@@ -362,13 +373,12 @@ async function capture(page, section, name, state, viewport = false) {
         `${stage}: bounded uncertainty, no automatic retry/readback or late success; explicit reload reconciles actual fixture state.`,
       );
     }
-    await section
-      .getByRole('button', { name: 'Remove rule for Success VM, backup', exact: true })
-      .click();
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Remove this rule', exact: true })
-      .click();
+    await activate(
+      section.getByRole('button', { name: 'Remove rule for Success VM, backup', exact: true }),
+    );
+    await activate(
+      page.getByRole('dialog').getByRole('button', { name: 'Remove this rule', exact: true }),
+    );
     await section
       .getByRole('status')
       .filter({ hasText: 'Rule removed. Future matching findings can appear.' })
@@ -380,6 +390,11 @@ async function capture(page, section, name, state, viewport = false) {
     assert.equal(deleted().length, 3);
     assert.equal(new Set(deleted().map((r) => r.path)).size, 3);
     await capture(page, section, name, 'confirmed-removal');
+    result.checks.push(
+      width === 320
+        ? 'All controls exercised through WebKit touch taps.'
+        : 'All controls exercised through keyboard focus and Enter.',
+    );
     result.checks.push(
       'A separate explicitly confirmed rule still removes normally after pre-read and absence readback; neighbour, broad, legacy and dismissed records remain byte-equivalent.',
     );
