@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d4994d32f4d06cd51161cb12a4be7232223dcd20",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx": "8ad4aae41f6548374e9796230efe0f2879ec84d04ea5f77734a7c8ccce10fa39"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Yearly Count chart with one day Tab stop and selected archive",
+    "Local-midnight window replacement retains the same focused calendar-day DOM node",
+    "Volume updates accessible and anchored tooltip evidence",
+    "Native Space clears the selected day and existing seven-day keyboard/touch activation preserves source scope"
+  ],
+  "interactions": [
+    "Natural Tab enters the 365-day plot once; the next Tab reaches the existing search and Shift+Tab returns",
+    "Left/Right/Home/End move focus without filtering or wrapping; native Enter selects and native Space deselects",
+    "Escape dismisses the tooltip without changing the day filter; Volume and midnight replacement retain day identity",
+    "Desktop keyboard and 320px WebKit touch use real production GET readers and the containing Backups/router/model/chart/CSS with exactly two inventory reads per journey"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T11:44:44Z",
+  "protocol": "frontend-modern/browser-tests/backup-activity-keyboard.cjs",
+  "execution_source": "d4994d32f4d06cd51161cb12a4be7232223dcd20",
+  "execution_tree": "391e2e31282e7ef989b8946fc7feda589b2675df",
+  "parent_tree": "391e2e31282e7ef989b8946fc7feda589b2675df",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "name": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    },
+    {
+      "name": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-year-selected.png",
+      "state": "year-selected",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "6d66a088cd1039319b506919a88165176626718604c59a170b8c2ec553a1a574",
+      "geometry": {
+        "focusedRect": {
+          "left": 1325.6875,
+          "top": 359.5,
+          "right": 1331.703125,
+          "bottom": 463.5
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1 backup, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The yearly plot shows the focused selected day at the right edge, visible keyboard help and the matching 19 October archive/filter. No tooltip remains after Escape.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "chromium-live-window-focus.png",
+      "state": "live-window-focus",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "661a4845d2acad40f784af6e24276322ba558e9a59824b3bed1277970c3d5d45",
+      "geometry": {
+        "focusedRect": {
+          "left": 1318.671875,
+          "top": 359.5,
+          "right": 1324.6875,
+          "bottom": 463.5
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1 backup, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "After local midnight the same 19 October selection/focus remains, the axis extends to 20 October and the matching row age advances.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "chromium-volume-focus.png",
+      "state": "volume-focus",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "ecfba32b0e951a96f920978a36d982702d5631ee2688b4f5dde78a0ae2a506f0",
+      "geometry": {
+        "focusedRect": {
+          "left": 1319.046875,
+          "top": 384,
+          "right": 1325.0625,
+          "bottom": 488
+        },
+        "tooltipRects": [
+          {
+            "left": 1156.46875,
+            "top": 264.5,
+            "right": 1361,
+            "bottom": 376
+          }
+        ],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1.00 KB, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The 1.00 KB tooltip is anchored above the right-hand focused day, within the viewport, and agrees with the selected archive. Help and Volume controls remain readable.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "chromium-short-range-selection.png",
+      "state": "short-range-selection",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "54fbae41295874153ef775c9d4b3555b921b3dae33216efc61f817387884a5bc",
+      "geometry": {
+        "focusedRect": {
+          "left": 796,
+          "top": 384,
+          "right": 972.65625,
+          "bottom": 488
+        },
+        "tooltipRects": [
+          {
+            "left": 782.0625,
+            "top": 264.5,
+            "right": 986.59375,
+            "bottom": 376
+          }
+        ],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Sun, 18 Oct: 2.00 KB, selected",
+        "dayButtons": 7,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The 18 October bar has a visible focus/selection outline. Its centred 2.00 KB tooltip agrees with the dated archive and filter chip; neighbouring activity stays visible.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "webkit-year-selected.png",
+      "state": "year-selected",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "4b74dcc866d8275e6fa6fcac12f3e040fcf6ec68ede4eccdd488aef6351ac9c8",
+      "geometry": {
+        "focusedRect": {
+          "left": 292.6875,
+          "top": 600,
+          "right": 298.703125,
+          "bottom": 692
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1 backup, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "At 320px dark/touch the keyboard help wraps inside the chart and the yearly range/metric controls fit. The selected day and original archive identity remain visible.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "webkit-live-window-focus.png",
+      "state": "live-window-focus",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "d4378d4180f122430c5a237d0bf4e5aac6baeaf805f24dfd5bc3dda7ae72957e",
+      "geometry": {
+        "focusedRect": {
+          "left": 285.671875,
+          "top": 600,
+          "right": 291.6875,
+          "bottom": 692
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1 backup, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The retained selected day remains outlined beside the new local-day boundary; narrow help and archive fields remain legible.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "webkit-volume-focus.png",
+      "state": "volume-focus",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "eb50044c0b32328705224133eb95d2d71fe97c5d35b973160545d04b8e24159a",
+      "geometry": {
+        "focusedRect": {
+          "left": 286.046875,
+          "top": 644,
+          "right": 292.0625,
+          "bottom": 736
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Mon, 19 Oct: 1.00 KB, selected",
+        "dayButtons": 365,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The longer Volume title and keyboard help wrap within the narrow card. Focus stays on the retained date, and no floating hover tooltip is shown on touch.",
+      "inspected_with": "native view_image"
+    },
+    {
+      "file": "webkit-short-range-selection.png",
+      "state": "short-range-selection",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "86e0fdec8f1599e68ad2af8cdf60ade7631db77aa45187aba30e9950b2ff5bf0",
+      "geometry": {
+        "focusedRect": {
+          "left": 200.5625,
+          "top": 644,
+          "right": 231.359375,
+          "bottom": 736
+        },
+        "tooltipRects": [],
+        "overflow": false,
+        "clippedHelp": [],
+        "focused": "Sun, 18 Oct: 2.00 KB, selected",
+        "dayButtons": 7,
+        "dayTabStops": 1
+      },
+      "pixel_review": "The seven-day touch selection highlights 18 October and shows the matching 2.00 KB archive. Existing range/metric controls and backup evidence remain readable.",
+      "inspected_with": "native view_image"
+    }
+  ],
+  "cleanup": {
+    "serverClosed": true
+  },
+  "limits": "Consumer acceptance on safe collected-state HTTP fixtures only; not native guest recovery, whole-suite/build evidence, protected landing or a published release. Prior adverse protocol attempts are retained in the lane outcome."
+}

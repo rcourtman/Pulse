@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Backup activity keyboard focus follows calendar identity
+
+`BackupActivityChart` exposes a labelled, described group with one day Tab stop
+rather than up to 365. Left/Right and Home/End move focus only; Enter/Space keep
+native button activation and Tab exits. Modified browser shortcuts are not
+intercepted. Calendar-day keyed buttons survive live metric/window updates for
+remaining days; totals and tooltip contents remain reactive. Escape dismisses
+the tooltip without changing focus or the existing day selection. Visible
+keyboard help wraps at narrow widths. Mouse/touch day toggling, source scope,
+empty/unmeasured states and server-owned protection verdicts are unchanged.
+
+`BackupActivityChart.keyboard.test.tsx`, the containing backup-table test and
+`backup-activity-keyboard.cjs` cover these interactions using the existing
+Backups consumer, including a yearly range, live replacement and 320px touch.
+
 ### Patrol manual-rule controls recover from a stalled request
 
 The existing Patrol Activity rule list and exact-rule removal confirmation bound
