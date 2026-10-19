@@ -39,6 +39,25 @@ only for extra local telemetry such as SMART and temperatures; see
 
 ## Setting Up Direct PBS Connection
 
+### Before changing an existing connection
+
+Check **Settings → Infrastructure** for an existing PBS connection before
+running setup again. PBS shows a token's secret only when it is created;
+listing an existing token does not recover that secret.
+
+| What you already have | Safe next step |
+| --- | --- |
+| A saved Pulse connection using an API token | Edit that connection rather than removing and re-adding it. Keep **API Token** selected and **Token ID** unchanged. Leave **Token Value** blank to keep the stored secret; blank does not clear it. Keep the existing TLS verification and fingerprint unless you are deliberately updating trust. |
+| The token ID and its privately saved secret, for an intentional new connection | Choose **API Token → Manual Token Setup** and enter both values as described [below](#method-1-api-only-connection-recommended). Token creation is not needed. |
+| An existing token, but no saved secret or saved Pulse connection to reuse | Stop setup. Do not delete or recreate that token: another reader may still depend on it. Arrange a separate, distinctly named, least-privilege `Audit` token for the new reader instead of revoking the existing one. |
+
+Changing **Token ID** is a credential change and requires the corresponding
+secret; leaving **Token Value** blank cannot move a saved secret to another ID
+or a new connection. Do not switch to **Username & Password** or rerun assisted
+setup to recover a secret. If monitoring has failed, use the
+[connection checks](#connection-failed-error) with the existing configuration;
+replacing a token is not a diagnosis.
+
 ### Method 1: API-Only Connection (Recommended)
 
 Use a dedicated PBS monitoring user and token, not a root password. On a new
