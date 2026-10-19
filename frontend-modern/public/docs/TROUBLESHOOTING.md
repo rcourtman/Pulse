@@ -71,6 +71,10 @@ establish safe recovery.
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete
   backups or change retention to make the display agree.
+- **Coverage's latest backup job is Unknown:** expand the guest's
+  [collected job evidence](PBS.md#latest-backup-job-is-unknown).
+  Unknown chronology is not an absent or failed backup; use existing job
+  records, without rerunning a backup or guest-agent probe.
 - **Mail Gateway Test succeeds but collection fails:** use
   [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
   For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the

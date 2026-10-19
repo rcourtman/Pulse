@@ -494,6 +494,47 @@ verification result alongside it. **Unknown** on a PBS point means no verificati
 result was reported; it does not mean verification failed. **Job OK** is not an
 individual point's verification result. Use the records already available,
 without running Diagnostics or another verification just to compare them.
+If the latest job is **Unknown**, use the [job uncertainty checks](#latest-backup-job-is-unknown)
+before interpreting that as no job or a failed backup.
+
+#### Latest backup job is Unknown
+
+In **Proxmox → Backups → Coverage**, expand the affected guest and read the
+explanation beside its latest-job result. Pulse cannot choose a latest job
+when a job has a missing, invalid or future start, or equally recent jobs disagree.
+**Unknown** is not evidence that no job ran, that one is queued or that the
+backup failed.
+
+Where shown, **Collected backup jobs** keeps the observations separate from
+the latest result. Its list order is not a timeline. Read each **Job ID**,
+**Result**, **Job connection**, **Job node**, **Started**, **Last observed**
+and **Reported error** together. If **Reported status** and error disagree,
+retain both rather than treating an OK status as success. Older versions may
+omit collected jobs; use the same job's existing Proxmox records instead.
+
+- **Started** is the reported start, which may be unusable. **Last observed**
+  is when Pulse read the job history, not when the job finished. Refreshing
+  the page or a changing relative age does not establish a new collection.
+- The recorded job node can differ from the guest's current node after a
+  move. Match the owning connection, guest type/ID and original time with
+  the existing Proxmox task, not another installation's same name or VMID.
+- Search can find a collected job ID, reported error or recorded node. Clear
+  search and view filters before concluding a row is absent. Search only
+  covers collected evidence, not every native task or a complete job history.
+- An ordinary unambiguous or empty replacement can remove collected
+  observations and their search matches. This is not a permanent job log;
+  their disappearance is not evidence that the original backup recovered.
+
+For help, retain the version, explanation and only the relevant redacted job
+fields and matching native result already available. Keep full job logs,
+private names, paths and tokens out of public reports. Do not run a new
+backup, verification, restore, Diagnostics or guest-agent probe, restart,
+clear History, change permissions or repeat the failed job just to fill a gap.
+
+**An OK job is not proof of backup usability, guest thaw or filesystem writes.**
+If the guest is frozen or unresponsive, keep affected Pulse monitoring stopped
+and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety), not these display
+checks. Readable diagnostics alone do not establish recovery.
 
 #### Prune protection is not verification
 

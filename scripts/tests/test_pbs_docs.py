@@ -508,7 +508,13 @@ PY
             ])
             self.assertNotIn(AGENT_TOKEN.encode(), result.stdout + result.stderr)
         actual = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', actual)
+        # The installer now validates option values before assigning them.
+        # Check that admission and file handoff together, not an obsolete
+        # unguarded one-line spelling; keep failures from dumping the installer.
+        branches = re.findall(r"(?m)^\s*--token-file\)([^\n]+)", actual)
+        self.assertEqual(len(branches), 1, "expected one token-file parser branch")
+        self.assertRegex(branches[0],
+                         r'require_option_value "\$@";\s+TOKEN_FILE_PATH="\$2";\s+shift 2\s*;;')
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', actual)
 
     def test_failed_installer_download_is_nonzero(self):
@@ -529,6 +535,69 @@ PY
             with self.assertRaisesRegex(AssertionError, "private response leaked"):
                 self.run_curl(Path(temporary), unsafe, port, self.cert)
             self.assertEqual(len(requests), 1)
+
+
+class BackupJobUncertaintyHelpTest(unittest.TestCase):
+    """Bind passive troubleshooting to the existing Coverage consumer, not PBS jobs."""
+
+    heading = "#### Latest backup job is Unknown\n"
+    anchor = "#latest-backup-job-is-unknown"
+
+    def guidance(self):
+        text = DOC.read_text()
+        self.assertEqual(text.count(self.heading), 1)
+        return " ".join(text.split(self.heading, 1)[1].split("\n#### ", 1)[0].split("\n### ", 1)[0].replace("**", "").split())
+
+    def test_existing_coverage_and_symptom_entries_reach_the_guidance(self):
+        guidance = self.guidance()
+        self.assertIn(f"[job uncertainty checks]({self.anchor})", DOC.read_text())
+        hub = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[collected job evidence](PBS.md{self.anchor})", hub)
+        self.assertIn("Older versions may omit collected jobs", guidance)
+        for name in ("PBS", "TROUBLESHOOTING"):
+            self.assertEqual((ROOT / "docs" / f"{name}.md").read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_bytes())
+
+    def test_display_labels_match_the_real_consumer(self):
+        guidance = self.guidance()
+        table = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx").read_text()
+        for label in ("Collected backup jobs", "Job ID", "Result", "Job connection",
+                      "Job node", "Started", "Last observed", "Reported status", "Reported error"):
+            with self.subTest(label=label):
+                self.assertIn(label, table)
+                self.assertIn(label, guidance)
+        model = (ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts").read_text()
+        search = model.split("export function coverageRowMatchesSearch", 1)[1].split(
+            "export function recoverableArtifactMatchesSearch", 1)[0]
+        for field in ("task.id", "task.node", "task.startedAt", "task.observedAt", "task.error"):
+            self.assertIn(field, search)
+        self.assertIn("Search can find a collected job ID, reported error or recorded node", guidance)
+
+    def test_unknown_does_not_fabricate_a_timeline_freshness_or_success(self):
+        guidance = self.guidance()
+        for distinction in (
+            "missing, invalid or future start", "equally recent jobs disagree",
+            "list order is not a timeline", "status and error disagree",
+            "when Pulse read the job history, not when the job finished",
+            "changing relative age does not establish a new collection",
+            "job node can differ from the guest's current node",
+            "not a permanent job log", "not evidence that the original backup recovered",
+        ):
+            self.assertIn(distinction, guidance)
+
+    def test_comparison_preserves_existing_jobs_access_and_guest_safety(self):
+        guidance = self.guidance()
+        self.assertNotIn("```", guidance)
+        for boundary in (
+            "owning connection, guest type/ID and original time",
+            "Keep full job logs, private names, paths and tokens out of public reports",
+            "Do not run a new backup, verification, restore, Diagnostics or guest-agent probe",
+            "restart, clear History, change permissions or repeat the failed job",
+            "An OK job is not proof of backup usability, guest thaw or filesystem writes",
+            "keep affected Pulse monitoring stopped",
+        ):
+            self.assertIn(boundary, guidance)
+        self.assertIn("[Backup safety](VM_DISK_MONITORING.md#backup-safety)", guidance)
 
 
 class PBSJobEvidenceHelpTest(unittest.TestCase):
