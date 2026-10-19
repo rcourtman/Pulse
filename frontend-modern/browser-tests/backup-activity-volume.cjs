@@ -284,11 +284,11 @@ async function capture(page, name) {
     state = 'partial';
     await button('Refresh backups').click();
     const partial = page.getByRole('button', {
-      name: /: 1.00 KB reported; 1 backup without a positive size$/,
+      name: /: 1.00 KB reported\. 1 backup without a positive size$/,
     });
     await partial.waitFor();
     const missingDay = page.getByRole('button', {
-      name: /: Size unavailable; 1 backup without a positive size$/,
+      name: /: Size unavailable\. 1 backup without a positive size$/,
     });
     await missingDay.waitFor();
     assert.match(
@@ -299,7 +299,7 @@ async function capture(page, name) {
     if (width !== 320) {
       await missingDay.focus();
       await page
-        .getByText('Size unavailable; 1 backup without a positive size', { exact: true })
+        .getByText('Size unavailable. 1 backup without a positive size', { exact: true })
         .waitFor();
     }
     await capture(page, name + '-partial-volume');

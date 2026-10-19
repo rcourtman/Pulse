@@ -308,14 +308,14 @@ describe('ProxmoxBackupsTable', () => {
     renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
     await fireEvent.click(await screen.findByRole('button', { name: 'Volume' }));
     const missingDay = screen.getByRole('button', {
-      name: /: Size unavailable; 1 backup without a positive size$/,
+      name: /: Size unavailable\. 1 backup without a positive size$/,
     });
     expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
     expect(
       screen.getByText(/1 completed restore point in this window has no positive size reported/),
     ).toBeInTheDocument();
     await fireEvent.focus(missingDay);
-    expect(screen.getAllByText('Size unavailable; 1 backup without a positive size')).toHaveLength(
+    expect(screen.getAllByText('Size unavailable. 1 backup without a positive size')).toHaveLength(
       1,
     );
     await fireEvent.blur(missingDay);
@@ -332,7 +332,7 @@ describe('ProxmoxBackupsTable', () => {
     await waitFor(() =>
       expect(
         screen.getByRole('button', {
-          name: /: Size unavailable; 1 backup without a positive size$/,
+          name: /: Size unavailable\. 1 backup without a positive size$/,
         }),
       ).toBeInTheDocument(),
     );

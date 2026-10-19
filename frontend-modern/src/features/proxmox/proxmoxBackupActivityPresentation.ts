@@ -190,7 +190,7 @@ export function getBackupActivityPointTotalLabel(
   if (mode === 'volume') {
     if (unmeasuredCount > 0) {
       const missing = `${unmeasuredCount} ${noun}${unmeasuredCount === 1 ? '' : 's'} without a positive size`;
-      return `${total > 0 ? `${formatBytes(total)} reported` : 'Size unavailable'}; ${missing}`;
+      return `${total > 0 ? `${formatBytes(total)} reported` : 'Size unavailable'}. ${missing}`;
     }
     return formatBytes(Math.max(0, total));
   }

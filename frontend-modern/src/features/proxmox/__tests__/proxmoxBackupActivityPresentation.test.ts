@@ -442,13 +442,13 @@ describe('proxmoxBackupActivityPresentation', () => {
   describe('getBackupActivityPointTotalLabel', () => {
     it('qualifies unknown and partial daily volume without inventing zero bytes', () => {
       expect(getBackupActivityPointTotalLabel(0, 'backup', 'volume', 1)).toBe(
-        'Size unavailable; 1 backup without a positive size',
+        'Size unavailable. 1 backup without a positive size',
       );
       expect(getBackupActivityPointTotalLabel(1024, 'backup', 'volume', 2)).toBe(
-        '1.00 KB reported; 2 backups without a positive size',
+        '1.00 KB reported. 2 backups without a positive size',
       );
       expect(getBackupActivityColumnAriaLabel('Today', 0, true, 'backup', 'volume', 1)).toBe(
-        'Today: Size unavailable; 1 backup without a positive size, selected',
+        'Today: Size unavailable. 1 backup without a positive size, selected',
       );
       expect(getBackupActivityPointTotalLabel(2, 'backup', 'count', 1)).toBe('2 backups');
     });
