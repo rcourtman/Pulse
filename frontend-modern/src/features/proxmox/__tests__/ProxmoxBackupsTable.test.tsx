@@ -240,17 +240,17 @@ describe('ProxmoxBackupsTable', () => {
       );
       window.history.replaceState({}, '', '/proxmox/backups/date');
       renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-      const volume = await screen.findByRole('button', { name: 'Volume', exact: true });
+      const volume = await screen.findByRole('button', { name: 'Volume' });
       expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
       await fireEvent.click(volume);
 
-      expect(screen.getByRole('button', { name: 'Count', exact: true })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
       expect(volume).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByText(/Completed restore points exist in this window/)).toBeInTheDocument();
       expect(screen.queryByText(/No completed restore-point activity/)).not.toBeInTheDocument();
       expect(screen.queryByText('0 B')).not.toBeInTheDocument();
 
-      await fireEvent.click(screen.getByRole('button', { name: 'Count', exact: true }));
+      await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
       expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
       expect(
         screen.queryByText(/Completed restore points exist in this window/),
@@ -306,7 +306,7 @@ describe('ProxmoxBackupsTable', () => {
     );
     window.history.replaceState({}, '', '/proxmox/backups/date');
     renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Volume', exact: true }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Volume' }));
     const missingDay = screen.getByRole('button', {
       name: /: Size unavailable; 1 backup without a positive size$/,
     });
@@ -326,10 +326,7 @@ describe('ProxmoxBackupsTable', () => {
       expect(screen.getByRole('button', { name: /: 2.00 KB$/ })).toBeInTheDocument(),
     );
     expect(screen.queryByText(/has no positive size reported/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Volume', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('button', { name: 'Volume' })).toHaveAttribute('aria-pressed', 'true');
     size = undefined;
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
     await waitFor(() =>
@@ -356,17 +353,17 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
     renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
     await screen.findByText(/No completed restore-point activity/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     expect(
       screen.getByText(/No completed restore-point activity in the selected 30-day window/),
     ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: '90d', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: '90d' }));
     expect(screen.getByRole('button', { name: /: 8.00 GB$/ })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: '7d', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: '7d' }));
     expect(
       screen.getByText(/No completed restore-point activity in the selected 7-day window/),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Count', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
   });
 
   it('keeps restore-point completion totals and the chart truthful through inventory replacement', async () => {
