@@ -4775,6 +4775,20 @@ named and default organizations. The custom event envelope stays unchanged.
     `TestClusterClient_GetTaskLog` in
     `pkg/proxmox/cluster_client_api_test.go`.
 
+    A guest-scoped `ERROR:` line without the explicit `Backup of VM ...
+    failed` verdict must not become clean success on `Finished Backup`.
+    Keep that guest running until completion; then publish `warning` with
+    a fixed logged-error summary, not the private log text. This does not
+    establish a failed archive or guest recovery. An explicit guest failure
+    retains precedence; job-wide/quoted errors and clean sibling guests
+    remain independent. The next clean job replaces the warning normally.
+    `TestVzdumpGuestWarningsDoNotBecomeSuccess`,
+    `TestVzdumpGuestWarningScopeAndFailurePrecedence`, and
+    `TestPVEGuestLogErrorSurvivesPollingCacheAndReports` in
+    `internal/monitoring/pve_backup_guest_warning_test.go` cover parsing,
+    real read-only HTTP polling, immutable cache, live inventory and report
+    counts/last-success without operating a guest or backup.
+
 14. A TrueNAS app container reported as `EXITED` is a completed workload and
     must raise no incident. TrueNAS classifies container exits before Pulse
     sees them: a normal exit code becomes `EXITED`, an abnormal one becomes

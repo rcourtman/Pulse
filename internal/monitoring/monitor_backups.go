@@ -2727,12 +2727,13 @@ var (
 // stable across polls and distinct from individually-run guest backups.
 func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) []models.BackupTask {
 	type guestSection struct {
-		vmid   int
-		start  time.Time
-		end    time.Time
-		status string
-		errMsg string
-		warned bool
+		vmid     int
+		start    time.Time
+		end      time.Time
+		status   string
+		errMsg   string
+		warned   bool
+		logError bool
 	}
 
 	var order []int
@@ -2793,6 +2794,11 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			if activeVMID == vmid {
 				activeVMID = 0
 			}
+		} else if activeVMID > 0 && strings.HasPrefix(text, "ERROR:") {
+			// An unqualified log error is not a terminal guest verdict, but
+			// a later finish marker cannot establish clean success either.
+			// Keep its scope and private detail inside the original task log.
+			sections[activeVMID].logError = true
 		} else if activeVMID > 0 && (strings.HasPrefix(text, "WARN:") || strings.HasPrefix(text, "WARNING:")) {
 			// A finished backup can still have guest-scoped warnings. Do not
 			// let its finish marker turn those into clean success, attribute
@@ -2810,7 +2816,10 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 	tasks := make([]models.BackupTask, 0, len(order))
 	for _, vmid := range order {
 		sec := sections[vmid]
-		if sec.status == "OK" && sec.warned {
+		if sec.status == "OK" && sec.logError {
+			sec.status = "warning"
+			sec.errMsg = "Backup completed with logged errors; review the original Proxmox task log."
+		} else if sec.status == "OK" && sec.warned {
 			sec.status = "warning"
 			sec.errMsg = "Backup completed with warnings; review the original Proxmox task log."
 		}
