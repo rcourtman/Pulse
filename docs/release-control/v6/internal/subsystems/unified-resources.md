@@ -8968,3 +8968,25 @@ the job; renewed ambiguity withdraws that ownership without losing its record.
 text and both identity transitions; `unmatched-backup-jobs.cjs` covers HTTP,
 keyboard/touch and narrow pixels. This changes neither canonical resource IDs nor
 collection, guest operations or operational-recovery acceptance.
+
+
+### Exact backup-location filters and conservative saved scopes
+
+Backup-location keys preserve the source kind, case-sensitive connection and
+repository, and (for local archives) storage node as a framed tuple. Missing or
+repeated source fields cannot collapse identity. Operator labels are not keys.
+Legacy saved URLs resolve only when all observed aliases identify one exact
+location or one intentional store-wide local-node group. A case/delimiter/field
+collision remains explicitly ambiguous; a missing location remains unavailable.
+Neither silently selects All or unrelated restore points. The same resolved
+scope governs By date, activity and Coverage; new choices save exact keys.
+Normal refresh or organisation changes must withdraw a newly ambiguous/missing
+selection. Clearing filters restores the unscoped collected inventory.
+
+`proxmoxBackupRecoveryModel.locations.test.ts`, `proxmoxBackupLocation.test.ts`
+and `ProxmoxBackupsTable.locations.test.tsx` check identity framing, saved-scope
+compatibility, collisions, conservative empty states and actual consuming filters.
+The read-only `backup-location-scope.cjs` HTTP/browser protocol exercises desktop
+keyboard and 320px touch using the production decoders, model, tables and CSS.
+This changes inventory selection, not collection, protection verdicts, guest
+operations, thaw, filesystem liveness or native backup recovery.
