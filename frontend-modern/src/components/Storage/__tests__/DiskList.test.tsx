@@ -90,6 +90,33 @@ describe('DiskList', () => {
     cleanup();
   });
 
+  it('replaces a successful but expired SMART report in place without marking it healthy', async () => {
+    const initial = {
+      ...buildDisk('sda', 'tower', { temperature: 41 }),
+      health: { verdict: 'ok' as const, reasons: [] },
+    };
+    const [disks, setDisks] = createSignal<Resource[]>([structuredClone(initial)]);
+    render(() => (
+      <DiskList
+        disks={disks()}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const row = screen.getByRole('row', { name: /Disk sda/ });
+    expect(within(row).getByText('Healthy')).toBeInTheDocument();
+    setDisks([{ ...initial, health: { verdict: 'stale', reasons: [] } }]);
+    await waitFor(() => expect(within(row).getByText('Last known')).toBeInTheDocument());
+    expect(within(row).queryByText('Healthy')).toBeNull();
+    expect(within(row).getByText('41°C')).toHaveAttribute('data-temperature-reading', 'last-known');
+    setDisks([initial]);
+    await waitFor(() => expect(within(row).getByText('Healthy')).toBeInTheDocument());
+    expect(within(row).getByText('41°C')).toHaveAttribute('data-temperature-reading', 'current');
+  });
+
   it('shows a retained temperature as last known, not as a live threshold reading', async () => {
     const withTemperature = (collection: NonNullable<Resource['physicalDisk']>['collection']) =>
       buildDisk('sda', 'tower', { diskType: 'sata', temperature: 72, collection });

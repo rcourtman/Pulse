@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -225,6 +226,44 @@ describe('GuestPhysicalDisks', () => {
       'title',
       'Last known reading, not current: host agent stopped reporting',
     );
+  });
+
+  it('keeps an expired successful inventory report qualified in the row and open SMART view', async () => {
+    // The actual resource owner reconciles by canonical ID, rather than
+    // replacing the disk owner (which would correctly close a different row).
+    const [state, setState] = createStore<{ resources: Resource[] }>({
+      resources: [structuredClone(disk)],
+    });
+    queryState.accessor = () => state.resources;
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+    await screen.findByTestId('disk-detail-health');
+    setState(
+      'resources',
+      reconcile(
+        [{ ...disk, health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale' }] } }],
+        { key: 'id' },
+      ),
+    );
+    await waitFor(() => expect(screen.getAllByText('Last known')).toHaveLength(2));
+    expect(row.open).toBe(true);
+    expect(within(row).queryByText('Healthy')).toBeNull();
+    expect(screen.getByTestId('disk-detail-health')).toHaveTextContent(
+      'current disk health is unconfirmed',
+    );
+    expect(row.querySelector('[data-temperature-reading]')).toHaveAttribute(
+      'data-temperature-reading',
+      'last-known',
+    );
+    expect(row.querySelector('[data-temperature-reading]')).toHaveTextContent('45°C, last known');
+    setState(
+      'resources',
+      reconcile([{ ...disk, health: { verdict: 'ok', reasons: [] } }], { key: 'id' }),
+    );
+    await waitFor(() => expect(screen.getAllByText('Healthy')).toHaveLength(2));
+    expect(row.open).toBe(true);
   });
 
   it('follows a disk between current and last known as its collection state changes', () => {

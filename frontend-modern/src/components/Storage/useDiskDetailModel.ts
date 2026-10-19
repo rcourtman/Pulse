@@ -41,6 +41,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const metricResourceId = createMemo(() => historyResourceId());
   const collectionMessages = createMemo(() => getPhysicalDiskCollectionMessages(diskData()));
   const liveIOAvailable = createMemo(() => {
+    if (diskData().lastKnown) return false;
     const state = diskData().collection?.io?.state;
     return !state || state === 'available';
   });
