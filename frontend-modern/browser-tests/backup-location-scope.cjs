@@ -8,7 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { webkit, expect } = require('playwright/test');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
-const output = path.join(root, 'tmp/backup-location-scope/browser-v3');
+const output = path.join(root, 'tmp/backup-location-scope/browser-v4');
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const binding = JSON.parse(fs.readFileSync(path.join(output, 'binding.json')));
 for (const [file, digest] of Object.entries(binding.files))
@@ -201,7 +201,11 @@ function serve(req, res, next) {
       const value = await option.getAttribute('value');
       await page.getByRole('combobox', { name: 'Filter', exact: true }).selectOption(value);
       await expect(rows()).toHaveCount(1);
-      await expect(rows()).toContainText('pbs-server / main / (root)');
+      await expect(rows()).toHaveAttribute(
+        'data-proxmox-backup-key',
+        'artifact:pbs:pbs-server/main/vm/100',
+      );
+      await expect(page.getByText('pbs-server / main / (root)', { exact: true })).toBeVisible();
       await expect(page.getByText('pbs-server / Main / (root)', { exact: true })).toHaveCount(0);
       const selected = new URL(page.url()).searchParams.get('location');
       assert.equal(selected, 'backup-location-v2:["pbs","pbs-server","main"]');
@@ -237,7 +241,11 @@ function serve(req, res, next) {
       const exactUpper = page.getByRole('option', { name: 'pbs-server / Main', exact: true });
       await activate(exactUpper);
       await expect(rows()).toHaveCount(1);
-      await expect(rows()).toContainText('pbs-server / Main / (root)');
+      await expect(rows()).toHaveAttribute(
+        'data-proxmox-backup-key',
+        'artifact:pbs:pbs-server/Main/vm/100',
+      );
+      await expect(page.getByText('pbs-server / Main / (root)', { exact: true })).toBeVisible();
       await expect(page.getByText('pbs-server / main / (root)', { exact: true })).toHaveCount(0);
       await expect(
         page
@@ -252,8 +260,16 @@ function serve(req, res, next) {
       // A unique legacy aggregate keeps both local copies, not either PBS store.
       await visit('archive:east:local');
       await expect(rows()).toHaveCount(2);
-      await expect(rows().nth(0)).toContainText('east / local / node-a');
-      await expect(rows().nth(1)).toContainText('east / local / node-b');
+      await expect(rows().nth(0)).toHaveAttribute(
+        'data-proxmox-backup-key',
+        'artifact:archive:east/local/node-a/100',
+      );
+      await expect(rows().nth(1)).toHaveAttribute(
+        'data-proxmox-backup-key',
+        'artifact:archive:east/local/node-b/100',
+      );
+      await expect(page.getByText('east / local / node-a', { exact: true })).toBeVisible();
+      await expect(page.getByText('east / local / node-b', { exact: true })).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Backup location: east / local', exact: true }),
       ).toBeVisible();
