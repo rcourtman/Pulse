@@ -35,6 +35,11 @@ if args == ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
     sys.exit(1)
 if args == ["daemon-reload"]:
     sys.exit(0)
+if args == ["show", "pulse", "--property=ActiveState", "--value"]:
+    # A missing unit still has a complete inactive ActiveState, not an
+    # unavailable manager. This is the initial existing-binary observation.
+    print("inactive")
+    sys.exit(0)
 sys.exit(97)
 '''
 
@@ -93,13 +98,14 @@ exit "$status"
 
 
 class ServerUpdateRepair(unittest.TestCase):
-    def exercise(self, *, pinned, automatic, unit_error=False):
+    def exercise(self, *, pinned, automatic, unit_error=False, version_probe_error=False):
         with tempfile.TemporaryDirectory(prefix="pulse-update-repair-") as directory:
             f = Path(directory)
             for name in ["tools", "install/bin", "units"]:
                 (f / name).mkdir(parents=True)
             for name, version in [("install/bin/pulse", "v6.5.0"), ("new-pulse", "v6.6.0")]:
-                (f / name).write_text("#!/bin/sh\necho 'Pulse " + version + "'\n")
+                failed_probe = "exit 1\n" if version_probe_error and name == "install/bin/pulse" else ""
+                (f / name).write_text("#!/bin/sh\necho 'Pulse " + version + "'\n" + failed_probe)
                 (f / name).chmod(0o755)
             (f / "tools/systemctl").write_text(MANAGER)
             (f / "tools/systemctl").chmod(0o755)
@@ -143,6 +149,17 @@ class ServerUpdateRepair(unittest.TestCase):
                     self.assertIn("EnvironmentFile=", e["unit"])
                     self.assertIn("/install/bin/pulse", e["unit"])
                     self.assertIn(["daemon-reload"], e["calls"])
+                    self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper"] +
+                                     (["timer"] if automatic else []) + ["start pulse", "marker", "complete"])
+
+    def test_failed_version_probe_keeps_both_existing_repair_paths_available(self):
+        for pinned in (True, False):
+            for automatic in (True, False):
+                with self.subTest(pinned=pinned, automatic=automatic):
+                    e = self.exercise(pinned=pinned, automatic=automatic, version_probe_error=True)
+                    self.assertEqual(e["result"].returncode, 0, e["result"].stdout + e["result"].stderr)
+                    self.assertIn("Could not determine the installed Pulse version", e["result"].stderr)
+                    self.assertIn(["show", "pulse", "--property=ActiveState", "--value"], e["calls"])
                     self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper"] +
                                      (["timer"] if automatic else []) + ["start pulse", "marker", "complete"])
 

@@ -3057,6 +3057,7 @@ check_existing_installation() {
     local BINARY_PATH=""
     local detected_service="$SERVICE_NAME"
     local service_available=false
+    local service_state=""
 
     # Check for the binary in expected locations
     if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
@@ -3076,12 +3077,37 @@ check_existing_installation() {
         service_available=true
     fi
 
-    # Try to get version if binary exists
+    # Observe before version execution or any main-flow mutation. A failed
+    # is-active exit cannot distinguish an inactive unit from a failed read.
+    if [[ "$service_available" == true ]]; then
+        if ! service_state=$(timeout -k 1 5 systemctl show "$detected_service" --property=ActiveState --value 2>/dev/null); then
+            print_error "Cannot observe a settled Pulse service state ($detected_service); installation unchanged. Check the service manager before retrying."
+            return 2
+        fi
+        case "$service_state" in
+            active|inactive|failed) ;;
+            *)
+                print_error "Cannot observe a settled Pulse service state ($detected_service); installation unchanged. Check the service manager before retrying."
+                return 2
+                ;;
+        esac
+    fi
+
+    # Bound the installed executable too, and never accept plausible output
+    # from a failed/timed-out probe. Keep damaged-binary repair available.
     if [[ -n "$BINARY_PATH" ]]; then
-        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+        local version_output=""
+        CURRENT_VERSION="unknown"
+        if version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
+            CURRENT_VERSION=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1) || CURRENT_VERSION="unknown"
+        fi
+        if [[ -z "$CURRENT_VERSION" || "$CURRENT_VERSION" == "unknown" ]]; then
+            CURRENT_VERSION="unknown"
+            print_warn "Could not determine the installed Pulse version; version is unknown. Existing-install repair remains available."
+        fi
     fi
     
-    if [[ "$service_available" == true ]] && systemctl is-active --quiet "$detected_service" 2>/dev/null; then
+    if [[ "$service_state" == active ]]; then
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
             print_info "Pulse $CURRENT_VERSION is currently running"
         else
@@ -3089,10 +3115,16 @@ check_existing_installation() {
         fi
         return 0
     elif [[ -n "$BINARY_PATH" ]]; then
+        local installed_status="installed but not running"
+        if [[ "$service_state" == failed ]]; then
+            installed_status="installed; service is failed"
+        elif [[ "$service_available" != true ]]; then
+            installed_status="installed; service state is unavailable"
+        fi
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
-            print_info "Pulse $CURRENT_VERSION is installed but not running"
+            print_info "Pulse $CURRENT_VERSION is $installed_status"
         else
-            print_info "Pulse is installed but not running"
+            print_info "Pulse is $installed_status"
         fi
         return 0
     else
