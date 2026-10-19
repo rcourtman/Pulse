@@ -36,7 +36,7 @@ func TestVzdumpGuestWarningsDoNotBecomeSuccess(t *testing.T) {
 					job.EndTime = start.Add(2 * time.Minute)
 					lines = append(lines, "INFO: Finished Backup of VM 100 (00:01:00)", "INFO: Starting Backup of VM 200 (lxc)", "INFO: Finished Backup of VM 200 (00:01:00)", "TASK WARNINGS: 1")
 				}
-				tasks := parseVzdumpJobLog(job, "job", testLogLines(lines...))
+				tasks, _ := parseVzdumpJobLog(job, "job", testLogLines(lines...))
 				if !finished {
 					require.Len(t, tasks, 1)
 					require.Equal(t, "running", tasks[0].Status, "a warning cannot finish a running guest backup")
@@ -75,7 +75,7 @@ func TestVzdumpGuestWarningScopeAndFailurePrecedence(t *testing.T) {
 		{"unfinished-with-logged-error", "error", "backup job ended before guest backup completed", []string{"INFO: Starting Backup of VM 100 (qemu)", "ERROR: private detail", "TASK ERROR: job errors"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tasks := parseVzdumpJobLog(job, "job", testLogLines(tc.lines...))
+			tasks, _ := parseVzdumpJobLog(job, "job", testLogLines(tc.lines...))
 			require.Len(t, tasks, 1)
 			require.Equal(t, tc.status, tasks[0].Status)
 			require.Equal(t, tc.detail, tasks[0].Error)

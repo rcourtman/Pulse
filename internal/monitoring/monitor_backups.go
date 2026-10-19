@@ -2661,8 +2661,9 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		// Store the successful read's receipt in the cache itself, not just in
 		// the published copy. A later failed non-final read must retain this
 		// original time rather than renew it or fall back to a zero timestamp.
-		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
-		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
+		guestTasks, attributed := parseVzdumpJobLog(jobTask, upid, logLines)
+		guestTasks = refreshObservedAt(guestTasks, now)
+		historyComplete := attributed && backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.applyPVEBackupEffect(ctx, instanceName, func() {
 			m.mu.Lock()
 			if m.vzdumpJobTaskCache == nil {
@@ -2715,7 +2716,7 @@ func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.Backup
 
 // vzdump job logs mark each guest's section with these lines.
 var (
-	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)`)
+	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)(?:\s|$)`)
 	vzdumpLogGuestFinishRe = regexp.MustCompile(`^INFO: Finished Backup of VM (\d+) \((\d+):(\d{2}):(\d{2})\)$`)
 	vzdumpLogGuestFailRe   = regexp.MustCompile(`^ERROR: Backup of VM (\d+) failed -\s*(.*)$`)
 )
@@ -2725,21 +2726,26 @@ var (
 // times are reconstructed from the job start plus the durations vzdump prints
 // on each "Finished Backup" line. Task IDs embed the parent UPID, keeping them
 // stable across polls and distinct from individually-run guest backups.
-func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) []models.BackupTask {
+// The second result qualifies section attribution, not transport completeness:
+// unmatched/repeated markers must not supply success or seal an immutable cache.
+func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) ([]models.BackupTask, bool) {
 	type guestSection struct {
-		vmid     int
-		start    time.Time
-		end      time.Time
-		status   string
-		errMsg   string
-		warned   bool
-		logError bool
+		vmid      int
+		start     time.Time
+		end       time.Time
+		status    string
+		errMsg    string
+		warned    bool
+		logError  bool
+		started   bool
+		ambiguous bool
 	}
 
 	var order []int
 	sections := make(map[int]*guestSection)
 	cursor := jobTask.StartTime
 	activeVMID := 0
+	attributed := true
 
 	ensureSection := func(vmid int) *guestSection {
 		if sec, ok := sections[vmid]; ok {
@@ -2751,6 +2757,17 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		return sec
 	}
 
+	markAmbiguous := func(sec *guestSection) {
+		attributed = false
+		sec.ambiguous = true
+		// An explicit guest failure remains useful adverse evidence, even
+		// when another marker contradicts its execution sequence.
+		if sec.status != "error" {
+			sec.status = "unknown"
+			sec.errMsg = "Guest backup result is unknown because task log markers do not match; review the original Proxmox task log."
+		}
+	}
+
 	for _, line := range logLines {
 		text := strings.TrimSpace(line.Text)
 		if match := vzdumpLogGuestStartRe.FindStringSubmatch(text); match != nil {
@@ -2759,8 +2776,17 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 				continue
 			}
 			sec := ensureSection(vmid)
-			sec.start = cursor
-			sec.status = "running"
+			if activeVMID != 0 {
+				markAmbiguous(sections[activeVMID])
+			}
+			if sec.started || sec.status != "running" {
+				// One synthetic task cannot safely collapse several attempts.
+				markAmbiguous(sec)
+			}
+			if !sec.started {
+				sec.start = cursor
+				sec.started = true
+			}
 			activeVMID = vmid
 		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
 			vmid, err := strconv.Atoi(match[1])
@@ -2768,6 +2794,13 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 				continue
 			}
 			sec := ensureSection(vmid)
+			if !sec.started || activeVMID != vmid || sec.ambiguous {
+				markAmbiguous(sec)
+				if activeVMID == vmid {
+					activeVMID = 0
+				}
+				continue
+			}
 			if sec.status == "running" {
 				sec.status = "OK"
 			}
@@ -2786,6 +2819,9 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 				continue
 			}
 			sec := ensureSection(vmid)
+			if !sec.started || activeVMID != vmid {
+				markAmbiguous(sec)
+			}
 			sec.status = "error"
 			sec.errMsg = strings.TrimSpace(match[2])
 			if sec.errMsg == "" {
@@ -2809,7 +2845,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 	}
 
 	if len(order) == 0 {
-		return nil
+		return nil, attributed
 	}
 
 	jobFinished := !jobTask.EndTime.IsZero()
@@ -2849,7 +2885,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		})
 	}
 
-	return tasks
+	return tasks, attributed
 }
 
 func (m *Monitor) pollPVEBackupsAsync(
