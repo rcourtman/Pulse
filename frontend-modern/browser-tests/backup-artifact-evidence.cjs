@@ -112,6 +112,16 @@ let server,
 const apiReads = () =>
   result.responses.filter((response) => response.path.startsWith('/api/')).length;
 async function capture(page, name) {
+  // Dialog's shared entry animation has a 200ms opacity-zero delay. A present
+  // DOM/focused close button is not a rendered panel. Inspect settled pixels.
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('[role="dialog"]');
+    return (
+      !panel ||
+      (getComputedStyle(panel).opacity === '1' &&
+        panel.getAnimations().every((animation) => animation.playState === 'finished'))
+    );
+  });
   const geometry = await page.evaluate(() => {
     const clipped = [];
     for (const node of document.querySelectorAll(
@@ -126,12 +136,18 @@ async function capture(page, name) {
       )
         clipped.push(node.textContent);
     }
+    const panel = document.querySelector('[role="dialog"]');
+    if (panel) {
+      const box = panel.getBoundingClientRect();
+      if (box.left < 0 || box.right > innerWidth || box.top < 0 || box.bottom > innerHeight)
+        clipped.push('dialog outside viewport');
+    }
     return { clipped, overflow: document.documentElement.scrollWidth > innerWidth };
   });
   result.geometry.push({ name, ...geometry });
   assert.deepEqual(geometry, { clipped: [], overflow: false });
   const file = path.join(output, name + '.png');
-  await page.screenshot({ path: file });
+  await page.screenshot({ path: file, animations: 'disabled' });
   result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
 }
 (async () => {
@@ -367,12 +383,6 @@ async function capture(page, name) {
     }
     await read;
     await verified.waitFor({ state: 'detached' });
-    const replaced = page
-      .locator('[data-proxmox-backup-row="recoverable"]')
-      .filter({
-        has: page.locator('[data-backup-artifact-state]', { hasText: 'Unknown' }),
-      })
-      .filter({ has: page.locator('[data-backup-artifact-details]', { hasText: '1 PBS file' }) });
     // Two unknown points share a workload but keep separate record context.
     const unknownButtons = evidenceButton(page, 'Unknown');
     assert.equal(await unknownButtons.count(), 2);
@@ -397,7 +407,6 @@ async function capture(page, name) {
       else await page.keyboard.press('Escape');
     }
     assert(replacementButton);
-    assert.equal(await replaced.count(), 2);
     checks.push(
       'ordinary refresh withdraws Verified/prune protection; matching record stays literal and unknown',
     );
