@@ -9,8 +9,8 @@ public Community downloads do not replace a private Pro build.
 
 For the current v6 release candidate packet, see:
 
-- `docs/releases/RELEASE_NOTES_v6.6.0-rc.4.md`
-- `docs/releases/V6_CHANGELOG_v6.6.0-rc.4.md`
+- `docs/releases/RELEASE_NOTES_v6.6.0-rc.5.md`
+- `docs/releases/V6_CHANGELOG_v6.6.0-rc.5.md`
 
 For the current stable v6 packet, see:
 
