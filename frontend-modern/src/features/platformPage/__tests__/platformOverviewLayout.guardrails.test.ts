@@ -40,6 +40,7 @@ import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.ts
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
+import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
@@ -505,7 +506,7 @@ describe('platform overview layout guardrails', () => {
     // A capped inline-block (max-w-52 truncate) ignored the column width, so a
     // long value spilled past a narrow cell without an ellipsis and sat above
     // the row's text line; a block span fills the cell and ellipsizes there.
-    for (const source of [
+    const summarySources = [
       dockerConfigsTableSource,
       dockerImagesTableSource,
       dockerNetworksTableSource,
@@ -515,7 +516,6 @@ describe('platform overview layout guardrails', () => {
       dockerVolumesTableSource,
       proxmoxCoverageTableSource,
       proxmoxMailGatewayDrawerSource,
-      proxmoxRecoverableTableSource,
       vsphereHostsTableSource,
       kubernetesAutoscalingTableSource,
       kubernetesConfigTableSource,
@@ -526,11 +526,27 @@ describe('platform overview layout guardrails', () => {
       kubernetesPolicyTableSource,
       kubernetesServicesTableSource,
       kubernetesStorageTableSource,
-    ]) {
+    ];
+    for (const source of [...summarySources, proxmoxRecoverableTableSource]) {
       expect(source).not.toMatch(/class="[^"]*\binline-block\b[^"]*\btruncate\b/);
       expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
+    }
+    for (const source of summarySources) {
       // A block span that ellipsizes in its own cell, toned or not.
       expect(source).toMatch(/class=(?:"|\{`)block truncate\b/);
+    }
+  });
+
+  it('keeps full restore-point details wrapping instead of requiring a clipped summary', () => {
+    // These cells intentionally moved to shared, wrapping evidence in
+    // 4d3bf0c8a6. The generic summary assertion must not undo that repair.
+    for (const component of ['ArtifactLocationText', 'ArtifactDetailText']) {
+      expect(proxmoxRecoverableTableSource).toContain(`<${component} artifact={artifact} />`);
+      const body = proxmoxBackupsTableSharedSource
+        .split(`export function ${component}(`)[1]!
+        .split('\nexport ')[0]!;
+      expect(body).toContain('whitespace-normal wrap-anywhere');
+      expect(body).not.toMatch(/class="[^"]*\btruncate\b/);
     }
   });
 
