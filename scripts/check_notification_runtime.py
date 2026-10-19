@@ -28,8 +28,9 @@ PUBLIC_URL = 'https://notification-runtime.example.test'
 LIMIT = 2 * 1024 * 1024
 # prepareWebhookData's ordinary event; resolution is a different path.
 ORDINARY_EVENT = 'alert'
-TELEGRAM_PATH = '/owned-telegram/sendMessage?chat_id=-1001234'
+TELEGRAM_PATH = '/owned-telegram/sendMessage'
 TELEGRAM_CHAT = '-1001234'
+TELEGRAM_CONFIG_PATH = TELEGRAM_PATH + '?chat_id=' + TELEGRAM_CHAT
 FIXTURE_HEADER = 'owned-synthetic'
 
 
@@ -138,6 +139,18 @@ def telegram_delivery_checks(row, expected_name):
                 saved_public_url=PUBLIC_URL + '/alerts/history?alert=' in text,
                 markdown=row['body'].get('parse_mode') == 'Markdown',
                 unrelated_header=row.get('fixture_headers') == [FIXTURE_HEADER])
+
+
+def bounded_receiver_observations(rows):
+    """Preserve failed/multiple sends as closed checks, never body/header text."""
+    observations = []
+    for row in rows:
+        service = 'generic' if row['path'] == '/owned-alert' else 'telegram'
+        verify = delivery_checks if service == 'generic' else telegram_delivery_checks
+        observations.append({'service': service, 'bytes': row['bytes'], 'sha256': row['sha256'],
+                             'checks_by_resource': {identity: verify(row, f'notification-{identity}.example.test')
+                                                    for identity in ('a', 'b')}})
+    return observations
 
 
 def source_binding(binary, expected):
@@ -287,7 +300,7 @@ class Journey:
         row = matches[0]
         checks = {'builtin_service': row.get('service') == 'telegram',
                   'no_custom_template': not row.get('template'),
-                  'owned_url': row.get('url') == f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_PATH,
+                  'owned_url': row.get('url') == f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_CONFIG_PATH,
                   'enabled_post': row.get('enabled') is True and row.get('method') == 'POST',
                   'masked_headers': row.get('headers') ==
                       {'content-type': '***REDACTED***', 'X-Pulse-Fixture': '***REDACTED***'}}
@@ -357,7 +370,9 @@ class Journey:
             # Test call, custom body or real provider token. The ordinary
             # sender must apply its built-in JSON headers on both processes.
             self.request('/api/notifications/webhooks', {'name': 'owned-builtin-telegram',
-                         'url': f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_PATH,
+                         # The real sender extracts chat_id into its JSON and
+                         # strips it from the wire URL; assert both identities.
+                         'url': f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_CONFIG_PATH,
                          'enabled': True, 'method': 'POST', 'service': 'telegram',
                          'headers': {'content-type': 'text/plain', 'X-Pulse-Fixture': FIXTURE_HEADER}})
             cfg = self.request('/api/alerts/config')
@@ -434,7 +449,8 @@ def main():
                 report.update(phases=journey.phases, child_exits=journey.exits,
                               requests=journey.requests, incomplete_request=journey.active_request,
                               deliveries=journey.deliveries, delivery_observations=journey.delivery_observations,
-                              destination_readbacks=journey.destination_readbacks)
+                              destination_readbacks=journey.destination_readbacks,
+                              receiver_observations=bounded_receiver_observations(sink.snapshot()))
     report['owned_temporary_data_removed'] = not data.exists()
     report['source_clean_after'] = subprocess.run(['git', 'diff', '--quiet', 'HEAD'], check=False).returncode == 0
     if not report['source_clean_after']:

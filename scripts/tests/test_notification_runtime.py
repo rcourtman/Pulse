@@ -137,7 +137,7 @@ class NotificationRuntimeControls(unittest.TestCase):
         journey = self.journey()
         journey.sink = SimpleNamespace(port=7655)
         valid = {'name': 'owned-builtin-telegram', 'service': 'telegram',
-                 'url': 'http://127.0.0.1:7655' + RUNTIME.TELEGRAM_PATH,
+                 'url': 'http://127.0.0.1:7655' + RUNTIME.TELEGRAM_CONFIG_PATH,
                  'enabled': True, 'method': 'POST',
                  'headers': {'content-type': '***REDACTED***', 'X-Pulse-Fixture': '***REDACTED***'}}
         for changes in ({}, {'template': '{"text":"custom"}'}, {'service': 'generic'},
@@ -152,6 +152,25 @@ class NotificationRuntimeControls(unittest.TestCase):
                     journey.assert_telegram_destination()
                     self.assertTrue(all(journey.destination_readbacks[-1].values()))
                 journey.request.assert_called_once_with('/api/notifications/webhooks')
+
+    def test_telegram_config_keeps_chat_query_but_wire_removes_it(self):
+        self.assertEqual(RUNTIME.TELEGRAM_CONFIG_PATH,
+                         RUNTIME.TELEGRAM_PATH + '?chat_id=' + RUNTIME.TELEGRAM_CHAT)
+        row = self.telegram_row()
+        row['path'] = RUNTIME.TELEGRAM_CONFIG_PATH
+        self.assertFalse(RUNTIME.telegram_wire_checks(row)['owned_path'])
+
+    def test_multiple_or_failed_delivery_observations_never_expose_payload_text(self):
+        row = self.telegram_row()
+        row.update(bytes=200, sha256='c' * 64)
+        row['body']['text'] += '\nprivate fixture body'
+        row['fixture_headers'] = ['private fixture header']
+        observations = RUNTIME.bounded_receiver_observations([row, copy.deepcopy(row)])
+        self.assertEqual(len(observations), 2)
+        self.assertFalse(observations[0]['checks_by_resource']['a']['unrelated_header'])
+        text = json.dumps(observations)
+        self.assertNotIn('private fixture', text)
+        self.assertNotIn(RUNTIME.TELEGRAM_CHAT, text)
 
     def test_current_ordinary_event_not_resolution_or_invented_firing(self):
         source = (ROOT / 'internal/notifications/notifications.go').read_text()
