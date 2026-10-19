@@ -1243,6 +1243,75 @@ test("structured Pulse version never falls back to an upgrade source or agent ve
   assert.equal(extractPulseVersion("bug on v5.1.35", "### Pulse version"), null);
 });
 
+const ambiguousVersionDeclarations = [
+  "6.4.5 -> 6.5.0",
+  "v6.4.5 → v6.5.0",
+  "6.4.5 to 6.5.0",
+  "6.4.5 upgraded to 6.5.0",
+  "6.4.5 / 6.5.0",
+  "6.4.5 or 6.5.0",
+  "6.4.5 and 6.5.0",
+  "6.4.5 – 6.5.0",
+  "6.4.5 - 6.5.0",
+  "6.4.5 through 6.5.0",
+  "v6.4.5 upgrading to v6.5.0-rc.1",
+  "6.4.5 migrated to Pulse 6.5.0",
+  "6.4.5 → unknown",
+  "6.4.5 to latest",
+  "6.4.5 -> 6.5",
+  "**6.4.5** => **6.5.0**",
+  "Pulse 6.4.5 → Pulse 6.5.0",
+  "rcourtman/pulse:6.4.5 -> rcourtman/pulse:6.5.0",
+  "license.pulserelay.pro/pulse-pro:6.4.5 → license.pulserelay.pro/pulse-pro:6.5.0",
+  "pulse-v6.4.5-linux-amd64.tar.gz -> pulse-v6.5.0-linux-amd64.tar.gz",
+];
+
+test("version fields do not select an upgrade source or guess between releases", () => {
+  for (const value of ambiguousVersionDeclarations) {
+    for (const body of [
+      `### Pulse version\n${value}\n### Agent version\n6.6.0`,
+      `Pulse version: ${value}`,
+      `### Pulse version\n\`\`\`text\n${value}\n\`\`\``,
+    ]) {
+      assert.equal(triage.internals.extractPulseVersion("Bug on v6.6.0", body), null, body);
+    }
+  }
+});
+
+test("unambiguous current versions retain upgrade history and companion context", () => {
+  for (const value of [
+    "6.5.0 (upgraded from 6.4.5)",
+    "6.5.0 (previous attempt: 6.4.5 -> 6.4.6)",
+    "server 6.5.0; agent 6.4.5",
+    "6.5.0 / agent 6.4.5",
+    "server + pulse-agent v6.5.0 (Docker, rcourtman/pulse:6.5.0)",
+    "rcourtman/pulse:6.5.0 (upgraded from 6.4.5)",
+    "pulse-v6.5.0-linux-amd64.tar.gz (previously 6.4.5)",
+  ]) {
+    assert.equal(triage.internals.extractPulseVersion("Upgrade failure",
+      `### Pulse version\n${value}`), "6.5.0", value);
+  }
+});
+
+test("ambiguous version intake stays silent and preserves whole-thread ownership", async () => {
+  for (const value of ambiguousVersionDeclarations) {
+    for (const established of [false, true]) {
+      const { github, calls } = createGithub();
+      const labels = ["bug", "needs-human", "needs-retest-on-latest",
+        ...(established ? ["affects-6.6.0"] : [])];
+      const issue = { number: 3072, title: "Upgrade stopped", body: `### Pulse version\n${value}`,
+        labels: labels.map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+      assert.deepEqual(calls.addLabels.map(call => call.labels),
+        established ? [] : [["needs-version-info"]], value);
+      assert.deepEqual(calls.removeLabel, [], value);
+      assert.deepEqual(calls.createComment, [], value);
+      assert.deepEqual(calls.getLatestRelease, [], value);
+      assert.deepEqual(calls.paginate, [], value);
+    }
+  }
+});
+
 test("free-form titles cannot turn platform, agent or upgrade versions into Pulse evidence", () => {
   const { extractPulseVersion } = triage.internals;
   for (const title of [

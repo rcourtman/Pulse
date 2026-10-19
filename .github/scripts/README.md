@@ -30,6 +30,12 @@ whether a fix is available. Community reconciles comments, images and releases.
   upgrade/migration titles do not establish the failing executable. An unknown
   body declaration remains authoritative. This conservative fallback neither
   clears established whole-thread labels nor sends a diagnostic question.
+- A version field containing a transition or alternatives (for example,
+  `6.4.5 → 6.5.0` or `6.4.5 / 6.5.0`) does not identify the failing release.
+  Do not choose its first endpoint, including server-image and archive forms.
+  A stated current version with separate history, such as
+  `6.5.0 (upgraded from 6.4.5)`, still supplies evidence. An ambiguous field
+  does not erase versions already established by Community or request a retest.
 - Preserve the immediate pre-write check of issue identity, open state, title,
   body, update time and label set. Separate GitHub label APIs are not atomic;
   this check narrows that race but cannot eliminate it.
