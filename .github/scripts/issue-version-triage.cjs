@@ -5,6 +5,9 @@ const NEEDS_DECOMPOSITION_LABEL = "needs-decomposition";
 const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
+const EMPTY_TOPIC_VALUES = new Set([
+  "_no response_", "n/a", "na", "no", "none", "none known", "not applicable",
+]);
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -116,11 +119,38 @@ function normalizedTopicField(body) {
   ]);
   if (value === null) return null;
 
-  return value
+  const normalize = (text) => text
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ")
     .replace(/[.!]+$/g, "");
+  const normalized = normalize(value);
+  if (EMPTY_TOPIC_VALUES.has(normalized)) return normalized;
+
+  // An emphasized or code-styled "None" is still an empty answer, not a new
+  // investigation. Only unwrap one projected paragraph's inline decoration.
+  // Links, deletions, HTML and additional paragraphs retain their full evidence;
+  // do not erase evidence to manufacture an empty answer.
+  const plain = (tokens) => {
+    let text = "";
+    for (const token of tokens || []) {
+      if (token.type === "strong" || token.type === "em") {
+        const nested = plain(token.tokens);
+        if (nested === null) return null;
+        text += nested;
+      } else if (["text", "escape", "codespan"].includes(token.type)) {
+        text += token.text;
+      } else {
+        return null;
+      }
+    }
+    return text;
+  };
+  const blocks = lexer(value, { gfm: true });
+  const unwrapped = blocks.length === 1 && blocks[0].type === "paragraph"
+    ? plain(blocks[0].tokens) : null;
+  const candidate = unwrapped === null ? null : normalize(unwrapped);
+  return EMPTY_TOPIC_VALUES.has(candidate) ? candidate : normalized;
 }
 
 function classifyAdditionalActionableTopics(body) {
@@ -128,15 +158,7 @@ function classifyAdditionalActionableTopics(body) {
   if (normalized === null) return null;
   if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) return false;
 
-  return !new Set([
-    "_no response_",
-    "n/a",
-    "na",
-    "no",
-    "none",
-    "none known",
-    "not applicable",
-  ]).has(normalized);
+  return !EMPTY_TOPIC_VALUES.has(normalized);
 }
 
 function normalizeVersion(value) {
