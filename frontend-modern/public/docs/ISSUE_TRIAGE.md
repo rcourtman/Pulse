@@ -4,6 +4,26 @@ Pulse issue triage must preserve every actionable topic a reporter contributes.
 Resolving the primary defect does not dispose of secondary bugs, feature requests,
 documentation gaps, or operator workflows described in the same report.
 
+## Find reporting guidance
+
+Use the section relevant to the problem, not a checklist of extra evidence to
+collect. Existing observations and unknown details are valid; an existing
+report does not need to be filed again.
+
+- [Versions and installation failures](#versions-and-installation-failures)
+- [Failed or interrupted upgrades](#failed-or-interrupted-upgrades)
+- [Platform and collection paths](#platform-and-collection-paths)
+- [Several hosts or clusters](#several-hosts-or-clusters)
+- [Missing readings and unresponsive workloads](#missing-readings-and-unresponsive-workloads)
+- [Pulse performance and memory](#pulse-performance-and-memory)
+- [Guest memory disagreements](#guest-memory-disagreements)
+- [Notification delivery and identity](#notification-delivery-and-identity)
+- [Sign-in and access reports](#sign-in-and-access-reports)
+
+For a report with separate topics, see [Required disposition](#required-disposition).
+The [automation boundary](#automation-boundary) explains what intake labels
+can and cannot establish.
+
 ## Intake contract
 
 Issue forms ask for one primary outcome and provide an optional **Additional
@@ -27,6 +47,8 @@ removes the label only after the linked dispositions below are complete.
 Reporters may still write free-form issues, edit form output, or discover a
 second topic during discussion. Triage owns decomposition in those cases; it
 must not require the reporter to refile information they already supplied.
+
+### Versions and installation failures
 
 Automatic metadata uses top-level rendered Markdown fields, not declarations
 inside quoted logs, nested lists, raw HTML or code examples. A legacy bullet
@@ -64,6 +86,8 @@ An API-only connection can have no agent. Accept "unknown" or an omitted optiona
 field, and use existing evidence; do not ask for a downgrade, restart, reinstall
 or re-enrolment to obtain version context. Existing reports need no refile.
 
+### Failed or interrupted upgrades
+
 An interrupted upgrade needs a timeline, not one inferred version. The optional
 **Upgrade attempt and recovery** field separates the starting version, intended
 version or asset, route, original time and timezone, last recorded updater or
@@ -82,6 +106,8 @@ restore, run Diagnostics or delete rollback backups just to complete a report;
 keep backups private and preserve the original evidence. Version labels are
 intake metadata, not proof of the failing executable or installed recovery.
 
+### Platform and collection paths
+
 The optional **OS / environment** field in both bug forms also distinguishes
 where readings come from: the platform API, a Pulse agent, or both. Retain the
 affected platform release, including TrueNAS SCALE versus CORE, separately from
@@ -97,6 +123,8 @@ does not make Docker commands relevant to that target. Read later comments as
 well as the original title and screenshots before choosing diagnostics. When a
 report shifts to a different target, retain both topics rather than assuming
 the new symptom is the original defect or a duplicate.
+
+### Several hosts or clusters
 
 For reports involving several hosts or clusters, preserve which nodes share a
 cluster, which belong to independent installations, whether node names or guest
@@ -128,6 +156,8 @@ link is not proof that agent reporting stopped. Do not install another agent,
 change a link or recreate the addition just to diagnose it; a repair for distinct
 full hostnames alone does not establish a fix for repeated short names.
 
+### Missing readings and unresponsive workloads
+
 Missing readings and an unresponsive workload need different investigation and
 recovery paths. Use the reporter's existing observations of the workload's usual
 UI, not Pulse's displayed connection status, to distinguish them where possible.
@@ -143,6 +173,8 @@ result, time and sanitized evidence; do not require a second attempt before
 triage. Where the installed state is uncertain, check it before suggesting
 another action. A diagnostics export is useful only when Pulse is running and
 collecting it is safe.
+
+### Pulse performance and memory
 
 For performance reports, retain what a reading measures before comparing it:
 Pulse process, container or whole host; units, measurement window and uptime;
@@ -166,6 +198,8 @@ another restart, downgrade, profile or unchanged sample. If the reporter
 clarifies that the problem is the baseline, carry that goal to the engineering
 owner; growth-rate evidence alone does not answer it. Unknown context is valid.
 
+### Guest memory disagreements
+
 For VM or LXC memory disagreements, retain where each existing reading appears
 (overview, History, alert, Patrol or another tool), whether the comparison was
 measured inside the affected guest or on its hypervisor node, and the original
@@ -184,6 +218,8 @@ do not reattribute History or a past warning from the current view. Reconcile
 the full thread before asking only for a consequential remaining distinction.
 Do not request commands, Diagnostics or guest-agent probes, an agent install,
 memory or workload changes, or another backup just to fill this context.
+
+### Notification delivery and identity
 
 For notification reports, distinguish an already-observed **Test** result from
 ordinary alert delivery: single, grouped/digest or resolved. A successful Test
