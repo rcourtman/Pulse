@@ -89,7 +89,7 @@ const { chromium } = require('playwright');
             await page.getByRole('dialog').waitFor();
             const text = await page.getByRole('dialog').innerText();
             assert(text.includes(state));
-            assert(text.includes('restore') && text.includes('thaw'), 'evidence must retain its safety limit');
+            assert(text.includes('guest responsiveness') && text.includes('successful restore'), 'evidence must retain its safety limit');
             await page.keyboard.press('Escape');
             await page.getByRole('dialog').waitFor({ state: 'hidden' });
             await evidence.focus();

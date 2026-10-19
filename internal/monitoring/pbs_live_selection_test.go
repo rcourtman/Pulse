@@ -102,7 +102,22 @@ func exercisePBSLiveSelectionKeepsNewerRefreshAheadOfOlderCache(t *testing.T) {
 	poll := func(p int32, label string) []models.PBSBackup {
 		phase.Store(p)
 		f.m.pollPBSBackups(context.Background(), instance, f.client, []models.PBSDatastore{{Name: "archive"}})
-		f.wait(t)
+		// This fixture ingests the actual 5,000-row window, rather than the
+		// one/two-row inventories served by f.wait's ten-second helper. Wait
+		// for completion, not a latency SLO; retain all artifact assertions.
+		deadline := time.Now().Add(90 * time.Second)
+		for {
+			f.m.recoveryIngestMu.Lock()
+			running := f.m.recoveryIngestRunning
+			f.m.recoveryIngestMu.Unlock()
+			if !running {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("large PBS selection ingest did not complete")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 		rows := f.m.PBSBackupsSnapshot()
 		mapped, mapErr := proxmoxmapper.FromPBSBackupsWithEvidence(rows, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), time.Now())
 		require.NoError(t, mapErr)
