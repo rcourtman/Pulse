@@ -224,6 +224,59 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps yearly activity keyboard navigation separate from the scoped restore-point filter', async () => {
+    mockBackupAPIs();
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? {
+                data: {
+                  ...pvePayload.data,
+                  storageBackups: [
+                    {
+                      ...pvePayload.data.storageBackups[0],
+                      time: new Date(Date.now() - 3_600_000).toISOString(),
+                    },
+                  ],
+                },
+              }
+            : { data: { backups: [] } },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date?source=archive&node=pve-a');
+    const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    await screen.findByRole('group', { name: 'Backup activity days' });
+    fireEvent.click(screen.getByRole('button', { name: '1y', exact: true }));
+    const chart = screen.getByRole('group', { name: 'Backup activity days' });
+    const days = within(chart).getAllByRole('button');
+    expect(days).toHaveLength(365);
+    expect(days.filter((day) => day.tabIndex === 0)).toEqual([days.at(-1)]);
+    const point = within(chart).getByRole('button', { name: /: 1 backup$/ });
+    point.focus();
+    fireEvent.keyDown(point, { key: 'ArrowLeft' });
+    expect(document.activeElement).not.toBe(point);
+    expect(new URLSearchParams(window.location.search).has('day')).toBe(false);
+    fireEvent.click(point);
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('day')).not.toBeNull(),
+    );
+    const selectedDay = new URLSearchParams(window.location.search).get('day');
+    expect(selectedDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
+    point.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    expect(point).toHaveAccessibleName(/1\.00 MB, selected/);
+    expect(document.activeElement).toBe(point);
+    expect(point).toHaveAttribute('tabindex', '0');
+    const query = new URLSearchParams(window.location.search);
+    expect(query.get('day')).toBe(selectedDay);
+    expect(query.get('node')).toBe('pve-a');
+    expect(query.get('source')).toBe('archive');
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps a job-only unmatched target inspectable without counting it as monitored or recoverable', async () => {
     mockBackupAPIs();
     const error = 'Cannot start backup <img src=x onerror="window.__jobInjected=true">';

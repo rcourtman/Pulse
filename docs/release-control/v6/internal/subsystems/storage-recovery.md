@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Keyboard access to collected backup activity
+
+The existing backup activity chart has one day in the Tab sequence, initially
+its selected day if visible, otherwise the newest day. Left/Right move focus
+without filtering; Home/End jump to the window edges. Native Enter/Space still
+toggle the existing day filter, and Tab leaves the chart. Pointer selection
+sets the re-entry day without changing the filter contract. Range replacement
+falls back to one valid day if the previous focus key is no longer present.
+Calendar-day keys preserve the focused button through metric replacement and
+live window rollover while that day remains visible. Accessible totals and
+hover evidence follow current observations, and Escape dismisses the tooltip.
+No inventory reads, guest operations or protection decisions are added.
+
+`BackupActivityChart.keyboard.test.tsx` checks yearly Tab-stop bounds, focus,
+key navigation, replacement and empty states. `ProxmoxBackupsTable.test.tsx`
+checks the production consumer's selected day, node/source scope and two-read
+inventory bound. `backup-activity-keyboard.cjs` exercises actual GET readers,
+keyboard and narrow touch with shipped CSS. This is access to collected backup
+evidence, not native backup recovery or filesystem liveness.
+
 ### Mounted backup chronology follows the wall clock, not the inventory-load time
 
 By date's local calendar window, timestamp admission and Coverage's latest-point/

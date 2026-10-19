@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import type { Accessor, Component } from 'solid-js';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -33,15 +33,13 @@ import {
   getBackupActivityTooltipRows,
   type BackupActivityMetricMode,
   type BackupActivityNoun,
-  type BackupActivityPoint,
   type BackupActivityRangeDays,
   type BackupActivitySegmentKind,
   type BackupActivityTimeline,
 } from './proxmoxBackupActivityPresentation';
 
 interface TooltipState {
-  dateLabel: string;
-  point: BackupActivityPoint;
+  dayKey: string;
   x: number;
   y: number;
 }
@@ -65,9 +63,29 @@ interface BackupActivityChartProps {
 }
 
 export const BackupActivityChart: Component<BackupActivityChartProps> = (props) => {
-  const [tooltip, setTooltip] = createSignal<TooltipState | null>(null);
+  const [tooltipAnchor, setTooltipAnchor] = createSignal<TooltipState | null>(null);
+  const [focusedDayKey, setFocusedDayKey] = createSignal<string | null>(null);
+  const keyboardHelpId = `backup-activity-${createUniqueId()}-keyboard-help`;
+  let dayGroup: HTMLDivElement | undefined;
 
   const points = () => props.timeline().points;
+  // Key buttons by calendar day, not by replaceable metric observations. A clock
+  // tick or Count/Volume change must not remove the operator's focused button.
+  const pointsByKey = createMemo(() => new Map(points().map((point) => [point.key, point])));
+  const dayKeys = createMemo(() => [...pointsByKey().keys()]);
+  const tabStopKey = () => {
+    const focused = focusedDayKey();
+    if (focused && pointsByKey().has(focused)) return focused;
+    const selected = props.selectedDateKey();
+    return selected && pointsByKey().has(selected) ? selected : dayKeys().at(-1);
+  };
+  const tooltip = () => {
+    const anchor = tooltipAnchor();
+    const point = anchor && pointsByKey().get(anchor.dayKey);
+    return anchor && point
+      ? { ...anchor, point, dateLabel: getRecoveryPrettyDateLabel(anchor.dayKey) }
+      : null;
+  };
   const axisMax = () => props.timeline().axisMax;
   const hasSelection = () => props.selectedDateKey() !== null;
   const metricMode = (): BackupActivityMetricMode =>
@@ -86,16 +104,37 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
 
   const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.range())}px`;
 
-  const showTooltip = (target: HTMLElement, point: BackupActivityPoint, dateLabel: string) => {
+  const showTooltip = (target: HTMLElement, dayKey: string) => {
     const rect = target.getBoundingClientRect();
-    setTooltip({
-      dateLabel,
-      point,
+    setTooltipAnchor({
+      dayKey,
       x: rect.left + rect.width / 2,
       y: rect.top,
     });
   };
-  const hideTooltip = () => setTooltip(null);
+  const hideTooltip = () => setTooltipAnchor(null);
+  const navigateDay = (event: KeyboardEvent, dayKey: string) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape') {
+      hideTooltip();
+      return;
+    }
+    const index = dayKeys().indexOf(dayKey);
+    const last = dayKeys().length - 1;
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowLeft'
+            ? Math.max(0, index - 1)
+            : event.key === 'ArrowRight'
+              ? Math.min(last, index + 1)
+              : null;
+    if (next === null) return; // Keep native Tab, Enter and Space behaviour.
+    event.preventDefault();
+    dayGroup?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
+  };
 
   return (
     <div class="rounded-lg border border-border-subtle px-2 py-2">
@@ -192,6 +231,10 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
           </div>
         }
       >
+        <p id={keyboardHelpId} class="mb-2 text-[11px] text-muted">
+          Use Left and Right arrow keys to move between days, Home or End to jump, and Enter or
+          Space to filter. Tab leaves the chart. Escape dismisses the tooltip.
+        </p>
         <div class="relative">
           <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
             <div
@@ -211,21 +254,28 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                 style={{ 'min-width': chartMinWidthStyle() }}
               >
                 <div
+                  ref={dayGroup}
+                  role="group"
+                  aria-label="Backup activity days"
+                  aria-describedby={keyboardHelpId}
+                  data-backup-activity-days
                   class="absolute inset-x-0 bottom-4 top-0 flex items-stretch"
                   style={{ gap: chartGapStyle() }}
                 >
-                  <For each={points()}>
-                    {(point) => {
-                      const total = () => point.total;
+                  <For each={dayKeys()}>
+                    {(dayKey) => {
+                      const point = () => pointsByKey().get(dayKey)!;
+                      const total = () => point().total;
                       const heightPct = () =>
                         axisMax() > 0 ? Math.min(100, (total() / axisMax()) * 100) : 0;
-                      const isSelected = () => props.selectedDateKey() === point.key;
-                      const dateLabel = getRecoveryPrettyDateLabel(point.key);
+                      const isSelected = () => props.selectedDateKey() === dayKey;
+                      const dateLabel = getRecoveryPrettyDateLabel(dayKey);
 
                       return (
                         <div class="min-w-[3px] flex-1 self-stretch">
                           <button
                             type="button"
+                            tabIndex={tabStopKey() === dayKey ? 0 : -1}
                             class={`h-full w-full ${getRecoveryTimelineColumnButtonClass(
                               isSelected(),
                               hasSelection(),
@@ -236,15 +286,20 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               isSelected(),
                               props.noun,
                               metricMode(),
-                              point.unmeasuredCount,
+                              point().unmeasuredCount,
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
-                            onClick={() => props.onToggleDay(point.key)}
-                            onMouseEnter={(event) =>
-                              showTooltip(event.currentTarget, point, dateLabel)
-                            }
+                            onClick={() => {
+                              setFocusedDayKey(dayKey);
+                              props.onToggleDay(dayKey);
+                            }}
+                            onKeyDown={(event) => navigateDay(event, dayKey)}
+                            onMouseEnter={(event) => showTooltip(event.currentTarget, dayKey)}
                             onMouseLeave={hideTooltip}
-                            onFocus={(event) => showTooltip(event.currentTarget, point, dateLabel)}
+                            onFocus={(event) => {
+                              setFocusedDayKey(dayKey);
+                              showTooltip(event.currentTarget, dayKey);
+                            }}
                             onBlur={hideTooltip}
                           >
                             <div class="relative h-full w-full overflow-hidden rounded-xs">
@@ -268,7 +323,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                                 >
                                   <For each={props.segmentKinds}>
                                     {(kind) => {
-                                      const count = () => point.counts[kind] ?? 0;
+                                      const count = () => point().counts[kind] ?? 0;
                                       const segmentPct = () =>
                                         total() > 0 ? (count() / total()) * 100 : 0;
                                       return (
