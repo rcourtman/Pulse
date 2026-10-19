@@ -175,7 +175,11 @@ function serve(req, res, next) {
       };
       const capture = async (state) => {
         const file = `${name}-${state}.png`;
-        await page.screenshot({ path: path.join(output, file), fullPage: true });
+        await page.screenshot({
+          path: path.join(output, file),
+          fullPage: true,
+          animations: 'disabled',
+        });
         report.captures.push({
           file,
           state,
