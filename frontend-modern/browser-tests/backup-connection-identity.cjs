@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { execFileSync } = require('node:child_process');
+const http = require('node:http');
+const { createRequire } = require('node:module');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace';
 const frontend = path.join(root, 'frontend-modern');
@@ -159,35 +160,85 @@ function serve(req, res, next) {
         'node_modules/@playwright/test'
       ].version,
     );
-    // Prepare the admitted lock from this assignment's verified offline cache,
-    // inside the browser capability, not through the source shell's listeners.
-    execFileSync(
-      'npm',
-      ['ci', '--offline', '--cache', path.join(root, 'tmp/backup-connection-identity/cache/npm')],
-      { cwd: frontend, stdio: 'pipe', timeout: 60000 },
-    );
-    result.dependency_install = 'npm ci --offline, exact bound manifest/lock';
-    const { createServer } = await import(
+    // Use the same offline graph already prepared for this fixture. Compile
+    // before navigation instead of racing hundreds of cold dev-module reads
+    // against browser navigation. The full source VM installs independently.
+    result.dependency_install = 'Existing offline npm-ci graph; bound manifests unchanged';
+    const { build } = await import(
       pathToFileURL(path.join(frontend, 'node_modules/vite/dist/node/index.js')).href
     );
-    server = await createServer({
+    const frontendRequire = createRequire(path.join(frontend, 'package.json'));
+    const solid = frontendRequire('vite-plugin-solid');
+    const tailwind = (
+      await import(pathToFileURL(frontendRequire.resolve('@tailwindcss/vite')).href)
+    ).default;
+    const compiled = path.join(output, 'static');
+    result.compiled_sources = {};
+    await build({
       root: frontend,
-      configFile: path.join(frontend, 'vite.config.ts'),
-      cacheDir: path.join(output, 'vite-cache'),
+      configFile: false,
+      publicDir: false,
       logLevel: 'error',
-      optimizeDeps: { entries: ['browser-tests/backup-identity.html'] },
+      resolve: {
+        alias: { '@': path.join(frontend, 'src') },
+        conditions: ['import', 'browser', 'default'],
+      },
       plugins: [
+        tailwind(),
+        solid(),
         {
-          name: 'exact-connection-reads',
-          configureServer(s) {
-            s.middlewares.use(serve);
+          name: 'exact-connection-compiled-source-binding',
+          generateBundle() {
+            for (const id of this.getModuleIds()) {
+              const file = id.split('?')[0];
+              if (!file.startsWith(frontend + '/') || file.includes('/node_modules/')) continue;
+              if (!fs.existsSync(file) || !fs.statSync(file).isFile()) continue;
+              const relative = path.relative(root, file);
+              const digest = hash(fs.readFileSync(file));
+              assert.equal(binding.files[relative], digest, relative);
+              result.compiled_sources[relative] = digest;
+            }
           },
         },
       ],
-      server: { host: '127.0.0.1', port: 0, strictPort: false, proxy: {} },
+      build: {
+        target: 'esnext',
+        outDir: compiled,
+        emptyOutDir: true,
+        rollupOptions: { input: path.join(frontend, 'browser-tests/backup-identity.html') },
+      },
     });
-    await server.listen();
-    origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+    result.compiled_artifacts = {};
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const file = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(file);
+        else result.compiled_artifacts[path.relative(compiled, file)] = hash(fs.readFileSync(file));
+      }
+    };
+    walk(compiled);
+    server = http.createServer((req, res) =>
+      serve(req, res, () => {
+        const key = decodeURIComponent(new URL(req.url, 'http://fixture.invalid').pathname).slice(
+          1,
+        );
+        if (!Object.hasOwn(result.compiled_artifacts, key)) {
+          res.statusCode = 404;
+          return res.end('Not found');
+        }
+        const bytes = fs.readFileSync(path.join(compiled, key));
+        assert.equal(hash(bytes), result.compiled_artifacts[key]);
+        res.setHeader(
+          'Content-Type',
+          { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[
+            path.extname(key)
+          ] || 'application/octet-stream',
+        );
+        res.end(bytes);
+      }),
+    );
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    origin = `http://127.0.0.1:${server.address().port}`;
     for (const spec of [
       { name: 'chromium', engine: chromium, width: 1440, touch: false },
       { name: 'webkit', engine: webkit, width: 320, touch: true },
@@ -414,7 +465,7 @@ function serve(req, res, next) {
       result.cleanup.browser = true;
     } else result.cleanup.browser = true;
     if (server) {
-      await server.close();
+      await new Promise((resolve) => server.close(resolve));
       result.cleanup.server = true;
     }
     fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
