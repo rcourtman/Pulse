@@ -1,0 +1,371 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b7c2a702b587c38301ad77dcc131623067b2c86f",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6804eb268fdfbb122d10a2cbfc977e9663b12c509e1c016eeddfd1e7da04a1ba",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "6d2ad0a5de88dbfd9b3bcab539eef6b108ed7f96ec88224cc28d6c87a475c21c"
+  },
+  "routes": [
+    "Existing Backups via browser-tests/backup-inventory.html",
+    "Existing Storage and guest SMART via browser-tests/disk-source-freshness.html"
+  ],
+  "states": [
+    "Actual inventory-reader timeout notice with corrected sentence; source Retry remains available and incomplete is not no backups",
+    "Explicit stale HTTP resource through Storage and guest SMART details, with corrected current-health-unconfirmed sentence"
+  ],
+  "interactions": [
+    "Native keyboard/touch Refresh before real reader deadline",
+    "Keyboard/touch open Storage disk and guest SMART details",
+    "Six retained changed-message captures opened and inspected with native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T21:39:27Z",
+  "execution_source": "b7c2a702b587c38301ad77dcc131623067b2c86f",
+  "execution_tree": "c61b8aff22d1a86c31a08a65ee3a018dc90ea182",
+  "parent_tree": "c61b8aff22d1a86c31a08a65ee3a018dc90ea182",
+  "playwright": "1.56.1",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "proofs": [
+    {
+      "id": "backup",
+      "protocol": "backup/protocol.cjs",
+      "protocol_sha256": "3769a653f396a41d2349860f6c459d57d209a4c189b4dc537d29d06f537212b6",
+      "cases": [
+        {
+          "engine": "chromium",
+          "viewport": {
+            "width": 1365,
+            "height": 1000
+          },
+          "hold": true,
+          "requests": [
+            {
+              "path": "/api/backups/pve",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/backups/pbs",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/recovery/postures?resourceId=ct-112&limit=200",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/backups/pve",
+              "method": "GET",
+              "held": true
+            },
+            {
+              "path": "/api/backups/pbs",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/recovery/postures?resourceId=ct-112&limit=200",
+              "method": "GET",
+              "held": false
+            }
+          ],
+          "browserVersion": "141.0.7390.37",
+          "checks": [
+            "Actual initial readable inventory; native explicit Refresh",
+            "Actual reader timeout produces the changed sentence in the consuming status notice",
+            "Source-local Retry remains available; no backup, provider or guest operation"
+          ],
+          "contextClosed": true,
+          "browserClosed": true
+        },
+        {
+          "engine": "webkit",
+          "viewport": {
+            "width": 320,
+            "height": 1000
+          },
+          "hold": true,
+          "requests": [
+            {
+              "path": "/api/backups/pve",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/backups/pbs",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/recovery/postures?resourceId=ct-112&limit=200",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/backups/pve",
+              "method": "GET",
+              "held": true
+            },
+            {
+              "path": "/api/backups/pbs",
+              "method": "GET",
+              "held": false
+            },
+            {
+              "path": "/api/recovery/postures?resourceId=ct-112&limit=200",
+              "method": "GET",
+              "held": false
+            }
+          ],
+          "browserVersion": "26.0",
+          "checks": [
+            "Actual initial readable inventory; native explicit Refresh",
+            "Actual reader timeout produces the changed sentence in the consuming status notice",
+            "Source-local Retry remains available; no backup, provider or guest operation"
+          ],
+          "contextClosed": true,
+          "browserClosed": true
+        }
+      ],
+      "captures": [
+        {
+          "file": "copy-backup-chromium-timeout-copy.png",
+          "engine": "chromium",
+          "viewport": {
+            "width": 1365,
+            "height": 1000
+          },
+          "sha256": "ba7fc6b34301d096641329421f8df9fed4ced7e8d62d043590fc6d39e540ee11",
+          "original_file": "chromium-timeout-copy.png",
+          "archive_member": "backup/chromium-timeout-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "Desktop: amber PVE unavailable notice is legible in a single line, including the new sentence boundary. Retry PVE inventory is visible below it; incomplete inventory remains explicit instead of asserting that no backups exist."
+        },
+        {
+          "file": "copy-backup-webkit-timeout-copy.png",
+          "engine": "webkit",
+          "viewport": {
+            "width": 320,
+            "height": 1000
+          },
+          "sha256": "4205a4498c3e5b612b5fe043fe401dcb6ba7a74516eaa9f091d84dd9b4be3327",
+          "original_file": "webkit-timeout-copy.png",
+          "archive_member": "backup/webkit-timeout-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "320px dark phone: full timeout guidance wraps inside the amber border, including the new sentence boundary and no-guest-contact assurance. Retry remains visible below the text; Unknown protection and incomplete inventory remain distinct from no backups."
+        }
+      ],
+      "errors": [],
+      "cleanup": {
+        "browser": true,
+        "heldResponses": true,
+        "server": true
+      }
+    },
+    {
+      "id": "disk",
+      "protocol": "disk/protocol.cjs",
+      "protocol_sha256": "40deb61038ac3b67373fd2312098e63102714aac0b89b9326f72b9d1d696cee7",
+      "cases": [
+        {
+          "engine": "chromium",
+          "viewport": {
+            "width": 1365,
+            "height": 1000
+          },
+          "mode": "stale",
+          "requests": [
+            {
+              "method": "GET",
+              "path": "/api/resources?type=physical_disk&parent=guest-101&page=1&limit=100",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/license/runtime-capabilities",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/license/runtime-capabilities",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_reallocated_sectors&range=24h",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h&maxPoints=226",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_reallocated_sectors&range=24h&maxPoints=226",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_reallocated_sectors&range=24h",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h&maxPoints=223",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_reallocated_sectors&range=24h&maxPoints=223",
+              "mode": "stale"
+            }
+          ],
+          "browserVersion": "141.0.7390.37",
+          "checks": [
+            "Actual HTTP resource decoder and existing Storage detail show the corrected stale-health sentence",
+            "Guest overview consumes the same producer; Last known remains distinct from current health",
+            "No mutation, probe or off-origin request"
+          ],
+          "contextClosed": true,
+          "browserClosed": true
+        },
+        {
+          "engine": "webkit",
+          "viewport": {
+            "width": 320,
+            "height": 1000
+          },
+          "mode": "stale",
+          "requests": [
+            {
+              "method": "GET",
+              "path": "/api/resources?type=physical_disk&parent=guest-101&page=1&limit=100",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/license/runtime-capabilities",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/license/runtime-capabilities",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h&maxPoints=119",
+              "mode": "stale"
+            },
+            {
+              "method": "GET",
+              "path": "/api/metrics-store/history?resourceType=disk&resourceId=agent-101%3Asda&metric=smart_temp&range=24h&maxPoints=113",
+              "mode": "stale"
+            }
+          ],
+          "browserVersion": "26.0",
+          "checks": [
+            "Actual HTTP resource decoder and existing Storage detail show the corrected stale-health sentence",
+            "Guest overview consumes the same producer; Last known remains distinct from current health",
+            "No mutation, probe or off-origin request"
+          ],
+          "contextClosed": true,
+          "browserClosed": true
+        }
+      ],
+      "captures": [
+        {
+          "file": "copy-disk-chromium-storage-copy.png",
+          "engine": "chromium",
+          "state": "storage-copy",
+          "viewport": {
+            "width": 1365,
+            "height": 1000
+          },
+          "sha256": "2388ca81d917e01c3375a0c2cf91a84fb04abcc274acbe87db35c59ca73be3e2",
+          "original_file": "chromium-storage-copy.png",
+          "archive_member": "disk/chromium-storage-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "Desktop: Storage detail visibly separates Last known from current health. The full corrected sentence is legible above neutral last-known SMART cards and retained History."
+        },
+        {
+          "file": "copy-disk-chromium-guest-copy.png",
+          "engine": "chromium",
+          "state": "guest-copy",
+          "viewport": {
+            "width": 1365,
+            "height": 1000
+          },
+          "sha256": "ec3ad7292ba4a06264c8261bd4c150ab13db86b7cbfad8dacd2dc7cf3e1d9a5c",
+          "original_file": "chromium-guest-copy.png",
+          "archive_member": "disk/chromium-guest-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "Desktop: opened guest SMART details show the same corrected unconfirmed-current-health sentence and last-known card labels. Native keyboard focus remains visible on the disclosure; synthetic backup context is separate."
+        },
+        {
+          "file": "copy-disk-webkit-storage-copy.png",
+          "engine": "webkit",
+          "state": "storage-copy",
+          "viewport": {
+            "width": 320,
+            "height": 1000
+          },
+          "sha256": "1666223823ead36810b9a2bbb787675655994cc40d1b1a7ac340fa8258312cf9",
+          "original_file": "webkit-storage-copy.png",
+          "archive_member": "disk/webkit-storage-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "320px dark phone: the full stale-health explanation wraps inside the Storage detail. The new sentence boundary remains legible; Last known temperature wraps without clipping, and retained History/card controls stay inside the viewport."
+        },
+        {
+          "file": "copy-disk-webkit-guest-copy.png",
+          "engine": "webkit",
+          "state": "guest-copy",
+          "viewport": {
+            "width": 320,
+            "height": 1000
+          },
+          "sha256": "4c2f595b472754701c1911ff0be90e1b0cb1f88faab433fa1a0e28465cd99137",
+          "original_file": "webkit-guest-copy.png",
+          "archive_member": "disk/webkit-guest-copy.png",
+          "inspected_with": "native view_image",
+          "pixel_review": "320px dark phone: the full stale-health explanation wraps inside the opened guest SMART disclosure. The new sentence boundary remains legible; Last known temperature wraps without clipping, and retained History/card controls stay inside the viewport."
+        }
+      ],
+      "errors": [],
+      "cleanup": {
+        "browser": true,
+        "server": true
+      }
+    }
+  ],
+  "limits": "Punctuation-only producer changes, safe local HTTP fixtures through existing consumers. No backup, sensor/native recovery, provider, guest or production operation. Protocol scripts and raw exact-source bindings retained in COPY-BROWSER-RAW.tar.xz beside lane outcome."
+}
