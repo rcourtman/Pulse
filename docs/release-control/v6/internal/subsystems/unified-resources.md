@@ -27,7 +27,8 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 Unavailable and Unknown capacity cells open the existing full-width resource
 row disclosure using a named native button with expanded/controls semantics.
-Its accessible name includes the visible Unavailable/Unknown state.
+Its accessible name includes the visible Unavailable/Unknown state. The control
+contains its click so the summary row cannot toggle the disclosure again.
 The disclosure names the backup server and datastore, explains that a failed or
 unknown capacity read is not an empty datastore, and does not confuse server
 reachability with a successful datastore read. Fixed copy does not expose raw

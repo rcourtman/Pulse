@@ -298,6 +298,9 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           name: `Collapse ${serverName} details`,
           exact: true,
         });
+        // Exercise focus restoration from a focused close control even on
+        // touch: a tap alone need not give buttons focus in WebKit.
+        await close.focus();
         await activate(close);
         await region.waitFor({ state: 'detached' });
         const summaryToggle = table

@@ -137,7 +137,10 @@ describe('PBS datastore capacity evidence', () => {
       });
       expect(button).toHaveAttribute('type', 'button');
       expect(button).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(button);
+      const click = new MouseEvent('click', { bubbles: true });
+      const stop = vi.spyOn(click, 'stopPropagation');
+      button.dispatchEvent(click);
+      expect(stop).toHaveBeenCalledTimes(1);
       expect(button).toHaveAttribute('aria-expanded', 'true');
       const region = within(container).getByRole('region', {
         name: 'Datastore capacity for pbs-capacity / tank',

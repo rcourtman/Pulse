@@ -668,7 +668,10 @@ export function ProxmoxBackupServersTable(props: {
                                     aria-label={`Explain ${capacityLabel().toLowerCase()} capacity for ${row.serverName} / ${datastore().name}`}
                                     aria-expanded={isExpanded()}
                                     aria-controls={detailRowId()}
-                                    onClick={() => detail.toggle(rowIdentity)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      detail.toggle(rowIdentity);
+                                    }}
                                   >
                                     {capacityLabel()}
                                   </button>
