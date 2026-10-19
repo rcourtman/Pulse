@@ -28,6 +28,83 @@ const owners = (result: ReturnType<typeof model>) =>
   result.recoverableArtifacts.map((artifact) => artifact.workload.resourceId);
 
 describe('backup-identity: native ownership rather than first label match', () => {
+  it.each([false, true])(
+    'keeps case-distinct connections separate, including migrated evidence (reversed: %s)',
+    (reversed) => {
+      const workloads = [
+        identityGuest('upper-100', 'East', 'pve-upper'),
+        identityGuest('lower-100', 'east', 'pve-lower'),
+      ];
+      if (reversed) workloads.reverse();
+      const result = model({
+        workloads,
+        archives: [identityArchive({ instance: 'East', node: 'pve-lower' })],
+        snapshots: [identitySnapshot({ instance: 'east', node: 'pve-upper' })],
+        pbsBackups: [
+          identityPBS({ id: 'pbs-upper', namespace: 'East' }),
+          identityPBS({ id: 'pbs-lower', namespace: 'east' }),
+        ],
+        tasks: [
+          identityTask({ id: 'upper-job', instance: 'East', node: 'pve-lower' }),
+          identityTask({ id: 'lower-job', instance: 'east', node: 'pve-upper', type: 'vm' }),
+        ],
+      });
+      const owner = (id: string) =>
+        result.recoverableArtifacts.find((artifact) => artifact.nativeId === id)?.workload
+          .resourceId;
+      expect(owner('file-100')).toBe('upper-100');
+      expect(owner('snapshot-100')).toBe('lower-100');
+      expect(owner('pbs-upper')).toBe('upper-100');
+      expect(owner('pbs-lower')).toBe('lower-100');
+      expect(result.coverageRows).toHaveLength(2);
+      expect(
+        result.coverageRows.find((row) => row.workload.resourceId === 'upper-100')?.latestTask
+          ?.id,
+      ).toBe('upper-job');
+      expect(
+        result.coverageRows.find((row) => row.workload.resourceId === 'lower-100')?.latestTask
+          ?.id,
+      ).toBe('lower-job');
+    },
+  );
+
+  it('does not borrow a singleton guest from a case-distinct removed connection', () => {
+    const result = model({
+      workloads: [identityGuest('lower-100', 'east', 'pve-1')],
+      archives: [identityArchive({ instance: 'East' })],
+      snapshots: [identitySnapshot({ instance: 'East' })],
+      tasks: [identityTask({ instance: 'East' })],
+    });
+    expect(owners(result)).toEqual([undefined, undefined]);
+    const live = result.coverageRows.find((row) => row.workload.resourceId === 'lower-100')!;
+    expect(live.artifacts).toEqual([]);
+    expect(live.latestTask).toBeUndefined();
+    const orphan = result.coverageRows.find((row) => row.isOrphaned)!;
+    expect(orphan.workload.instance).toBe('East');
+    expect(orphan.latestTask?.id).toBe('task-100');
+    expect(orphan.posture).toBe('not-evaluated');
+  });
+
+  it('keeps untyped orphan jobs with their exact source rather than a case-distinct archive', () => {
+    const result = model({
+      archives: [
+        identityArchive({ id: 'upper-file', instance: 'East' }),
+        identityArchive({ id: 'lower-file', instance: 'east' }),
+      ],
+      tasks: [
+        identityTask({ id: 'upper-job', instance: 'East' }),
+        identityTask({ id: 'lower-job', instance: 'east' }),
+      ],
+    });
+    expect(result.coverageRows).toHaveLength(2);
+    expect(
+      result.coverageRows.map((row) => [row.workload.instance, row.latestTask?.id]).sort(),
+    ).toEqual([
+      ['East', 'upper-job'],
+      ['east', 'lower-job'],
+    ]);
+  });
+
   it('keeps copied local archives and their location filters independent of guest placement', () => {
     const result = model({
       workloads: [identityGuest('east-100', 'east', 'current-guest-node')],
@@ -309,7 +386,7 @@ describe('backup-identity: native ownership rather than first label match', () =
             identityGuest('west-100', 'west', 'pve-1'),
             identityGuest('east-100', 'east', 'pve-1'),
           ],
-          pbsBackups: [identityPBS({ namespace: ' EAST ' })],
+          pbsBackups: [identityPBS({ namespace: 'east' })],
         }),
       ),
     ).toEqual(['east-100']);
