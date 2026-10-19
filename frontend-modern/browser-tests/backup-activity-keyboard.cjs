@@ -291,8 +291,10 @@ function serve(req, res, next) {
       await page.keyboard.press('Escape');
       await expect(page.locator('[data-tooltip-portal="true"]')).toHaveCount(0);
       await page.keyboard.press('Space');
-      assert.equal(new URL(page.url()).searchParams.get('day'), null);
+      await page.clock.runFor(50);
+      await expect(remembered).toHaveAttribute('aria-pressed', 'false');
       await expect(page.locator('[data-proxmox-backup-row="recoverable"]')).toHaveCount(2);
+      assert.equal(new URL(page.url()).searchParams.get('day'), null);
       await page.keyboard.press('Tab');
       await expect(search).toBeFocused();
       check('Native Space clears the day and Tab still reaches filters without a trap');
