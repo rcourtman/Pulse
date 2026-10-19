@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3bd004c9f26710040f8e183d16d6bb5cab070317",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/nodeFingerprintValidation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/nodeFingerprintValidation.ts": "d168db0ff22a0ebe6cc3aaceb7074d46cc2ab1b2f963bf0aca27b3325f1b9cf0"
+  },
+  "routes": [
+    "Existing PVE/PBS/PMG connection form via browser-tests/node-fingerprint-validation.html"
+  ],
+  "states": [
+    "Malformed fingerprints keep Verify SSL checked and show the corrected sentence-boundary guidance",
+    "Correction clears invalidity and preserves exact pin bytes; valid format does not prove certificate trust"
+  ],
+  "interactions": [
+    "Native keyboard/touch Save keeps focus on malformed input and sends no save or draft trust probe",
+    "Saved-record and corrected entered-settings tests retain their existing request boundaries",
+    "Six retained changed-message captures inspected with native view_image; unchanged corrected/test captures are not claimed as pixel-reviewed"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T21:28:16Z",
+  "execution_source": "3bd004c9f26710040f8e183d16d6bb5cab070317",
+  "execution_tree": "aa567dd49909ea7d5907450a749db86d99c3be90",
+  "parent_tree": "aa567dd49909ea7d5907450a749db86d99c3be90",
+  "protocol": "frontend-modern/browser-tests/node-fingerprint-validation.cjs",
+  "protocol_sha256": "34f16d43a2c7baf332e7fd7f5c682dccd759828b95dcbf174a3623f68782e4c3",
+  "playwright": "1.56.1",
+  "cases": [
+    {
+      "type": "pve",
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    },
+    {
+      "type": "pbs",
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    },
+    {
+      "type": "pmg",
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    },
+    {
+      "type": "pve",
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    },
+    {
+      "type": "pbs",
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    },
+    {
+      "type": "pmg",
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "checks": [
+        "Invalid pin remains visible; accessible field error and native save focus; no save or probe",
+        "Explicit saved-record test omits unsaved draft and new credentials",
+        "Correction clears invalidity and saves exact colon/case bytes, checkbox and saved credentials intact",
+        "Actual API PUT and GET readback use the exact saved target; no add/delete or capture",
+        "Malformed entered-settings test sends nothing; valid-format mismatch stays a failed connection result"
+      ]
+    }
+  ],
+  "captures": [
+    {
+      "file": "copy-tls-chromium-pve-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pve",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "engine": "chromium",
+      "sha256": "edf8afdaf06fe4f4e8b33fee46fe22071f9d2b7da638d08811e134aae5a49484",
+      "original_file": "chromium-pve-invalid-pin.png",
+      "archive_member": "tls/chromium-pve-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At desktop width the SSL field remains focused and Verify SSL stays checked. The corrected guidance is present in the red inline error and native validation popup. The popup overlays some inline copy (and is partly faded in PBS/PMG captures), rather than indicating layout clipping. The PVE capture shows the whole native message clearly, including the new sentence boundary."
+    },
+    {
+      "file": "copy-tls-chromium-pbs-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pbs",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "engine": "chromium",
+      "sha256": "a3a3f0a80234c57861baed8813e625ff2413b0eaa4c33421b8767d2a5c83c3e4",
+      "original_file": "chromium-pbs-invalid-pin.png",
+      "archive_member": "tls/chromium-pbs-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At desktop width the SSL field remains focused and Verify SSL stays checked. The corrected guidance is present in the red inline error and native validation popup. The popup overlays some inline copy (and is partly faded in PBS/PMG captures), rather than indicating layout clipping. The PVE capture shows the whole native message clearly, including the new sentence boundary."
+    },
+    {
+      "file": "copy-tls-chromium-pmg-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pmg",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "engine": "chromium",
+      "sha256": "f418217e0f849c2347e1d3d8bd6144bc28a311d9d58701ef1f8d16b0f90a856e",
+      "original_file": "chromium-pmg-invalid-pin.png",
+      "archive_member": "tls/chromium-pmg-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At desktop width the SSL field remains focused and Verify SSL stays checked. The corrected guidance is present in the red inline error and native validation popup. The popup overlays some inline copy (and is partly faded in PBS/PMG captures), rather than indicating layout clipping. The PVE capture shows the whole native message clearly, including the new sentence boundary."
+    },
+    {
+      "file": "copy-tls-webkit-pve-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pve",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "engine": "webkit",
+      "sha256": "8cf6d06b6a8f977b48ccf956e690cc74a0e0111ca7d94e30e521a7d76dd2f0d6",
+      "original_file": "webkit-pve-invalid-pin.png",
+      "archive_member": "tls/webkit-pve-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the native validation popup visibly wraps the corrected guidance through \u201cValid format does not prove trust.\u201d It overlays part of the inline red error, but stays within the phone viewport. Verify SSL remains checked; the input is focused and retains its malformed value, independently asserted in the protocol."
+    },
+    {
+      "file": "copy-tls-webkit-pbs-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pbs",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "engine": "webkit",
+      "sha256": "5fb76118d1e3003be59364c9c596af76d5c16a4ab06882daaf299cf961e5ed46",
+      "original_file": "webkit-pbs-invalid-pin.png",
+      "archive_member": "tls/webkit-pbs-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the native validation popup visibly wraps the corrected guidance through \u201cValid format does not prove trust.\u201d It overlays part of the inline red error, but stays within the phone viewport. Verify SSL remains checked; the input is focused and retains its malformed value, independently asserted in the protocol."
+    },
+    {
+      "file": "copy-tls-webkit-pmg-invalid-pin.png",
+      "state": "invalid-pin",
+      "type": "pmg",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "engine": "webkit",
+      "sha256": "b0961efafd507b78ccec62e2e7c1392f13a927bdd1c1bbeeae1caa895c1b1a12",
+      "original_file": "webkit-pmg-invalid-pin.png",
+      "archive_member": "tls/webkit-pmg-invalid-pin.png",
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the native validation popup visibly wraps the corrected guidance through \u201cValid format does not prove trust.\u201d It overlays part of the inline red error, but stays within the phone viewport. Verify SSL remains checked; the input is focused and retains its malformed value, independently asserted in the protocol."
+    }
+  ],
+  "cleanup": {
+    "browser": true,
+    "server": true
+  },
+  "limits": "Synthetic local endpoints and existing form only. Punctuation does not change validation or trust. No native TLS renewal/provisioning, credentials or provider operation."
+}
