@@ -145,6 +145,21 @@ updates:
       - dependency-name: "@vitest/coverage-v8"
         update-types:
           - "version-update:semver-major"
+      # The standalone jsdom 30 proposal fails accessible-name checks
+      # (PR #3059); the portal has its own jsdom test graph
+      # (PR #3061). Migrate both consumers deliberately, not as isolated bumps.
+      - dependency-name: "jsdom"
+        update-types:
+          - "version-update:semver-major"
+      # The Vite 8 proposal fails tracked-chunk and icon-size checks
+      # (PR #3060). Keep the bundler, consumers and size accounting together;
+      # do not reset budgets just to accept a version-update proposal.
+      - dependency-name: "vite"
+        update-types:
+          - "version-update:semver-major"
+      # These deferrals do not dispose of security findings: the independent
+      # complete-graph advisory watch and all-lockfile security scan stay on.
+      # An applicable advisory or concrete consumer need reopens migration.
 
   - package-ecosystem: "docker"
     directories:
