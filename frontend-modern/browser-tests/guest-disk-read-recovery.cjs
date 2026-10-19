@@ -214,8 +214,9 @@ function serve(req, res, next) {
         activate(page.getByRole('button', { name: 'Refresh collected inventory' }));
       const retry = () => page.getByRole('button', { name: 'Retry physical disk details' });
       const card = () => page.getByTestId('guest-physical-disks');
-      const resourceReads = () =>
-        current.requests.filter((r) => r.path.startsWith('/api/resources?')).length;
+      const resourceRequests = () =>
+        current.requests.filter((r) => r.path.startsWith('/api/resources?'));
+      const resourceReads = () => resourceRequests().length;
       const historyReads = () =>
         current.requests.filter((r) => r.path.startsWith('/api/metrics-store/history?')).length;
       await page.goto(`${origin}/browser-tests/guest-disk-read-recovery.html`, {
@@ -260,7 +261,7 @@ function serve(req, res, next) {
       await expect(card()).toHaveCount(0);
       await expect(page.getByTestId('disk-detail-history')).toHaveCount(0);
       await expect(page.locator('[data-temperature-reading]')).toHaveCount(0);
-      await expect.poll(() => current.requests.at(-1).closed).toBe(true);
+      await expect.poll(() => resourceRequests().at(-1).closed).toBe(true);
       const historyAtFailure = historyReads();
       await capture('background-body-timeout');
 
@@ -278,7 +279,7 @@ function serve(req, res, next) {
       await page.clock.runFor(20_000);
       await expect(retry()).toBeEnabled();
       await expect(card()).toHaveCount(0);
-      await expect.poll(() => current.requests.at(-1).closed).toBe(true);
+      await expect.poll(() => resourceRequests().at(-1).closed).toBe(true);
       assert.equal(historyReads(), historyAtFailure, 'Withdrawn SMART history stays stopped');
       assert(
         !/PRIVATE_/.test(await page.locator('body').innerText()),
