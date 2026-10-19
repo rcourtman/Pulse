@@ -95,6 +95,16 @@ publication or the reporter's own removal.
 
 Long rule reasons remain scrollable without hiding the confirmation heading or Cancel/Remove controls. Resource/category and exact rule ID precede the reason, so confirmation can be reviewed on narrow displays without clipping safety information.
 
+Each rule-list read or complete pre-read/DELETE/readback sequence has a 30-second
+UI deadline. Expiry aborts the request, retires its response generation, withdraws
+stale rules and closes confirmation with an explicit timeout/uncertainty message.
+Reload becomes available again; no automatic read, mutation retry or success
+claim follows expiry. A DELETE may already have reached the server, so only an
+explicit fresh reload reconciles state before any new confirmation. Completion,
+organisation/access invalidation and disposal clear the deadline. The component
+regressions and `patrol-rule-deadline.cjs` cover each stalled stage, late results,
+normal recovery and unchanged neighbouring decisions at desktop and 320px.
+
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 

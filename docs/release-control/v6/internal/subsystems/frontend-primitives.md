@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Patrol manual-rule controls recover from a stalled request
+
+The existing Patrol Activity rule list and exact-rule removal confirmation bound
+their whole operation to 30 seconds. Timeout returns an explicit unavailable or
+unconfirmed state, closes the blocked dialog, and re-enables explicit Reload.
+Late responses cannot revive stale controls or announce success. Removal is never
+replayed automatically; existing organisation, manual-origin, fresh-scope and
+absence-readback checks remain intact. Desktop keyboard and narrow touch proof
+uses the real Patrol Activity/router, HTTP clients and shipped CSS with synthetic
+rules, not an installed/customer deletion. See `PatrolSuppressionRules.test.tsx`
+and `patrol-rule-deadline.cjs`.
+
 ### Backup chart and list share non-day filter ownership
 
 `ProxmoxBackupsTable` derives one non-day artifact scope for the existing By date

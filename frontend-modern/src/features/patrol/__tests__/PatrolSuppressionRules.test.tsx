@@ -70,7 +70,10 @@ describe('Patrol manual-rule reversal', () => {
     read.mockReset().mockResolvedValue(initial);
     remove.mockReset().mockResolvedValue(undefined);
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('does not load until requested; shows exact IDs, reasons, wildcard scope and non-manual distinction', async () => {
     render(() => <PatrolSuppressionRules />);
@@ -258,6 +261,142 @@ describe('Patrol manual-rule reversal', () => {
     view.unmount();
     expect(signal.aborted).toBe(true);
     pending.resolve([broad]);
+  });
+
+  it('bounds a stalled list read, restores explicit reload and ignores its late result', async () => {
+    vi.useFakeTimers();
+    const pending = deferred<PatrolSuppressionRule[]>();
+    read.mockReturnValueOnce(pending.promise);
+    render(() => <PatrolSuppressionRules openForLink />);
+    const signal = read.mock.lastCall![1]!;
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(screen.getByRole('button', { name: 'Checking rules…' })).toBeDisabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(signal.aborted).toBe(true);
+    expect(screen.getByRole('alert')).toHaveTextContent('The request timed out');
+    expect(screen.getByRole('button', { name: 'Reload rules' })).toBeEnabled();
+    expect(screen.queryByText('No manually created suppression rules.')).not.toBeInTheDocument();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    read.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload rules' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('No manually created suppression rules.')).toBeInTheDocument();
+    pending.resolve(initial);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByText(`Rule ID: ${manual.id}`)).not.toBeInTheDocument();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it.each(['preflight', 'delete', 'readback'] as const)(
+    'bounds a stalled %s without retrying removal or accepting late success',
+    async (phase) => {
+      await openRules();
+      await chooseManual();
+      vi.useFakeTimers();
+      const pendingRead = deferred<PatrolSuppressionRule[]>();
+      const pendingDelete = deferred<void>();
+      if (phase === 'preflight') read.mockReturnValueOnce(pendingRead.promise);
+      if (phase === 'delete') remove.mockReturnValueOnce(pendingDelete.promise);
+      if (phase === 'readback')
+        read.mockResolvedValueOnce(initial).mockReturnValueOnce(pendingRead.promise);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove this rule' }));
+      await vi.advanceTimersByTimeAsync(0);
+      const signal = phase === 'delete' ? remove.mock.lastCall![2]! : read.mock.lastCall![1]!;
+      expect(screen.getByRole('button', { name: 'Verifying removal…' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(signal.aborted).toBe(true);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Removal could not be confirmed. The request timed out. Reload rules before trying again.',
+      );
+      expect(screen.getByRole('button', { name: 'Reload rules' })).toBeEnabled();
+      expect(screen.queryByRole('button', { name: /^Remove rule for/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(remove).toHaveBeenCalledTimes(phase === 'preflight' ? 0 : 1);
+      const readsAfterTimeout = read.mock.calls.length;
+      pendingRead.resolve(phase === 'preflight' ? initial : [broad, dismissed, legacy]);
+      pendingDelete.resolve();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(read).toHaveBeenCalledTimes(readsAfterTimeout);
+      expect(remove).toHaveBeenCalledTimes(phase === 'preflight' ? 0 : 1);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByText(`Rule ID: ${manual.id}`)).not.toBeInTheDocument();
+
+      read.mockResolvedValueOnce([broad, dismissed, legacy]);
+      fireEvent.click(screen.getByRole('button', { name: 'Reload rules' }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByText(`Rule ID: ${broad.id}`)).toBeInTheDocument();
+      expect(screen.getByText(/2 other remembered decisions/)).toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(remove).toHaveBeenCalledTimes(phase === 'preflight' ? 0 : 1);
+    },
+  );
+
+  it.each(['organisation', 'disposal'] as const)(
+    'retires a stalled operation deadline after %s invalidation',
+    async (reason) => {
+      await openRules();
+      await chooseManual();
+      vi.useFakeTimers();
+      read.mockReturnValueOnce(deferred<PatrolSuppressionRule[]>().promise);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove this rule' }));
+      const signal = read.mock.lastCall![1]!;
+      if (reason === 'organisation') {
+        context.org = 'tenant-b';
+        eventBus.emit('org_switched', context.org);
+      } else cleanup();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(signal.aborted).toBe(true);
+      expect(screen.queryByText(/The request timed out/)).not.toBeInTheDocument();
+      if (reason === 'organisation')
+        expect(screen.getByRole('alert')).toHaveTextContent('Organisation or access changed');
+      expect(remove).not.toHaveBeenCalled();
+      expect(read).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('shares one deadline across preflight, deletion and readback rather than restarting per stage', async () => {
+    await openRules();
+    await chooseManual();
+    vi.useFakeTimers();
+    const preflight = deferred<PatrolSuppressionRule[]>();
+    const deletion = deferred<void>();
+    read.mockReturnValueOnce(preflight.promise);
+    remove.mockReturnValueOnce(deletion.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove this rule' }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    preflight.resolve(initial);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remove).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(screen.getByRole('button', { name: 'Verifying removal…' })).toBeDisabled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Removal could not be confirmed');
+    expect(remove.mock.lastCall![2]!.aborted).toBe(true);
+    deletion.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('clears the deadline after a confirmed removal instead of expiring its successful state', async () => {
+    await openRules();
+    await chooseManual();
+    vi.useFakeTimers();
+    read.mockResolvedValueOnce(initial).mockResolvedValueOnce([broad, dismissed, legacy]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove this rule' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByRole('status')).toHaveTextContent('Rule removed.');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(screen.getByRole('status')).toHaveTextContent('Rule removed.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText(`Rule ID: ${broad.id}`)).toBeInTheDocument();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 
   it('opens a linked rule section on mount without making a mutation', async () => {

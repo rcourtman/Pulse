@@ -20,6 +20,7 @@ import { eventBus } from '@/stores/events';
 import { getOrgID } from '@/utils/apiClient';
 
 export const PATROL_SUPPRESSION_RULES_PATH = '/patrol/activity#patrol-suppression-rules';
+const RULE_OPERATION_TIMEOUT_MS = 30_000;
 
 const ruleScope = (rule: PatrolSuppressionRule) => ({
   resource: rule.resource_id ? rule.resource_name || rule.resource_id : 'All resources',
@@ -52,37 +53,63 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
   let loadedOrg = '';
   let generation = 0;
   let request: AbortController | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   let summary: HTMLElement | undefined;
   let trigger: HTMLElement | undefined;
   const currentOrg = () => getOrgID() || 'default';
-  const begin = () => {
-    request?.abort();
-    request = new AbortController();
-    return { generation: ++generation, controller: request, org: currentOrg() };
-  };
-  const isCurrent = (run: ReturnType<typeof begin>) =>
-    run.generation === generation && !run.controller.signal.aborted && run.org === currentOrg();
-  const invalidate = () => {
+  const retireRequest = () => {
     ++generation;
+    clearTimeout(deadline);
+    deadline = undefined;
     request?.abort();
+  };
+  const reset = (message: string) => {
+    retireRequest();
+    trigger = summary;
     setRules(undefined);
     setSelected(undefined);
     setBusy(false);
     setNotice('');
-    setError('Organisation or access changed. Reload rules before making changes.');
+    setError(message);
+  };
+  const invalidate = () =>
+    reset('Organisation or access changed. Reload rules before making changes.');
+  const begin = (timeoutMessage: string) => {
+    retireRequest();
+    request = new AbortController();
+    const run = { generation, controller: request, org: currentOrg() };
+    // Bound the whole read or removal sequence, not each network stage. Retire
+    // its generation before aborting: a delayed response (including a DELETE
+    // already accepted by the server) must not restore controls or claim success.
+    deadline = setTimeout(() => {
+      if (run.generation !== generation) return;
+      if (run.org !== currentOrg()) invalidate();
+      else reset(timeoutMessage);
+    }, RULE_OPERATION_TIMEOUT_MS);
+    return run;
+  };
+  const isCurrent = (run: ReturnType<typeof begin>) =>
+    run.generation === generation && !run.controller.signal.aborted && run.org === currentOrg();
+  const finish = (run: ReturnType<typeof begin>) => {
+    if (run.generation !== generation) return;
+    clearTimeout(deadline);
+    deadline = undefined;
+    if (run.org !== currentOrg()) invalidate();
+    else setBusy(false);
   };
   const offOrg = eventBus.on('org_switched', invalidate);
   const offMembership = eventBus.on('organizations_changed', invalidate);
   onCleanup(() => {
-    ++generation;
-    request?.abort();
+    retireRequest();
     offOrg();
     offMembership();
   });
 
   const load = async () => {
     if (busy()) return;
-    const run = begin();
+    const run = begin(
+      'Rules could not be loaded. The request timed out. Reload rules to check again.',
+    );
     setBusy(true);
     setSelected(undefined);
     setRules(undefined);
@@ -97,10 +124,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
       if (isCurrent(run))
         setError('Rules could not be loaded. Check your access and reload rules.');
     } finally {
-      if (run.generation === generation) {
-        if (run.org !== currentOrg()) invalidate();
-        else setBusy(false);
-      }
+      finish(run);
     }
   };
   const choose = (rule: PatrolSuppressionRule, button: HTMLElement) => {
@@ -114,7 +138,9 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
     const rule = selected();
     if (!rule || busy() || !rules()) return;
     if (loadedOrg !== currentOrg()) return invalidate();
-    const run = begin();
+    const run = begin(
+      'Removal could not be confirmed. The request timed out. Reload rules before trying again.',
+    );
     setBusy(true);
     setError('');
     try {
@@ -146,10 +172,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
       setRules(undefined);
       setError('Removal could not be confirmed. Reload rules before trying again.');
     } finally {
-      if (run.generation === generation) {
-        if (run.org !== currentOrg()) invalidate();
-        else setBusy(false);
-      }
+      finish(run);
     }
   };
   const openFromLink = () => {
