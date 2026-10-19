@@ -7758,3 +7758,25 @@ settlement, a common pagination allowance, surviving shared owners and remounts;
 `guest-disk-read-recovery.cjs` exercises these bounded reads through real HTTP,
 the API client, Overview and SMART at desktop and 320px. Guest thaw, filesystem
 liveness and ordinary native recovery remain separate and unproved by this UI.
+
+### Disk SMART freshness survives successful inventory reads
+
+Storage's disk list/detail and the guest Overview consume the backend's canonical
+staleness envelope, including `telemetry_stale` behind a stronger alert. An HTTP
+inventory success is not a new SMART observation. Expired reports say Last known
+(Old data in the compact table); retained failed health, risk and adverse counters
+remain explicitly qualified and discoverable through attention filters. A stale
+retained temperature cannot create a current heat verdict, endurance and SMART
+cards lose live threshold colouring, and Live I/O withdraws. Historical charts
+and stable identities remain available. Fresh canonical observations restore
+ordinary presentation without closing the selected detail. Field-only temperature
+unavailability retains its existing independent meaning. No expiry threshold,
+collection metadata, polling cadence, action or native guest recovery is changed.
+`diskSourceFreshness.test.ts`, `DiskList.test.tsx`, `GuestPhysicalDisks.test.tsx`
+and `disk-source-freshness.cjs` exercise the source/HTTP/consumer boundaries.
+
+SMART metric labels explicitly wrap even inside the Storage table's inherited
+nowrap context. The last-known qualifier must remain fully readable on a phone;
+`DiskDetail.test.tsx` protects that context and the HTTP browser protocol checks
+label bounds in both Storage and the guest Overview. Pixel inspection, not only
+page overflow or DOM visibility, is required for this reading qualification.

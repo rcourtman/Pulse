@@ -79,6 +79,29 @@ const chartStates = (): Record<string, [string | undefined, string]> =>
   );
 
 describe('DiskDetail', () => {
+  it('keeps the last-known temperature label wrappable inside a storage table', () => {
+    const disk = buildDisk();
+    disk.health = { verdict: 'stale', reasons: [{ code: 'telemetry_stale' }] };
+    render(() => (
+      <table>
+        <tbody>
+          <tr>
+            <td style={{ 'white-space': 'nowrap' }}>
+              <DiskDetail disk={disk} nodes={[]} />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    ));
+    expect(screen.getByText('Last known temperature')).toHaveClass(
+      'whitespace-normal',
+      'wrap-break-word',
+    );
+    expect(screen.getByTestId('disk-detail-health')).toHaveTextContent(
+      'current disk health is unconfirmed',
+    );
+  });
+
   it('shows the first chart on a phone and folds the rest behind one button that stops their reads', () => {
     atPhoneWidth(() => {
       render(() => <DiskDetail disk={buildDisk()} nodes={[]} />);

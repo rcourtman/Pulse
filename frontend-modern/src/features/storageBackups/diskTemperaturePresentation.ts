@@ -41,15 +41,18 @@ export interface PhysicalDiskTemperaturePresentation {
 export function getPhysicalDiskTemperaturePresentation(disk: {
   temperature: number;
   collection?: PhysicalDiskCollectionStatus | null;
+  lastKnown?: boolean;
 }): PhysicalDiskTemperaturePresentation | null {
   if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return null;
-  const current = isPhysicalDiskTemperatureCurrent(disk.collection);
+  const current = !disk.lastKnown && isPhysicalDiskTemperatureCurrent(disk.collection);
   return {
     label: formatTemperature(disk.temperature),
     current,
     title: current
       ? undefined
-      : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
+      : disk.lastKnown
+        ? 'Last known reading, not current: disk source stopped reporting'
+        : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
   };
 }
 
@@ -60,10 +63,15 @@ export function getPhysicalDiskTemperaturePresentation(disk: {
 // reading is not current, and null thresholds mean disk temperature alerting
 // is off for the disk, so neither is ever hot. Disk risk never carries heat.
 export function isPhysicalDiskRunningHot(
-  disk: { temperature: number; collection?: PhysicalDiskCollectionStatus | null },
+  disk: {
+    temperature: number;
+    collection?: PhysicalDiskCollectionStatus | null;
+    lastKnown?: boolean;
+  },
   thresholds: MetricDisplayThresholds | null,
 ): boolean {
   if (!thresholds || !(thresholds.critical > 0)) return false;
+  if (disk.lastKnown) return false;
   if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return false;
   if (!isPhysicalDiskTemperatureCurrent(disk.collection)) return false;
   return disk.temperature >= thresholds.critical;

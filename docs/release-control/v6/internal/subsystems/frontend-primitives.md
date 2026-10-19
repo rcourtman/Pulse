@@ -10471,3 +10471,19 @@ are reused without changing their contracts. `ProxmoxCoverageTable.taskDetail.te
 and `backup-job-interval.cjs` check readable responsive fields and same-open
 replacement using the real reader/model/table. No shared primitive, action,
 route or collection contract changes; these are collected facts, not recovery.
+
+### Shared disk presenters keep canonical source expiry
+
+The Storage and guest SMART presenters carry `getResourceStaleness` through
+health, temperature, endurance and attribute cards instead of promoting a retained
+report when its inventory GET succeeds. Whole-source expiry is distinct from
+per-field unavailability. Compact health vocabulary remains short enough for
+phone tracks, while expanded detail states that current disk health is unconfirmed
+and preserves recorded adverse evidence. No new frontend route, collection policy
+or browser-side freshness threshold is introduced. Source-bound desktop/320px
+HTTP journeys live in `disk-source-freshness.cjs`; component and presentation
+regressions cover replacement, retained risk and recovery in existing details.
+
+`StorageDetailMetricCard` owns its label wrapping rather than inheriting a parent
+table's nowrap setting. Long safety qualifiers remain inside the card at narrow
+widths; this leaves ordinary table rows dense without clipping expanded evidence.
