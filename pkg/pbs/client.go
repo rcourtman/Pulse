@@ -645,8 +645,12 @@ func (c *Client) DeleteUserToken(ctx context.Context, userID, tokenName string) 
 	return nil
 }
 
-// SetupMonitoringAccess creates a monitoring user with Audit role and returns API token
-// This is the turnkey method for setting up PBS monitoring access
+// ErrMonitoringTokenExists means setup cannot recover an existing token's secret.
+// Creating monitoring access must not revoke credentials still used elsewhere.
+var ErrMonitoringTokenExists = errors.New("PBS reported an existing monitoring token")
+
+// SetupMonitoringAccess creates a monitoring user with Audit role and returns API token.
+// An existing token is left unchanged; its secret must be supplied separately.
 func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (tokenID, tokenValue string, err error) {
 	const (
 		monitorUser    = "pulse-monitor@pbs"
@@ -671,15 +675,9 @@ func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (t
 	token, err := c.CreateUserToken(ctx, monitorUser, tokenName)
 	if err != nil {
 		if isAlreadyExistsError(err) {
-			log.Warn().Str("tokenName", tokenName).Msg("PBS SetupMonitoringAccess: token already exists; rotating in place")
-			if deleteErr := c.DeleteUserToken(ctx, monitorUser, tokenName); deleteErr != nil {
-				return "", "", fmt.Errorf("delete existing token: %w", deleteErr)
-			}
-			token, err = c.CreateUserToken(ctx, monitorUser, tokenName)
+			return "", "", fmt.Errorf("%w: %w", ErrMonitoringTokenExists, err)
 		}
-		if err != nil {
-			return "", "", fmt.Errorf("create token: %w", err)
-		}
+		return "", "", fmt.Errorf("create token: %w", err)
 	}
 
 	// Step 4: Grant Audit role to the token as well

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,8 +18,114 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+// Re-adding a PBS through a different address must not rotate a token used by
+// the existing connection, or silently persist the administrator password.
+func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
+	const oldToken = "fixture-existing-secret"
+	var revoked atomic.Bool
+	var creates, deletes, reloads atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api2/json/access/ticket":
+			_, _ = w.Write([]byte(`{"data":{"ticket":"fixture-ticket","CSRFPreventionToken":"fixture-csrf"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api2/json/version":
+			if revoked.Load() || r.Header.Get("Authorization") != "PBSAPIToken=pulse-monitor@pbs!pulse-pulse-example-test:"+oldToken {
+				http.Error(w, "fixture reader lost access", http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":{"version":"3.4","release":"1","repoid":"fixture"}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/users":
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/acl":
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.Contains(r.URL.Path, "/token/") && r.Method == http.MethodDelete:
+			deletes.Add(1)
+			revoked.Store(true)
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.Contains(r.URL.Path, "/token/") && r.Method == http.MethodPost:
+			creates.Add(1)
+			if !revoked.Load() {
+				http.Error(w, "API token already exists; fixture-provider-private-marker", http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":{"tokenid":"pulse-monitor@pbs!pulse-pulse-example-test","value":"fixture-replacement-secret"}}`))
+		default:
+			t.Errorf("unexpected PBS request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected fixture request", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{DataPath: t.TempDir(), PublicURL: "https://pulse.example.test", PBSInstances: []config.PBSInstance{{
+		Name: "existing", Host: "https://existing-pbs.example.test:8007", TokenName: "pulse-monitor@pbs!pulse-pulse-example-test", TokenValue: oldToken, VerifySSL: true,
+	}}}
+	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+	h := newTestConfigHandlers(t, cfg)
+	h.reloadFunc = func() error { reloads.Add(1); return nil }
+	if err := h.defaultPersistence.SaveNodesConfig(nil, cfg.PBSInstances, nil); err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: cfg.PBSInstances[0].TokenName, TokenValue: oldToken,
+		VerifySSL: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkReader := func() {
+		t.Helper()
+		if version, err := reader.GetVersion(context.Background()); err != nil || version == nil || version.Version != "3.4" {
+			t.Errorf("existing saved-token reader did not survive setup: %v", err)
+		}
+	}
+	checkReader()
+	body, _ := json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": server.URL,
+		"user": "root@pam", "password": "fixture-administrator-password", "verifySSL": true})
+	rec := httptest.NewRecorder()
+	h.HandleAddNode(rec, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Use Manual Token Setup") {
+		t.Fatalf("collision status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "fixture-") || strings.Contains(rec.Body.String(), "root@pam") {
+		t.Fatal("collision response disclosed provider output or credentials")
+	}
+	after, err := json.Marshal(cfg)
+	if err != nil || !bytes.Equal(before, after) || reloads.Load() != 0 {
+		t.Fatal("collision saved administrator credentials or changed the running configuration")
+	}
+	saved, err := h.defaultPersistence.LoadNodesConfig()
+	if err != nil || len(saved.PBSInstances) != 1 || saved.PBSInstances[0].TokenValue != oldToken || saved.PBSInstances[0].Password != "" {
+		t.Fatal("collision changed persisted connection credentials")
+	}
+	checkReader()
+	if revoked.Load() || creates.Load() != 1 || deletes.Load() != 0 {
+		t.Fatalf("collision mutated existing token: creates=%d deletes=%d", creates.Load(), deletes.Load())
+	}
+	t.Logf("PBS_SETUP_COLLISION_WIRE=%s", base64.StdEncoding.EncodeToString(rec.Body.Bytes()))
+
+	// The suggested existing manual-token route remains usable, without an
+	// extra provisioning attempt or retaining the administrator password.
+	body, _ = json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": server.URL,
+		"tokenName": cfg.PBSInstances[0].TokenName, "tokenValue": oldToken, "verifySSL": true})
+	manual := httptest.NewRecorder()
+	h.HandleAddNode(manual, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
+	if manual.Code != http.StatusOK || len(cfg.PBSInstances) != 2 || reloads.Load() != 1 {
+		t.Fatalf("manual saved-token setup failed: status=%d body=%s", manual.Code, manual.Body.String())
+	}
+	added := cfg.PBSInstances[1]
+	if added.Password != "" || added.User != "" || added.TokenValue != oldToken || !added.VerifySSL || creates.Load() != 1 || deletes.Load() != 0 {
+		t.Fatal("manual setup changed access, TLS, or administrator credential persistence")
+	}
+	checkReader()
+	t.Logf("PBS_SETUP_MANUAL_WIRE=%s", base64.StdEncoding.EncodeToString(manual.Body.Bytes()))
+}
 
 func TestHandleTestConnection(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pulse-conn-test")

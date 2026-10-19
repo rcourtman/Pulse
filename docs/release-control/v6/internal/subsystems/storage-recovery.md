@@ -7780,3 +7780,16 @@ nowrap context. The last-known qualifier must remain fully readable on a phone;
 `DiskDetail.test.tsx` protects that context and the HTTP browser protocol checks
 label bounds in both Storage and the guest Overview. Pixel inspection, not only
 page overflow or DOM visibility, is required for this reading qualification.
+
+
+### Preserve existing PBS readers during monitoring setup
+
+An add-node monitoring-token collision is a configuration conflict, not consent
+to delete/recreate an existing PBS token. The route returns fixed HTTP 409
+guidance without saving the administrator password or changing stored provider
+connections. Existing saved-token reads remain usable, and deliberate manual
+setup with that secret requires no provisioning replay. Backup points, task
+outcomes, namespace scope and storage reconciliation are unchanged.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` and
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` cover this source
+boundary without native backup, restore or guest operations.
