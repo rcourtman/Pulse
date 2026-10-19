@@ -21,6 +21,70 @@ def source(name: str) -> str:
 
 
 class NavigationHelpDocsTest(unittest.TestCase):
+    def test_troubleshooting_groups_offer_focused_fragment_navigation(self):
+        entry = doc_text("TROUBLESHOOTING.md").split("## Choose the affected workflow\n", 1)[1]
+        entry = entry.split("\n## ⚡ Quick Fixes", 1)[0]
+        groups = (
+            ("Sign-in, access and updates", "sign-in-access-and-updates", 7),
+            ("Missing or incorrect readings", "missing-or-incorrect-readings", 6),
+            ("Backups and storage", "backups-and-storage", 5),
+            ("Notifications and performance", "notifications-and-performance", 5),
+        )
+        introduction = entry.split("\n### ", 1)[0]
+        for label, fragment, count in groups:
+            with self.subTest(group=label):
+                self.assertIn(f"[{label}](#{fragment})", introduction)
+                group = entry.split(f"### {label}\n", 1)[1].split("\n### ", 1)[0]
+                self.assertEqual(len(re.findall(r"^- \*\*", group, re.M)), count)
+        self.assertEqual(len(re.findall(r"^- \*\*", entry, re.M)), 24)
+        # Safety and disclosure containment must be reachable before choosing
+        # a category, not buried inside an unrelated symptom group.
+        self.assertIn("[Backup safety](VM_DISK_MONITORING.md#backup-safety)", introduction)
+        self.assertIn("#if-you-already-posted-private-information", introduction)
+
+    def test_troubleshooting_groups_preserve_existing_destination_links(self):
+        entry = doc_text("TROUBLESHOOTING.md").split("## Choose the affected workflow\n", 1)[1]
+        entry = entry.split("\n## ⚡ Quick Fixes", 1)[0]
+        destinations = set(re.findall(r"\[[^\]]*\]\(([^)]+)\)", entry))
+        expected = {
+            'AUTO_UPDATE.md#update-failed',
+            'CONFIGURATION.md#if-debug-makes-the-ui-unusable',
+            'DOCKER.md#check-a-failed-or-pending-workload-update',
+            'MAIL_GATEWAY.md#cluster-response-or-backup-lookup-errors',
+            'MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway',
+            'OIDC.md#sign-in-fails-after-editing-a-provider',
+            'PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees',
+            'PBS.md#duplicate-backups',
+            'PBS.md#latest-backup-job-is-unknown',
+            'PBS.md#one-pbs-namespace-is-missing-or-stops-changing',
+            'PBS.md#pbs-is-active-but-missing-from-monitoring',
+            'PULSE_PRO.md#already-paid-but-pro-features-are-unavailable',
+            'TROUBLESHOOTING.md#-getting-help',
+            'TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops',
+            'TROUBLESHOOTING.md#apprise-api-reports-a-tls-or-connection-error',
+            'TROUBLESHOOTING.md#cannot-login--401-unauthorized',
+            'TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth',
+            'TROUBLESHOOTING.md#find-the-running-server-and-agent-versions',
+            'TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful',
+            'TROUBLESHOOTING.md#i-forgot-my-password',
+            'TROUBLESHOOTING.md#if-you-already-posted-private-information',
+            'TROUBLESHOOTING.md#memory-use-keeps-growing',
+            'TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations',
+            'TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed',
+            'TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare',
+            'TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing',
+            'TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing',
+            'TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots',
+            'TRUENAS.md#stale-truenas-data',
+            'UNIFIED_AGENT.md#agent-is-healthy-locally-but-host-reports-are-stale',
+            'UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403',
+            'UNIFIED_AGENT.md#copied-agent-command-fails-before-installation',
+            'VM_DISK_MONITORING.md#backup-safety',
+            'VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings',
+        }
+        # Only the four in-page shortcuts are new; no earlier guide disappears.
+        self.assertEqual({link for link in destinations if not link.startswith("#")}, expected)
+
     def test_entry_routes_match_the_registered_platform_routes(self):
         guide = doc_text("TROUBLESHOOTING.md").split("#### Old bookmarks don't work", 1)[1]
         guide = guide.split("### Relay / Mobile", 1)[0]

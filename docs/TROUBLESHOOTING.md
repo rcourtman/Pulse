@@ -11,6 +11,19 @@ first.** Do not run Diagnostics, force guest-agent probes or repeat a backup to
 fill a report. A successful backup task or responsive console alone does not
 establish safe recovery.
 
+- **Private information was posted:** follow
+  [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
+  Deleting the public copy does not revoke a credential.
+
+Jump to a group:
+
+- [Sign-in, access and updates](#sign-in-access-and-updates)
+- [Missing or incorrect readings](#missing-or-incorrect-readings)
+- [Backups and storage](#backups-and-storage)
+- [Notifications and performance](#notifications-and-performance)
+
+### Sign-in, access and updates
+
 - **Not sure which version is affected:** distinguish the
   [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
   A helper's selected release or an agent's target is not its running version.
@@ -32,12 +45,6 @@ establish safe recovery.
   monitored container is a different job; use
   [Docker workload update checks](DOCKER.md#check-a-failed-or-pending-workload-update).
   Preserve the current state and rollback evidence; do not repeat the attempt.
-- **Agent host is missing or reporting is rejected:** check the existing
-  [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
-  before replacing a token or reinstalling. Installer success is not an accepted
-  report. If the agent is locally healthy but readings stop, distinguish
-  [local health from stale host reports](UNIFIED_AGENT.md#agent-is-healthy-locally-but-host-reports-are-stale);
-  an unavailable hard NFS mount is not an authentication failure.
 - **Proxmox or PBS reports a certificate error:** distinguish
   [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
   Keep verification enabled; a new certificate or a working browser is not
@@ -46,6 +53,15 @@ establish safe recovery.
   [preparation, private prompt and lifecycle action](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation).
   A stopped new command does not diagnose the existing agent. Keep state and
   credentials; do not repeat removal or installation to obtain an error.
+
+### Missing or incorrect readings
+
+- **Agent host is missing or reporting is rejected:** check the existing
+  [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
+  before replacing a token or reinstalling. Installer success is not an accepted
+  report. If the agent is locally healthy but readings stop, distinguish
+  [local health from stale host reports](UNIFIED_AGENT.md#agent-is-healthy-locally-but-host-reports-are-stale);
+  an unavailable hard NFS mount is not an authentication failure.
 - **Guest readings are missing or disagree:** distinguish
   [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
   from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
@@ -63,6 +79,14 @@ establish safe recovery.
   an agent does not prove API recovery. If only one datastore or namespace is
   affected, use the [scoped inventory checks](PBS.md#one-pbs-namespace-is-missing-or-stops-changing);
   a fresh sibling does not prove that the missing scope was read.
+- **Mail Gateway Test succeeds but collection fails:** use
+  [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
+  For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the
+  [cluster-response guidance](MAIL_GATEWAY.md#cluster-response-or-backup-lookup-errors)
+  before changing credentials, DNS or TLS. Missing queue data is not an empty queue.
+
+### Backups and storage
+
 - **A PBS job says Healthy despite an error, warning or running status:** compare
   [the same task's status evidence](PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees).
   An `OK` or `success` word inside a longer message is not completed success.
@@ -75,11 +99,6 @@ establish safe recovery.
   [collected job evidence](PBS.md#latest-backup-job-is-unknown).
   Unknown chronology is not an absent or failed backup; use existing job
   records, without rerunning a backup or guest-agent probe.
-- **Mail Gateway Test succeeds but collection fails:** use
-  [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
-  For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the
-  [cluster-response guidance](MAIL_GATEWAY.md#cluster-response-or-backup-lookup-errors)
-  before changing credentials, DNS or TLS. Missing queue data is not an empty queue.
 - **RAID is reported degraded despite a spare:** compare
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the
@@ -88,6 +107,9 @@ establish safe recovery.
   [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
   Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
   just to make Pulse's count agree.
+
+### Notifications and performance
+
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -106,9 +128,6 @@ establish safe recovery.
   with [server log-level recovery](CONFIGURATION.md#if-debug-makes-the-ui-unusable).
   Pause Stream is display-only; a startup override does not change the saved
   level. Do not repeat the stall or restart a server held for backup safety.
-- **Private information was posted:** follow
-  [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
-  Deleting the public copy does not revoke a credential.
 
 If none fits, use [Getting Help](TROUBLESHOOTING.md#-getting-help).
 Review evidence locally before sharing it; unknown or unavailable details are
