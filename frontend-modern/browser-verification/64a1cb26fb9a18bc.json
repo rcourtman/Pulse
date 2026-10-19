@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "5c47fd40d83688cf158744fa368e9d159034d8c4",
+  "verified_at": "2026-10-19T23:23:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "123fb52c610501494f0a6ccc572a8a29ab38dddf42059a2a5b912525952b324d"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/backups?view=coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Production HTTP inventory/posture readers, recovery mapper, router, Backups health strip, Coverage/By date tables and shipped CSS with synthetic observations; Playwright1.56.1 matches integration lock. Chromium141 desktop/light and WebKit26 narrow/dark touch.",
+    "Five live targets with server-owned1 protected,1 attention,2 unprotected,1 unknown; separate unmatched PBS record. Global counts stay visible behind individually/combined scoped filters; no protection verdict is evaluated locally.",
+    "All eight final-source captures opened with native view_image and visually inspected. Global-scope copy wraps; both counted unprotected rows are readable after selection; no page-width overflow. Pressed count styling, real empty zero state and unmatched evidence remain distinct."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch on2 unprotected clear hiding search/node/type/location in one route transition, retain unrelated URL state and show exactly both counted targets; a selected posture behind another scope is not pressed/toggled off.",
+    "Protected, attention and unknown counts also reveal their exact target sets. Date-only source/day and legacy view facets clear on Coverage entry from By date and the bare route.",
+    "A pressed count toggles off to all five targets. Same-route keyboard focus survives; count actions add no inventory or posture reads. The ordinary view tab remains usable and original unmatched restore record remains listed.",
+    "A real Refresh backups read changes protected to unknown: the selected0 protected count remains reachable while scoped, clears the scope on selection, then toggles off without inventing a healthy target."
+  ]
+}

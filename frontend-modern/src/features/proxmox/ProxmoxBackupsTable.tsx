@@ -483,27 +483,32 @@ export const ProxmoxBackupsTable: Component<{
     const query = params.toString();
     return `${buildProxmoxBackupsPath(next)}${query ? `?${query}` : ''}`;
   };
-  // The health strip's counts that name a posture filter toggle it. From the
-  // date view a count opens Coverage already filtered to those workloads.
+  // The strip counts the whole estate, independently of the list filters.
+  // Its action must reveal that entire set, not retain a scope which can hide
+  // the counted workloads. The regular filter controls keep scoped selection.
   const navigate = useNavigate();
   const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
-    const pressed = view() === 'coverage' && coverageFilter() === posture;
-    // A zero count would only open an empty list.
-    if (!pressed && liveHealthSummary()[posture] === 0) return {};
+    const selected = view() === 'coverage' && coverageFilter() === posture;
+    const pressed =
+      selected &&
+      ![search().trim(), nodeFilter(), locationFilter(), typeFilter()].some(Boolean);
+    // Keep an active filter reachable if observations reduce its count to zero,
+    // even when another scope means the complete global set is not pressed.
+    if (!selected && liveHealthSummary()[posture] === 0) return {};
     return {
       pressed,
       onSelect: () => {
-        const next = coverageFilter() === posture && view() === 'coverage' ? 'all' : posture;
-        if (routeView() === 'coverage') {
-          setCoverageFilter(next);
-          return;
-        }
-        // By date, or Coverage chosen only by the health fallback: land on the
-        // Coverage route so the view cannot flip back when the counts change.
-        const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
-        if (next === 'all') target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
-        else target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, next);
-        navigate(`${target.pathname}${target.search}`);
+        const params = new URLSearchParams(location.search);
+        for (const key of Object.values(PROXMOX_BACKUPS_QUERY_PARAMS)) params.delete(key);
+        if (!pressed) params.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, posture);
+        const query = params.toString();
+        // One URL transition clears list/search/date facets atomically. Pin
+        // the route even when Coverage was only the bare-route fallback, and
+        // keep focus/scroll on the count while the same consumer updates.
+        navigate(`${buildProxmoxBackupsPath('coverage')}${query ? `?${query}` : ''}`, {
+          replace: routeView() === 'coverage',
+          scroll: false,
+        });
       },
     };
   };
@@ -819,7 +824,15 @@ export const ProxmoxBackupsTable: Component<{
             {/* The health strip renders identically in both route-backed views. */}
             <ProxmoxBackupsCoverageStrip
               title="Backup health"
-              footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
+              footnote={
+                <>
+                  Counts cover all targets. Choose a count to clear other filters and show those
+                  targets.
+                  <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
+                    {(rule) => <> {rule()}</>}
+                  </Show>
+                </>
+              }
               tail={
                 <span>
                   {liveTotalCount()} targets ·{' '}
