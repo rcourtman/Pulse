@@ -10158,6 +10158,21 @@ resolution still goes through the live registry.
 
 ### Reporting authentication errors do not prescribe credential replacement
 
+The Unix installer's post-start registration warning and final error follow
+the same rule. A denied lookup does not diagnose restore/upgrade loss or prove
+that a new token or another installation is needed. Keep the existing
+credential and identity, check its issuing instance/API Access record and
+`agent:report` or endpoint policy, and keep secrets private. Local readiness
+still cannot override denial: completion retains exit 18 and the unchanged
+`complete/auth_rejected` JSON record, without a success message.
+`TestInstallSHWarnAgentTokenRejectedIsActionable` runs
+`scripts/tests/test_agent_auth_completion.py` through the real warning, waiter
+and completion functions with closed readiness/registration/persistence peers.
+It covers both readiness paths, install/update, interactive/non-interactive,
+text/JSON, saved-state preservation and registered/pending/missing-process
+controls. This is synthetic completion proof, not installed authentication
+recovery or a diagnosis of a reported failure.
+
 Host reporting's 401 diagnostic identifies the configured endpoint and directs
 an operator to the existing API Access record and issuing instance, not a
 presumed restore/upgrade loss or another installation. A 403 directs the operator

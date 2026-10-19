@@ -16,6 +16,23 @@
 
 ## Purpose
 
+### Agent installer authentication guidance preserves existing recovery state
+
+Unix agent installation retains its non-success exit 18 and unchanged
+`complete/auth_rejected` JSON record when local readiness succeeds but Pulse
+denies registration. Its warning and final error direct the operator to the
+existing credential's issuing instance, API Access record, reporting scope and
+endpoint policy, not automatic credential replacement or another installation.
+Neither warning may presume a server restore/upgrade caused the denial or
+request command execution/administrator access for host reporting.
+
+`TestInstallSHWarnAgentTokenRejectedIsActionable` executes the closed Bash
+completion matrix in `scripts/tests/test_agent_auth_completion.py`, preserving
+state bytes/modes, refusal exits and machine output across both readiness paths,
+install/update and text/JSON modes. Registered, unconfirmed and missing-process
+controls remain distinct. The fixtures do not contact a server, replace a
+credential or establish installed recovery.
+
 ### Development does not implicitly import installed credentials or targets
 
 The hot-dev launcher defaults both installed-data selectors to `false`.

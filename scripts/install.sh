@@ -649,12 +649,13 @@ restore_selinux_contexts() {
 # After starting the agent service, poll its readiness endpoint to verify it
 # actually started. The agent exposes /readyz on the configured health address
 # once modules are initialized. The default is 127.0.0.1:9191.
-# warn_agent_token_rejected surfaces the actionable recovery path when the
-# server rejects the agent's token. Keeps the message in one place so both
-# health-check paths report it identically.
+# Keep both health-check paths factual: a denied lookup establishes neither
+# credential loss nor a need to reinstall. Preserve the existing installation
+# while the operator checks the issuing instance, record and access policy.
 warn_agent_token_rejected() {
-    log_warn "Pulse rejected this agent's API token or required reporting scope (HTTP 401/403). The saved credential cannot authenticate this agent on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
-    log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401/403 until the credential is replaced."
+    log_warn "Pulse rejected this agent's API token or required reporting scope (HTTP 401/403). This check does not identify the cause."
+    log_warn "Check the configured Pulse URL and the existing credential's record in Settings > API Access on that same Pulse instance. For 403, check agent:report and the endpoint's access policy; host reporting does not require command execution or administrator access."
+    log_warn "Do not reinstall, re-enrol, replace tokens or delete identity solely on this error. Keep token values and service files private. See docs/UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403."
 }
 
 # Resolve the newly downloaded/installed pulse-agent command surface used for
@@ -3616,7 +3617,7 @@ complete_installation_flow() {
             json_event "complete" "installed" "Installation installed"
         fi
     elif [[ $verification_rc -eq 2 ]]; then
-        log_error "Pulse Agent authentication failed. The local service is running, but Pulse rejected its credential; installation is not complete. Generate a fresh scoped agent credential in Pulse and run the repair command again."
+        log_error "Pulse Agent authentication failed. The local service is running, but Pulse rejected its credential; installation is not complete. Check the existing credential and issuing instance using the guidance above; this error alone does not require a replacement or another installation."
         json_event "complete" "auth_rejected" "Pulse rejected the agent credential" "$EXIT_AUTH_REJECTED"
         exit "$EXIT_AUTH_REJECTED"
     else

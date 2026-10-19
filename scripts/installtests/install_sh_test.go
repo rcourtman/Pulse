@@ -6782,7 +6782,7 @@ func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
 	if !strings.Contains(output, "JSON:complete:auth_rejected") || !strings.Contains(output, "authentication failed") {
 		t.Fatalf("rejected credential did not produce actionable non-success completion:\n%s", output)
 	}
-	for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "unreachable", "unexpected-proxmox-report"} {
+	for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "unreachable", "unexpected-proxmox-report", "Generate a fresh"} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("rejected credential emitted forbidden success output %q:\n%s", forbidden, output)
 		}
@@ -6967,32 +6967,21 @@ func writeMarker(t *testing.T, stateDir, name, contents string) {
 	}
 }
 
-// TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery
-// copy the installer prints when the server rejects the agent's token.
+// Exercise the actual waiter, warning and completion together: the final
+// error must not undo safe guidance by prescribing another installation.
+// Readiness/registration/persistence are closed peers, not native recovery.
 func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
-	logWarn := extractInstallShellFunction(t, "log_warn")
-	warnFn := extractInstallShellFunction(t, "warn_agent_token_rejected")
-
-	script := `
-		NON_INTERACTIVE="false"
-		redact_token() { printf '%s' "$1"; }
-` + logWarn + `
-` + warnFn + `
-		warn_agent_token_rejected
-	`
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_agent_auth_completion.py"), "-v")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("bash: %v\n%s", err, out)
+		t.Fatalf("agent authentication completion controls: %v\n%s", err, out)
 	}
-	for _, needle := range []string{
-		"rejected this agent's API token",
-		"Re-run the full agent install command",
-		"mint a fresh token",
-	} {
-		if !strings.Contains(string(out), needle) {
-			t.Fatalf("warn_agent_token_rejected missing %q:\n%s", needle, out)
-		}
+	if !strings.Contains(string(out), "Ran 3 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete agent authentication completion controls:\n%s", out)
 	}
+	t.Logf("%s", out)
 }
 
 // TestInstallSHAgentKillPatternsExcludeSiblingAgents guards a real incident:
