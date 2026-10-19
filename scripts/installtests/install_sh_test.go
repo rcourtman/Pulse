@@ -6984,6 +6984,23 @@ func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
 	t.Logf("%s", out)
 }
 
+// Execute the production token selection, lifecycle scope and outer cleanup
+// against closed peers. Signals target only the disposable shell fixture;
+// no installed service, host identity, listener or real credential is used.
+func TestInstallSHLifecycleTemporaryTokenCleanup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_agent_lifecycle_token_cleanup.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent lifecycle temporary-token cleanup controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 5 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete agent lifecycle temporary-token cleanup controls:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
 // TestInstallSHAgentKillPatternsExcludeSiblingAgents guards a real incident:
 // the installer and the Unraid wrapper it generates both killed agents with
 // pkill -f "^<binary>". pkill -f matches the whole command line and "^" only

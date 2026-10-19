@@ -122,6 +122,21 @@ The existing macOS fixture-only tool supply includes GNU wget; it does not
 replace native agent runtime tools or relax any containing check.
 
 
+### Unix agent lifecycle temporary-token cleanup
+
+`scripts/install.sh` owns a fallback temporary lifecycle token within each
+registration, removal or authority-reduction call, including command-substitution
+callers. Cleanup is armed before secret bytes are written and runs on normal
+return and handled INT/TERM without replacing the installer's outer traps or
+removing its other staged files. Retained runtime/configured/bootstrap tokens
+are never cleanup targets. Command output and nonzero results are preserved;
+failed cleanup after command success returns failure.
+
+The registered `TestInstallSHLifecycleTemporaryTokenCleanup` and its five Python
+methods exercise the real extracted shell functions with inert peers, private
+fixture files and self-directed signals. Native binary/service termination,
+unhandled kill/power loss and installed recovery remain separate, unproved jobs.
+
 ### Unix agent installer ignores ambient curl configuration
 
 Every direct curl invocation in `scripts/install.sh` puts `--disable` first,
