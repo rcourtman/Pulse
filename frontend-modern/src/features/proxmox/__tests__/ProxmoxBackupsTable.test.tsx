@@ -224,6 +224,151 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it.each([undefined, 0])(
+    'keeps Count available when completed backups have no positive size (%s)',
+    async (size) => {
+      mockBackupAPIs();
+      const backupTime = new Date(Date.now() - 3_600_000).toISOString();
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(
+            url === '/api/backups/pve'
+              ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
+              : { data: { backups: [{ ...pbsPayload.data.backups[0], backupTime, size }] } },
+          ),
+        ),
+      );
+      window.history.replaceState({}, '', '/proxmox/backups/date');
+      renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+      const volume = await screen.findByRole('button', { name: 'Volume', exact: true });
+      expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
+      await fireEvent.click(volume);
+
+      expect(screen.getByRole('button', { name: 'Count', exact: true })).toBeInTheDocument();
+      expect(volume).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByText(/Completed restore points exist in this window/)).toBeInTheDocument();
+      expect(screen.queryByText(/No completed restore-point activity/)).not.toBeInTheDocument();
+      expect(screen.queryByText('0 B')).not.toBeInTheDocument();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Count', exact: true }));
+      expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Completed restore points exist in this window/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('qualifies partial volume per day and replaces missing-size evidence on ordinary refresh', async () => {
+    mockBackupAPIs();
+    const today = new Date(Date.now() - 3_600_000).toISOString();
+    const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    let size: number | undefined;
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
+            : {
+                data: {
+                  backups: [
+                    { ...pbsPayload.data.backups[0], id: 'unknown-size', backupTime: today, size },
+                    {
+                      ...pbsPayload.data.backups[0],
+                      id: 'measured',
+                      backupTime: earlier,
+                      size: 1024,
+                    },
+                    {
+                      ...pbsPayload.data.backups[0],
+                      id: 'running',
+                      backupTime: today,
+                      size: 0,
+                      inProgress: true,
+                    },
+                    { ...pbsPayload.data.backups[0], id: 'undated', backupTime: '', size: 0 },
+                    {
+                      ...pbsPayload.data.backups[0],
+                      id: 'future',
+                      backupTime: new Date(Date.now() + 86_400_000).toISOString(),
+                      size: 0,
+                    },
+                    {
+                      ...pbsPayload.data.backups[0],
+                      id: 'old',
+                      backupTime: '2020-01-01T00:00:00Z',
+                      size: 0,
+                    },
+                  ],
+                },
+              },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Volume', exact: true }));
+    const missingDay = screen.getByRole('button', {
+      name: /: Size unavailable; 1 backup without a positive size$/,
+    });
+    expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 completed restore point in this window has no positive size reported/),
+    ).toBeInTheDocument();
+    await fireEvent.focus(missingDay);
+    expect(screen.getAllByText('Size unavailable; 1 backup without a positive size')).toHaveLength(
+      1,
+    );
+    await fireEvent.blur(missingDay);
+
+    size = 2048;
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /: 2.00 KB$/ })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/has no positive size reported/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Volume', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    size = undefined;
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: /: Size unavailable; 1 backup without a positive size$/,
+        }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('keeps range and metric controls usable in a genuinely empty activity window', async () => {
+    mockBackupAPIs();
+    const backupTime = new Date(Date.now() - 50 * 86_400_000).toISOString();
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
+            : { data: { backups: [{ ...pbsPayload.data.backups[0], backupTime }] } },
+        ),
+      ),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    await screen.findByText(/No completed restore-point activity/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    expect(
+      screen.getByText(/No completed restore-point activity in the selected 30-day window/),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: '90d', exact: true }));
+    expect(screen.getByRole('button', { name: /: 8.00 GB$/ })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: '7d', exact: true }));
+    expect(
+      screen.getByText(/No completed restore-point activity in the selected 7-day window/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Count', exact: true })).toBeInTheDocument();
+  });
+
   it('keeps restore-point completion totals and the chart truthful through inventory replacement', async () => {
     mockBackupAPIs('attention');
     const time = new Date(Date.now() - 3_600_000).toISOString();

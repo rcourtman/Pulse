@@ -69,6 +69,9 @@ export interface BackupActivityPoint {
   key: string;
   total: number;
   counts: Record<BackupActivitySegmentKind, number>;
+  // Value-mode observations without a usable positive reading still establish
+  // activity. They cannot become zero-byte backups or disappear from the day.
+  unmeasuredCount?: number;
 }
 
 export interface BackupActivityTimeline {
@@ -120,11 +123,14 @@ export function buildBackupActivityTimeline<T>(
     if (ts < windowStart) continue;
     const kind = classify(item);
     if (!kind) continue;
-    const value = getValue(item);
-    if (!Number.isFinite(value) || value <= 0) continue;
     const key = recoveryDateKeyFromTimestamp(ts);
     const bucket = buckets.get(key);
     if (!bucket) continue;
+    const value = getValue(item);
+    if (!Number.isFinite(value) || value <= 0) {
+      bucket.unmeasuredCount = (bucket.unmeasuredCount ?? 0) + 1;
+      continue;
+    }
     bucket.counts[kind] += value;
     bucket.total += value;
   }
@@ -179,8 +185,13 @@ export function getBackupActivityPointTotalLabel(
   total: number,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
+  unmeasuredCount = 0,
 ): string {
   if (mode === 'volume') {
+    if (unmeasuredCount > 0) {
+      const missing = `${unmeasuredCount} ${noun}${unmeasuredCount === 1 ? '' : 's'} without a positive size`;
+      return `${total > 0 ? `${formatBytes(total)} reported` : 'Size unavailable'}; ${missing}`;
+    }
     return formatBytes(Math.max(0, total));
   }
   const normalized = Math.max(0, Math.round(total));
@@ -194,8 +205,9 @@ export function getBackupActivityColumnAriaLabel(
   selected: boolean,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
+  unmeasuredCount = 0,
 ): string {
-  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode);
+  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode, unmeasuredCount);
   return selected ? `${dateLabel}: ${countLabel}, selected` : `${dateLabel}: ${countLabel}`;
 }
 

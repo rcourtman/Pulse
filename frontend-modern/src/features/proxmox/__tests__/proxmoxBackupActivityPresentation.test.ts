@@ -256,6 +256,26 @@ describe('proxmoxBackupActivityPresentation', () => {
       expect(today.counts.ok).toBe(1073741824);
       expect(today.counts.failed).toBe(2147483648);
       expect(today.total).toBe(1073741824 + 2147483648);
+      expect(today.unmeasuredCount).toBe(4);
+    });
+
+    it('retains unmeasured activity only inside the observed calendar window', () => {
+      const timeline = buildBackupActivityTimeline(
+        7,
+        [
+          { ts: localMs(2026, 1, 13, 9), kind: 'pbs' as const },
+          { ts: localMs(2026, 1, 13, 10), kind: 'archive' as const, bytes: 0 },
+          { ts: localMs(2026, 1, 13, 16), kind: 'pbs' as const },
+          { ts: localMs(2026, 1, 6), kind: 'pbs' as const },
+          { kind: 'pbs' as const },
+          { ts: localMs(2026, 1, 13, 9), kind: null },
+        ],
+        itemMs,
+        classify,
+        { now: NOW, getValue: (item) => item.bytes ?? 0 },
+      );
+      expect(timeline.points.at(-1)).toMatchObject({ total: 0, unmeasuredCount: 2 });
+      expect(timeline.points.slice(0, -1).every((point) => !point.unmeasuredCount)).toBe(true);
     });
 
     it('keeps fractional positive values in volume mode', () => {
@@ -420,6 +440,18 @@ describe('proxmoxBackupActivityPresentation', () => {
   });
 
   describe('getBackupActivityPointTotalLabel', () => {
+    it('qualifies unknown and partial daily volume without inventing zero bytes', () => {
+      expect(getBackupActivityPointTotalLabel(0, 'backup', 'volume', 1)).toBe(
+        'Size unavailable; 1 backup without a positive size',
+      );
+      expect(getBackupActivityPointTotalLabel(1024, 'backup', 'volume', 2)).toBe(
+        '1.00 KB reported; 2 backups without a positive size',
+      );
+      expect(getBackupActivityColumnAriaLabel('Today', 0, true, 'backup', 'volume', 1)).toBe(
+        'Today: Size unavailable; 1 backup without a positive size, selected',
+      );
+      expect(getBackupActivityPointTotalLabel(2, 'backup', 'count', 1)).toBe('2 backups');
+    });
     it.each([
       [0, 'backup', '0 backups'],
       [1, 'backup', '1 backup'],
