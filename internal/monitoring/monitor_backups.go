@@ -1016,15 +1016,24 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 
 	backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
 
-	// Poll backup tasks
-	m.pollBackupTasks(backupCtx, instanceName, client)
+	// Archive files appear under their final names while vzdump is still
+	// writing them. This scan's live task read is a prerequisite for the
+	// partial-output correlation below; retained tasks or a history backfill
+	// cannot establish that no new backup is running.
+	tasksCurrent := m.pollBackupTasks(backupCtx, instanceName, client)
 
 	// Poll storage backups - pass nodes to avoid duplicate API calls
 	if parentCtx.Err() != nil {
 		cancel()
 		return
 	}
-	m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes, nodeEffectiveStatus)
+	if tasksCurrent {
+		m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes, nodeEffectiveStatus)
+	} else if backupCtx.Err() == nil {
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Backup task inventory was unavailable; keeping previous archive observations until a successful task read. Guest snapshot collection continues.")
+	}
 
 	backupErr := backupCtx.Err()
 	cancel()
@@ -2427,10 +2436,11 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 	return append(backups, additions...)
 }
 
-// pollBackupTasks polls backup tasks from a PVE instance
-func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
+// pollBackupTasks polls backup tasks from a PVE instance. Its result describes
+// only this scan's live collection, not retained rows or history-store success.
+func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) bool {
 	if ctx.Err() != nil {
-		return
+		return false
 	}
 
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
@@ -2495,7 +2505,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 	if liveErr != nil && !hasHistoryStore {
-		return
+		return false
 	}
 
 	var backupTasks []models.BackupTask
@@ -2585,6 +2595,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
 		m.persistBackupTaskHistory(ctx, points, collection)
 	})
+	return liveErr == nil && ctx.Err() == nil
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one

@@ -17,6 +17,26 @@
 
 ## Purpose
 
+
+### PVE archive refresh requires the same scan's live task read
+
+A vzdump file is listed under its final name while still being written. If the
+live task inventory fails, retained tasks and successful history backfill cannot
+rule out a new writer. The ordinary scan therefore keeps its previous archive
+inventory, PBS visibility confirmations and protection collection age instead
+of enumerating/reconciling new archives or advancing Last Backup. Independent
+guest snapshot polling continues with its existing budget. A later successful
+live task read resumes ordinary partial-file classification, finished archives
+and complete-empty removal. Other connections and direct PBS polling are unchanged.
+
+`pve_backup_task_barrier_test.go` exercises both legacy/scoped adapters through
+the complete scan, unchanged archives, backup ages, repeated failure, running,
+finished and empty recovery. Its emitted snapshots feed the production Backups
+component using `scripts/check-pve-backup-task-barrier.cjs` at desktop and narrow
+viewports. These are closed source/consumer fixtures, not guest, thaw, filesystem
+liveness, restore, installed or reporter recovery proof. No provider mutation,
+new guest command, broader permission or new API field is introduced.
+
 ### Bounded backup-log reads make progress past unfinished jobs
 
 The existing 25-log per-poll budget serves never/least-recently attempted
