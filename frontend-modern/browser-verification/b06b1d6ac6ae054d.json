@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "4e4412001bca8bb124ef4ce9177a7ba6b2b18d11",
-  "verified_at": "2026-10-19T04:38:15.218179+00:00",
+  "base_sha": "440ca063409f1ae6203e4a5116cc9356a8b504e3",
+  "verified_at": "2026-10-19T04:38:15.218179Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
@@ -77,6 +77,7 @@
       "browser": true,
       "server": true
     },
-    "raw_result": "BROWSER-RESULT.json in retained lane dossier"
+    "raw_result": "BROWSER-RESULT.json in retained lane dossier",
+    "recording_correction": "The first receipt used a valid UTC offset but not the guard-required Z spelling. This corrects only timestamp serialization and binds this recording commit to its own parent; verified runtime, actual browser source 4e4412001bca8bb124ef4ce9177a7ba6b2b18d11, captures and inspection are unchanged. No browser or mutation replay."
   }
 }
