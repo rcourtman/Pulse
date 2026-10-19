@@ -16,49 +16,71 @@ function fieldGuidance(form, id) {
   return (preceding.startsWith("  - type: markdown\n") ? preceding : "") + blocks[index];
 }
 
+function assertOptionalIntakeGuidance(form, summary, evidence) {
+  const blocks = form.split(/(?=^  - type: )/m).slice(1);
+  const disclosures = [];
+  for (const block of blocks) {
+    if (!block.includes("<details")) continue;
+    assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
+    assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
+    const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
+    assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
+    for (const [, title, content] of groups) {
+      assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
+      assert.ok(content.trim(), "a disclosure must retain its guidance");
+      disclosures.push(title);
+    }
+  }
+  assert.deepEqual(disclosures.sort(), [
+    "Failed upgrade: which attempt, stop and recovery?",
+    "Several hosts or clusters: preserve which names and IDs repeat",
+    "Sign-in or permissions: keep working access",
+    "Notification delivery: Test versus ordinary alerts",
+    "Pulse CPU, memory or disk writes: comparable measurements",
+    "VM or LXC memory: guest versus hypervisor readings",
+  ].sort());
+  for (const [id, titles] of [
+    ["upgrade_context", ["Failed upgrade:"]],
+    [summary, ["Several hosts or clusters:"]],
+    [evidence, ["Sign-in or permissions:", "Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
+  ]) {
+    const guidance = fieldGuidance(form, id);
+    for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
+  }
+  // Collection and public-disclosure warnings are never hidden in a disclosure.
+  const introduction = blocks[0];
+  assert.doesNotMatch(introduction, /<details/);
+  assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
+  assert.match(introduction, /Anything you attach here is public/);
+  const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
+  assert.match(attachment, /Review files and screenshots locally/);
+  assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+}
+
 for (const [name, summary, evidence] of [
   ["bug_report.yml", "bug_description", "logs"],
   ["v6_rc_feedback.yml", "summary", "evidence"],
 ]) {
   test(`specialist intake guidance stays optional and beside its input: ${name}`, () => {
     const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
-    const blocks = form.split(/(?=^  - type: )/m).slice(1);
-    const disclosures = [];
-    for (const block of blocks) {
-      if (!block.includes("<details")) continue;
-      assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
-      assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
-      const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
-      assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
-      for (const [, title, content] of groups) {
-        assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
-        assert.ok(content.trim(), "a disclosure must retain its guidance");
-        disclosures.push(title);
-      }
-    }
-    assert.deepEqual(disclosures.sort(), [
-      "Failed upgrade: which attempt, stop and recovery?",
-      "Several hosts or clusters: preserve which names and IDs repeat",
-      "Notification delivery: Test versus ordinary alerts",
-      "Pulse CPU, memory or disk writes: comparable measurements",
-      "VM or LXC memory: guest versus hypervisor readings",
-    ].sort());
-    for (const [id, titles] of [
-      ["upgrade_context", ["Failed upgrade:"]],
-      [summary, ["Several hosts or clusters:"]],
-      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
-    ]) {
-      const guidance = fieldGuidance(form, id);
-      for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
-    }
-    // Collection and public-disclosure warnings are never hidden in a disclosure.
-    const introduction = blocks[0];
-    assert.doesNotMatch(introduction, /<details/);
-    assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
-    assert.match(introduction, /Anything you attach here is public/);
-    const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
-    assert.match(attachment, /Review files and screenshots locally/);
-    assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+    assertOptionalIntakeGuidance(form, summary, evidence);
+  });
+
+  test(`sign-in guidance guard rejects absent, expanded and misplaced advice: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const signIn = form.match(/<details>\s*<summary>Sign-in or permissions: keep working access<\/summary>[\s\S]*?<\/details>/)?.[0];
+    assert.ok(signIn, "the actual sign-in disclosure is needed for these controls");
+    assert.throws(() => assertOptionalIntakeGuidance(form.replace(signIn, ""), summary, evidence));
+    assert.throws(() => assertOptionalIntakeGuidance(form.replace(signIn,
+      signIn.replace("<details>", "<details open>")), summary, evidence));
+
+    // Keep every disclosure, but move sign-in advice to the unrelated primary
+    // description. The inventory check alone must not accept that placement.
+    const blocks = form.replace(signIn, "").split(/(?=^  - type: )/m);
+    const primary = blocks.findIndex(block => block.includes(`    id: ${summary}\n`));
+    blocks[primary - 1] += `        ${signIn}\n\n`;
+    assert.throws(() => assertOptionalIntakeGuidance(blocks.join(""), summary, evidence),
+      new RegExp(`${evidence}: Sign-in or permissions:`));
   });
 }
 
