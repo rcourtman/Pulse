@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "base_sha": "96b31b11644f0cd4feba425a9a9044001d7a97e6",
+  "verified_at": "2026-10-19T05:31:20.557670Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/nodes.ts": "e67e66afef90e4c971cdf36cef25d75d1576f828c03b94161ecbdf3fd4ee48d4",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "8fcab489fe5569b7c4773d485b94d418068b6ec0e329716954de006297c56617"
+  },
+  "routes": [
+    "/settings/infrastructure \u2014 production NodeCredentialSlot, state hook, sections, NodesAPI, apiClient and CSS consumed through the existing offline node-fingerprint-validation fixture. Native local HTTP fixtures only."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "A saved-record request with held response headers and an entered-settings request with a partial JSON body each remain pending until exactly 30 seconds, then restore an explicit test control with a scoped no-result notice. No automatic retry or save.",
+    "Timed-out responses are retired. Explicit subsequent saved tests preserve warnings; an explicit entered-settings certificate mismatch remains an error, not verified trust. Exact pins, verification and saved/draft credential isolation remain.",
+    "Stalled CSRF preparation reaches the same deadline; its late health response cannot dispatch a stale probe. A 403 with a refresh token does not automatically repeat a bounded test.",
+    "All 18 captures opened natively. Notice text, scope explanations and warning/error treatments fit desktop/320px without horizontal clipping. Most timeout frames do not include the action row; actual controls were subsequently exercised."
+  ],
+  "interactions": [
+    "Eight journeys using Playwright 1.56.1 (integration lock parity), Chromium 141.0.7390.37 desktop keyboard focus/Enter and WebKit 26.0 320px touch taps.",
+    "Six PVE/PBS/PMG header/body timeout and explicit recovery journeys, plus two stalled-CSRF/no-retry journeys. Actual production HTTP clients with synthetic CSRF cookies/headers; no request saves, adds, deletes or changes monitoring.",
+    "Browser engines/contexts, held fixture responses and Vite server closed. Client exit 0, no page or fixture errors. Browser cancellation does not establish that a real server stopped testing."
+  ],
+  "evidence": {
+    "source_commit": "96b31b11644f0cd4feba425a9a9044001d7a97e6",
+    "source_tree": "22331f77db2997040e8c279f6c8a2d32ef311c76",
+    "protocol": "frontend-modern/browser-tests/node-connection-deadline.cjs",
+    "protocol_sha256": "f36f174be565b0a14f0cdd5e4c9245dc678948df301f20e2cde188b4f9f143c7",
+    "raw_result": "BROWSER-RESULT.json in retained Web dossier",
+    "native_pixel_review": "PIXELS.json in retained Web dossier",
+    "captures": [
+      {
+        "file": "browser/chromium-pve-saved-timeout.png",
+        "sha256": "f1781400a0bb6a7b5e8cae4a18244c73061f02217d999408d299e9fc6ee409b3"
+      },
+      {
+        "file": "browser/chromium-pve-explicit-saved-recovery.png",
+        "sha256": "ea250158eefef133b6e45d9ec109c80e671ea1d590853b7f0d87c1dd79eb5f07"
+      },
+      {
+        "file": "browser/chromium-pve-entered-body-timeout.png",
+        "sha256": "2b2d0f4ad5ac0c5dc517819a14004f93c9fda986481958968ebef23625282905"
+      },
+      {
+        "file": "browser/chromium-pve-explicit-entered-mismatch.png",
+        "sha256": "7f695f898584ceebf67eb5cf535223d4fdef3414117a2c655b58b27117e612af"
+      },
+      {
+        "file": "browser/chromium-pbs-saved-timeout.png",
+        "sha256": "b9d96c9ba59334815c6ceac64d9b88b0eb2da8b42cdaef2949b8cff6a65410c3"
+      },
+      {
+        "file": "browser/chromium-pbs-entered-body-timeout.png",
+        "sha256": "8bb5ef230415a5755431ec0776cd443f066c530c8a092d1d01ff4a8e4e809665"
+      },
+      {
+        "file": "browser/chromium-pmg-saved-timeout.png",
+        "sha256": "cc27ad201ea5f9cf8b2046c75fe7bada898bdd09510253981467bd9f111315cf"
+      },
+      {
+        "file": "browser/chromium-pmg-entered-body-timeout.png",
+        "sha256": "769a650c999f09eb967c585a8ddfaa17f50fbd3f36e843ebd04dcde2fc156cf1"
+      },
+      {
+        "file": "browser/chromium-pve-csrf-preparation-timeout.png",
+        "sha256": "e9c2213056a873cfa1b4b1aad36eacbbcc760a3423700acb3b1c5cf478cf0892"
+      },
+      {
+        "file": "browser/webkit-pve-saved-timeout.png",
+        "sha256": "a17dd6d9dd25d3bb3c4798e00070bbc7de7987eb0eb7df7f2ff12ad2d66a5e10"
+      },
+      {
+        "file": "browser/webkit-pve-explicit-saved-recovery.png",
+        "sha256": "567b6ef004aa9c9575f671f1809865914c4642328ad231b71cc6b5447a481444"
+      },
+      {
+        "file": "browser/webkit-pve-entered-body-timeout.png",
+        "sha256": "201506eb8daae957008095d84c6ce45249a634b0050cdb6ba4eb54298dd871ce"
+      },
+      {
+        "file": "browser/webkit-pve-explicit-entered-mismatch.png",
+        "sha256": "a78562b87d8a72ad7de970f3ab4990fdef0bbca65df864545922f995778e52b8"
+      },
+      {
+        "file": "browser/webkit-pbs-saved-timeout.png",
+        "sha256": "e84a50212cf046dc1b53fab7d260fdc84131bf766d77da5b5801115e15c5efb8"
+      },
+      {
+        "file": "browser/webkit-pbs-entered-body-timeout.png",
+        "sha256": "3069160e6145ec3b5cbcd76fdabf88da0b903b204a47d6ce70f51205a8cd5c85"
+      },
+      {
+        "file": "browser/webkit-pmg-saved-timeout.png",
+        "sha256": "0b14843d67560a753ff397e01e29a2d228c79cba4d4f8ff5c22d223edbe098c6"
+      },
+      {
+        "file": "browser/webkit-pmg-entered-body-timeout.png",
+        "sha256": "7a8f7ab6db18f1a2ba406c4fa1f5039f370ec9624a9c3df1668c9b3cdf0d2e3f"
+      },
+      {
+        "file": "browser/webkit-pve-csrf-preparation-timeout.png",
+        "sha256": "201506eb8daae957008095d84c6ce45249a634b0050cdb6ba4eb54298dd871ce"
+      }
+    ]
+  }
+}
