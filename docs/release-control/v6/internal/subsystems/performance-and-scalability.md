@@ -2765,7 +2765,17 @@ Each retained read fixes its index choice for its snapshot. A stale legacy
 index error may retry once with a new snapshot only after inspecting the
 clustered primary key. This covers another Store committing the upgrade while
 prepared SQL is cached. Layout participates in the bounded SQL-template key;
-results and tier presence remain uncached. Restart recognizes the primary key
+results and tier presence remain uncached. Raw multi-resource reads bind one
+bounded request table and return statement-local resource numbers across the
+SQLite row boundary. Resolve each number against that statement's normalized
+resource list; never persist or expose it as resource identity. Tier discovery,
+coverage probes and value ranges retain the same scoped snapshot and index
+bounds. These detached raw series explicitly restore stable timestamp order in
+Go before Docker observation projection, without a fleet-wide SQLite sort or
+merge by repeated identity strings. Ordered streamed display buckets retain
+their existing SQL path and allocation bound. The row shape follows the same
+resource-count, step and grouping inputs as the bounded SQL-template cache.
+Restart recognizes the primary key
 without recreating the legacy index. If an older executable reopens the
 row-compatible table and recreates its legacy identity index, deferred
 maintenance removes only the known redundant trees after verifying the primary
