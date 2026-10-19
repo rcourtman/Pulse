@@ -545,3 +545,77 @@ describe('retained query access boundary', () => {
     expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().keys).toEqual(['new']);
   });
 });
+
+describe('abandoned poll cache ownership', () => {
+  it.each([false, true])(
+    'retains the timeout across remount (previous success: %s)',
+    async (loaded) => {
+      vi.useFakeTimers();
+      const reads: { signal: AbortSignal; resolve: (value: string) => void }[] = [];
+      const fetcher = vi.fn(
+        (_key: string, signal: AbortSignal) =>
+          new Promise<string>((resolve) => reads.push({ signal, resolve })),
+      );
+      if (loaded) fetcher.mockResolvedValueOnce('old value');
+      const Probe = () => {
+        const query = createNonSuspendingQuery({
+          source: () => 'polled-key',
+          cacheKey: (key) => key,
+          fetcher,
+          initialValue: '',
+          pollMs: 30_000,
+        });
+        return (
+          <output data-testid="abandoned-query">{`${query.value()}|${query.resolvedOnce()}|${(query.error() as Error | null)?.message ?? ''}`}</output>
+        );
+      };
+      const first = render(() => <Probe />);
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(screen.getByTestId('abandoned-query')).toHaveTextContent(
+        'true|The request timed out.',
+      );
+      first.unmount();
+      render(() => <Probe />);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByTestId('abandoned-query')).toHaveTextContent(
+        'true|The request timed out.',
+      );
+      for (const read of reads.slice(0, -1)) {
+        expect(read.signal.aborted).toBe(true);
+        read.resolve('obsolete answer');
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByTestId('abandoned-query')).not.toHaveTextContent('obsolete answer');
+      expect(screen.getByTestId('abandoned-query')).toHaveTextContent('The request timed out.');
+    },
+  );
+
+  it('cannot repopulate a cache generation withdrawn by another denied read', async () => {
+    vi.useFakeTimers();
+    const Probe = () => {
+      createNonSuspendingQuery({
+        source: () => 'polled-key',
+        cacheKey: (key) => key,
+        fetcher: () => new Promise<string>(() => {}),
+        initialValue: '',
+        pollMs: 30_000,
+      });
+      return <span />;
+    };
+    const first = render(() => <Probe />);
+    await vi.advanceTimersByTimeAsync(60_000);
+    const other = mount('different-key', async () => {
+      throw denied(403);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(0);
+    first.unmount();
+    other.unmount();
+    const remounted = mount('polled-key', () => new Promise<string>(() => {}));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remounted.query.resolvedOnce()).toBe(false);
+    expect(remounted.query.error()).toBeNull();
+  });
+});

@@ -190,10 +190,12 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
   let activeAbortController: AbortController | null = null;
   let activeRequestStartedAt = 0;
   let activeRequestIsPoll = false;
+  let retainActiveResult: (() => void) | null = null;
 
   const cancelActiveRequest = () => {
     activeAbortController?.abort();
     activeAbortController = null;
+    retainActiveResult = null;
   };
 
   const reset = () => {
@@ -229,6 +231,16 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     const requestId = ++latestRequestId;
     const retainedCacheKey = getRetainedCacheKey(key);
     const cacheGeneration = retainedQueryCacheGeneration;
+    const retainResult = () => {
+      if (retainedCacheKey && cacheGeneration === retainedQueryCacheGeneration) {
+        writeRetainedQueryCacheEntry(retainedCacheKey, {
+          error: error(),
+          resolvedOnce: true,
+          value: value(),
+        });
+      }
+    };
+    retainActiveResult = retainResult;
     if (!runOptions.background) {
       setLoading(true);
     }
@@ -260,13 +272,8 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
       if (requestId === latestRequestId) {
         activeAbortController = null;
         setResolvedOnce(true);
-        if (retainedCacheKey && cacheGeneration === retainedQueryCacheGeneration) {
-          writeRetainedQueryCacheEntry(retainedCacheKey, {
-            error: error(),
-            resolvedOnce: true,
-            value: value(),
-          });
-        }
+        retainResult();
+        retainActiveResult = null;
         // A background poll can replace a pending foreground refresh. The
         // latest read owns settlement, regardless of how that read started.
         setLoading(false);
@@ -318,6 +325,11 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
           setLoading(false);
           setError(new Error('The request timed out.'));
           setResolvedOnce(true);
+          // Abandonment need not reach the fetcher's finally (it may ignore
+          // abort forever). Persist the same failed result now, before a
+          // remount can reuse an earlier successful verdict. Keep the read's
+          // original cache key and access generation, not a renewed scope.
+          retainActiveResult?.();
         });
       }
       const key = options.source();

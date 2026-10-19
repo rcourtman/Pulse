@@ -7780,3 +7780,23 @@ nowrap context. The last-known qualifier must remain fully readable on a phone;
 `DiskDetail.test.tsx` protects that context and the HTTP browser protocol checks
 label bounds in both Storage and the guest Overview. Pixel inspection, not only
 page overflow or DOM visibility, is required for this reading qualification.
+
+
+### Abandoned polled reads retain their failure across remount
+
+A polled read abandoned by the existing stall fallback records its failed result
+in the same bounded cache as a settled read, before its replacement starts. This
+retention uses the abandoned read's original key and access generation; it cannot
+repopulate a generation invalidated by a denied read or organisation change.
+Late abort-ignoring responses remain fenced. Cadence, stall threshold, LRU/expiry,
+foreground replacement and successful-query retention are unchanged.
+
+`createNonSuspendingQuery.test.tsx` covers loaded and never-loaded remounts,
+late settlement and access-generation invalidation. `useProtectionPostures.test.ts`
+checks the actual protection consumer: an abandoned evaluation stays unavailable,
+with no current verdict or policy, through remount and pending retry. Only a
+successful current evaluation restores them. Independent restore evidence is not
+withdrawn. The read-only `protection-posture-remount.cjs` HTTP/browser protocol
+exercises the production Backups reader, Coverage and shipped CSS at desktop and
+320px, including keyboard/touch retry and organisation fencing. This is truthful
+monitoring presentation, not guest thaw, filesystem liveness or backup recovery.

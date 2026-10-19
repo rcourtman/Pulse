@@ -13,8 +13,57 @@ const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: apiFetchJSONMock }));
 
 afterEach(() => {
+  vi.useRealTimers();
   apiFetchJSONMock.mockReset();
   resetCreateNonSuspendingQueryCacheForTest();
+});
+
+describe('stalled protection verdict retention', () => {
+  it('keeps an abandoned evaluation unavailable across remount and late success, then recovers', async () => {
+    vi.useFakeTimers();
+    apiFetchJSONMock.mockResolvedValueOnce(postureResponse(['vm:1']));
+    const pending: { signal: AbortSignal; resolve: (value: unknown) => void }[] = [];
+    apiFetchJSONMock.mockImplementation(
+      (_url: string, { signal }: { signal: AbortSignal }) =>
+        new Promise((resolve) => pending.push({ signal, resolve })),
+    );
+    let dispose = () => {};
+    const mount = () =>
+      createRoot((stop) => {
+        dispose = stop;
+        return useProtectionPostures(() => ['vm:1']);
+      });
+    const first = mount();
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(first.postureByResourceID().get('vm:1')?.state).toBe('protected');
+      // The 30-second poll starts a read; its existing 150-second stall
+      // fallback abandons it and starts another. Both transports ignore abort.
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(pending).toHaveLength(2);
+      expect(pending[0].signal.aborted).toBe(true);
+      expect(first.response.error).toBeInstanceOf(Error);
+      expect(first.postures()).toEqual([]);
+      dispose();
+      expect(pending.every(({ signal }) => signal.aborted)).toBe(true);
+      const remounted = mount();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(remounted.response.error).toBeInstanceOf(Error);
+      expect(remounted.postures()).toEqual([]);
+      expect(remounted.policy().freshnessWindowSeconds).toBe(0);
+      // Neither the abandoned poll nor its replacement may renew the cache.
+      pending[0].resolve(postureResponse(['vm:1']));
+      pending[1].resolve(postureResponse(['vm:1']));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(remounted.postures()).toEqual([]);
+      apiFetchJSONMock.mockResolvedValueOnce(postureResponse(['vm:1'], 'unprotected'));
+      await remounted.refetch();
+      expect(remounted.response.error).toBeNull();
+      expect(remounted.postureByResourceID().get('vm:1')?.state).toBe('unprotected');
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('useProtectionPostures transport', () => {
