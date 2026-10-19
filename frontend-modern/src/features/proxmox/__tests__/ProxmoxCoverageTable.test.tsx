@@ -617,7 +617,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
     );
     expect(titles).toContain(
-      'This backup does not match a guest Pulse currently monitors, so it is not rated.',
+      'This backup or job does not match a guest Pulse currently monitors, so it is not rated.',
     );
     expect(titles.join(' ')).not.toMatch(/canonical|provider evidence|independent recovery/);
   });

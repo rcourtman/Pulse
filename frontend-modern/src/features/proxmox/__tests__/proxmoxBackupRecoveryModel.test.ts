@@ -578,7 +578,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     );
   });
 
-  it('does not create phantom workload rows from aggregate vzdump jobs', () => {
+  it('retains guest-scoped jobs without inventing targets for aggregate vzdump jobs', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [],
       pbsBackups: [],
@@ -603,8 +603,15 @@ describe('proxmoxBackupRecoveryModel', () => {
       nowMs: Date.parse('2026-05-26T08:00:00Z'),
     });
 
-    expect(model.coverageRows).toHaveLength(0);
-    expect(model.coverageSummary.totalWorkloads).toBe(0);
+    expect(model.coverageRows).toHaveLength(1);
+    expect(model.coverageRows[0]).toMatchObject({
+      isOrphaned: true,
+      posture: 'not-evaluated',
+      workload: { type: 'unknown', vmid: '105' },
+      latestTask: { id: 'orphan-vzdump' },
+    });
+    expect(model.coverageRows[0].workload.resourceId).toBeUndefined();
+    expect(model.coverageSummary.recoverableArtifacts).toBe(0);
   });
 });
 

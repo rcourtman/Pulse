@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e15087fd931b24e95b1ab31f217597be544d24bc",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "9b5d5483927c57bd09055376c933731b6813a474cbc7e8684eab8ee9693c3cb7",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f9f82ff06282e23a5cf98d6baf7dc4e0c142224e2c540dd6b997905e4e74ad2a",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "658677c5abd62b96ba710674d028b2aa22245f41489229d09d809678a70e195c"
+  },
+  "routes": [
+    "Existing Proxmox Backups Coverage through /browser-tests/unmatched-backup-jobs.html: production HTTP decoders, query owners, recovery model, tables and shipped CSS. No product route added."
+  ],
+  "states": [
+    "Positive-VMID vzdump jobs without an absent or uniquely resolved inventory owner stay source-scoped and unrated; repeated VMIDs do not inherit the job. Job-only records do not inflate live-target or restore-point counts; VMID-zero parents do not invent guests.",
+    "Original job ID, raw/error-like status, escaped failure text and source/timing evidence remain inspectable and searchable. Missing chronology uses Collected backup jobs rather than inventing a latest result.",
+    "Inventory changes resolve the unique owner, then renewed ambiguity withdraws ownership without losing evidence. An independent PBS restore point stays with its owner; neither transition refetches backup inventories."
+  ],
+  "interactions": [
+    "Chromium desktop keyboard focus/Enter and WebKit 320px dark/touch: open the unmatched-target disclosure, expand dated and unorderable jobs, search an original task ID, and exercise both inventory identity transitions.",
+    "Two final completed journeys, eight final captures opened with native view_image, no page/fixture errors; each context/browser and Vite closed, client exit 0.",
+    "Finite screenshot animations are completed without advancing the observation clock. Two earlier runs are retained separately; the second was accidentally unchanged after a nonmatching edit and establishes no additional acceptance."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T08:35:43.653345Z",
+  "evidence": {
+    "source_commit": "e15087fd931b24e95b1ab31f217597be544d24bc",
+    "source_tree": "6f8d981528f196f1808ee86ec08346d7d6bba4de",
+    "runtime_commit": "91d0325946c1ab6510e2056932fa53e458f93606",
+    "bound_inputs": 2549,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "chromium",
+        "requests": [
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/recovery/postures",
+          "/api/recovery/postures"
+        ],
+        "browserVersion": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "pageErrors": [],
+        "contextClosed": true,
+        "browserClosed": true
+      },
+      {
+        "name": "webkit",
+        "requests": [
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/recovery/postures",
+          "/api/recovery/postures"
+        ],
+        "browserVersion": "26.0",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "pageErrors": [],
+        "contextClosed": true,
+        "browserClosed": true
+      }
+    ],
+    "protocol": "frontend-modern/browser-tests/unmatched-backup-jobs.cjs",
+    "protocol_sha256": "c637c6816e62d07b8f46a0252afc2ded7ecdaf46276ba05abcd5424eff691574",
+    "raw_result": "BROWSER-RESULT.json in the retained Web dossier",
+    "captures": [
+      {
+        "file": "chromium-unmatched-dated.png",
+        "state": "unmatched-dated",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "0b8103e36aabff18a1c0a57719faef45fadbe475532904bbd1274e40a27368eb"
+      },
+      {
+        "file": "chromium-unmatched-undated.png",
+        "state": "unmatched-undated",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "fb57ab8d5c65fb9db00126995d1ab727317b646f8b7855fb8665ae83838b8b6a"
+      },
+      {
+        "file": "chromium-searched-evidence.png",
+        "state": "searched-evidence",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "ddca69a48afd7580abd80bfd885aff714d452dba86f024bf0783586ef1df24bf"
+      },
+      {
+        "file": "chromium-resolved-owner.png",
+        "state": "resolved-owner",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "d2d4f169e4a8dd15b258575f16b66e40a20862cecc971a3c86c21cfe227812a4"
+      },
+      {
+        "file": "webkit-unmatched-dated.png",
+        "state": "unmatched-dated",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "c9f6f8f8f2a44769b0952b16fa425c0d25ffde5713a6b3c0ae0beaa037f865b8"
+      },
+      {
+        "file": "webkit-unmatched-undated.png",
+        "state": "unmatched-undated",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "f64a3a19fefdf637b5a6352975563587be9dd888cd0f91c35c07e4b258a175b6"
+      },
+      {
+        "file": "webkit-searched-evidence.png",
+        "state": "searched-evidence",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "3d63ad3328c85d1b6b465ca37fc9a99491e67bc1a3ae79ff36c8e48b8901dbe2"
+      },
+      {
+        "file": "webkit-resolved-owner.png",
+        "state": "resolved-owner",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "bcdd9426f3bb8815acfa64bfe5124827ccddcdb31745f63f9d452f15802c8c7b"
+      }
+    ],
+    "pixel_review": "All eight final retained PNGs opened with native view_image, with image content presented to the model. Full wrapping notices, unrated/unknown distinctions, source provenance and independent PBS evidence inspected at desktop and 320px.",
+    "limits": "Synthetic consumer evidence, not guest thaw, filesystem liveness, backup/restore or installed recovery."
+  }
+}

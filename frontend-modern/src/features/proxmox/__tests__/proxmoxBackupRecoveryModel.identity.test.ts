@@ -334,7 +334,10 @@ describe('backup-identity: native ownership rather than first label match', () =
       type: 'system-container',
     } as typeof vm;
     const result = model({ workloads: [vm, ct], tasks: [identityTask()] });
-    expect(result.coverageRows.every((row) => row.latestTask === undefined)).toBe(true);
+    expect(
+      result.coverageRows.filter((row) => row.workload.resourceId).every((row) => !row.latestTask),
+    ).toBe(true);
+    expect(result.coverageRows.find((row) => row.isOrphaned)?.latestTask?.id).toBe('task-100');
   });
 
   it('preserves unresolved artifacts but does not pool identically named PBS sources', () => {

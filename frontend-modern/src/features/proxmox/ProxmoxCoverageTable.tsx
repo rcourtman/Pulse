@@ -177,7 +177,7 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
   if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
   if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
-    return 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
+    return 'This backup or job does not match a guest Pulse currently monitors, so it is not rated.';
   }
   return 'Pulse cannot tell yet whether this guest is backed up.';
 };

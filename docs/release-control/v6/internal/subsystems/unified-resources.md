@@ -8955,3 +8955,16 @@ unmounts. The deadline expires naturally for an otherwise abandoned shared read.
 `useUnifiedResources.test.ts` and `guest-disk-read-recovery.cjs` cover the complete
 allowance, actual HTTP bodies/Retry-After, cache/remount recovery and existing
 organisation fencing. No collection, polling cadence or native operation changes.
+
+### Unresolved PVE jobs are unrated evidence, not live resource identity
+
+Coverage's existing unmatched-target disclosure retains positive-VMID jobs even
+when their provider job type supplies no guest type and inventory matching fails
+or conflicts. It never attaches that job to a guessed resource or counts the
+fallback as a monitored target/restore point. The explanation explicitly covers
+both backup artifacts and job-only evidence. Valid inventory can later resolve
+the job; renewed ambiguity withdraws that ownership without losing its record.
+`ProxmoxBackupsTable.test.tsx` protects counts, native disclosure, escaped error
+text and both identity transitions; `unmatched-backup-jobs.cjs` covers HTTP,
+keyboard/touch and narrow pixels. This changes neither canonical resource IDs nor
+collection, guest operations or operational-recovery acceptance.

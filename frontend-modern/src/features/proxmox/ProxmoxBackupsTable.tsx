@@ -242,7 +242,7 @@ export const ProxmoxBackupsTable: Component<{
   const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
     new Set<string>(),
   );
-  // Unmatched backups (VM/LXC evidence without an unambiguous live identity)
+  // Unmatched backups/jobs (guest evidence without an unambiguous live identity)
   // are collapsed by default so the main table is active backup targets, not a
   // pile of unassigned artifacts sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
@@ -981,8 +981,8 @@ export const ProxmoxBackupsTable: Component<{
                         class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
                         aria-hidden="true"
                       />
-                      {orphanedTotalCount()} unmatched{' '}
-                      {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
+                      {orphanedTotalCount()} unmatched backup{' '}
+                      {orphanedTotalCount() === 1 ? 'target' : 'targets'}
                     </span>
                     <span class="w-full text-[11px] text-muted sm:w-auto">
                       No unambiguous inventory match
@@ -990,12 +990,16 @@ export const ProxmoxBackupsTable: Component<{
                   </button>
                   <Show when={showOrphaned()}>
                     <div class="border-t border-border-subtle p-2">
+                      <p class="mb-2 px-1 text-xs text-muted">
+                        Backups and jobs without an unambiguous live guest match are not rated. A
+                        job alone does not establish a restore point or guest recovery.
+                      </p>
                       <ProxmoxCoverageTable
                         rows={orphanedCoverageRows()}
                         hasAnyRows={orphanedTotalCount() > 0}
                         emptyIcon={props.emptyIcon}
-                        emptyTitle="No unmatched backups"
-                        emptyDescription="Backups without an unambiguous live guest match will appear here."
+                        emptyTitle="No unmatched backup targets"
+                        emptyDescription="Backups and jobs without an unambiguous live guest match will appear here."
                         sortKey={coverageSortKey}
                         sortDirection={coverageSortDirection}
                         onSort={handleCoverageSort}
