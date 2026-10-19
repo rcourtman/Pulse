@@ -7048,7 +7048,9 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
     # Check 4: Pulse URL reachability and agent binary availability
     if [[ -n "$PULSE_URL" ]]; then
-        CURL_TEST_ARGS=(-sfL --connect-timeout 5 -o /dev/null)
+        # A connected peer (or a redirect target) can stop sending headers or
+        # body bytes. Bound the whole read, not just connection establishment.
+        CURL_TEST_ARGS=(-sfL --connect-timeout 5 --max-time 10 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
         if curl --disable "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then

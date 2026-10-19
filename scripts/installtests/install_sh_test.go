@@ -539,6 +539,98 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	}
 }
 
+func TestInstallSHPreflightHealthDeadline(t *testing.T) {
+	for _, mode := range []string{"silent_headers", "stalled_body"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			state := filepath.Join(dir, "state")
+			if err := os.Mkdir(state, 0700); err != nil {
+				t.Fatal(err)
+			}
+			preserved := filepath.Join(state, "operator-state.json")
+			const originalState = "{\"preserve\":true}\n"
+			if err := os.WriteFile(preserved, []byte(originalState), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.Path)
+				mu.Unlock()
+				if r.URL.Path == "/api/health" {
+					if mode == "stalled_body" {
+						w.Header().Set("Content-Length", "2")
+						_, _ = w.Write([]byte("a"))
+						w.(http.Flusher).Flush()
+					}
+					// Even the old installer completes after 12 seconds: the
+					// negative case cannot strand a curl child or HTTP handler.
+					timer := time.NewTimer(12 * time.Second)
+					defer timer.Stop()
+					select {
+					case <-r.Context().Done():
+						return
+					case <-timer.C:
+						if mode == "stalled_body" {
+							_, _ = w.Write([]byte("b"))
+						}
+						return
+					}
+				}
+				if r.URL.Path != "/download/pulse-agent" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", repoFile("scripts", "install.sh"),
+				"--url", server.URL, "--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox", "--state-dir", state)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "CURL_HOME=" + dir,
+				"TMPDIR=" + dir, "LC_ALL=C", "NO_PROXY=*", "no_proxy=*"}
+			cmd.WaitDelay = time.Second
+			started := time.Now()
+			out, err := cmd.CombinedOutput()
+			elapsed := time.Since(started)
+			if ctx.Err() != nil {
+				t.Fatalf("preflight exceeded fixture deadline: %v\n%s", ctx.Err(), out)
+			}
+			if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 14 {
+				t.Fatalf("connected but stalled health read must fail preflight (14), got %v after %s:\n%s", err, elapsed, out)
+			}
+			text := string(out)
+			for _, event := range []string{`"code":"pulse_unreachable"`, `"code":"agent_download_available"`, `"code":"failed"`} {
+				if !strings.Contains(text, event) {
+					t.Fatalf("preflight omitted %s:\n%s", event, out)
+				}
+			}
+			if strings.Contains(text, `"code":"ok"`) || strings.Contains(text, `"code":"pulse_reachable"`) {
+				t.Fatalf("timeout was reported as successful preflight:\n%s", out)
+			}
+			mu.Lock()
+			gotRequests := strings.Join(requests, ", ")
+			mu.Unlock()
+			if gotRequests != "GET /api/health, HEAD /download/pulse-agent" {
+				t.Fatalf("preflight changed its read-only request set: %s", gotRequests)
+			}
+			bytes, err := os.ReadFile(preserved)
+			if err != nil || string(bytes) != originalState {
+				t.Fatalf("preflight changed operator state: %v, %q", err, bytes)
+			}
+			entries, err := os.ReadDir(state)
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("preflight added installed state: %v, %v", err, entries)
+			}
+			t.Logf("real curl %s: exit 14 after %s; artifact inspected, state preserved", mode, elapsed)
+		})
+	}
+}
+
 // Exercise the complete read-only installer with real curl. Ambient defaults
 // must not turn an untrusted TLS peer into a success or turn GET/HEAD into a
 // mutation, extra request or trace. Explicit CA/insecure choices still work.
