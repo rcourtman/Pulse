@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "cc9446defa5143def6226949b1ddff44074195d5",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "75d58983bc43a1165834ffa13f6de7da0a83be49712366a0ced3359a03e73dbf"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Count with a selected historical day before Europe/London midnight",
+    "New local-day Volume window with original range and scope preserved",
+    "Clock reversed: latest backup and job Unknown while server-owned Protected remains",
+    "Clock reconciled: ordered PBS point, original observed timestamp and 5s recorded job return"
+  ],
+  "interactions": [
+    "Desktop keyboard selects range, historical day, clears day, selects Volume, navigates Coverage and expands evidence",
+    "320px WebKit touch performs the same controls and preserves the expanded row through both clock directions",
+    "Actual production GET readers retain exactly two inventory requests per journey; ordinary posture polling remains separate"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T10:50:12Z",
+  "protocol": "frontend-modern/browser-tests/backup-clock.cjs",
+  "execution_source": "ea9c481aaa475b77152c3ad35204ed2bca7cbe45",
+  "execution_tree": "5524a2147df12e720831b2734118871f96911348",
+  "parent_tree": "5524a2147df12e720831b2734118871f96911348",
+  "source_equivalence": "Only commit-message metadata changed after execution; verified final runtime bytes and complete tree are identical. No frontend edits or merge resolution followed browser execution.",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "name": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    },
+    {
+      "name": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-before-midnight.png",
+      "state": "before-midnight",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "cb4e8cdea6ecec02680684c49963b2251f2cb0c0f0584b6e67a7330fb6a76b2d",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Mon Oct 19 2026 23:59:50 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "chromium-new-day-volume.png",
+      "state": "new-day-volume",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "6188a81c6160f78be3388eda49c356af28732c5cb908eebe072140f4e4cdd2b1",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Tue Oct 20 2026 00:00:20 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "chromium-clock-reversed.png",
+      "state": "clock-reversed",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "cb11e69cb48f997e40f46cc32953c79932a7a66f5ab36463a0ff5bfc22e8e721",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Mon Oct 19 2026 23:55:20 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "chromium-chronology-reconciled.png",
+      "state": "chronology-reconciled",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "d8db532ee8db57034cd8e77d3b7cef30ef9200360d97c216f3578f47f53d540a",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Tue Oct 20 2026 00:01:20 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "webkit-before-midnight.png",
+      "state": "before-midnight",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "1e2af771d356e4d235dd8fb95689d3007370822b5056268a33e0a9f75cab00f3",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Mon Oct 19 2026 23:59:50 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "webkit-new-day-volume.png",
+      "state": "new-day-volume",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "3d6ec25cbd801fd1086de40c68640b4f4cd8b2522796e9845ab158cf44516052",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Tue Oct 20 2026 00:00:20 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "webkit-clock-reversed.png",
+      "state": "clock-reversed",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "b32c7933f9b43d13629fde1b3ba4e88a9dd56db7863732126d6a16ac43b5f022",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Mon Oct 19 2026 23:55:20 GMT+0100 (British Summer Time)"
+      }
+    },
+    {
+      "file": "webkit-chronology-reconciled.png",
+      "state": "chronology-reconciled",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "69a7d9da7856ee532f6df4e59d0bf56c8c52552f803a44d544269b6c8a805fec",
+      "geometry": {
+        "overflow": false,
+        "clipped": [],
+        "localNow": "Tue Oct 20 2026 00:01:20 GMT+0100 (British Summer Time)"
+      }
+    }
+  ],
+  "pixel_review": {
+    "desktop": "The Count chart initially includes 13 and 19 October; 7d and the historical day filter remain selected. After local midnight the Volume chart spans 14\u201320 October and shows only the recent 1 KB archive while both original points remain listed. Keyboard focus tooltip is visible at the top-left in the initial capture; no changed control is obscured. Coverage reverses to Unknown latest backup/job with the original raw dates and collected job retained, then restores the ordered PBS point and recorded 5s job, without changing Protected.",
+    "narrow": "All four 320px dark/touch captures inspected. Range/metric controls and chart remain within the viewport; the historic date chip and clear action remain reachable. After midnight the timeline moves to 14\u201320 October while the source-filter count remains 2. Expanded Coverage keeps the readable Unknown job explanation and full original dates while clock-reversed, then the recorded 5s result and unchanged Last observed time return. PBS/PVE source locations and full archive identifiers wrap in the existing continuation. No horizontal page overflow or clipped changed evidence was observed.",
+    "limits": "Synthetic collected GET evidence only; these images do not prove upstream collection, successful restore, independent thaw, filesystem liveness, installed recovery or publication."
+  },
+  "cleanup": {
+    "serverClosed": true
+  },
+  "proof_limits": "Synthetic collected GET evidence only; these images do not prove upstream collection, successful restore, independent thaw, filesystem liveness, installed recovery or publication."
+}
