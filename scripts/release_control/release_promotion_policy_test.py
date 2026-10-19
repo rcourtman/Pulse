@@ -2075,6 +2075,42 @@ pathlib.Path(args[args.index("-o")+1]).write_bytes(pathlib.Path(os.environ["MARK
                 self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
 
+    def test_signin_report_context_preserves_access_without_requesting_secrets(self) -> None:
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                context = expandable_intake_context(
+                    form, evidence_id, "Sign-in or permissions: keep working access",
+                )
+                for distinction in (
+                    "sign-in method or provider type", "original time and redacted error",
+                    "refused sign-in", "successful login with a denied page or action",
+                    "including a save without changes", 'write "unknown"',
+                    "Test checks discovery, not sign-in or permissions",
+                    "blank Client Secret field does not prove the saved secret is lost",
+                    "Keep any working administrator session open",
+                    "Do not sign out, repeat a save or login, recreate the provider",
+                    "rotate secrets, enable Debug or relax TLS/access restrictions",
+                    "passwords, client secrets, authorization codes, tokens, cookies",
+                    "full callback URLs and claim/configuration dumps private",
+                    "consistent aliases", "not a HAR export or Copy as cURL command",
+                ):
+                    self.assertIn(distinction, context)
+                self.assertFalse(fields[evidence_id].get("validations", {}).get("required", False))
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                self.assertNotIn("client_secret", fields)
+                self.assertNotIn("callback_url", fields)
+        triage = read("docs/ISSUE_TRIAGE.md")
+        self.assertEqual(triage, read("frontend-modern/public/docs/ISSUE_TRIAGE.md"))
+        section = normalize_ws(triage.split("### Sign-in and access reports", 1)[1]
+                               .split("## Required disposition", 1)[0])
+        for boundary in ("Use the full thread's existing", "unchanged save",
+                         "existing reports need no refile or repeated workaround",
+                         "OIDC.md#safe-diagnosis", "not a local password reset for an SSO failure",
+                         "not evidence that the login or save defect is repaired"):
+            self.assertIn(boundary, section)
+
     def test_notification_report_context_is_optional_and_passive(self) -> None:
         for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
             with self.subTest(form=name):
@@ -2113,6 +2149,7 @@ pathlib.Path(args[args.index("-o")+1]).write_bytes(pathlib.Path(os.environ["MARK
         ):
             for field_id, heading in (
                 (summary_id, "Several hosts or clusters: preserve which names and IDs repeat"),
+                (evidence_id, "Sign-in or permissions: keep working access"),
                 (evidence_id, "Notification delivery: Test versus ordinary alerts"),
             ):
                 with self.subTest(form=name, field=field_id):

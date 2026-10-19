@@ -211,6 +211,15 @@ body:
         Optional context: open only the section that matches your report. Use existing observations; missing details are valid.
 
         <details>
+        <summary>Sign-in or permissions: keep working access</summary>
+
+        Give the sign-in method or provider type, original time and redacted error where already known. Distinguish refused sign-in from a successful login with a denied page or action. Say whether it followed a provider save, including a save without changes; use existing observations, or write "unknown". A successful provider Test checks discovery, not sign-in or permissions; a blank Client Secret field does not prove the saved secret is lost.
+        Keep any working administrator session open. Do not sign out, repeat a save or login, recreate the provider, rotate secrets, enable Debug or relax TLS/access restrictions just to complete this report.
+        Keep passwords, client secrets, authorization codes, tokens, cookies, full callback URLs and claim/configuration dumps private. Use consistent aliases for users and groups; an existing locally reviewed, redacted error is enough, not a HAR export or Copy as cURL command.
+
+        </details>
+
+        <details>
         <summary>Notification delivery: Test versus ordinary alerts</summary>
 
         For notification reports, distinguish an already-observed **Test** result from ordinary alert delivery: single, grouped/digest or resolved. Give the destination type (such as email or Telegram), built-in or custom template, original time and redacted error or missing host/resource context where known. A successful Test does not establish ordinary delivery or correct identity.
