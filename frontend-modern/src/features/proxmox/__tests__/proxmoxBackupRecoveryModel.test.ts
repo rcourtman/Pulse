@@ -956,7 +956,7 @@ describe('backup job observation provenance', () => {
     ['2026-05-27T02:05:00Z', undefined],
     ['2026-05-25T02:00:00Z', 0],
     ['2026-05-25T02:05:01Z', 301],
-  ])(
+  ] as const)(
     'retains raw end %j but derives only a valid recorded duration',
     (endTime, durationSeconds) => {
       const row = model([task({ startTime: '2026-05-25T02:00:00Z', endTime })]).coverageRows[0];

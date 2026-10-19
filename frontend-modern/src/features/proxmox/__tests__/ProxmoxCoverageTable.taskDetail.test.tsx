@@ -69,7 +69,7 @@ describe('expanded Coverage backup job evidence', () => {
         within(detail).getByText('Reported end').nextElementSibling?.querySelector('time'),
       ).toHaveAttribute('datetime', endTime);
       expect(within(detail).getByText('Recorded duration').nextElementSibling).toHaveTextContent(
-        /^5m 0s$/,
+        /^5m$/,
       );
       expect(
         within(detail).getByText('Last observed').nextElementSibling?.querySelector('time'),
@@ -128,7 +128,7 @@ describe('expanded Coverage backup job evidence', () => {
       'datetime',
       '2026-10-04T11:10:00Z',
     );
-    expect(detail.querySelector('[data-backup-task-duration]')).toHaveTextContent(/^10m 0s$/);
+    expect(detail.querySelector('[data-backup-task-duration]')).toHaveTextContent(/^10m$/);
     expect(detail).not.toHaveTextContent(raw);
     expect(toggle).toHaveFocus();
   });
