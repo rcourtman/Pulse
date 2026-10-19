@@ -273,21 +273,25 @@ func exerciseVzdumpLogBudgetBacklogRecovery(t *testing.T, client PVEClientInterf
 			require.Equal(t, recovery.KindOther, point.Kind, "task result is not a restore artifact")
 		}
 		summary := recovery.BuildBackupHealth([]recoverymodel.BackupHealthWorkload{{ID: "deferred-success", Instance: "site", VMID: 100}, {ID: "deferred-failure", Instance: "site", VMID: 200}, {ID: "unread-log", Instance: "site", VMID: 300}}, points, recoverymodel.BackupHistoryCoverage{}, start.Add(-time.Hour), start.Add(time.Hour), time.UTC)
+		// No attributed execution is missing coverage, not an invented
+		// execution with an Unknown outcome (nor a successful backup).
+		require.Zero(t, summary.Counts.Unknown)
 		if p == 0 {
-			require.Equal(t, 3, summary.Counts.Unknown)
+			require.Equal(t, 3, summary.MissingWorkloads)
+			require.Zero(t, summary.Counts.Total())
 		} else {
 			require.Equal(t, 1, summary.Counts.Failed)
 			if p < 3 {
-				require.Equal(t, 1, summary.Counts.Unknown)
+				require.Equal(t, 1, summary.MissingWorkloads)
 				require.Equal(t, 1, summary.Counts.Success)
 			} else {
-				require.Zero(t, summary.Counts.Unknown)
+				require.Zero(t, summary.MissingWorkloads)
 				require.Equal(t, 2, summary.Counts.Success)
 			}
 		}
 		wire, err := json.Marshal(map[string]any{"data": snapshot})
 		require.NoError(t, err)
 		t.Logf("PVE_BUDGET_PROJECTION_%s=%s", label, wire)
-		t.Logf("HTTP_BUDGET_%s requests=%d tasks=%d success=%d failed=%d unknown=%d", label, logReads.Load()-before, len(snapshot.BackupTasks), summary.Counts.Success, summary.Counts.Failed, summary.Counts.Unknown)
+		t.Logf("PVE_BUDGET_%s requests=%d tasks=%d success=%d failed=%d unknown=%d missing=%d", label, logReads.Load()-before, len(snapshot.BackupTasks), summary.Counts.Success, summary.Counts.Failed, summary.Counts.Unknown, summary.MissingWorkloads)
 	}
 }
