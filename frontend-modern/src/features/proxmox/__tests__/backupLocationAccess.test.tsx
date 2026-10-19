@@ -16,6 +16,7 @@ import {
   recoverableArtifactMatchesSearch,
 } from '../proxmoxBackupRecoveryModel';
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
+import { resolveBackupLocationSelection } from '../proxmoxBackupLocation';
 import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
 
 const namespace = 'pve-1/department-with-a-long-name/production';
@@ -63,14 +64,32 @@ describe('backup location access without hover', () => {
       'main / (root)',
     ]);
     expect(pbs.map((artifact) => artifact.locationKey)).toEqual([
-      'pbs:pbs-east:main',
-      'pbs:pbs-west:main',
-      'pbs:pbs-east:main',
+      'backup-location-v2:["pbs","pbs-east","main"]',
+      'backup-location-v2:["pbs","pbs-west","main"]',
+      'backup-location-v2:["pbs","pbs-east","main"]',
     ]);
     expect(
       model.recoverableArtifacts.find((artifact) => artifact.nativeId === 'file-100')
         ?.locationGroupKey,
-    ).toBe('archive:east:local');
+    ).toBe('backup-location-v2:["archive","east","local"]');
+    // Old saved filters are aliases, not the source identity. Each must still
+    // resolve to its own exact tuple without pooling east and west evidence.
+    for (const connection of ['pbs-east', 'pbs-west']) {
+      expect(
+        resolveBackupLocationSelection(model.recoverableArtifacts, `pbs:${connection}:main`),
+      ).toEqual({
+        state: 'matched',
+        key: `backup-location-v2:["pbs","${connection}","main"]`,
+        label: `${connection} / main`,
+      });
+    }
+    expect(
+      resolveBackupLocationSelection(model.recoverableArtifacts, 'archive:east:local'),
+    ).toEqual({
+      state: 'matched',
+      key: 'backup-location-v2:["archive","east","local"]',
+      label: 'east / local',
+    });
     expect(model.recoverableArtifacts.map(getRecoverableArtifactLocation).sort()).toEqual(
       [...locations].sort(),
     );
