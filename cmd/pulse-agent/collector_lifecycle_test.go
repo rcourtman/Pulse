@@ -110,6 +110,23 @@ func TestCollectorLifecycleCommandSafelyReadsCollectorToken(t *testing.T) {
 	}
 }
 
+func TestCollectorLifecycleCommandRejectsNULWithoutOutput(t *testing.T) {
+	for _, encoded := range []string{"\x00synthetic-secret", "synthetic\x00-secret", "synthetic-secret\x00", "synthetic-secret\x00\n"} {
+		tokenFile := writeCollectorLifecycleToken(t, encoded)
+		var stdout, stderr bytes.Buffer
+		err := runCollectorLifecycleCommand(context.Background(), collectorReadTokenCommand, []string{
+			"--token-file", tokenFile,
+			"--token-owner-uid", collectorLifecycleTestOwnerUID(),
+		}, &stdout, &stderr)
+		if err == nil || collectorLifecycleExitCode(err) != 1 || stdout.Len() != 0 || stderr.Len() != 0 {
+			t.Fatal("invalid token did not fail without writing credential output")
+		}
+		if err.Error() != "collector lifecycle token file is empty or invalid" {
+			t.Fatal("invalid token did not produce the fixed non-disclosing error")
+		}
+	}
+}
+
 func TestCollectorLifecycleCommandDownloadsInstallerThroughPublicTransport(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/install.sh" || request.Header.Get("Authorization") != "" {
