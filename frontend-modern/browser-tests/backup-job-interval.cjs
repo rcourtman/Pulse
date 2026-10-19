@@ -126,10 +126,16 @@ async function capture(page, name, state) {
     server: { host: '127.0.0.1', port: 5327, strictPort: true },
   });
   await server.listen();
+  const profiles = binding.profiles ?? ['desktop', 'narrow'];
+  assert(
+    Array.isArray(profiles) &&
+      profiles.length > 0 &&
+      profiles.every((name) => ['desktop', 'narrow'].includes(name)),
+  );
   for (const [name, engine, width] of [
     ['desktop', chromium, 1365],
     ['narrow', webkit, 320],
-  ]) {
+  ].filter(([name]) => profiles.includes(name))) {
     tasks = [task];
     browser = await engine.launch(
       engine === chromium
@@ -197,7 +203,7 @@ async function capture(page, name, state) {
     const row = page.locator('[data-proxmox-backup-row="coverage"]').first();
     await row.waitFor();
     const toggle = row.getByRole('button', { expanded: false });
-    if (width === 320) await toggle.tap();
+    if (width === 320) await row.locator('td').first().tap();
     else {
       await toggle.focus();
       await page.keyboard.press('Enter');
@@ -240,7 +246,7 @@ async function capture(page, name, state) {
     // A filtered-away row may remount, so reopen only if its disclosure was retired.
     const expand = page.locator('[data-proxmox-backup-row="coverage"]').first().getByRole('button');
     if ((await expand.getAttribute('aria-expanded')) === 'false') {
-      if (width === 320) await expand.tap();
+      if (width === 320) await row.locator('td').first().tap();
       else {
         await expand.focus();
         await page.keyboard.press('Enter');
