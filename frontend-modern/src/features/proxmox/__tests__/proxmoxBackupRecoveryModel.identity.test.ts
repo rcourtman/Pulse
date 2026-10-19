@@ -105,6 +105,25 @@ describe('backup-identity: native ownership rather than first label match', () =
     ]);
   });
 
+  it('retains hostname case matching without treating connection names as hostnames', () => {
+    const result = model({
+      workloads: [
+        identityGuest('upper-100', 'East', 'pve-upper'),
+        identityGuest('lower-100', 'east', 'pve-lower'),
+      ],
+      archives: [identityArchive({ instance: '', node: 'PVE-UPPER' })],
+      pbsBackups: [identityPBS({ namespace: 'PVE-LOWER' })],
+      tasks: [identityTask({ instance: '', node: 'PVE-UPPER' })],
+    });
+    expect(owners(result)).toEqual(['upper-100', 'lower-100']);
+    expect(
+      result.coverageRows.find((row) => row.workload.resourceId === 'upper-100')?.latestTask?.id,
+    ).toBe('task-100');
+    expect(
+      result.coverageRows.find((row) => row.workload.resourceId === 'lower-100')?.latestTask,
+    ).toBeUndefined();
+  });
+
   it('keeps copied local archives and their location filters independent of guest placement', () => {
     const result = model({
       workloads: [identityGuest('east-100', 'east', 'current-guest-node')],

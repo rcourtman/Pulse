@@ -20,6 +20,13 @@
 
 ## Purpose
 
+Backup workload presentation preserves the backend's exact configured connection
+identity, including case, when mapping files, snapshots and jobs to live or
+unmatched rows. Native hostname aliases remain case-insensitive; they do not
+override a known different connection. PBS connection-name hints follow the same
+exact comparison. Both Backups consumers expose the resulting independent
+ownership without changing server posture or adding provider/guest operations.
+
 ### PBS count disclosure shares its table presentation
 
 The existing datastore disclosure keeps backup-entry counts inspectable when

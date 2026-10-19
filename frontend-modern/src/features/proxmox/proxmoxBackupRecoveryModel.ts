@@ -213,6 +213,13 @@ function normalizeKey(value: string | number | undefined | null): string {
     .toLowerCase();
 }
 
+// Configured connection names are source identities, not DNS names. Preserve
+// their spelling just as the collector and location keys do. Only an absent
+// or whitespace-only name can use the legacy native-node matching path.
+function connectionIdentity(value: string | undefined): string {
+  return value?.trim() ? value : '';
+}
+
 function artifactLocationScope(
   sourceKind: RecoverableSourceKind,
   instance: string | undefined,
@@ -471,10 +478,12 @@ function matchPVEWorkload<T extends WorkloadReference>(
   instance: string,
   node: string,
 ): T | undefined {
-  const instanceKey = normalizeKey(instance);
+  const instanceKey = connectionIdentity(instance);
   const nodeKey = normalizeKey(node);
   if (instanceKey) {
-    const scoped = workloads.filter((workload) => normalizeKey(workload.instance) === instanceKey);
+    const scoped = workloads.filter(
+      (workload) => connectionIdentity(workload.instance) === instanceKey,
+    );
     // A VMID is unique inside its PVE connection. Historical backup/task nodes
     // can differ after a migration; they must not override that connection.
     if (scoped.length > 0) {
@@ -487,7 +496,7 @@ function matchPVEWorkload<T extends WorkloadReference>(
     // identify one of them, but cannot rescue a known conflicting instance.
     return uniqueWorkload(
       workloads.filter(
-        (workload) => !normalizeKey(workload.instance) && matchesNativeNode(workload, node),
+        (workload) => !connectionIdentity(workload.instance) && matchesNativeNode(workload, node),
       ),
     );
   }
@@ -525,13 +534,13 @@ function resolvePBSWorkload(
   // PBS instance/datastore identify a repository, not a PVE connection. A
   // namespace can disambiguate a repeated VMID only with one exact native
   // node/alias or connection match. A display name or substring proves none.
-  const namespace = normalizeKey(backup.namespace);
+  const namespace = connectionIdentity(backup.namespace);
   const matched = namespace
     ? uniqueWorkload(
         typed.filter(
           (workload) =>
             matchesNativeNode(workload, backup.namespace) ||
-            normalizeKey(workload.instance) === namespace,
+            connectionIdentity(workload.instance) === namespace,
         ),
       )
     : undefined;

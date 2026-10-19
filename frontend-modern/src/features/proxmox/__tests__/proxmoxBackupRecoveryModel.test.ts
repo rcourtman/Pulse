@@ -106,8 +106,11 @@ describe('proxmoxBackupRecoveryModel', () => {
       snapshots: [],
       tasks: [task({ type: 'ct', instance: 'Homelab' })],
       nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
     });
-    expect(result.coverageRows.find((row) => row.workload.resourceId)?.latestTask).toBeUndefined();
+    const live = result.coverageRows.find((row) => row.workload.resourceId)!;
+    expect(live.latestTask).toBeUndefined();
+    expect(live.posture).toBe('protected');
     const orphan = result.coverageRows.find((row) => row.isOrphaned)!;
     expect(orphan.workload.instance).toBe('Homelab');
     expect(orphan.latestTask?.id).toBe('task-112');
