@@ -789,7 +789,8 @@ export const ProxmoxBackupsTable: Component<{
               <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
                 <p role="status" class="min-w-0 flex-1 basis-64">
                   Protection posture is unavailable. Pulse is showing restore evidence without
-                  guessing whether workloads are protected.
+                  guessing whether workloads are protected. Each read stops waiting after 150
+                  seconds. Retry reads Pulse's collected evidence, not a guest probe.
                 </p>
                 <button
                   type="button"

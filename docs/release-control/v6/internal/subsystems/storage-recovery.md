@@ -3581,6 +3581,27 @@ vdev layout is reported` in
 
 ## Current State
 
+### Protection evaluations settle or release their owner
+
+One 150-second read budget covers every 200-subject batch, including API-client
+preparation, the existing two-minute Retry-After allowance and the JSON bodies.
+Cancellation settles the local promise even when a transport ignores abort;
+manual refresh, organisation replacement and disposal cannot leave an abandoned
+evaluation pending. A rejected or unreadable batch cancels its siblings rather
+than retaining unfinished requests or publishing a partial fleet verdict. Late
+responses cannot restore a retired result. Timers and owner listeners are removed
+on every terminal path. Abort does not prove server-side cancellation.
+
+`useProtectionPostures.deadline.test.ts` checks the whole budget, delayed success,
+late responses, failed siblings and cancellation through the real query owner;
+`useProtectionPostures.test.ts` also checks disposal of a manual containing refresh.
+`protection-posture-deadline.cjs` consumes real partial HTTP bodies, the hook,
+query cache, Coverage and CSS by desktop keyboard and 320px touch. The existing
+30-second polling and generic stall fallback are unchanged. Failure still
+withdraws current verdicts and policy, retains independent restore evidence,
+and offers a posture-only retry. This is bounded read/retry behaviour, not guest
+thaw, filesystem liveness, native backup recovery or release acceptance.
+
 ### Unreadable protection evaluations remain unavailable (16 October 2026)
 
 The Coverage posture reader validates successful HTTP payloads before publishing

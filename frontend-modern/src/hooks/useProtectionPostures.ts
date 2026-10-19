@@ -11,6 +11,9 @@ import { apiFetchJSON } from '@/utils/apiClient';
 const PROTECTION_POSTURES_URL = '/api/recovery/postures';
 export const MAX_PROTECTION_POSTURE_BATCH_SIZE = 200;
 const REFRESH_MS = 30_000;
+// One budget for the entire evaluation, including every batch and its body.
+// Preserve the API client's existing two-minute Retry-After allowance.
+export const PROTECTION_POSTURE_READ_TIMEOUT_MS = 150_000;
 
 const EMPTY_POLICY: ProtectionPosturePolicy = {
   freshnessWindowSeconds: 0,
@@ -144,7 +147,42 @@ async function fetchProtectionPostures(
  * Fetch server-owned protection posture in bounded batches. A fleet may exceed
  * one API batch, but request count scales by 200-row pages rather than by row.
  */
-async function fetchAllProtectionPostures(
+export async function fetchAllProtectionPostures(
+  resourceIDs: readonly string[],
+  signal: AbortSignal,
+): Promise<ProtectionPosturesResponse> {
+  signal.throwIfAborted();
+  const controller = new AbortController();
+  let cancel!: () => void;
+  let timer!: ReturnType<typeof setTimeout>;
+  const interrupted = new Promise<never>((_resolve, reject) => {
+    cancel = () => {
+      reject(signal.reason);
+      controller.abort();
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    timer = setTimeout(() => {
+      reject(new Error('The protection posture read timed out.'));
+      controller.abort();
+    }, PROTECTION_POSTURE_READ_TIMEOUT_MS);
+  });
+  try {
+    // Abort alone need not settle a transport or partial body. Settle the
+    // query's own promise too, so refresh callers and abandoned org reads do
+    // not stay pending. An unreadable/denied batch cancels its siblings; no
+    // partial fleet verdict or late response can become a current result.
+    return await Promise.race([
+      interrupted,
+      readProtectionPostureBatches(resourceIDs, controller.signal),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', cancel);
+    controller.abort();
+  }
+}
+
+async function readProtectionPostureBatches(
   resourceIDs: readonly string[],
   signal: AbortSignal,
 ): Promise<ProtectionPosturesResponse> {

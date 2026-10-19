@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "base_sha": "5f438c67cc299b218d08976529a04c2f41a14cc0",
+  "verified_at": "2026-10-19T10:23:19.916278Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "100bc364f8c946b3268ce458e9eb1e1331fa8ba38362c1a120202c7051043044",
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "c72e1f6ac36130136db36d218301d0dccde7dc2a05c132417bef8741e969f764"
+  },
+  "routes": [
+    "Existing Proxmox Backups Coverage via /browser-tests/backup-location-scope.html?view=coverage: real HTTP partial JSON bodies, production posture reader/query ownership, inventory consumers and shipped CSS. No product route added."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Initial completed protection verdict beside the existing expanded restore evidence.",
+    "An unfinished posture JSON body is abandoned through the ordinary foreground/background polling lifecycle. Current verdicts and policy withdraw to Unknown with a readable unavailable/read-limit/retry notice; restore evidence is retained.",
+    "An explicit posture-only retry keeps Unknown and its warning until a complete response, disables duplicate pending retry and does not reread PVE/PBS inventory.",
+    "Completed replacement evaluation updates row, summary and expanded explanation to Attention while preserving source identity and restore evidence."
+  ],
+  "interactions": [
+    "Completed desktop keyboard journey at 3ef1e8a8159feedc2749f73145d97a36d90cf1de was retained, not replayed. Its containing process subsequently failed at an existing compact-label fixture assertion, not this completed desktop case.",
+    "Resumed only corrected WebKit 320px dark/touch journey at 5f438c67cc299b218d08976529a04c2f41a14cc0. Native taps expand Coverage, refresh collected reads and retry posture. Client exit 0, no page errors, browser/context and preview server close.",
+    "Four new narrow captures opened with native view_image. Four desktop captures retain the preceding turn's native inspection and identical final product hashes."
+  ],
+  "evidence": {
+    "runtime_commit": "29a728af843408b179c73651d5b687c846856a40",
+    "receipt_parent": "5f438c67cc299b218d08976529a04c2f41a14cc0",
+    "receipt_parent_tree": "1d6832beaa008fe66da6ffe3b319dc8043ab23b1",
+    "playwright": "1.56.1",
+    "sources": [
+      {
+        "commit": "3ef1e8a8159feedc2749f73145d97a36d90cf1de",
+        "completed_case": "chromium",
+        "browser_version": "141.0.7390.37",
+        "enclosing_client_exit": 1,
+        "limit": "The desktop case completed and cleaned up; the later narrow full-word label assertion stopped that process."
+      },
+      {
+        "commit": "5f438c67cc299b218d08976529a04c2f41a14cc0",
+        "completed_case": "webkit",
+        "browser_version": "26.0",
+        "enclosing_client_exit": 0
+      }
+    ],
+    "cases": [
+      {
+        "name": "chromium",
+        "requests": [
+          {
+            "path": "/api/backups/pve",
+            "mode": "success"
+          },
+          {
+            "path": "/api/backups/pbs",
+            "mode": "success"
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "success"
+          },
+          {
+            "path": "/api/backups/pve",
+            "mode": "stall"
+          },
+          {
+            "path": "/api/backups/pbs",
+            "mode": "stall"
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "retry",
+            "closed": true
+          }
+        ],
+        "pageErrors": [],
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "browserVersion": "141.0.7390.37",
+        "readTrace": [
+          {
+            "url": "/api/backups/pve",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pbs",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pve",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pbs",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411230000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411380000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411380000
+          }
+        ],
+        "contextClosed": true,
+        "browserClosed": true
+      },
+      {
+        "name": "webkit",
+        "requests": [
+          {
+            "path": "/api/backups/pve",
+            "mode": "success"
+          },
+          {
+            "path": "/api/backups/pbs",
+            "mode": "success"
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "success"
+          },
+          {
+            "path": "/api/backups/pve",
+            "mode": "stall"
+          },
+          {
+            "path": "/api/backups/pbs",
+            "mode": "stall"
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "stall",
+            "closed": true
+          },
+          {
+            "path": "/api/recovery/postures",
+            "mode": "retry",
+            "closed": true
+          }
+        ],
+        "pageErrors": [],
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "browserVersion": "26.0",
+        "readTrace": [
+          {
+            "url": "/api/backups/pve",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pbs",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pve",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/backups/pbs",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411200000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411230000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411380000
+          },
+          {
+            "url": "/api/recovery/postures?resourceId=east-100&limit=200",
+            "at": 1792411380000
+          }
+        ],
+        "contextClosed": true,
+        "browserClosed": true
+      }
+    ],
+    "captures": [
+      {
+        "file": "chromium-protected.png",
+        "state": "protected",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "4c567fb8eb051d7d87d5bec06bfc9e1582244f7ce08848d9d1fb27283a7d333a",
+        "source_commit": "3ef1e8a8159feedc2749f73145d97a36d90cf1de"
+      },
+      {
+        "file": "chromium-unavailable.png",
+        "state": "unavailable",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "9adde713aa4cd4eaa045398851ae968306cfe8aac4eedba2ddfcef980e48461e",
+        "source_commit": "3ef1e8a8159feedc2749f73145d97a36d90cf1de"
+      },
+      {
+        "file": "chromium-retrying.png",
+        "state": "retrying",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "efe37213652d08a887af011c762858189b01a15c943584cf835438ecf959aefb",
+        "source_commit": "3ef1e8a8159feedc2749f73145d97a36d90cf1de"
+      },
+      {
+        "file": "chromium-recovered.png",
+        "state": "recovered",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "96c4f31fb0e80f196f9a875083cc41c05cde0af087eeeaa55b6650bdce25e38e",
+        "source_commit": "3ef1e8a8159feedc2749f73145d97a36d90cf1de"
+      },
+      {
+        "file": "webkit-protected.png",
+        "state": "protected",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "1c0d439db8d93cdf9aa1f8fa0f35b9478b1fb8c3f6df31bb70d68a4323859b03",
+        "source_commit": "5f438c67cc299b218d08976529a04c2f41a14cc0"
+      },
+      {
+        "file": "webkit-unavailable.png",
+        "state": "unavailable",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "52fa11c9f314ec7789df16f4f4e5c102891a6106725914594c410b0c119e6b88",
+        "source_commit": "5f438c67cc299b218d08976529a04c2f41a14cc0"
+      },
+      {
+        "file": "webkit-retrying.png",
+        "state": "retrying",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "da27f7474028c15d4d6728f8de36faba6e807568329d732dcfb3b67ea7bc46fd",
+        "source_commit": "5f438c67cc299b218d08976529a04c2f41a14cc0"
+      },
+      {
+        "file": "webkit-recovered.png",
+        "state": "recovered",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "e878e3e8066a7f39ba949850527973a55cc2f2703ccfe70a174613d9d6508a3d",
+        "source_commit": "5f438c67cc299b218d08976529a04c2f41a14cc0"
+      }
+    ],
+    "raw_records": [
+      "BROWSER-DESKTOP-PARTIAL.json",
+      "BROWSER-NARROW.json",
+      "previous/CURRENT-EVIDENCE.tar.xz"
+    ],
+    "pixel_review": "Four narrow images inspected natively this turn; four accepted desktop images reused from preceding native inspections. See retained PIXELS.json and previous/PIXELS.json.",
+    "limits": "Browser acceptance only. Full containing source suite/build request was not admitted before execution (proof-capacity-low); no replay, native recovery, protected landing or release availability claim."
+  }
+}

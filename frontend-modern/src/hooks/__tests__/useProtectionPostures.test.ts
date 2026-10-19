@@ -415,7 +415,7 @@ describe('protection verdict ownership', () => {
     apiFetchJSONMock.mockReturnValue(new Promise(() => {}));
     const ids = Array.from({ length: MAX_PROTECTION_POSTURE_BATCH_SIZE + 1 }, (_, i) => `vm:${i}`);
     let dispose = () => {};
-    createRoot((stop) => {
+    const hook = createRoot((stop) => {
       dispose = stop;
       return useProtectionPostures(() => ids);
     });
@@ -425,8 +425,17 @@ describe('protection verdict ownership', () => {
       expect(signals[0]).toBeInstanceOf(AbortSignal);
       expect(signals[1]).toBe(signals[0]);
       expect(signals[0].aborted).toBe(false);
+      // A manual caller must also settle on disposal when the API transport
+      // ignores abort, not leave the table's containing refresh pending.
+      const refresh = hook.refetch();
+      const replacementSignals = apiFetchJSONMock.mock.calls
+        .slice(2)
+        .map(([, opts]) => opts.signal);
       dispose();
+      await refresh;
       expect(signals[0].aborted).toBe(true);
+      expect(replacementSignals).toHaveLength(2);
+      expect(replacementSignals.every((signal) => signal.aborted)).toBe(true);
     } finally {
       dispose();
     }
