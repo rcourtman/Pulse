@@ -42,10 +42,10 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "${SCRIPT_DIR}/require-safe-gh-attestation.sh"
 
-# Registry and attestation reads are idempotent and cross the public internet, where a
-# Docker Hub or GHCR 5xx is routine: one 502 during a blob copy failed the first beta's
-# release. Retry a bounded number of times. A moved tag or an invalid attestation fails
-# identically on every attempt, so a real failure is delayed by the backoff, never masked.
+# A transfer 5xx can be transient: one 502 during a blob copy failed the first beta.
+# Idempotence alone does not permit repeating a refusal or an unknown failure.
+# Retry only the recognised transfer diagnostic, never an authentication, trust or
+# policy failure, a mixed diagnostic, or a timeout/signal/nonordinary exit.
 # This script's stdout is the step output, so each attempt's stdout is captured and only
 # the successful attempt's is emitted; a half-printed failed attempt cannot leak into it.
 REGISTRY_ATTEMPTS="${VERIFY_REGISTRY_ATTEMPTS:-4}"
@@ -55,20 +55,48 @@ if [[ ! "$REGISTRY_ATTEMPTS" =~ ^[1-9][0-9]?$ || ! "$REGISTRY_WAIT_SECONDS" =~ ^
     exit 2
 fi
 
+umask 077
+diagnostic_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-registry-read.XXXXXXXX")"
+diagnostic="${diagnostic_dir}/stderr"
+: > "$diagnostic"
+cleanup_registry_diagnostic() {
+    rm -- "$diagnostic"
+    rmdir -- "$diagnostic_dir"
+}
+trap cleanup_registry_diagnostic EXIT
+
+transient_registry_diagnostic() {
+    LC_ALL=C awk '
+        tolower($0) ~ /denied|forbidden|unauthorized|insufficient_scope|authentication required|authorization failed/ { unknown = 1; next }
+        /^(ERROR: )?failed to copy: .*unexpected status.*(502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout)$/ { seen = 1; next }
+        { unknown = 1 }
+        END { exit !(seen && !unknown) }
+    ' "$diagnostic"
+}
+
 with_registry_retry() {
     local attempt=1
     local wait_seconds="$REGISTRY_WAIT_SECONDS"
-    local output
+    local output status
 
     while true; do
-        if output="$("$@")"; then
+        if output="$("$@" 2> "$diagnostic")"; then
+            cat -- "$diagnostic" >&2
             printf '%s\n' "$output"
             return 0
+        else
+            status=$?
+        fi
+        cat -- "$diagnostic" >&2
+
+        if [ "$status" -ne 1 ] || ! transient_registry_diagnostic; then
+            echo "registry read failed (exit ${status}); not retrying a refusal or unrecognised failure: $1 $2 $3" >&2
+            return "$status"
         fi
 
         if [ "$attempt" -ge "$REGISTRY_ATTEMPTS" ]; then
             echo "registry read failed after ${REGISTRY_ATTEMPTS} attempts: $1 $2 $3" >&2
-            return 1
+            return "$status"
         fi
 
         echo "registry read failed on attempt ${attempt}/${REGISTRY_ATTEMPTS}; retrying in ${wait_seconds}s: $1 $2 $3" >&2
@@ -81,7 +109,7 @@ with_registry_retry() {
 resolve_digest() {
     local reference="$1"
     local manifest
-    manifest="$(with_registry_retry docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"
+    manifest="$(with_registry_retry docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')" || return $?
     jq -er '.digest | select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' <<<"$manifest"
 }
 
@@ -92,10 +120,10 @@ verify_image() {
     local ghcr_name="ghcr.io/${OWNER}/${image}"
     local docker_tag_digest docker_version_digest ghcr_tag_digest ghcr_version_digest
 
-    docker_tag_digest="$(resolve_digest "${docker_name}:${TAG}")"
-    docker_version_digest="$(resolve_digest "${docker_name}:${VERSION}")"
-    ghcr_tag_digest="$(resolve_digest "${ghcr_name}:${TAG}")"
-    ghcr_version_digest="$(resolve_digest "${ghcr_name}:${VERSION}")"
+    docker_tag_digest="$(resolve_digest "${docker_name}:${TAG}")" || return $?
+    docker_version_digest="$(resolve_digest "${docker_name}:${VERSION}")" || return $?
+    ghcr_tag_digest="$(resolve_digest "${ghcr_name}:${TAG}")" || return $?
+    ghcr_version_digest="$(resolve_digest "${ghcr_name}:${VERSION}")" || return $?
 
     if [ "$docker_tag_digest" != "$docker_version_digest" ] || \
        [ "$docker_tag_digest" != "$ghcr_tag_digest" ] || \
@@ -117,7 +145,7 @@ verify_image() {
             --source-digest "$SOURCE_SHA" \
             --deny-self-hosted-runners \
             --predicate-type https://slsa.dev/provenance/v1 \
-            >/dev/null
+            >/dev/null || return $?
     done
 
     printf '%s=%s\n' "$output_name" "$docker_tag_digest"

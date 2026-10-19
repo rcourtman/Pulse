@@ -5770,15 +5770,24 @@ beta). That read is retried up to five times with backoff and accepts only a
 complete listing of valid pages, so a failed or truncated read can never be
 mistaken for "no existing release" and stage a duplicate draft. Exhausting the
 attempts fails the job with an explicit error.
-The release container image verification reads registry digests with `docker buildx
-imagetools inspect` and checks provenance with `gh attestation verify`, both
-against Docker Hub and GHCR. Those reads are idempotent and routinely meet a 5xx
-from the public registries (a Docker Hub 502 during a blob copy failed the first
-beta's release), so each is retried up to four times with doubling backoff from
-10 seconds. Only the successful attempt's output reaches the step output, so a
-half-printed failed attempt cannot corrupt the verified digests. A moved tag or an
-invalid attestation fails identically on every attempt and is delayed by the
-backoff, never masked.
+The release container image verification reads registry digests with `docker
+buildx imagetools inspect` and checks provenance with `gh attestation verify`,
+both against Docker Hub and GHCR. A Docker Hub 502 during a blob copy failed the
+first beta, but idempotence alone does not permit repeating a refusal. Only an
+exit-1 blob-transfer diagnostic ending in HTTP 502/503/504 can retry, up to four
+times with doubling backoff from 10 seconds. Every diagnostic line must match
+the recognised transfer form. Access/authentication refusals, mixed or unknown
+errors, trust/policy failures and nonordinary exits stop immediately, preserving
+the command exit and diagnostic, without another registry/reference. Only a
+successful attempt's stdout is admitted; private diagnostic staging is removed
+on ordinary exit. Digest equality, exact source and signer policy are unchanged.
+
+`scripts/release_control/verify_release_container_images_test.py` executes the
+actual verifier with inert Docker/attestation peers: single-call refusal,
+partial failed output, exact same-read bounded 5xx recovery, exhaustion,
+preserved nonordinary numeric exits and unchanged digest/provenance policy.
+These controls neither resolve registry access nor establish live continuity,
+publication or installed health.
 The release backend test runner warms the `pulse-agent` build cache once, after
 compiling the race-enabled API test binary and before any shard starts, with
 the full CPU count. `TestHostAgentCredentialFileHandoff` compiles the agent
