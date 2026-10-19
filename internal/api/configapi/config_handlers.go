@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
@@ -223,14 +224,18 @@ type ConfigHandlers struct {
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     GuestMetadataReloader
 	runtime                  RuntimeDependencies
-	setupTokens              map[string]*SetupTokenRecord      // Map of token hash -> setup token details
-	recentSetupTokens        map[string]RecentSetupTokenRecord // Temporary map for recently used setup tokens (grace period)
-	codeMutex                sync.RWMutex                      // Mutex for thread-safe code access
-	clusterDetectMutex       sync.Mutex
-	lastClusterDetection     map[string]time.Time
-	recentAutoRegistered     map[string]time.Time
-	recentAutoRegMutex       sync.Mutex
-	autoRegisterMutex        sync.Mutex
+	// A per-handler construction seam lets token setup's persistence/error
+	// boundary be exercised with in-process HTTP, without a shared global hook.
+	// Nil always selects the ordinary PBS client and its TLS/authentication.
+	pbsSetupClientFactory func(pbs.ClientConfig) (*pbs.Client, error)
+	setupTokens           map[string]*SetupTokenRecord      // Map of token hash -> setup token details
+	recentSetupTokens     map[string]RecentSetupTokenRecord // Temporary map for recently used setup tokens (grace period)
+	codeMutex             sync.RWMutex                      // Mutex for thread-safe code access
+	clusterDetectMutex    sync.Mutex
+	lastClusterDetection  map[string]time.Time
+	recentAutoRegistered  map[string]time.Time
+	recentAutoRegMutex    sync.Mutex
+	autoRegisterMutex     sync.Mutex
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance

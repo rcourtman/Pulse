@@ -579,7 +579,11 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("PBS: Attempting turnkey token creation via API")
 
 			// Try to create a token using the provided credentials
-			pbsClient, err := pbs.NewClient(pbs.ClientConfig{
+			newPBSClient := pbs.NewClient
+			if h.pbsSetupClientFactory != nil {
+				newPBSClient = h.pbsSetupClientFactory
+			}
+			pbsClient, err := newPBSClient(pbs.ClientConfig{
 				Host:      host,
 				User:      pbsUser,
 				Password:  req.Password,

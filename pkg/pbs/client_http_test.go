@@ -100,6 +100,72 @@ func TestSetupMonitoringAccessCollisionKeepsExistingReader(t *testing.T) {
 	}
 }
 
+func TestSetupMonitoringAccessInProcess(t *testing.T) {
+	for _, tc := range []struct {
+		name, refusedStep string
+		userExists        bool
+	}{
+		{name: "fresh-token"},
+		{name: "existing-user-new-token", userExists: true},
+		{name: "user-acl-refused", refusedStep: "user-acl"},
+		{name: "token-create-refused", refusedStep: "token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var steps []string
+			client, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Authorization"), "PBSAPIToken=root@pam!fixture-admin:") {
+					t.Fatalf("unexpected setup request: %s %s", r.Method, r.URL.Path)
+				}
+				if err := r.ParseForm(); err != nil {
+					t.Fatal(err)
+				}
+				step, body, status := "", `{"data":null}`, http.StatusOK
+				switch r.URL.Path {
+				case "/api2/json/access/users":
+					step = "user"
+					if tc.userExists {
+						status, body = http.StatusBadRequest, "user already exists"
+					}
+				case "/api2/json/access/acl":
+					step = "user-acl"
+					if r.Form.Get("auth-id") == "pulse-monitor@pbs!reader" {
+						step = "token-acl"
+					}
+					if r.Form.Get("role") != "Audit" || r.Form.Get("path") != "/" {
+						t.Fatal("setup changed the existing Audit role/scope")
+					}
+				case "/api2/json/access/users/pulse-monitor@pbs/token/reader":
+					step, body = "token", `{"data":{"tokenid":"pulse-monitor@pbs!reader","value":"fixture-new-secret"}}`
+				default:
+					t.Fatalf("unexpected setup endpoint: %s", r.URL.Path)
+				}
+				steps = append(steps, step)
+				if step == tc.refusedStep {
+					status, body = http.StatusForbidden, "fixture permission refused"
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+			})
+			id, value, err := client.SetupMonitoringAccess(context.Background(), "reader")
+			wantSteps := []string{"user", "user-acl", "token", "token-acl"}
+			if tc.refusedStep != "" {
+				if err == nil || errors.Is(err, ErrMonitoringTokenExists) || id != "" || value != "" {
+					t.Fatalf("non-collision refusal became successful setup/collision: %v", err)
+				}
+				wantSteps = wantSteps[:slices.Index(wantSteps, tc.refusedStep)+1]
+			} else if err != nil || id != "pulse-monitor@pbs!reader" || value != "fixture-new-secret" {
+				t.Fatalf("new token setup did not succeed: id=%q err=%v", id, err)
+			}
+			if !slices.Equal(steps, wantSteps) {
+				t.Errorf("setup steps = %v, want %v", steps, wantSteps)
+			}
+		})
+	}
+}
+
 func newRootNodeNameClient(t *testing.T, host string) *Client {
 	t.Helper()
 	client, err := NewClient(ClientConfig{

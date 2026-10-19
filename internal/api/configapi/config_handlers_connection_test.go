@@ -25,10 +25,27 @@ import (
 // Re-adding a PBS through a different address must not rotate a token used by
 // the existing connection, or silently persist the administrator password.
 func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
+	testAddNodePBSTokenCollision(t, false)
+}
+
+// The credential regression is also testable without a listening socket. Both
+// modes run the real PBS setup/request decoder, add handler and persistence.
+// This mode substitutes an already-authenticated in-process HTTP transport;
+// it does not assert a TLS handshake or password authentication result.
+func TestHandleAddNodePBSTokenCollisionInProcess(t *testing.T) {
+	testAddNodePBSTokenCollision(t, true)
+}
+
+type pbsSetupRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f pbsSetupRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
+	t.Helper()
 	const oldToken = "fixture-existing-secret"
 	var revoked atomic.Bool
 	var creates, deletes, reloads atomic.Int32
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	provider := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.URL.Path == "/api2/json/access/ticket":
@@ -58,8 +75,32 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 			t.Errorf("unexpected PBS request: %s %s", r.Method, r.URL.Path)
 			http.Error(w, "unexpected fixture request", http.StatusNotFound)
 		}
-	}))
-	defer server.Close()
+	})
+	host, fingerprint := "https://pbs-fixture.invalid:8007", ""
+	var attachTransport func(*pbs.Client)
+	if inProcess {
+		attachTransport = func(client *pbs.Client) {
+			setUnexportedField(t, client, "httpClient", &http.Client{Transport: pbsSetupRoundTrip(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host != "pbs-fixture.invalid:8007" {
+					t.Fatalf("unexpected fixture destination: %s", r.URL.Host)
+				}
+				if r.Body != nil {
+					defer r.Body.Close()
+				}
+				rec := httptest.NewRecorder()
+				provider.ServeHTTP(rec, r)
+				response := rec.Result()
+				response.Request = r
+				return response, nil
+			})})
+		}
+	} else {
+		server := httptest.NewTLSServer(provider)
+		t.Cleanup(server.Close)
+		host = server.URL
+		fingerprint = fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
+		attachTransport = func(*pbs.Client) {}
+	}
 
 	cfg := &config.Config{DataPath: t.TempDir(), PublicURL: "https://pulse.example.test", PBSInstances: []config.PBSInstance{{
 		Name: "existing", Host: "https://existing-pbs.example.test:8007", TokenName: "pulse-monitor@pbs!pulse-pulse-example-test", TokenValue: oldToken, VerifySSL: true,
@@ -67,6 +108,18 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
 	h := newTestConfigHandlers(t, cfg)
 	h.reloadFunc = func() error { reloads.Add(1); return nil }
+	if inProcess {
+		h.pbsSetupClientFactory = func(clientConfig pbs.ClientConfig) (*pbs.Client, error) {
+			if clientConfig.Host != host || clientConfig.User != "root@pam" || clientConfig.Password != "fixture-administrator-password" {
+				t.Fatal("setup did not forward the submitted credentials/endpoint")
+			}
+			client, err := pbs.NewClient(pbs.ClientConfig{Host: host, TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err == nil {
+				attachTransport(client)
+			}
+			return client, err
+		}
+	}
 	if err := h.defaultPersistence.SaveNodesConfig(nil, cfg.PBSInstances, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +127,12 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: cfg.PBSInstances[0].TokenName, TokenValue: oldToken,
-		VerifySSL: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))})
+	reader, err := pbs.NewClient(pbs.ClientConfig{Host: host, TokenName: cfg.PBSInstances[0].TokenName, TokenValue: oldToken,
+		VerifySSL: true, Fingerprint: fingerprint})
 	if err != nil {
 		t.Fatal(err)
 	}
+	attachTransport(reader)
 	checkReader := func() {
 		t.Helper()
 		if version, err := reader.GetVersion(context.Background()); err != nil || version == nil || version.Version != "3.4" {
@@ -86,7 +140,7 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 		}
 	}
 	checkReader()
-	body, _ := json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": server.URL,
+	body, _ := json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": host,
 		"user": "root@pam", "password": "fixture-administrator-password", "verifySSL": true})
 	rec := httptest.NewRecorder()
 	h.HandleAddNode(rec, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
@@ -112,7 +166,7 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 
 	// The suggested existing manual-token route remains usable, without an
 	// extra provisioning attempt or retaining the administrator password.
-	body, _ = json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": server.URL,
+	body, _ = json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": host,
 		"tokenName": cfg.PBSInstances[0].TokenName, "tokenValue": oldToken, "verifySSL": true})
 	manual := httptest.NewRecorder()
 	h.HandleAddNode(manual, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
@@ -122,6 +176,10 @@ func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
 	added := cfg.PBSInstances[1]
 	if added.Password != "" || added.User != "" || added.TokenValue != oldToken || !added.VerifySSL || creates.Load() != 1 || deletes.Load() != 0 {
 		t.Fatal("manual setup changed access, TLS, or administrator credential persistence")
+	}
+	saved, err = h.defaultPersistence.LoadNodesConfig()
+	if err != nil || len(saved.PBSInstances) != 2 || saved.PBSInstances[1].TokenValue != oldToken || saved.PBSInstances[1].Password != "" || !saved.PBSInstances[1].VerifySSL {
+		t.Fatal("manual setup did not persist the deliberate token/verification configuration")
 	}
 	checkReader()
 	t.Logf("PBS_SETUP_MANUAL_WIRE=%s", base64.StdEncoding.EncodeToString(manual.Body.Bytes()))
