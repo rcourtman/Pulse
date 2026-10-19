@@ -7789,6 +7789,18 @@ before installation if the server cannot provide that binary. Both checks must
 follow redirects to the operator's final Pulse origin before deciding
 reachability or inspecting checksum metadata; an HTTP redirect accepted as a
 successful transport response is not the agent artifact contract.
+The health request has a ten-second total deadline, including redirects,
+headers and response body, as well as its five-second connection deadline.
+A timeout is `pulse_unreachable` and a failed preflight (exit 14 when the
+artifact checks succeed), never permission to install or restart the agent.
+The existing thirty-second artifact HEAD deadlines, checksum checks, ambient
+curl-configuration isolation and explicitly selected TLS policy are unchanged.
+`scripts/tests/test_agent_preflight_deadline.py` exercises the whole installer
+with closed command doubles; `TestInstallSHPreflightHealthDeadline` in
+`scripts/installtests/install_sh_test.go` uses real curl against silent-header
+and stalled-body HTTP fixtures, checking terminal failure, continued artifact
+inspection and preserved state. These are preflight controls, not installed
+upgrade or reporter-recovery acceptance.
 A server may only hand out an agent binary that carries its own agent version.
 Local agent artifacts are build outputs that nothing refreshes on their own, so
 they go stale silently, and staleness is not cosmetic: the installer renders its

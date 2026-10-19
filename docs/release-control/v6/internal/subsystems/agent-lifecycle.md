@@ -151,6 +151,20 @@ and the full-installer HTTP/HTTPS controls in `install_sh_test.go` retain explic
 CA/insecure choices, read-only preflight, private-file credentials and unchanged
 download verification. This is not installed renewal or appliance acceptance.
 
+### Read-only preflight health reads have a total deadline
+
+`scripts/install.sh --preflight-only` bounds the entire health GET to ten
+seconds, including redirects and stalled headers/body, rather than bounding
+only connection establishment. A health timeout remains `pulse_unreachable`
+and failed preflight, even when the subsequent checksum-bearing artifact HEAD
+succeeds. It does not activate, replace or restart the collector. Explicit CA
+and insecure choices, ambient curl isolation and the existing artifact deadline
+remain unchanged. The closed whole-installer controls in
+`scripts/tests/test_agent_preflight_deadline.py` and real-curl
+`TestInstallSHPreflightHealthDeadline` retain success/failure propagation and
+operator-state preservation. Native installation and upgrade recovery remain
+separate obligations.
+
 ### NAS installation preserves shared boot-file ownership
 
 Unraid and QNAP registration uses the same exact-entry parser as removal, not
