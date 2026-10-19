@@ -508,7 +508,13 @@ PY
             ])
             self.assertNotIn(AGENT_TOKEN.encode(), result.stdout + result.stderr)
         actual = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', actual)
+        # The installer now validates option values before assigning them.
+        # Check that admission and file handoff together, not an obsolete
+        # unguarded one-line spelling; keep failures from dumping the installer.
+        branches = re.findall(r"(?m)^\s*--token-file\)([^\n]+)", actual)
+        self.assertEqual(len(branches), 1, "expected one token-file parser branch")
+        self.assertRegex(branches[0],
+                         r'require_option_value "\$@";\s+TOKEN_FILE_PATH="\$2";\s+shift 2\s*;;')
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', actual)
 
     def test_failed_installer_download_is_nonzero(self):
