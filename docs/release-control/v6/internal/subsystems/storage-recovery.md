@@ -7774,3 +7774,9 @@ unavailability retains its existing independent meaning. No expiry threshold,
 collection metadata, polling cadence, action or native guest recovery is changed.
 `diskSourceFreshness.test.ts`, `DiskList.test.tsx`, `GuestPhysicalDisks.test.tsx`
 and `disk-source-freshness.cjs` exercise the source/HTTP/consumer boundaries.
+
+SMART metric labels explicitly wrap even inside the Storage table's inherited
+nowrap context. The last-known qualifier must remain fully readable on a phone;
+`DiskDetail.test.tsx` protects that context and the HTTP browser protocol checks
+label bounds in both Storage and the guest Overview. Pixel inspection, not only
+page overflow or DOM visibility, is required for this reading qualification.

@@ -10483,3 +10483,7 @@ and preserves recorded adverse evidence. No new frontend route, collection polic
 or browser-side freshness threshold is introduced. Source-bound desktop/320px
 HTTP journeys live in `disk-source-freshness.cjs`; component and presentation
 regressions cover replacement, retained risk and recovery in existing details.
+
+`StorageDetailMetricCard` owns its label wrapping rather than inheriting a parent
+table's nowrap setting. Long safety qualifiers remain inside the card at narrow
+widths; this leaves ordinary table rows dense without clipping expanded evidence.

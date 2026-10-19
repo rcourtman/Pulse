@@ -232,6 +232,15 @@ function serve(req, res, next) {
         await expect(detail()).toContainText('current disk health is unconfirmed');
         await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(0);
         await expect(page.getByText('Last known temperature', { exact: true })).toBeVisible();
+        assert(
+          await page
+            .getByText('Last known temperature', { exact: true })
+            .evaluate(
+              (label) =>
+                label.scrollWidth <= label.clientWidth && label.scrollHeight <= label.clientHeight,
+            ),
+          'The last-known qualifier fits inside its SMART card, including inside a nowrap table',
+        );
         const value = page
           .getByText('CRC Errors', { exact: true })
           .locator('..')
