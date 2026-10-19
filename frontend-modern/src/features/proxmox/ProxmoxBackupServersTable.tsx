@@ -529,6 +529,8 @@ export function ProxmoxBackupServersTable(props: {
                     capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
                       : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
+                  const capacityLabel = () =>
+                    capacityEvidence().state === 'unavailable' ? 'Unavailable' : 'Unknown';
                   const rowIdentity = { id: row.key };
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
@@ -659,14 +661,20 @@ export function ProxmoxBackupServersTable(props: {
                               <Show
                                 when={capacityEvidence().state === 'available'}
                                 fallback={
-                                  <span
-                                    class="text-[11px] text-amber-600 dark:text-amber-300"
+                                  <button
+                                    type="button"
+                                    class="min-h-8 rounded-sm text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-amber-300"
                                     title={capacityNotice()}
+                                    aria-label={`Explain ${capacityLabel().toLowerCase()} capacity for ${row.serverName} / ${datastore().name}`}
+                                    aria-expanded={isExpanded()}
+                                    aria-controls={detailRowId()}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      detail.toggle(rowIdentity);
+                                    }}
                                   >
-                                    {capacityEvidence().state === 'unavailable'
-                                      ? 'Unavailable'
-                                      : 'Unknown'}
-                                  </span>
+                                    {capacityLabel()}
+                                  </button>
                                 }
                               >
                                 <div class="flex items-center justify-end gap-2">
@@ -747,6 +755,43 @@ export function ProxmoxBackupServersTable(props: {
                         detailRowId={detailRowId()}
                         colSpan={visibleColumns().length}
                         initialShowHostDetails
+                        beforeDetails={
+                          <Show when={row.datastore}>
+                            {(datastore) => (
+                              <section
+                                aria-label={`Datastore capacity for ${row.serverName} / ${datastore().name}`}
+                                class="mb-3 min-w-0 rounded-md border border-border p-3 text-xs text-base-content [overflow-wrap:anywhere]"
+                              >
+                                <h3 class="font-semibold">Datastore capacity</h3>
+                                <dl class="mt-2 space-y-1">
+                                  <div>
+                                    <dt class="inline text-muted">Backup server: </dt>
+                                    <dd class="inline">{row.serverName}</dd>
+                                  </div>
+                                  <div>
+                                    <dt class="inline text-muted">Datastore: </dt>
+                                    <dd class="inline">{datastore().name}</dd>
+                                  </div>
+                                </dl>
+                                <Show
+                                  when={capacityEvidence().state === 'available'}
+                                  fallback={
+                                    <p class="mt-2 text-amber-600 dark:text-amber-300">
+                                      {capacityNotice()} Server reachability does not confirm a
+                                      successful datastore capacity read.
+                                    </p>
+                                  }
+                                >
+                                  <p class="mt-2">
+                                    Used: <PlatformTablePercentValue value={pct()} /> ·{' '}
+                                    {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
+                                    {formatPlatformTableBytesValue(datastore().total)}
+                                  </p>
+                                </Show>
+                              </section>
+                            )}
+                          </Show>
+                        }
                         onClose={() => detail.close(rowIdentity)}
                       />
                     </>

@@ -6088,6 +6088,7 @@
               "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformResourceDetailTableRow.test.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
@@ -8405,6 +8406,7 @@
             "exact_files": [
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.capacity.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
@@ -8773,6 +8775,7 @@
               "frontend-modern/src/features/kubernetes/__tests__/KubernetesServicesTable.test.tsx",
               "frontend-modern/src/features/kubernetes/__tests__/KubernetesStorageTable.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.capacity.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.taskDetail.test.tsx",

@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
@@ -73,6 +73,7 @@ describe('PBS datastore capacity evidence', () => {
     ));
     const cell = usedCell(container);
     await waitFor(() => expect(within(cell).getByText(label)).toBeInTheDocument());
+    expect(within(cell).getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     expect(cell.textContent).not.toMatch(/%|0 B/);
     expect(cell.querySelector('.bg-emerald-500')).toBeNull();
     expect(cell.querySelector('[title]')?.getAttribute('title')).toContain(
@@ -114,6 +115,84 @@ describe('PBS datastore capacity evidence', () => {
       <ProxmoxBackupServersTable servers={[server()]} layoutWidth={() => 1200} />
     ));
     expect(usedCell(container).textContent).toBe('No datastore data');
+  });
+
+  it.each(['direct', 'canonical'] as const)(
+    'explains %s capacity failures in the same open, named datastore disclosure',
+    async (transport) => {
+      const present = (store: ResourcePBSDatastore): Resource => {
+        const resource = server(store);
+        if (transport === 'direct') return resource;
+        const { pbs, ...base } = resource;
+        return canonicalizeRealtimeResource({ ...base, platformData: { sources: ['pbs'], pbs } });
+      };
+      const [servers, setServers] = createSignal([
+        present(datastore({ status: 'unavailable', error: 'PRIVATE_PROVIDER_ERROR_SENTINEL' })),
+      ]);
+      const { container } = render(() => (
+        <ProxmoxBackupServersTable servers={servers()} layoutWidth={() => 320} />
+      ));
+      const button = within(usedCell(container)).getByRole('button', {
+        name: 'Explain unavailable capacity for pbs-capacity / tank',
+      });
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      const click = new MouseEvent('click', { bubbles: true });
+      const stop = vi.spyOn(click, 'stopPropagation');
+      button.dispatchEvent(click);
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      const region = within(container).getByRole('region', {
+        name: 'Datastore capacity for pbs-capacity / tank',
+      });
+      expect(region.closest('td')).toHaveAttribute('id', button.getAttribute('aria-controls'));
+      expect(region).toHaveTextContent('Datastore capacity is unavailable.');
+      expect(region).toHaveTextContent('This does not mean the datastore is empty.');
+      expect(region).toHaveTextContent('Server reachability does not confirm a successful');
+      expect(region).toHaveTextContent('Backup server: pbs-capacity');
+      expect(region).toHaveTextContent('Datastore: tank');
+      expect(region.textContent).not.toMatch(/40\.0%|0 B/);
+      button.focus();
+      setServers([present(datastore({ total: 0, used: 0, usagePercent: 0 }))]);
+      await waitFor(() => expect(region).toHaveTextContent('Datastore capacity is unknown.'));
+      expect(within(usedCell(container)).getByRole('button')).toBe(button);
+      expect(button).toHaveFocus();
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(within(container).getByRole('region')).toBe(region);
+      expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
+      setServers([present(datastore({ used: 0, usagePercent: 0 }))]);
+      await waitFor(() => expect(region).toHaveTextContent('Used: 0.0%'));
+      expect(region).not.toHaveTextContent('does not mean the datastore is empty');
+      expect(within(container).getByRole('region')).toBe(region);
+      expect(within(usedCell(container)).queryByRole('button')).toBeNull();
+    },
+  );
+
+  it('keeps each datastore explanation distinct and treats reported names as text', () => {
+    const resource = server(datastore({ status: 'unavailable' }));
+    const secondName = '<img src=x onerror=alert(1)>' + 'long-name-'.repeat(20);
+    resource.pbs!.datastores!.push(datastore({ name: secondName, status: 'unknown' }));
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable servers={[resource]} layoutWidth={() => 1200} />
+    ));
+    const open = (name: string) => {
+      fireEvent.click(
+        within(container).getByRole('button', {
+          name: `Explain ${name === 'tank' ? 'unavailable' : 'unknown'} capacity for pbs-capacity / ${name}`,
+        }),
+      );
+      return within(container).getByRole('region', {
+        name: `Datastore capacity for pbs-capacity / ${name}`,
+      });
+    };
+    expect(open('tank')).toHaveTextContent('Datastore capacity is unavailable.');
+    const region = open(secondName);
+    expect(region).toHaveTextContent(secondName);
+    expect(region).toHaveTextContent('Datastore capacity is unknown.');
+    expect(region.querySelector('img')).toBeNull();
+    expect(within(container).getAllByRole('region')).toHaveLength(1);
+    const details = region.closest('td')!;
+    expect(details.colSpan).toBe(container.querySelector('thead tr')!.children.length);
   });
 
   it.each(['direct', 'canonical'] as const)(

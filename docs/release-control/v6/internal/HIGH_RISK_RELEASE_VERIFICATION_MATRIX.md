@@ -8,6 +8,20 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## PBS datastore capacity access
+
+Build `build-pbs-capacity-details.mjs <full-source-SHA>` and run
+`pbs-capacity-details.cjs`. On desktop keyboard and 320px touch, activate the
+Unavailable/Unknown capacity cell. Its existing full-width row disclosure must
+name the correct server/store and explain why unavailable is not empty, without
+raw provider errors, executable names, clipped text or horizontal overflow.
+Switch between same-server stores, retain the same open disclosure through
+unavailable/unknown replacements, then replace it with measured zero and high
+usage. Check Enter, Space, tap, expanded/controls semantics, visible focus and
+close-to-disclosure focus return and visible state in the accessible name, including when the warning button disappears
+after recovery. Verify actual captures. All fixture API requests must be GETs;
+this is read access, not native PBS capacity recovery or a guest operation.
+
 ## Coverage backup job diagnostics
 
 Run `ProxmoxCoverageTable.taskDetail.test.tsx` with the real inventory parser

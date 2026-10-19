@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### PBS datastore capacity explanations are not hover-only
+
+Unavailable and Unknown capacity cells open the existing full-width resource
+row disclosure using a named native button with expanded/controls semantics.
+Its accessible name includes the visible Unavailable/Unknown state. The control
+contains its click so the summary row cannot toggle the disclosure again.
+The disclosure names the backup server and datastore, explains that a failed or
+unknown capacity read is not an empty datastore, and does not confuse server
+reachability with a successful datastore read. Fixed copy does not expose raw
+provider errors; reported names remain escaped, wrapping text. Ordinary same-row
+updates replace the explanation with measured capacity, including a genuine
+zero, without closing the disclosure. Other datastores remain independently
+attributed. No probe, backup, guest action or new route is added.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-capacity-details.cjs`
+exercise the production table, canonical adapter and row-specific context at
+desktop and 320px touch widths. Synthetic observations are not native datastore
+recovery or guest-safety acceptance.
+
 ### Restore-point details remain readable without hover
 
 By date and expanded Coverage show the full reported PVE archive identifier
