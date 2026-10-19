@@ -76,6 +76,8 @@ export interface CoverageTask {
   label: string;
   startedAt: string;
   startedMs?: number;
+  /** Literal provider end time; absence is not a running-duration measurement. */
+  endedAt?: string;
   /** Original provider history read, which does not advance on a UI refresh. */
   observedAt?: string;
   durationSeconds?: number;
@@ -611,10 +613,17 @@ function taskLabel(task: BackupTask): string {
   return task.status || 'Unknown';
 }
 
-function taskDurationSeconds(task: BackupTask): number | undefined {
+function taskDurationSeconds(task: BackupTask, nowMs: number): number | undefined {
   const start = parseTimestampMs(task.startTime);
   const end = parseTimestampMs(task.endTime);
-  if (start === undefined || end === undefined || end <= start) return undefined;
+  if (
+    start === undefined ||
+    end === undefined ||
+    getRecoveryAgeBand(start, nowMs) === 'unknown' ||
+    getRecoveryAgeBand(end, nowMs) === 'unknown' ||
+    end < start
+  )
+    return undefined;
   return Math.round((end - start) / 1000);
 }
 
@@ -821,8 +830,9 @@ export function buildProxmoxBackupRecoveryModel(
       label: taskLabel(task),
       startedAt: task.startTime,
       startedMs,
+      endedAt: task.endTime,
       observedAt: task.observedAt,
-      durationSeconds: taskDurationSeconds(task),
+      durationSeconds: taskDurationSeconds(task, input.nowMs),
       error: task.error,
       statusErrorConflict: taskStatusErrorConflict(task),
     };
@@ -923,9 +933,12 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
+    row.latestTask?.id,
     row.latestTask?.status,
     row.latestTask?.instance,
     row.latestTask?.node,
+    row.latestTask?.startedAt,
+    row.latestTask?.endedAt,
     row.latestTask?.error,
     row.taskChronologyUnknown ? 'Latest backup job unknown' : undefined,
     ...(row.taskChronologyUnknown ? (row.unresolvedTasks ?? []) : []).flatMap((task) => [
@@ -935,6 +948,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
       task.instance,
       task.node,
       task.startedAt,
+      task.endedAt,
       task.observedAt,
       task.error,
     ]),

@@ -928,6 +928,45 @@ describe('backup job observation provenance', () => {
     expect(jobs).toEqual(original);
   });
 
+  it('retains and searches the selected native job identity and recorded end, not another job', () => {
+    const selected = task({
+      id: 'UPID:minipc:native-selected-job',
+      endTime: '2026-05-25T02:15:00Z',
+    });
+    const row = model([
+      task({
+        id: 'other-native-job',
+        startTime: '2026-05-24T01:00:00Z',
+        endTime: '2026-05-24T02:00:00Z',
+      }),
+      selected,
+    ]).coverageRows[0];
+    expect(row.latestTask).toMatchObject({ id: selected.id, endedAt: selected.endTime });
+    expect(coverageRowMatchesSearch(row, selected.id)).toBe(true);
+    expect(coverageRowMatchesSearch(row, selected.endTime!)).toBe(true);
+    expect(coverageRowMatchesSearch(row, 'other-native-job')).toBe(false);
+  });
+
+  it.each([
+    [undefined, undefined],
+    ['', undefined],
+    ['0001-01-01T00:00:00Z', undefined],
+    ['not-a-date', undefined],
+    ['2026-05-25T01:59:59Z', undefined],
+    ['2026-05-27T02:05:00Z', undefined],
+    ['2026-05-25T02:00:00Z', 0],
+    ['2026-05-25T02:05:01Z', 301],
+  ] as const)(
+    'retains raw end %j but derives only a valid recorded duration',
+    (endTime, durationSeconds) => {
+      const row = model([task({ startTime: '2026-05-25T02:00:00Z', endTime })]).coverageRows[0];
+      expect(row.latestTask?.endedAt).toBe(endTime);
+      expect(row.latestTask?.durationSeconds).toBe(durationSeconds);
+      expect(row.latestTask?.label).toBe('OK');
+      expect(row.posture).toBe('unknown');
+    },
+  );
+
   it.each([undefined, '', '0001-01-01T00:00:00Z', 'invalid', '2027-01-01T00:00:00Z'])(
     'does not manufacture an observation when its recorded value is %j',
     (observedAt) => {

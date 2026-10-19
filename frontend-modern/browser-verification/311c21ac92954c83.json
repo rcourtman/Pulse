@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "base_sha": "fab36ddb36928298ac2d40b6327d0832e107f28f",
+  "verified_at": "2026-10-19T04:12:53.764163Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "7e598f10901f045ff61641ab2135a62e94ebd104672c0ac793db31e68723b8c1",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b04be4feff9c63287b5b45e50dfeea2633427581efa1fb110d790deb3fc9a53d"
+  },
+  "routes": [
+    "/proxmox/backups/coverage \u2014 ordinary inventory readers, recovery model and existing Coverage disclosure with synthetic GET-only history"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Native latest job ID, reported end and recorded duration are distinct from start and original observation; seconds and local timezone are visible.",
+    "Missing, invalid, zero-date, reversed and future end times retain unknown timing; a valid equal-time interval shows 0s. No live elapsed time is invented.",
+    "Unorderable starts retain collected job details without a latest-job claim; literal markup-shaped provider end remains text.",
+    "All six desktop/320px final-runtime captures opened natively; no field/page horizontal overflow or clipped non-whitespace glyphs."
+  ],
+  "interactions": [
+    "Desktop keyboard disclosure and narrow WebKit touch on the visible row; exact native ID search is local and distinguishes a different job.",
+    "Ordinary refresh uses only PVE/PBS/posture GETs and keeps the existing row open through running, invalid, unresolved and recovered observations.",
+    "A later valid record withdraws prior raw/unknown timing in the same open disclosure without changing protection posture or artifact completion."
+  ],
+  "evidence": {
+    "protocol": "frontend-modern/browser-tests/backup-job-interval.cjs",
+    "playwright": "1.56.1",
+    "desktop_source_sha": "022a355f3550e159fa7187d2d9951f85543f1f8e",
+    "narrow_source_sha": "fab36ddb36928298ac2d40b6327d0832e107f28f",
+    "desktop_browser": "141.0.7390.37",
+    "narrow_browser": "26.0",
+    "runtime_content_identical": true,
+    "desktop_attempt": "Completed desktop case in an overall failed attempt; the narrow selector timeout is retained in the lane dossier.",
+    "narrow_attempt": "Corrected touch selector, narrow-only run passed. No desktop replay or runtime change.",
+    "native_pixel_review": "Six retained PNGs inspected using native view_image; detailed observations in the lane outcome PIXELS.json.",
+    "captures": [
+      {
+        "file": "browser/desktop-recorded.png",
+        "sha256": "6b9b9eeff2f96d744f519afd5c6a55bd7bd68a35f25d1e4e370a1a2021196c31"
+      },
+      {
+        "file": "browser/desktop-not-reported.png",
+        "sha256": "21748e10f1b2364fd3018cac3dcb402e66b5f39b6f7eb83d258e8fae743b39fb"
+      },
+      {
+        "file": "browser/desktop-invalid-end.png",
+        "sha256": "f335aee1bdfbfecd5b112d8bda0fb6a3d39d26fb7375136c32ad0605d26b4bc8"
+      },
+      {
+        "file": "browser/narrow-recorded.png",
+        "sha256": "36f766a3ec35fcbfdf9415c2637d876a3a20aec87f969618ea6caf5a94bed604"
+      },
+      {
+        "file": "browser/narrow-not-reported.png",
+        "sha256": "8219ff2c9940912bf451c10cba8af8ed1ad31528da39cb5a1f5271e6a19da66b"
+      },
+      {
+        "file": "browser/narrow-invalid-end.png",
+        "sha256": "58d14715272892487fb5dbb5a7121c61f881cba715df197baa3c130c71d5e0e3"
+      }
+    ],
+    "cleanup": {
+      "desktop": true,
+      "narrow": true,
+      "first_server": true,
+      "narrow_server": true
+    },
+    "limits": "Collected-history presentation, not native backup/restore, guest thaw, filesystem liveness or release availability."
+  }
+}

@@ -8908,3 +8908,18 @@ stays Unknown. `ProxmoxCoverageTable.taskDetail.test.tsx` covers raw-status
 visibility and same-open withdrawal; the read-only `backup-failure-status.cjs`
 protocol checks actual HTTP/search/disclosure consumers at desktop and 320px.
 Neither establishes native backup, guest safety or installed fleet recovery.
+
+### Proxmox Coverage job identity and interval remain source-scoped
+
+The existing expanded Coverage evidence shows the selected collected job ID and
+reported end/duration; local search includes that selected ID and recorded
+start/end. The unchanged API identifier can contain an instance prefix and a
+per-guest suffix around its parent UPID; no raw-UPID extraction is implied.
+Unorderable jobs keep their individual raw values without becoming a
+latest result. Invalid, missing, future or reversed times cannot produce an
+elapsed duration. Zero-second recorded intervals remain explicit. Original job
+connection/node and observation provenance do not change, and job timing does
+not settle workload protection, current guest state, thaw or filesystem writes.
+`ProxmoxCoverageTable.taskDetail.test.tsx` exercises literal wrapping and live
+replacement; `backup-job-interval.cjs` consumes the real HTTP/model/table surface
+at desktop and 320px. No resource identity, routing, polling or operation changes.

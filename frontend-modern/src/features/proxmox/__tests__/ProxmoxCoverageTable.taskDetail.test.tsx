@@ -53,6 +53,87 @@ afterEach(() => {
 
 describe('expanded Coverage backup job evidence', () => {
   it.each([320, 640, 1365])(
+    'keeps the native job ID, reported end and duration separate from observation time at %i px',
+    (width) => {
+      const id = 'UPID:pve-1:0000001A:0000002B:0000003C:vzdump:100:backup@pve:';
+      const endTime = '2026-10-04T11:05:00Z';
+      const observedAt = '2026-10-04T11:30:00Z';
+      const { toggle } = mount([identityTask({ id, endTime, observedAt })], width);
+      fireEvent.click(toggle);
+      const detail = screen.getByRole('region', { name: 'Latest backup job' });
+      const jobID = within(detail).getByText('Job ID').nextElementSibling;
+      expect(jobID?.textContent).toBe(id);
+      expect(jobID).toHaveClass('wrap-anywhere');
+      expect(jobID).not.toHaveAttribute('title');
+      expect(
+        within(detail).getByText('Reported end').nextElementSibling?.querySelector('time'),
+      ).toHaveAttribute('datetime', endTime);
+      expect(within(detail).getByText('Recorded duration').nextElementSibling).toHaveTextContent(
+        /^5m$/,
+      );
+      expect(
+        within(detail).getByText('Last observed').nextElementSibling?.querySelector('time'),
+      ).toHaveAttribute('datetime', observedAt);
+      expect(detail).toHaveTextContent('not evidence of guest thaw or filesystem writes');
+    },
+  );
+
+  it.each([
+    undefined,
+    '',
+    '0001-01-01T00:00:00Z',
+    'not-a-date',
+    '2026-10-04T10:59:59Z',
+    '2026-10-05T11:05:00Z',
+  ])('does not manufacture a job end or elapsed duration from %j', (endTime) => {
+    const { toggle } = mount([identityTask({ endTime, status: 'running' })]);
+    fireEvent.click(toggle);
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    const end = within(detail).getByText('Reported end').nextElementSibling;
+    expect(end?.querySelector('time')).toBeNull();
+    expect(end).toHaveTextContent(endTime ? `Unknown · reported: ${endTime}` : 'Not reported');
+    expect(within(detail).getByText('Recorded duration').nextElementSibling).toHaveTextContent(
+      /^Unknown$/,
+    );
+    expect(within(detail).getByText('Result').nextElementSibling).toHaveTextContent(/^Running$/);
+  });
+
+  it('retains a zero-second recorded interval without substituting a live elapsed time', () => {
+    const { toggle } = mount([identityTask({ endTime: '2026-10-04T11:00:00Z' })]);
+    fireEvent.click(toggle);
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    expect(within(detail).getByText('Recorded duration').nextElementSibling).toHaveTextContent(
+      /^0s$/,
+    );
+  });
+
+  it('replaces the exact job interval in an open row and leaves invalid provider text literal', () => {
+    const { toggle, setInventory } = mount([identityTask({ id: 'native-old' })]);
+    fireEvent.click(toggle);
+    toggle.focus();
+    const raw = '<img src="/unexpected"><script>unsafe()</script>';
+    setInventory([identityTask({ id: 'native-new', endTime: raw })]);
+    const detail = screen.getByRole('region', { name: 'Latest backup job' });
+    expect(detail).toHaveTextContent('native-new');
+    expect(detail).not.toHaveTextContent('native-old');
+    expect(detail.querySelector('[data-backup-task-end]')?.textContent).toBe(
+      `Unknown · reported: ${raw}`,
+    );
+    expect(detail.querySelector('[data-backup-task-duration]')).toHaveTextContent(/^Unknown$/);
+    expect(detail.querySelector('img, script')).toBeNull();
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    setInventory([identityTask({ id: 'native-final', endTime: '2026-10-04T11:10:00Z' })]);
+    expect(detail.querySelector('[data-backup-task-end] time')).toHaveAttribute(
+      'datetime',
+      '2026-10-04T11:10:00Z',
+    );
+    expect(detail.querySelector('[data-backup-task-duration]')).toHaveTextContent(/^10m$/);
+    expect(detail).not.toHaveTextContent(raw);
+    expect(toggle).toHaveFocus();
+  });
+
+  it.each([320, 640, 1365])(
     'identifies a raw provider ERROR as Failed and retains its full status at %i px',
     (width) => {
       const status = 'ERROR: archive unavailable\n' + 'repository-path-'.repeat(20);

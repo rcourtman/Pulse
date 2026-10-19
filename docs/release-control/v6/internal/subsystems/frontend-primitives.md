@@ -10446,3 +10446,16 @@ provider identifiers wrap inside its scrollable body, not the narrow state cell.
 There is no new route, mutation, inventory fetch or global listener while closed.
 Unit and desktop/320px browser checks cover state/prune separation, live
 replacement, native activation, literal text, focus and nested-table retention.
+
+### Backup job interval uses existing read-only disclosure primitives
+
+Proxmox Coverage's existing native disclosure and wrapping definition list now
+include the literal collected job ID, reported end and recorded duration. The
+identifier stays byte-for-byte as supplied, including any instance/guest scope;
+it is not labelled as an extracted raw Proxmox UPID. Timestamp text
+includes seconds and timezone; invalid values remain escaped plain text, never
+markup or a made-up running timer. The existing platform date/duration formatters
+are reused without changing their contracts. `ProxmoxCoverageTable.taskDetail.test.tsx`
+and `backup-job-interval.cjs` check readable responsive fields and same-open
+replacement using the real reader/model/table. No shared primitive, action,
+route or collection contract changes; these are collected facts, not recovery.
