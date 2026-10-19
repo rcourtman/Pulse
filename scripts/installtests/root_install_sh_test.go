@@ -2397,7 +2397,11 @@ print_info() { echo "INFO: $*"; }
 print_error() { echo "ERROR: $*"; }
 print_success() { echo "SUCCESS: $*"; }
 safe_systemctl() { return 0; }
-timeout() { shift; "$@"; }
+timeout() {
+    [[ "$1" == -k && "$2" == 1 && "$3" == 5 && "$4" == systemctl ]] || return 97
+    shift 3
+    "$@"
+}
 sleep() { :; }
 journalctl() { return 0; }
 ensure_pulse_running_after_update() { return 0; }
