@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Mounted backup chronology follows the wall clock, not the inventory-load time
+
+By date's local calendar window, timestamp admission and Coverage's latest-point/
+job selection share the existing 30-second relative-time clock with row ages.
+An unchanged inventory is reconciled when the day or clock changes, including
+clock reversal; a newly replaced inventory reads the current wall time between
+ticks. Future/invalid times remain unknown until actually orderable. Provider
+timestamps and observation times are not renewed, and server-owned protection
+verdicts are not evaluated locally. Existing source withdrawal, selected day,
+range, metric, scope filters and expanded evidence remain intact. No new timer,
+inventory polling, retry, collection, backup or guest operation is introduced.
+
+`ProxmoxBackupsTable.clock.test.tsx` covers local-midnight Count/Volume windows,
+future-time and reversed-clock artifact/job selection, unchanged observations,
+server posture, source denial, between-tick replacement and clock cleanup.
+`backup-clock.cjs` exercises the actual HTTP readers, router, model, chart/table
+and CSS by desktop keyboard and 320px touch. This proves collected-evidence
+chronology, not native backup/restore, guest thaw or filesystem liveness.
+
 ### An unanswered backup inventory read releases the manual retry path
 
 PVE and PBS snapshot reads each have one 150-second browser deadline, including

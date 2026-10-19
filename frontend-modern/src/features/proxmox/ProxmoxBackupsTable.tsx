@@ -13,6 +13,7 @@ import {
   type ProxmoxBackupsView,
 } from '@/routing/resourceLinks';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   PlatformErrorState,
   PlatformResourceCounter,
@@ -301,13 +302,17 @@ export const ProxmoxBackupsTable: Component<{
     backups.error() ? [] : (backups.value().backupTasks ?? []),
   );
 
-  // Share the observation moment, refreshing it when inventory is replaced.
-  // A newly completed backup must not be "future" relative to page mount.
+  // Use the same live clock as row ages: local day windows and future-time
+  // admission must also advance (or reverse) while inventory stays unchanged.
+  // Read the current wall time on replacement too, even between shared ticks.
+  // This never renews provider observations or evaluates protection locally.
+  const wallNow = useRelativeTimeNow();
   const nowMs = createMemo(() => {
     pbsArtifacts();
     archives();
     snapshots();
-    return Date.now();
+    tasks();
+    return wallNow();
   });
 
   const recoveryModel = createMemo(() =>
