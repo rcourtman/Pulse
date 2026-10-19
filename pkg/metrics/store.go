@@ -2377,7 +2377,6 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 	params := []interface{}{bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs}
 	if s.clusteredMetrics.Load() {
 		query = clusteredMetricsRollupSQL
-		params = append([]interface{}{string(fromTier), startTs, endTs}, params...)
 	}
 	_, err = tx.Exec(query, params...)
 	if err != nil {

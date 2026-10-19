@@ -67,7 +67,6 @@ func TestClusteredMetricsRollupPlanUsesBoundedPrimaryRanges(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	rows, err := store.db.Query("EXPLAIN QUERY PLAN "+clusteredMetricsRollupSQL,
-		"raw", int64(1_700_000_000), int64(1_700_000_120),
 		int64(60), int64(60), "minute", "raw", int64(1_700_000_000), int64(1_700_000_120))
 	if err != nil {
 		t.Fatal(err)

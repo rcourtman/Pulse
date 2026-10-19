@@ -2778,7 +2778,10 @@ the current production schema. Clustered rollups first discover resource
 identities within the bounded source window through the covering tier/time
 index, then read each resource through its primary-key time range. They must
 not seek the primary table once per source observation through the secondary
-index. A statement-local resource number gives the aggregate an integer group
+index. Discovery and value reads share the same bound source tier and time
+window. Reuse the ordinary aggregate's binding slots so constructing that
+indexed query does not duplicate argument arrays or boxing per window.
+A statement-local resource number gives the aggregate an integer group
 key without changing stored resource identity, bucket boundaries, nullable
 extrema fallback or `INSERT OR IGNORE` idempotence. It is neither persisted nor
 cached. Legacy rowid databases retain their existing aggregate query until

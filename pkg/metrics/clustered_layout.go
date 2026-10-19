@@ -22,10 +22,12 @@ const clusteredMetricsIndex = "sqlite_autoindex_metrics_1"
 // ranges. Group by a statement-local resource number to avoid comparing both
 // identity strings for every input row; the number is unique within this query
 // and never becomes a persisted or externally visible resource identity.
+// Reuse the ordinary rollup's six binding slots in both read stages. Repeating
+// the tier/window arguments would allocate another argument slice per window.
 const clusteredMetricsRollupSQL = `
 	WITH selected_resources AS MATERIALIZED (
 		SELECT DISTINCT resource_type, resource_id FROM metrics
-		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
+		WHERE tier = ?4 AND timestamp >= ?5 AND timestamp < ?6
 	), resources AS MATERIALIZED (
 		SELECT ROW_NUMBER() OVER (ORDER BY resource_type, resource_id) AS resource_number,
 			resource_type, resource_id FROM selected_resources
@@ -34,10 +36,10 @@ const clusteredMetricsRollupSQL = `
 		(resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 	SELECT r.resource_type, r.resource_id, m.metric_type, AVG(m.value),
 		MIN(COALESCE(m.min_value, m.value)), MAX(COALESCE(m.max_value, m.value)),
-		(m.timestamp / ?) * ? AS bucket_ts, ?
+		(m.timestamp / ?1) * ?2 AS bucket_ts, ?3
 	FROM resources AS r CROSS JOIN metrics AS m
 	WHERE m.resource_type = r.resource_type AND m.resource_id = r.resource_id
-		AND m.tier = ? AND m.timestamp >= ? AND m.timestamp < ?
+		AND m.tier = ?4 AND m.timestamp >= ?5 AND m.timestamp < ?6
 	GROUP BY r.resource_number, bucket_ts, m.metric_type
 	ORDER BY r.resource_number, bucket_ts, m.metric_type
 `

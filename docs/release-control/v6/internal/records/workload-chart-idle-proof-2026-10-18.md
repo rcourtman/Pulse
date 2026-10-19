@@ -193,3 +193,64 @@ medians of 4.735637/5.7315405 ms for the small rollup and
 are retained without substituting for the revised paired CI result or the
 still-pending strict idle-worker chart proof. The previous executable and
 initial adverse CI results are preserved.
+
+## Revised paired result and shared bindings
+
+The revised comparison in
+[run 39177248750](https://github.com/rcourtman/Pulse/actions/runs/39177248750)
+used PR head `fc58c597caf0051389c7bb3a5a6e10e7dfb3ac9b` through synthetic merge
+`e79e0546086124d96ee75bd64722c8fc3f8ed6bf`, tree
+`2143d881c0c8cbcb7d8696c204f42149623a3d5b`. Its other parent was current main
+`6209d03d5a3895005f48b365cc2eeb8f1483f072`; the main advance changed only
+Proxmox guest-test fixtures. The paired baseline remained
+`ed4a2c6b54ee1d139d5f198950c53b403596c17c`.
+
+The small rollup improved from 4.309 to 4.254 ms (-1.28%, p = 0.011), and the
+500-node rollup from 121.2 to 112.1 ms (-7.48%, p < 0.001). The four-hour cold
+chart improved from 113.97 to 78.69 ms (-30.96%, p < 0.001), with unchanged
+21.47 MiB and approximately 508,200 allocations. The remaining benchmark flag
+was the small rollup's 3.117 to 3.453 KiB (+10.76%, p < 0.001). Its allocation
+count rose from 100 to 105. The 500-node case likewise gained five allocations
+and about 352 bytes, below that case's relative flag threshold. Artifact
+[12155027036](https://github.com/rcourtman/Pulse/actions/runs/39177248750/artifacts/12155027036)
+has GitHub digest
+`f238c3230b214064fde984765b81c6f93f22f7addb410f7aad43d5ba404a69cd`.
+
+The duplicated discovery tier/window arguments caused those extra allocations.
+Both stages now reuse the ordinary aggregate's same six SQLite binding slots,
+removing the second argument array and repeated boxing without changing
+resource discovery, primary ranges or aggregation semantics. The existing
+cross-layout aggregate and query-plan tests exercise the shared bindings.
+
+The hosted strict test in that revised run passed its latency assertion:
+p50 50.135919 ms, p95 67.674439 ms and p99 74.205989 ms, explicit SLO 90 ms.
+It still failed capacity validation. Two of 12 concurrent capacity samples
+recorded `provjobd1628928` at 21.0% and 25.25% total CPU. The four-vCPU runner
+was an AMD EPYC 9V45, with GOMAXPROCS=2 and Go 1.26.9. This is different
+hardware from the prior public attempt; their absolute timings are not a
+source-only comparison. Admission/after receipts, both adverse intervals and
+the passing test remain retained. Fixed executable SHA-256:
+`89dfcd17f28ccd16d88d1b663ff8266975486adb5804876ae65c1269a4952b98`.
+Artifact
+[12155196024](https://github.com/rcourtman/Pulse/actions/runs/39177248750/artifacts/12155196024)
+has GitHub digest
+`65d01e1a1614836a025f747869d577daa21032a6a362a621413807d4b2c1e150`.
+The test establishes a passing latency assertion on that runner; the failed
+capacity guard still prevents an idle-worker qualification claim.
+
+The shared-binding executable passed the complete targeted rollup correctness
+and plan suite and the rollup race suite (6.010 s). SHA-256:
+`ce878df8c9df1193b457742ef913dac8073f29777b53aeb9148fecfd8b9a1686`.
+Its five source hashes are retained in `rollup-bindings/source.sha256`.
+Ten native samples per case measured small-rollup median allocation volume
+3,204.5 versus 3,532.5 bytes, and 500-node volume 3,896 versus 4,248 bytes.
+Median allocation counts were 106 versus 105 and 113 versus 112 respectively;
+reused numbered bindings reduce volume while the driver handles their names.
+Sequential shared-worker median times were 7.8832245 versus 6.780017 ms and
+164.7742585 versus 149.3372525 ms. These adverse timing observations are
+retained without attributing them to the binding change or substituting for
+fresh paired CI. The full metrics suite passed before the binding-only change;
+the final native proof exercises all affected rollup paths and boundaries.
+All nine required source checks for `fc58c597caf0051389c7bb3a5a6e10e7dfb3ac9b`
+ultimately passed, including REST-0 at 23:57:41Z. Its allocation flag and
+capacity-invalidated SLO are preserved separately from those source checks.
