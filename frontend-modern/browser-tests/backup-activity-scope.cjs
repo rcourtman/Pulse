@@ -130,7 +130,15 @@ async function count(page) {
 }
 const rowCount = (page) => page.locator('[data-proxmox-backup-row="recoverable"]').count();
 async function capture(page, name) {
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(async () => {
+    window.scrollTo(0, 0);
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
+  });
   const geometry = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth > innerWidth,
     clipped: [
