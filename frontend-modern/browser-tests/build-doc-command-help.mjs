@@ -56,7 +56,7 @@ try {
     binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
   fs.mkdirSync(path.join(output, 'docs'), { recursive: true });
   for (const name of ['README', 'FAQ', 'UNIFIED_AGENT', 'TROUBLESHOOTING', 'DOCKER', 'PBS', 'MAIL_GATEWAY', 'AGENT_SECURITY',
-    'RELEASE_PROCESS', 'AUTO_UPDATE', 'MIGRATION', 'DEPLOYMENT_MODELS', 'TRUENAS', 'VM_DISK_MONITORING',
+    'RELEASE_PROCESS', 'AUTO_UPDATE', 'MIGRATION', 'DEPLOYMENT_MODELS', 'TRUENAS', 'VM_DISK_MONITORING', 'TEMPERATURE_MONITORING',
     'AI_TRANSPARENCY', 'AI', 'AI_AUTONOMY', 'ASSISTANT_SAFETY', 'PRIVACY', 'ISSUE_TRIAGE', 'SECURITY', 'API', 'CONFIGURATION', 'INSTALL', 'KUBERNETES', 'OIDC', 'CONTRIBUTING']) {
     const file = `public/docs/${name}.md`;
     binding.sources[file] = hash(fs.readFileSync(path.join(root, file)));
