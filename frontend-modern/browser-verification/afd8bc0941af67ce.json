@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "0e11897ce1df180108fafe287dbeec3e93e1ebdf",
+  "changed_paths": [
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "800e93630e3f708589a7c7f1b6e88350f496e04b2bb8781fa00085b6ab6d59cd"
+  },
+  "routes": [
+    "Existing Proxmox Backups Coverage through /browser-tests/protection-posture-remount.html: production HTTP posture/inventory readers, retained query cache, recovery model, table and shipped CSS. No product route added."
+  ],
+  "states": [
+    "Successful Protected -> unanswered background poll -> existing stall fallback Unknown -> same-cache remount with a pending body -> Unknown remains; obsolete responses cannot revive Protected.",
+    "A successful current evaluation replaces the unavailable state; independent PVE/PBS restore evidence remains inspectable through timeout, remount and retry.",
+    "Organisation change withdraws the old verdict and fences late answers; only the new-scope evaluation restores a current state."
+  ],
+  "interactions": [
+    "Chromium desktop keyboard focus/Enter and WebKit 320px dark/touch: expand existing evidence, hide/show the consuming fixture, single-flight scoped retry, ordinary refresh and organisation event.",
+    "Two completed HTTP consumer journeys and ten final captures opened with native view_image. No fixture/page errors. Browser contexts, browsers, held responses and Vite closed; client and enclosing exec exited 0.",
+    "Original protocol failures are retained: incorrect longer PBS badge selector, then a mismatched Needs attention label and missing ordinary runtime-capability fixture. These did not change runtime source or relax production assertions."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T08:11:50.009018Z",
+  "evidence": {
+    "source_commit": "0e11897ce1df180108fafe287dbeec3e93e1ebdf",
+    "source_tree": "6afdcda160beaa513b9f1608227156cdb064d27a",
+    "bound_inputs": 9349,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "engine": "chromium",
+        "browserVersion": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        }
+      },
+      {
+        "engine": "webkit",
+        "browserVersion": "26.0",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        }
+      }
+    ],
+    "protocol": "frontend-modern/browser-tests/protection-posture-remount.cjs",
+    "protocol_sha256": "8645a04ea8cca1894f0706776746e3e2ad030097c1c8ca413c8f596591866fb9",
+    "raw_result": "BROWSER-RESULT.json in the retained Web dossier",
+    "captures": [
+      {
+        "file": "chromium-current.png",
+        "state": "current",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "3635865526be0457bac0416c16417637e90f5a7c616a3ea71b1a6337a0bbdab2"
+      },
+      {
+        "file": "chromium-timeout.png",
+        "state": "timeout",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "01166b34f52b64e890f8f00694c4767009d72b7008696e2d099d35474f0f4161"
+      },
+      {
+        "file": "chromium-remounted-unknown.png",
+        "state": "remounted-unknown",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "f99274a78562760ee357f2f025f1ffb8c30f796f85548e06b7d6033143585756"
+      },
+      {
+        "file": "chromium-recovered-current.png",
+        "state": "recovered-current",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "abcc72fab07206f3adab0f799225a58641c60a75139337e558a86d40336a6cd4"
+      },
+      {
+        "file": "chromium-new-org-current.png",
+        "state": "new-org-current",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "8073c094338ace0fd9908522c7fc4b9b2f565bbdb3f7846222fc0800ffb93231"
+      },
+      {
+        "file": "webkit-current.png",
+        "state": "current",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "18e5568b5f54d9912abb6b2cb53374ecbc8f62f00066b3507780dd61cd1e7272"
+      },
+      {
+        "file": "webkit-timeout.png",
+        "state": "timeout",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "4f85a08d3e9cf115c0dcd73d2ca6cc7805b496e639901982ea15989bed4c6cc8"
+      },
+      {
+        "file": "webkit-remounted-unknown.png",
+        "state": "remounted-unknown",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "4f85a08d3e9cf115c0dcd73d2ca6cc7805b496e639901982ea15989bed4c6cc8"
+      },
+      {
+        "file": "webkit-recovered-current.png",
+        "state": "recovered-current",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "a1333d9d5af869c6fab0afc2a49275e2b2df74636cb845c3b9a85e6b637a3cfc"
+      },
+      {
+        "file": "webkit-new-org-current.png",
+        "state": "new-org-current",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "2dc54da263d42bdc3511baa3f605fa22ada713f410fd596d98722a9701c6c341"
+      }
+    ],
+    "pixel_review": "All ten final captures opened natively and inspected; the narrow unavailable notice, Unknown verdict, retry and source locations are readable without page overflow. This is not native recovery, installed acceptance or whole-source build proof."
+  }
+}
