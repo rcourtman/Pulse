@@ -4,6 +4,7 @@ import { render } from 'solid-js/web';
 import { DiskList } from '../src/components/Storage/DiskList';
 import { GuestDrawerOverview } from '../src/components/Workloads/GuestDrawerOverview';
 import { useUnifiedResources } from '../src/hooks/useUnifiedResources';
+import { dispatchResourceMetadataChanged } from '../src/utils/resourceMetadataEvents';
 import type { WorkloadGuest } from '../src/types/workloads';
 import type { StorageHealthFilter } from '../src/features/storageBackups/models';
 import '../src/index.css';
@@ -36,7 +37,12 @@ function Fixture() {
     <main class="mx-auto max-w-5xl space-y-3 p-3 text-base-content">
       <h1 class="text-lg font-semibold">Disk source freshness</h1>
       <nav aria-label="Synthetic fixture controls" class="flex flex-wrap gap-3 text-xs">
-        <button type="button" onClick={() => void source.refetch()}>
+        <button
+          type="button"
+          onClick={() =>
+            dispatchResourceMetadataChanged({ metadataKind: 'guest', metadataId: guest.id })
+          }
+        >
           Refresh collected inventory
         </button>
         <button type="button" onClick={() => setView('storage')}>
