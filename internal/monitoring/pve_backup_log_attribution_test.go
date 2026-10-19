@@ -78,7 +78,7 @@ func TestPVEGuestLogAttributionRecoversWithoutSealingAmbiguity(t *testing.T) {
 		case r.URL.Path == "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
 		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
-			fmt.Fprintf(w, `{"data":[{"upid":"attribution-job","node":"pve1","type":"vzdump","status":"OK","starttime":%d,"endtime":%d}]}`, start.Unix(), start.Add(3*time.Minute).Unix())
+			fmt.Fprintf(w, `{"data":[{"upid":"attribution-job","node":"pve1","type":"vzdump","status":"job errors","starttime":%d,"endtime":%d}]}`, start.Unix(), start.Add(3*time.Minute).Unix())
 		case strings.HasSuffix(r.URL.Path, "/log"):
 			logReads.Add(1)
 			if phase.Load() == 1 {
@@ -89,7 +89,7 @@ func TestPVEGuestLogAttributionRecoversWithoutSealingAmbiguity(t *testing.T) {
 			if phase.Load() >= 2 {
 				lines = append(lines, "INFO: Starting Backup of VM 100 (qemu)")
 			}
-			lines = append(lines, "INFO: Finished Backup of VM 100 (00:01:00)", "INFO: Starting Backup of VM 200 (lxc)", "INFO: Finished Backup of VM 200 (00:01:00)", "TASK OK")
+			lines = append(lines, "INFO: Finished Backup of VM 100 (00:01:00)", "INFO: Starting Backup of VM 200 (lxc)", "INFO: Finished Backup of VM 200 (00:01:00)", "INFO: Starting Backup of VM 300 (qemu)", "ERROR: Backup of VM 300 failed - fixture storage unavailable", "TASK ERROR: job errors")
 			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"data": testLogLines(lines...)}))
 		default:
 			t.Errorf("unexpected request %s", r.URL.Path)
@@ -112,13 +112,15 @@ func TestPVEGuestLogAttributionRecoversWithoutSealingAmbiguity(t *testing.T) {
 		phase.Store(step.phase)
 		m.pollBackupTasks(context.Background(), "site", client)
 		snapshot := m.state.GetSnapshot().PVEBackups
-		require.Len(t, snapshot.BackupTasks, 3)
+		require.Len(t, snapshot.BackupTasks, 4)
 		byID := map[int]models.BackupTask{}
 		for _, task := range snapshot.BackupTasks {
 			byID[task.VMID] = task
 		}
 		require.Equal(t, step.status, byID[100].Status)
 		require.Equal(t, "OK", byID[200].Status)
+		require.Equal(t, "error", byID[300].Status, "explicit sibling failure survives every phase")
+		require.Equal(t, "fixture storage unavailable", byID[300].Error)
 		require.Equal(t, step.reads, logReads.Load())
 		entry := m.vzdumpJobTaskCache["site|attribution-job"]
 		require.Equal(t, step.final, entry.final, "ambiguous logs cannot become immutable")
@@ -139,7 +141,8 @@ func TestPVEGuestLogAttributionRecoversWithoutSealingAmbiguity(t *testing.T) {
 		for _, p := range points {
 			require.Equal(t, recovery.KindOther, p.Kind, "task cannot mint a restore artifact")
 		}
-		summary := recovery.BuildBackupHealth([]recoverymodel.BackupHealthWorkload{{ID: "vm100", Instance: "site", VMID: 100}, {ID: "ct200", Instance: "site", VMID: 200}}, points, recoverymodel.BackupHistoryCoverage{}, start.Add(-time.Hour), start.Add(time.Hour), time.UTC)
+		summary := recovery.BuildBackupHealth([]recoverymodel.BackupHealthWorkload{{ID: "vm100", Instance: "site", VMID: 100}, {ID: "ct200", Instance: "site", VMID: 200}, {ID: "vm300", Instance: "site", VMID: 300}}, points, recoverymodel.BackupHistoryCoverage{}, start.Add(-time.Hour), start.Add(time.Hour), time.UTC)
+		require.Equal(t, 1, summary.Counts.Failed)
 		if !step.final {
 			require.Equal(t, 1, summary.Counts.Unknown)
 			require.Equal(t, 1, summary.Counts.Success)
@@ -148,7 +151,7 @@ func TestPVEGuestLogAttributionRecoversWithoutSealingAmbiguity(t *testing.T) {
 			require.Equal(t, 2, summary.Counts.Success)
 		}
 		for _, w := range summary.Workloads {
-			if w.ID == "vm100" && !step.final {
+			if w.ID == "vm300" || (w.ID == "vm100" && !step.final) {
 				require.Nil(t, w.LastSuccessAt)
 			} else {
 				require.NotNil(t, w.LastSuccessAt)
