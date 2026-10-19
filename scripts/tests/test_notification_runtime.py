@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Controls for the source-bound ordinary notification journey, without a server."""
+"""Controls for source-bound notifications, using only owned loopback receivers."""
 import contextlib
 import copy
 import importlib.util
 import io
+import http.client
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -39,6 +41,117 @@ class NotificationRuntimeControls(unittest.TestCase):
 
     def journey(self):
         return RUNTIME.Journey(Path('/unused-binary'), Path('/unused-data'), io.BytesIO(), None)
+
+    def telegram_row(self):
+        return {'path': RUNTIME.TELEGRAM_PATH, 'content_types': ['application/json'],
+                'fixture_headers': [RUNTIME.FIXTURE_HEADER],
+                'body': {'chat_id': RUNTIME.TELEGRAM_CHAT, 'parse_mode': 'Markdown',
+                         'text': '*Pulse Alert: Warning*\n• Resource: owned.example.test\nType: Cpu\n' +
+                                 RUNTIME.PUBLIC_URL + '/alerts/history?alert=synthetic'}}
+
+    def test_telegram_checks_reject_empty_wrong_or_generic_payloads_independently(self):
+        self.assertTrue(all(RUNTIME.telegram_delivery_checks(self.telegram_row(), 'owned.example.test').values()))
+        cases = [('path', '/foreign', 'owned_path'),
+                 ('content_types', ['text/plain'], 'json_content_type'),
+                 ('content_types', ['application/json', 'application/json'], 'json_content_type'),
+                 ('fixture_headers', [], 'unrelated_header'),
+                 ('chat_id', 'other-chat', 'chat_identity'),
+                 ('parse_mode', 'HTML', 'markdown')]
+        for key, value, failed in cases:
+            with self.subTest(key=key, value=value):
+                row = self.telegram_row()
+                target = row['body'] if key in ('chat_id', 'parse_mode') else row
+                target[key] = value
+                checks = RUNTIME.telegram_delivery_checks(row, 'owned.example.test')
+                self.assertEqual([key for key, passed in checks.items() if not passed], [failed])
+        for text in (None, '', '  ', [], {}, '*Resolved: owned.example.test*', 'irrelevant nonempty text'):
+            with self.subTest(text=text):
+                row = self.telegram_row()
+                row['body']['text'] = text
+                self.assertFalse(all(RUNTIME.telegram_delivery_checks(row, 'owned.example.test').values()))
+        row = self.telegram_row()
+        row['body'] = {'alerts': [{'resourceName': 'owned.example.test'}], 'count': 1}
+        self.assertFalse(all(RUNTIME.telegram_wire_checks(row).values()))
+        for old, new, failed in [('owned.example.test', 'owned.example.test.neighbour', 'resource_identity'),
+                                 ('*Pulse Alert:', '*Resolved:', 'ordinary_event'),
+                                 ('Type: Cpu', 'Type: Memory', 'cpu_metric'),
+                                 (RUNTIME.PUBLIC_URL, 'https://foreign.example.test', 'saved_public_url')]:
+            with self.subTest(failed=failed):
+                row = self.telegram_row()
+                row['body']['text'] = row['body']['text'].replace(old, new)
+                checks = RUNTIME.telegram_delivery_checks(row, 'owned.example.test')
+                self.assertEqual([key for key, passed in checks.items() if not passed], [failed])
+
+    def test_owned_telegram_receiver_rejects_bad_wire_before_accepting_correct_message(self):
+        sink = RUNTIME.Sink()
+        try:
+            for content_type, text, expected in [('text/plain', 'message', 400),
+                                                 ('application/json', '', 400),
+                                                 ('application/json', 'message', 200)]:
+                with self.subTest(content_type=content_type, text=text):
+                    client = http.client.HTTPConnection('127.0.0.1', sink.port, timeout=2)
+                    try:
+                        body = json.dumps({'chat_id': RUNTIME.TELEGRAM_CHAT, 'text': text})
+                        client.request('POST', RUNTIME.TELEGRAM_PATH, body,
+                                       {'Content-Type': content_type})
+                        with client.getresponse() as response:
+                            self.assertEqual(response.status, expected)
+                            self.assertEqual(json.loads(response.read()), {'ok': expected == 200})
+                    finally:
+                        client.close()
+            self.assertIsNone(sink.error)
+            self.assertEqual(len(sink.snapshot()), 3)
+        finally:
+            sink.close()
+
+    def test_ordinary_report_requires_both_destinations_without_test_or_replay(self):
+        journey = self.journey()
+        journey.request = mock.Mock()
+        journey.process = mock.Mock()
+        journey.process.poll.return_value = None
+        generic = self.valid_row()
+        generic.update(bytes=100, sha256='b' * 64)
+        generic['body']['resourceName'] = 'notification-a.example.test'
+        telegram = self.telegram_row()
+        telegram.update(bytes=200, sha256='c' * 64)
+        telegram['body']['text'] = telegram['body']['text'].replace('owned.example.test', 'notification-a.example.test')
+        for rows, message in [([generic, telegram], None),
+                              ([generic, telegram, copy.deepcopy(telegram)], 'more than once'),
+                              ([generic, dict(telegram, content_types=['text/plain'])], 'json_content_type')]:
+            with self.subTest(message=message):
+                journey.sink = mock.Mock(error=None)
+                journey.sink.snapshot.side_effect = [[], rows]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    if message:
+                        with self.assertRaisesRegex(RUNTIME.Failure, message):
+                            journey.report('a')
+                    else:
+                        journey.report('a')
+                        self.assertEqual([row['service'] for row in journey.deliveries], ['generic', 'telegram'])
+                self.assertEqual(journey.request.call_count, 1)
+                self.assertEqual(journey.request.call_args.args[0], '/api/agents/agent/report')
+                self.assertEqual(journey.request.call_args.kwargs, {'auth': 'agent'})
+                journey.request.reset_mock()
+
+    def test_builtin_destination_readback_forbids_a_custom_body_or_changed_identity(self):
+        journey = self.journey()
+        journey.sink = SimpleNamespace(port=7655)
+        valid = {'name': 'owned-builtin-telegram', 'service': 'telegram',
+                 'url': 'http://127.0.0.1:7655' + RUNTIME.TELEGRAM_PATH,
+                 'enabled': True, 'method': 'POST',
+                 'headers': {'content-type': '***REDACTED***', 'X-Pulse-Fixture': '***REDACTED***'}}
+        for changes in ({}, {'template': '{"text":"custom"}'}, {'service': 'generic'},
+                        {'url': 'https://api.telegram.org/not-owned'}, {'enabled': False},
+                        {'method': 'GET'}, {'headers': {}}, {'name': 'other'}):
+            with self.subTest(changes=changes):
+                journey.request = mock.Mock(return_value=[dict(valid, **changes)])
+                if changes:
+                    with self.assertRaises(RUNTIME.Failure):
+                        journey.assert_telegram_destination()
+                else:
+                    journey.assert_telegram_destination()
+                    self.assertTrue(all(journey.destination_readbacks[-1].values()))
+                journey.request.assert_called_once_with('/api/notifications/webhooks')
 
     def test_current_ordinary_event_not_resolution_or_invented_firing(self):
         source = (ROOT / 'internal/notifications/notifications.go').read_text()
