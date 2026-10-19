@@ -205,7 +205,14 @@ function titlePulseVersion(title) {
     `\\bPulse(?:[ \\t]+Pro)?(?:[ \\t]+server)?(?:[ \\t]+version)?[ \\t]*[:=]?[ \\t]+${version}${end}`,
     "gi"
   )), ...text.matchAll(new RegExp(`(?:^|[ \\t/])pulse(?:-pro)?:${version}${end}`, "gi"))];
-  if (named.length) return named.length === 1 ? normalizeVersion(named[0][1]) : null;
+  if (named.length) {
+    if (named.length !== 1) return null;
+    const match = named[0];
+    // Naming Pulse disambiguates it from a platform/agent version, not from
+    // the other endpoint of an upgrade or range. Apply the same continuation
+    // check as body fields before the title can create version metadata.
+    return versionBeforeContext(match[1], text.slice(match.index + match[0].length));
+  }
 
   // Preserve concise legacy release titles, not arbitrary numbers embedded in
   // platform names, companion artifacts or prose. Multiple release numbers
@@ -217,7 +224,7 @@ function titlePulseVersion(title) {
     "i"
   );
   const match = text.trim().match(concise);
-  return match ? normalizeVersion(match[1]) : null;
+  return match ? versionBeforeContext(match[1], text.trim().slice(match[0].length)) : null;
 }
 
 function pulseVersionEvidence(title, body) {
