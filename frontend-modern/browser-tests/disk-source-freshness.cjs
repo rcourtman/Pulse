@@ -215,6 +215,11 @@ function serve(req, res, next) {
       };
       const row = () => page.locator('[data-row-id="disk-101"]');
       const detail = () => page.getByTestId('disk-detail-health');
+      const revealPhoneCharts = async () => {
+        if (!narrow) return;
+        const toggle = page.getByTestId('disk-detail-phone-toggle');
+        if ((await toggle.getAttribute('aria-expanded')) === 'false') await activate(toggle);
+      };
       const refresh = async (mode) => {
         current.mode = mode;
         const before = current.requests.filter((r) => r.path.startsWith('/api/resources?')).length;
@@ -249,6 +254,7 @@ function serve(req, res, next) {
       if (narrow) await row().getByText('Guest SATA', { exact: true }).tap();
       else await activate(row().getByRole('button', { name: 'Expand Guest SATA', exact: true }));
       await expect(detail()).toContainText('Healthy');
+      await revealPhoneCharts();
       await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(1);
       await capture('storage-current');
 
@@ -291,6 +297,7 @@ function serve(req, res, next) {
         'data-temperature-reading',
         'current',
       );
+      await revealPhoneCharts();
       await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(1);
       await expect(page.getByText('Last known temperature', { exact: true })).toHaveCount(0);
       assert(
@@ -302,6 +309,7 @@ function serve(req, res, next) {
       await expect(row().getByText('Healthy', { exact: true })).toBeVisible();
       await expect(detail()).toContainText('Healthy');
       await expect(row().locator('[data-temperature-reading]')).toHaveText('44°C');
+      await revealPhoneCharts();
       await capture('storage-recovered');
       report.cases.push({
         browser: name,
