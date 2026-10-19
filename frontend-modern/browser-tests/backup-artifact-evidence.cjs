@@ -211,6 +211,11 @@ async function capture(page, name) {
       });
     if (url.pathname === '/api/recovery/postures')
       return json({
+        policy: {
+          freshnessWindowSeconds: 604800,
+          verificationWindowSeconds: 604800,
+          requireVerification: true,
+        },
         data: [
           {
             subjectResourceId: guest.id,
@@ -285,6 +290,11 @@ async function capture(page, name) {
       });
     const verified = evidenceButton(page, 'Verified', true);
     await verified.waitFor();
+    await page.getByRole('button', { name: 'Refresh backups', exact: true }).waitFor();
+    assert.equal(
+      await page.getByText('Protection posture is unavailable.', { exact: false }).count(),
+      0,
+    );
     await verified.scrollIntoViewIfNeeded();
     const height = await verified.evaluate((el) => el.getBoundingClientRect().height);
     if (phone) assert(height >= 44, 'phone target is at least 44px');
