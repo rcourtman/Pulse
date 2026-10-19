@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### Running scheduled backups cannot qualify unidentified archive output
+
+An active vzdump parent without a positive guest ID cannot identify every file
+it may be writing. Its log is bounded and may be unreadable, deferred behind the
+existing 25-log budget, or a valid prefix ending after an earlier guest. The same
+connection's archive pass retains its exact previous inventory and age until a
+live read establishes that the parent has ended. Positive parent/guest task
+observations and independent guest snapshots continue. A later history verdict
+cannot retroactively qualify the earlier live writer scope. Individual-guest
+active tasks retain ordinary partial-file classification; terminal parents and
+complete-empty reads resume ordinary archive collection without requiring a
+successful log or broader permissions.
+
+This deliberately delays newly completed sibling archives until the scheduled
+parent ends, rather than guessing an incomplete file's guest or reporting a false
+restore point. Other connections and direct PBS collection are unchanged. No
+new field, request, log budget, guest operation or QGA admission is introduced.
+
+`pve_backup_unscoped_writer_test.go` joins both real HTTP adapters to the ordinary
+scan, exact archive retention, Last Backup, recovery mapping, bounded log reads,
+positive sibling evidence and ordinary scoped/finished/empty recovery. Its emitted
+frames feed the production Backups component at desktop and narrow viewports via
+`scripts/check-pve-unscoped-backup-writer.cjs`. These are synthetic source/consumer
+proofs, not installed, restore, thaw or filesystem-liveness acceptance.
+
 
 ### PVE archive refresh requires the same scan's live task read
 
