@@ -6920,6 +6920,22 @@
               "pkg/proxmox/task_identity_test.go",
               "pkg/proxmox/task_response_test.go"
             ]
+          },
+          {
+            "id": "proxmox-replication-response-runtime",
+            "label": "Complete and unambiguous replication observation through client, monitor and HTTP consumers",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/replication.go",
+              "pkg/proxmox/replication_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/proxmox/replication_response_test.go",
+              "internal/monitoring/replication_read_acceptance_test.go",
+              "internal/api/replication_read_acceptance_test.go"
+            ]
           }
         ],
         "match_files": null

@@ -8307,6 +8307,37 @@ HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
 
+### Complete, unambiguous replication reads preserve the last useful observation
+
+Both replication inventory and source-job status require the bounded HTTP body
+through EOF and a successful close before publication. The complete envelope
+must have one canonical `data` field, no error payload, valid UTF-8 and no
+trailing JSON, duplicate or case-shadowed fields. Inventory requires unique,
+nonempty job identities; a rejected inventory preserves the previous rows,
+failure detail and original `LastPolled`, rather than replacing them with an
+apparently successful empty prefix. Explicit complete empty arrays still remove
+only that connection's jobs.
+
+Rejected per-job status does not hide readable configuration or become a
+successful sync. Object and array replies share validation and the existing
+job/source binding; conflicting legacy identity, failure-count or outcome
+aliases cannot conceal adverse evidence. Consistent native/legacy shapes,
+string/numeric zero and unique additive metadata remain supported. Independent
+jobs and connections retain their own observations, and a later ordinary read
+can recover without a restart. Raw provider response bodies no longer enter
+debug logs. Request scope, permissions, polling cadence and API shape are
+unchanged.
+
+`pkg/proxmox/replication_response_test.go` covers complete-body/close failures,
+malformed/ambiguous envelopes and identities, privacy and compatible shapes.
+`scripts/replication_read_acceptance.py` connects emitted client jobs to
+`replication_read_acceptance_test.go` in monitoring and API, preserving the exact
+five phases through ordinary conversion, scoped replacement and 25 handler
+requests. Consuming browser verification uses those emitted HTTP payloads, not
+hand-invented verdicts. Socket-free fixture transport is not wire/TLS or native
+PVE acceptance, and this repair does not diagnose #2606's original interruption
+or establish frozen-guest/backup recovery.
+
 ### Observed Proxmox replication sync outcome
 
 Replication configuration is enriched only from the source node's per-job
