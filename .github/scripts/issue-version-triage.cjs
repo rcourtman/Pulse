@@ -145,6 +145,16 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function versionBeforeContext(version, remainder) {
+  // A range or transition gives neither the failing executable nor a single
+  // affected release. Do not select its first endpoint. Only inspect the
+  // immediate continuation: a named current version may also include separate
+  // upgrade history or an explicitly named agent's version.
+  const flow = /^[`*_]*[ \t]*(?:->|=>|→|↔|\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing)|updat(?:e|ed|ing))[ \t]+to\b)/i;
+  const alternatives = /^[`*_]*[ \t]*(?:\/|–|—|-[ \t]+|\b(?:to|or|and|through)\b)[ \t]*[`*_]*(?:(?:pulse(?:[ \t]+pro)?(?:[ \t]+server)?|server)[ \t]+|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:|pulse-)?(?:v?\d+\.\d+(?:\.\d+)?\b|unknown\b|latest\b|main\b|nightly\b)/i;
+  return flow.test(remainder) || alternatives.test(remainder) ? null : normalizeVersion(version);
+}
+
 function normalizeLegacyVersionValue(value) {
   const rawValue = String(value).trim();
   const visible = rawValue.replace(/^[`*_]+/, "");
@@ -157,9 +167,9 @@ function normalizeLegacyVersionValue(value) {
     const archive = filename.match(
       /^pulse-v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
     );
-    return archive ? normalizeVersion(archive[1].replace(
+    return archive ? versionBeforeContext(archive[1].replace(
       /-linux-(?:386|amd64|arm64|armv6|armv7)$/i, ""
-    )) : null;
+    ), visible.slice(filename.length)) : null;
   }
   // Both community and private Pro images carry the server. Read the tag of
   // that image only: "latest" plus a later agent version is not server-version
@@ -172,12 +182,12 @@ function normalizeLegacyVersionValue(value) {
     const imageTag = wrapper && image[1].endsWith(wrapper)
       ? image[1].slice(0, -wrapper.length) : image[1];
     const tag = imageTag.match(/^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:@sha256:[a-f0-9]{64})?$/i);
-    return tag ? normalizeVersion(tag[1]) : null;
+    return tag ? versionBeforeContext(tag[1], visible.slice(image[0].length)) : null;
   }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|pulse[-_]v?\d+\.\d+\.\d+\b)/i.test(visible)
-    ? normalizeVersion(visible) : null;
+  const legacy = visible.match(/^(?:(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+|pulse[-_])?v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b/i);
+  return legacy ? versionBeforeContext(legacy[0], visible.slice(legacy[0].length)) : null;
 }
 
 function titlePulseVersion(title) {
