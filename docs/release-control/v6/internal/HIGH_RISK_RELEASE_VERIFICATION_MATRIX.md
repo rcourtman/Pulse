@@ -1460,3 +1460,18 @@ as verification progresses:
   boundary. No recurring full-inventory polling or guest command is introduced.
 - This is presentation/read recovery, not native inventory freshness, backup
   completion, guest thaw, filesystem writes or installed recovery acceptance.
+
+
+### Accessible backup artifact state evidence
+
+- `proxmoxBackupsTableShared.test.tsx` must disclose verified, unverified,
+  unknown, running, failed, file and snapshot explanations, retain precedence
+  over contradictory flags, separate prune protection, withdraw replaced text
+  and isolate adjacent records and enclosing row actions.
+- `backup-artifact-evidence.cjs` must consume PVE/PBS inventory through the real
+  reader/model and both By date and expanded Coverage. At desktop and 320px,
+  inspect the collapsed affordance and disclosed evidence; verify keyboard/touch
+  activation, focus return/containment, complete wrapping, literal provider
+  text, ordinary replacement and no new request when disclosing evidence.
+- These checks establish access to collected evidence, not a successful restore,
+  guest responsiveness, thaw, installed recovery or published availability.

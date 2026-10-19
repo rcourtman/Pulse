@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "base_sha": "6645211012e13d1f6dc99a8cc80bee6a6bc8e4f1",
+  "verified_at": "2026-10-19T02:57:27Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "9b8052d61eb1c2e51bcc92aefd0946c001a2f59a3f8a3dc8e15855410280a06d"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage \u2014 expanded existing restore evidence"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Verified and prune protected remain independent; unknown, unverified, running, failed, file and snapshot states retain their existing precedence and explanations.",
+    "Actual HTTP replacement removes successful verification and prune protection from the same full provider record.",
+    "Complete long provider identifiers including literal markup are text, not executable HTML. Workload connection and backup repository stay separate."
+  ],
+  "interactions": [
+    "Desktop native Tab/Shift+Tab reaches state action; Enter/Space opens, Escape closes and returns focus.",
+    "320px WebKit touch opens/closes both consuming tables; native target is at least 44px high.",
+    "Shared Dialog traps focus, makes background inert, restores focus and does not collapse enclosing Coverage. Opening/closing issues no API call.",
+    "All ten final desktop/light and narrow/dark captures opened natively. Settled modal bounds/wrapping and page overflow checked."
+  ],
+  "evidence": {
+    "runtime_source_sha": "002f0a83660e64e46f4937c10efc74b6372b0f22",
+    "containing_protocol_source": "6645211012e13d1f6dc99a8cc80bee6a6bc8e4f1",
+    "browser_command": "pulse-worker-browser tmp/backup-artifact-browser.cjs",
+    "protocol": "frontend-modern/browser-tests/backup-artifact-evidence.cjs",
+    "preview": "Production inventory readers, recovery model, tables, shared Dialog and shipped CSS, compiled as a consuming fixture inside governed offline browser execution; not a full production build.",
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop",
+        "width": 1365,
+        "browser": "141.0.7390.37",
+        "checks": [
+          "Verified: native activation, explanation, prune=true, focus trap/return, no request",
+          "Unverified: native activation, explanation, prune=true, focus trap/return, no request",
+          "Unknown: native activation, explanation, prune=false, focus trap/return, no request",
+          "Running: native activation, explanation, prune=false, focus trap/return, no request",
+          "Failed: native activation, explanation, prune=false, focus trap/return, no request",
+          "Backup file: native activation, explanation, prune=false, focus trap/return, no request",
+          "Snapshot: native activation, explanation, prune=false, focus trap/return, no request",
+          "ordinary refresh withdraws Verified/prune protection; matching record stays literal and unknown",
+          "Failed: native activation, explanation, prune=false, focus trap/return, no request",
+          "Coverage nested-table disclosure does not collapse the workload or alter its unknown posture"
+        ]
+      },
+      {
+        "name": "narrow",
+        "width": 320,
+        "browser": "26.0",
+        "checks": [
+          "Verified: native activation, explanation, prune=true, focus trap/return, no request",
+          "Unverified: native activation, explanation, prune=true, focus trap/return, no request",
+          "Unknown: native activation, explanation, prune=false, focus trap/return, no request",
+          "Running: native activation, explanation, prune=false, focus trap/return, no request",
+          "Failed: native activation, explanation, prune=false, focus trap/return, no request",
+          "Backup file: native activation, explanation, prune=false, focus trap/return, no request",
+          "Snapshot: native activation, explanation, prune=false, focus trap/return, no request",
+          "ordinary refresh withdraws Verified/prune protection; matching record stays literal and unknown",
+          "Failed: native activation, explanation, prune=false, focus trap/return, no request",
+          "Coverage nested-table disclosure does not collapse the workload or alter its unknown posture"
+        ]
+      }
+    ],
+    "captures": [
+      {
+        "file": "tmp/backup-artifact-evidence/desktop-date-affordance.png",
+        "sha256": "5adcc5b9524393bd29adb97d70000a020703b0719a80dc917745cfbc357b99db"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/desktop-date-verified.png",
+        "sha256": "8b1e15176c002f97ec8026e5b873d5b35bc7ff92b6d74b1175a03620bd4431c5"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/desktop-date-snapshot.png",
+        "sha256": "b6e4f8bea7c80110067e38e42a3dfd2ebf6d2b9171d8c41f27959476bba08642"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/desktop-date-replaced-unknown.png",
+        "sha256": "d9cb35ede685c66cb9bdceaa13f990859bfd8f9a2f98a0f917912e2135ee092e"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/desktop-coverage-failed.png",
+        "sha256": "b3c6698e2a8f92c701125d549142129861093fe49c5097d98506b78590d4cc3f"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/narrow-date-affordance.png",
+        "sha256": "528f2a08971319f970dd076cf2c076c013a61148a0d2e6d53d31b447a003f7d2"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/narrow-date-verified.png",
+        "sha256": "bdfaccd7427e0bd457334fcc2182664a7010f40bbab8b88f68c547ededd7db96"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/narrow-date-snapshot.png",
+        "sha256": "772f8b3be0ecf3cb6c6a0c40e24d9fb78a469c1b5e8ea03df1315b57930b78bc"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/narrow-date-replaced-unknown.png",
+        "sha256": "5830ce6676b9b9018ff564e83ffff7797525c5a6ea20fb9078600f57867e5604"
+      },
+      {
+        "file": "tmp/backup-artifact-evidence/narrow-coverage-failed.png",
+        "sha256": "862d0005cb739efb01c95e89a61d351ce6c745ff2c91c90fde0389f33c5ef2eb"
+      }
+    ],
+    "pixel_review": "All ten image contents presented to the model with native view_image; worker outcome PIXELS.json records exact retained identities and observations.",
+    "cleanup": {
+      "desktop": true,
+      "narrow": true,
+      "server": true
+    },
+    "limitations": "Read-only synthetic collection presentation. No claim of native backup, restore, thaw, release availability or operational recovery."
+  }
+}

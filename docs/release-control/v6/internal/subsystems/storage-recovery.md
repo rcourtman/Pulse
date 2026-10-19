@@ -7639,3 +7639,21 @@ status/error separation, wrapping, markup-shaped text and same-open recovery.
 `backup-failure-status.cjs` exercises the actual HTTP reader, model, search and
 Coverage disclosure at desktop and 320px. This is failure visibility, not native
 backup completion, guest thaw, filesystem liveness or installed recovery.
+
+
+### Backup artifact state meanings are readable without hover
+
+By date and expanded Coverage evidence use one native button for each artifact's
+state and optional prune-protection badge. Its read-only dialog keeps the full
+record, repository location and workload beside the existing explanation.
+Verification is not a restore test or guest-thaw evidence; prune protection is
+not verification or workload protection. Running/failed artifacts remain
+incomplete and guest snapshots remain distinct from separate backups. No
+collection, guest operation, API request, posture or completion rule changes.
+
+The disclosure updates with its record and restores focus on dismissal.
+`proxmoxBackupsTableShared.test.tsx` covers all states, contradictory flags,
+withdrawal, adjacent records and literal provider text. The source-bound
+`backup-artifact-evidence.cjs` protocol exercises the actual inventory readers,
+model and both consuming tables with desktop keyboard and 320px touch. This is
+accessible collected-evidence proof, not native recovery or release availability.

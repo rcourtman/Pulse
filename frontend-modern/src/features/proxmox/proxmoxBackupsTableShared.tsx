@@ -1,4 +1,5 @@
-import { Show, type Accessor } from 'solid-js';
+import { Show, createSignal, type Accessor } from 'solid-js';
+import { Dialog } from '@/components/shared/Dialog';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
@@ -277,7 +278,14 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
+const PRUNE_PROTECTION_DESCRIPTION =
+  "The provider marks this backup protected from pruning. This is not verification or the workload's protection assessment.";
+
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact }) {
+  const [detailsOpen, setDetailsOpen] = createSignal(false);
+  let trigger: HTMLButtonElement | undefined;
+  const workloadLabel = () => props.artifact.workload.name || props.artifact.workload.label;
+  const pruneProtected = () => props.artifact.sourceKind !== 'snapshot' && props.artifact.protected;
   const state = () => {
     const artifact = props.artifact;
     if (artifact.sourceKind === 'snapshot') {
@@ -312,35 +320,120 @@ export function ArtifactStateBadge(props: { artifact: RecoverableArtifact }) {
     };
   };
   return (
-    <span class="inline-flex max-w-full flex-col items-start gap-1">
-      <MetadataBadge
-        {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
-        tone={state().tone}
-        title={state().title}
-        wrap
-        data-backup-artifact-state
+    <>
+      {/* State meanings are safety evidence, not just hover help. One native
+          read-only action serves both badges without changing the row action. */}
+      <button
+        ref={trigger}
+        type="button"
+        class="inline-flex min-h-11 min-w-11 max-w-full flex-col items-start justify-center gap-1 rounded-sm text-left sm:min-h-6 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+        aria-label={`Backup evidence for ${workloadLabel()}: ${artifactStateLabel(props.artifact)}${pruneProtected() ? ', prune protected' : ''}`}
+        aria-haspopup="dialog"
+        aria-expanded={detailsOpen()}
+        onClick={(event) => {
+          event.stopPropagation();
+          setDetailsOpen(true);
+        }}
       >
-        {artifactStateLabel(props.artifact)}
-        <Show
-          when={
-            props.artifact.sourceKind === 'pbs' && artifactStateLabel(props.artifact) === 'Unknown'
-          }
-        >
-          <span class="sr-only"> verification</span>
-        </Show>
-      </MetadataBadge>
-      <Show when={props.artifact.sourceKind !== 'snapshot' && props.artifact.protected}>
         <MetadataBadge
           {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
-          tone="info"
-          title="The provider marks this backup protected from pruning. This is not verification or the workload's protection assessment."
+          tone={state().tone}
+          title={state().title}
           wrap
-          data-backup-prune-protected
+          data-backup-artifact-state
         >
-          Prune protected
+          {artifactStateLabel(props.artifact)}
+          <Show
+            when={
+              props.artifact.sourceKind === 'pbs' &&
+              artifactStateLabel(props.artifact) === 'Unknown'
+            }
+          >
+            <span class="sr-only"> verification</span>
+          </Show>
         </MetadataBadge>
+        <Show when={pruneProtected()}>
+          <MetadataBadge
+            {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
+            tone="info"
+            title={PRUNE_PROTECTION_DESCRIPTION}
+            wrap
+            data-backup-prune-protected
+          >
+            Prune protected
+          </MetadataBadge>
+        </Show>
+        <span class="text-[10px] text-muted underline underline-offset-2">Details</span>
+      </button>
+      <Show when={detailsOpen()}>
+        <Dialog
+          isOpen
+          ariaLabel="Backup evidence details"
+          onClose={() => setDetailsOpen(false)}
+          returnFocus={() => trigger}
+        >
+          <div class="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+            <h2 class="text-sm font-semibold text-base-content">Backup evidence</h2>
+            <button
+              type="button"
+              aria-label="Close backup evidence"
+              class="min-h-11 rounded-sm px-3 text-xs text-muted hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={() => setDetailsOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div
+            class="space-y-4 overflow-y-auto p-4 text-xs text-base-content whitespace-normal wrap-anywhere"
+            data-backup-evidence-details
+          >
+            <dl class="space-y-2">
+              <div>
+                <dt class="text-muted">Workload</dt>
+                <dd>
+                  {workloadLabel()} · {props.artifact.workload.typeLabel}{' '}
+                  {props.artifact.workload.vmid || '—'}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-muted">Workload connection</dt>
+                <dd>{props.artifact.workload.instance?.trim() || 'Unknown'}</dd>
+              </div>
+              <div>
+                <dt class="text-muted">Source</dt>
+                <dd>{props.artifact.sourceLabel}</dd>
+              </div>
+              <div>
+                <dt class="text-muted">Location</dt>
+                <dd>{getRecoverableArtifactLocation(props.artifact)}</dd>
+              </div>
+              <div>
+                <dt class="text-muted">Reported date</dt>
+                <dd>{props.artifact.createdAt || 'Not reported'}</dd>
+              </div>
+              <div>
+                <dt class="text-muted">Record</dt>
+                <dd class="whitespace-pre-wrap">{props.artifact.nativeId}</dd>
+              </div>
+            </dl>
+            <section class="space-y-1" data-backup-verification-evidence>
+              <h3 class="font-semibold">{artifactStateLabel(props.artifact)}</h3>
+              <p>{state().title}</p>
+            </section>
+            <Show when={pruneProtected()}>
+              <section class="space-y-1" data-backup-prune-evidence>
+                <h3 class="font-semibold">Prune protected</h3>
+                <p>{PRUNE_PROTECTION_DESCRIPTION}</p>
+              </section>
+            </Show>
+            <p class="border-t border-border pt-3 text-muted">
+              Backup inventory and verification do not establish guest responsiveness or a
+              successful restore.
+            </p>
+          </div>
+        </Dialog>
       </Show>
-    </span>
+    </>
   );
 }
 

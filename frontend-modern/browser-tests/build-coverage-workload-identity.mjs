@@ -55,6 +55,7 @@ try {
     'browser-tests/coverage-workload-identity.cjs',
     'browser-tests/backup-job-uncertainty.cjs',
     'browser-tests/backup-activity-volume.cjs',
+    'browser-tests/backup-artifact-evidence.cjs',
     'browser-tests/build-coverage-workload-identity.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
