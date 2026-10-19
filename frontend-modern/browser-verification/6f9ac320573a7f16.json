@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "base_sha": "9feee9cbefe88702b4576dffc132d92dea494c5f",
+  "verified_at": "2026-10-19T09:13:18.728142Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6df1aaf6b708e42778edaaaa390324d44958f7d8c3e5b23547ae11addc0c0544",
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts": "0d2e35dd8f26c04d6e60d8cdb7f49c4c179bfaf6505874c3d2b89b53ce870b6c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "317289e003bdea9cdf42c66cf95ed4035c4dccc90d2462762cb8b728092b1649"
+  },
+  "routes": [
+    "Existing Proxmox Backups By date and Coverage via /browser-tests/backup-location-scope.html: production HTTP decoders, query owners, exact-location resolver, tables, activity and shipped CSS. No product route added."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Case-sensitive main and Main repositories remain distinct. Selecting an exact lower-case location scopes By date, activity and expanded Coverage; route transitions preserve its exact key.",
+    "An ambiguous legacy saved location selects no restore points, shows a readable correction notice and never falls back to All. Choosing the exact uppercase Main location recovers the scoped inventory.",
+    "A unique legacy east/local store-wide filter keeps both local storage-node copies and excludes the independent PBS repositories. No backup, guest or mutation request is made."
+  ],
+  "interactions": [
+    "Native-select browser interaction plus desktop keyboard Enter/touch controls for Coverage expansion, filter-chip choices, source selection and route navigation. No hover-only evidence requirement.",
+    "One completed Chromium journey from c4bdb7a45c and one completed WebKit 320px dark/touch journey from 9feee9cbef, with identical final product hashes; eight captures opened using native view_image. Completed desktop proof was reused, not replayed.",
+    "The desktop-containing v2 process exited 1 only after its completed desktop case, at the later mobile collapsed-menu precondition. That partial execution and a separate compact sibling-row assertion failure are preserved; final narrow v4/client exit 0 and cleanup are distinct. Neither was a product fix."
+  ],
+  "evidence": {
+    "runtime_commit": "e709c8bbecbc9a0be3bdf0d4c60c35d82f5ae876",
+    "receipt_parent": "9feee9cbefe88702b4576dffc132d92dea494c5f",
+    "receipt_parent_tree": "9365d87598f5d45a844a428e4a8efefc58cb91ca",
+    "sources": [
+      {
+        "commit": "c4bdb7a45c3693007ef76bf23a3ce35a24125678",
+        "tree": "099198b9af73e8426bcddcb95943ef0ed4b8d803",
+        "completed_case": "chromium",
+        "enclosing_client_exit": 1,
+        "limit": "Later WebKit fixture precondition stopped this process; completed desktop assertions/captures/cleanup are retained independently."
+      },
+      {
+        "commit": "9feee9cbefe88702b4576dffc132d92dea494c5f",
+        "tree": "9365d87598f5d45a844a428e4a8efefc58cb91ca",
+        "completed_case": "webkit",
+        "enclosing_client_exit": 0
+      }
+    ],
+    "playwright": "1.56.1",
+    "cases": [
+      {
+        "name": "chromium",
+        "requests": [
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures"
+        ],
+        "phases": [
+          {
+            "phase": "navigation-start",
+            "selected": ""
+          },
+          {
+            "phase": "dom-loaded"
+          },
+          {
+            "phase": "navigation-start",
+            "selected": "pbs:pbs-server:main"
+          },
+          {
+            "phase": "dom-loaded"
+          },
+          {
+            "phase": "navigation-start",
+            "selected": "archive:east:local"
+          },
+          {
+            "phase": "dom-loaded"
+          }
+        ],
+        "browserVersion": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "pageErrors": [],
+        "contextClosed": true,
+        "browserClosed": true
+      },
+      {
+        "name": "webkit",
+        "requests": [
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures",
+          "/api/backups/pve",
+          "/api/backups/pbs",
+          "/api/recovery/postures"
+        ],
+        "phases": [
+          {
+            "phase": "navigation-start",
+            "selected": ""
+          },
+          {
+            "phase": "dom-loaded"
+          },
+          {
+            "phase": "navigation-start",
+            "selected": "pbs:pbs-server:main"
+          },
+          {
+            "phase": "dom-loaded"
+          },
+          {
+            "phase": "navigation-start",
+            "selected": "archive:east:local"
+          },
+          {
+            "phase": "dom-loaded"
+          }
+        ],
+        "browserVersion": "26.0",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "pageErrors": [],
+        "contextClosed": true,
+        "browserClosed": true
+      }
+    ],
+    "captures": [
+      {
+        "file": "chromium-exact-lower-coverage.png",
+        "state": "exact-lower-coverage",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "befc2a2153417accecfb8c5ff530178e6d08964bcd493d1b85c051b761973f82",
+        "source_commit": "c4bdb7a45c3693007ef76bf23a3ce35a24125678"
+      },
+      {
+        "file": "chromium-ambiguous-saved-location.png",
+        "state": "ambiguous-saved-location",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "6e0465e0e194b70f71d0dd8172d1a1036ceb67957c4b190531e2dc6d43f2efb5",
+        "source_commit": "c4bdb7a45c3693007ef76bf23a3ce35a24125678"
+      },
+      {
+        "file": "chromium-exact-upper-recovered.png",
+        "state": "exact-upper-recovered",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "7bcb35afa7a6345f05411713c74d7167359d5e0b57049b9806482cac7f435fef",
+        "source_commit": "c4bdb7a45c3693007ef76bf23a3ce35a24125678"
+      },
+      {
+        "file": "chromium-legacy-local-group.png",
+        "state": "legacy-local-group",
+        "engine": "chromium",
+        "viewport": {
+          "width": 1365,
+          "height": 1000
+        },
+        "sha256": "d0051019f46b5a03397eb6749e61e68b38c12a3c9bc09fffa8b34b4b1796f877",
+        "source_commit": "c4bdb7a45c3693007ef76bf23a3ce35a24125678"
+      },
+      {
+        "file": "webkit-exact-lower-coverage.png",
+        "state": "exact-lower-coverage",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "9ca0bf76ee3a39de799b0687c4ca72448da21cad7eb49446751c6786bc4f7ab7",
+        "source_commit": "9feee9cbefe88702b4576dffc132d92dea494c5f"
+      },
+      {
+        "file": "webkit-ambiguous-saved-location.png",
+        "state": "ambiguous-saved-location",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "bee544fb16d9b9ba6b22f90ac83e574b2215b6fdfff3cf868b5f1ab876ca11dd",
+        "source_commit": "9feee9cbefe88702b4576dffc132d92dea494c5f"
+      },
+      {
+        "file": "webkit-exact-upper-recovered.png",
+        "state": "exact-upper-recovered",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "5f552a5a385608a1360ec7811d7b4d56a5137edddc21c26e002dba1230e65d09",
+        "source_commit": "9feee9cbefe88702b4576dffc132d92dea494c5f"
+      },
+      {
+        "file": "webkit-legacy-local-group.png",
+        "state": "legacy-local-group",
+        "engine": "webkit",
+        "viewport": {
+          "width": 320,
+          "height": 1000
+        },
+        "sha256": "b11e9d33f7e34a983188f60290e6c6751f00cb4851fde8451b899a956d8ee1ab",
+        "source_commit": "9feee9cbefe88702b4576dffc132d92dea494c5f"
+      }
+    ],
+    "pixel_review": "Eight captures opened natively, content inspected, with observations in retained PIXELS.json.",
+    "raw_records": [
+      "BROWSER-DESKTOP-PARTIAL.json",
+      "BROWSER-NARROW.json",
+      "CURRENT-EVIDENCE.tar.xz"
+    ],
+    "limits": "Synthetic consumer evidence only. Full source suite/build unavailable before execution (proof-capacity-low); no guest recovery or protected/release availability claim."
+  }
+}

@@ -1183,7 +1183,7 @@ describe('ProxmoxBackupsTable', () => {
 
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).get('location')).toBe(
-        'pbs:pbs-offsite:offsite',
+        'backup-location-v2:["pbs","pbs-offsite","offsite"]',
       ),
     );
     expect(screen.getByText('pbs-offsite / offsite / minipc')).toBeInTheDocument();
@@ -1195,7 +1195,7 @@ describe('ProxmoxBackupsTable', () => {
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     expect(new URLSearchParams(window.location.search).get('location')).toBe(
-      'pbs:pbs-offsite:offsite',
+      'backup-location-v2:["pbs","pbs-offsite","offsite"]',
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));

@@ -66,6 +66,7 @@ import {
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
+import { resolveBackupLocationSelection } from './proxmoxBackupLocation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
@@ -210,8 +211,12 @@ export const ProxmoxBackupsTable: Component<{
   const setLocationFilter = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.location]: value || null }, { replace: true });
   const locationMatches = (artifact: RecoverableArtifact): boolean => {
-    const selected = locationFilter();
-    return !selected || artifact.locationKey === selected || artifact.locationGroupKey === selected;
+    const selected = locationSelection();
+    return (
+      selected.state === 'all' ||
+      (selected.state === 'matched' &&
+        (artifact.locationKey === selected.key || artifact.locationGroupKey === selected.key))
+    );
   };
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
@@ -317,6 +322,11 @@ export const ProxmoxBackupsTable: Component<{
       protectionPosturesResolved: protectionPostures.resolvedOnce(),
     }),
   );
+  const locationSelection = createMemo(() =>
+    resolveBackupLocationSelection(recoveryModel().recoverableArtifacts, locationFilter()),
+  );
+  const locationUnavailable = () =>
+    locationSelection().state === 'ambiguous' || locationSelection().state === 'missing';
 
   // Node options for the scope filter: the distinct nodes across the workload
   // set, "All nodes" first. PBS snapshots carry no node, so this scopes the
@@ -337,13 +347,18 @@ export const ProxmoxBackupsTable: Component<{
 
   const locationOptions = createMemo<FilterSelectOption[]>(() => {
     const locations = new Map<string, string>();
+    const selected = locationSelection();
     for (const artifact of recoveryModel().recoverableArtifacts) {
       if (artifact.locationKey && artifact.locationLabel) {
         locations.set(artifact.locationKey, artifact.locationLabel);
       }
       // Retain the meaning and label of an existing saved store-wide filter
       // without crowding new filter choices with redundant aggregate options.
-      if (artifact.locationGroupKey === locationFilter() && artifact.locationGroupLabel) {
+      if (
+        selected.state === 'matched' &&
+        artifact.locationGroupKey === selected.key &&
+        artifact.locationGroupLabel
+      ) {
         locations.set(artifact.locationGroupKey, artifact.locationGroupLabel);
       }
     }
@@ -600,6 +615,16 @@ export const ProxmoxBackupsTable: Component<{
         value: locationFilter,
         setValue: setLocationFilter,
         defaultValue: '',
+        // A legacy URL remains intact, but its chip names the resolved exact
+        // location. Never show raw encoded keys or pretend a collision is All.
+        formatChipValue: () => {
+          const selected = locationSelection();
+          return selected.state === 'matched'
+            ? selected.label
+            : selected.state === 'ambiguous'
+              ? 'Ambiguous saved location'
+              : 'Unavailable saved location';
+        },
       },
       {
         id: 'type',
@@ -751,6 +776,15 @@ export const ProxmoxBackupsTable: Component<{
         >
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+            <Show when={locationUnavailable()}>
+              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                {locationSelection().state === 'ambiguous'
+                  ? 'The saved backup location matches more than one source.'
+                  : 'The saved backup location is not in the current inventory.'}{' '}
+                No restore points are selected. Choose a backup location or clear filters. This does
+                not mean no backups exist.
+              </p>
+            </Show>
             <Show when={protectionPostures.response.error}>
               <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
                 <p role="status" class="min-w-0 flex-1 basis-64">
@@ -938,12 +972,18 @@ export const ProxmoxBackupsTable: Component<{
                 hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
                 emptyIcon={props.emptyIcon}
                 emptyTitle={
-                  inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
+                  locationUnavailable()
+                    ? 'Choose a backup location'
+                    : inventoryIncomplete()
+                      ? 'Backup inventory is incomplete'
+                      : 'No backups yet'
                 }
                 emptyDescription={
-                  inventoryIncomplete()
-                    ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                    : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+                  locationUnavailable()
+                    ? 'The saved location cannot be matched to one current source. Choose an exact location or clear filters to inspect the collected inventory.'
+                    : inventoryIncomplete()
+                      ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                      : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
                 }
                 sortKey={recoverableSortKey}
                 sortDirection={recoverableSortDirection}

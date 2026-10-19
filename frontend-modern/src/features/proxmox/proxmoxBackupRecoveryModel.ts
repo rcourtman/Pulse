@@ -51,6 +51,9 @@ export interface RecoverableArtifact {
   /** Existing saved store-wide filters remain valid for local-node locations. */
   locationGroupKey?: string;
   locationGroupLabel?: string;
+  /** Old saved URL aliases; usable only when they resolve one exact source. */
+  legacyLocationKey?: string;
+  legacyLocationGroupKey?: string;
   detail: string;
   /** Full provider identifier, displayed alongside a shortened `detail`. */
   detailTitle?: string;
@@ -217,8 +220,29 @@ function artifactLocationScope(
   storageNode?: string,
 ): Pick<
   RecoverableArtifact,
-  'locationKey' | 'locationLabel' | 'locationGroupKey' | 'locationGroupLabel'
+  | 'locationKey'
+  | 'locationLabel'
+  | 'locationGroupKey'
+  | 'locationGroupLabel'
+  | 'legacyLocationKey'
+  | 'legacyLocationGroupKey'
 > {
+  // Provider source names are case-sensitive. Keep every tuple field, even
+  // when its label repeats another field or contains a delimiter. A versioned
+  // key cannot collide with the old URLs that need conservative resolution.
+  const connection = instance?.trim() ? instance : '';
+  const store = repository?.trim() ? repository : '';
+  const node = storageNode?.trim() ? storageNode : undefined;
+  if (!connection && !store) return {};
+  const groupKey = `backup-location-v2:${JSON.stringify([sourceKind, connection, store])}`;
+  const groupLabel = [
+    connection || 'Connection not reported',
+    store || (sourceKind === 'snapshot' ? 'Node not reported' : 'Repository not reported'),
+  ].join(' / ');
+
+  // Retain precisely the previous encoding for existing bookmarks. It is an
+  // alias, not identity: the consumer refuses it if distinct source tuples
+  // now share it (including case-folding and missing-field collisions).
   const parts = [instance?.trim(), repository?.trim()].filter((part): part is string =>
     Boolean(part),
   );
@@ -226,22 +250,26 @@ function artifactLocationScope(
     (part, index) =>
       parts.findIndex((candidate) => normalizeKey(candidate) === normalizeKey(part)) === index,
   );
-  if (distinctParts.length === 0) return {};
   const localNode = storageNode?.trim();
+  const legacyGroupKey = [sourceKind, ...distinctParts.map(normalizeKey)].join(':');
   return {
-    locationKey: localNode
+    locationKey: node
+      ? `backup-location-v2:${JSON.stringify([sourceKind, connection, store, node])}`
+      : groupKey,
+    locationLabel: node ? `${groupLabel} / ${node}` : groupLabel,
+    legacyLocationKey: localNode
       ? JSON.stringify([
           sourceKind,
           normalizeKey(instance),
           normalizeKey(repository),
           normalizeKey(localNode),
         ])
-      : [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
-    locationLabel: [...distinctParts, ...(localNode ? [localNode] : [])].join(' / '),
-    ...(localNode
+      : legacyGroupKey,
+    ...(node
       ? {
-          locationGroupKey: [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
-          locationGroupLabel: distinctParts.join(' / '),
+          locationGroupKey: groupKey,
+          locationGroupLabel: groupLabel,
+          legacyLocationGroupKey: legacyGroupKey,
         }
       : {}),
   };
