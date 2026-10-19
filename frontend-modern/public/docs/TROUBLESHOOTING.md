@@ -91,6 +91,9 @@ Jump to a group:
   [the same task's status evidence](PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees).
   An `OK` or `success` word inside a longer message is not completed success.
   Use existing PBS records; do not run another job or verification to test the badge.
+- **Backup activity has no volume or the chart and row counts differ:** use
+  [Count, range and size-evidence checks](PBS.md#backup-activity-has-no-volume-or-fewer-rows-than-expected).
+  Missing sizes are not zero-byte backups; activity is not proof of protection.
 - **Backup rows look duplicated or copies are missing:** compare
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete

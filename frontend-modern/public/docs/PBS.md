@@ -271,6 +271,40 @@ retention or backups as a test. Use PBS's existing records meanwhile; see
 [backup health](#backups-are-visible-but-coverage-says-unprotected) separately
 for a Coverage disagreement.
 
+### Backup activity has no volume or fewer rows than expected
+
+In **Proxmox → Backups → By date**, **Count** shows completed restore points
+in the selected **7d**, **30d**, **90d** or **1y** window. **Volume** sums only
+their reported positive sizes. A point without a usable size still counts;
+it is not a zero-byte backup. These are restore-point observations, not a
+count of successful backup jobs or distinct protected guests.
+
+| What you see | Safe next check |
+| --- | --- |
+| Count has activity, but Volume has no measured bars | Use **Count** to see activity. Missing sizes do not mean that no backups exist. |
+| Volume shows some sizes and also reports points without a positive size | Treat the total as partial, not the size of all backups. Compare the same point's existing provider record if you already have it. |
+| A listed point does not appear in the chart | Compare its **Created** date with the selected range. Running, incomplete, undated and future-dated points do not contribute to completed activity; older points can remain in the table outside the chart window. |
+
+The activity chart covers the collected inventory, not just the rows matching
+the table's search, node, type, source or location filters. Selecting a chart
+day filters those rows further; **Clear date filter** removes that selection.
+Keep the range and active filters with a disagreement rather than comparing
+an unfiltered chart total with a filtered row count. Calendar days use your
+browser's local timezone.
+
+Reported volume is not datastore space used, free space or bytes transferred.
+PBS deduplication and shared copies mean it is not a storage-capacity estimate.
+For an individual point, match **Source**, **Location**, guest type/ID and
+**Created** time with its existing native record; matching names or VMIDs alone
+do not establish ownership. Keep private identifiers and paths out of reports.
+
+**Activity is not proof of protection, verification, restore readiness or guest
+thaw.** Use the [Coverage checks](#backups-are-visible-but-coverage-says-unprotected)
+for protection disagreements and [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+for an unresponsive guest or uncertain freeze/thaw. Do not run a backup,
+verification, restore, live diagnostics or guest-agent probe, change retention,
+delete records or restart anything just to fill a chart or measure its size.
+
 ### A PBS job looks Healthy but its status disagrees
 
 **An error, warning or running state must not be treated as a completed OK
