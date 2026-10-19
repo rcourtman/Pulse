@@ -10388,3 +10388,14 @@ parser for every value-taking option in text/JSON modes, with transport and
 platform-action sentinels. `TestInstallSHValueArgumentsPreserveExplicitValues`
 retains empty, spaced and single-hyphen values through the real help path.
 These are CLI admission controls, not installed lifecycle recovery proof.
+
+
+### PBS add-source token collision boundary
+
+The config add-node route stops with HTTP 409 when PBS reports an existing
+monitoring token. It leaves that token intact and does not substitute saved
+administrator credentials or reload the monitor. Existing agents and their
+credentials are unchanged; no enrolment, removal or lifecycle operation is
+issued. The existing manual-token path can use a known saved secret.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` covers configuration,
+persistence, reload exclusion and subsequent manual-token setup.

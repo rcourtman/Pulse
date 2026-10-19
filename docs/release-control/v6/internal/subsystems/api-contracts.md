@@ -12622,3 +12622,22 @@ only when it is present, while existing schedules remain editable after a runtim
 change. Legacy catalogs default to false. API and catalog-model tests cover
 absence and registration so staggered source upgrades do not offer unavailable
 rendering. No price or entitlement changes.
+
+
+### PBS setup leaves existing monitoring credentials intact
+
+The existing add-node endpoint returns HTTP 409 with bounded, fixed guidance
+when PBS reports that its monitoring token already exists. It neither saves
+the supplied administrator password as a fallback, appends a connection,
+persists configuration nor reloads monitoring on that collision. The response
+contains no provider body, credential or token identity. It directs operators
+to the existing Manual Token Setup with their saved secret, not deletion or
+recreation of a working token. Other setup errors retain their existing
+behaviour; this does not change TLS trust, collection scope or authentication.
+
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` joins the real TLS PBS client
+and add handler, existing-token reads, unchanged running/persisted configuration
+and manual-token recovery without another provisioning request. Its emitted
+safe HTTP responses bind consuming-editor verification to the producer. This
+source fixture does not establish installed provisioning, guest liveness or
+reporter recovery.

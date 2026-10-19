@@ -595,6 +595,13 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)
 				if err != nil {
+					if errors.Is(err, pbs.ErrMonitoringTokenExists) {
+						// A token name collision is not consent to revoke it or
+						// silently save the administrator password as a substitute.
+						log.Warn().Str("host", host).Msg("PBS: Existing monitoring token left unchanged")
+						http.Error(w, "PBS reported an existing monitoring token. It was left unchanged. Use Manual Token Setup with its saved secret; do not delete or recreate a working token.", http.StatusConflict)
+						return
+					}
 					log.Warn().Err(err).Str("host", host).Msg("PBS: Failed to create token via API, falling back to password auth")
 					// Fallback to password auth
 					pbsPassword = req.Password

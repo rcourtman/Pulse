@@ -7842,3 +7842,15 @@ The read-only `backup-location-scope.cjs` HTTP/browser protocol exercises deskto
 keyboard and 320px touch using the production decoders, model, tables and CSS.
 This changes inventory selection, not collection, protection verdicts, guest
 operations, thaw, filesystem liveness or native backup recovery.
+
+### Preserve existing PBS readers during monitoring setup
+
+An add-node monitoring-token collision is a configuration conflict, not consent
+to delete/recreate an existing PBS token. The route returns fixed HTTP 409
+guidance without saving the administrator password or changing stored provider
+connections. Existing saved-token reads remain usable, and deliberate manual
+setup with that secret requires no provisioning replay. Backup points, task
+outcomes, namespace scope and storage reconciliation are unchanged.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` and
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` cover this source
+boundary without native backup, restore or guest operations.
