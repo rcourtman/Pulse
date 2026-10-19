@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### PBS server counts retain one source owner
+
+The Backups server/datastore table selects the whole PBS inventory source before
+looking up a datastore count. An exact configured connection name takes
+precedence over a legacy instance-ID alias. The alias is usable only when no
+configured connection owns it and it has one server owner; an empty datastore
+must not inherit another connection's entries (for example `backup` versus
+`pbs-backup`). Missing or ambiguous server identity reads Unknown, not zero.
+Unique legacy sources remain supported without summing current and legacy
+inventories. Counts include collected entries, not a restore or guest-health
+claim. The existing datastore disclosure exposes the same count at phone widths,
+including Loading/Unavailable and a measured empty result.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` checks alias collisions, whole-source
+selection, duplicate/missing identities, legacy compatibility and mounted retry
+states. `browser-tests/pbs-count-sources.cjs` consumes synthetic HTTP inventory
+through the production reader/page/table in desktop and narrow touch layouts.
+This does not change collection, protection posture, thaw or native recovery.
+
+
 ### Keyboard access to collected backup activity
 
 The existing backup activity chart has one day in the Tab sequence, initially

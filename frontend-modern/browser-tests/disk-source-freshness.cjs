@@ -229,7 +229,7 @@ function serve(req, res, next) {
           .toBe(before + 1);
       };
       const verifyRetained = async (risk) => {
-        await expect(detail()).toContainText('current disk health is unconfirmed');
+        await expect(detail()).toContainText('Current disk health is unconfirmed');
         await expect(page.getByRole('heading', { name: /Live I\/O \(30m\)/ })).toHaveCount(0);
         await expect(page.getByText('Last known temperature', { exact: true })).toBeVisible();
         assert(
@@ -280,7 +280,7 @@ function serve(req, res, next) {
       await activate(page.getByRole('button', { name: 'Toggle healthy filter' }));
       await expect(row()).toHaveCount(0);
       await activate(page.getByRole('button', { name: 'Toggle healthy filter' }));
-      await expect(detail()).toContainText('current disk health is unconfirmed');
+      await expect(detail()).toContainText('Current disk health is unconfirmed');
 
       await refresh('risk');
       await expect(

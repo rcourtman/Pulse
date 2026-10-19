@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### PBS count disclosure shares its table presentation
+
+The existing datastore disclosure keeps backup-entry counts inspectable when
+the compact projection hides the count column. Both compose the same
+`PlatformTableNumberValue` / `formatPlatformTableIntegerValue` presentation,
+including measured zero. Loading, Unavailable and ambiguous-source Unknown are
+not numeric zero. Same-row inventory replacement retains the open disclosure
+and its focused toggle. Counts are collected entries, not a restore or guest
+health claim. `ProxmoxBackupServersTable.capacity.test.tsx` and
+`pbs-count-sources.cjs` cover desktop keyboard and 320px touch consumers.
+
+
 ### Backup activity keyboard focus follows calendar identity
 
 `BackupActivityChart` exposes a labelled, described group with one day Tab stop

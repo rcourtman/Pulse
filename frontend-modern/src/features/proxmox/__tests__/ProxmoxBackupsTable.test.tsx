@@ -248,7 +248,7 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState({}, '', '/proxmox/backups/date?source=archive&node=pve-a');
     const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
     await screen.findByRole('group', { name: 'Backup activity days' });
-    fireEvent.click(screen.getByRole('button', { name: '1y', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: '1y' }));
     const chart = screen.getByRole('group', { name: 'Backup activity days' });
     const days = within(chart).getAllByRole('button');
     expect(days).toHaveLength(365);
@@ -266,7 +266,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(selectedDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
     point.focus();
-    fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     expect(point).toHaveAccessibleName(/1\.00 MB, selected/);
     expect(document.activeElement).toBe(point);
     expect(point).toHaveAttribute('tabindex', '0');

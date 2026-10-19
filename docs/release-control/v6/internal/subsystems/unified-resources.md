@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### PBS backup counts preserve source attribution
+
+The Backups consumer selects one whole PBS inventory source per server.
+Configured connection names take precedence over unclaimed, unique legacy
+instance-ID aliases; `backup` cannot borrow `pbs-backup`'s entries. Duplicate
+or missing identities stay Unknown rather than becoming a zero or a shared
+count. Datastore lookup follows source selection. This is inventory attribution,
+not host/agent correlation, capacity, protection posture or native recovery.
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-count-sources.cjs`
+cover the actual rows/disclosure, canonical resource adapter and HTTP reader.
+
+
 ### PBS datastore capacity explanations are not hover-only
 
 Unavailable and Unknown capacity cells open the existing full-width resource

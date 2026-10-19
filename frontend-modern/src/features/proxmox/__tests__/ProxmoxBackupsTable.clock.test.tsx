@@ -115,7 +115,7 @@ describe('mounted backup chronology', () => {
     };
     mount('date', '?source=archive&q=east-100');
     await flush();
-    fireEvent.click(screen.getByRole('button', { name: '7d', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: '7d' }));
     expect(activityCount()).toBe(2);
     const oldDay = screen.getAllByRole('button', { name: /: 1 backup$/ })[0];
     fireEvent.click(oldDay);
@@ -128,15 +128,12 @@ describe('mounted backup chronology', () => {
     expect(activityCount()).toBe(1);
     expect(screen.getAllByRole('button', { name: /: \d+ backups?/ })).toHaveLength(7);
     expect(new URLSearchParams(window.location.search).get('day')).toBe(selected);
-    expect(screen.getByRole('button', { name: '7d', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
     expect(rows()).toHaveLength(1); // Selected historical day is not silently reset.
     fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }));
     await flush();
     expect(rows()).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /: 2.00 KB$/ })).not.toBeInTheDocument();
     expect(new URLSearchParams(window.location.search).get('source')).toBe('archive');
@@ -259,7 +256,7 @@ describe('mounted backup chronology', () => {
           })
         : Promise.resolve(new Response(JSON.stringify(pve))),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
     await flush();
     const row = rows()[0];
     const trigger = within(row as HTMLElement).getByRole('button', { name: /Backup evidence/ });
@@ -268,9 +265,7 @@ describe('mounted backup chronology', () => {
     const dialog = screen.getByRole('dialog', { name: 'Backup evidence details' });
     const close = within(dialog).getByRole('button', { name: 'Close backup evidence' });
     close.focus();
-    expect(
-      within(dialog).getByRole('heading', { name: 'Verified', exact: true }),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Verified' })).toBeInTheDocument();
     finish(
       new Response(
         JSON.stringify({
@@ -289,12 +284,8 @@ describe('mounted backup chronology', () => {
     expect(rows()[1]).toBe(row);
     expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toBe(dialog);
     expect(document.activeElement).toBe(close);
-    expect(
-      within(dialog).getByRole('heading', { name: 'Unverified', exact: true }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole('heading', { name: 'Verified', exact: true }),
-    ).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Unverified' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('heading', { name: 'Verified' })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Prune protected' })).toBeInTheDocument();
     expect(dialog).toHaveTextContent(point.id);
     fireEvent.click(close);
@@ -316,7 +307,7 @@ describe('mounted backup chronology', () => {
           })
         : Promise.resolve(new Response(JSON.stringify(pve))),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
     await flush();
     fireEvent.click(screen.getByRole('button', { name: /Backup evidence for east-100/ }));
     await flush();
@@ -347,7 +338,7 @@ describe('mounted backup chronology', () => {
     await flush();
     expect(activityCount()).toBe(2);
     denyPBS = true;
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
     await flush();
     expect(activityCount()).toBe(1);
     expect(rows()).toHaveLength(1);
@@ -364,7 +355,7 @@ describe('mounted backup chronology', () => {
         storageBackups: [identityArchive({ time: iso(Date.now()) })],
       },
     };
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
     await flush();
     expect(activityCount()).toBe(1);
     expect(document.querySelectorAll('[aria-label^="Unknown age"]')).toHaveLength(0);

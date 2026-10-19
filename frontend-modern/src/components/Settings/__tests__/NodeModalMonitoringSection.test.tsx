@@ -275,7 +275,7 @@ describe('NodeModalMonitoringSection collection safety', () => {
       fireEvent.input(fingerprint, { target: { value: 'SHA256:' + 'ab'.repeat(32) } });
       expect(fingerprint).toHaveAttribute('aria-invalid', 'true');
       expect(fingerprint).toHaveAccessibleDescription(/exactly 64 hexadecimal characters/);
-      expect(fingerprint).toHaveAccessibleDescription(/valid format does not prove trust/);
+      expect(fingerprint).toHaveAccessibleDescription(/Valid format does not prove trust/);
       expect(fingerprint).toBeInvalid();
       expect(screen.getByRole('alert')).toHaveTextContent(
         'Do not include spaces or a SHA256: label',

@@ -163,7 +163,7 @@ const malformed = {
         await pin.fill(malformed[type]);
         await expect(pin).toHaveAttribute('aria-invalid', 'true');
         await expect(pin).toHaveAccessibleDescription(/exactly 64 hexadecimal characters/);
-        await expect(error).toContainText('valid format does not prove trust');
+        await expect(error).toContainText('Valid format does not prove trust');
         assert.equal(await pin.evaluate((input) => input.validity.customError), true);
         await activate(save);
         assert.equal(

@@ -251,7 +251,7 @@ describe('GuestPhysicalDisks', () => {
     expect(row.open).toBe(true);
     expect(within(row).queryByText('Healthy')).toBeNull();
     expect(screen.getByTestId('disk-detail-health')).toHaveTextContent(
-      'current disk health is unconfirmed',
+      'Current disk health is unconfirmed',
     );
     expect(row.querySelector('[data-temperature-reading]')).toHaveAttribute(
       'data-temperature-reading',

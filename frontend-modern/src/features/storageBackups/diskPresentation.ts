@@ -829,7 +829,7 @@ export function getPhysicalDiskHealthStatus(
   const hasRisk = getPhysicalDiskHealthVerdict(disk).kind !== 'clear';
   return {
     label: hasRisk ? 'Last known risk' : 'Last known',
-    summary: `${hasRisk ? `Last reported: ${status.label}. ${status.summary} ` : ''}Disk source stopped reporting. SMART readings are last known, not current; current disk health is unconfirmed.`,
+    summary: `${hasRisk ? `Last reported: ${status.label}. ${status.summary} ` : ''}Disk source stopped reporting. SMART readings are last known, not current. Current disk health is unconfirmed.`,
     tone: hasRisk ? status.tone : 'text-muted',
   };
 }

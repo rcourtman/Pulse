@@ -61,19 +61,66 @@ interface BackupServerRow {
   memoryTotal?: number;
   uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
-  backupCount: number;
+  backupCount?: number;
   // A later datastore row of the server on the row above: host cells stay empty.
   continuesServer: boolean;
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
-function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, number> {
-  const counts = new Map<string, number>();
+function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
   for (const backup of backups) {
-    const key = `${backup.instance ?? ''}::${backup.datastore ?? ''}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const instance = backup.instance ?? '';
+    const stores = counts.get(instance) ?? new Map<string, number>();
+    stores.set(backup.datastore ?? '', (stores.get(backup.datastore ?? '') ?? 0) + 1);
+    counts.set(instance, stores);
   }
   return counts;
+}
+
+// Current PBS inventories name their configured connection. Retain the older
+// instance-ID fallback only when no configured name owns that token and its ID
+// has one owner. In particular, "backup" must not borrow "pbs-backup"'s rows.
+function backupSourceOwners(servers: readonly Resource[], key: (server: Resource) => string) {
+  const owners = new Map<string, Set<string>>();
+  for (const server of servers) {
+    const source = key(server);
+    if (!source) continue;
+    const ids = owners.get(source) ?? new Set<string>();
+    ids.add(server.id);
+    owners.set(source, ids);
+  }
+  return owners;
+}
+
+function BackupInventoryCount(props: {
+  value?: number;
+  state?: 'available' | 'loading' | 'unavailable';
+}) {
+  return (
+    <Show
+      when={!props.state || props.state === 'available'}
+      fallback={
+        <span class="text-muted text-[11px]" title={`PBS backup inventory is ${props.state}`}>
+          {props.state === 'loading' ? 'Loading' : 'Unavailable'}
+        </span>
+      }
+    >
+      <Show
+        when={props.value !== undefined}
+        fallback={
+          <span
+            class="text-muted text-[11px]"
+            title="The PBS backup source cannot be matched to one server. This does not mean no backups exist."
+          >
+            Unknown
+          </span>
+        }
+      >
+        <PlatformTableNumberValue value={props.value} format={formatPlatformTableIntegerValue} />
+      </Show>
+    </Show>
+  );
 }
 
 function serverIsOnline(resource: Resource): boolean {
@@ -314,20 +361,27 @@ export function buildBackupServerRows(
 ): BackupServerRow[] {
   const rows: BackupServerRow[] = [];
   const counts = buildBackupCounts(backups);
-  // PBS backups carry instance; resources may expose it under name or pbs.instanceId.
-  const countFor = (server: Resource, datastoreName: string): number => {
-    const ids = [server.name, server.pbs?.instanceId].filter(Boolean) as string[];
-    for (const id of ids) {
-      const n = counts.get(`${id}::${datastoreName}`);
-      if (n !== undefined) return n;
-    }
-    return 0;
-  };
   // `model().pbs` is scope-filtered (proxmox-pbs), which also catches PBS
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
   // datastore renders as a phantom offline "server" row.
   const pbsServers = servers.filter((resource) => resource.type === 'pbs');
+  const names = backupSourceOwners(pbsServers, (server) => server.name);
+  const legacyIds = backupSourceOwners(pbsServers, (server) => server.pbs?.instanceId ?? '');
+  const countFor = (server: Resource, datastoreName: string): number | undefined => {
+    if (server.name && names.get(server.name)?.size !== 1) return undefined;
+    let identified = false;
+    for (const source of [server.name, server.pbs?.instanceId]) {
+      if (!source) continue;
+      const owners = names.get(source) ?? legacyIds.get(source);
+      if (owners?.size !== 1 || !owners.has(server.id)) continue;
+      identified = true;
+      const stores = counts.get(source);
+      // Select a whole source, not a different fallback for each datastore.
+      if (stores) return stores.get(datastoreName) ?? 0;
+    }
+    return identified ? 0 : undefined;
+  };
   const sortedServers = pbsServers
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
@@ -707,27 +761,10 @@ export function ProxmoxBackupServersTable(props: {
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
-                              <Show
-                                when={
-                                  !props.backupInventoryState ||
-                                  props.backupInventoryState === 'available'
-                                }
-                                fallback={
-                                  <span
-                                    class="text-muted text-[11px]"
-                                    title={`PBS backup inventory is ${props.backupInventoryState}`}
-                                  >
-                                    {props.backupInventoryState === 'loading'
-                                      ? 'Loading'
-                                      : 'Unavailable'}
-                                  </span>
-                                }
-                              >
-                                <PlatformTableNumberValue
-                                  value={row.backupCount}
-                                  format={formatPlatformTableIntegerValue}
-                                />
-                              </Show>
+                              <BackupInventoryCount
+                                value={row.backupCount}
+                                state={props.backupInventoryState}
+                              />
                             </Show>
                           </TableCell>
                         </Show>
@@ -772,7 +809,20 @@ export function ProxmoxBackupServersTable(props: {
                                     <dt class="inline text-muted">Datastore: </dt>
                                     <dd class="inline">{datastore().name}</dd>
                                   </div>
+                                  <div>
+                                    <dt class="inline text-muted">Backup entries: </dt>
+                                    <dd class="inline">
+                                      <BackupInventoryCount
+                                        value={row.backupCount}
+                                        state={props.backupInventoryState}
+                                      />
+                                    </dd>
+                                  </div>
                                 </dl>
+                                <p class="mt-2 text-muted">
+                                  Entries in Pulse's collected PBS inventory, not a restore or
+                                  guest-health check.
+                                </p>
                                 <Show
                                   when={capacityEvidence().state === 'available'}
                                   fallback={
