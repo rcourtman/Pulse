@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "22fa6d7c62c370a46b8da5b3f79ce53a7a4ed8a1",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "8b93ea18a3bed9abfd6650f2d14a5e98b0bb740530470a8f859a83fe2ae108d5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "efd0c9f2c6966340304db7508aa9cb506957283c4183ab96a7901043494d004d"
+  },
+  "routes": [
+    "Production ProxmoxBackupsTable through /browser-tests/backup-identity.html and its actual /proxmox/backups/coverage and /proxmox/backups/date router journeys"
+  ],
+  "states": [
+    "Case-distinct East/east connections with repeated VM100 and database names, opposing historical nodes, PVE files, guest snapshots, typed/untyped jobs and PBS connection-name namespace hints",
+    "Reordered equal-sort observations preserve focused/open Coverage evidence",
+    "Removed PVE source remains a separate unrated unmatched target; ordinary resource recovery returns its own evidence; source posture remains independent"
+  ],
+  "interactions": [
+    "Actual HTTP inventory decoders and model consumed through Coverage, expanded job/restore evidence, By date and point dialog",
+    "Chromium desktop keyboard and 320px WebKit touch, using the shipped full-row compact interaction; Escape/Close returns invoking focus",
+    "Only initial and explicit Refresh backups inventory reads; no provider, backup, guest, restore or thaw operations",
+    "42 checks pass, with six settled captures inspected using native view_image; earlier failures and unusable modal captures are retained separately"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T22:21:02Z",
+  "execution_source": "22fa6d7c62c370a46b8da5b3f79ce53a7a4ed8a1",
+  "execution_tree": "4fd4570eaace96dabee8a4df8b32cadcde991bd5",
+  "protocol": "frontend-modern/browser-tests/backup-connection-identity.cjs",
+  "protocol_sha256": "6abe59819ab5de8cc5e80b6c5dc3e0e11e7a3dde5ed906463a683f5dad61a0b2",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "browser_version": "26.0"
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-coverage-exact.png",
+      "state": "coverage-exact",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "Collapse details for database (VM 100)"
+      },
+      "sha256": "3348d83ecb8ccfb18145012737559b3b4b052b81fef1fbd5dd4c43d0de20ab2f",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "At 1440px the two database/VM100 rows remain distinct: east has lower-job/OK, East has upper-job/Warning, despite opposing recorded nodes. Both expanded evidence tables show their own archive/snapshot markers and PBS namespace. Postures remain Unknown, and the East disclosure has a visible blue focus ring."
+    },
+    {
+      "file": "chromium-point-exact.png",
+      "state": "point-exact",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "Close backup evidence"
+      },
+      "sha256": "645fbf7468659b65fc21c98fbcf3afd2364de9f8b54f88923b30bf727c6d6cbb",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "The settled desktop dialog is visible within the viewport: workload connection East, source PBS, central-backups / main / East, and record pbs-upper. Verified and prune-protected meanings are separate, with explicit limits on restore, guest thaw and responsiveness. Close has a visible focus ring."
+    },
+    {
+      "file": "chromium-removed-source.png",
+      "state": "removed-source",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "Collapse details for VM 100"
+      },
+      "sha256": "9380f79a81e84ac571bd1e77da85351314a1da4e1cbb59aaf819201e5fcca32d",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "The remaining east/database row stays OK. East appears separately as one unmatched VM100 target, Not evaluated, retaining upper-job/Warning and its own file/snapshot evidence. The unmatched explanation and full-width evidence remain readable, not pooled with the monitored guest."
+    },
+    {
+      "file": "webkit-coverage-exact.png",
+      "state": "coverage-exact",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "Collapse details for database (VM 100)"
+      },
+      "sha256": "ae3bbc95437dff2969138cb1e967df14948ffd5330b265a29cc3577f246d1ce1",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "At 320px in dark mode the two VM100/database rows retain case-distinct connections, native node context and independent job dots/record details. Expanded evidence wraps into source-specific Location/Details continuations. Both Unknown explanations stay explicit, with no horizontal spill."
+    },
+    {
+      "file": "webkit-point-exact.png",
+      "state": "point-exact",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "Close backup evidence"
+      },
+      "sha256": "2cc5d2435410537564a58eefa3a6b0d8c8c78c92bd8d390df925aba1312621e9",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "The narrow settled dialog is fully visible and readable: East, PBS, central-backups / main / East, pbs-upper. Verification and pruning explanations wrap inside the panel, and the bottom paragraph still denies restore/responsiveness proof. The close action remains visible."
+    },
+    {
+      "file": "webkit-removed-source.png",
+      "state": "removed-source",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "geometry": {
+        "overflow": false,
+        "focus": "\n    Restore points reflect the last inventory read. Refresh to read new or removed backups.Refresh "
+      },
+      "sha256": "653adbbaf3eede1cec8294df9f5a77240ce945895b1082099e875c5942c665c3",
+      "inspected_with": "native view_image, original detail, image content presented to model",
+      "pixel_review": "The narrow remaining east row retains lower-job/OK while one East VM100 unmatched target reads N/A and upper-job/Warning. Its source-specific archive/snapshot evidence and non-recovery explanation remain inspectable below the live target; no horizontal spill is visible."
+    }
+  ],
+  "limits": "Synthetic collected snapshots and resource replacement through actual HTTP decoder, router, mapper, tables and CSS. PVE exact-source attribution and PBS exact connection-name hints; existing unique-VMID PBS fallback is unchanged. No native collection, backup/restore, guest thaw/liveness, installed recovery, release or screen-reader speech proof.",
+  "raw_result_sha256": "99ecbbfb60f061bf16178ac2045cebf796e43e11b13ea851e00c42f6e40bdb04",
+  "compiled_source_count": 297,
+  "compiled_artifacts": {
+    "assets/backup-identity-CNOytHpr.js": "331f9307e028da13f676493d0dfcd73e1db82157c081270cfb2c1a4c7ac13697",
+    "assets/backup-identity-Cyanv9-g.css": "7caece3e194f1eb2df4185cbb676ad81ccf24db7308fa85c75c7467d4e36a95f",
+    "assets/messages.de-DXb0-WyL.js": "29fb234cbceaa19d3e479ba266757867d05325ef2b19247268b14d178012cd98",
+    "assets/messages.es-CYJMg4-g.js": "65a2bde5323f97c85835c32542deda443e86d7f31aaffd5ff3b1f253d42b4bb3",
+    "browser-tests/backup-identity.html": "baacd9a8278c4c3747d40acb1730e15dd6acd8272107d967f0a9a6bdefb2fd3f"
+  },
+  "cleanup": {
+    "browser": true,
+    "server": true
+  }
+}

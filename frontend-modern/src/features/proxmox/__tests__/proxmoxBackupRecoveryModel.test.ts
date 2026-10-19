@@ -98,6 +98,25 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it('does not lend a typed backup job to a guest in a case-distinct connection', () => {
+    const result = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [task({ type: 'ct', instance: 'Homelab' })],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
+    });
+    const live = result.coverageRows.find((row) => row.workload.resourceId)!;
+    expect(live.latestTask).toBeUndefined();
+    expect(live.posture).toBe('protected');
+    const orphan = result.coverageRows.find((row) => row.isOrphaned)!;
+    expect(orphan.workload.instance).toBe('Homelab');
+    expect(orphan.latestTask?.id).toBe('task-112');
+    expect(orphan.posture).toBe('not-evaluated');
+  });
+
   it.each(['OK', 'success', 'completed', ' Ok '])(
     'does not assert %j success when the same job reports an error',
     (status) => {

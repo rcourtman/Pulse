@@ -21,6 +21,32 @@
 
 ## Purpose
 
+### Backup workload attribution preserves configured connection identity
+
+PVE files, guest snapshots and typed/untyped jobs match configured connection
+names exactly, including case, before considering native nodes. A historical
+node from before migration cannot select a guest in a case-distinct connection.
+A known conflicting connection cannot borrow a singleton guest; its collected
+evidence stays inspectable as an unrated unmatched target. Untyped orphan jobs
+can join only the exact PVE source's artifact row. PBS namespace hints compare
+connection names exactly as well. Native hostname/alias matching remains
+case-insensitive, and absent-instance, unique-VMID PBS and other legacy fallback
+rules remain unchanged. No source data or server-owned posture is rewritten.
+Coverage sort ties use full row identity rather than source response order, so
+ordinary replacement of equal-name/posture/time rows does not move a focused
+disclosure or lose its keyboard focus. Primary sort direction remains intact.
+
+`proxmoxBackupRecoveryModel.identity.test.ts` and
+`proxmoxBackupRecoveryModel.test.ts` cover case-distinct/migrated sources,
+removed-source singletons, orphan jobs and hostname compatibility.
+`ProxmoxBackupsTable.test.tsx` checks tied-order, focus, open evidence and read
+counts through resource replacement.
+`browser-tests/backup-connection-identity.cjs` consumes safe HTTP snapshots
+through the production reader, mapper, Coverage and By date, including point
+details, live resource replacement and keyboard/narrow-touch interactions.
+This is backup-evidence attribution, not collection, native recovery,
+guest thaw or filesystem-liveness proof.
+
 ### PBS server counts retain one source owner
 
 The Backups server/datastore table selects the whole PBS inventory source before
