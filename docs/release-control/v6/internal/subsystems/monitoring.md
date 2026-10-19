@@ -17,6 +17,35 @@
 
 ## Purpose
 
+### PBS live-state slots belong to selected groups, not cache or response order
+
+The existing 5,000-row per-connection window reserves slots in descending
+last-backup group order within each enumerated datastore/namespace. Cache hits
+and refreshes consume the same budget; a cache hit cannot reset outstanding
+reservations. Selected groups publish in that order, each with its newest real
+snapshots, regardless of worker response order. Older cached rows cannot crowd
+out a newer refresh, and unselected older groups are not fetched to fill a
+failed or denied selected group's slots. Configured datastore/namespace traversal,
+the 100-snapshot group cap and five-reader HTTP ceiling remain unchanged.
+
+A group crossing the live-state boundary, or outgrowing its listed count during
+the snapshot read, makes collection partial rather than authorising deletion of
+unseen durable history. A clipped payload expires that exact group's cache so a
+still-stale count cannot certify completeness on the next poll. Failed refreshes
+retain their original age; access rejection withdraws raw rows without renewing
+them. Complete ordinary recovery resumes cache reuse, and authoritative empty
+history still reconciles deletion.
+
+`pbs_live_selection_test.go` joins real HTTP reads at the actual cap to raw/cache
+publication, guest backup age, recovery mapping, stored history and protection,
+including mixed reuse/refresh, transient and denied reads and ordinary recovery.
+Its complete emitted frames feed the production Backups surface through
+`scripts/check-pbs-live-selection-browser.cjs` at desktop and narrow viewports.
+These are source/consumer proofs, not installed PBS, restore, guest thaw or
+filesystem-liveness acceptance. No limit, permission, API field, guest operation
+or native-recovery prerequisite is added.
+
+
 ### Running scheduled backups cannot qualify unidentified archive output
 
 An active vzdump parent without a positive guest ID cannot identify every file

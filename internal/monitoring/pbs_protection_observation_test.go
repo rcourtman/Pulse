@@ -395,3 +395,14 @@ func exercisePBSRootDatastoreDiscovery(t *testing.T, cases []pbsDatastoreDiscove
 		})
 	}
 }
+
+// The live-state selection controls join the actual cap to the ordinary HTTP,
+// cache, guest-age and stored protection consumers. Keep their entry points
+// alongside the provider-completeness contract controls.
+func TestPBSLiveSelectionKeepsNewerRefreshAheadOfOlderCache(t *testing.T) {
+	exercisePBSLiveSelectionKeepsNewerRefreshAheadOfOlderCache(t)
+}
+
+func TestPBSLiveSelectionGrowthDoesNotRenewTruncatedCache(t *testing.T) {
+	exercisePBSLiveSelectionGrowthDoesNotRenewTruncatedCache(t)
+}

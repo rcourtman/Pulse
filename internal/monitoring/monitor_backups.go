@@ -1706,6 +1706,8 @@ type pbsBackupFetchRequest struct {
 	namespace string
 	group     pbs.BackupGroup
 	cached    cachedPBSGroup
+	reuse     bool
+	limit     int // Reserved live-state slots, including cache hits, in group order.
 }
 
 func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName string, client *pbs.Client, inventory pbsBackupInventory) {
@@ -1801,6 +1803,10 @@ func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName strin
 			projectedBackups := len(allBackups)
 
 			for _, group := range groups {
+				// Deleted groups do not consume any live-state capacity.
+				if group.BackupCount == 0 {
+					continue
+				}
 				if projectedBackups >= pbsBackupLiveStateLimit {
 					log.Warn().
 						Str("instance", instanceName).
@@ -1822,11 +1828,20 @@ func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName strin
 				}
 				cached := existingGroups[key]
 
-				// Group deleted (no backups left) - ensure cached data is dropped.
-				if group.BackupCount == 0 {
-					continue
-				}
 				retainedGroups[key] = struct{}{}
+				reserved := retainedPBSSnapshotCount(group.BackupCount)
+				// A transient count-decreasing refresh still owns its known
+				// cached rows. Reserve room for them without relaxing either cap.
+				if len(cached.snapshots) > reserved {
+					reserved = len(cached.snapshots)
+				}
+				if remaining := pbsBackupLiveStateLimit - projectedBackups; reserved > remaining {
+					reserved = remaining
+					// Even the final group can cross the live-state boundary.
+					// Truncation is not a complete, reconcilable inventory.
+					datastoreNamespaceErrors++
+				}
+				projectedBackups += reserved
 
 				lastBackupTime := time.Unix(group.LastBackup, 0)
 				hasCachedData := len(cached.snapshots) > 0
@@ -1852,32 +1867,35 @@ func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName strin
 				// Reuse only an unchanged group. A count-preserving prune/import
 				// can move last-backup backwards; the previously newest point
 				// may no longer exist. TTL still bounds verification-only changes.
-				if hasCachedData &&
+				reuse := hasCachedData &&
 					cacheStillFresh &&
 					cacheCountMatches &&
 					!cachedHasInProgress &&
-					lastBackupTime.Equal(cached.latest) {
+					lastBackupTime.Equal(cached.latest)
 
-					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
+				if reuse {
 					groupsReused++
-					projectedBackups = len(allBackups)
-					continue
+				} else {
+					groupsRequested++
 				}
 
+				// Cache and HTTP results share one ordered selection. Publishing
+				// cache hits first would let older rows consume the slots reserved
+				// for newer groups still being read by the worker pool.
 				requests = append(requests, pbsBackupFetchRequest{
 					datastore: ds.Name,
 					namespace: namespace,
 					group:     group,
 					cached:    cached,
+					reuse:     reuse,
+					limit:     reserved,
 				})
-				projectedBackups += retainedPBSSnapshotCount(group.BackupCount)
 			}
 
 			if len(requests) == 0 {
 				continue
 			}
 
-			groupsRequested += len(requests)
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
 			allBackups = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
 			datastoreNamespaceErrors += fetched.errors
@@ -1889,6 +1907,11 @@ func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName strin
 			fetchedAt := time.Now()
 			for _, key := range fetched.refreshed {
 				refreshedGroups[key] = fetchedAt
+			}
+			for _, key := range fetched.truncated {
+				// Do not let a clipped payload masquerade as an unchanged,
+				// complete group on the next poll, even if count is still stale.
+				refreshedGroups[key] = time.Time{}
 			}
 		}
 
@@ -2213,6 +2236,7 @@ type pbsBackupSnapshotFetchResult struct {
 	errors         int
 	terminalErrors int
 	refreshed      []pbsBackupGroupKey
+	truncated      []pbsBackupGroupKey
 }
 
 func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
@@ -2225,8 +2249,12 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		workerCount = len(requests)
 	}
 
-	jobs := make(chan pbsBackupFetchRequest)
-	results := make(chan pbsBackupSnapshotFetchResult, workerCount)
+	type indexedResult struct {
+		index int
+		pbsBackupSnapshotFetchResult
+	}
+	jobs := make(chan int)
+	results := make(chan indexedResult, workerCount)
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {
@@ -2234,7 +2262,33 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		go func() {
 			defer wg.Done()
 
-			for req := range jobs {
+			for index := range jobs {
+				req := requests[index]
+				key := pbsBackupGroupKey{datastore: req.datastore, namespace: req.namespace, backupType: req.group.BackupType, backupID: req.group.BackupID}
+				result := pbsBackupSnapshotFetchResult{}
+				publish := func() bool {
+					if len(result.backups) > req.limit {
+						// A group can grow between listing and snapshot reads. It
+						// cannot consume another group's reserved live-state slots
+						// or certify that the truncated inventory was complete.
+						result.backups = append([]models.PBSBackup(nil), result.backups[:req.limit]...)
+						result.errors++
+						result.truncated = []pbsBackupGroupKey{key}
+					}
+					select {
+					case results <- indexedResult{index, result}:
+						return true
+					case <-ctx.Done():
+						return false
+					}
+				}
+				if req.reuse {
+					result.backups = req.cached.snapshots
+					if !publish() {
+						return
+					}
+					continue
+				}
 				log.Debug().
 					Str("instance", instanceName).
 					Str("datastore", req.datastore).
@@ -2254,27 +2308,22 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 						Str("id", req.group.BackupID).
 						Msg("Failed to list PBS backup snapshots")
 
-					result := pbsBackupSnapshotFetchResult{errors: 1}
+					result.errors = 1
 					if shouldReuseCachedPBSBackups(err) {
 						result.backups = req.cached.snapshots
 					} else {
 						// Access rejection cannot renew a cached raw row.
 						result.terminalErrors = 1
 					}
-					results <- result
+					if !publish() {
+						return
+					}
 					continue
 				}
 
-				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
-				select {
-				case results <- pbsBackupSnapshotFetchResult{
-					backups: backups,
-					refreshed: []pbsBackupGroupKey{{
-						datastore: req.datastore, namespace: req.namespace,
-						backupType: req.group.BackupType, backupID: req.group.BackupID,
-					}},
-				}:
-				case <-ctx.Done():
+				result.backups = convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
+				result.refreshed = []pbsBackupGroupKey{key}
+				if !publish() {
 					return
 				}
 			}
@@ -2283,9 +2332,9 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 
 	go func() {
 		defer close(jobs)
-		for _, req := range requests {
+		for index := range requests {
 			select {
-			case jobs <- req:
+			case jobs <- index:
 			case <-ctx.Done():
 				return
 			}
@@ -2298,11 +2347,18 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	}()
 
 	var combined pbsBackupSnapshotFetchResult
+	// Reservations keep the staged payload bounded by the same live-state
+	// limit. Preserve group priority regardless of cache or response timing.
+	ordered := make([][]models.PBSBackup, len(requests))
 	for result := range results {
-		combined.backups = appendPBSBackupsWithinLimit(combined.backups, result.backups)
+		ordered[result.index] = result.backups
 		combined.errors += result.errors
 		combined.terminalErrors += result.terminalErrors
 		combined.refreshed = append(combined.refreshed, result.refreshed...)
+		combined.truncated = append(combined.truncated, result.truncated...)
+	}
+	for _, backups := range ordered {
+		combined.backups = appendPBSBackupsWithinLimit(combined.backups, backups)
 	}
 
 	return combined

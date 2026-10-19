@@ -300,6 +300,7 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 		backupID := strconv.Itoa(1000 + i)
 		requests = append(requests, pbsBackupFetchRequest{
 			datastore: "archive",
+			limit:     1,
 			group: pbs.BackupGroup{
 				BackupType:  "vm",
 				BackupID:    backupID,
