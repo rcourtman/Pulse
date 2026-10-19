@@ -5,6 +5,108 @@ const path = require("node:path");
 
 const triage = require("./issue-version-triage.cjs");
 
+// A named source in a title is still a transition, not the failing release.
+// Exercise fallback separately from the authoritative form/legacy body fields.
+const ambiguousVersionTitles = [
+  "Pulse 6.4.5 → 6.5.0 fails",
+  "Pulse 6.4.5 -> v6.5.0 fails",
+  "Pulse 6.4.5 => latest fails",
+  "Pulse 6.4.5 ↔ 6.5.0",
+  "Pulse 6.4.5 to 6.5.0 fails",
+  "Pulse 6.4.5 through 6.5.0",
+  "Pulse 6.4.5 / 6.5.0",
+  "Pulse 6.4.5 or 6.5.0",
+  "Pulse 6.4.5 and 6.5.0",
+  "Pulse 6.4.5 – 6.5.0",
+  "Pulse 6.4.5 — v6.5.0",
+  "Pulse 6.4.5 - 6.5.0",
+  "Pulse Pro server v6.4.5 → v6.5.0",
+  "Pulse version 6.4.5 → unknown",
+  "Pulse server: 6.4.5 to nightly",
+  "Pulse 6.4.5 update to 6.5.0 fails",
+  "rcourtman/pulse:6.4.5 → latest fails",
+  "license.pulserelay.pro/pulse-pro:6.4.5 / 6.5.0",
+  "[Bug]: 6.4.5 → latest fails",
+  "Bug on v6.4.5 -> unknown",
+  "6.4.5 to nightly fails",
+  "[v6 pre-release]: 6.6.0-beta.2 / latest",
+];
+
+test("title fallback never selects a transition's named source or alternative", () => {
+  for (const title of ambiguousVersionTitles) {
+    assert.equal(triage.internals.extractPulseVersion(title, "Existing observations only."), null, title);
+  }
+});
+
+test("ambiguous titles do not override an explicit current or unknown body version", () => {
+  for (const title of ambiguousVersionTitles) {
+    for (const body of ["### Pulse version\n6.5.0", "Pulse version: 6.5.0"]) {
+      assert.equal(triage.internals.extractPulseVersion(title, body), "6.5.0", title);
+    }
+    assert.equal(triage.internals.extractPulseVersion(title, "### Pulse version\nunknown"), null, title);
+  }
+});
+
+const currentVersionTitles = [
+  ["Pulse 6.5.0 with PVE 9.2.0: readings missing", "6.5.0"],
+  ["Pulse Pro server v6.5.0 with agent 6.4.5: readings missing", "6.5.0"],
+  ["Pulse 6.5.0 and agent 6.4.5 disagree", "6.5.0"],
+  ["Pulse 6.5.0 / TrueNAS CORE 13.0.0: readings missing", "6.5.0"],
+  ["Pulse 6.6.0-rc.4 with Kubernetes 1.33.0", "6.6.0-rc.4"],
+  ["Pulse 6.5.0: moving a node to another cluster loses readings", "6.5.0"],
+  ["rcourtman/pulse:6.5.0 on PVE 9.2.0", "6.5.0"],
+  ["license.pulserelay.pro/pulse-pro:6.6.0-beta.3 with agent 6.5.0", "6.6.0-beta.3"],
+  ["Bug on v6.5.0: missing readings", "6.5.0"],
+  ["[Bug]: 6.6.0-rc.4: sign-in fails", "6.6.0-rc.4"],
+];
+
+test("title ambiguity checks preserve explicit server versions beside other products", () => {
+  for (const [title, version] of currentVersionTitles) {
+    assert.equal(triage.internals.extractPulseVersion(title, "Existing observations only."), version, title);
+  }
+});
+
+test("ambiguous titles cannot create an affected-version label or a public question", async () => {
+  for (const title of ambiguousVersionTitles) for (const action of ["opened", "edited", "reopened"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.",
+      labels: ["bug", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action, issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], `${action}: ${title}`);
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
+test("title transitions preserve versions established from the whole conversation", async () => {
+  for (const title of ambiguousVersionTitles) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.",
+      labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "reopened", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels, [], title);
+    assert.deepEqual(calls.createLabel, [], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
+test("the title consumer still classifies a single explicit server release silently", async () => {
+  for (const [title, version] of currentVersionTitles) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.", labels: [{ name: "bug" }] };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[`affects-${version}`]], title);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [`affects-${version}`], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
 // GitHub issue forms do not submit markdown-only guidance as report fields.
 // Detailed, optional guidance belongs immediately before the input it helps;
 // test that location rather than requiring every reader to see it expanded.

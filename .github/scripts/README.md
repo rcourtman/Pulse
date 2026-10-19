@@ -36,6 +36,11 @@ whether a fix is available. Community reconciles comments, images and releases.
   A stated current version with separate history, such as
   `6.5.0 (upgraded from 6.4.5)`, still supplies evidence. An ambiguous field
   does not erase versions already established by Community or request a retest.
+- The same transition check applies to title fallback: naming the source
+  (`Pulse 6.4.5 → 6.5.0 fails`) does not make it the affected release. A mutable
+  or unknown destination is also ambiguous. Explicit body fields still take
+  precedence, and an unrelated agent or platform version beside a named Pulse
+  version does not turn that title into a range.
 - Preserve the immediate pre-write check of issue identity, open state, title,
   body, update time and label set. Separate GitHub label APIs are not atomic;
   this check narrows that race but cannot eliminate it.
