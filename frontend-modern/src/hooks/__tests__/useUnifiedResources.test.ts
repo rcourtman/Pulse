@@ -862,6 +862,181 @@ describe('useUnifiedResources', () => {
     }
   });
 
+  describe('opted-in complete inventory read deadline', () => {
+    const mount = (readTimeoutMs?: number, cacheKey = 'deadline-test') => {
+      setWsConnected(false);
+      setWsState('resources', []);
+      let result!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+      let dispose = () => {};
+      createRoot((stop) => {
+        dispose = stop;
+        result = useUnifiedResources({
+          query: 'type=physical_disk&parent=vm-101',
+          cacheKey,
+          readTimeoutMs,
+          reportBackgroundErrors: true,
+        });
+      });
+      return { result, dispose };
+    };
+
+    it.each(['headers', 'body', 'error-body', 'later-page'])(
+      'releases a stalled %s read, aborts its transport and admits a fresh explicit retry',
+      async (stage) => {
+        const pending = deferred<unknown>();
+        if (stage === 'headers') apiFetchMock.mockReturnValue(pending.promise);
+        if (stage === 'body')
+          apiFetchMock.mockResolvedValue({ ok: true, json: () => pending.promise });
+        if (stage === 'error-body')
+          apiFetchMock.mockResolvedValue({ ok: false, status: 503, text: () => pending.promise });
+        if (stage === 'later-page')
+          apiFetchMock
+            .mockResolvedValueOnce({
+              ok: true,
+              json: async () => ({ data: [v2Resource], meta: { totalPages: 3 } }),
+            })
+            .mockReturnValue(pending.promise);
+        const { result, dispose } = mount(20_000);
+        try {
+          for (let i = 0; i < 20; i++) await flushAsync();
+          const calls = stage === 'later-page' ? 3 : 1;
+          expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+          await vi.advanceTimersByTimeAsync(19_999);
+          expect(result.error()).toBeUndefined();
+          expect(result.loading()).toBe(true);
+          await vi.advanceTimersByTimeAsync(1);
+          expect(result.error()).toBeInstanceOf(Error);
+          expect(result.loading()).toBe(false);
+          expect(result.resources()).toHaveLength(0);
+          const signals = apiFetchMock.mock.calls.map((call) => call[1]?.signal);
+          expect(signals.every((signal) => signal instanceof AbortSignal && signal.aborted)).toBe(
+            true,
+          );
+          expect(new Set(signals).size).toBe(1);
+
+          apiFetchMock.mockResolvedValue(resourceResponse([{ ...v2Resource, name: 'recovered' }]));
+          await result.refetch();
+          expect(apiFetchMock).toHaveBeenCalledTimes(calls + 1);
+          expect(result.error()).toBeUndefined();
+          expect(result.resources()[0].name).toBe('recovered');
+          // Abort-ignoring transports/bodies cannot reanimate a timed-out query.
+          pending.resolve(
+            stage === 'headers' || stage === 'later-page'
+              ? {
+                  ok: true,
+                  json: async () => ({
+                    data: [{ ...v2Resource, name: 'obsolete' }],
+                    meta: { totalPages: 4 },
+                  }),
+                }
+              : stage === 'body'
+                ? { data: [{ ...v2Resource, name: 'obsolete' }], meta: { totalPages: 4 } }
+                : '{"error":"PRIVATE_OLD_ERROR"}',
+          );
+          for (let i = 0; i < 20; i++) await flushAsync();
+          expect(result.error()).toBeUndefined();
+          expect(result.resources()[0].name).toBe('recovered');
+          expect(apiFetchMock).toHaveBeenCalledTimes(calls + 1);
+        } finally {
+          dispose();
+        }
+      },
+    );
+
+    it('uses one deadline across pagination rather than starting a new page allowance', async () => {
+      const firstPage = deferred<unknown>();
+      const secondPage = deferred<unknown>();
+      apiFetchMock.mockReturnValueOnce(firstPage.promise).mockReturnValueOnce(secondPage.promise);
+      const { result, dispose } = mount(20_000);
+      try {
+        await vi.advanceTimersByTimeAsync(15_000);
+        firstPage.resolve({ ok: true, json: async () => ({ data: [], meta: { totalPages: 2 } }) });
+        for (let i = 0; i < 20; i++) await flushAsync();
+        expect(apiFetchMock).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(result.error()).toBeInstanceOf(Error);
+        expect(result.loading()).toBe(false);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('coalesces bounded readers and preserves failed freshness through a warm remount', async () => {
+      apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+      const first = mount(20_000);
+      let next: ReturnType<typeof mount> | undefined;
+      try {
+        await waitForResourceCount(() => first.result.resources().length);
+        apiFetchMock.mockReturnValue(new Promise(() => {}));
+        window.dispatchEvent(new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT));
+        await waitForValue(() => apiFetchMock.mock.calls.length, 2);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(first.result.error()).toBeInstanceOf(Error);
+        first.dispose();
+        next = mount(20_000);
+        expect(next.result.error()).toBeInstanceOf(Error);
+        const retry = next.result.refetch().catch((error) => error);
+        await waitForValue(() => apiFetchMock.mock.calls.length, 3);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(await retry).toBeInstanceOf(Error);
+        expect(apiFetchMock).toHaveBeenCalledTimes(3);
+        apiFetchMock.mockResolvedValue(resourceResponse([]));
+        await next.result.refetch();
+        expect(next.result.error()).toBeUndefined();
+        expect(next.result.resources()).toHaveLength(0);
+      } finally {
+        if (!next) first.dispose();
+        next?.dispose();
+      }
+    });
+
+    it('shares one bounded read across mounted owners without cancelling a surviving sibling', async () => {
+      apiFetchMock.mockReturnValue(new Promise(() => {}));
+      const first = mount(20_000);
+      const second = mount(20_000);
+      try {
+        await waitForValue(() => apiFetchMock.mock.calls.length, 1);
+        first.dispose();
+        const signal = apiFetchMock.mock.calls[0][1].signal as AbortSignal;
+        expect(signal.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(second.result.error()).toBeInstanceOf(Error);
+        expect(signal.aborted).toBe(true);
+        expect(apiFetchMock).toHaveBeenCalledTimes(1);
+        apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+        await second.result.refetch();
+        expect(second.result.error()).toBeUndefined();
+        expect(second.result.resources()).toHaveLength(1);
+      } finally {
+        second.dispose();
+      }
+    });
+
+    it('retains the existing unbounded default and clears a settled deadline timer', async () => {
+      apiFetchMock.mockReturnValue(new Promise(() => {}));
+      const normal = mount();
+      try {
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(normal.result.error()).toBeUndefined();
+        expect(normal.result.loading()).toBe(true);
+        expect(apiFetchMock.mock.calls[0][1].signal).toBeUndefined();
+      } finally {
+        normal.dispose();
+      }
+      apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+      const bounded = mount(20_000, 'settled-deadline');
+      try {
+        await waitForResourceCount(() => bounded.result.resources().length);
+        const signal = apiFetchMock.mock.calls.at(-1)![1].signal as AbortSignal;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(signal.aborted).toBe(false);
+        expect(bounded.result.error()).toBeUndefined();
+      } finally {
+        bounded.dispose();
+      }
+    });
+  });
+
   it('keeps an attached availability check distinct from its host across REST and websocket updates', async () => {
     const host = createWsResource({
       id: 'agent-core2026',

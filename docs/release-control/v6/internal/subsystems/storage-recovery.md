@@ -7745,3 +7745,16 @@ becomes a successful read merely by closing/reopening the drawer. Retry's local
 busy owner resets on organisation change and ignores old-scope settlement, while
 the existing source owner fences the response. Other resource consumers retain
 their previous defaults; no shared polling or collection behaviour changes.
+
+The child reader's complete shared read now has a 20-second deadline, covering
+headers, success/error bodies, API-client Retry-After waits and all inventory
+pages together. Expiry aborts its transport, retires late settlement before any
+cache write, withdraws retained SMART consumers and releases the explicit Retry.
+Only another explicit retry or an existing resource refresh starts another read;
+no timeout retry loop or guest operation is added. The notice names the wait
+limit without rendering provider text. Successful empty and populated recovery
+keep their existing meanings. `useUnifiedResources.test.ts` covers abort-ignoring
+settlement, a common pagination allowance, surviving shared owners and remounts;
+`guest-disk-read-recovery.cjs` exercises these bounded reads through real HTTP,
+the API client, Overview and SMART at desktop and 320px. Guest thaw, filesystem
+liveness and ordinary native recovery remain separate and unproved by this UI.

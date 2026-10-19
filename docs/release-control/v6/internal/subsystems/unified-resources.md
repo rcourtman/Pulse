@@ -8941,3 +8941,17 @@ failed-cache remount and successful recovery. The child component's tests and
 `guest-disk-read-recovery.cjs` connect the opt-in to actual Overview withdrawal,
 explicit/coalesced retries, empty success and retired old-tenant responses at
 desktop/320px. These are read-only synthetic consumers, not guest-safety recovery.
+
+The guest physical-disk consumer additionally opts into a 20-second complete
+shared-read deadline. Callers sharing its cache key share one deadline policy;
+other readers retain the unbounded default. One controller covers the API
+client, response bodies and every page, and binds bounded pages to the original
+organisation rather than following a new active organisation mid-read. A local
+race settles even if abort is ignored; only its winner can populate the cache,
+so expired late bodies cannot renew freshness or block the next explicit read.
+Page settlement checks abort before advancing a growing inventory. Deadline
+cleanup does not cancel a surviving coalesced owner merely because one drawer
+unmounts. The deadline expires naturally for an otherwise abandoned shared read.
+`useUnifiedResources.test.ts` and `guest-disk-read-recovery.cjs` cover the complete
+allowance, actual HTTP bodies/Retry-After, cache/remount recovery and existing
+organisation fencing. No collection, polling cadence or native operation changes.
