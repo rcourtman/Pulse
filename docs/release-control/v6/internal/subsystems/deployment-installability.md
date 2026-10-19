@@ -725,6 +725,29 @@ default-based service operation, fresh-install fallback, live executable
 replacement or destructive removal follows that refusal. Admitted executable
 staging and existing stop/readback/recovery safeguards remain unchanged.
 
+The initial existing-install check also requires one successful, settled
+`ActiveState` observation of the selected service before executing the installed
+binary or entering main's backup, download or configuration steps. An inactive
+or failed unit is not a failed read; unavailable, partial, transitional or
+unknown results return the distinct refusal status 2, never fresh-install
+absence or an assertion that Pulse is stopped. This read has the existing
+five-second deadline and one-second kill backstop; no second sample or service
+mutation follows uncertainty.
+
+The installed executable's `--version` probe uses the same command bound and a
+quoted pathname, including custom install paths containing spaces. Only a
+successful complete probe contributes version bytes. Failure, timeout or an
+unrecognised version leaves one explicit `unknown` value and a warning, not a
+plausible version combined with failed output. An existing binary still counts
+as an installation, preserving the existing damaged/unversioned-binary repair
+route; an inactive host without a binary remains a fresh install. This is not
+an installed version, process-identity, native recovery or downgrade-safety
+guarantee for unknown versions.
+Failed service state and unavailable non-systemd state are named as such,
+not described as a confirmed stopped service. The existing config/unit repair
+fixture also exercises pinned and ordinary repair with failed version output
+and both timer-consent choices; it observes the missing unit as inactive.
+
 `TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads` executes the
 actual shell functions and callers with confined command doubles, a
 deterministic pipe-buffer control, fake versioned archive/build inputs and an
@@ -732,6 +755,10 @@ optional real `systemctl --root` inventory. Only the unit-writer test relocates
 its fixed output path. It proves selection and refusal propagation, not release
 signature trust, real compilation, native systemd restart, an LXC stop cause or
 installed update/recovery. Those remain separate operational evidence.
+Its initial-check controls include settled/custom-path success, unavailable
+and transitional main-flow refusal before mutation, TERM-resistant manager
+and version probes with plausible early output, and preserved damaged-binary
+and fresh-host detection. The Go hook requires those controls by name.
 `TestAutoUpdateServiceDiscoveryAndInstallerHandoff` uses the same fixture to
 execute the actual unattended helper's selection and
 `perform_update` entry/handoff with a fake installer, including timeout and
