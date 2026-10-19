@@ -165,7 +165,18 @@ function serve(req, res, next) {
         }
       };
       const capture = async (state) => {
+        // The controlled wall clock must still allow the portal's requested
+        // animation-frame layout to complete before judging its pixels.
+        await page.clock.runFor(50);
         const geometry = await page.evaluate(() => ({
+          focusedRect: (() => {
+            const r = document.activeElement.getBoundingClientRect();
+            return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+          })(),
+          tooltipRects: [...document.querySelectorAll('[data-tooltip-portal="true"]')].map((el) => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+          }),
           overflow: document.documentElement.scrollWidth > innerWidth,
           clippedHelp: [...document.querySelectorAll('[id$="-keyboard-help"]')]
             .filter((el) => el.scrollWidth > el.clientWidth + 1)
@@ -178,6 +189,15 @@ function serve(req, res, next) {
         assert.equal(geometry.overflow, false, `Viewport overflow: ${state}`);
         assert.deepEqual(geometry.clippedHelp, []);
         assert.equal(geometry.dayTabStops, 1);
+        if (!narrow && ['volume-focus', 'short-range-selection'].includes(state)) {
+          assert.equal(geometry.tooltipRects.length, 1);
+          const tip = geometry.tooltipRects[0];
+          assert(tip.left >= 0 && tip.right <= current.viewport.width);
+          assert(
+            Math.abs(tip.bottom - geometry.focusedRect.top) <= 12,
+            'Tooltip follows its focused day after layout',
+          );
+        }
         const file = `${name}-${state}.png`;
         await page.screenshot({
           path: path.join(output, file),
