@@ -360,6 +360,8 @@ class SignedInstallerStagingTest(unittest.TestCase):
                         installer.write_text(installer.read_text() + '# Pulse Unified Agent Installer\n')
                     subprocess.run(['ssh-keygen', '-Y', 'sign', '-f', str(key), '-n', 'pulse-install', str(installer)],
                                    check=True, capture_output=True)
+                    # OpenSSH writes .sig; Pulse publishes that as .sshsig.
+                    (folder / 'install.sh.sig').rename(folder / 'install.sh.sshsig')
                     if variant == 'bad-signature' and '-rc.' in tag:
                         installer.with_suffix('.sh.sshsig').write_text('invalid signature')
                     assets = [{'name': p.name, 'size': p.stat().st_size,
