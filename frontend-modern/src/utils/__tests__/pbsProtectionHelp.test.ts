@@ -25,7 +25,13 @@ describe('PBS protection disagreement help', () => {
     expect(
       render(guide, 'PBS').querySelector('#backups-are-visible-but-coverage-says-unprotected'),
     ).not.toBeNull();
-    const rows = [...article().querySelectorAll('tbody tr')].map((row) => row.textContent);
+    // The section also contains job-identity/timing tables. Assert the safety
+    // comparison itself, not every descendant row added by those subsections.
+    const comparisons = [...article().querySelectorAll('table')].filter((table) =>
+      table.querySelector('thead th')?.textContent === 'Observation in Pulse',
+    );
+    expect(comparisons).toHaveLength(1);
+    const rows = [...comparisons[0].querySelectorAll('tbody tr')].map((row) => row.textContent);
     expect(rows).toHaveLength(4);
     expect(rows[0]).toContain('subject-linked backup evidence');
     expect(rows[0]).toContain('not identity proof');

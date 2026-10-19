@@ -123,7 +123,12 @@ describe('NodeCredentialSlot', () => {
       expect(result).toHaveTextContent('Saved connection test');
       expect(result).toHaveTextContent('Fixture saved connection responds');
       expect(result).toHaveTextContent('Unsaved changes are not tested');
-      expect(savedTest).toHaveBeenCalledExactlyOnceWith(`${nodeType}-fixture`);
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(
+        `${nodeType}-fixture`,
+        undefined,
+        expect.any(AbortSignal),
+      );
+      expect(savedTest.mock.calls[0][2]?.aborted).toBe(false);
       expect(formTest).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('checkbox', { name: 'Verify SSL certificate' }));
       expect(
@@ -183,7 +188,12 @@ describe('NodeCredentialSlot', () => {
       expect(result).toHaveTextContent('Unsaved changes are not tested');
       expect(screen.getByLabelText('SSL Fingerprint (optional)')).toHaveValue(pin);
       expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
-      expect(savedTest).toHaveBeenCalledExactlyOnceWith(`${nodeType}-fixture`);
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(
+        `${nodeType}-fixture`,
+        undefined,
+        expect.any(AbortSignal),
+      );
+      expect(savedTest.mock.calls[0][2]?.aborted).toBe(false);
       expect(formTest).not.toHaveBeenCalled();
       expect(settings.saveNode).not.toHaveBeenCalled();
     },
@@ -225,8 +235,18 @@ describe('NodeCredentialSlot', () => {
     expect(result).toHaveTextContent('Entered settings test');
     expect(result).toHaveTextContent('No settings are saved');
     expect(formTest).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ password: 'fixture-only-secret' }),
+      {
+        type: 'pmg',
+        name: 'Fixture',
+        host: 'https://saved.example.invalid',
+        fingerprint: '',
+        verifySSL: true,
+        user: 'fixture@pam',
+        password: 'fixture-only-secret',
+      },
+      expect.any(AbortSignal),
     );
+    expect(formTest.mock.calls[0][1]?.aborted).toBe(false);
     expect(savedTest).not.toHaveBeenCalled();
     fireEvent.input(screen.getByLabelText('Password'), { target: { value: '' } });
     expect(
