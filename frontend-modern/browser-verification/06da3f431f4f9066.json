@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9a8bee80a2f9d8e925203ee822241bc7911d3eea",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "e6d53652065f33e5f2b45c02cc2c69587f1b3497a051c8ec7858cea1cc3d974a"
+  },
+  "routes": [
+    "Production ProxmoxBackupsTable By date content through /browser-tests/pbs-count-sources.html?transport=direct|canonical"
+  ],
+  "states": [
+    "Independent backup and pbs-backup connections sharing datastore names; exact-name inventory missing a store; wholly empty first source",
+    "Unclaimed unique legacy source; malformed PBS inventory withdrawn as Unavailable; explicit retry recovery",
+    "Duplicate configured source names remain Unknown rather than zero or a shared count"
+  ],
+  "interactions": [
+    "Desktop native disclosure buttons activated by keyboard; 320px WebKit touch activates the existing datastore row",
+    "Each source checked in the table-owned single disclosure; returning to the target before testing live replacement respects the shipped interaction model",
+    "Native Refresh backups and source-local Retry PBS inventory consume four HTTP snapshots per engine without backup, provider or guest operations",
+    "The exact same disclosure toggle retains open state and actual DOM focus through retry recovery; independent source counts stay unchanged"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T20:46:24Z",
+  "execution_source": "9a8bee80a2f9d8e925203ee822241bc7911d3eea",
+  "execution_tree": "2925055a827a8c1b675ca559041624002ee11d98",
+  "parent_tree": "2925055a827a8c1b675ca559041624002ee11d98",
+  "protocol": "frontend-modern/browser-tests/pbs-count-sources.cjs",
+  "protocol_sha256": "db351bd2b65c61f2c3e0977c10c87b132f75b446a9fa9da91c1002f42b03cee1",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "transport": "direct",
+      "contextClosed": true,
+      "browserClosed": true
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "transport": "canonical",
+      "contextClosed": true,
+      "browserClosed": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-isolated.png",
+      "sha256": "48ae48b5e0a7559cfe4e82edf3cd59651a14752c135278587621a41bc1b94a68",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "isolated",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Collapse details for backup"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 1440px the open backup / tank disclosure reads Backup entries: 0 and explicitly identifies collected entries, not a restore or guest-health check. The compact explanation is readable inside the existing full-width row, with unchanged 40.0% capacity and no clipping."
+    },
+    {
+      "file": "chromium-unavailable.png",
+      "sha256": "4ad34106ff28a3c0e377f06425c082cfc3074c91653ccf7dfa1e1561cb9d9db5",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "unavailable",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Refresh backups"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The amber source-local notice says the PBS inventory is unavailable and offers Retry PBS inventory. Count cells and the open disclosure say Unavailable rather than 0; separate server health/capacity remains visible. The bottom incomplete-inventory placeholder is captured during its fade-in, not claimed as a settled text contrast proof."
+    },
+    {
+      "file": "chromium-recovered.png",
+      "sha256": "7b0d755501bff1ed24a002e4005c864b366e996e8fb382c099791e17dad78603",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "recovered",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Collapse details for backup"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The same open backup / tank now reads 1 in the count column and disclosure while pbs-backup / tank remains 2. The focused disclosure chevron has a visible blue ring. The collected-entry qualification remains readable."
+    },
+    {
+      "file": "chromium-ambiguous.png",
+      "sha256": "da6d019e2ed397184d9cc7afa4b529f15e47950aded80541e7f6a6f75042b692",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "state": "ambiguous",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Collapse details for duplicate"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "Duplicate server names show Unknown in the count column and the open datastore disclosure, not a shared count or zero. Server, store and capacity context remains independently readable."
+    },
+    {
+      "file": "webkit-isolated.png",
+      "sha256": "2a36f40b3885da75c45581e1874f17f9c717a06694791099aa97d65bd947756f",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "isolated",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "\n    BackupsRestore points reflect the last inventory read. Refresh to read new or removed backups.R"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px in dark mode the count column is absent, but tapping the tank row exposes Backup entries: 0 with backup / tank identity. The collected-entry qualification wraps within the disclosure, with no horizontal clipping."
+    },
+    {
+      "file": "webkit-unavailable.png",
+      "sha256": "1df418850fb8bda460836f03072d93fc75dfbe64512e49a2ae1796fdcc98f4f1",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "unavailable",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Refresh backups"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The source-local amber notice and Retry control wrap inside 320px. The open backup / tank disclosure says Backup entries: Unavailable while capacity remains 40.0%. The lower incomplete-inventory placeholder is mid-fade; no settled contrast claim is made for it."
+    },
+    {
+      "file": "webkit-recovered.png",
+      "sha256": "023d1f5eb261fd4483a4039d0e1795924b8071428bf65f8bd7b0e71eb5e9358b",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "recovered",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "Collapse details for backup"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The phone disclosure remains open and now reads Backup entries: 1. Its focused toggle is revealed at the left of the tank row; the source identity and collected-entry qualification remain within the narrow card. Focus continuity is additionally established by the actual DOM check, not inferred from a painted focus ring."
+    },
+    {
+      "file": "webkit-ambiguous.png",
+      "sha256": "e9ed81e60a6d9d8f0bcd88e09a6f1a677163fb8a57a39bb19f6cb7dd52f476cb",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "state": "ambiguous",
+      "geometry": {
+        "overflow": false,
+        "clippedDetails": [],
+        "focus": "\n    BackupsRestore points reflect the last inventory read. Refresh to read new or removed backups.R"
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The 320px duplicate / tank disclosure reads Backup entries: Unknown, not 0. The qualification and capacity line wrap without clipping, preserving access when the summary count column is hidden."
+    }
+  ],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "limits": "Safe synthetic inventory and resource observations; actual page/query/decoder/count producer/rows/CSS. No production embed, native PBS, guest liveness, restore, thaw, installed recovery, release or screen-reader speech proof. Resource observations are fixtures; full navigation/authentication and native PBS acceptance are not claimed."
+}
