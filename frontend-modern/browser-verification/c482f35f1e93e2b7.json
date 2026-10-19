@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "39a3bd6b75a98d1eb797ae928bddb0144efc67ea",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "b5e5b65c0bc4e1c872bd87ccf4fe5cb82d137ff4e8a4845f9038fdac7ce9195c",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "e000d242cd0b71ba261f0f206dc357fcb7fdbabc8b10b52e64ad68d4e4b670ae"
+  },
+  "routes": [
+    "/browser-tests/pbs-capacity.html?details=1&transport=direct",
+    "/browser-tests/pbs-capacity.html?details=1&transport=canonical"
+  ],
+  "states": [
+    "Unavailable and Unknown capacity on a reachable PBS server",
+    "Same-open unknown/error/offline observations",
+    "Two datastores with independent named context and literal long identifiers",
+    "Measured zero and 95 percent usage replacing an unavailable reading",
+    "No datastore inventory removes earlier capacity context"
+  ],
+  "interactions": [
+    "Native Tab, Enter and Space activate the warning and existing disclosure once",
+    "320px WebKit touch opens and toggles capacity details",
+    "Same-open observation changes retain the capacity region and desktop focus",
+    "Close returns focus to an actually visible unclipped existing disclosure; Enter/touch reopens it",
+    "Only two fixture inventory GETs per journey; no off-origin requests or page errors"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T00:53:01Z",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-capacity-details.cjs",
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": "Eight final captures were opened with native view_image. Long identifiers and fixed explanations wrap at 320px; measured evidence replaces the warning; desktop focus ring and narrow revealed disclosure are visible. Synthetic observations are not native PBS recovery.",
+  "captures": [
+    "tmp/pbs-capacity-details/browser/desktop-warning.png",
+    "tmp/pbs-capacity-details/browser/desktop-unavailable-details.png",
+    "tmp/pbs-capacity-details/browser/desktop-measured-details.png",
+    "tmp/pbs-capacity-details/browser/desktop-focus-return.png",
+    "tmp/pbs-capacity-details/browser/narrow-warning.png",
+    "tmp/pbs-capacity-details/browser/narrow-unavailable-details.png",
+    "tmp/pbs-capacity-details/browser/narrow-measured-details.png",
+    "tmp/pbs-capacity-details/browser/narrow-focus-return.png"
+  ]
+}
