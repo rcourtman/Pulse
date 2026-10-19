@@ -315,7 +315,11 @@ function serve(req, res, next) {
         }));
         assert.equal(geometry.overflow, false);
         const file = `${spec.name}-${state}.png`;
-        await page.screenshot({ path: path.join(output, file), fullPage: true });
+        await page.screenshot({
+          path: path.join(output, file),
+          fullPage: state !== 'point-exact',
+          animations: 'disabled',
+        });
         result.captures.push({
           file,
           state,
