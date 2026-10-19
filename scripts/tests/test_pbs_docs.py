@@ -600,6 +600,70 @@ class BackupJobUncertaintyHelpTest(unittest.TestCase):
         self.assertIn("[Backup safety](VM_DISK_MONITORING.md#backup-safety)", guidance)
 
 
+class BackupJobTimingHelpTest(unittest.TestCase):
+    """Check the passive guide against the actual Coverage field producer."""
+
+    heading = "#### Read backup job identity and timing\n"
+    anchor = "#read-backup-job-identity-and-timing"
+
+    def guidance(self):
+        text = DOC.read_text()
+        self.assertEqual(text.count(self.heading), 1)
+        return " ".join(text.split(self.heading, 1)[1].split("\n#### ", 1)[0]
+                        .replace("**", "").split())
+
+    def test_field_table_matches_the_expanded_job_consumer_and_both_entries(self):
+        guidance = self.guidance()
+        table = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx").read_text()
+        detail = table.split("function CoverageTaskDetail(", 1)[1].split(
+            "function CoverageTaskObservation(", 1)[0]
+        fields = re.findall(r'<dt class="text-muted">([^<]+)</dt>', detail)
+        for field in ("Job ID", "Started", "Reported end", "Recorded duration", "Last observed"):
+            with self.subTest(field=field):
+                self.assertIn(field, fields)
+                self.assertIn(f"| {field} |", guidance)
+        self.assertIn(f"[identity and timing checks]({self.anchor})", DOC.read_text())
+        hub = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[job identity and timing](PBS.md{self.anchor})", hub)
+        for name in ("PBS", "TROUBLESHOOTING"):
+            self.assertEqual((ROOT / "docs" / f"{name}.md").read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_bytes())
+
+    def test_recorded_intervals_are_not_live_elapsed_time_or_observation_freshness(self):
+        guidance = self.guidance()
+        for meaning in (
+            "date, seconds and timezone", "compare the same instant",
+            "Not reported means absent", "Unknown · reported:",
+            "usable, ordered, non-future start and end times",
+            "Unknown is not a live elapsed timer", "proof that the job is still running",
+            "0s is a recorded interval rounded to seconds, not missing duration",
+            "not when the job started, ended or the guest recovered",
+            "end before the start", "combine one job's start with another job's end",
+            "not a globally unique guest identity", "only currently collected evidence",
+        ):
+            self.assertIn(meaning, guidance)
+        model = (ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts").read_text()
+        search = model.split("export function coverageRowMatchesSearch", 1)[1].split(
+            "export function recoverableArtifactMatchesSearch", 1)[0]
+        for field in ("row.latestTask?.id", "row.latestTask?.startedAt", "row.latestTask?.endedAt",
+                      "task.startedAt", "task.endedAt"):
+            self.assertIn(field, search)
+
+    def test_matching_evidence_does_not_request_workloads_or_disclose_native_ids(self):
+        guidance = self.guidance()
+        self.assertNotIn("```", guidance)
+        for boundary in (
+            "use the same job's existing Proxmox record", "Job IDs can contain private names",
+            "consistent aliases", "Keep full logs, paths, tokens and private identifiers out",
+            "Do not rerun a backup, verification, restore or guest-agent probe",
+            "run Diagnostics, restart, clear History or change permissions",
+            "does not prove successful backup, guest thaw or filesystem writes",
+            "Read Result and any Reported error separately", "keep affected Pulse monitoring stopped",
+            "[Backup safety](VM_DISK_MONITORING.md#backup-safety)",
+        ):
+            self.assertIn(boundary, guidance)
+
+
 class PBSJobEvidenceHelpTest(unittest.TestCase):
     """Static guidance checks only; no listener, TLS recipe or PBS request."""
 

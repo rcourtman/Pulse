@@ -27,7 +27,7 @@ class NavigationHelpDocsTest(unittest.TestCase):
         groups = (
             ("Sign-in, access and updates", "sign-in-access-and-updates", 7),
             ("Missing or incorrect readings", "missing-or-incorrect-readings", 6),
-            ("Backups and storage", "backups-and-storage", 5),
+            ("Backups and storage", "backups-and-storage", 6),
             ("Notifications and performance", "notifications-and-performance", 5),
         )
         introduction = entry.split("\n### ", 1)[0]
@@ -36,7 +36,7 @@ class NavigationHelpDocsTest(unittest.TestCase):
                 self.assertIn(f"[{label}](#{fragment})", introduction)
                 group = entry.split(f"### {label}\n", 1)[1].split("\n### ", 1)[0]
                 self.assertEqual(len(re.findall(r"^- \*\*", group, re.M)), count)
-        self.assertEqual(len(re.findall(r"^- \*\*", entry, re.M)), 24)
+        self.assertEqual(len(re.findall(r"^- \*\*", entry, re.M)), 25)
         # Safety and disclosure containment must be reachable before choosing
         # a category, not buried inside an unrelated symptom group.
         self.assertIn("[Backup safety](VM_DISK_MONITORING.md#backup-safety)", introduction)
@@ -54,10 +54,12 @@ class NavigationHelpDocsTest(unittest.TestCase):
             'MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway',
             'OIDC.md#sign-in-fails-after-editing-a-provider',
             'PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees',
+            'PBS.md#backup-activity-has-no-volume-or-fewer-rows-than-expected',
             'PBS.md#duplicate-backups',
             'PBS.md#latest-backup-job-is-unknown',
             'PBS.md#one-pbs-namespace-is-missing-or-stops-changing',
             'PBS.md#pbs-is-active-but-missing-from-monitoring',
+            'PBS.md#read-backup-job-identity-and-timing',
             'PULSE_PRO.md#already-paid-but-pro-features-are-unavailable',
             'TROUBLESHOOTING.md#-getting-help',
             'TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops',
@@ -82,7 +84,7 @@ class NavigationHelpDocsTest(unittest.TestCase):
             'VM_DISK_MONITORING.md#backup-safety',
             'VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings',
         }
-        # Only the four in-page shortcuts are new; no earlier guide disappears.
+        # Preserve both the workflow shortcuts and the existing focused guides.
         self.assertEqual({link for link in destinations if not link.startswith("#")}, expected)
 
     def test_entry_routes_match_the_registered_platform_routes(self):

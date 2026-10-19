@@ -98,10 +98,11 @@ Jump to a group:
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete
   backups or change retention to make the display agree.
-- **Coverage's latest backup job is Unknown:** expand the guest's
-  [collected job evidence](PBS.md#latest-backup-job-is-unknown).
-  Unknown chronology is not an absent or failed backup; use existing job
-  records, without rerunning a backup or guest-agent probe.
+- **Coverage's job identity, timing or latest result is unclear:** expand the
+  guest's [job identity and timing](PBS.md#read-backup-job-identity-and-timing).
+  For an Unknown latest result, read the [collected job evidence](PBS.md#latest-backup-job-is-unknown).
+  An unknown duration is not a live timer; a reported end does not prove guest
+  thaw. Compare existing records, without rerunning a backup or guest-agent probe.
 - **RAID is reported degraded despite a spare:** compare
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the

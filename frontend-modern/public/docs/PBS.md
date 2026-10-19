@@ -532,13 +532,56 @@ without running Diagnostics or another verification just to compare them.
 If the latest job is **Unknown**, use the [job uncertainty checks](#latest-backup-job-is-unknown)
 before interpreting that as no job or a failed backup.
 
+#### Read backup job identity and timing
+
+In **Proxmox → Backups → Coverage**, expand the affected guest. Where present,
+**Latest backup job** shows the job Pulse could order as latest;
+**Collected backup jobs** preserves separate observations when that choice is
+uncertain. Neither is a complete or permanent native task history. Older
+versions may omit these details; use the same job's existing Proxmox record,
+not a new backup or probe, to fill a display gap.
+
+| Field | How to compare it |
+| --- | --- |
+| **Job ID** | Match the full ID within its **Job connection**, **Job node** and guest type/ID. A native task ID, such as a UPID, is not a globally unique guest identity. |
+| **Started** | The provider's reported start. Read the date, seconds and timezone when shown; compare the same instant in the native record, not just the clock time. |
+| **Reported end** | The provider's reported end, not when Pulse last polled. **Not reported** means absent; **Unknown · reported:** preserves a value that cannot establish a valid interval. |
+| **Recorded duration** | A rounded interval between usable, ordered, non-future start and end times. **Unknown** is not a live elapsed timer or proof that the job is still running. **0s** is a recorded interval rounded to seconds, not missing duration. |
+| **Last observed** | When Pulse read the job history, not when the job started, ended or the guest recovered. Refreshing the page does not establish a new provider read. |
+
+An end before the start, a future time or an unusable timestamp cannot supply
+a trustworthy duration. Do not replace an unknown time with the page refresh
+time, or combine one job's start with another job's end. The job's recorded node
+may differ from the guest's current node after a move. Match the owning
+connection too: independent installations can reuse names, VMIDs and task IDs.
+
+Search can find a collected job's ID and reported start/end as well as its
+error or node. This searches only currently collected evidence; a missing
+match does not prove that no native job ran. Clear search and view filters
+before concluding a guest row is absent.
+
+For a discrepancy, retain the Pulse version and only the matching job's
+redacted fields and native result already available. Job IDs can contain
+private names; use consistent aliases while preserving the distinction between
+jobs and connections. Keep full logs, paths, tokens and private identifiers out
+of public reports. Do not rerun a backup, verification, restore or guest-agent
+probe, run Diagnostics, restart, clear History or change permissions to fill
+these fields.
+
+**A reported end or duration does not prove successful backup, guest thaw or
+filesystem writes.** Read **Result** and any **Reported error** separately.
+If a guest is frozen or unresponsive, keep affected Pulse monitoring stopped
+and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety), not these
+display checks.
+
 #### Latest backup job is Unknown
 
 In **Proxmox → Backups → Coverage**, expand the affected guest and read the
 explanation beside its latest-job result. Pulse cannot choose a latest job
 when a job has a missing, invalid or future start, or equally recent jobs disagree.
 **Unknown** is not evidence that no job ran, that one is queued or that the
-backup failed.
+backup failed. Use the [identity and timing checks](#read-backup-job-identity-and-timing)
+for the meaning of each recorded time, including an unknown duration.
 
 Where shown, **Collected backup jobs** keeps the observations separate from
 the latest result. Its list order is not a timeline. Read each **Job ID**,
