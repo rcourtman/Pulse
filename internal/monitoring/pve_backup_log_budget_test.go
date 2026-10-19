@@ -183,6 +183,62 @@ func TestVzdumpLogBudgetHTTPBacklogRecovery(t *testing.T) {
 	defer server.Close()
 	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
 	require.NoError(t, err)
+	exerciseVzdumpLogBudgetBacklogRecovery(t, client, &phase, &logReads, start)
+}
+
+// The changed producer is the monitor's scheduler, not the provider transport.
+// Exercise the same polling/state/report contract without a listening socket;
+// the real-client HTTP variant above remains available in isolated source proof.
+type budgetBacklogClient struct {
+	PVEClientInterface
+	phase, logReads *atomic.Int32
+	start           time.Time
+}
+
+func (c *budgetBacklogClient) GetBackupTasks(context.Context) ([]proxmox.Task, error) {
+	tasks := make([]proxmox.Task, 0, maxVzdumpJobLogFetchesPerPoll+2)
+	for i := 0; i < maxVzdumpJobLogFetchesPerPoll+2; i++ {
+		tasks = append(tasks, proxmox.Task{UPID: fmt.Sprintf("job-%d", i), Node: "node", Type: "vzdump", Status: "job errors", StartTime: c.start.Add(-time.Duration(i) * time.Minute).Unix(), EndTime: c.start.Add(time.Minute).Unix()})
+	}
+	return tasks, nil
+}
+
+func (c *budgetBacklogClient) GetTaskLog(_ context.Context, _, upid string) ([]proxmox.TaskLogLine, error) {
+	c.logReads.Add(1)
+	index, err := strconv.Atoi(strings.TrimPrefix(upid, "job-"))
+	if err != nil {
+		return nil, err
+	}
+	if index < maxVzdumpJobLogFetchesPerPoll && c.phase.Load() < 3 {
+		return nil, fmt.Errorf("fixture log unavailable")
+	}
+	vmid := 500 + index
+	switch index {
+	case 0:
+		vmid = 300
+	case maxVzdumpJobLogFetchesPerPoll:
+		vmid = 100
+	case maxVzdumpJobLogFetchesPerPoll + 1:
+		vmid = 200
+	}
+	lines := []string{fmt.Sprintf("INFO: Starting Backup of VM %d (qemu)", vmid)}
+	if vmid == 200 {
+		lines = append(lines, "ERROR: Backup of VM 200 failed - fixture storage unavailable", "TASK ERROR: job errors")
+	} else {
+		lines = append(lines, fmt.Sprintf("INFO: Finished Backup of VM %d (00:01:00)", vmid), "TASK OK")
+	}
+	return testLogLines(lines...), nil
+}
+
+func TestVzdumpLogBudgetInProcessBacklogRecovery(t *testing.T) {
+	var phase, logReads atomic.Int32
+	start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	client := &budgetBacklogClient{phase: &phase, logReads: &logReads, start: start}
+	exerciseVzdumpLogBudgetBacklogRecovery(t, client, &phase, &logReads, start)
+}
+
+func exerciseVzdumpLogBudgetBacklogRecovery(t *testing.T, client PVEClientInterface, phase, logReads *atomic.Int32, start time.Time) {
+	t.Helper()
 	m := &Monitor{state: models.NewState()}
 	for p, label := range []string{"deferred", "discovered", "retained", "recovered", "cached"} {
 		phase.Store(int32(p))
