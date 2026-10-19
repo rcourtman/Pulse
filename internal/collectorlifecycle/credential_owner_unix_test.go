@@ -55,6 +55,28 @@ func TestReadPrivateBearerRejectsFIFOWithoutBlocking(t *testing.T) {
 	}
 }
 
+func TestPrivateValueFilePreservesUnixModeBoundary(t *testing.T) {
+	for _, mode := range []os.FileMode{0600, 0640, 0644, 0660, 0604} {
+		t.Run(mode.String(), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "collector.token")
+			if err := os.WriteFile(path, []byte("synthetic-secret"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			value, err := ReadPrivateValueFile(path, testTokenOwnerUID())
+			if mode == 0600 || mode == 0640 {
+				if err != nil || value != "synthetic-secret" {
+					t.Fatal("private file was not readable")
+				}
+			} else if err == nil || value != "" {
+				t.Fatal("public or group-writable credential was not refused")
+			}
+		})
+	}
+}
+
 func TestOpenCredentialFileDescriptorCannotBeSymlinkSwapped(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "collector.token")

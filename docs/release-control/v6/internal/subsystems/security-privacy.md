@@ -18,6 +18,18 @@
 
 ## Purpose
 
+### Private lifecycle values cannot lose NUL bytes through a shell
+
+The descriptor-safe Go reader rejects any NUL before returning a private value
+or initializing an authenticated lifecycle client. `collector-read-token`
+therefore fails without credential output instead of letting Bash silently
+remove bytes and select another credential. Errors do not include the value.
+Existing size, no-follow, regular-file, mode/owner checks and whitespace
+normalization remain in place; no token precedence, trust or transport policy
+changes. Reader/client, CLI-output and actual Unix-ingress controls are recorded
+in the [agent lifecycle contract](agent-lifecycle.md#the-descriptor-safe-credential-reader-rejects-nul-before-output).
+They do not establish standalone binary, native installation or release use.
+
 ### Unix lifecycle fallback credentials are transient
 
 The agent installer's lifecycle scope owns only the temporary mode-0600 bearer

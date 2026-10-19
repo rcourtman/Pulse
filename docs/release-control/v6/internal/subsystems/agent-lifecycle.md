@@ -110,6 +110,27 @@ checks. It retains file bytes/modes/inodes and proves no service/transport/state
 operations for invalid ingress. Service and transport peers remain inert;
 native installation, TLS and installed recovery require separate proof.
 
+### The descriptor-safe credential reader rejects NUL before output
+
+The shared Go private-value reader rejects a NUL anywhere in the bounded file,
+before returning a value to `collector-read-token` or constructing a lifecycle
+client. Failure returns no credential and a fixed, non-disclosing error. Bash
+command substitution must never turn a successful reader's NUL-containing
+output into a different credential. Existing whitespace normalization, valid
+literal/UTF-8 values, size limits, descriptor privacy and owner checks remain
+unchanged; installer credential precedence and TLS policy do not change.
+
+`TestPrivateValueFileRejectsNULWithoutReturningCredential` covers the shared
+reader and client construction; the valid-value control preserves existing
+normalization. `TestCollectorLifecycleCommandRejectsNULWithoutOutput` covers the
+CLI writer. `TestCollectorTokenReaderInstallerIngress` invokes production
+`main`/CLI dispatch in the compiled test executable, then consumes its real
+output through the production Unix reader and both collector/action ingress
+gates. Only executable discovery is fixture-wired; file/parent checks, Bash
+substitution and the Go implementation are not output peers. Caller bytes,
+mode and inode are retained. This is focused source proof, not a standalone
+agent build, installation, native recovery or protected delivery.
+
 ### Explicit Unix installer transport policy wins over curl defaults
 
 All direct installer curl requests ignore `.curlrc` before processing their
