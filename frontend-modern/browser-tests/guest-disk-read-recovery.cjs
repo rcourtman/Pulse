@@ -343,6 +343,9 @@ function serve(req, res, next) {
       await activate(page.getByRole('button', { name: 'Close guest details' }));
       await activate(page.getByRole('button', { name: 'Reopen guest details' }));
       await expect.poll(resourceReads).toBe(beforeRemount + 1);
+      // Existing warm-cache revalidation is background work. An explicit Retry
+      // joins that shared read and owns the visible pending/disabled state.
+      await activate(retry());
       await expect(retry()).toBeDisabled();
       await expect(card()).toHaveCount(0);
       await page.clock.runFor(20_000);
