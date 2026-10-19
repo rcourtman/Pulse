@@ -92,11 +92,17 @@ function serve(req, res, next) {
     assert.equal(req.method, 'GET', 'No product mutation or guest operation');
     const url = new URL(req.url, 'http://fixture.invalid');
     assert(
-      ['/api/backups/pve', '/api/backups/pbs', '/api/recovery/postures'].includes(url.pathname),
+      [
+        '/api/backups/pve',
+        '/api/backups/pbs',
+        '/api/recovery/postures',
+        '/api/license/runtime-capabilities',
+      ].includes(url.pathname),
+      `Unexpected API: ${url.pathname}`,
     );
     const entry = {
       path: url.pathname,
-      org: req.headers['x-org-id'] ?? null,
+      org: req.headers['x-pulse-org-id'] ?? null,
       mode: current.mode,
       closed: false,
     };
@@ -104,6 +110,13 @@ function serve(req, res, next) {
     req.on('close', () => {
       entry.closed = true;
     });
+    if (url.pathname === '/api/license/runtime-capabilities')
+      return send(res, {
+        capabilities: [],
+        limits: [],
+        max_history_days: 7,
+        runtime: { build: 'community' },
+      });
     if (url.pathname === '/api/backups/pve') return send(res, pve);
     if (url.pathname === '/api/backups/pbs') return send(res, pbs);
     assert.deepEqual(url.searchParams.getAll('resourceId'), ['ct-112']);
@@ -282,7 +295,7 @@ function serve(req, res, next) {
       await expectPosture(narrow ? 'Check' : 'Checking');
       await expect(notice()).toHaveCount(0);
       current.held.at(-1).res.end(JSON.stringify(posture('attention')));
-      await expectPosture(narrow ? 'Attn.' : 'Attention');
+      await expectPosture(narrow ? 'Attn.' : 'Needs attention');
       await expect(
         page.getByPlaceholder('Search backups by workload, node, source, or status'),
       ).toHaveValue('backup-guest');
@@ -312,6 +325,7 @@ function serve(req, res, next) {
     report.passed = true;
   } catch (error) {
     report.failure = String(error.stack || error);
+    report.partial = current ? { mode: current.mode, requests: current.requests } : null;
     process.exitCode = 1;
   } finally {
     if (browser) await browser.close();
