@@ -8901,3 +8901,20 @@ unfiltered chart results against the full reader with 1,000-point series,
 including LTTB selection and caller mutation. Metrics-store guards compare the
 projections across mixed tiers and buckets, changed database snapshots and
 Docker legacy/observed provenance; the query-plan guard covers both SQL forms.
+
+
+### Non-destructive PBS monitoring-token collisions
+
+`SetupMonitoringAccess` makes one token-creation attempt. A provider response
+reporting an existing token returns `ErrMonitoringTokenExists` with its original
+HTTP status; it never deletes the token, retries creation or changes that token's
+ACL. An existing secret cannot be recovered by recreating its token. Explicit
+`DeleteUserToken` remains available only to its separate intentional callers.
+The ordinary new-token setup, monitoring-user ACL and token-ACL sequence remain.
+
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` exercises the real
+request and version readers through 400, 409 and 500 collision responses,
+preserving a saved-token reader before and afterwards without listeners.
+`TestClient_SetupMonitoringAccess_PreservesExistingToken` replaces the former
+rotation expectation. API/persistence and consuming-editor proof are separate;
+these controls do not establish installed PBS or guest/backup recovery.

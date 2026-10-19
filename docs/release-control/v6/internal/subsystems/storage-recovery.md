@@ -7800,3 +7800,15 @@ withdrawn. The read-only `protection-posture-remount.cjs` HTTP/browser protocol
 exercises the production Backups reader, Coverage and shipped CSS at desktop and
 320px, including keyboard/touch retry and organisation fencing. This is truthful
 monitoring presentation, not guest thaw, filesystem liveness or backup recovery.
+
+### Preserve existing PBS readers during monitoring setup
+
+An add-node monitoring-token collision is a configuration conflict, not consent
+to delete/recreate an existing PBS token. The route returns fixed HTTP 409
+guidance without saving the administrator password or changing stored provider
+connections. Existing saved-token reads remain usable, and deliberate manual
+setup with that secret requires no provisioning replay. Backup points, task
+outcomes, namespace scope and storage reconciliation are unchanged.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` and
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` cover this source
+boundary without native backup, restore or guest operations.

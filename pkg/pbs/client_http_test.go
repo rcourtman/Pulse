@@ -23,6 +23,83 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+// A repeated setup must not invalidate another installation's saved secret.
+// Exercise the real request and version readers against a stateful transport;
+// no listener, live PBS, credential rotation or guest command is used.
+func TestSetupMonitoringAccessCollisionKeepsExistingReader(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusConflict, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			const oldAuth = "PBSAPIToken=pulse-monitor@pbs!monitor1:fixture-existing-secret"
+			live := true
+			creates, deletes, tokenACLs, reads := 0, 0, 0, 0
+			transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				code, body := http.StatusOK, `{"data":null}`
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/api2/json/version":
+					reads++
+					if !live || r.Header.Get("Authorization") != oldAuth {
+						code, body = http.StatusUnauthorized, "fixture token no longer valid"
+					} else {
+						body = `{"data":{"version":"3.4","release":"1","repoid":"fixture"}}`
+					}
+				case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/users":
+				case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/acl":
+					if err := r.ParseForm(); err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(r.Form.Get("auth-id"), "!") {
+						tokenACLs++
+					}
+				case r.URL.Path == "/api2/json/access/users/pulse-monitor@pbs/token/monitor1":
+					if r.Method == http.MethodDelete {
+						deletes++
+						live = false
+					} else if r.Method == http.MethodPost {
+						creates++
+						if live {
+							code, body = status, "API token already exists"
+						} else {
+							body = `{"data":{"tokenid":"pulse-monitor@pbs!monitor1","value":"fixture-replacement-secret"}}`
+						}
+					} else {
+						t.Fatalf("unexpected token method: %s", r.Method)
+					}
+				default:
+					t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})
+			admin, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "pulse-monitor@pbs!monitor1", TokenValue: "fixture-existing-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			admin.httpClient.Transport, reader.httpClient.Transport = transport, transport
+			for phase := 0; phase < 2; phase++ {
+				version, err := reader.GetVersion(context.Background())
+				if err != nil || version == nil || version.Version != "3.4" {
+					t.Errorf("saved-token reader failed at phase %d: %v", phase, err)
+				}
+				if phase == 0 {
+					id, secret, err := admin.SetupMonitoringAccess(context.Background(), "monitor1")
+					if !errors.Is(err, ErrMonitoringTokenExists) || id != "" || secret != "" {
+						t.Errorf("collision must not return replacement credentials: error=%v", err)
+					}
+					if got, ok := HTTPStatus(err); !ok || got != status {
+						t.Errorf("lost provider status: %d, %v", got, ok)
+					}
+				}
+			}
+			if !live || creates != 1 || deletes != 0 || tokenACLs != 0 || reads != 2 {
+				t.Errorf("collision changed credentials or dispatched more setup: live=%v creates=%d deletes=%d tokenACLs=%d reads=%d", live, creates, deletes, tokenACLs, reads)
+			}
+		})
+	}
+}
+
 func newRootNodeNameClient(t *testing.T, host string) *Client {
 	t.Helper()
 	client, err := NewClient(ClientConfig{

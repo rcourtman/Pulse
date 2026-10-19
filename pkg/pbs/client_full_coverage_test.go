@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -285,7 +286,7 @@ func TestClient_SetupMonitoringAccess_Errors(t *testing.T) {
 	}
 }
 
-func TestClient_SetupMonitoringAccess_RotatesExistingToken(t *testing.T) {
+func TestClient_SetupMonitoringAccess_PreservesExistingToken(t *testing.T) {
 	createTokenCalls := 0
 	deleteCalled := false
 
@@ -317,20 +318,14 @@ func TestClient_SetupMonitoringAccess_RotatesExistingToken(t *testing.T) {
 	defer server.Close()
 
 	id, value, err := client.SetupMonitoringAccess(context.Background(), "monitor1")
-	if err != nil {
-		t.Fatalf("SetupMonitoringAccess failed: %v", err)
+	if !errors.Is(err, ErrMonitoringTokenExists) || id != "" || value != "" {
+		t.Fatalf("setup must return a collision without replacement credentials: id=%q, error=%v", id, err)
 	}
-	if id != "pulse-monitor@pbs!monitor1" {
-		t.Fatalf("token ID = %q, want pulse-monitor@pbs!monitor1", id)
+	if createTokenCalls != 1 {
+		t.Fatalf("create token calls = %d, want 1", createTokenCalls)
 	}
-	if value != "rotated-secret" {
-		t.Fatalf("token value = %q, want rotated-secret", value)
-	}
-	if createTokenCalls != 2 {
-		t.Fatalf("create token calls = %d, want 2", createTokenCalls)
-	}
-	if !deleteCalled {
-		t.Fatal("expected existing token delete to be called")
+	if deleteCalled {
+		t.Fatal("setup revoked an existing monitoring token")
 	}
 }
 
