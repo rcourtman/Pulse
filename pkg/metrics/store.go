@@ -1529,12 +1529,20 @@ func (s *Store) QueryMetricValuesBatch(resourceType string, resourceIDs, metricT
 type retainedProjection[T any] struct {
 	valuesOnly bool
 	point      func(MetricPoint) T
+	compare    func(T, T) int
 }
 
-var retainedMetricPoints = retainedProjection[MetricPoint]{point: func(p MetricPoint) MetricPoint { return p }}
-var retainedMetricValues = retainedProjection[models.MetricPoint]{valuesOnly: true, point: func(p MetricPoint) models.MetricPoint {
-	return models.MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-}}
+var retainedMetricPoints = retainedProjection[MetricPoint]{
+	point:   func(p MetricPoint) MetricPoint { return p },
+	compare: func(a, b MetricPoint) int { return a.Timestamp.Compare(b.Timestamp) },
+}
+var retainedMetricValues = retainedProjection[models.MetricPoint]{
+	valuesOnly: true,
+	point: func(p MetricPoint) models.MetricPoint {
+		return models.MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
+	},
+	compare: func(a, b models.MetricPoint) int { return a.Timestamp.Compare(b.Timestamp) },
+}
 
 func (s *Store) queryBatch(
 	resourceType string,
@@ -1698,11 +1706,25 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 	return retainedQuerySQLWithIndex(metricsIdentityIndex, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
 }
 
+// Raw fleet reads return a statement-local resource number instead of decoding
+// the same resource ID for every observation. Their detached output already
+// holds every point, so order each completed series in Go rather than merging
+// tier branches by repeated identity strings in SQLite. Streamed display
+// buckets keep their ordered SQL path and bounded output allocation.
+func retainedQueryUsesResourceOrdinals(resources int, stepSecs int64, groupSeries bool) bool {
+	return resources > 1 && stepSecs <= 1 && !groupSeries
+}
+
 func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
 	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
+	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), stepSecs, groupSeries)
 	identityColumns := ""
 	if len(resourceIDs) != 1 {
-		identityColumns += "resource_id, "
+		if resourceOrdinals {
+			identityColumns += "r.resource_number, "
+		} else {
+			identityColumns += "resource_id, "
+		}
 	}
 	if len(metricTypes) != 1 {
 		identityColumns += "metric_type, "
@@ -1724,6 +1746,9 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 	stepParam := tierParam + len(tiers)
 	scope := func(alias string, tierIndex int) string {
 		clause := alias + ".resource_type = :p1 AND " + alias + ".resource_id IN (" + idSlots + ")"
+		if resourceOrdinals && alias == "m" {
+			clause = alias + ".resource_type = :p1 AND " + alias + ".resource_id = r.resource_id"
+		}
 		if len(metricTypes) > 0 {
 			clause += " AND " + alias + ".metric_type IN (" + metricSlots + ")"
 		}
@@ -1746,7 +1771,13 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 	}
 	branches := make([]string, 0, len(tiers))
 	for i, tier := range tiers {
-		branch := "SELECT " + projection + " FROM metrics AS m INDEXED BY " + index + " WHERE " + scope("m", i)
+		from := "metrics AS m INDEXED BY " + index
+		if resourceOrdinals {
+			// Keep each requested resource outside its indexed value range. The
+			// request table is bounded by the existing 500-resource chunk size.
+			from = "requested_resources AS r CROSS JOIN " + from
+		}
+		branch := "SELECT " + projection + " FROM " + from + " WHERE " + scope("m", i)
 		for j, preferred := range tiers[:i] {
 			// SQLite evaluates the uncorrelated existence check once. An empty
 			// preferred tier must not incur a correlated index probe for every
@@ -1775,7 +1806,7 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 			aggregate += `, MIN(COALESCE(min_value, value)), MAX(COALESCE(max_value, value))`
 		}
 		query = aggregate + " FROM (" + query + ") GROUP BY " + identityColumns + "bucket_ts ORDER BY " + identityColumns + "bucket_ts ASC"
-	} else {
+	} else if !resourceOrdinals {
 		orderColumns := identityColumns
 		if !groupSeries {
 			// The identity index is time-major within each resource. Metric
@@ -1788,6 +1819,13 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 			}
 		}
 		query += " ORDER BY " + orderColumns + "timestamp ASC"
+	}
+	if resourceOrdinals {
+		resources := make([]string, len(resourceIDs))
+		for i := range resources {
+			resources[i] = fmt.Sprintf("(%d,:p%d)", i, i+2)
+		}
+		query = "WITH requested_resources(resource_number, resource_id) AS MATERIALIZED (VALUES " + strings.Join(resources, ",") + ") " + query
 	}
 	return query, params
 }
@@ -1918,6 +1956,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		queryStep = 0
 	}
 	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
+	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), queryStep, streamBuckets)
 
 	queryRows := func() (*sql.Rows, error) { return tx.Query(sqlQuery, params...) }
 	if tx == nil {
@@ -1997,12 +2036,15 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		bucketCount = 0
 	}
 	var resourceID, metricType string
+	var resourceNumber int
 	var ts int64
 	var p MetricPoint
 	var low, high sql.NullFloat64
 	destinations := make([]interface{}, 0, 6)
 	if len(resourceIDs) == 1 {
 		resourceID = resourceIDs[0]
+	} else if resourceOrdinals {
+		destinations = append(destinations, &resourceNumber)
 	} else {
 		destinations = append(destinations, &resourceID)
 	}
@@ -2019,6 +2061,12 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		if err := rows.Scan(destinations...); err != nil {
 			log.Warn().Err(err).Msg("Failed to scan batch metric row")
 			continue
+		}
+		if resourceOrdinals {
+			if resourceNumber < 0 || resourceNumber >= len(resourceIDs) {
+				return nil, fmt.Errorf("invalid retained resource number %d for %d resources", resourceNumber, len(resourceIDs))
+			}
+			resourceID = resourceIDs[resourceNumber]
 		}
 		if !projection.valuesOnly {
 			p.Min, p.Max = p.Value, p.Value
@@ -2055,6 +2103,15 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 
 	flushBucket()
 	flushSeries()
+	if resourceOrdinals {
+		for _, metrics := range result {
+			for _, points := range metrics {
+				if !slices.IsSortedFunc(points, projection.compare) {
+					slices.SortStableFunc(points, projection.compare)
+				}
+			}
+		}
+	}
 	if hasDockerObservationContract(resourceType) {
 		projectDockerObservations(result)
 	}
