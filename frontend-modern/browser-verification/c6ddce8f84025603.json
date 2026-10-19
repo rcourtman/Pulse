@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "aed115a7ab16cdf6e792943f7b681ef5fb63b118",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "f22a7b0c874ecdf98bcfbaa63dd1fafff836d75246b1ab5ee059be4d86005f93"
+  },
+  "routes": [
+    "/proxmox/backups/date (production consumer through /browser-tests/backup-location-scope.html?view=date)"
+  ],
+  "states": [
+    "Future-dated PBS point moves from Unknown date into its actual day while its evidence dialog is open",
+    "A pending collected-inventory refresh changes verification/prune state and reorders points",
+    "PBS access denial withdraws its open dialog while independent PVE evidence remains"
+  ],
+  "interactions": [
+    "Clock/date-group rollover retains the exact open dialog and focused Close without extra inventory reads",
+    "Escape returns keyboard focus to the same original evidence trigger",
+    "Pending HTTP replacement reorders points and updates verification/prune state in the existing focused dialog, not a stale snapshot",
+    "Close/touch and Escape retain focus restoration after the point changes state and order",
+    "Denied source removes its open dialog and points, releases modal isolation and cannot reappear on the next clock tick",
+    "The independent PVE source stays readable and interactive without borrowing the withdrawn PBS record"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-19T13:11:55Z",
+  "protocol": "frontend-modern/browser-tests/backup-evidence-lifetime.cjs",
+  "protocol_sha256": "59c8da7e56b380f1369adc8fd5dfe1f9da0f7ca8272ffad934db7ba43f03d66b",
+  "execution_source": "aed115a7ab16cdf6e792943f7b681ef5fb63b118",
+  "execution_tree": "037483b4dcb8983b440436ad10dbea0a80e96aa1",
+  "parent_tree": "037483b4dcb8983b440436ad10dbea0a80e96aa1",
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "name": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    },
+    {
+      "name": "webkit",
+      "browserVersion": "26.0",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "timezone": "Europe/London",
+      "contextClosed": true,
+      "browserClosed": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-clock-open.png",
+      "state": "clock-open",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "7e3dfe2e7bf4bdccdb191e7c4c42f6aca5ae3c286b4d13d433564e420ea682cb",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": "Close backup evidence",
+        "bodyLocked": true
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "Centred light dialog has a visible Close focus ring, the same PBS record as plain text, Verified wording and the guest-thaw/restore caveat. No field or panel is clipped."
+    },
+    {
+      "file": "chromium-updated-open.png",
+      "state": "updated-open",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "9b9401bace862031b4a554e8146e255602743308c12047765927e14d935518be",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": "Close backup evidence",
+        "bodyLocked": true
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "Same record remains readable; Unverified and Prune protected have distinct explanations, the safety caveat stays visible, and Close keeps its focus ring."
+    },
+    {
+      "file": "chromium-source-denied.png",
+      "state": "source-denied",
+      "engine": "chromium",
+      "viewport": {
+        "width": 1365,
+        "height": 1000
+      },
+      "sha256": "f6823c291a56c9b2d587d710d8d7839073cce7530f6f822b44d17ba008d540bc",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": null,
+        "bodyLocked": false
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "Dialog and PBS points are gone. The full Access denied/counts-incomplete notice and Retry PBS control appear above one independently attributed PVE backup-file row."
+    },
+    {
+      "file": "webkit-clock-open.png",
+      "state": "clock-open",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "224d5f2e04f09f4f8cb75dc3218e40bfd3d7ff9eba8276b2db11e45003dcf140",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": "Close backup evidence",
+        "bodyLocked": true
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the dark dialog fits with 16px side margins. The identifier wraps as literal text; workload/source/location, Verified explanation and restore/thaw caveat remain readable."
+    },
+    {
+      "file": "webkit-updated-open.png",
+      "state": "updated-open",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "5d073451d91183bfd5914610ccab219caabf71ed2ff41c9137486dbe14402951",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": "Close backup evidence",
+        "bodyLocked": true
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "At 320px the same record remains, with readable wrapping Unverified and Prune protected explanations and the safety caveat. Close remains available at the top."
+    },
+    {
+      "file": "webkit-source-denied.png",
+      "state": "source-denied",
+      "engine": "webkit",
+      "viewport": {
+        "width": 320,
+        "height": 1000
+      },
+      "sha256": "93b36e2180fd730f4b4eb6caa39c7b56c2fc341e91aa3b280be3bc723b12a04d",
+      "geometry": {
+        "overflow": false,
+        "clippedFields": [],
+        "dialogWithinViewport": true,
+        "focused": null,
+        "bodyLocked": false
+      },
+      "inspected_with": "native view_image",
+      "pixel_review": "The scrolled narrow viewport shows the end of the unavailable notice and Retry PBS, an Unknown health summary and the single PVE backup-file/provenance row. Its notice begins above this viewport; full denial text is established by the DOM assertion, not this capture. No horizontal clipping is visible."
+    }
+  ],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "proof_limits": [
+    "Synthetic collected-state HTTP fixtures, not installed backup/restore, guest responsiveness, independent thaw or filesystem liveness.",
+    "Source-proof type/lint/build/budget execution was unavailable before guest creation (proof-capacity-low), not passed."
+  ]
+}
