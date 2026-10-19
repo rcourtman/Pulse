@@ -21,8 +21,17 @@ LOCALIZED_DOCS = (
 
 MACHINE_FACING_STRINGS = (
     "export PULSE_VERSION=vX.Y.Z",
-    "curl -fsSLO \"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh\"",
-    "curl -fsSLO \"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig\"",
+    # Preserve the bounded signed recipe, not the old unbounded curl spelling.
+    # test_signed_installer_docs also executes the copied canonical/localized
+    # blocks against download, HTTP-status and real signature failure controls.
+    '"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"',
+    '"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"',
+    "curl --disable --fail --silent --show-error --location",
+    "--proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60",
+    "--output install.sh --write-out '%{http_code}'",
+    "--output install.sh.sshsig --write-out '%{http_code}'",
+    '[ "$status" = 200 ]',
+    "umask 077",
     "ssh-keygen -Y verify",
     "bash install.sh --version \"${PULSE_VERSION}\"",
     "docker run -d",
