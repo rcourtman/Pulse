@@ -31,6 +31,8 @@ func TestPVEOfflineBackupTasksRetainAgeAndHealthyPeerProgress(t *testing.T) {
 				require.Equal(t, http.MethodGet, r.Method)
 				p := phase.Load()
 				switch r.URL.Path {
+				case "/api2/json/access/permissions":
+					fmt.Fprintf(w, `{"data":{%q:{"Sys.Audit":1}}}`, r.URL.Query().Get("path"))
 				case "/api2/json/nodes":
 					if p == 5 {
 						fmt.Fprint(w, `{"data":[]}`)
