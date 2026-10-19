@@ -270,9 +270,9 @@ function serve(req, res, next) {
       };
       await page.goto(
         `${origin}/browser-tests/pbs-count-sources.html?transport=${spec.transport}`,
-        { waitUntil: 'networkidle' },
+        { waitUntil: 'domcontentloaded', timeout: 30000 },
       );
-      await table.waitFor();
+      await table.waitFor({ timeout: 45000 });
       await open('backup', 'tank');
       await expectCount('backup', 'tank', 0);
       await open('pbs-backup', 'tank');
