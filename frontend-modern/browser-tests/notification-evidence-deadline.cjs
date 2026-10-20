@@ -331,6 +331,9 @@ let browser, context;
       modes.held = 'headers';
       await activate(card.getByRole('button', { name: 'Refresh delivery status' }));
       await expect.poll(() => count('held')).toBe(3);
+      // Seeing an HTTP request is not evidence its independent response has
+      // reached the owner. Let attempts finish before aging only the held read.
+      await expect(card.getByRole('button', { name: 'Refresh delivery status' })).toBeEnabled();
       await page.clock.fastForward(LIMIT);
       await expect(card.getByText(heldGap, { exact: true })).toBeVisible();
       await expect(card.getByText(logGap, { exact: true })).toHaveCount(0);
