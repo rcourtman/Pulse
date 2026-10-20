@@ -1439,97 +1439,141 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 		return sizes
 	}
 
-	for nodeName := range nodes {
+	// Sizing follows inventory polling, but must not serialize independent
+	// nodes behind one slow storage read. Bound both workers and requests;
+	// storage reads within a node remain serial and totals remain atomic.
+	const maxSnapshotSizePollWorkers = 8
+	nodeNames := make([]string, 0, len(nodes))
+	for node := range nodes {
+		nodeNames = append(nodeNames, node)
+	}
+	sort.Strings(nodeNames)
+	jobs := make(chan string)
+	results := make(chan map[string]int64, len(nodeNames))
+	var wg sync.WaitGroup
+	for i := 0; i < min(maxSnapshotSizePollWorkers, len(nodeNames)); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for node := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				if totals := collectSnapshotSizesForNode(ctx, instanceName, node, client, validSnapshots); len(totals) > 0 {
+					// A complete node remains useful even if a different
+					// reader exhausts the budget while the scan joins it.
+					results <- totals
+				}
+			}
+		}()
+	}
+dispatch:
+	for _, node := range nodeNames {
 		if ctx.Err() != nil {
 			break
 		}
+		select {
+		case jobs <- node:
+		case <-ctx.Done():
+			break dispatch
+		}
+	}
+	close(jobs)
+	// Cancellation withdraws queued work, not ownership of active reads.
+	wg.Wait()
+	close(results)
+	for totals := range results {
+		for key, size := range totals {
+			sizes[key] = size
+		}
+	}
+	return sizes
+}
 
-		storages, err := client.GetStorage(ctx, nodeName)
+func collectSnapshotSizesForNode(ctx context.Context, instanceName, nodeName string, client PVEClientInterface, validSnapshots map[string]struct{}) map[string]int64 {
+	storages, err := client.GetStorage(ctx, nodeName)
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("node", nodeName).
+			Str("instance", instanceName).
+			Msg("Failed to get storage list for snapshot sizing")
+		return nil
+	}
+
+	// A snapshot can span several storages. Stage this node's totals
+	// until all eligible storage reads complete; a missing disk cannot
+	// turn a large snapshot into a small, apparently recovered one.
+	nodeSizes := make(map[string]int64)
+	unknownSizes := make(map[string]bool)
+	seenVolids := make(map[string]struct{})
+	complete := true
+	for _, storage := range storages {
+		if ctx.Err() != nil {
+			complete = false
+			break
+		}
+
+		contentTypes := strings.ToLower(storage.Content)
+		if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+			continue
+		}
+		if !storageContentQueryable(storage) {
+			complete = false
+			continue
+		}
+
+		contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
 		if err != nil {
 			log.Debug().
 				Err(err).
 				Str("node", nodeName).
+				Str("storage", storage.Storage).
 				Str("instance", instanceName).
-				Msg("Failed to get storage list for snapshot sizing")
+				Msg("Failed to get storage content for snapshot sizing")
+			complete = false
 			continue
 		}
 
-		// A snapshot can span several storages. Stage this node's totals
-		// until all eligible storage reads complete; a missing disk cannot
-		// turn a large snapshot into a small, apparently recovered one.
-		nodeSizes := make(map[string]int64)
-		unknownSizes := make(map[string]bool)
-		seenVolids := make(map[string]struct{})
-		complete := true
-		for _, storage := range storages {
-			if ctx.Err() != nil {
-				complete = false
-				break
-			}
-
-			contentTypes := strings.ToLower(storage.Content)
-			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+		for _, item := range contents {
+			if item.Content != "images" && item.Content != "rootdir" {
 				continue
 			}
-			if !storageContentQueryable(storage) {
-				complete = false
+			if item.VMID <= 0 {
 				continue
 			}
 
-			contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
-			if err != nil {
-				log.Debug().
-					Err(err).
-					Str("node", nodeName).
-					Str("storage", storage.Storage).
-					Str("instance", instanceName).
-					Msg("Failed to get storage content for snapshot sizing")
-				complete = false
+			if _, seen := seenVolids[item.Volid]; seen {
 				continue
 			}
 
-			for _, item := range contents {
-				if item.Content != "images" && item.Content != "rootdir" {
-					continue
-				}
-				if item.VMID <= 0 {
-					continue
-				}
-
-				if _, seen := seenVolids[item.Volid]; seen {
-					continue
-				}
-
-				snapName := extractSnapshotName(item.Volid)
-				if snapName == "" {
-					continue
-				}
-
-				key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
-				if _, ok := validSnapshots[key]; !ok {
-					continue
-				}
-
-				seenVolids[item.Volid] = struct{}{}
-
-				if item.Size == 0 || item.Size > uint64(math.MaxInt64-nodeSizes[key]) {
-					unknownSizes[key] = true
-					continue
-				}
-
-				nodeSizes[key] += int64(item.Size)
+			snapName := extractSnapshotName(item.Volid)
+			if snapName == "" {
+				continue
 			}
-		}
-		if complete && ctx.Err() == nil {
-			for key, size := range nodeSizes {
-				if !unknownSizes[key] {
-					sizes[key] = size
-				}
+
+			key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
+			if _, ok := validSnapshots[key]; !ok {
+				continue
 			}
+
+			seenVolids[item.Volid] = struct{}{}
+
+			if item.Size == 0 || item.Size > uint64(math.MaxInt64-nodeSizes[key]) {
+				unknownSizes[key] = true
+				continue
+			}
+
+			nodeSizes[key] += int64(item.Size)
 		}
 	}
-
-	return sizes
+	if !complete || ctx.Err() != nil {
+		return nil
+	}
+	for key := range unknownSizes {
+		delete(nodeSizes, key)
+	}
+	return nodeSizes
 }
 
 func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {

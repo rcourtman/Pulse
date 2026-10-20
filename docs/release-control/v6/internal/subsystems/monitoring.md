@@ -221,6 +221,27 @@ gated mixed-fleet reads, checks scoped inventory and actual-return cancellation,
 and measures fixed-sample allocation cost. These are source resource/evidence
 proofs, not installed RSS, incident diagnosis or frozen-guest recovery.
 
+### Snapshot sizing isolates slow nodes with bounded workers
+
+Snapshot volume sizing uses at most eight reusable workers per connection scan,
+rather than serialising every node behind one slow storage read. Each worker
+keeps a node's storage reads serial and publishes its totals only after all
+eligible storages complete. The existing inventory scan budget, query selection,
+size validation and unknown/held-alert semantics remain unchanged. Completed
+nodes survive another reader exhausting the sizing budget; cancellation withdraws
+queued nodes but joins every occupied reader before returning. No QGA command,
+guest operation, permission, API field, route or recovery claim is added.
+
+`snapshot_size_workers_test.go` gates actual workers/requests at 0/1/7/8/128 nodes,
+checks same-VMID isolation, pre-cancellation, real reader joins and completed-peer
+retention. `snapshot_size_http_test.go` joins single and cluster HTTP adapters,
+VM/LXC inventory, two-storage totals, a blocked node with a live healthy peer,
+unknown sizes, held/acknowledged alerts with their original observation time,
+recovery points, ordinary smaller-total recovery and authoritative removal.
+Its actual frames feed production Backups/Alerts at desktop and narrow widths
+through `scripts/check-snapshot-size-workers.cjs`. These synthetic controls do
+not establish installed performance, incident cause, thaw or filesystem liveness.
+
 ### Storage content is shared evidence, not a backup-only list
 
 The validated Proxmox content reader returns every content kind to its existing
