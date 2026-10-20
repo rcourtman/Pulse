@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "df7b0feb45fe62946dc04226c68adf4a6cc98104",
+  "verified_at": "2026-10-20T02:29:52.940823Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/features/storageBackups/models.ts",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/features/storageBackups/storageAlertState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "049b11497319463f6fe4ce491c39a1fd52a6c64aedc8b2bcd7acebd91dd1cc3f",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "d384351c1a92ab61f9aaca3d8d5a55663f6a27c776d3b053352a19587fedeec4",
+    "frontend-modern/src/features/storageBackups/models.ts": "399c4937b316a0f302893e12047073771f867712d0f0df372027fc0d7cacba47",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "e504e6ee9fe87d350eee6f454967aae6ef63db584f292f1c1d6fbdd1cdeeb8ed",
+    "frontend-modern/src/features/storageBackups/storageAlertState.ts": "dc0edd987c615d5fc940457dc80c5e35214ab70cd168d90b6b9b147cd89ca6ca"
+  },
+  "routes": [
+    "/browser-tests/unraid-storage-alerts.html \u2014 production Storage adapter, alert hook, table and disclosure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium"
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "browser": "WebKit",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "states": [
+    "Twelve unchanged backend broadcast frames in both browsers: legacy empty slots, fresh agent, explicit missing, assigned missing/disabled/invalid, no parity and every ordinary recovery",
+    "Three separately mapped same-name/host/provider identity controls per state; genuine critical/warning row severity/count/headline and healthy silence",
+    "Full current unacknowledged reason is visible in existing expanded detail, with no clipping, and withdrawn by ordinary recovered frames"
+  ],
+  "interactions": [
+    "Desktop row disclosure via keyboard focus and Enter",
+    "Narrow row disclosure via touch without hover",
+    "Frame replacement through every failure and recovery; no horizontal page overflow or page errors",
+    "All six retained final captures opened using native view_image after the 24-state browser pass"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/unraid-storage-alerts.cjs",
+  "producer_frames_sha256": "7c926f95431e7c89b9592467896b841d725375876e8b8e1d37b4fc6ba4a6ab51",
+  "playwright": "1.56.1",
+  "limits": "Synthetic original producer frames, not installed Unraid, reporter confirmation or release proof; no functioning history store is supplied."
+}

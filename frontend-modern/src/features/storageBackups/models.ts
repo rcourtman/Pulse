@@ -99,6 +99,8 @@ export interface StorageRecord {
   absorbedAlertResourceIds?: string[];
   metricsTarget?: StorageMetricsTarget;
   refs?: {
+    // Exact alert-producer identity when it differs from the metrics target.
+    alertResourceId?: string;
     resourceId?: string;
     platformEntityId?: string;
   };
