@@ -86,12 +86,22 @@ func TestProDockerUpdateCommandsImageShapes(t *testing.T) {
 // default broker fixture mirrors the producer's already-pinned image field.
 func TestCheckProUpdatesDockerBrokerImageShapes(t *testing.T) {
 	setupProUpdateTest(t, "6.5.0")
-	for _, shape := range []string{"pinned", "legacy"} {
-		t.Run(shape, func(t *testing.T) {
+	for _, tc := range []struct {
+		name, shape, login string
+	}{
+		{name: "pinned", shape: "pinned"},
+		{name: "legacy", shape: "legacy"},
+		{name: "pinned-prompt", shape: "pinned", login: "docker login 'registry.pulserelay.pro' --username 'lic_test'"},
+		{name: "legacy-prompt", shape: "legacy", login: "docker login 'registry.pulserelay.pro' --username 'lic_test'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			fixture := newProBrokerFixture(t, "6.6.0", false)
 			fixture.dockerBlock = defaultBrokerDockerBlock(fixture.version)
-			if shape == "legacy" {
+			if tc.shape == "legacy" {
 				fixture.dockerBlock["image"] = strings.SplitN(fixture.dockerBlock["image"].(string), "@", 2)[0]
+			}
+			if tc.login != "" {
+				fixture.dockerBlock["login_command"] = tc.login
 			}
 			manager := NewManager(&config.Config{DataPath: t.TempDir()})
 			manager.SetProUpdateCredentialSource(fixture.credentialSource())
@@ -117,7 +127,7 @@ func TestCheckProUpdatesDockerBrokerImageShapes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Logf("DOCKER_BROKER_READER_%s=%s", shape, wire)
+			t.Logf("DOCKER_BROKER_READER_%s=%s", tc.name, wire)
 		})
 	}
 }
