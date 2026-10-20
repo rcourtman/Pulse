@@ -166,6 +166,14 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     resource.storage?.vdevLayout || resource.storage?.topology,
   );
   const metricsTarget = metricsTargetForStorageResource(resource);
+  // CheckHost keys an agent's Unraid assessment on "agent:<host>/storage:unraid-array";
+  // the registry's storage metrics target intentionally has no "agent:" prefix.
+  // Carry that exact producer key without changing chart routing or borrowing
+  // alerts by array name, node label, parent, or another provider's metrics id.
+  const agentStorageAlertId =
+    resource.sourceType === 'agent' && isUnraid && metricsTarget?.resourceType === 'storage'
+      ? metricsTarget.resourceId.trim()
+      : '';
   const sourceStatuses = Object.values(resource.sourceStatus ?? {});
   const degradedSource = sourceStatuses.find((source) =>
     ['stale', 'offline', 'error', 'failed', 'unauthorized'].includes(
@@ -224,6 +232,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     freshnessError: degradedSource?.error?.trim() || undefined,
     metricsTarget,
     refs: {
+      ...(agentStorageAlertId ? { alertResourceId: `agent:${agentStorageAlertId}` } : {}),
       resourceId: metricsTarget?.resourceId || resource.id,
       platformEntityId: resource.platformId,
     },
@@ -346,6 +355,9 @@ const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): S
         preferred.refs?.resourceId ||
         secondary.refs?.resourceId,
       platformEntityId: preferred.refs?.platformEntityId || secondary.refs?.platformEntityId,
+      ...(preferred.refs?.alertResourceId || secondary.refs?.alertResourceId
+        ? { alertResourceId: preferred.refs?.alertResourceId || secondary.refs?.alertResourceId }
+        : {}),
     },
     details: {
       ...(secondary.details || {}),

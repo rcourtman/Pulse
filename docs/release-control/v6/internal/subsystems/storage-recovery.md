@@ -21,6 +21,29 @@
 
 ## Purpose
 
+### Unraid assessment alerts keep their exact producer identity
+
+The storage adapter carries a separate `refs.alertResourceId` for an agent-backed
+Unraid array with a concrete storage metrics target. CheckHost's `agent:` alert
+namespace must not replace the registry or metrics identity: chart/history
+routing is unchanged. Row severity, count, acknowledgement and headline all
+match this explicit key through the existing exact matcher. Array/host display
+names, node labels, parent IDs and API-only lookalikes cannot borrow an agent
+assessment. Legacy resource IDs and absorbed Ceph alert IDs still work.
+The existing expanded detail exposes the full current unacknowledged alert reason
+without a hover-only tooltip; compact row text may truncate. That explanation
+withdraws when acknowledgement, detection-off or ordinary replacement removes
+the headline, without changing provider posture. `StoragePoolDetail.test.tsx`
+checks reactive replacement and withdrawal.
+
+`storageAgentAlerts.test.ts` consumes unmodified synthetic producer frames and
+checks genuine critical/warning failures, healthy/recovered states, detection-off,
+acknowledgement, deduplication and same-name/host/component isolation.
+`browser-tests/unraid-storage-alerts.cjs` exercises the production adapter, alert
+hook, table and expandable detail with those frames at desktop and narrow touch
+widths. This is consumer correctness, not installed Unraid recovery or release
+availability; no provider data, alerts or protection verdicts are rewritten.
+
 ### Backup workload attribution preserves configured connection identity
 
 PVE files, guest snapshots and typed/untyped jobs match configured connection

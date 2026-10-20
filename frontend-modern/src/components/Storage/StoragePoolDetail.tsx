@@ -50,6 +50,7 @@ interface StoragePoolDetailProps {
   getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   summarySeriesId: string;
   controlsId?: string;
+  alertHeadline?: string | null;
 }
 
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
@@ -86,6 +87,16 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     <tr class={STORAGE_DETAIL_ROW_CLASS} data-inline-detail-for={props.summarySeriesId}>
       <td id={props.controlsId} colSpan={99} class={STORAGE_DETAIL_CELL_CLASS}>
         <div class="space-y-3">
+          <Show when={props.alertHeadline}>
+            {(headline) => (
+              <div class={STORAGE_DETAIL_CARD_CLASS} data-storage-alert-detail>
+                <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>Active alert</h4>
+                <p class="mt-1 whitespace-normal text-sm text-base-content [overflow-wrap:anywhere]">
+                  {headline()}
+                </p>
+              </div>
+            )}
+          </Show>
           {/* The capacity trend leads: "is this pool filling up?" is answered
               before topology and devices. There is no separate History tab
               repeating it. */}

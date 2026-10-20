@@ -245,6 +245,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           summarySeriesId={props.summarySeriesId}
           controlsId={detailControlsId()}
+          alertHeadline={props.alertHeadline}
         />
       </Show>
     </>

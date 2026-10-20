@@ -77,6 +77,22 @@ describe('storageAlertState', () => {
     });
   });
 
+  it('includes an explicit producer key once without replacing existing storage identities', () => {
+    const alertResourceId = 'agent:unraid-machine/storage:unraid-array';
+    const record = makeRecord({
+      refs: {
+        resourceId: 'unraid-machine/storage:unraid-array',
+        alertResourceId: `  ${alertResourceId}  `,
+      },
+      absorbedAlertResourceIds: [alertResourceId],
+    });
+    expect(getStorageRecordAlertResourceIds(record)).toEqual([
+      'storage-1',
+      'unraid-machine/storage:unraid-array',
+      alertResourceId,
+    ]);
+  });
+
   it('derives storage alert candidate ids canonically', () => {
     expect(
       getStorageRecordAlertResourceIds(

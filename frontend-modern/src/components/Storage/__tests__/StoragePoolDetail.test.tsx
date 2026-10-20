@@ -42,6 +42,33 @@ const makeRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => ({
 });
 
 describe('StoragePoolDetail', () => {
+  it('exposes the full current row reason without hover and withdraws it on recovery', () => {
+    const [headline, setHeadline] = createSignal<string | null>(
+      'Unraid array reports 1 missing disk(s)',
+    );
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail
+            record={makeRecord()}
+            physicalDisks={[]}
+            summarySeriesId="pool:tank"
+            alertHeadline={headline()}
+          />
+        </tbody>
+      </table>
+    ));
+    const detail = () => container.querySelector('[data-storage-alert-detail]');
+    expect(detail()).toHaveTextContent('Active alert');
+    expect(detail()).toHaveTextContent('Unraid array reports 1 missing disk(s)');
+    expect(detail()?.querySelector('p')).not.toHaveClass('truncate');
+    setHeadline('Unraid array reports 1 disabled disk(s)');
+    expect(detail()).toHaveTextContent('Unraid array reports 1 disabled disk(s)');
+    expect(detail()).not.toHaveTextContent('missing');
+    setHeadline(null);
+    expect(detail()).toBeNull();
+  });
+
   it('updates capacity rows without presenting missing readings as an empty pool', () => {
     const [record, setRecord] = createSignal(makeRecord());
     render(() => (
