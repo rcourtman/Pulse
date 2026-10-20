@@ -69,6 +69,15 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 						fmt.Fprint(w, `{"data":{"total":100,"used":20,"avail":80,"deduplication-factor":2}}`)
 					case "/api2/json/version":
 						fmt.Fprint(w, `{"data":{"version":"9.1","release":"1"}}`)
+					case "/api2/json/statistics/mail":
+						fmt.Fprint(w, `{"data":{"count":10,"count_in":6,"count_out":4}}`)
+					case "/api2/json/config/cluster/status":
+						if r.URL.Query().Get("list_single_node") != "1" {
+							t.Error("PMG cluster probe lost its configured single-node query")
+						}
+						fmt.Fprint(w, `{"data":[{"name":"fixture","type":"node","ip":"127.0.0.1"}]}`)
+					case "/api2/json/quarantine/spamstatus":
+						fmt.Fprint(w, `{"data":{"count":1,"avgbytes":1024,"mbytes":0.001}}`)
 					default:
 						t.Errorf("unexpected provider read: %s", r.URL.Path)
 						http.NotFound(w, r)
@@ -142,6 +151,8 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 							wantReads = 3 // listing, RRD and status for the one real fixture datastore
 						} else if kind == "pve" && mode == "draft" {
 							wantReads, wantLogins = 2, 2 // nodes plus the ordinary cluster-detection session
+						} else if kind == "pmg" && mode == "draft" {
+							wantReads = 4 // version, mail statistics, cluster and quarantine
 						}
 						if success && (reads.Load() != readStart+wantReads || logins.Load() != loginStart+wantLogins) {
 							t.Errorf("%s/%s: ordinary authenticated reads not completed exactly once per endpoint", mode, phase)
