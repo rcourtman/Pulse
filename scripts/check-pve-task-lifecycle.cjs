@@ -135,7 +135,8 @@ let payload, server, browser;
           const field = (label) => detail.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }).evaluate((dt) => dt.nextElementSibling.textContent.trim());
           assert.equal(await field('Job connection'), 'site');
           assert.equal(await field('Job node'), 'node');
-          assert.equal(await detail.locator('dt').filter({ hasText: /^Result$/ }).evaluate((dt) => dt.nextElementSibling.textContent.trim()), phase === 'finished' ? 'OK' : phase.startsWith('live-') ? 'ERROR: fixture failure' : 'Running');
+          if (phase.startsWith('live-')) assert.equal(await field('Reported status'), 'ERROR: fixture failure', 'the original adverse provider status remains visible');
+          assert.equal(await detail.locator('dt').filter({ hasText: /^Result$/ }).evaluate((dt) => dt.nextElementSibling.textContent.trim()), phase === 'finished' ? 'OK' : phase.startsWith('live-') ? 'Failed' : 'Running');
           assert.equal(await detail.locator('dt').filter({ hasText: /^Started$/ }).locator('xpath=following-sibling::dd[1]').locator('time').getAttribute('datetime'), ownTasks[0].startTime);
           if (['live-missing-start', 'history-missing-start', 'finished'].includes(phase)) {
             await detail.scrollIntoViewIfNeeded(); await page.evaluate(() => document.fonts.ready);
