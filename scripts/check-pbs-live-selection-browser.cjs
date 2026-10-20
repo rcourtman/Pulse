@@ -85,7 +85,7 @@ const { chromium } = require('playwright');
         }
         const count = frames[phase].backups.length;
         try {
-          await page.getByText(`${count} restore points`, { exact: false }).first().waitFor();
+          await page.waitForFunction(count => document.querySelector('main')?.innerText.includes(`${count} restore points`), count);
         } catch (error) {
           await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true });
           fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ width, phase, count, reads, errors, text: await page.locator('body').innerText() }, null, 2));
