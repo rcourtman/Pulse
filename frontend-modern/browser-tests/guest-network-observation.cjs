@@ -142,6 +142,7 @@ const save = () =>
           !/diagnostics|run-command|guest-agent|qemu/.test(url.pathname),
           'no guest operation',
         );
+        if (url.pathname === '/api/alerts/active') return route.fulfill({ json: [] });
         const body =
           url.pathname === '/api/metrics-store/history'
             ? {
@@ -156,7 +157,12 @@ const save = () =>
         return route.fulfill({ json: body });
       });
       await page.addInitScript(
-        (dark) => document.documentElement.classList.toggle('dark', dark),
+        (dark) =>
+          document.addEventListener(
+            'DOMContentLoaded',
+            () => document.documentElement.classList.toggle('dark', dark),
+            { once: true },
+          ),
         dark,
       );
       await page.goto(origin, { waitUntil: 'networkidle' });

@@ -26,13 +26,14 @@ const initial: Resource = {
   name: 'network-guest',
   displayName: 'network-guest',
   type: 'vm',
+  platformId: 'fixture',
   platformType: 'proxmox-pve',
   platformScopes: ['proxmox-pve'],
   sourceType: 'hybrid',
   status: 'online',
   sources: ['proxmox', 'agent'],
   lastSeen: Date.parse(observedAt),
-  identity: { ipAddresses: ['192.0.2.80'] },
+  identity: { ips: ['192.0.2.80'] },
   cpu: { current: 0 },
   memory: {
     current: 0,
@@ -83,7 +84,7 @@ function Fixture() {
     freshAddresses: () =>
       update(
         {
-          identity: { ipAddresses: ['192.0.2.81'] },
+          identity: { ips: ['192.0.2.81'] },
           proxmox: {
             ...snapshot()[0].proxmox,
             runtimeStatus: 'running',
