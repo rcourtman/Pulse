@@ -46,6 +46,7 @@ import {
   getAlertOverviewGroupAcknowledgeLabel,
   getAlertOverviewGroupDisclosureLabel,
   getAlertOverviewHydrationState,
+  getAlertOverviewDeliveryUnavailable,
   getAlertOverviewNodeLabel,
   getAlertOverviewPausedState,
   getAlertOverviewPrimaryActionClass,
@@ -141,6 +142,15 @@ describe('alertOverviewPresentation', () => {
       description:
         'Pulse could not confirm the current incident state. This page will not report an all-clear until alert data is available.',
       retryLabel: 'Retry',
+    });
+  });
+
+  it('explains an unavailable notification observation without claiming delivery failed', () => {
+    expect(getAlertOverviewDeliveryUnavailable()).toEqual({
+      label: 'Alert notification status',
+      title: 'Alert notification status is unavailable.',
+      description:
+        'Pulse could not refresh the delivery or pause reason for these alerts. It will check again automatically.',
     });
   });
 

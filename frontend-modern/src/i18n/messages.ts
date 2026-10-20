@@ -205,6 +205,10 @@ export const EN_MESSAGES = {
   'alerts.overview.hydration.unavailable.description':
     'Pulse could not confirm the current incident state. This page will not report an all-clear until alert data is available.',
   'alerts.overview.hydration.unavailable.title': 'Active alert status is temporarily unavailable',
+  'alerts.overview.deliveryUnavailable.region': 'Alert notification status',
+  'alerts.overview.deliveryUnavailable.title': 'Alert notification status is unavailable.',
+  'alerts.overview.deliveryUnavailable.description':
+    'Pulse could not refresh the delivery or pause reason for these alerts. It will check again automatically.',
   'alerts.overview.nodePrefix': 'on {node}',
   'alerts.overview.notification.acknowledged': 'Alert acknowledged',
   'alerts.overview.notification.acknowledgeFailed': 'Failed to acknowledge alert',
@@ -827,6 +831,9 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.overview.hydration.retry',
   'alerts.overview.hydration.unavailable.description',
   'alerts.overview.hydration.unavailable.title',
+  'alerts.overview.deliveryUnavailable.region',
+  'alerts.overview.deliveryUnavailable.title',
+  'alerts.overview.deliveryUnavailable.description',
   'alerts.overview.nodePrefix',
   'alerts.overview.notification.acknowledged',
   'alerts.overview.notification.acknowledgeFailed',

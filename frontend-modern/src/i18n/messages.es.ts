@@ -105,6 +105,11 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.hydration.unavailable.title':
     'El estado de las alertas activas no esta disponible temporalmente',
   'alerts.overview.nodePrefix': 'en {node}',
+  'alerts.overview.deliveryUnavailable.region': 'Estado de las notificaciones de alerta',
+  'alerts.overview.deliveryUnavailable.title':
+    'El estado de las notificaciones de alerta no está disponible.',
+  'alerts.overview.deliveryUnavailable.description':
+    'Pulse no pudo actualizar el motivo del envío o de la pausa de estas alertas. Volverá a comprobarlo automáticamente.',
   'alerts.overview.notification.acknowledged': 'Alerta reconocida',
   'alerts.overview.notification.acknowledgeFailed': 'No se pudo reconocer la alerta',
   'alerts.overview.notification.bulkFailure.singular': 'No se pudo reconocer {count} alerta.',

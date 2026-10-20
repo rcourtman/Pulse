@@ -907,6 +907,12 @@ with missing, unknown, or unrelated scopes fail closed.
 
 ## Extension Points
 
+The localized Alerts Overview notification-status notice uses only fixed
+observation-unavailable copy. It must not interpolate API error bodies,
+destination credentials or endpoints, nor turn an unreadable diagnosis into
+a delivery-failure or delivery-success claim. Alert catalog changes preserve
+all security terms and token/privacy strings unchanged.
+
 The agent-lifecycle-owned `internal/collectorlifecycle/` package and
 `cmd/pulse-agent/collector_lifecycle.go` are the security boundary for
 bearer-authenticated safe-profile migration calls. They must preserve direct

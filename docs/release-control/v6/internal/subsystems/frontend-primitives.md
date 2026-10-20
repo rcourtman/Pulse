@@ -2262,10 +2262,16 @@ catalog proof must advance together so this reliability distinction cannot
 silently fall back to English or collapse into ordinary empty-state wording.
 The active-alert card's delivery-status row remains an alerts-owned compact
 presentation composed inside the shared responsive card shell. It consumes one
-bulk diagnosis snapshot per overview refresh, wraps beside started-at and
-threshold metadata at narrow widths, and does not create a second card or
-page-level banner. Acknowledged cards omit the redundant row, and unavailable
-diagnosis data leaves the existing alert card intact.
+bulk diagnosis snapshot per overview refresh and wraps beside started-at and
+threshold metadata at narrow widths. Acknowledged cards omit the redundant
+row. A failed latest read withdraws old reasons without unmounting the alert
+cards or their controls. One shared `InlineNotice` in a persistent, named,
+polite status region explains the unavailable observation; it does not claim
+a delivery failure. Ordinary successful refresh or an empty active set clears
+the notice. Its region name, title and explanation follow the alert-owned
+presentation helper and all three catalogs. The overview consumer and i18n
+regressions cover that distinction; the read-only browser fixture covers
+keyboard focus, phone wrapping, first failure and ordinary next-read recovery.
 The Destinations delivery-activity surface follows the same ownership split:
 alerts own the `AlertDeliveryLogCard` composition inside the shared `Card`,
 button, badge, list, and responsive wrapping primitives. Its single

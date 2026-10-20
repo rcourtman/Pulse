@@ -85,6 +85,7 @@ describe('useAlertOverviewState', () => {
     finish([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
     await Promise.resolve();
     expect(result.deliveryDiagnoses()).toEqual({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
   });
 
   it('does not accept an older success when a newer periodic refresh fails', async () => {
@@ -116,7 +117,131 @@ describe('useAlertOverviewState', () => {
     expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledTimes(3);
     finishOlder([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
     await Promise.resolve();
-    expect(result.deliveryDiagnoses()).toEqual({ a1: retained });
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(true);
+    // A failed read is not a permanent warning: the ordinary next minute
+    // owns a new snapshot and clears unavailable state, even if it is empty.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+  });
+
+  it('withdraws stale reasons after a latest failure and recovers on the next successful read', async () => {
+    const previous = { alertIdentifier: 'a1', reason: 'quiet_hours' } as AlertDeliveryDiagnosis;
+    const current = { alertIdentifier: 'a1', reason: 'monitor_only' } as AlertDeliveryDiagnosis;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses)
+      .mockResolvedValueOnce([previous])
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValueOnce([current]);
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    await Promise.resolve();
+    expect(result.deliveryDiagnoses()).toEqual({ a1: previous });
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(result.deliveryDiagnoses()).toEqual({ a1: current });
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    expect(notificationStore.error).not.toHaveBeenCalled();
+    expect(notificationStore.success).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'ignores an older %s after a newer success',
+    async (outcome) => {
+      let resolve!: (value: AlertDeliveryDiagnosis[]) => void;
+      let reject!: (error: Error) => void;
+      const current = { alertIdentifier: 'a1', reason: 'monitor_only' } as AlertDeliveryDiagnosis;
+      vi.mocked(AlertsAPI.getDeliveryDiagnoses)
+        .mockReturnValueOnce(
+          new Promise((yes, no) => {
+            resolve = yes;
+            reject = no;
+          }),
+        )
+        .mockResolvedValueOnce([current]);
+      const { result } = renderHook(() =>
+        useAlertOverviewState({
+          activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+          overrides: () => [],
+          showAcknowledged: () => true,
+          updateAlert: vi.fn(),
+        }),
+      );
+      expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      if (outcome === 'success')
+        resolve([{ alertIdentifier: 'a1', reason: 'quiet_hours' } as AlertDeliveryDiagnosis]);
+      else reject(new Error('old read failed'));
+      await Promise.resolve();
+      expect(result.deliveryDiagnoses()).toEqual({ a1: current });
+      expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    },
+  );
+
+  it('clears an initial failure when the alert set becomes empty and fences a late failure', async () => {
+    let reject!: (error: Error) => void;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses)
+      .mockRejectedValueOnce(new Error('initial unavailable'))
+      .mockReturnValueOnce(
+        new Promise((_yes, no) => {
+          reject = no;
+        }),
+      );
+    const [activeAlerts, setActiveAlerts] = createSignal<Record<string, Alert>>({
+      a1: makeAlert('a1', new Date().toISOString()),
+    });
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    await Promise.resolve();
+    expect(result.deliveryDiagnosesUnavailable()).toBe(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    setActiveAlerts({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    reject(new Error('late unavailable'));
+    await Promise.resolve();
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not publish a late failure or start another read after disposal', async () => {
+    let reject!: (error: Error) => void;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses).mockReturnValueOnce(
+      new Promise((_yes, no) => {
+        reject = no;
+      }),
+    );
+    const { result, cleanup } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    cleanup();
+    reject(new Error('retired read failed'));
+    await Promise.resolve();
+    await result.refreshDeliveryDiagnoses();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(result.deliveryDiagnosesUnavailable()).toBe(false);
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
   });
 
   it('refreshes diagnoses once a minute, not on the 30-second age clock', async () => {

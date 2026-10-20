@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "84df37788a873c19c60dcf371e81643f08afb256",
+  "verified_at": "2026-10-20T01:38:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "5d707be4dd41528405fae0480f289e2b4e9b659ff1a01a50b14daaba9a97fe52",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "abd193d0751885a1779aa6aaf3d752392129695d06599be6c6ea66f1485d9a1e",
+    "frontend-modern/src/i18n/messages.de.ts": "bc2251d6a634a401c7eef162397f1e91e80a208e493a9395da70cd3e2fd68075",
+    "frontend-modern/src/i18n/messages.es.ts": "88554f717725458a8c828b514f5b770b93a5ada826e4003ed58a37f1594ceb6e",
+    "frontend-modern/src/i18n/messages.ts": "e1565f9cb19c93795203f423640eb9e835961fd533d804a1ea17627077b049d8",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "7eb012f41a84fa6505ba69599e597d593f9e0fa37d88b341cb96a2f043c72b02"
+  },
+  "routes": [
+    "/browser-tests/alert-delivery-freshness.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Alerts Overview, state hook, real API reader, router and CSS with synthetic read-only diagnosis/queue observations. Playwright1.56.1 matches integration lock; Chromium141 desktop/light and WebKit26 phone/dark.",
+    "Both engines reproduce stale quiet-hours and dispatch reasons at unchanged base84df3778. Latest failed reads now withdraw those reasons and show one named persistent polite status notice without hiding alerts or alleging failed delivery.",
+    "Repeated failures stay unknown; initial failure is explicit; empty active sets clear unknown without extra reads; ordinary next successful minute replaces the notice with current monitor-only reasons.",
+    "All four baseline and ten final captures were opened via native view_image. English,German and Spanish notices are readable and wrap without horizontal overflow. Catalogued region names/titles/explanations follow the actual locale signal."
+  ],
+  "interactions": [
+    "Actual periodic GET producers receive synthetic503 responses and later normal success; no endpoint,notification,acknowledgement,queue or monitoring mutations occur. Off-origin and non-read requests are refused by the fixture.",
+    "Keyboard focus stays on the first alert More button across failure/recovery; desktop Enter and narrow touch still open Timeline/Monitoring controls.",
+    "Ten complete WCAG A/AA scans across failure,recovery,initial unknown and German/Spanish states have no automatic violations under unchanged axe4.13. Not new-graph axe4.14,screen-reader speech,installed recovery or release proof."
+  ]
+}
