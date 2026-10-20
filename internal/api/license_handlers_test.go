@@ -783,8 +783,8 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	if err != nil {
 		t.Fatalf("parse redirect location: %v", err)
 	}
-	if redirectURL.Scheme != "https" || redirectURL.Host != "cloud.pulserelay.pro" || redirectURL.Path != "/portal" {
-		t.Fatalf("redirect location = %q, want Pulse Account portal", location)
+	if redirectURL.Scheme != "https" || redirectURL.Host != "license.pulserelay.pro" || redirectURL.Path != "/buy" {
+		t.Fatalf("redirect location = %q, want licence-server purchase page", location)
 	}
 	if got := redirectURL.Query().Get("feature"); got != "" {
 		t.Fatalf("feature = %q, want omitted portal query", got)
