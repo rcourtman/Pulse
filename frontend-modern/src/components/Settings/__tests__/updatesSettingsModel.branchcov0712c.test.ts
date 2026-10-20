@@ -52,7 +52,7 @@ const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): Docker
 });
 
 const PRO_STEP_CODE_CLASS =
-  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
+  'block rounded-md border border-border bg-page p-3 pr-14 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
 
 // ---- buildUpdateInstallGuide (complementary branch-coverage) ----------------
 
@@ -118,7 +118,9 @@ describe('buildUpdateInstallGuide — isProRuntime / dockerUpdate precedence', (
       'curl',
       true,
     );
-    expect(guide?.introText).toBe('Run these two commands on the Docker host to update:');
+    expect(guide?.introText).toBe(
+      'Run these commands on the Docker host, in the folder with your docker-compose.yml:',
+    );
     expect(guide?.steps[0]).toStrictEqual({
       id: 'docker-pro-pull',
       title: 'Pull the new Pulse Pro image (pinned to this release\u2019s digest)',
@@ -295,7 +297,7 @@ describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand fal
     expect(guide?.steps.map((s) => s.id)).toStrictEqual(['docker-pro-pull', 'docker-pro-up']);
   });
 
-  it('includes the login note with the exact interpolated command when loginCommand is a non-empty custom string', () => {
+  it('withholds an unrecognised custom login instead of echoing its credential', () => {
     const customLogin =
       'echo hunter2 | docker login registry.example.invalid -u ops --password-stdin';
     const dockerUpdate = makeDockerUpdate({ loginCommand: customLogin });
@@ -309,8 +311,8 @@ describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand fal
     );
     expect(guide?.steps).toHaveLength(3);
     expect(guide?.steps[2]?.id).toBe('docker-pro-login-note');
-    expect(guide?.steps[2]?.note).toBe(
-      `If the pull is denied, sign in to the registry first (replace <activation-key> with the key from Settings \u2192 License): ${customLogin}`,
-    );
+    expect(guide?.steps[2]?.command).toBeUndefined();
+    expect(guide?.steps[2]?.note).toContain('could not be checked safely');
+    expect(JSON.stringify(guide)).not.toContain('hunter2');
   });
 });

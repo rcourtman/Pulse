@@ -54,7 +54,7 @@ const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): Docker
 });
 
 const PRO_STEP_CODE_CLASS =
-  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
+  'block rounded-md border border-border bg-page p-3 pr-14 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
 const SYSTEMD_DOWNLOAD_CODE_CLASS =
   'block rounded-md border border-border bg-page p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all';
 
@@ -279,7 +279,9 @@ describe('buildUpdateInstallGuide', () => {
       false,
     );
     // The dockerUpdate arm overrides introText with the two-command copy.
-    expect(guide?.introText).toBe('Run these two commands on the Docker host to update:');
+    expect(guide?.introText).toBe(
+      'Run these commands on the Docker host, in the folder with your docker-compose.yml:',
+    );
     expect(guide?.steps).toHaveLength(3);
     expect(guide?.steps[0]).toStrictEqual({
       id: 'docker-pro-pull',
@@ -293,11 +295,14 @@ describe('buildUpdateInstallGuide', () => {
       command: dockerUpdate.composeUpCommand,
       commandCodeClass: PRO_STEP_CODE_CLASS,
     });
-    // loginCommand truthy arm: a third note step is pushed.
+    // Legacy login becomes an interactive password prompt, never a key-bearing command.
     expect(guide?.steps[2]?.id).toBe('docker-pro-login-note');
-    expect(guide?.steps[2]?.title).toBe('');
-    expect(guide?.steps[2]?.note).toContain('sign in to the registry first');
-    expect(guide?.steps[2]?.note).toContain(dockerUpdate.loginCommand as string);
+    expect(guide?.steps[2]?.title).toBe('If the pull is denied, sign in, then repeat the pull');
+    expect(guide?.steps[2]?.note).toContain('Docker’s hidden Password prompt');
+    expect(guide?.steps[2]?.command).toBe(
+      "docker login registry.pulserelay.pro --username 'lic_test'",
+    );
+    expect(JSON.stringify(guide)).not.toContain('<activation-key>');
   });
 
   it('omits the login note step when dockerUpdate has no loginCommand (loginCommand falsy arm)', () => {

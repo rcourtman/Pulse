@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "52250616b3da69d6cd943c4e64bca851d8d59970",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/utils/proRegistryLogin.ts",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "870bda38348067cf48b3437121b891086e5b2701b20ed220c30bc000a4aa9be9",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "a9d8dc7e8bc1c01c0fc7440556d96d4584236d0b9326e7919c9ab967b8390cb4",
+    "frontend-modern/src/utils/proRegistryLogin.ts": "718c36c0bee401588e0457346594c152b8c979c7b139c497011da521551a7011",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts": "5698ba3c0e6fc644d34f8fd25f7c939155e1be265ec6ab090b577c0182ac5ced"
+  },
+  "routes": [
+    "Settings \u2192 Updates (production UpdatesSettingsPanel, UpdatesAPI and runtime reader at the offline browser fixture)"
+  ],
+  "states": [
+    "Community Docker-to-Pro switch: returned quoted login field, legacy placeholder template, secret-bearing rejected input and missing login",
+    "Pro Docker update: the same four response variants with unchanged pinned image and Compose commands",
+    "Desktop light Chromium and 320px dark WebKit: secret-bearing input withheld without echo or a login-copy action"
+  ],
+  "interactions": [
+    "16 fresh HTTP-to-production-panel cases, split into two bounded viewport requests; no previous browser proof rebound",
+    "Keyboard activation on desktop and touch activation on phone for every copy action; exact intact sanitised login and unchanged digest-pinned pull/up text reach the clipboard-write seam",
+    "Hidden Password prompt, terminal, Settings \u2192 License, Ctrl+C cancellation, key-in-command warning and Docker local-storage note are visible",
+    "No off-origin requests, API writes or settings changes; date fields render the actual native date formatting result",
+    "Paragraph/text bounds, copy-button non-overlap and page width assertions; native view_image inspection of all 14 current captures, including complete desktop and narrow guides and release-date fields"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-20T11:36:57.137046Z",
+  "tool": [
+    "pulse-worker-browser frontend-modern/browser-tests/pro-registry-desktop.cjs",
+    "pulse-worker-browser frontend-modern/browser-tests/pro-registry-phone.cjs"
+  ],
+  "playwright": "1.56.1",
+  "browsers": {
+    "desktop": "141.0.7390.37",
+    "phone": "26.0"
+  },
+  "source_sha": "52250616b3da69d6cd943c4e64bca851d8d59970",
+  "report_sha256": "55a8868e492c9fbefa6d9982aac03e82e3f677cbe3b376a41737568148958627",
+  "captures": [
+    {
+      "file": "desktop-switch-legacy.png",
+      "sha256": "94cf769e0ef3fbab688bc3e1be051f1b3096fdb4d3506e8e7414c45c85b7a180"
+    },
+    {
+      "file": "desktop-switch-producer-command.png",
+      "sha256": "94cf769e0ef3fbab688bc3e1be051f1b3096fdb4d3506e8e7414c45c85b7a180"
+    },
+    {
+      "file": "desktop-switch-secret-rejected.png",
+      "sha256": "88b81dd964b37d2bc3605eb7c5d783e4405dc5892343e758dac1208429ca5c72"
+    },
+    {
+      "file": "desktop-update-legacy.png",
+      "sha256": "36609482147c9d28472e42e0f5c42fa719b6a3607e21da60783f5c62651c8cc8"
+    },
+    {
+      "file": "desktop-release-date.png",
+      "sha256": "469f2da532892478f1314376bc3f1f07df7efc91e501c8dc88b7635a25b8b81d"
+    },
+    {
+      "file": "desktop-update-producer-command.png",
+      "sha256": "35c1858ad6636becfc6480623d965c52ead627c29da5037456f62fe4544ad59d"
+    },
+    {
+      "file": "desktop-update-secret-rejected.png",
+      "sha256": "58ab4292775e811e253dc2e2b1844f0cdad9f6f558c8dd45ab9667b2248cd134"
+    },
+    {
+      "file": "phone-switch-legacy.png",
+      "sha256": "aa8fa2b0b5eaa6e1c207ec7c7d3c72bdbbd3f94910802500e36f51e4c564a63d"
+    },
+    {
+      "file": "phone-switch-producer-command.png",
+      "sha256": "aa8fa2b0b5eaa6e1c207ec7c7d3c72bdbbd3f94910802500e36f51e4c564a63d"
+    },
+    {
+      "file": "phone-switch-secret-rejected.png",
+      "sha256": "fc3aeffc6090d93abb6247c72f0ae8c6b783836fb575d5566519757dd9fce29b"
+    },
+    {
+      "file": "phone-update-legacy.png",
+      "sha256": "7a6561b659307d163928c481d38ae79f6bb3f0969f795d2b1cd4f8d05077e234"
+    },
+    {
+      "file": "phone-release-date.png",
+      "sha256": "e1d0f61a1117455ffdf77385d48b7c3df80ad0f7730d40ed80ecd19843aa0294"
+    },
+    {
+      "file": "phone-update-producer-command.png",
+      "sha256": "7a6561b659307d163928c481d38ae79f6bb3f0969f795d2b1cd4f8d05077e234"
+    },
+    {
+      "file": "phone-update-secret-rejected.png",
+      "sha256": "970e92dd0f22afc2449c05ae2df37bb32d4af0336fefb9d9ba3e0fbe016469c2"
+    }
+  ],
+  "cleanup": {
+    "desktop": {
+      "contextClosed": true,
+      "browserClosed": true,
+      "serverClosed": true
+    },
+    "phone": {
+      "contextClosed": true,
+      "browserClosed": true,
+      "serverClosed": true
+    }
+  },
+  "limits": [
+    "Only the owner-returned login command field is actual producer evidence here. Other public endpoint fields are synthetic; original complete handler wire is unavailable, with re-export requested as 08d6f620.",
+    "No native Docker/registry authentication, installed switch/update, protected/served/released inclusion or issue resolution is established."
+  ],
+  "fresh_final_proof": "Fresh complete 8-case desktop and 8-case phone executions at this exact concise source, with all 14 new capture files opened natively. Earlier 9fa66c16 and e232e684 browser proof is retained separately, not rebound."
+}

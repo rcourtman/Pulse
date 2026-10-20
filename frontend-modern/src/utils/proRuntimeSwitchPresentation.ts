@@ -1,4 +1,5 @@
 import type { ProRuntimeSwitch } from '@/api/updates';
+import { getProRegistryLogin } from '@/utils/proRegistryLogin';
 
 export interface ProRuntimeSwitchStep {
   id: string;
@@ -51,12 +52,12 @@ export function getProRuntimeSwitchPresentation(
   if (result.available && result.docker) {
     const docker = result.docker;
     const steps: ProRuntimeSwitchStep[] = [];
-    if (docker.loginCommand) {
+    const login = getProRegistryLogin(docker);
+    if (login) {
       steps.push({
         id: 'pro-runtime-login',
         title: 'Sign in to the Pulse Pro registry',
-        command: docker.loginCommand,
-        note: 'Replace <activation-key> with your activation key (it starts ppk_live_).',
+        ...login,
       });
     }
     steps.push(
