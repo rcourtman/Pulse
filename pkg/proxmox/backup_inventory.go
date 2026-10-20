@@ -43,12 +43,24 @@ func (c *Client) GetBackupTaskInventory(ctx context.Context) (BackupTaskInventor
 			// or permanently stall busy nodes that always have 200 tasks.
 			active, activeComplete, activeErr := c.backupTasksForNode(ctx, node.Node, "active")
 			if activeErr == nil {
-				seen := make(map[string]bool, len(active))
+				seen := make(map[string]Task, len(active))
 				for _, task := range active {
-					seen[task.UPID] = true
+					seen[task.UPID] = task
 				}
 				for _, task := range tasks {
-					if !seen[task.UPID] {
+					if current, duplicate := seen[task.UPID]; duplicate {
+						// Completion may advance between the two GETs, but
+						// the same opaque execution cannot change its guest,
+						// process, start time or owner. An arbitrary active
+						// winner could hide the real archive writer. Fail this
+						// live read just like other inconsistent inventories:
+						// no prefix may replace earlier tasks or qualify output.
+						current.Status, task.Status = "", ""
+						current.EndTime, task.EndTime = 0, 0
+						if current != task {
+							return BackupTaskInventory{}, fmt.Errorf("Proxmox backup task identity differs between recent and active observations")
+						}
+					} else {
 						active = append(active, task)
 					}
 				}
