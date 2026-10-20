@@ -198,6 +198,14 @@ let browser, context;
         }
         const data = {
           '/api/notifications/health': { overall_healthy: healthy, queue },
+          '/api/notifications/webhook-templates': [],
+          '/api/alerts/deadman/status': {
+            configured: false,
+            state: 'disabled',
+            heartbeatIntervalSeconds: 60,
+            recommendedGraceSeconds: 180,
+            consecutiveFailures: 0,
+          },
           '/api/security/status': {
             hasAuthentication: true,
             requiresAuth: false,
