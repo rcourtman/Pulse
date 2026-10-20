@@ -484,7 +484,7 @@ func TestClient_GetDatastores_Full(t *testing.T) {
 			// Missing dedup in status
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"total": 2000.0,
+					"total": 2000.0, "used": 500.0, "avail": 1500.0,
 				},
 			})
 			return
@@ -1072,7 +1072,7 @@ func TestClient_GetDatastores_AdvancedDedup(t *testing.T) {
 		if strings.HasSuffix(r.URL.Path, "status") {
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"total": 100.0,
+					"total": 100.0, "used": 25.0, "avail": 75.0,
 				},
 			})
 			return
@@ -1300,10 +1300,15 @@ func (t *sequentialFailTransport) RoundTrip(req *http.Request) (*http.Response, 
 		}, nil
 	}
 
-	// Otherwise succeed (empty JSON valid enough for decode to not error drastically or just fail decode gracefully)
+	// Otherwise succeed with actual capacity so the GC read-error case still
+	// reaches GC, rather than failing earlier at status admission.
+	body := `{"data": {}}`
+	if strings.HasSuffix(req.URL.Path, "/status") {
+		body = `{"data":{"total":1000,"used":250,"avail":750}}`
+	}
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewBufferString(`{"data": {}}`)),
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
 		Header:     make(http.Header),
 	}, nil
 }
@@ -1369,7 +1374,7 @@ func TestClient_GetDatastores_DedupFromStatus(t *testing.T) {
 				// Hyphenated key
 				json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"deduplication-factor": 5.5,
+						"deduplication-factor": 5.5, "total": 1000, "used": 250, "avail": 750,
 					},
 				})
 				return
@@ -1378,7 +1383,7 @@ func TestClient_GetDatastores_DedupFromStatus(t *testing.T) {
 				// Underscore key
 				json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"deduplication_factor": 6.6,
+						"deduplication_factor": 6.6, "total": 1000, "used": 250, "avail": 750,
 					},
 				})
 				return

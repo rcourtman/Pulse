@@ -995,58 +995,26 @@ func (c *Client) GetDatastoresFiltered(
 			})
 			continue
 		}
-		defer statusResp.Body.Close()
-
-		statusBody, err := readResponseBodyLimited(statusResp.Body)
-		if err != nil {
-			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to read datastore status response")
-			datastores = append(datastores, Datastore{
-				Store:  ds.Store,
-				Status: "unavailable",
-				Error:  fmt.Sprintf("Failed to read status: %v", err),
-			})
-			continue
-		}
-
-		var statusResult struct {
-			Data map[string]interface{} `json:"data"`
-		}
-
-		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
+		statusBody, readErr := readResponseBodyLimited(statusResp.Body)
+		closeErr := statusResp.Body.Close()
+		datastore, hasDedupFactor, decodeErr := decodeDatastoreStatus(statusBody)
+		if readErr != nil || closeErr != nil || statusResp.StatusCode != http.StatusOK || decodeErr != nil {
+			// Read/close/decoder errors may contain private provider details.
+			// A malformed success is not a healthy, empty datastore.
 			log.Error().
 				Str("store", ds.Store).
 				Int("responseBytes", len(statusBody)).
-				Err(err).
+				Err(errInvalidDatastoreStatus).
 				Msg("Failed to parse datastore status")
 			datastores = append(datastores, Datastore{
-				Store:  ds.Store,
-				Status: "unavailable",
-				Error:  fmt.Sprintf("Failed to parse status: %v", err),
+				Store: ds.Store, Status: "unavailable",
+				Error: "Failed to parse status: " + errInvalidDatastoreStatus.Error(),
 			})
 			continue
 		}
-
-		// Extract fields from the map
-		total, _ := statusResult.Data["total"].(float64)
-		used, _ := statusResult.Data["used"].(float64)
-		avail, _ := statusResult.Data["avail"].(float64)
-
-		totalSpace, _ := statusResult.Data["total-space"].(float64)
-		usedSpace, _ := statusResult.Data["used-space"].(float64)
-		availSpace, _ := statusResult.Data["avail-space"].(float64)
-
-		// Check for deduplication_factor in status response
-		if df, ok := statusResult.Data["deduplication-factor"].(float64); ok {
-			dedupFactor = df
-		} else if df, ok := statusResult.Data["deduplication_factor"].(float64); ok {
-			dedupFactor = df
+		if hasDedupFactor {
+			dedupFactor = datastore.DeduplicationFactor
 		}
-
-		status := "available"
-		if rawStatus, ok := statusResult.Data["status"].(string); ok && strings.TrimSpace(rawStatus) != "" {
-			status = strings.TrimSpace(rawStatus)
-		}
-		gcStatus, _ := statusResult.Data["gc-status"].(string)
 
 		// If still no dedup factor, try gc-status endpoint
 		if dedupFactor == 0 {
@@ -1079,19 +1047,8 @@ func (c *Client) GetDatastoresFiltered(
 			}
 		}
 
-		// Create datastore with status info
-		datastore := Datastore{
-			Store:               ds.Store,
-			Total:               int64(total),
-			Used:                int64(used),
-			Avail:               int64(avail),
-			TotalSpace:          int64(totalSpace),
-			UsedSpace:           int64(usedSpace),
-			AvailSpace:          int64(availSpace),
-			Status:              status,
-			GCStatus:            strings.TrimSpace(gcStatus),
-			DeduplicationFactor: dedupFactor,
-		}
+		datastore.Store = ds.Store
+		datastore.DeduplicationFactor = dedupFactor
 
 		// Polling diagnostics use only the modelled numeric fields. Provider
 		// extensions may contain private data and do not belong in the log.
