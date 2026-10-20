@@ -59,6 +59,8 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 					switch r.URL.Path {
 					case "/api2/json/nodes":
 						fmt.Fprint(w, `{"data":[{"node":"fixture","status":"online"}]}`)
+					case "/api2/json/cluster/status":
+						fmt.Fprint(w, `{"data":[{"type":"node","name":"fixture","local":1,"online":1}]}`)
 					case "/api2/json/admin/datastore":
 						fmt.Fprint(w, `{"data":[{"store":"fixture"}]}`)
 					case "/api2/json/admin/datastore/fixture/rrd":
@@ -87,7 +89,7 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 				before, _ := json.Marshal(cfg)
 				for _, mode := range []string{"saved", "draft"} {
 					for _, phase := range []string{"matching-uppercase", "wrong-pin", "strict-untrusted", "unsupported-scheme", "recovered"} {
-						request := map[string]any{"type": kind, "host": host, "user": "fixture@pam", "password": "synthetic-password", "verifySSL": true, "fingerprint": pin}
+						request := map[string]any{"type": kind, "name": strings.ToUpper(kind) + " fixture", "host": host, "user": "fixture@pam", "password": "synthetic-password", "verifySSL": true, "fingerprint": pin}
 						requestPin, requestHost := pin, host
 						switch phase {
 						case "wrong-pin":
@@ -114,7 +116,9 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 						if mode == "saved" {
 							h.HandleTestNode(rec, req)
 						} else {
-							h.HandleTestNodeConfig(rec, req)
+							// Match router_routes_registration.go: the editor posts
+							// to test-connection, not the older test-config route.
+							h.HandleTestConnection(rec, req)
 						}
 						success := phase == "matching-uppercase" || phase == "recovered"
 						wantStatus := http.StatusBadRequest
@@ -122,17 +126,24 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 							wantStatus = http.StatusOK
 						}
 						var response map[string]any
-						if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-							t.Fatal(err)
+						message := strings.TrimSpace(rec.Body.String())
+						if strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
+							if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+								t.Fatal(err)
+							}
+							message, _ = response["message"].(string)
 						}
 						if rec.Code != wantStatus || (response["status"] == "success") != success {
 							t.Errorf("%s/%s: unexpected response code=%d body=%s", mode, phase, rec.Code, rec.Body.String())
 						}
 						wantReads := int32(1)
+						wantLogins := int32(1)
 						if kind == "pbs" {
 							wantReads = 3 // listing, RRD and status for the one real fixture datastore
+						} else if kind == "pve" && mode == "draft" {
+							wantReads, wantLogins = 2, 2 // nodes plus the ordinary cluster-detection session
 						}
-						if success && (reads.Load() != readStart+wantReads || logins.Load() != loginStart+1) {
+						if success && (reads.Load() != readStart+wantReads || logins.Load() != loginStart+wantLogins) {
 							t.Errorf("%s/%s: ordinary authenticated reads not completed exactly once per endpoint", mode, phase)
 						}
 						if !success && (reads.Load() != readStart || logins.Load() != loginStart) {
@@ -147,7 +158,7 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 								t.Error("connection test disclosed fixture credentials")
 							}
 						}
-						frame := map[string]any{"network": network, "type": kind, "mode": mode, "phase": phase, "path": path, "request": request, "status": rec.Code, "body": json.RawMessage(rec.Body.Bytes()), "reads": reads.Load() - readStart, "logins": logins.Load() - loginStart, "configurationUnchanged": true}
+						frame := map[string]any{"network": network, "type": kind, "mode": mode, "phase": phase, "path": path, "request": request, "status": rec.Code, "rawBody": rec.Body.String(), "message": message, "contentType": rec.Header().Get("Content-Type"), "reads": reads.Load() - readStart, "logins": logins.Load() - loginStart, "configurationUnchanged": true}
 						wire, _ := json.Marshal(frame)
 						t.Logf("ENDPOINT_AUTHORITY_FRAME=%s", base64.StdEncoding.EncodeToString(wire))
 					}
