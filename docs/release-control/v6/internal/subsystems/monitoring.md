@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### PBS status diagnostics do not retain whole provider payloads
+
+Node-status and datastore-status diagnostics report bounded response lengths,
+not raw successful or malformed JSON bodies. Routine datastore/RRD/GC success
+records are Debug-only; a malformed status still emits its store, byte count and
+parse error at Error. The datastore diagnostic includes only the existing typed
+numeric measurements, never an arbitrary map of provider extension fields. This
+bounds new status log content independently of unknown payload size and reduces
+normal Info-level polling writes. Decoding, availability, returned errors, metric
+values and deduplication precedence, request selection/order, authentication and
+response closure remain unchanged.
+
+`TestPBSStatusDiagnostics` in `pkg/pbs/host_diagnostics_regression_test.go` covers
+Info/Debug node, RRD, status-override, GC-fallback and malformed status responses at
+two payload sizes, preserving exact metrics, selected requests and body closure.
+Its emitted real log lines feed the production `SystemLogsPanel` through
+`scripts/check-pbs-status-logs.cjs`; `scripts/build-pbs-status-logs-preview.cjs`
+binds its compiled modules and served artifacts before bounded browser execution.
+These controls establish only this source/consumer behaviour, not installed
+performance relief or incident recovery. Existing resource/authentication names,
+other endpoint errors and previously retained logs remain private; no global
+redaction or public-safe support bundle is claimed.
+
 ### PBS live-state slots belong to selected groups, not cache or response order
 
 The existing 5,000-row per-connection window reserves slots in descending
@@ -197,6 +220,27 @@ remain in force. No resource field or rendered state is added or reinterpreted.
 gated mixed-fleet reads, checks scoped inventory and actual-return cancellation,
 and measures fixed-sample allocation cost. These are source resource/evidence
 proofs, not installed RSS, incident diagnosis or frozen-guest recovery.
+
+### Snapshot sizing isolates slow nodes with bounded workers
+
+Snapshot volume sizing uses at most eight reusable workers per connection scan,
+rather than serialising every node behind one slow storage read. Each worker
+keeps a node's storage reads serial and publishes its totals only after all
+eligible storages complete. The existing inventory scan budget, query selection,
+size validation and unknown/held-alert semantics remain unchanged. Completed
+nodes survive another reader exhausting the sizing budget; cancellation withdraws
+queued nodes but joins every occupied reader before returning. No QGA command,
+guest operation, permission, API field, route or recovery claim is added.
+
+`snapshot_size_workers_test.go` gates actual workers/requests at 0/1/7/8/128 nodes,
+checks same-VMID isolation, pre-cancellation, real reader joins and completed-peer
+retention. `snapshot_size_http_test.go` joins single and cluster HTTP adapters,
+VM/LXC inventory, two-storage totals, a blocked node with a live healthy peer,
+unknown sizes, held/acknowledged alerts with their original observation time,
+recovery points, ordinary smaller-total recovery and authoritative removal.
+Its actual frames feed production Backups/Alerts at desktop and narrow widths
+through `scripts/check-snapshot-size-workers.cjs`. These synthetic controls do
+not establish installed performance, incident cause, thaw or filesystem liveness.
 
 ### Storage content is shared evidence, not a backup-only list
 

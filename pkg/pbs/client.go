@@ -835,13 +835,13 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	}
 	defer statusResp.Body.Close()
 
-	// Read the response body to log it
+	// Keep the bounded payload for decoding, never for diagnostic output.
 	body, err := readResponseBodyLimited(statusResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read status response: %w", err)
 	}
 
-	log.Debug().Str("response", string(body)).Msg("PBS node status response")
+	log.Debug().Int("responseBytes", len(body)).Msg("PBS node status response")
 
 	var statusResult struct {
 		Data *NodeStatus `json:"data"`
@@ -952,7 +952,7 @@ func (c *Client) GetDatastoresFiltered(
 			if json.Unmarshal(rrdBody, &rrdResult) == nil && len(rrdResult.Data) > 0 {
 				// Get the most recent deduplication factor
 				dedupFactor = rrdResult.Data[len(rrdResult.Data)-1].DedupFactor
-				log.Info().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
+				log.Debug().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
 			}
 		}
 
@@ -988,7 +988,7 @@ func (c *Client) GetDatastoresFiltered(
 		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
 			log.Error().
 				Str("store", ds.Store).
-				Str("response", string(statusBody)).
+				Int("responseBytes", len(statusBody)).
 				Err(err).
 				Msg("Failed to parse datastore status")
 			datastores = append(datastores, Datastore{
@@ -1041,7 +1041,7 @@ func (c *Client) GetDatastoresFiltered(
 					// Calculate deduplication factor from index-data-bytes / disk-bytes
 					if gcResult.Data.DiskBytes > 0 && gcResult.Data.IndexDataBytes > 0 {
 						dedupFactor = gcResult.Data.IndexDataBytes / gcResult.Data.DiskBytes
-						log.Info().
+						log.Debug().
 							Float64("index_bytes", gcResult.Data.IndexDataBytes).
 							Float64("disk_bytes", gcResult.Data.DiskBytes).
 							Float64("dedup_factor", dedupFactor).
@@ -1066,15 +1066,15 @@ func (c *Client) GetDatastoresFiltered(
 			DeduplicationFactor: dedupFactor,
 		}
 
-		// Log all fields to see what's available
-		log.Info().
+		// Polling diagnostics use only the modelled numeric fields. Provider
+		// extensions may contain private data and do not belong in the log.
+		log.Debug().
 			Str("store", datastore.Store).
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
 			Float64("dedup_factor", datastore.DeduplicationFactor).
-			Interface("all_fields", statusResult.Data).
-			Msg("PBS datastore status - ALL FIELDS")
+			Msg("PBS datastore status")
 
 		datastores = append(datastores, datastore)
 	}
