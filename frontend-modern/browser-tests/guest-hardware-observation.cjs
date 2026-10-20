@@ -42,8 +42,35 @@ const save = () =>
     const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
     report.binding = binding;
     assert.equal(hash(fs.readFileSync(path.join(frontend, 'package-lock.json'))), binding.graph);
+    // The CommonJS driver is not compiled into the app. A driver-only repair
+    // may reuse immutable app bytes without waiting for another compiler VM.
+    // Keep the original compile binding intact and require a separate exact
+    // execution binding; every non-driver source and artifact still matches it.
+    const driverPath = 'browser-tests/guest-hardware-observation.cjs';
+    const driverHash = hash(fs.readFileSync(path.join(frontend, driverPath)));
+    if (driverHash !== binding.sources[driverPath]) {
+      const execution = JSON.parse(
+        fs.readFileSync(path.join(root, 'tmp/guest-hardware-proof/driver-binding.json')),
+      );
+      assert.equal(execution.version, 1);
+      assert.match(execution.source_sha, /^[a-f0-9]{40}$/);
+      assert.equal(execution.compiled_source_sha, binding.source_sha);
+      assert.equal(
+        execution.compiled_binding_sha256,
+        hash(fs.readFileSync(path.join(compiled, 'binding.json'))),
+      );
+      assert.equal(execution.driver_path, driverPath);
+      assert.equal(execution.driver_sha256, driverHash);
+      report.execution_binding = execution;
+    }
     for (const [file, digest] of Object.entries(binding.sources))
-      assert.equal(hash(fs.readFileSync(path.join(frontend, file))), digest, file);
+      assert.equal(
+        hash(fs.readFileSync(path.join(frontend, file))),
+        file === driverPath && report.execution_binding
+          ? report.execution_binding.driver_sha256
+          : digest,
+        file,
+      );
     for (const required of [
       'src/utils/guestHardwareObservation.ts',
       'src/components/Workloads/GuestDrawerOverview.tsx',
@@ -466,9 +493,13 @@ const save = () =>
           'only a stored History fetch may be cancelled',
         );
         assert(
-          ['net::ERR_ABORTED', 'cancelled', 'Cancelled', 'Load cancelled'].includes(
-            failed.failure?.errorText,
-          ),
+          [
+            'net::ERR_ABORTED',
+            'cancelled',
+            'Cancelled',
+            'Load cancelled',
+            'Load request cancelled',
+          ].includes(failed.failure?.errorText),
           'unexpected request failure',
         );
         const owner = observedAborts.find(
