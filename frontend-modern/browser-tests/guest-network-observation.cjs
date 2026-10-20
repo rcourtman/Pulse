@@ -146,9 +146,10 @@ const save = () =>
         const body =
           url.pathname === '/api/metrics-store/history'
             ? {
-                resourceType: 'vm',
-                resourceId: 'fixture:pve1:101',
-                range: '1h',
+                resourceType: url.searchParams.get('resourceType'),
+                resourceId: url.searchParams.get('resourceId'),
+                range: url.searchParams.get('range') || '24h',
+                source: 'store',
                 start: Date.UTC(2026, 9, 20, 11),
                 end: Date.UTC(2026, 9, 20, 12),
                 metrics: {},
@@ -204,6 +205,8 @@ const save = () =>
       });
       await expect(cue).toHaveCount(0);
       record.cases.push('Initial running platform data has no last-known overlay.');
+      await expect(drawer.getByText('No stored history in this range').first()).toBeVisible();
+      await expect(drawer.getByText('Failed to load history data', { exact: true })).toHaveCount(0);
       for (const fromAgent of [false, true]) {
         await apply('producer', fromAgent);
         for (const power of ['paused', 'suspended', 'stopped', 'offline']) {
@@ -289,6 +292,8 @@ const save = () =>
       record.cases.push(
         'A replacement running source preserves the new address and zero counters without inventing a connection or a probe.',
       );
+      await expect(drawer.getByText('No stored history in this range').first()).toBeVisible();
+      await expect(drawer.getByText('Failed to load history data', { exact: true })).toHaveCount(0);
       assert.deepEqual(record.errors, []);
       assert.deepEqual(record.failed, []);
       await context.close();
