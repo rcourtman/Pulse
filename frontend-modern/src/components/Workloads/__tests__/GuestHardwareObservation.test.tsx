@@ -133,7 +133,7 @@ describe('native power cannot renew in-guest hardware evidence', () => {
       render(() => <GuestDrawerOverview {...props(value())} />);
       const array = screen.getByTestId('raid-card-array');
       expect(array).toHaveAttribute('data-raid-reading', 'current');
-      setValue(guest({ status }));
+      setValue({ ...value(), status });
       expect(array).toHaveAttribute('data-raid-reading', 'last-known');
       expect(within(array).getByText('clean (last known)')).toBeVisible();
       expect(within(array).getByText('Rebuild was at 37%')).toBeVisible();
@@ -157,7 +157,7 @@ describe('native power cannot renew in-guest hardware evidence', () => {
       const row = await expandDisk();
       expect(within(row).getAllByText('Healthy')).toHaveLength(2);
       const chart = within(row).getAllByTestId('history-chart')[0];
-      setValue(guest({ status }));
+      setValue({ ...value(), status });
       expect(within(row).queryAllByText('Healthy')).toHaveLength(0);
       expect(within(row).getAllByText('Last known')).toHaveLength(2);
       expect(within(row).getByTestId('disk-detail-health')).toHaveTextContent(

@@ -1607,7 +1607,7 @@ describe('GuestDrawer', () => {
       expect(array).toHaveAttribute('data-raid-reading', 'last-known');
       expect(within(array).getByTestId('raid-card-state')).toHaveAttribute(
         'title',
-        'Last known reading, not current: host agent stopped reporting',
+        'Last known reading, not current: The Pulse Agent in this guest stopped reporting.',
       );
       expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
         'Rebuild was at 42%',
