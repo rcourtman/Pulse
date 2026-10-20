@@ -76,7 +76,7 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 	alertCfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 80, Clear: 70}
 	alertCfg.TimeThresholds["storage"] = 0
 	m.alertManager.UpdateConfig(alertCfg)
-	registry := unifiedresources.NewRegistry(nil)
+	registry := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
 	var incidentID string
 	for i, label := range labels {
 		t.Run(label, func(t *testing.T) {
@@ -122,8 +122,21 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 				}
 			}
 			require.Equal(t, i < 5, usageFound, "only real low/empty readings may recover capacity")
-			registry.IngestSnapshot(snapshot)
-			resources := registry.ListForPresentation()
+			// Ordinary monitoring replaces the registry generation. Reusing a raw
+			// Registry would incorrectly carry old incidents/metrics into this
+			// fixture's next full snapshot, unlike MonitorAdapter's real path.
+			registry.PopulateFromSnapshot(snapshot)
+			resources := registry.GetAll()
+			for _, resource := range resources {
+				if resource.Type == unifiedresources.ResourceTypeStorage && resource.Name == "archive" {
+					if i > 0 && i < 5 {
+						require.Equal(t, unifiedresources.StatusOffline, resource.Status)
+					} else if i >= 5 {
+						require.Equal(t, unifiedresources.StatusOnline, resource.Status)
+						require.Empty(t, resource.Incidents, "ordinary full recovery must not inherit old datastore incidents")
+					}
+				}
+			}
 			wire, err := json.Marshal(map[string]any{"phase": label, "resources": resources})
 			require.NoError(t, err)
 			require.NotContains(t, string(wire), "private-status-provider-body")
