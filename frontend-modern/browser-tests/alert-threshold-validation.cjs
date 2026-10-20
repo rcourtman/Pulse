@@ -143,7 +143,18 @@ async function dismissToasts(page) {
   const buttons = page
     .getByRole('region', { name: 'Notifications' })
     .getByRole('button', { name: 'Dismiss notification' });
-  while (await buttons.count()) await buttons.first().click();
+  while (await buttons.count()) {
+    const before = await buttons.count();
+    try {
+      // A toast can be leaving while the count is read. Keyboard activation
+      // needs no geometric stability; an already expired last toast is done.
+      await buttons.first().press('Enter', { timeout: 1500 });
+    } catch (error) {
+      if ((await buttons.count()) === 0) return;
+      throw error;
+    }
+    await expect.poll(() => buttons.count()).toBeLessThan(before);
+  }
 }
 (async () => {
   fs.mkdirSync(output, { recursive: true });
