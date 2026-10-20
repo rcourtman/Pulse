@@ -132,7 +132,8 @@ describe('agent storage alert identity', () => {
           unacknowledgedCount: 0,
           severity: 'critical',
         });
-        expect(getRecordAlertState(row.id).headline).toBeTruthy();
+        // Existing acknowledgement semantics retire the unacknowledged reason.
+        expect(getRecordAlertState(row.id).headline).toBeNull();
         setEnabled(false);
         expect(getRecordAlertState(row.id)).toMatchObject({ hasAlert: false, headline: null });
         setEnabled(true);

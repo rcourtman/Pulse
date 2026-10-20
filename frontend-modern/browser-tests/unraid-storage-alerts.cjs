@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 (async () => {
   const root='/workspace/frontend-modern';
-  const artifacts='/workspace/tmp/unraid-alert-proof/browser';
+  const artifacts='/workspace/tmp/unraid-alert-proof/browser-final';
   fs.mkdirSync(artifacts,{recursive:true});
   const source=JSON.parse(fs.readFileSync('/workspace/tmp/unraid-alert-proof/binding.json','utf8'));
   const fixtureBytes=fs.readFileSync('/workspace/frontend-modern/browser-tests/unraid-storage-frames.json');
@@ -85,6 +85,14 @@ const { chromium, webkit } = require('playwright');
         const toggle=row.getByRole('button');
         if(phone)await row.tap();else {await toggle.focus();await page.keyboard.press('Enter');}
         await consumer.getByText('Topology',{exact:true}).waitFor();
+        const detailReason=consumer.locator('[data-storage-alert-detail]');
+        equal(await detailReason.count(),healthy?0:1,`${mode} full disclosure reason presence`);
+        if(!healthy){
+          const expectedReason=frames[mode].activeAlerts.find(alert=>alert.type==='storage-topology').message;
+          equal(await detailReason.locator('p').innerText(),expectedReason,`${mode} full producer reason`);
+          const geometry=await detailReason.locator('p').evaluate(el=>({client:el.clientWidth,scroll:el.scrollWidth,height:el.clientHeight,text:el.textContent}));
+          check(geometry.scroll<=geometry.client+1,`${mode} full reason wraps without clipping: ${JSON.stringify(geometry)}`);
+        }
         if(healthy){
           await consumer.getByText('Physical Disks (6)',{exact:true}).waitFor();
           equal(await consumer.getByText('parity2',{exact:true}).count(),0,`${mode} no empty parity member`);
