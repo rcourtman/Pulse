@@ -189,7 +189,9 @@ export const ProRuntimeSwitchCard: Component<ProRuntimeSwitchCardProps> = (props
                       )}
                     </Show>
                     <Show when={step.note}>
-                      <p class="text-xs text-amber-800 dark:text-amber-200">{step.note}</p>
+                      <p class="text-xs text-amber-800 dark:text-amber-200 [overflow-wrap:anywhere]">
+                        {step.note}
+                      </p>
                     </Show>
                   </li>
                 )}

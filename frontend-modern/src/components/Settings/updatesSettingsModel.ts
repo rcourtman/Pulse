@@ -1,4 +1,5 @@
 import type { DockerUpdateCommands, UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
+import { getProRegistryLogin } from '@/utils/proRegistryLogin';
 
 export type UpdateChannelOptionValue = 'stable' | 'rc';
 
@@ -70,21 +71,24 @@ function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateIn
       title: 'Pull the new Pulse Pro image (pinned to this release’s digest)',
       command: dockerUpdate.composePullCommand,
       commandCodeClass:
-        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
+        'block rounded-md border border-border bg-page p-3 pr-14 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
     },
     {
       id: 'docker-pro-up',
       title: 'Recreate the container on the new image',
       command: dockerUpdate.composeUpCommand,
       commandCodeClass:
-        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
+        'block rounded-md border border-border bg-page p-3 pr-14 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
     },
   ];
-  if (dockerUpdate.loginCommand) {
+  const login = getProRegistryLogin(dockerUpdate);
+  if (login) {
     steps.push({
       id: 'docker-pro-login-note',
-      title: '',
-      note: `If the pull is denied, sign in to the registry first (replace <activation-key> with the key from Settings → License): ${dockerUpdate.loginCommand}`,
+      title: 'If the pull is denied, sign in, then repeat the pull',
+      ...login,
+      commandCodeClass:
+        'block rounded-md border border-border bg-page p-3 pr-14 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
     });
   }
   return steps;
@@ -143,7 +147,8 @@ export function buildUpdateInstallGuide(
       return {
         headerTitle: 'Update Available',
         headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
-        introText: 'Run these two commands on the Docker host to update:',
+        introText:
+          'Run these commands on the Docker host, in the folder with your docker-compose.yml:',
         steps: buildProDockerUpdateSteps(updateInfo.dockerUpdate),
       };
     }

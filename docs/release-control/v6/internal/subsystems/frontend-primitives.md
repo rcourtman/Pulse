@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Pro registry guidance keeps activation keys out of shell commands
+
+Both Docker Updates guides share `proRegistryLogin.ts`. They rebuild recognised
+legacy placeholder templates and plain password-prompt logins as an interactive
+`docker login` with the image's matching registry and non-secret username only.
+The operator enters the key at Docker's hidden Password prompt, never in a shell
+command. Unknown, secret-bearing or mismatched login text is withheld without
+echoing it into the page or clipboard; existing Private Release Access guidance
+remains the fallback. Digest-pinned pull/recreate commands, Compose identity,
+data-volume guidance and binary-switch confirmation/uncertainty stay unchanged.
+`proRegistryLogin.test.ts`, the two guide/model tests and
+`browser-tests/pro-registry-guidance.cjs` cover legacy, prompt-format, missing and
+withheld inputs through the production consumers and actual clipboard actions at
+desktop/narrow widths. Synthetic prompt fixtures are a consumer contract, not
+evidence of a repaired private producer, registry authentication or a release.
+
 ### Related-alert disclosure preserves attention and access
 
 Collapsed Alerts overview groups retain their designated primary while exposing
@@ -2004,6 +2020,7 @@ removal/failure retention and containing publication remain separate evidence.
 50. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
 51. `frontend-modern/src/utils/reportingPresentation.ts`
 52. `frontend-modern/src/utils/updatesPresentation.ts`
+    52a. `frontend-modern/src/utils/proRegistryLogin.ts` and `frontend-modern/src/utils/proRuntimeSwitchPresentation.ts`
 53. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 54. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 55. `frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`

@@ -213,4 +213,37 @@ describe('ProRuntimeSwitchCard', () => {
     );
     expect(screen.queryByRole('button', { name: /Switch to Pulse Pro/ })).not.toBeInTheDocument();
   });
+
+  it.each([
+    "printf '%s' '<activation-key>' | docker login license.pulserelay.pro -u 'pulse-pro' --password-stdin",
+    "docker login license.pulserelay.pro --username 'pulse-pro'",
+    "printf '%s' 'ppk_live_SYNTHETIC_NOT_A_CREDENTIAL' | docker login license.pulserelay.pro -u 'pulse-pro' --password-stdin",
+  ])('never renders a key-substitution command: %s', async (loginCommand) => {
+    mockCheck.mockResolvedValue({
+      available: true,
+      currentVersion: '6.5.0',
+      version: '6.5.0',
+      installInPlace: false,
+      docker: {
+        version: 'v6.5.0',
+        image: 'license.pulserelay.pro/pulse-pro',
+        imageDigest: 'sha256:' + 'ab'.repeat(32),
+        loginCommand,
+        composePullCommand: "PULSE_IMAGE='pinned' docker compose pull",
+        composeUpCommand: "PULSE_IMAGE='pinned' docker compose up -d",
+      },
+    });
+    render(() => <ProRuntimeSwitchCard shouldCheck />);
+    const card = await screen.findByTestId('pro-runtime-switch');
+    expect(card).not.toHaveTextContent('<activation-key>');
+    expect(card).not.toHaveTextContent('ppk_live_');
+    expect(card).not.toHaveTextContent('printf');
+    const withheld = loginCommand.includes('ppk_live_');
+    expect(screen.getAllByRole('button', { name: 'Copy to clipboard' })).toHaveLength(
+      withheld ? 2 : 3,
+    );
+    expect(card).toHaveTextContent(
+      withheld ? 'could not be checked safely' : 'At Docker’s Password prompt',
+    );
+  });
 });
