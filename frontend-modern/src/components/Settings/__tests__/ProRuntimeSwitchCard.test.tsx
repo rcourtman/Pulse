@@ -244,7 +244,7 @@ describe('ProRuntimeSwitchCard', () => {
       withheld ? 2 : 3,
     );
     expect(card).toHaveTextContent(
-      withheld ? 'could not be checked safely' : 'At Docker’s Password prompt',
+      withheld ? 'could not be checked safely' : 'Docker’s hidden Password prompt',
     );
   });
 });

@@ -227,7 +227,7 @@ describe('UpdateInstallGuide', () => {
       screen.getByText("docker login registry.pulserelay.pro --username 'lic_test'"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/printf/)).not.toBeInTheDocument();
-    expect(screen.getByText(/At Docker’s Password prompt/)).toBeInTheDocument();
+    expect(screen.getByText(/Docker’s hidden Password prompt/)).toBeInTheDocument();
   });
 
   it('withholds community commands on a Pro docker install even without broker commands', () => {

@@ -195,11 +195,9 @@ module.exports = async (profile) => {
           const guide =
             mode === 'switch'
               ? page.getByTestId('pro-runtime-switch')
-              : page
-                  .locator('div.overflow-hidden.border-green-200')
-                  .filter({
-                    has: page.getByRole('heading', { name: 'Update Available', exact: true }),
-                  });
+              : page.locator('div.overflow-hidden.border-green-200').filter({
+                  has: page.getByRole('heading', { name: 'Update Available', exact: true }),
+                });
           await expect(guide).toContainText(baseDocker.composePullCommand);
           await expect(guide).toContainText(baseDocker.composeUpCommand);
           await expect(guide).not.toContainText('<activation-key>');
@@ -208,8 +206,7 @@ module.exports = async (profile) => {
           await expect(guide).not.toContainText('rcourtman/pulse:');
           if (recognised) {
             await expect(guide).toContainText(prompt);
-            await expect(guide).toContainText('At Docker’s Password prompt');
-            await expect(guide).toContainText('Input is hidden.');
+            await expect(guide).toContainText('Docker’s hidden Password prompt');
             await expect(guide).toContainText('Ctrl+C cancels.');
           } else if (loginCommand) {
             await expect(guide).toContainText('could not be checked safely');
