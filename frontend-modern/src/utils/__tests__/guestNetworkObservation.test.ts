@@ -11,7 +11,7 @@ describe('selected guest network details are not connection evidence', () => {
         const input = { ...vm, status, agentStale: false, networkInterfacesFromAgent };
         const before = structuredClone(input);
         expect(getGuestNetworkLastKnownReason(input)).toContain(
-          'retained addresses and counters do not establish a current connection',
+          'Retained addresses and counters do not establish a current connection',
         );
         expect(input).toEqual(before);
       }

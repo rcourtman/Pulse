@@ -72,7 +72,7 @@ describe('native power does not renew retained guest network details', () => {
         setValue(guest({ status, networkInterfacesFromAgent, agentStale: false }));
         expect(
           screen.getByText(
-            `Using last known interface details. Proxmox reports this VM ${status}; retained addresses and counters do not establish a current connection.`,
+            `Using last known interface details. Proxmox reports this VM ${status}. Retained addresses and counters do not establish a current connection.`,
           ),
         ).toBeVisible();
         expect(screen.getByText('Last known IP 192.0.2.80')).toBeVisible();

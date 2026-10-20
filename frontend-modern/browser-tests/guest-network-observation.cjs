@@ -206,7 +206,7 @@ const save = () =>
           const expectedPower = power === 'offline' ? 'stopped' : power;
           await expect(drawer.getByText('Last known IP 192.0.2.80', { exact: true })).toBeVisible();
           await expect(
-            drawer.getByText(new RegExp(`Proxmox reports this VM ${expectedPower};`)),
+            drawer.getByText(new RegExp(`Proxmox reports this VM ${expectedPower}\\.`)),
           ).toBeVisible();
           const evidence = await page.evaluate(() => window.__guestNetwork.evidence());
           assert.equal(evidence.canonical.status, 'online');
@@ -267,7 +267,7 @@ const save = () =>
       await apply('kind', 'vm');
       await apply('producer', false, false);
       await apply('power', 'stopped');
-      await capture('stopped-details', drawer.getByText(/Proxmox reports this VM stopped;/));
+      await capture('stopped-details', drawer.getByText(/Proxmox reports this VM stopped\./));
       await apply('freshAddresses');
       await expect(cue).toHaveCount(0);
       await expect(drawer.locator('[data-testid="guest-drawer-facts"]')).toContainText(

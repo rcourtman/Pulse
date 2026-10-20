@@ -24,7 +24,7 @@ export const getGuestNetworkLastKnownReason = (guest: GuestNetworkEvidence): str
   const status = guest.status?.trim().toLowerCase();
   if (proxmoxVM && ['paused', 'suspended', 'stopped', 'offline'].includes(status ?? '')) {
     const power = status === 'offline' ? 'stopped' : status;
-    return `Using last known interface details. Proxmox reports this VM ${power}; retained addresses and counters do not establish a current connection.`;
+    return `Using last known interface details. Proxmox reports this VM ${power}. Retained addresses and counters do not establish a current connection.`;
   }
   // A stale linked agent cannot invalidate independently supplied platform
   // interfaces (including host-derived LXC configuration). Preserve the
