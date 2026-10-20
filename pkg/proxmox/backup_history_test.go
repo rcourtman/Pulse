@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +128,118 @@ func TestBackupHistoryRejectsIncompletePagesAndAuditEvidence(t *testing.T) {
 				require.Empty(t, history.Tasks, "an incomplete page supplies no task evidence")
 			}
 		})
+	}
+}
+
+// Offset pages need not be an atomic snapshot. Identical boundary overlap is
+// useful, but a contradictory execution must not be resolved by first-wins.
+func TestBackupHistoryCrossPageIdentityAdmission(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		mutate   func(*Task)
+		conflict bool
+	}{
+		{"identical", func(*Task) {}, false},
+		{"implicit-node", func(task *Task) { task.Node = "" }, false},
+		{"status", func(task *Task) { task.Status = "ERROR: archive unavailable" }, true},
+		{"guest", func(task *Task) { task.ID = "101" }, true},
+		{"kind", func(task *Task) { task.Type = "qmstart" }, true},
+		{"pid", func(task *Task) { task.PID++ }, true},
+		{"process-start", func(task *Task) { task.PStart++ }, true},
+		{"start-time", func(task *Task) { task.StartTime++ }, true},
+		{"end-time", func(task *Task) { task.EndTime++ }, true},
+		{"user", func(task *Task) { task.User = "other@pve" }, true},
+	} {
+		for _, lastPage := range []int{1, 2} {
+			t.Run(fmt.Sprintf("%s/page-%d", tc.name, lastPage+1), func(t *testing.T) {
+				first := Task{UPID: "overlapping-execution", Node: "node", PID: 17, PStart: 5, Type: "vzdump", ID: "100", User: "fixture@pve", Status: "OK", StartTime: 1700000000, EndTime: 1700000060}
+				second := first
+				tc.mutate(&second)
+				var requests, audits []string
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, http.MethodGet, r.Method)
+					requests = append(requests, r.URL.RequestURI())
+					switch r.URL.Path {
+					case "/api2/json/nodes":
+						fmt.Fprint(w, `{"data":[{"node":"node","status":"online"},{"node":"peer","status":"online"}]}`)
+					case "/api2/json/nodes/node/tasks":
+						q := r.URL.Query()
+						require.Equal(t, "vzdump", q.Get("typefilter"))
+						require.Equal(t, "all", q.Get("source"))
+						require.Equal(t, "200", q.Get("limit"))
+						var rows []Task
+						if q.Get("start") == fmt.Sprint(200*lastPage) {
+							rows = []Task{{UPID: "unadmitted-page-prefix", Type: "vzdump", Status: "OK"}, second}
+						} else {
+							for i := 0; i < 200; i++ {
+								rows = append(rows, Task{UPID: fmt.Sprintf("earlier-%s-%d", q.Get("start"), i), Type: "vzdump", Status: "ERROR"})
+							}
+							if q.Get("start") == "0" {
+								rows[0] = first
+							}
+						}
+						json.NewEncoder(w).Encode(map[string]any{"data": rows})
+					case "/api2/json/nodes/peer/tasks":
+						fmt.Fprint(w, `{"data":[{"upid":"independent-peer","type":"vzdump","id":"200","status":"OK"}]}`)
+					case "/api2/json/access/permissions":
+						audits = append(audits, r.URL.Query().Get("path"))
+						fmt.Fprintf(w, `{"data":{%q:{"Sys.Audit":1}}}`, r.URL.Query().Get("path"))
+					default:
+						t.Errorf("unexpected request %s", r.URL.RequestURI())
+						http.NotFound(w, r)
+					}
+				}))
+				defer server.Close()
+				history, err := backupTestClient(t, server.URL).GetBackupTaskHistory(context.Background(), time.Unix(1699990000, 0))
+				require.NoError(t, err)
+				reason := ""
+				if tc.conflict {
+					reason = "collection_failed"
+				}
+				require.Equal(t, []BackupTaskHistoryNode{{Node: "node", Complete: !tc.conflict, Reason: reason}, {Node: "peer", Complete: true}}, history.Nodes)
+				if tc.conflict {
+					require.Len(t, history.Tasks, lastPage*200, "only the ambiguous earlier execution and the whole new page are withheld; peer remains")
+					require.Equal(t, []string{"/nodes/peer"}, audits)
+					for _, task := range history.Tasks {
+						require.True(t, strings.HasPrefix(task.UPID, "earlier-") || task.UPID == "independent-peer", "neither version nor new page prefix may enter history")
+					}
+				} else {
+					require.Len(t, history.Tasks, lastPage*200+2, "identical boundary overlap is deduplicated, not dropped or marked incomplete")
+					require.Equal(t, []string{"/nodes/node", "/nodes/peer"}, audits)
+					require.Equal(t, first, history.Tasks[0], "omitted redundant node is equivalent to the request's node")
+				}
+				require.Len(t, requests, lastPage+3+len(audits), "no extra retry or page may be requested")
+			})
+		}
+	}
+}
+
+func TestBackupHistoryCrossPageConflictRemovesEveryAmbiguousExecution(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
+		case "/api2/json/nodes/node/tasks":
+			var rows []Task
+			if r.URL.Query().Get("start") == "0" {
+				for i := 0; i < 200; i++ {
+					rows = append(rows, Task{UPID: fmt.Sprint("task-", i), Type: "vzdump", Status: "OK"})
+				}
+			} else {
+				rows = []Task{{UPID: "task-0", Type: "vzdump", Status: "ERROR"}, {UPID: "task-199", Type: "vzdump", ID: "101", Status: "OK"}}
+			}
+			json.NewEncoder(w).Encode(map[string]any{"data": rows})
+		default:
+			t.Errorf("ambiguous history must not be qualified with another read: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	history, err := backupTestClient(t, server.URL).GetBackupTaskHistory(context.Background(), time.Unix(1699990000, 0))
+	require.NoError(t, err)
+	require.Equal(t, []BackupTaskHistoryNode{{Node: "node", Reason: "collection_failed"}}, history.Nodes)
+	require.Len(t, history.Tasks, 198)
+	for _, task := range history.Tasks {
+		require.NotContains(t, []string{"task-0", "task-199"}, task.UPID)
 	}
 }

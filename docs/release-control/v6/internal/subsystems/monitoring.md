@@ -468,8 +468,8 @@ original observation times. Ordinary complete reads can recover normally.
 
 Scheduled parents may still have an empty guest ID; running tasks may omit their
 result/end time. Omitted redundant node fields, explicit other task kinds,
-additive metadata, genuine empty arrays and cross-page History deduplication
-retain their existing meaning. No UPID format constraint, guest/backup command,
+additive metadata, genuine empty arrays and identical cross-page History
+overlap retain their existing meaning. No UPID format constraint, guest/backup command,
 request budget or privilege is added.
 
 `TestTaskListsRequireUnambiguousIdentity` covers all three HTTP task-list consumers;
@@ -9054,9 +9054,28 @@ A foreign-node row makes that whole page `collection_failed`: none of its
 prefix can replace live outcomes, enter report history or qualify complete
 observation. Earlier admitted pages and independently readable nodes remain
 available. An omitted redundant node field still inherits the request's node.
-Correctly scoped later history can still update a live task's outcome; the
-existing window, page/log budgets, authority and no-guest-operation boundaries
-are unchanged. `TestBackupHistoryRejectsForeignNodePages` checks first/later
+Across offset pages, repeated opaque task IDs must agree in all decoded task
+fields after an omitted redundant node is bound to the request. Identical
+boundary overlap remains deduplicated. A changed result, guest, task kind or
+execution identity makes that node's collection `collection_failed`: withhold
+that whole new page and both versions of every conflicting earlier task.
+Unambiguous earlier executions and independent nodes remain available. Neither
+first/last response order nor filtering another task kind can turn ambiguity into
+a live success or complete report coverage. The read is not an atomic provider
+snapshot; a running task changing across overlapping pages is conservatively
+incomplete until a subsequent ordinary consistent read.
+
+Correctly scoped, unambiguous later history can still update a live task's outcome;
+the existing window, page/log budgets, authority and no-guest-operation boundaries
+are unchanged. `TestBackupHistoryCrossPageIdentityAdmission` covers second/third
+page overlap, all decoded identity/result fields, request bounds and equivalent
+node spellings. `TestBackupHistoryCrossPageConflictRemovesEveryAmbiguousExecution`
+checks multiple conflicts; `TestPVEBackupHistoryCrossPageConflictPreservesLiveFailure`
+joins direct/cluster HTTP, normal reconciliation, peer progress, same-VMID isolation
+and ordinary recovery without a database. The source-bound desktop/narrow
+`browser-tests/backup-history-pagination.cjs` consumes its actual emitted JSON
+through the production API reader, model and Coverage detail, including keyboard/
+touch refresh, retained disclosure, source search and corrected-result pixels. `TestBackupHistoryRejectsForeignNodePages` checks first/later
 pages, duplicate-UPID contamination and peer preservation;
 `TestPVEBackupHistoryForeignNodeCannotReplaceLiveFailure` joins direct/cluster
 HTTP readers, ordinary polling and the served Coverage projection without

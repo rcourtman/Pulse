@@ -115,3 +115,120 @@ func TestPVEBackupHistoryForeignNodeCannotReplaceLiveFailure(t *testing.T) {
 		})
 	}
 }
+
+// Synthetic GET-only provider -> direct/cluster reader -> normal History/live
+// reconciliation -> served backup projection. No database, native target,
+// guest/backup command, QGA request or stopped investigation is exercised.
+func TestPVEBackupHistoryCrossPageConflictPreservesLiveFailure(t *testing.T) {
+	for _, cluster := range []bool{false, true} {
+		name := "direct"
+		if cluster {
+			name = "cluster"
+		}
+		t.Run(name, func(t *testing.T) {
+			var phase atomic.Int32
+			const upid = "UPID:pve-a:00000100:00000001:67000000:vzdump:100:fixture@pve:"
+			primary := proxmox.Task{UPID: upid, Node: "pve-a", Type: "vzdump", ID: "100", Status: "ERROR: archive unavailable", StartTime: 1792350000, EndTime: 1792350060}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				switch {
+				case r.URL.Path == "/api2/json/nodes":
+					fmt.Fprint(w, `{"data":[{"node":"pve-a","status":"online"},{"node":"pve-b","status":"online"}]}`)
+				case r.URL.Path == "/api2/json/access/permissions":
+					fmt.Fprintf(w, `{"data":{%q:{"Sys.Audit":1}}}`, r.URL.Query().Get("path"))
+				case strings.HasSuffix(r.URL.Path, "/tasks"):
+					p := phase.Load()
+					task := primary
+					var tasks []proxmox.Task
+					if strings.Contains(r.URL.Path, "/pve-b/") {
+						task.UPID, task.Node, task.ID, task.Status = "independent-peer", "pve-b", "200", "OK"
+						task.EndTime += int64(p) // The readable peer genuinely advances.
+						tasks = []proxmox.Task{task}
+					} else if !r.URL.Query().Has("since") {
+						tasks = []proxmox.Task{task} // The ordinary live read remains failed.
+					} else if p == 0 || p == 5 {
+						if p == 5 {
+							task.Status = "OK"
+						}
+						tasks = []proxmox.Task{task}
+					} else if r.URL.Query().Get("start") == "0" {
+						if p != 2 {
+							task.Status = "OK"
+						}
+						tasks = []proxmox.Task{task}
+						for i := 1; i < 200; i++ {
+							tasks = append(tasks, proxmox.Task{UPID: fmt.Sprint("earlier-", i), Node: "pve-a", Type: "vzdump", ID: "101", Status: "OK", StartTime: primary.StartTime - int64(i), EndTime: primary.EndTime - int64(i)})
+						}
+					} else {
+						switch p {
+						case 2:
+							task.Status = "OK" // Reverse order must not choose another winner.
+						case 3:
+							task.ID, task.Status = "101", "OK"
+						case 4:
+							task.Type, task.Status = "qmstart", "OK"
+						}
+						tasks = []proxmox.Task{{UPID: "unadmitted-page-prefix", Node: "pve-a", Type: "vzdump", ID: "102", Status: "OK"}, task}
+					}
+					json.NewEncoder(w).Encode(map[string]any{"data": tasks})
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 5 * time.Second}
+			var client PVEClientInterface
+			if cluster {
+				client = proxmox.NewClusterClient("history-pagination", cfg, []string{server.URL}, nil)
+			} else {
+				var err error
+				client, err = proxmox.NewClient(cfg)
+				require.NoError(t, err)
+			}
+			m := &Monitor{state: models.NewState(), recoveryManager: recoverymanager.New(nil)}
+			other := models.BackupTask{ID: "independent-instance", Instance: "other", Node: "pve-a", VMID: 100, Type: "vzdump", Status: "OK", StartTime: time.Unix(primary.StartTime, 0), EndTime: time.Unix(primary.EndTime, 0), ObservedAt: time.Unix(1792350120, 0)}
+			m.state.UpdateBackupTasksForInstance("other", []models.BackupTask{other})
+			for i, label := range []string{"initial", "conflict", "conflict-reverse", "conflict-guest", "conflict-kind", "recovered"} {
+				phase.Store(int32(i))
+				history, collection, err := m.readBackupTaskHistory(context.Background(), "site", client)
+				require.NoError(t, err)
+				ambiguous := i > 0 && i < 5
+				require.Equal(t, !ambiguous, collection.Complete, label)
+				if ambiguous {
+					require.Equal(t, "collection_failed", collection.Reason)
+					require.Len(t, history, 200, "199 unambiguous earlier executions and the readable peer survive")
+					for _, row := range history {
+						require.NotEqual(t, upid, row.UPID, "neither contradictory version may enter durable/live reconciliation")
+						require.NotEqual(t, "unadmitted-page-prefix", row.UPID)
+					}
+				}
+				m.pollBackupTasks(context.Background(), "site", client)
+				snapshot := m.state.GetSnapshot().PVEBackups
+				require.Len(t, snapshot.BackupTasks, 3, "report-only backfill must not inflate live state")
+				for _, row := range snapshot.BackupTasks {
+					switch {
+					case row.Instance == "other":
+						require.Equal(t, other, row)
+					case row.VMID == 200:
+						require.Equal(t, "pve-b", row.Node)
+						require.Equal(t, "OK", row.Status)
+						require.Equal(t, primary.EndTime+int64(i), row.EndTime.Unix())
+					default:
+						require.Equal(t, 100, row.VMID)
+						require.Equal(t, "site-"+upid, row.ID)
+						require.Equal(t, "pve-a", row.Node)
+						expected := primary.Status
+						if i == 5 {
+							expected = "OK"
+						}
+						require.Equal(t, expected, row.Status, "ambiguous History cannot replace the current failed live task")
+					}
+				}
+				wire, err := json.Marshal(map[string]any{"data": snapshot})
+				require.NoError(t, err)
+				t.Logf("HISTORY_PAGINATION_%s_%s=%s", name, label, wire)
+			}
+		})
+	}
+}
