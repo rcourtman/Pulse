@@ -39,6 +39,7 @@ func TestSnapshotSizeWorkersKeepHTTPPeersIndependent(t *testing.T) {
 			type phaseInput struct {
 				index    int
 				peerRead chan struct{}
+				slowRead chan struct{}
 			}
 			var phase atomic.Pointer[phaseInput]
 			var unexpected, blockedPeerControls atomic.Int32
@@ -70,6 +71,7 @@ func TestSnapshotSizeWorkersKeepHTTPPeersIndependent(t *testing.T) {
 					fmt.Fprintf(w, `{"data":[{"volid":"fast:vm-100-disk-0@weekly","content":"images","vmid":100,"size":%d}]}`, size)
 				case "/api2/json/nodes/a-slow/storage/remote/content":
 					if p.index == 1 {
+						close(p.slowRead)
 						select {
 						case <-p.peerRead:
 							blockedPeerControls.Add(1)
@@ -91,6 +93,11 @@ func TestSnapshotSizeWorkersKeepHTTPPeersIndependent(t *testing.T) {
 				case "/api2/json/nodes/b-peer/storage/fast/content":
 					if p.index == 1 {
 						close(p.peerRead)
+						select {
+						case <-p.slowRead:
+						case <-time.After(5 * time.Second):
+							t.Error("slow-node request did not overlap the healthy peer")
+						}
 					}
 					size := int64(p.index+1) * 12 * gib
 					if p.index == 4 {
@@ -138,7 +145,7 @@ func TestSnapshotSizeWorkersKeepHTTPPeersIndependent(t *testing.T) {
 			var originalObservedAt any
 			for p, name := range []string{"initial", "unread", "missing-size", "recovered", "empty"} {
 				t.Run(name, func(t *testing.T) {
-					phase.Store(&phaseInput{index: p, peerRead: make(chan struct{})})
+					phase.Store(&phaseInput{index: p, peerRead: make(chan struct{}), slowRead: make(chan struct{})})
 					m.pollGuestSnapshots(context.Background(), "site", client)
 					wait()
 					state := m.GetState()
