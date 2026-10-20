@@ -217,6 +217,11 @@ describe('UpdateInstallGuide', () => {
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`)).toBeInTheDocument();
     expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("docker login registry.pulserelay.pro --username 'lic_test'"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/printf/)).not.toBeInTheDocument();
+    expect(screen.getByText(/At Docker’s Password prompt/)).toBeInTheDocument();
   });
 
   it('withholds community commands on a Pro docker install even without broker commands', () => {

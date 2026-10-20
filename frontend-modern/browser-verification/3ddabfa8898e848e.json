@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9759673560bd1ce991704093b7bd9fe3dfafc632",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/utils/proRegistryLogin.ts",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/proRegistryLogin.ts": "e36841428e2765d1ece973fdefb40c5a5bf530411f20d4e0b490e892b605fa38",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts": "5698ba3c0e6fc644d34f8fd25f7c939155e1be265ec6ab090b577c0182ac5ced",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "a9d8dc7e8bc1c01c0fc7440556d96d4584236d0b9326e7919c9ab967b8390cb4",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "870bda38348067cf48b3437121b891086e5b2701b20ed220c30bc000a4aa9be9"
+  },
+  "routes": [
+    "Settings \u2192 Updates (production UpdatesSettingsPanel at /browser-tests/pro-registry-guidance.html)"
+  ],
+  "states": [
+    "Community Docker-to-Pro switch: legacy, supported prompt-contract, secret-bearing rejected and missing login",
+    "Pro Docker update: same four API response variants; exact digest-pinned image and Compose commands unchanged",
+    "Desktop light and 320px WebKit dark; secret-bearing login withheld without echo or copy action"
+  ],
+  "interactions": [
+    "16 HTTP-to-production-panel cases via actual runtime reader and UpdatesAPI",
+    "Desktop keyboard activation and phone touch of every guide copy button; browser clipboard write seam matches full intact secret-free commands",
+    "No off-origin requests, API writes or settings edits; no registry or real credential",
+    "Text ranges remain inside paragraph boxes and clear of copy buttons; page width checks",
+    "Native image review of all ten final captures: command text unobscured, password guidance legible, fallback URL wraps at 320px",
+    "Both real update consumers render a dated API response; native date-call return/duration observed without changing inputs or return. Desktop first calls8.3\u201321.3ms, WebKit15\u201340ms; this does not explain the separate VM cold-date timeout."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-20T10:04:30.284718Z",
+  "tool": "pulse-worker-browser frontend-modern/browser-tests/pro-registry-guidance.cjs",
+  "playwright": "1.56.1",
+  "browsers": {
+    "desktop": "Chromium141.0.7390.37",
+    "phone": "WebKit26.0"
+  },
+  "source_sha": "9759673560bd1ce991704093b7bd9fe3dfafc632",
+  "report_sha256": "ec3bba5c550b0101dfd436958c28fb1910b01d784badac6e107c3bf47c2d2206",
+  "captures": [
+    {
+      "file": "desktop-switch-legacy.png",
+      "sha256": "34415f3248a02296765415f832953a337272e727298efdcf108f9d83c81b7584"
+    },
+    {
+      "file": "desktop-switch-secret-rejected.png",
+      "sha256": "63dd20a3b21585ab8848de400860d9701ec846c146860b526a10edec186983a2"
+    },
+    {
+      "file": "desktop-update-legacy.png",
+      "sha256": "74366fcaa63fdcecc0eeb37764fc4077746d0009672ce48d549f3623182b37d6"
+    },
+    {
+      "file": "desktop-release-date.png",
+      "sha256": "469f2da532892478f1314376bc3f1f07df7efc91e501c8dc88b7635a25b8b81d"
+    },
+    {
+      "file": "desktop-update-secret-rejected.png",
+      "sha256": "e268999565f987e55d5861cbdd11c5a1886ab36efdc1683d4d39c1dec0815bf9"
+    },
+    {
+      "file": "phone-switch-legacy.png",
+      "sha256": "3b753885be85746fbac1ad28d71f973d6682087b27973899640dcb010b85b8df"
+    },
+    {
+      "file": "phone-switch-secret-rejected.png",
+      "sha256": "9ecd735986064c55c535a5f416c52f6d3e98e184f2d2e9becf63a849d5fab190"
+    },
+    {
+      "file": "phone-update-legacy.png",
+      "sha256": "d10e9415b1369f95732417e9b7b7189bee7124e97fdcc0d8e6ed339c98029d04"
+    },
+    {
+      "file": "phone-release-date.png",
+      "sha256": "e1d0f61a1117455ffdf77385d48b7c3df80ad0f7730d40ed80ecd19843aa0294"
+    },
+    {
+      "file": "phone-update-secret-rejected.png",
+      "sha256": "8c5a96e890feba37b8fb3e9d09d0d28d5fb6673b79d7c0091826e664b766799b"
+    }
+  ],
+  "limits": [
+    "Prompt-contract fixture is synthetic supported consumer input, not the pending repaired private producer output.",
+    "No real Docker login, installed switch, publication, deployed exposure or issue resolution established."
+  ],
+  "fresh_adoption_proof": "Fresh 16-case execution on the final notes and dated responses. All ten final captures natively inspected; no earlier receipt rebound."
+}

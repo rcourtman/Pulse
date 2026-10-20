@@ -166,7 +166,7 @@ async function finish(page) {
       const copies = card.getByRole('button', { name: 'Copy to clipboard' });
       await expect(copies).toHaveCount(3);
       for (let i = 0; i < 3; i++) await copies.nth(i).click();
-      assert.deepEqual(await controls.copy(), [docker.loginCommand, docker.composePullCommand, docker.composeUpCommand]);
+      assert.deepEqual(await controls.copy(), ["docker login license.pulserelay.pro --username 'fixture'", docker.composePullCommand, docker.composeUpCommand]);
       await expect(card.getByRole('button', { name: /Switch/ })).toHaveCount(0);
       const noteLines = await card.locator('p').last().evaluate((element) => {
         const box = element.getBoundingClientRect();

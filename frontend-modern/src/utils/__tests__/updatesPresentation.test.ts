@@ -132,7 +132,7 @@ describe('getProRuntimeSwitchPresentation', () => {
     expect(view.body).toContain('Pulse Pro v6.5.0');
   });
 
-  it('gives Docker installs the broker commands in order, login first', () => {
+  it('gives Docker installs protected login first and preserves the pinned broker commands', () => {
     const view = getProRuntimeSwitchPresentation({
       ...proRuntimeSwitchBase,
       available: true,
@@ -141,11 +141,12 @@ describe('getProRuntimeSwitchPresentation', () => {
     expect(view.kind).toBe('docker');
     if (view.kind !== 'docker') return;
     expect(view.steps.map((step) => step.command)).toEqual([
-      proDockerCommands.loginCommand,
+      "docker login registry.pulserelay.pro --username 'lic_test'",
       proDockerCommands.composePullCommand,
       proDockerCommands.composeUpCommand,
     ]);
-    expect(view.steps[0].note).toContain('<activation-key>');
+    expect(view.steps[0].note).toContain('At Docker’s Password prompt');
+    expect(JSON.stringify(view)).not.toContain('<activation-key>');
     expect(view.note).toContain('PULSE_IMAGE');
     expect(view.steps.some((step) => step.command?.includes('rcourtman/pulse'))).toBe(false);
   });
