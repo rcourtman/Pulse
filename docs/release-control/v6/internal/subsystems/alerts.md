@@ -5289,3 +5289,42 @@ fresh recovery and production-shaped consumer projections. The window boundary
 test in `windowed_metric_test.go` proves rejection precedes History reads.
 These are synthetic controls, not an attribution or installed recovery claim
 for a reported disk alert or notification delivery failure.
+
+
+### Group acknowledgements retain per-alert outcomes (20 October 2026)
+
+The existing Alerts overview counts only unacknowledged group members in its
+acknowledgement action. Group, individual-card and all-alert writes share the
+per-alert processing lock, so overlapping controls cannot submit duplicate
+writes while an acknowledgement is pending. Independent groups remain usable.
+The existing short processing release delay is unchanged; rejected members
+become actionable again when it completes.
+
+Group and all-alert replies use the same exact-request reconciliation. Only
+unique, explicit successful confirmations for requested canonical alert IDs
+update the shared store. Rejected, omitted or conflicting results stay active
+and produce the existing failure-count notification, alongside a success count
+when appropriate. A result for an unrequested same-name neighbour cannot change
+its acknowledgement. Already acknowledged or removed group members are not
+submitted. Acknowledgement is not resolution, deletion or proof of monitoring
+recovery; no collection, notification routing or API contract changes.
+
+`useAlertAcknowledgementState.test.tsx` checks partial/all/request failure,
+retry, missing/conflicting/duplicate replies, current membership and overlapping
+requests. `OverviewTab.groupacknowledgement.test.tsx` exercises rendered counts,
+busy/disabled controls and retained failed members. The presentation regression
+and `browser-tests/alert-group-acknowledgement.cjs` bind the same existing flow
+to desktop keyboard and narrow touch interactions through the real HTTP adapter
+and toast consumer with synthetic local responses only.
+
+Pending acknowledgement dims only disabled actions, not the whole alert card.
+The first pending-state browser audit found twelve contrast failures from
+whole-card processing opacity. Removing that opacity preserves readable current
+conditions and timestamps until a reply arrives; busy/disabled controls and the
+processing lock remain explicit. Presentation regressions cover active and
+acknowledged cards at every severity while processing.
+
+Each completed acknowledgement request releases its reservations with one
+1500ms timer and one Set copy for the entire requested batch. Reserving all
+alerts must not introduce a timer and full Set copy per alert during an alert
+flood. The shared-owner regression covers a500-member batch and cleanup.

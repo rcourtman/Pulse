@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "d688d3831588c1ce91d32880b6849e499be4523e",
+  "verified_at": "2026-10-20T03:56:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts": "2d412e59b073ccb1e833f4d138227ced2bab4812da11a6567183c1952de4d546",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "eb9991f19b4367f6565a71b52befe0acec05be670f76fbfd0913edb9fdd96609",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "e772922d5d8b47de8dde827bc14b42ccceebb27c3114ef9f0e618540d89986bf"
+  },
+  "routes": [
+    "/alerts (real OverviewTab in /browser-tests/alert-group-acknowledgement.html)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Paired baseline/fixed desktop and narrow journeys: baseline duplicate writes, inflated group count and silent per-member rejection reproduced. Final group count excludes acknowledged members; pending controls expose busy state and preserve full evidence contrast.",
+    "Partial rejection, all-member rejection, whole-request400 rejection, deliberate successful retry and all-alert partial rejection pass through the actual HTTP adapter and ToastContainer. Rejected members remain active; acknowledged observations remain retained, not resolved.",
+    "Eight final WCAG A/AA scans havezero violations after removing whole-card processing opacity; original12-node contrast failure retained. All12 final-pass captures opened with native view_image from worker-owned output files."
+  ],
+  "interactions": [
+    "Chromium141.0.7390.37 desktop keyboard Enter and WebKit26.0 touch320px. Playwright1.56.1 matches integration lock.",
+    "Native repeated activation cannot submit a duplicate group/all request while its members are processing; individual overlapping actions disabled while independent same-name group remains enabled. Request bodies and exact IDs checked; no off-origin requests or other mutation endpoints admitted.",
+    "Rejected member retries submit only its exact canonical ID. Accepted success changes acknowledgement only; no observations deleted. No page errors or horizontal overflow; browser and preview server closed."
+  ],
+  "source_binding": {
+    "browser_executed_commit": "bf18ca9272605d32fcdf394545e506f5ccba48fe",
+    "receipt_parent": "d688d3831588c1ce91d32880b6849e499be4523e",
+    "runtime_content_matches": true,
+    "difference_since_browser": "Only a rendered-test query changed after browser; production source and browser script unchanged. This is the initial receipt, not a rebind."
+  }
+}

@@ -160,8 +160,10 @@ export function getAlertOverviewGroupDisclosureLabel({
   );
 }
 
-export function getAlertOverviewGroupAcknowledgeLabel(count: number): string {
-  return t('alerts.overview.group.acknowledge', { count });
+export function getAlertOverviewGroupAcknowledgeLabel(count: number, processing = false): string {
+  return processing
+    ? t('alerts.overview.action.acknowledging')
+    : t('alerts.overview.group.acknowledge', { count });
 }
 
 export function getAlertOverviewAcknowledgedBadgeLabel(): string {
@@ -481,13 +483,13 @@ export function getAlertBucketCountLabel(count: number) {
 export function getAlertOverviewCardPresentation(
   level: 'critical' | 'warning' | string,
   acknowledged: boolean,
-  processing: boolean,
+  _processing: boolean,
 ): AlertOverviewCardPresentation {
   const isCritical = level === 'critical';
   const isInformational = level === 'info';
-  // Acknowledgement changes the border, surface, badge and icon, not text
-  // contrast. Dimming the whole card makes retained evidence hard to read.
-  const opacityClass = processing ? 'opacity-50' : '';
+  // Acknowledgement and in-flight writes do not reduce evidence contrast.
+  // Busy actions already expose their disabled/processing state; dimming the
+  // whole card hides the still-active condition while the server responds.
   // Severity rides on a left edge, the icon and the badge rather than a fully
   // tinted card, so a page of warnings stays scannable instead of one block
   // of colour.
@@ -508,11 +510,7 @@ export function getAlertOverviewCardPresentation(
   const resourceClassName = 'text-sm font-semibold truncate text-base-content';
 
   return {
-    cardClassName: [
-      'border border-l-4 rounded-md px-3 py-2.5 transition-all',
-      opacityClass,
-      stateClass,
-    ]
+    cardClassName: ['border border-l-4 rounded-md px-3 py-2.5 transition-all', stateClass]
       .filter(Boolean)
       .join(' '),
     iconClassName,
