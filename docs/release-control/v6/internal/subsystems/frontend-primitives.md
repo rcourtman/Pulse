@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Related-alert disclosure preserves attention and access
+
+Collapsed Alerts overview groups retain their designated primary while exposing
+the unacknowledged supporting alerts' severity counts through the shared severity
+labels and badges. Counts do not borrow an independent group's alerts or include
+acknowledged evidence as current attention. Native keyboard/touch buttons expose
+expanded state and uniquely bound related-card content, with wrapping and phone
+target sizes. Expanded acknowledged evidence uses the existing neutral surface,
+edge, badge and icon without opacity that reduces its text contrast.
+
+`OverviewTab.emptystate.test.tsx`, the alert presentation tests and
+`alert-group-severity.cjs` exercise the real grouping/card/CSS consumers, including
+both correlation types, independent groups, live observation changes and baseline
+versus repaired desktop/narrow pixels. Alert correlation, order, monitoring and
+acknowledgement operations are unchanged.
+
 ### Global backup counts reveal their complete target set
 
 The Backups health strip keeps estate-wide warnings visible, independent of

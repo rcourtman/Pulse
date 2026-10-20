@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### Collapsed active-alert groups retain visible severity evidence
+
+The Alerts overview keeps a correlation's designated primary, even when a
+supporting alert is more severe. Its existing related-alert disclosure shows
+counts by severity for unacknowledged supporting alerts, in critical/warning/info
+order. Acknowledged alerts stay inspectable when requested but do not inflate
+these attention badges. Ordinary observation, acknowledgement and removal update
+the summary; no alert identity, correlation, ordering or write path changes.
+
+The disclosure exposes its expanded state and, while open, the unique element
+containing its related cards. Both the disclosure and existing group-acknowledge
+action have phone-sized targets and wrap within narrow layouts. Keyboard and
+touch expansion retain every underlying card and action.
+Acknowledged cards keep their muted surface, neutral edge, badge and check icon
+without whole-card opacity, so their retained evidence remains readable. The
+existing pending-operation presentation is unchanged.
+
+`OverviewTab.emptystate.test.tsx` exercises the real overview/state/card consumer
+with both correlation kinds, ordinary resource groups, acknowledgement changes
+and independent disclosure identities. `alertOverviewPresentation.test.ts` and
+its coverage companion preserve readable acknowledged severity states. The source-bound
+`browser-tests/alert-group-severity.cjs` compares baseline and repaired desktop
+and phone views, including keyboard/touch disclosure, live recovery and a
+read-only synthetic API. This is UI evidence, not notification delivery or
+installed incident recovery.
+
 ### Notification activity remains inspectable without hover
 
 The bounded delivery/held-event list has an accessible name, an explicit keyboard
