@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "dad5cea213d4e0a04684fe24f4add022b2843617",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/utils/proRegistryLogin.ts",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "870bda38348067cf48b3437121b891086e5b2701b20ed220c30bc000a4aa9be9",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "a9d8dc7e8bc1c01c0fc7440556d96d4584236d0b9326e7919c9ab967b8390cb4",
+    "frontend-modern/src/utils/proRegistryLogin.ts": "449a56c05a3606bb8fdd32aba01949e287eeb3b7079b96ec359104a96429a167",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts": "5698ba3c0e6fc644d34f8fd25f7c939155e1be265ec6ab090b577c0182ac5ced"
+  },
+  "routes": [
+    "Settings \u2192 Updates (production UpdatesSettingsPanel at /browser-tests/pro-registry-guidance.html)"
+  ],
+  "states": [
+    "Community Docker-to-Pro switch: legacy, supported prompt-contract, secret-bearing rejected and missing login",
+    "Pro Docker update: same four API response variants; exact digest-pinned image and Compose commands unchanged",
+    "Desktop light and 320px WebKit dark; secret-bearing login withheld without echo or copy action"
+  ],
+  "interactions": [
+    "16 HTTP-to-production-panel cases via actual runtime reader and UpdatesAPI",
+    "Desktop keyboard activation and phone touch of every guide copy button; browser clipboard write seam matches full intact secret-free commands",
+    "No off-origin requests, API writes or settings edits; no registry or real credential",
+    "Text ranges remain inside paragraph boxes and clear of copy buttons; page width checks",
+    "Native image review of all eight final captures: command text unobscured, password guidance legible, fallback URL wraps at 320px"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-20T09:33:45.452845Z",
+  "tool": "pulse-worker-browser frontend-modern/browser-tests/pro-registry-guidance.cjs",
+  "playwright": "1.56.1",
+  "browsers": {
+    "desktop": "Chromium141.0.7390.37",
+    "phone": "WebKit26.0"
+  },
+  "source_sha": "dad5cea213d4e0a04684fe24f4add022b2843617",
+  "report_sha256": "682e9605dfe7225d404e9d30b26387272f725bd287506d4a9a71dc2fe8fa5df2",
+  "captures": [
+    {
+      "file": "desktop-switch-legacy.png",
+      "sha256": "25245829bc60f2dfb0c51ae6b65ea74a98f091b63df6493bf092f244938bd473"
+    },
+    {
+      "file": "desktop-switch-secret-rejected.png",
+      "sha256": "8f94b161640266c40986a6b1ffa6885a3852fe24f478f7534a3c6f5565e6543e"
+    },
+    {
+      "file": "desktop-update-legacy.png",
+      "sha256": "bed152e6b10ca1ffbe939dcbe04fba20f55525aade40822270910cbcb4a4ec4d"
+    },
+    {
+      "file": "desktop-update-secret-rejected.png",
+      "sha256": "68727144954cab7a325f01ea193acbec4e870941d46a21bb0bc120b8bfaee42b"
+    },
+    {
+      "file": "phone-switch-legacy.png",
+      "sha256": "a7552273f944ab3706640fc4e082e839d71d9748c36d7bbd70b818ed91596851"
+    },
+    {
+      "file": "phone-switch-secret-rejected.png",
+      "sha256": "5613690433ee8343a63adf58d7b82918b593ebf9fd637c192fd611c3f669944f"
+    },
+    {
+      "file": "phone-update-legacy.png",
+      "sha256": "a0d38d58100ba399b1023dc5b91175541a4718564545a30c4b873ee2bdfb3fdc"
+    },
+    {
+      "file": "phone-update-secret-rejected.png",
+      "sha256": "874749a498e406c1ea70d96b3fe143ada71523bfbf69b9a66ff54fe986424d09"
+    }
+  ],
+  "limits": [
+    "Prompt-contract fixture is synthetic supported consumer input, not the pending repaired private producer output.",
+    "No real Docker login, installed switch, publication, deployed exposure or issue resolution established."
+  ],
+  "fresh_adoption_proof": "Fresh executed 16-case browser run on the adopted source. All eight newly retained captures opened natively; no earlier receipt rebound."
+}
