@@ -16,6 +16,22 @@
 
 ## Purpose
 
+### Portal build drift is rejected before ordinary CI fan-out
+
+Build and Test checks the portal's existing ordered input/byte hash in its
+dependency-free changes job, before classifying the diff or starting application
+dependency installation and compilation. Missing or malformed manifests, missing
+inputs and source drift fail with the existing portal rebuild command; the check
+does not regenerate assets, execute frontend source or fetch dependencies.
+`scripts/check_portal_frontend_sync.py` mirrors the existing Go sync assertion;
+it is not bundle correctness or browser proof and replaces none of the Go tests,
+real builds, security checks or required runtime checks.
+
+`scripts/tests/test_portal_frontend_sync.py` exercises exact bytes/order, source
+and package-manifest drift, failure/read-only controls and early workflow
+placement. It also checks the current shipped input binding. Installed behaviour,
+frontend source and the dependency graph are unchanged.
+
 ### Agent CA paths are data in generated service configuration
 
 A custom CA path must reach `SSL_CERT_FILE` byte-for-byte in the generated

@@ -87,6 +87,15 @@ jobs:
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
 
+      # The existing Go sync assertion is deterministic, but otherwise waits
+      # for backend compilation and a whole race-test shard. Check the same
+      # source/manifest hash before installing any application dependencies.
+      - name: Check shipped portal inputs before dependency work
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_portal_frontend_sync.py
+          python3 scripts/check_portal_frontend_sync.py
+
       - name: Validate browser receipt-only CI admission
         run: python3 scripts/tests/test_ci_browser_proof_only.py
 
