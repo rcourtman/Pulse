@@ -27,8 +27,8 @@ describe('PBS protection disagreement help', () => {
     ).not.toBeNull();
     // The section also contains job-identity/timing tables. Assert the safety
     // comparison itself, not every descendant row added by those subsections.
-    const comparisons = [...article().querySelectorAll('table')].filter((table) =>
-      table.querySelector('thead th')?.textContent === 'Observation in Pulse',
+    const comparisons = [...article().querySelectorAll('table')].filter(
+      (table) => table.querySelector('thead th')?.textContent === 'Observation in Pulse',
     );
     expect(comparisons).toHaveLength(1);
     const rows = [...comparisons[0].querySelectorAll('tbody tr')].map((row) => row.textContent);

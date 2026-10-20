@@ -1074,7 +1074,9 @@ describe('ProxmoxBackupsTable', () => {
       const scopeGuidance =
         /^Counts cover all targets\. Choose a count to clear other filters and show those targets\.$/;
       await waitFor(() => expect(coverageRow()).toHaveTextContent('Protected'));
-      expect(healthFootnote()).toHaveTextContent('Attention: the newest backup is older than 7 days,');
+      expect(healthFootnote()).toHaveTextContent(
+        'Attention: the newest backup is older than 7 days,',
+      );
       fireEvent.click(screen.getByRole('button', { name: /expand.*pbs-docker/i }));
       await screen.findByText('Restore evidence');
       const details = container.querySelector('[data-inline-detail-for="resource:ct-112"]');
@@ -1133,7 +1135,9 @@ describe('ProxmoxBackupsTable', () => {
       expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
       expect(details).toHaveTextContent('The latest provider job needs attention.');
       expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
-      expect(healthFootnote()).toHaveTextContent('Attention: the newest backup is older than 1 day,');
+      expect(healthFootnote()).toHaveTextContent(
+        'Attention: the newest backup is older than 1 day,',
+      );
       expect(healthFootnote()).not.toHaveTextContent('older than 7 days');
       expect(apiFetchMock).toHaveBeenCalledTimes(inventoryReads);
     },
@@ -1443,7 +1447,9 @@ describe('ProxmoxBackupsTable', () => {
         count.focus();
         await fireEvent.click(count);
         await waitFor(() => {
-          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(
+            1,
+          );
           expect(window.location.pathname).toBe('/proxmox/backups/coverage');
           const params = new URLSearchParams(window.location.search);
           expect(params.get('posture')).toBe(state);
@@ -1473,7 +1479,9 @@ describe('ProxmoxBackupsTable', () => {
         await waitFor(() => {
           expect(window.location.pathname).toBe('/proxmox/backups/coverage');
           expect(window.location.search).toBe('?presentation=kept&posture=attention');
-          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(
+            1,
+          );
         });
         expect(apiFetchMock).toHaveBeenCalledTimes(2);
         expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);

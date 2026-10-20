@@ -490,8 +490,7 @@ export const ProxmoxBackupsTable: Component<{
   const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
     const selected = view() === 'coverage' && coverageFilter() === posture;
     const pressed =
-      selected &&
-      ![search().trim(), nodeFilter(), locationFilter(), typeFilter()].some(Boolean);
+      selected && ![search().trim(), nodeFilter(), locationFilter(), typeFilter()].some(Boolean);
     // Keep an active filter reachable if observations reduce its count to zero,
     // even when another scope means the complete global set is not pressed.
     if (!selected && liveHealthSummary()[posture] === 0) return {};
