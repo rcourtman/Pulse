@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1be301ff1150bfb06fba59f812b6e8f1c1107b65",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/utils/proRegistryLogin.ts",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/proRegistryLogin.ts": "81fac4ae08d72c2713e54d92304c830131571764591efb6016ed40a73bc60e48",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts": "5698ba3c0e6fc644d34f8fd25f7c939155e1be265ec6ab090b577c0182ac5ced",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "a9d8dc7e8bc1c01c0fc7440556d96d4584236d0b9326e7919c9ab967b8390cb4",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "870bda38348067cf48b3437121b891086e5b2701b20ed220c30bc000a4aa9be9"
+  },
+  "routes": [
+    "Settings \u2192 Updates (production UpdatesSettingsPanel at /browser-tests/pro-registry-guidance.html)"
+  ],
+  "states": [
+    "Community Docker-to-Pro switch: legacy, supported prompt-contract, secret-bearing rejected and missing login",
+    "Pro Docker update: same four API response variants; exact digest-pinned image and Compose commands unchanged",
+    "Desktop light and 320px WebKit dark; secret-bearing login withheld without echo or copy action"
+  ],
+  "interactions": [
+    "16 HTTP-to-production-panel cases via actual runtime reader and UpdatesAPI",
+    "Desktop keyboard activation and phone touch of every guide copy button; browser clipboard write seam matches full intact secret-free commands",
+    "No off-origin requests, API writes or settings edits; no registry or real credential",
+    "Text ranges remain inside paragraph boxes and clear of copy buttons; page width checks",
+    "Native image review of all eight final captures: command text unobscured, password guidance legible, fallback URL wraps at 320px"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-20T09:44:51.864205Z",
+  "tool": "pulse-worker-browser frontend-modern/browser-tests/pro-registry-guidance.cjs",
+  "playwright": "1.56.1",
+  "browsers": {
+    "desktop": "Chromium141.0.7390.37",
+    "phone": "WebKit26.0"
+  },
+  "source_sha": "1be301ff1150bfb06fba59f812b6e8f1c1107b65",
+  "report_sha256": "d52c6ebdbb33674407fb351a7214dbd5d51f72da0ae140fce256680980762d2f",
+  "captures": [
+    {
+      "file": "desktop-switch-legacy.png",
+      "sha256": "e2cfffaf57c57f2dcb76ebf543d1aa88836ed64d0f0be2c3dba74387a8daaac2"
+    },
+    {
+      "file": "desktop-switch-secret-rejected.png",
+      "sha256": "d87453d45b0010ed135c30f9e9a69f060bad9f9dc4b96bbcf7141bfd9038f470"
+    },
+    {
+      "file": "desktop-update-legacy.png",
+      "sha256": "f7f8b19a735bd30e50ac6b709760d2c5ac76ad49b5f7ceaa9539c30a1563e5a5"
+    },
+    {
+      "file": "desktop-update-secret-rejected.png",
+      "sha256": "7fba9d543dbef4ef72f08fd8835229ec502980c44f1954864539f7afe3a0d624"
+    },
+    {
+      "file": "phone-switch-legacy.png",
+      "sha256": "df9c475b5b9675651e787ab3fcc9d3946bd7ca62c0e1c32d607dce03cce91404"
+    },
+    {
+      "file": "phone-switch-secret-rejected.png",
+      "sha256": "152f4b4ae630c3678781d35547ebc48eb7154c406f859102c8c95cb38ae99ea3"
+    },
+    {
+      "file": "phone-update-legacy.png",
+      "sha256": "fbd32e5d15fca334a0c6b9470faf9ef70586a9996eb1fec768435260376528ab"
+    },
+    {
+      "file": "phone-update-secret-rejected.png",
+      "sha256": "329b674421265fbb2bf385d87f6fdab2ec2a0b18fdecf753d280c12b09397d72"
+    }
+  ],
+  "limits": [
+    "Prompt-contract fixture is synthetic supported consumer input, not the pending repaired private producer output.",
+    "No real Docker login, installed switch, publication, deployed exposure or issue resolution established."
+  ],
+  "fresh_adoption_proof": "Fresh 16-case execution on final concise guidance; all eight resulting captures natively inspected. The hidden Password prompt, shell-command warning and local-storage caveat remain visible. No earlier receipt rebound."
+}
