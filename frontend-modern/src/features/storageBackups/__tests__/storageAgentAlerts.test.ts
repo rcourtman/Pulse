@@ -122,7 +122,11 @@ describe('agent storage alert identity', () => {
           activeAlerts: alerts,
           alertsEnabled: enabled,
         });
-        expect(getRecordAlertState(row.id).unacknowledgedCount).toBe(1);
+        expect(getRecordAlertState(row.id)).toMatchObject({
+          severity: 'critical',
+          hasUnacknowledgedAlert: true,
+          unacknowledgedCount: 1,
+        });
         setAlerts(frame.activeAlerts.map((alert) => ({ ...alert, acknowledged: true })));
         expect(getRecordAlertState(row.id)).toMatchObject({
           hasAlert: true,
@@ -130,14 +134,26 @@ describe('agent storage alert identity', () => {
           hasAcknowledgedOnlyAlert: true,
           acknowledgedCount: 1,
           unacknowledgedCount: 0,
-          severity: 'critical',
+          // Acknowledged incidents remain counted, but do not tint the row.
+          severity: null,
         });
         // Existing acknowledgement semantics retire the unacknowledged reason.
         expect(getRecordAlertState(row.id).headline).toBeNull();
+        setAlerts(frame.activeAlerts);
+        expect(getRecordAlertState(row.id)).toMatchObject({
+          severity: 'critical',
+          hasUnacknowledgedAlert: true,
+          hasAcknowledgedOnlyAlert: false,
+          acknowledgedCount: 0,
+        });
+        expect(getRecordAlertState(row.id).headline).toBeTruthy();
         setEnabled(false);
         expect(getRecordAlertState(row.id)).toMatchObject({ hasAlert: false, headline: null });
         setEnabled(true);
-        expect(getRecordAlertState(row.id).hasAlert).toBe(true);
+        expect(getRecordAlertState(row.id)).toMatchObject({
+          hasAlert: true,
+          severity: 'critical',
+        });
         setAlerts([]);
         expect(getRecordAlertState(row.id)).toMatchObject({
           hasAlert: false,
