@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -394,4 +395,251 @@ func TestPVEUnconfirmedTaskVisibilityKeepsObservedGuestLogs(t *testing.T) {
 	require.Equal(t, 100, byID["site-parent-vm100"].VMID)
 	require.Equal(t, "OK", byID["site-parent-vm100"].Status)
 	require.True(t, m.vzdumpJobTaskCache["site|parent"].final)
+}
+
+// GET-only direct/cluster readers exercise the actual live/History merge.
+// The nil-persistence manager selects that branch without opening a database.
+func TestPVEBackupHistoryExecutionIdentity(t *testing.T) {
+	for _, cluster := range []bool{false, true} {
+		for _, change := range []string{"identical", "completion", "implicit-node", "guest", "parent", "pid", "process-start", "start-time", "owner"} {
+			t.Run(fmt.Sprintf("cluster=%t/%s", cluster, change), func(t *testing.T) {
+				live := proxmox.Task{UPID: "opaque-execution", Node: "node", Type: "vzdump", ID: "100", PID: 17, PStart: 5, StartTime: 1792350000, User: "fixture@pve", Status: "ERROR: archive unavailable", EndTime: 1792350060}
+				later := live
+				if change != "identical" {
+					later.Status = "OK"
+				}
+				switch change {
+				case "completion":
+					later.EndTime++
+				case "implicit-node":
+					later.Node = ""
+				case "guest":
+					later.ID = "101"
+				case "parent":
+					later.ID = ""
+				case "pid":
+					later.PID++
+				case "process-start":
+					later.PStart++
+				case "start-time":
+					later.StartTime++
+				case "owner":
+					later.User = "other@pve"
+				}
+				peer := live
+				peer.UPID, peer.ID, peer.Status = "independent", "200", "OK"
+				backfill := live
+				backfill.UPID, backfill.ID = "history-only", "201"
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, http.MethodGet, r.Method)
+					var data any
+					switch r.URL.Path {
+					case "/api2/json/nodes":
+						data = []proxmox.Node{{Node: "node", Status: "online"}}
+					case "/api2/json/access/permissions":
+						data = map[string]any{"/nodes/node": map[string]int{"Sys.Audit": 1}}
+					case "/api2/json/nodes/node/tasks":
+						if r.URL.Query().Has("since") {
+							data = []proxmox.Task{later, peer, backfill}
+						} else {
+							data = []proxmox.Task{live, peer}
+						}
+					case "/api2/json/nodes/node/tasks/opaque-execution/log":
+						data = []proxmox.TaskLogLine{}
+					default:
+						t.Errorf("unexpected GET %s", r.URL)
+						http.NotFound(w, r)
+						return
+					}
+					require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"data": data}))
+				}))
+				defer server.Close()
+				cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 2 * time.Second}
+				var client PVEClientInterface
+				if cluster {
+					client = proxmox.NewClusterClient("history-identity", cfg, []string{server.URL}, nil)
+				} else {
+					var err error
+					client, err = proxmox.NewClient(cfg)
+					require.NoError(t, err)
+				}
+				m := &Monitor{state: models.NewState(), recoveryManager: recoverymanager.New(nil)}
+				other := models.BackupTask{ID: "another-site", Instance: "other", Node: "node", VMID: 100, Status: "OK", Type: "vzdump", ObservedAt: time.Unix(1792350000, 0)}
+				m.state.UpdateBackupTasksForInstance("other", []models.BackupTask{other})
+				consistent := change == "identical" || change == "completion" || change == "implicit-node"
+				assert.Equal(t, consistent, m.pollBackupTasks(context.Background(), "site", client), "only matching execution identity may qualify the archive pass")
+				got := m.PVEBackupsSnapshot()
+				require.Len(t, got.BackupTasks, 3, "history-only tasks cannot become live membership")
+				for _, task := range got.BackupTasks {
+					switch task.ID {
+					case "another-site":
+						require.Equal(t, other, task)
+					case "site-independent":
+						assert.Equal(t, 200, task.VMID)
+						assert.Equal(t, "OK", task.Status)
+					case "site-opaque-execution":
+						assert.Equal(t, 100, task.VMID, "History cannot move a live failure to another guest or parent")
+						assert.Equal(t, "node", task.Node)
+						assert.Equal(t, live.StartTime, task.StartTime.Unix())
+						status, end := live.Status, live.EndTime
+						if consistent {
+							status, end = later.Status, later.EndTime
+						}
+						assert.Equal(t, status, task.Status, "contradictory History cannot erase the observed live failure")
+						assert.Equal(t, end, task.EndTime.Unix())
+					default:
+						t.Errorf("unexpected task %+v", task)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Ordinary HTTP scan -> current tasks, archives, backup age and recovery mapper.
+// Safe synthetic observations only: no guest, QGA, database or native service.
+func TestPVEArchiveScanRejectsHistoryExecutionIdentity(t *testing.T) {
+	for _, cluster := range []bool{false, true} {
+		name := "direct"
+		if cluster {
+			name = "cluster"
+		}
+		t.Run(name, func(t *testing.T) {
+			at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			c := &taskBarrierClient{at: at}
+			var snapshotStarted atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				var data any
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					data = []proxmox.Node{{Node: "node", Status: "online"}}
+				case "/api2/json/access/permissions":
+					c.record("audit")
+					data = map[string]any{"/nodes/node": map[string]int{"Sys.Audit": 1}}
+				case "/api2/json/nodes/node/tasks":
+					history := r.URL.Query().Has("since")
+					c.record(fmt.Sprint("tasks-history=", history))
+					task := proxmox.Task{UPID: "current", Node: "node", Type: "vzdump", ID: "100", PID: 17, PStart: 5, StartTime: at.Unix(), User: "fixture@pve", Status: "running"}
+					if c.phase == "initial" || c.phase == "empty" {
+						data = []proxmox.Task{}
+					} else {
+						if history {
+							switch c.phase {
+							case "conflict-guest", "conflict-again":
+								task.ID = "101"
+							case "conflict-parent":
+								task.ID = ""
+							case "conflict-start":
+								task.StartTime++
+							}
+							if c.phase != "running" {
+								task.Status = "OK"
+								task.EndTime = at.Add(time.Minute).Unix()
+							}
+						}
+						data = []proxmox.Task{task}
+					}
+				case "/api2/json/nodes/node/tasks/current/log":
+					data = []proxmox.TaskLogLine{}
+				case "/api2/json/nodes/node/storage":
+					if snapshotStarted.Load() {
+						data = []proxmox.Storage{}
+					} else {
+						data, _ = c.GetStorage(r.Context(), "node")
+					}
+				case "/api2/json/nodes/node/storage/archive/content":
+					data, _ = c.GetStorageContent(r.Context(), "node", "archive")
+				case "/api2/json/nodes/node/qemu/100/snapshot":
+					snapshotStarted.Store(true)
+					data, _ = c.GetVMSnapshots(r.Context(), "node", 100)
+				default:
+					t.Errorf("unexpected GET %s", r.URL)
+					http.NotFound(w, r)
+					return
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"data": data}))
+			}))
+			defer server.Close()
+			cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 2 * time.Second}
+			var client PVEClientInterface
+			if cluster {
+				client = proxmox.NewClusterClient("history-identity", cfg, []string{server.URL}, nil)
+			} else {
+				var err error
+				client, err = proxmox.NewClient(cfg)
+				require.NoError(t, err)
+			}
+			m := backupLifecycleMonitor(client)
+			m.recoveryManager = recoverymanager.New(nil)
+			t.Cleanup(func() { awaitBackupProjectionIngest(m) })
+			peer := models.StorageBackup{ID: "independent", Instance: "other", Node: "node", Storage: "archive", VMID: 100, Type: "qemu", Time: at.Add(-time.Hour), CTime: at.Add(-time.Hour).Unix(), Size: 8192, Notes: "independent connection"}
+			m.state.UpdateStorageBackupsForInstance("other", []models.StorageBackup{peer})
+			frames := map[string]models.PVEBackups{}
+			var held models.StorageBackup
+			for _, phase := range []string{"initial", "conflict-guest", "conflict-again", "conflict-parent", "conflict-start", "running", "finished", "empty"} {
+				c.phase, c.calls = phase, nil
+				snapshotStarted.Store(false)
+				m.pollPVEBackupsAndSnapshots(context.Background(), "site", client, []proxmox.Node{{Node: "node", Status: "online"}}, map[string]string{"node": "online"}, 2*time.Second)
+				awaitBackupProjectionIngest(m)
+				got := m.PVEBackupsSnapshot()
+				var own []models.StorageBackup
+				for _, b := range got.StorageBackups {
+					if b.Instance == "other" {
+						require.Equal(t, peer, b)
+					} else {
+						own = append(own, b)
+					}
+				}
+				require.Len(t, got.StorageBackups, len(own)+1)
+				require.Len(t, got.GuestSnapshots, 1, "independent snapshot collection still progresses")
+				require.Equal(t, "snapshot-"+phase, got.GuestSnapshots[0].Name)
+				switch {
+				case phase == "initial":
+					require.Len(t, own, 1)
+					held = own[0]
+				case strings.HasPrefix(phase, "conflict-"):
+					require.Equal(t, []models.StorageBackup{held}, own, "contradictory History must not qualify new output or renew backup age")
+					require.NotContains(t, c.calls, "content")
+					require.Len(t, got.BackupTasks, 1)
+					require.Equal(t, 100, got.BackupTasks[0].VMID)
+					require.Equal(t, "running", got.BackupTasks[0].Status, "preserve the actual live observation")
+				case phase == "running" || phase == "finished":
+					require.Len(t, own, 2)
+					for _, b := range own {
+						if b.ID != held.ID {
+							require.Equal(t, phase == "running", b.InProgress)
+						}
+					}
+				case phase == "empty":
+					require.Empty(t, own, "complete ordinary emptiness still reconciles absence")
+				}
+				successes := 0
+				for _, p := range proxmoxmapper.FromPVEStorageBackups(own, nil) {
+					if p.Outcome == recovery.OutcomeSuccess {
+						successes++
+					}
+				}
+				want := 1
+				if phase == "finished" {
+					want = 2
+				} else if phase == "empty" {
+					want = 0
+				}
+				require.Equal(t, want, successes)
+				if phase != "empty" {
+					age := held.Time
+					if phase == "finished" {
+						age = at
+					}
+					require.True(t, age.Equal(m.state.GetSnapshot().VMs[0].LastBackup))
+				}
+				require.Contains(t, c.calls, "tasks-history=true")
+				frames[phase] = got
+			}
+			b, err := json.Marshal(map[string]any{"client": name, "frames": frames})
+			require.NoError(t, err)
+			t.Logf("PVE_HISTORY_IDENTITY_FRAMES=%s", b)
+		})
+	}
 }

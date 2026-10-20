@@ -2615,6 +2615,17 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 		for _, task := range history {
 			if i, ok := indices[task.UPID]; ok {
+				if !tasks[i].SameExecutionIdentity(task) {
+					// History may finish a live execution, not move it to a
+					// different guest/parent, process, start time or owner.
+					// Preserve the actual live observation and independent
+					// backfill, but do not certify history coverage or new
+					// archive output from contradictory execution evidence.
+					taskVisibilityConfirmed = false
+					collection.Complete = false
+					collection.Reason = "collection_failed"
+					continue
+				}
 				tasks[i] = task
 			} else {
 				indices[task.UPID] = len(tasks)
