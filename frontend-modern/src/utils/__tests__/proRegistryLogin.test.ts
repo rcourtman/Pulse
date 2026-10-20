@@ -11,14 +11,17 @@ describe('protected registry sign-in presentation', () => {
     expect(getProRegistryLogin({ image, loginCommand })).toBeNull();
   });
 
-  it.each([legacy, prompt, prompt.replace('--username', '-u')])(
-    'rebuilds a recognised login as Docker’s interactive password prompt: %s',
-    (loginCommand) => {
-      const result = getProRegistryLogin({ image, loginCommand });
-      expect(result).toEqual({ command: prompt, note: PRO_REGISTRY_PASSWORD_NOTE });
-      expect(result?.command).not.toMatch(/activation-key|password-stdin|printf|ppk_live_/);
-    },
-  );
+  it.each([
+    legacy,
+    prompt,
+    prompt.replace('--username', '-u'),
+    "docker login 'license.pulserelay.pro' --username 'pulse-pro'",
+    "docker login 'license.pulserelay.pro' -u 'pulse-pro'",
+  ])('rebuilds a recognised login as Docker’s interactive password prompt: %s', (loginCommand) => {
+    const result = getProRegistryLogin({ image, loginCommand });
+    expect(result).toEqual({ command: prompt, note: PRO_REGISTRY_PASSWORD_NOTE });
+    expect(result?.command).not.toMatch(/activation-key|password-stdin|printf|ppk_live_/);
+  });
 
   it('preserves a matching custom registry port and inert username', () => {
     expect(
@@ -32,6 +35,12 @@ describe('protected registry sign-in presentation', () => {
   it.each([
     legacy.replace('<activation-key>', 'ppk_live_SYNTHETIC_NOT_A_CREDENTIAL'),
     legacy.replace("'%s'", '"%s"'),
+    "docker login 'license.pulserelay.pro --username 'pulse-pro'",
+    "docker login license.pulserelay.pro' --username 'pulse-pro'",
+    "docker login 'license.pulserelay.pro' --username 'pulse-pro'; echo injected",
+    "docker login 'unrelated.example.invalid' --username 'pulse-pro'",
+    "docker login 'license.pulserelay.pro$(echo injected)' --username 'pulse-pro'",
+    "docker login 'license.pulserelay.pro' --username 'ppk_live_SYNTHETIC_NOT_A_CREDENTIAL'",
     prompt + '; echo injected',
     prompt + '\necho injected',
     prompt + ' --password-stdin',

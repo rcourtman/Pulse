@@ -10776,3 +10776,12 @@ controls. Keeping them in the shared Updates helper retained the new strings in
 the constrained Updates chunk despite a dynamic component import. The extraction
 preserves the function/constant bytes and existing presentation controls, rather
 than increasing the budget or changing any offer, reason or command contract.
+
+### Quoted registry compatibility (20 October 2026)
+
+The two existing paid Docker guides accept the current paired-single-quoted
+registry host as well as the recognised legacy placeholder template. Both are
+rebuilt as a non-secret interactive Docker login after registry/image identity
+validation. Malformed quoting, injected suffixes, secrets and unrelated registry
+identities stay withheld without echo or a login copy action. The password note
+explains hidden input and Ctrl+C cancellation. Pull/up commands remain untouched.

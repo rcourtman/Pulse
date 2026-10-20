@@ -8,20 +8,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit, expect } = require('playwright/test');
 const root = '/workspace';
-const output = path.join(root, 'tmp/pro-registry-guidance');
-const binding = JSON.parse(fs.readFileSync(path.join(output, 'binding.json')));
+const outputRoot = path.join(root, 'tmp/pro-registry-guidance-final');
+const binding = JSON.parse(fs.readFileSync(path.join(outputRoot, 'binding.json')));
 const origin = 'http://127.0.0.1:5215';
 const digest = 'sha256:' + 'ab'.repeat(32);
 const image = 'license.pulserelay.pro/pulse-pro';
 const prompt = `docker login license.pulserelay.pro --username 'pulse-pro'`;
-// This mirrors the existing public manager_pro_update_test.go broker fixture
-// with an inert identity and digest. The prompt variant is a supported consumer
-// format, NOT proof of a returned/released producer repair.
+// Only the login field below is the owner-returned producer value. The other
+// public endpoint fields remain synthetic: this is not a full handler wire or
+// proof of the pending pinned-image server reader repair.
 const legacy = "printf '%s' '<activation-key>' | docker login license.pulserelay.pro -u 'pulse-pro' --password-stdin";
+const producer = JSON.parse(fs.readFileSync(path.join(outputRoot, 'producer-command.json')));
+assert.equal(producer.command, "docker login 'license.pulserelay.pro' --username 'pulse-pro'");
 const marker = 'ppk_live_SYNTHETIC_NOT_A_CREDENTIAL';
 const cases = [
   ['legacy', legacy, true],
-  ['prompt-contract', prompt, true],
+  ['producer-command', producer.command, true],
   ['secret-rejected', legacy.replace('<activation-key>', marker), false],
   ['missing', undefined, false],
 ];
@@ -30,12 +32,16 @@ const baseDocker = {
   composePullCommand: `PULSE_IMAGE='${image}@${digest}' docker compose pull`,
   composeUpCommand: `PULSE_IMAGE='${image}@${digest}' docker compose up -d`,
 };
-const report = { binding, playwright: require('playwright/package.json').version, cases: [], captures: [], cleanup: {} };
+module.exports = async (profile) => {
+assert.ok(['desktop', 'phone'].includes(profile), 'select one bounded viewport');
+const output = path.join(outputRoot, profile);
+const report = { binding, producer, profile, startedAt: new Date().toISOString(), playwright: require('playwright/package.json').version, cases: [], captures: [], cleanup: {} };
 let server, browser;
+const save = (phase) => { report.phase = phase; fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n'); }; 
 const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
-(async () => {
   fs.mkdirSync(output, { recursive: true });
+  save('preparing-preview');
   const { createServer } = await import(path.join(root, 'frontend-modern/node_modules/vite/dist/node/index.js'));
   server = await createServer({
     root: path.join(root, 'frontend-modern'),
@@ -44,17 +50,21 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
   });
   try {
     await server.listen();
+    save('preview-listening');
     for (const [engine, label, viewport] of [
       [chromium, 'desktop', { width: 1365, height: 900 }],
       [webkit, 'phone', { width: 320, height: 844 }],
-    ]) {
+    ].filter(([, label]) => label === profile)) {
       browser = await engine.launch(label === 'desktop'
         ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] }
         : { headless: true });
+      report.browserVersion = browser.version();
+      save('browser-launched');
       const context = await browser.newContext({ viewport, hasTouch: label === 'phone' });
       for (const mode of ['switch', 'update']) for (const [variant, loginCommand, recognised] of cases) {
         const result = { browser: label, browserVersion: browser.version(), viewport, mode, variant, requests: [], unexpected: [], errors: [] };
         report.cases.push(result);
+        save('case-started');
         const docker = { ...baseDocker, loginCommand };
         const page = await context.newPage();
         page.on('pageerror', (error) => result.errors.push(error.message));
@@ -106,6 +116,7 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
           await expect(guide).toContainText(prompt);
           await expect(guide).toContainText('At Docker’s Password prompt');
           await expect(guide).toContainText('Input is hidden.');
+          await expect(guide).toContainText('Ctrl+C cancels.');
         } else if (loginCommand) {
           await expect(guide).toContainText('could not be checked safely');
           await expect(guide).toContainText('https://pulserelay.pro/download.html');
@@ -149,7 +160,7 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
         }
         result.readingGeometryChecked = true;
         assert.equal(await page.getByTestId('settings-dirty').innerText(), 'saved');
-        if (variant === 'legacy' || variant === 'secret-rejected') {
+        if (variant === 'legacy' || variant === 'producer-command' || variant === 'secret-rejected') {
           await guide.scrollIntoViewIfNeeded();
           await page.waitForFunction(() => document.getAnimations().length === 0);
           const file = `${label}-${mode}-${variant}.png`;
@@ -164,19 +175,25 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
         assert.deepEqual(result.errors, []);
         assert.deepEqual(result.unexpected, []);
         await page.close();
+        result.completed = true;
+        save('case-complete');
       }
-      await context.close(); await browser.close(); browser = undefined;
+      await context.close(); report.cleanup.contextClosed = true;
+      await browser.close(); report.cleanup.browserClosed = true; browser = undefined;
+      save('browser-closed');
     }
+    assert.equal(report.cases.length, 8);
+    assert.ok(report.cases.every((c) => c.completed));
     report.result = 'passed';
   } catch (error) {
     report.result = 'failed'; report.error = error.stack;
     throw error;
   } finally {
-    if (browser) await browser.close();
-    report.cleanup.browserClosed = true;
+    if (browser) { await browser.close(); report.cleanup.browserClosedAfterFailure = true; }
     if (server) await server.close();
     report.cleanup.serverClosed = true;
-    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n');
+    report.finishedAt = new Date().toISOString();
+    save('complete');
     console.log(JSON.stringify(report));
   }
-})().catch((error) => { console.error(error); process.exitCode = 1; });
+};
