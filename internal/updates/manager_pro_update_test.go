@@ -119,7 +119,7 @@ func defaultBrokerDockerBlock(version string) map[string]any {
 	pinnedRef := "registry.pulserelay.pro/pulse/pulse-pro@" + digest
 	return map[string]any{
 		"registry":             "registry.pulserelay.pro",
-		"image":                "registry.pulserelay.pro/pulse/pulse-pro",
+		"image":                pinnedRef,
 		"tag":                  "v" + strings.TrimPrefix(version, "v"),
 		"image_digest":         digest,
 		"login_command":        "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_test' --password-stdin",
@@ -310,7 +310,10 @@ func TestCheckProUpdatesDockerCommands(t *testing.T) {
 		if cmds.Version != "v6.0.5" {
 			t.Fatalf("DockerUpdate.Version = %q, want v6.0.5", cmds.Version)
 		}
-		pinnedRef := cmds.Image + "@" + cmds.ImageDigest
+		pinnedRef := "registry.pulserelay.pro/pulse/pulse-pro@" + cmds.ImageDigest
+		if cmds.Image != pinnedRef {
+			t.Fatalf("DockerUpdate.Image = %q, want the broker's pinned ref %q", cmds.Image, pinnedRef)
+		}
 		if !strings.Contains(cmds.ComposePullCommand, pinnedRef) || !strings.Contains(cmds.ComposeUpCommand, pinnedRef) {
 			t.Fatalf("compose commands must reference the digest-pinned image %q, got pull=%q up=%q", pinnedRef, cmds.ComposePullCommand, cmds.ComposeUpCommand)
 		}
