@@ -68,11 +68,18 @@ type Reply func(*http.Request, []byte) (int, string)
 // Pipe replaces only the production Transport's dialer. The Transport still
 // selects direct versus proxy routing and performs real HTTP and TLS. Each
 // response closes its owned pipe so fixtures cannot hide pooled requests.
+// Observations follow dial order, not response-goroutine completion order: a
+// client can start its form fallback before the JSON response writer resumes.
 func Pipe(t *testing.T, transport *http.Transport, certificate *tls.Certificate, reply Reply) func() Observation {
 	t.Helper()
-	observations := make(chan Observation, 16)
+	observations := make(chan chan Observation, 16)
 	transport.DialContext = func(_ context.Context, _, address string) (net.Conn, error) {
 		client, server := net.Pipe()
+		// Reserve the request's position before allowing its response to complete.
+		// Keep a separate result channel so parse, TLS and write errors still reach
+		// the caller only after that pipe's complete observation is available.
+		result := make(chan Observation, 1)
+		observations <- result
 		deadline := time.Now().Add(3 * time.Second)
 		if err := client.SetDeadline(deadline); err != nil {
 			t.Error(err)
@@ -82,7 +89,7 @@ func Pipe(t *testing.T, transport *http.Transport, certificate *tls.Certificate,
 		}
 		go func() {
 			got := Observation{Address: address}
-			defer func() { _ = server.Close(); observations <- got }()
+			defer func() { _ = server.Close(); result <- got }()
 			var wire net.Conn = server
 			reader := bufio.NewReader(wire)
 			if certificate != nil {
@@ -131,13 +138,19 @@ func Pipe(t *testing.T, transport *http.Transport, certificate *tls.Certificate,
 	t.Cleanup(transport.CloseIdleConnections)
 	return func() Observation {
 		t.Helper()
+		timer := time.NewTimer(4 * time.Second)
+		defer timer.Stop()
 		select {
-		case got := <-observations:
-			return got
-		case <-time.After(4 * time.Second):
-			t.Fatal("missing pipe observation")
-			return Observation{}
+		case result := <-observations:
+			select {
+			case got := <-result:
+				return got
+			case <-timer.C:
+			}
+		case <-timer.C:
 		}
+		t.Fatal("missing pipe observation")
+		return Observation{}
 	}
 }
 
