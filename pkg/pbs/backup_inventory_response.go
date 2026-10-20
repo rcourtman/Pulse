@@ -157,7 +157,12 @@ func readBackupSnapshots(resp *http.Response, backupType, backupID string) ([]Ba
 // Use the same complete-body admission as the resulting group/snapshot lists.
 func readBackupNamespaces(resp *http.Response) ([]Namespace, error) {
 	seen := make(map[string]bool)
-	namespaces, err := readBackupInventory(resp, []string{"ns", "path", "name", "parent"}, func(fields map[string]json.RawMessage, namespace Namespace) bool {
+	namespaces, err := readBackupInventory(resp, []string{"ns", "path", "name", "parent"}, func(fields map[string]json.RawMessage, _ Namespace) bool {
+		// These are compatibility spellings for the collection path, not
+		// independent scopes. An explicit root is an identity too: do not
+		// silently fall through from ns:"" to a different path/name. Doing so
+		// can certify a complete scan that never visited a retained namespace.
+		var path string
 		identified := false
 		for _, key := range []string{"ns", "path", "name"} {
 			if raw, ok := fields[key]; ok {
@@ -165,18 +170,15 @@ func readBackupNamespaces(resp *http.Response) ([]Namespace, error) {
 				if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &text) != nil {
 					return false
 				}
+				if text == "/" {
+					text = ""
+				}
+				if identified && text != path {
+					return false
+				}
+				path = text
 				identified = true
 			}
-		}
-		path := namespace.NS
-		if path == "" {
-			path = namespace.Path
-		}
-		if path == "" {
-			path = namespace.Name
-		}
-		if path == "/" {
-			path = ""
 		}
 		if !identified || seen[path] {
 			return false

@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### PBS namespace aliases cannot select conflicting collection scopes
+
+Every supplied namespace identity (`ns`, `path`, or legacy `name`) must be a
+string and identify the same collection path. Only the existing root spellings
+`""` and `"/"` are equivalent; path case and whitespace remain significant.
+Missing aliases retain compatibility, but an explicit empty/root alias cannot
+silently defer to a different non-root alias. A conflict makes the entire
+namespace discovery unavailable, not an authoritative empty or complete list.
+Last-known nested artifacts and their original cache age are retained under
+partial protection evidence. Root and sibling datastore reads remain independent;
+cached namespace paths are not probed after failed discovery. A subsequent
+ordinary complete read can renew the exact scope, and genuine empty inventories
+still reconcile absence. Credentials, TLS policy and request cadence are unchanged.
+
+`TestPBSNamespaceInventoryAdmission` covers alias agreement, explicit roots,
+case-distinct paths, existing complete-body/cleanup/privacy bounds and legacy
+compatibility. `TestPBSNamespaceIdentityLifecycle` follows pinned synthetic TLS
+through ordinary foreground/background collection, cached artifacts, stored
+protection and served resources: repeated conflicts retain evidence without
+claiming health, a readable sibling advances, another connection is untouched,
+equivalent/legacy aliases recover, and empty/restored inventory reconciles safely.
+Its real observations feed the existing Backups/Coverage consumer at desktop and
+narrow widths. These are source/consumer proofs, not installed PBS recovery,
+backup usability, guest thaw or published availability.
+
 ### Ambiguous PBS live-writer identities cannot certify idle backups
 
 The live backup/sync task reader admits compatibility aliases for worker type

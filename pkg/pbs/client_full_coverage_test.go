@@ -541,16 +541,16 @@ func TestClient_ListNamespaces(t *testing.T) {
 		}
 		if r.FormValue("ns") == "parent" && r.FormValue("max-depth") == "2" {
 			json.NewEncoder(w).Encode(map[string]any{
-				"data": []Namespace{
-					{Name: "child"},
+				"data": []map[string]string{
+					{"name": "child"},
 				},
 			})
 			return
 		}
 		// Default
 		json.NewEncoder(w).Encode(map[string]any{
-			"data": []Namespace{
-				{Name: "ns1"},
+			"data": []map[string]string{
+				{"name": "ns1"},
 			},
 		})
 	})
