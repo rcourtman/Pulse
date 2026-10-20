@@ -1,10 +1,10 @@
 import type { DockerUpdateCommands } from '@/api/updates';
 
 export const PRO_REGISTRY_PASSWORD_NOTE =
-  'Run this command in an interactive terminal. At Docker’s Password prompt, enter your activation key from Settings → License. Input is hidden. Do not put the key in a command or paste it at the shell prompt. Docker may save it in its configured credential store.';
+  'Run in an interactive terminal. At Docker’s Password prompt, enter the activation key from Settings → License. Input is hidden. Never put the key in a shell command. Docker may store it locally.';
 
 const UNRECOGNISED_LOGIN_NOTE =
-  'Registry sign-in instructions could not be checked safely. Use Private Release Access (https://pulserelay.pro/download.html) for sign-in guidance. Do not put your activation key in a shell command.';
+  'Registry sign-in instructions could not be checked safely. See https://pulserelay.pro/download.html for updated guidance. Never put your activation key in a shell command.';
 
 // Never render or copy arbitrary broker login text. In particular, old brokers
 // put a key placeholder in printf: substituting it records the key in shell
