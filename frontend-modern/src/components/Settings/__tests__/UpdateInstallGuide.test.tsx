@@ -200,11 +200,17 @@ describe('UpdateInstallGuide', () => {
     isMajorUpgrade: false,
   };
 
-  it('shows the broker digest-pinned commands for a Pro docker install, never the community image', () => {
+  it.each([
+    dockerUpdate.loginCommand,
+    "docker login 'registry.pulserelay.pro' --username 'lic_test'",
+  ])('shows safe login and broker digest-pinned Pro commands: %s', (loginCommand) => {
     render(() => (
       <UpdateInstallGuide
         versionInfo={dockerVersionInfo}
-        updateInfo={{ ...availableDockerUpdateInfo, dockerUpdate }}
+        updateInfo={{
+          ...availableDockerUpdateInfo,
+          dockerUpdate: { ...dockerUpdate, loginCommand },
+        }}
         updatePlan={dockerUpdatePlan}
         isInstalling={false}
         dockerImageTag="v6.0.5"

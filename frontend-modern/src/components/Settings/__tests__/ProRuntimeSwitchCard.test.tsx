@@ -217,6 +217,7 @@ describe('ProRuntimeSwitchCard', () => {
   it.each([
     "printf '%s' '<activation-key>' | docker login license.pulserelay.pro -u 'pulse-pro' --password-stdin",
     "docker login license.pulserelay.pro --username 'pulse-pro'",
+    "docker login 'license.pulserelay.pro' --username 'pulse-pro'",
     "printf '%s' 'ppk_live_SYNTHETIC_NOT_A_CREDENTIAL' | docker login license.pulserelay.pro -u 'pulse-pro' --password-stdin",
   ])('never renders a key-substitution command: %s', async (loginCommand) => {
     mockCheck.mockResolvedValue({
