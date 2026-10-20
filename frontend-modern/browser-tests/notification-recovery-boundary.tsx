@@ -12,6 +12,7 @@ import '../src/index.css';
 function Fixture() {
   const [email, setEmail] = createSignal<UIEmailConfig>({
     enabled: false,
+    provider: 'smtp',
     server: '',
     port: 587,
     from: '',

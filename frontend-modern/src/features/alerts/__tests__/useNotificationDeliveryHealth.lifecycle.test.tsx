@@ -170,7 +170,7 @@ describe('notification recovery view lifetime', () => {
       vi.mocked(NotificationsAPI.retryTerminalFailures).mockRejectedValueOnce(new Error('failed'));
       await state.retryTerminalFailures();
       const feedback = state.queueActionFeedback();
-      expect(feedback).toMatch(/^Unable to/);
+      expect(feedback).toMatch(/^(Retry|Dismissal) could not be confirmed\./);
       dispose();
       state.clearQueueActionFeedback();
       expect(state.queueActionFeedback()).toBe(feedback);

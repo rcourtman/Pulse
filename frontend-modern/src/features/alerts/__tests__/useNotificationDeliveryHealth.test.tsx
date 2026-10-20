@@ -310,7 +310,7 @@ describe('useNotificationDeliveryHealth', () => {
             await state.loadDeliveryHealth();
             await state[action]();
             const failure = state.queueActionFeedback();
-            expect(failure).toMatch(/^Unable to/);
+            expect(failure).toMatch(/^(Retry|Dismissal) could not be confirmed\./);
             await vi.advanceTimersByTimeAsync(11000);
             vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthWith('healthy'));
             await state.loadDeliveryHealth();
@@ -399,7 +399,8 @@ describe('useNotificationDeliveryHealth', () => {
               rejectOld(new Error('old activity failed'));
               await pending;
               expect(state.queueActionFeedback()).toBe(current);
-              if (next === 'newer') expect(current).toMatch(/^Unable to/);
+              if (next === 'newer')
+                expect(current).toMatch(/^(Retry|Dismissal) could not be confirmed\./);
             } finally {
               confirmSpy.mockRestore();
               dispose();

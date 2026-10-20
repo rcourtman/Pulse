@@ -233,7 +233,9 @@ let browser, context;
       const incomplete =
         'Some delivery attempts could not be read. This activity list is incomplete. Refresh to check again.';
       const capture = async (state) => {
-        await card.scrollIntoViewIfNeeded();
+        // Partial/recovered captures show activity. The unconfirmed capture
+        // must show the recovery message itself, especially at 320px.
+        await (state === 'unconfirmed' ? feedback : card).scrollIntoViewIfNeeded();
         const file = `${name}-${state}.png`;
         await page.screenshot({ path: path.join(output, file), animations: 'disabled' });
         report.captures.push({

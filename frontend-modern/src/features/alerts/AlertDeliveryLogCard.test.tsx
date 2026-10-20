@@ -123,9 +123,9 @@ describe('AlertDeliveryLogCard', () => {
     },
   );
 
-  it.each([[], log.entries])(
+  it.each([{ entries: [] }, { entries: log.entries }])(
     'names incomplete evidence without hiding readable rows: %j',
-    (entries) => {
+    ({ entries }) => {
       const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>({
         ...log,
         entries,
