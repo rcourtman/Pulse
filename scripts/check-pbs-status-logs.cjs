@@ -15,8 +15,12 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
   const frames = JSON.parse(producerBytes);
   const source = JSON.parse(fs.readFileSync(path.join(out, 'source.json')));
   const binding = JSON.parse(fs.readFileSync(path.join(staticRoot, 'binding.json')));
-  assert.equal(source.head, source.producerSource);
-  assert.equal(source.head, binding.source);
+  assert.match(source.head, /^[0-9a-f]{40}$/);
+  assert.equal(source.producerSource, binding.source);
+  assert.equal(source.compilerSource, binding.source);
+  assert.equal(source.browserHelperSHA256, hash(fs.readFileSync(__filename)));
+  for (const [name, digest] of Object.entries(source.producerFiles))
+    assert.equal(hash(fs.readFileSync(name)), digest, 'producer input differs from proved containing source');
   assert.equal(source.producerSHA256, hash(producerBytes));
   for (const [name, digest] of Object.entries(binding.compiledSources)) {
     if (name.startsWith('tmp/')) continue; // Generated harness is bound separately.
@@ -52,6 +56,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
         req.on('data', bytes => body += bytes);
         req.on('end', () => {
           assert.deepEqual(JSON.parse(body), {level:'debug'});
+          assert.equal(req.headers['x-csrf-token'], 'fixture-csrf');
           level = 'debug'; res.end();
           for (const phase of ['node','status','gc','malformed']) emit(phase);
         });
@@ -80,6 +85,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
     for (const width of [1440,320]) {
       level = 'info';
       const context = await browser.newContext({viewport:{width,height:1100},hasTouch:width===320,colorScheme:width===320?'dark':'light'});
+      await context.addCookies([{ name:'pulse_csrf', value:'fixture-csrf', url:origin, sameSite:'Strict' }]);
       const page = await context.newPage();
       await page.addInitScript(dark => { document.addEventListener('DOMContentLoaded',()=>document.documentElement.classList.toggle('dark',dark)); }, width===320);
       const errors = [], consoleErrors = [], requestFailures = [], overflows = [], captures = [];
@@ -101,7 +107,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       };
       const capture = async name => { await check(name); await page.screenshot({path:path.join(out,`${width}-${name}.png`),fullPage:true}); captures.push(`${width}-${name}.png`); };
       const activate = async button => { if(width===320)await button.tap(); else{await button.focus();await button.press('Enter');} };
-      await page.goto(origin+'/',{waitUntil:'networkidle'});
+      await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
       await logRows.first().waitFor();
       assert.equal(await logRows.count(),1);
       assert((await logRows.first().innerText()).includes('Failed to parse datastore status'));
