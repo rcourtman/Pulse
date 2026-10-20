@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2d2590109090b6e0dfe647e8aaf0b56aa04156bd",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/components/shared/cards/RaidCard.tsx",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts",
+    "frontend-modern/src/utils/guestHardwareObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "740e2d0510d0189b3727cb3e015ae166184f0a92a103a6d4614519c1e8d4370a",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "1a28469e1a21b36fbaaa4de7c6c3a7059691e9a7346f79f55bf9d436805848ef",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "19890730b34c318ad6296e247f57f7c022fb9c40751a62a75d98e1e5a188e3b5",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "ce11eebd569486d63fc31b0e23374b48ae6712d8328d4794fafebced975c0cbc",
+    "frontend-modern/src/components/shared/cards/RaidCard.tsx": "9ced0d1e30b5605fb6ac1e3c02d0bd85d80072106d10c58bb610c61b2d43aa28",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "a2a7564ee54f8f9185d53c32402fb62ccf62ebd72fce9b6b9b7d9e0e53e8d0a8",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts": "28df6eea2018d645578a1490b3f444fbd9edddd4471271555ea448dcefd8cc1b",
+    "frontend-modern/src/utils/guestHardwareObservation.ts": "1aec3d2768154d5a89bf1d13c510b4b8dbdbbfb9cf207f49ca2bfba6ad9807c0"
+  },
+  "routes": [
+    "/browser-tests/guest-hardware-observation.html (production canonical merger, Workloads mapper, full GuestDrawer, scoped physical-disk HTTP reader, SMART/RAID and CSS)"
+  ],
+  "states": [
+    "Paused, suspended, stopped/offline Proxmox VMs retain unexpired agent reports without current RAID, SMART health, temperature or live I/O claims. Raw online status and report time remain unchanged.",
+    "Stored disk History, same-open owner, adverse counters and faulty RAID members remain available; separately stale disk risk survives native running state. A replacement current source restores a changed measurement.",
+    "Expired in-guest agent versus independently current API-only disk, container and unknown native-state controls remain distinct."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow WebKit touch expand the native disk disclosure and keep it open across canonical power and scoped HTTP inventory replacements.",
+    "The same disk owner and selected History range survive qualification, source risk and recovery; native power-only updates do not add a disk read or guest probe.",
+    "Twenty-four cases pass with no page errors. Eleven desktop and one WebKit History request cancellations match exact-URL observed client AbortSignals; unmatched and non-abort failures remain fatal."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-20T15:28:55.462503Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All eight final captures were opened with native view_image in this source turn. Desktop light and 320px dark SMART labels and complete qualification wrap without horizontal overflow. Paused readings and RAID/member/rebuild evidence are muted and explicitly last known, while stored charts and pending-sector 8 remain readable. The RAID reason is visible without hover. Browser, both contexts and both browsers report closure.",
+  "driver": "frontend-modern/browser-tests/guest-hardware-observation.cjs",
+  "binding": "Source-2dq76ojd at ce7192c0 passes 410 checks, types, lint, production build/embed and budgets. Runtime and compiler inputs remain unchanged. Source-coteghv5 compiled at 3dd422a5; its immutable binding is preserved. Final 2d259010 driver has a separate exact execution binding, with all 2570 non-driver source hashes and ten compiled artifact hashes rechecked. No old compile or browser result is relabelled.",
+  "limits": "Synthetic read-only consumer proof, not native disk health, backup success, guest thaw, filesystem liveness, installed recovery, publication or release acceptance. Earlier incomplete fixture/browser results and the initial narrow timeout remain retained; its cause is unknown."
+}
