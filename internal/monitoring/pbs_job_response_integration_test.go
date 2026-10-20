@@ -253,8 +253,14 @@ func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 		if writerReads.Load()-beforeWriters != wantReads {
 			t.Errorf("%s: unexpected writer retry/read count", p)
 		}
-		if p != "active" && snapshotReads.Load() != beforeSnapshots {
-			t.Errorf("%s: unchanged snapshot cache was refetched", p)
+		// Incomplete groups deliberately refresh on every ordinary poll; only
+		// the completed sibling can use its unchanged snapshot cache.
+		wantSnapshotReads := int32(1)
+		if p == "active" {
+			wantSnapshotReads = 2
+		}
+		if snapshotReads.Load()-beforeSnapshots != wantSnapshotReads {
+			t.Errorf("%s: snapshot reads=%d want=%d (live target, cached sibling)", p, snapshotReads.Load()-beforeSnapshots, wantSnapshotReads)
 		}
 		incompleteCount := 0
 		for _, backup := range snapshot.PBSBackups {
