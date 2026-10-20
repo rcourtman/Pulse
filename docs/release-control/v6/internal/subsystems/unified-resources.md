@@ -764,6 +764,15 @@ not retain a former target's identification while the next read is pending.
 Availability fleet selection stores an ID, not a clicked snapshot: the open
 drawer resolves that ID in the current fleet. Removing the selected check
 closes and clears its selection, including when the ID subsequently reappears.
+Explicit tile activation must reveal the inline detail heading and focus its
+labelled group, with expanded/controlled relationships exposed on the tile.
+Collapse returns to the current same-ID tile; live replacements retain History,
+active tabs and focus without another scroll. A removed focused detail returns
+to a surviving neighbour, or to search/Add-check when its parent becomes empty.
+Outside controls and page-unmount focus stay untouched. This fifty-check
+navigation contract is exercised by AvailabilityFleetView.test.tsx and the
+bounded desktop/320px fleet-details browser profiles, using the preserved
+source-n3h389mz History output; no live probe or target mutation is needed.
 
 ResourceDetailDrawer.snapshot.test.tsx covers immutable and reconciled-store
 updates, target withdrawal/restoration, current availability and late facet
