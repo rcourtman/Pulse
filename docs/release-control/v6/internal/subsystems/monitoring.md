@@ -30,7 +30,10 @@ error. No arbitrary provider fields are copied into that error or diagnostic.
 Ordinary and legacy capacity names, positive used+available total inference,
 reserved filesystem space, explicit empty counters, status values and status/RRD/GC
 dedup precedence remain supported. Integer byte counters are decoded without
-float64 rounding. A rejected status is local to its datastore: the server stays
+float64 rounding. After the existing modern/legacy fallback and total inference,
+used plus available must not exceed total; a smaller sum still allows reserved
+space. The comparison must not add potentially overflowing int64 counters.
+A rejected status is local to its datastore: the server stays
 reachable when its connection reads succeeded, readable siblings advance, excluded
 stores are not queried, and the ordinary next valid read recovers availability.
 A missing observation cannot clear an existing capacity incident; a genuine low
@@ -38,7 +41,8 @@ or empty reading can. This is not a backup archive, verification or thaw claim.
 
 `TestPBSDatastoreStatusAdmission` covers the public client, response cleanup,
 malformed/valid controls, precision, bounded private diagnostics and request
-selection. `TestPBSDatastoreStatusAdmissionLifecycle` joins pinned synthetic TLS,
+selection, including combined-counter and int64-boundary controls.
+`TestPBSDatastoreStatusAdmissionLifecycle` joins pinned synthetic TLS,
 ordinary collection, datastore/storage projection, alert continuity and canonical
 presentation. Its emitted resources feed the actual Backups and Storage consumers
 at desktop and narrow sizes. Neither source nor browser fixtures establish

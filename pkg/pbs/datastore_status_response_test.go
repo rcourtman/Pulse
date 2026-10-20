@@ -45,6 +45,12 @@ func TestPBSDatastoreStatusAdmission(t *testing.T) {
 		{"confirmed-empty", `{"data":{"total":1000,"used":0,"avail":1000}}`, true},
 		{"explicit-zero", `{"data":{"total":0,"used":0,"avail":0}}`, true},
 		{"integer-precision", `{"data":{"total":9007199254740993,"used":1,"avail":9007199254740992}}`, true},
+		{"maximum-total", `{"data":{"total":9223372036854775807,"used":9223372036854775806,"avail":1}}`, true},
+		{"maximum-reserved", `{"data":{"total":9223372036854775807,"used":1,"avail":1}}`, true},
+		{"maximum-empty", `{"data":{"total":9223372036854775807,"used":0,"avail":9223372036854775807}}`, true},
+		{"maximum-full", `{"data":{"total":9223372036854775807,"used":9223372036854775807,"avail":0}}`, true},
+		{"legacy-confirmed-empty", `{"data":{"total-space":1000,"used-space":0,"avail-space":1000}}`, true},
+		{"legacy-explicit-zero", `{"data":{"total-space":0,"used-space":0,"avail-space":0}}`, true},
 		{"status-dedup", `{"data":{"total":1000,"used":600,"avail":350,"status":" read_only ","gc-status":" idle ","deduplication_factor":3,"deduplication-factor":4}}`, true},
 		{"missing-data", `{"message":"private-status-provider-body"}`, false},
 		{"null-data", `{"data":null}`, false},
@@ -65,6 +71,10 @@ func TestPBSDatastoreStatusAdmission(t *testing.T) {
 		{"inferred-overflow", `{"data":{"used":9223372036854775807,"avail":1}}`, false},
 		{"used-exceeds-total", `{"data":{"total":1000,"used":1001,"avail":0}}`, false},
 		{"available-exceeds-total", `{"data":{"total":1000,"used":1,"avail":1001}}`, false},
+		{"combined-exceeds-total", `{"data":{"total":1000,"used":1,"avail":1000}}`, false},
+		{"legacy-combined-exceeds-total", `{"data":{"total-space":1000,"used-space":1,"avail-space":1000}}`, false},
+		{"mixed-combined-exceeds-total", `{"data":{"total":1000,"used":0,"used-space":1,"avail":1000}}`, false},
+		{"combined-overflow", `{"data":{"total":9223372036854775807,"used":9223372036854775807,"avail":1}}`, false},
 		{"wrong-status", `{"data":{"total":1000,"used":1,"avail":999,"status":42}}`, false},
 		{"null-status", `{"data":{"total":1000,"used":1,"avail":999,"status":null}}`, false},
 		{"bad-dedup", `{"data":{"total":1000,"used":1,"avail":999,"deduplication-factor":"private-status-provider-body"}}`, false},
@@ -136,7 +146,7 @@ func TestPBSDatastoreStatusAdmission(t *testing.T) {
 				if tc.name == "status-dedup" && (target.Status != "read_only" || target.GCStatus != "idle" || target.DeduplicationFactor != 4) {
 					t.Error("status/dedup precedence changed")
 				}
-			} else if target.Status != "unavailable" || target.Error == "" || target.Total != 0 || target.Used != 0 || target.Avail != 0 || target.DeduplicationFactor != 0 {
+			} else if target.Status != "unavailable" || target.Error == "" || target.Total != 0 || target.Used != 0 || target.Avail != 0 || target.TotalSpace != 0 || target.UsedSpace != 0 || target.AvailSpace != 0 || target.DeduplicationFactor != 0 {
 				t.Errorf("invalid capacity became a measurement: %s", tc.name)
 			}
 			if stores[1].Status != "available" || stores[1].Total != 1000 || stores[1].Used != 600 || stores[1].DeduplicationFactor != 2 {

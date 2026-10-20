@@ -83,7 +83,10 @@ func decodeDatastoreStatus(body []byte) (Datastore, bool, error) {
 	}
 	_, totalPresent := fields["total"]
 	_, totalLegacy := fields["total-space"]
-	if (!totalPresent && !totalLegacy && total == 0) || used > total || avail > total {
+	// Reserved space may make used+available smaller than total, never larger.
+	// Subtract only after bounding available, so neither the comparison nor
+	// its intermediate values can overflow even at the int64 capacity limit.
+	if (!totalPresent && !totalLegacy && total == 0) || avail > total || used > total-avail {
 		return fail()
 	}
 	hasDedup := false

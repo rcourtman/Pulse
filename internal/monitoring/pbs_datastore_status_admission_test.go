@@ -34,10 +34,15 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 		`{"data":{"total":1073741824,"used":1020054732,"used":0,"avail":1073741824}}`,
 		`{"data":{"total":1073741824,"avail":1073741824}}`,
 		`{"data":{"total":1073741824,"used":0,"avail":1073741824},"errors":{"private":"private-status-provider-body"}}`,
+		`{"data":{"total":1073741824,"used":1,"avail":1073741824}}`,
+		`{"data":{"total-space":1073741824,"used-space":1,"avail-space":1073741824}}`,
+		`{"data":{"total":1073741824,"used":0,"used-space":1,"avail":1073741824}}`,
+		`{"data":{"total":9223372036854775807,"used":9223372036854775807,"avail":1}}`,
 		`{"data":{"total-space":1073741824,"used-space":268435456,"avail-space":805306368}}`,
 		`{"data":{"total":1073741824,"used":0,"avail":1073741824}}`,
 	}
-	labels := []string{"high", "null", "duplicate", "missing", "errors", "recovered", "empty"}
+	labels := []string{"high", "null", "duplicate", "missing", "errors", "combined", "legacy-combined", "mixed-combined", "combined-overflow", "recovered", "empty"}
+	recoveredPhase := len(labels) - 2
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
 		require.Equal(t, "PBSAPIToken=fixture@pbs!reader:fixture-only", r.Header.Get("Authorization"))
@@ -89,11 +94,12 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 			require.Len(t, instance.Datastores, 2)
 			target := instance.Datastores[0]
 			require.Equal(t, "archive", target.Name)
-			if i > 0 && i < 5 {
+			if i > 0 && i < recoveredPhase {
 				require.Equal(t, "unavailable", target.Status, "malformed success cannot clear datastore unavailability")
 				require.NotEmpty(t, target.Error)
 				require.Zero(t, target.Total)
 				require.Zero(t, target.Used)
+				require.Zero(t, target.Free)
 			} else {
 				require.Equal(t, "available", target.Status)
 				require.Empty(t, target.Error)
@@ -121,7 +127,7 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 					}
 				}
 			}
-			require.Equal(t, i < 5, usageFound, "only real low/empty readings may recover capacity")
+			require.Equal(t, i < recoveredPhase, usageFound, "only real low/empty readings may recover capacity")
 			// Ordinary monitoring replaces the registry generation. Reusing a raw
 			// Registry would incorrectly carry old incidents/metrics into this
 			// fixture's next full snapshot, unlike MonitorAdapter's real path.
@@ -129,9 +135,9 @@ func TestPBSDatastoreStatusAdmissionLifecycle(t *testing.T) {
 			resources := registry.GetAll()
 			for _, resource := range resources {
 				if resource.Type == unifiedresources.ResourceTypeStorage && resource.Name == "archive" {
-					if i > 0 && i < 5 {
+					if i > 0 && i < recoveredPhase {
 						require.Equal(t, unifiedresources.StatusOffline, resource.Status)
-					} else if i >= 5 {
+					} else if i >= recoveredPhase {
 						require.Equal(t, unifiedresources.StatusOnline, resource.Status)
 						require.Empty(t, resource.Incidents, "ordinary full recovery must not inherit old datastore incidents")
 					}
