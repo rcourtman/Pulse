@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### PBS status diagnostics do not retain whole provider payloads
+
+Node-status and datastore-status diagnostics report bounded response lengths,
+not raw successful or malformed JSON bodies. Routine datastore/RRD/GC success
+records are Debug-only; a malformed status still emits its store, byte count and
+parse error at Error. The datastore diagnostic includes only the existing typed
+numeric measurements, never an arbitrary map of provider extension fields. This
+bounds new status log content independently of unknown payload size and reduces
+normal Info-level polling writes. Decoding, availability, returned errors, metric
+values and deduplication precedence, request selection/order, authentication and
+response closure remain unchanged.
+
+`TestPBSStatusDiagnostics` in `pkg/pbs/host_diagnostics_regression_test.go` covers
+Info/Debug node, RRD, status-override, GC-fallback and malformed status responses at
+two payload sizes, preserving exact metrics, selected requests and body closure.
+Its emitted real log lines feed the production `SystemLogsPanel` through
+`scripts/check-pbs-status-logs.cjs`; `scripts/build-pbs-status-logs-preview.cjs`
+binds its compiled modules and served artifacts before bounded browser execution.
+These controls establish only this source/consumer behaviour, not installed
+performance relief or incident recovery. Existing resource/authentication names,
+other endpoint errors and previously retained logs remain private; no global
+redaction or public-safe support bundle is claimed.
+
 ### PBS live-state slots belong to selected groups, not cache or response order
 
 The existing 5,000-row per-connection window reserves slots in descending

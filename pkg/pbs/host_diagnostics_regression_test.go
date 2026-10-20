@@ -2,9 +2,14 @@ package pbs
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -87,3 +92,161 @@ func TestClientConstructionHonoursContext(t *testing.T) {
 func TestClientCancelledAuthResponseOwnsErrorAndSession(t *testing.T) {
 	testClientCancelledAuthResponseOwnsErrorAndSession(t)
 }
+
+// Non-parallel: the production package logger is shared. All response bytes and
+// credentials here are synthetic; no PBS, listener or guest operation is used.
+func TestPBSStatusDiagnostics(t *testing.T) {
+	priorLogger, priorLevel := log.Logger, zerolog.GlobalLevel()
+	defer func() { log.Logger = priorLogger; zerolog.SetGlobalLevel(priorLevel) }()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	for _, level := range []zerolog.Level{zerolog.InfoLevel, zerolog.DebugLevel} {
+		for _, phase := range []string{"node", "rrd", "status", "gc", "malformed"} {
+			for _, size := range []int{1024, 1 << 20} {
+				t.Run(fmt.Sprintf("%s/%s/bytes=%d", level, phase, size), func(t *testing.T) {
+					const marker = "synthetic-provider-extension-"
+					private := marker + strings.Repeat("x", size)
+					payload := map[string]any{"total": 1000, "used": 600, "avail": 400,
+						"total-space": 900, "used-space": 500, "avail-space": 400,
+						"status": "available", "gc-status": "idle", "extension": map[string]any{"unknown": private}}
+					if phase == "node" {
+						payload = map[string]any{"cpu": 0.25, "memory": map[string]int{"used": 12, "total": 48}, "extension": private}
+					} else if phase == "status" {
+						payload["deduplication-factor"] = 4
+					}
+					bodyBytes, err := json.Marshal(map[string]any{"data": payload})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if phase == "malformed" {
+						bodyBytes = bodyBytes[:len(bodyBytes)-1]
+					}
+					var captured bytes.Buffer
+					log.Logger = zerolog.New(&captured).Level(level)
+					client, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "fixture@pbs!pulse", TokenValue: "fixture-token"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					var paths []string
+					closes := 0
+					client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+						if r.Method != http.MethodGet || r.Header.Get("Authorization") != "PBSAPIToken=fixture@pbs!pulse:fixture-token" {
+							t.Error("diagnostic change altered read-only token authentication")
+						}
+						paths = append(paths, r.URL.RequestURI())
+						body := string(bodyBytes)
+						switch r.URL.Path {
+						case "/api2/json/nodes/localhost/status":
+							if phase != "node" {
+								t.Error("unexpected node read")
+							}
+						case "/api2/json/admin/datastore":
+							body = `{"data":[{"store":"chosen"},{"store":"excluded"}]}`
+						case "/api2/json/admin/datastore/chosen/rrd":
+							body = `{"data":[{"time":1234,"dedup_factor":2.5}]}`
+							if phase == "gc" {
+								body = `{"data":[]}`
+							}
+						case "/api2/json/admin/datastore/chosen/status":
+						case "/api2/json/admin/datastore/chosen/gc":
+							if phase != "gc" {
+								t.Error("unexpected GC fallback")
+							}
+							body = `{"data":{"index-data-bytes":900,"disk-bytes":300}}`
+						default:
+							t.Error("unexpected request or excluded datastore read")
+						}
+						return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+							Body: &statusDiagnosticBody{Reader: strings.NewReader(body), closes: &closes}, Request: r}, nil
+					})
+					expectedPaths := []string{"/api2/json/nodes/localhost/status"}
+					if phase == "node" {
+						status, err := client.GetNodeStatus(context.Background())
+						if err != nil || status == nil || status.CPU != 0.25 || status.Memory.Used != 12 || status.Memory.Total != 48 {
+							t.Error("status diagnostics changed returned node measurements")
+						}
+					} else {
+						expectedPaths = []string{"/api2/json/admin/datastore", "/api2/json/admin/datastore/chosen/rrd?cf=AVERAGE&timeframe=hour", "/api2/json/admin/datastore/chosen/status"}
+						if phase == "gc" {
+							expectedPaths = append(expectedPaths, "/api2/json/admin/datastore/chosen/gc")
+						}
+						stores, err := client.GetDatastoresFiltered(context.Background(), func(name string) bool { return name == "chosen" })
+						if err != nil || len(stores) != 1 {
+							t.Fatalf("datastore reader failed: %v", err)
+						}
+						if phase == "malformed" {
+							if stores[0].Status != "unavailable" || !strings.Contains(stores[0].Error, "Failed to parse status:") {
+								t.Error("parse failure became available metrics")
+							}
+						} else {
+							dedup := 2.5
+							if phase == "status" {
+								dedup = 4
+							} else if phase == "gc" {
+								dedup = 3
+							}
+							want := Datastore{Store: "chosen", Total: 1000, Used: 600, Avail: 400, TotalSpace: 900, UsedSpace: 500, AvailSpace: 400, Status: "available", GCStatus: "idle", DeduplicationFactor: dedup}
+							if !reflect.DeepEqual(stores[0], want) {
+								t.Error("diagnostic change altered datastore fields or dedup precedence")
+							}
+						}
+					}
+					if !reflect.DeepEqual(paths, expectedPaths) || closes != len(paths) {
+						t.Errorf("request/cleanup changed: reads=%d closes=%d", len(paths), closes)
+					}
+					lines := []string{}
+					if captured.Len() > 0 {
+						lines = strings.Split(strings.TrimSuffix(captured.String(), "\n"), "\n")
+					}
+					leaked := strings.Contains(captured.String(), marker)
+					t.Logf("PBS_STATUS_DIAGNOSTICS level=%s phase=%s response_bytes=%d log_bytes=%d events=%d provider_extension_logged=%t", level, phase, len(bodyBytes), captured.Len(), len(lines), leaked)
+					if leaked {
+						t.Error("status diagnostic retained an unmodelled provider field")
+					}
+					if captured.Len() > 4096 {
+						t.Error("status diagnostic size scales with raw provider payload")
+					}
+					for _, line := range lines {
+						var event map[string]any
+						if err := json.Unmarshal([]byte(line), &event); err != nil {
+							t.Fatal("diagnostic is not a complete JSON event")
+						}
+						if _, ok := event["response"]; ok {
+							t.Error("raw response diagnostic remains")
+						}
+						if _, ok := event["all_fields"]; ok {
+							t.Error("unbounded datastore diagnostic remains")
+						}
+					}
+					if level == zerolog.InfoLevel {
+						want := 0
+						if phase == "malformed" {
+							want = 1
+						}
+						if len(lines) != want {
+							t.Errorf("routine polling produced %d info events; want %d parse failures only", len(lines), want)
+						}
+					}
+					if phase == "malformed" && (!strings.Contains(captured.String(), "Failed to parse datastore status") || !strings.Contains(captured.String(), `"store":"chosen"`)) {
+						t.Error("parse failure lost its actionable diagnostic")
+					}
+					// Bound actual producer frames for the consuming UI, without ever
+					// printing the synthetic oversized body or failed baseline dumps.
+					if size == 1024 && !leaked && captured.Len() <= 4096 && !t.Failed() {
+						frame, err := json.Marshal(map[string]any{"phase": phase, "level": level.String(), "lines": lines, "responseBytes": len(bodyBytes), "logBytes": captured.Len(), "requestPaths": paths, "closedBodies": closes})
+						if err != nil {
+							t.Fatal(err)
+						}
+						t.Logf("PBS_STATUS_LOG_FRAME %s", base64.StdEncoding.EncodeToString(frame))
+					}
+				})
+			}
+		}
+	}
+}
+
+type statusDiagnosticBody struct {
+	io.Reader
+	closes *int
+}
+
+func (b *statusDiagnosticBody) Close() error { *b.closes++; return nil }
