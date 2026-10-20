@@ -287,6 +287,36 @@ writer outside the newest-200 window; the observed-parent control keeps log
 expansion useful without full audit visibility. No installed recovery follows
 from these fixtures.
 
+### History backfill cannot change a live backup execution's identity
+
+A later History read may advance status and completion time only for the same
+opaque execution: UPID, bound node, guest/parent ID, PID, process start, start
+time and owner must agree. The live/recent-active merge and the live/History
+merge share `Task.SameExecutionIdentity`; a future task field participates by
+default rather than being silently ignored. Missing identity fields are not
+inferred from a UPID. Existing clients bind omitted node labels to request scope.
+
+Contradictory History retains the actual live task, independently observed tasks
+and report-only backfill, while marking History collection incomplete and
+withholding this scan's archive replacement authority. It cannot move a live
+failure to another guest or qualify a growing file as a completed restore point.
+Existing archive identity and age survive, independent snapshot/connection reads
+progress, and ordinary matching running/completed/empty reads recover without
+extra requests, changed caps, new permissions or provider mutations. Equivalent
+identity still permits the existing later outcome/completion update.
+
+`TestTaskSameExecutionIdentity` and `TestPVEBackupHistoryExecutionIdentity` cover
+identity fields, symmetric non-mutating comparison, both actual HTTP adapters,
+live failure retention, independent scope, report-only membership and ordinary
+completion compatibility. `TestPVEArchiveScanRejectsHistoryExecutionIdentity`
+joins both adapters to ordinary scan publication, repeated contradiction,
+unchanged archives/backup age/recovery mapping and independent snapshot progress.
+Its actual emitted frames feed both production Backups views through
+`scripts/check-pve-history-execution-identity.cjs` at desktop and 320px widths:
+read-only refresh, running/completed evidence, latest-job scope and detail
+interactions. These are source/consumer controls, not durable-store acceptance,
+guest thaw, filesystem liveness, native/installed recovery or released availability.
+
 ### Bounded backup-log reads make progress past unfinished jobs
 
 The existing 25-log per-poll budget serves never/least-recently attempted

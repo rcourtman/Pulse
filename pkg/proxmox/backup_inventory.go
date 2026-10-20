@@ -55,9 +55,7 @@ func (c *Client) GetBackupTaskInventory(ctx context.Context) (BackupTaskInventor
 						// winner could hide the real archive writer. Fail this
 						// live read just like other inconsistent inventories:
 						// no prefix may replace earlier tasks or qualify output.
-						current.Status, task.Status = "", ""
-						current.EndTime, task.EndTime = 0, 0
-						if current != task {
+						if !current.SameExecutionIdentity(task) {
 							return BackupTaskInventory{}, fmt.Errorf("Proxmox backup task identity differs between recent and active observations")
 						}
 					} else {

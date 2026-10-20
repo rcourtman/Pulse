@@ -220,5 +220,8 @@ func (c *unscopedWriterHistoryClient) GetBackupTasks(ctx context.Context) ([]pro
 
 func (c *unscopedWriterHistoryClient) GetBackupTaskHistory(ctx context.Context, _ time.Time) (proxmox.BackupTaskHistory, error) {
 	tasks, err := c.lifecycleBackupClient.GetBackupTasks(ctx)
+	// This control advances completion of the same scheduled parent, not a
+	// different guest identity that merely reuses its UPID.
+	tasks[0].ID = c.id
 	return proxmox.BackupTaskHistory{Tasks: tasks, Nodes: []proxmox.BackupTaskHistoryNode{{Node: "node", Complete: true}}}, err
 }
