@@ -26,6 +26,28 @@ export interface DockerUpdateCommands {
   composeUpCommand: string;
 }
 
+// Whether a community install with a paid licence can move to the Pulse Pro
+// runtime (GET /api/updates/pro-runtime). The license server decides
+// eligibility; `reason` explains a switch that is not offered.
+export type ProRuntimeSwitchReason =
+  | 'already_pro'
+  | 'not_activated'
+  | 'not_eligible'
+  | 'source_build'
+  | 'unsupported_deployment'
+  | 'older_release'
+  | 'prerelease_only'
+  | 'unavailable';
+
+export interface ProRuntimeSwitch {
+  available: boolean;
+  reason?: ProRuntimeSwitchReason;
+  currentVersion: string;
+  version?: string;
+  installInPlace: boolean;
+  docker?: DockerUpdateCommands;
+}
+
 export interface ReleaseNotesInfo {
   version: string;
   releaseNotes: string;
@@ -159,6 +181,14 @@ export class UpdatesAPI {
 
   static async getReleaseNotes(): Promise<ReleaseNotesInfo> {
     return apiFetchJSON('/api/updates/release-notes');
+  }
+
+  static async checkProRuntimeSwitch(): Promise<ProRuntimeSwitch> {
+    return apiFetchJSON('/api/updates/pro-runtime');
+  }
+
+  static async applyProRuntimeSwitch(): Promise<{ status: string; message: string }> {
+    return apiFetchJSON('/api/updates/pro-runtime/apply', { method: 'POST', retry: false });
   }
 
   static async getUpdatePlan(version: string, channel?: UpdateChannel): Promise<UpdatePlan> {

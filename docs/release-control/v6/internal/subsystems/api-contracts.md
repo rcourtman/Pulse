@@ -2821,7 +2821,13 @@ payload shape change when the portal presents compact client rows.
     conflict response, with the reason logged rather than returned), runs the
     same readiness gate as apply against the switch target version, and
     answers with the apply started-acknowledgement shape. Neither route
-    exposes broker credentials.
+    exposes broker credentials. `frontend-modern/src/api/updates.ts` mirrors
+    the payload as `ProRuntimeSwitch` with the closed `ProRuntimeSwitchReason`
+    union, and `checkProRuntimeSwitch` / `applyProRuntimeSwitch` call only
+    those two routes. The runtime-switch apply is a single explicit POST with
+    transport retries disabled. A `started` acknowledgement is not a completed
+    installation; an unconfirmed response must not invite an immediate duplicate
+    apply. Definite pre-dispatch HTTP refusals retain the confirmation controls.
 87. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.

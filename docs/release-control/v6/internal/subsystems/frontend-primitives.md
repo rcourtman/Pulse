@@ -10708,3 +10708,54 @@ Off, inheritance, protection badges and connectivity after resampling in both
 layouts. The browser also compares the visible rate text and accessible name
 with the actual saved override and its removal; an HTTP-only inheritance pass
 is insufficient when the consumer still displays the previous override.
+
+### Updates panel offers the Pulse Pro runtime switch (14 October 2026)
+
+`UpdatesSettingsPanel.tsx` mounts `ProRuntimeSwitchCard` above the version box,
+and asks `GET /api/updates/pro-runtime` only when the runtime identity reports
+the community build and the install is not a source build. The card composes
+the shared `CalloutCard`, `Button` and `CopyCommandBlock` primitives; its copy
+lives in `getProRuntimeSwitchPresentation` in `utils/proRuntimeSwitchPresentation.ts`
+beside the shared Updates copy in `utils/updatesPresentation.ts`. Only `in_place`, `docker`,
+`older_release`, `prerelease_only` and `unavailable` render; every other reason
+stays hidden, and the License panel keeps its own runtime notice.
+`prerelease_only` is an info callout without a switch button: the only Pro
+build on offer is a preview and a stable-channel install never installs one,
+so the card names that preview version and says the switch appears once a
+stable Pulse Pro release is published. The in-place switch needs an
+explicit confirm step, and progress comes from the existing update progress
+modal rather than card-local state. Command blocks pad clear of the copy
+button so long digest-pinned commands stay readable when they wrap.
+
+The switch card is a lazy leaf, mounted only after a known community release
+identity is available; source, Pro and unknown builds do not load its controls
+or request a switch check. Withdrawing eligibility also withdraws a retained
+offer. A failed check shows the quiet unavailable notice, not a silent absence.
+Confirmation moves keyboard focus to Switch now, and Cancel returns it to the
+offer. Pending submission owns both confirmation controls. Accepted and unknown
+request states replace the action with a focused status notice, without claiming
+completion or offering a duplicate write. The existing global update-progress
+watcher and Update history remain the sources of progress and final results.
+
+`ProRuntimeSwitchCard.test.tsx`, `UpdatesSettingsPanel.switch.test.tsx`, the API
+client tests and `browser-tests/pro-runtime-switch.cjs` exercise those boundaries
+through the actual panel and synthetic HTTP responses at desktop and 320px,
+including command copying, both command-block themes, preview-only/older-build
+explanations and definite/uncertain writes. This is consuming-surface proof, not
+an installed community-to-Pro switch, rollback or entitlement-availability claim.
+
+Switch actions use the shared primary button rather than white-on-amber small
+text; the long offer wraps inside the narrow callout. A definite refusal returns
+focus to the confirmation control when it is enabled again. Card-scoped contrast
+and keyboard checks cover the offer and confirmation as well as the notices and
+commands, without claiming a whole-Settings accessibility pass.
+The Docker note owns arbitrary-word wrapping as well as the command blocks:
+the download URL and literal compose-variable guidance stay within the callout's
+content track at 320px. The browser checks actual text-line rectangles, not only
+document scroll width, following the nominal pass rejected by pixel review.
+
+Card-only presentation and request copy live in that lazy leaf as well as the
+controls. Keeping them in the shared Updates helper retained the new strings in
+the constrained Updates chunk despite a dynamic component import. The extraction
+preserves the function/constant bytes and existing presentation controls, rather
+than increasing the budget or changing any offer, reason or command contract.

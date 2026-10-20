@@ -477,6 +477,13 @@ there. Those commands require your compose file image line to use the
 page. Direct Linux users should download the private Pulse Pro archive from the
 same page.
 
+When a paid activation runs on a community build, **Settings → Updates** offers
+the switch itself. Systemd and Proxmox LXC installs switch in place: Pulse
+downloads the signed Pro archive for its own version (or a newer one) from the
+license server, backs up the community build, and restarts; **Roll back** on
+that Update history entry returns to the community build. Docker installs see
+the exact registry login and digest-pinned compose commands for their license.
+
 #### v5 License Migration
 
 Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 paid JWT-style licenses, including legacy Pro and Lifetime licenses.

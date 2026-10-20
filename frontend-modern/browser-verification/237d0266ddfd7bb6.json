@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "822a2438b902225630acebbf67ac64b78d26667b",
+  "verified_at": "2026-10-20T08:02:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/updates.ts",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/updates.ts": "065fa9af2595e0b77376b3398282ed7e39a55f3bca59aca9b243350e7662280e",
+    "frontend-modern/src/components/Settings/ProRuntimeSwitchCard.tsx": "ade4b9d92e88fbb49e60ed4e4fcb7af4bc370c42963281b136e8f380c60219ef",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "8cfb2caac3917a39008da123a7e6eb13d36f16725c9b5b04c84be07a16c8d034",
+    "frontend-modern/src/utils/proRuntimeSwitchPresentation.ts": "622f50456c4fc7b884638e964fab2c03b0375df5a06e8490655ecd1ed6df6846"
+  },
+  "routes": [
+    "/browser-tests/pro-runtime-switch.html",
+    "/browser-tests/docs-fragment-navigation.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Fresh qualification after abandoning the rejected imported-history candidate and adopting byte-identical reviewed source in a new credited maintainer commit. The actual production Updates panel, API/runtime readers, presentation leaf, history, ToastContainer and shipped CSS consume synthetic HTTP.",
+    "All 28 card cases pass: eligible community offer/confirmation, definite refusal, accepted and lost responses, Docker commands in both themes, older/preview-only/unavailable/failed checks, hidden reasons and Pro/source/unknown-build boundaries. Sixteen card-scoped WCAG scans report no violations.",
+    "Twenty new card captures were opened with native view_image; both long phone Docker captures also at original resolution. Buttons, focus rings, status notices and narrow note/command wrapping were accepted. No whole-Settings accessibility claim.",
+    "Both changed guides and shipped mirrors were consumed through the real Docs index/router/renderer. Four new desktop/phone captures were opened natively; Settings → Updates and restart/history/Roll back guidance is readable. Native fetched-byte hashes equal committed source and mirrors.",
+    "Chromium 141.0.7390.37 at 1365x900; WebKit 26.0 at 320x844; Playwright 1.56.1 matches the integration lock. Both browser scripts report browser/server closure."
+  ],
+  "interactions": [
+    "Keyboard Enter opens confirmation without dispatch and focuses Switch now; Cancel returns focus without a write. A definitive 403 with refreshed CSRF is one refused POST, returns focus and allows only another explicit confirmation. Pending owns both controls.",
+    "Accepted and unknown responses replace the switch action with a focused status notice; no automatic or immediate duplicate write and no false completion claim. Six total deliberate POSTs across both viewports.",
+    "Three exact synthetic Docker commands reach clipboard.writeText byte-for-byte; literal placeholders, stdin login, digest pins and compose-variable/download guidance remain visible. No command execution or host clipboard.",
+    "Hidden/informational states have no switch control; Pro/source/unknown builds make no check request. Saved settings remain saved; no page error, off-origin or unexpected API request.",
+    "Desktop keyboard and narrow touch navigate both guides from the Docs index; changed text geometry and native browser fetch identities pass."
+  ],
+  "proof_scope": "Synthetic consuming-surface proof, not installed switching/rollback, broker or licence acceptance, entitlement recovery or release availability."
+}
