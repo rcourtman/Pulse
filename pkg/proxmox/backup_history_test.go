@@ -50,7 +50,7 @@ func TestBackupHistoryPaginationAndCollectionQuality(t *testing.T) {
 					}
 					tasks := make([]Task, count)
 					for i := range tasks {
-						tasks[i] = Task{UPID: fmt.Sprintf("task-%d", i+offset), Type: "vzdump"}
+						tasks[i] = Task{UPID: fmt.Sprintf("task-%d", i+offset), Type: "vzdump", StartTime: 1700000000}
 					}
 					json.NewEncoder(w).Encode(map[string]any{"data": tasks})
 				default:
@@ -96,7 +96,7 @@ func TestBackupHistoryRejectsIncompletePagesAndAuditEvidence(t *testing.T) {
 					fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
 				case "/api2/json/nodes/node/tasks":
 					if test.audit {
-						fmt.Fprint(w, `{"data":[{"upid":"valid","type":"vzdump","id":"100","status":"OK"}]}`)
+						fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"valid","type":"vzdump","id":"100","status":"OK"}]}`)
 						return
 					}
 					if test.truncated {
@@ -169,10 +169,10 @@ func TestBackupHistoryCrossPageIdentityAdmission(t *testing.T) {
 						require.Equal(t, "200", q.Get("limit"))
 						var rows []Task
 						if q.Get("start") == fmt.Sprint(200*lastPage) {
-							rows = []Task{{UPID: "unadmitted-page-prefix", Type: "vzdump", Status: "OK"}, second}
+							rows = []Task{{UPID: "unadmitted-page-prefix", Type: "vzdump", Status: "OK", StartTime: 1700000000, EndTime: 1700000060}, second}
 						} else {
 							for i := 0; i < 200; i++ {
-								rows = append(rows, Task{UPID: fmt.Sprintf("earlier-%s-%d", q.Get("start"), i), Type: "vzdump", Status: "ERROR"})
+								rows = append(rows, Task{UPID: fmt.Sprintf("earlier-%s-%d", q.Get("start"), i), Type: "vzdump", Status: "ERROR", StartTime: 1700000000, EndTime: 1700000060})
 							}
 							if q.Get("start") == "0" {
 								rows[0] = first
@@ -180,7 +180,7 @@ func TestBackupHistoryCrossPageIdentityAdmission(t *testing.T) {
 						}
 						json.NewEncoder(w).Encode(map[string]any{"data": rows})
 					case "/api2/json/nodes/peer/tasks":
-						fmt.Fprint(w, `{"data":[{"upid":"independent-peer","type":"vzdump","id":"200","status":"OK"}]}`)
+						fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"independent-peer","type":"vzdump","id":"200","status":"OK"}]}`)
 					case "/api2/json/access/permissions":
 						audits = append(audits, r.URL.Query().Get("path"))
 						fmt.Fprintf(w, `{"data":{%q:{"Sys.Audit":1}}}`, r.URL.Query().Get("path"))
@@ -223,10 +223,10 @@ func TestBackupHistoryCrossPageConflictRemovesEveryAmbiguousExecution(t *testing
 			var rows []Task
 			if r.URL.Query().Get("start") == "0" {
 				for i := 0; i < 200; i++ {
-					rows = append(rows, Task{UPID: fmt.Sprint("task-", i), Type: "vzdump", Status: "OK"})
+					rows = append(rows, Task{UPID: fmt.Sprint("task-", i), Type: "vzdump", Status: "OK", StartTime: 1700000000, EndTime: 1700000060})
 				}
 			} else {
-				rows = []Task{{UPID: "task-0", Type: "vzdump", Status: "ERROR"}, {UPID: "task-199", Type: "vzdump", ID: "101", Status: "OK"}}
+				rows = []Task{{UPID: "task-0", Type: "vzdump", Status: "ERROR", StartTime: 1700000000, EndTime: 1700000060}, {UPID: "task-199", Type: "vzdump", ID: "101", Status: "OK", StartTime: 1700000000, EndTime: 1700000060}}
 			}
 			json.NewEncoder(w).Encode(map[string]any{"data": rows})
 		default:

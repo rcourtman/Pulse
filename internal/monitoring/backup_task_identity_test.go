@@ -49,7 +49,7 @@ func TestPVEBackupTaskIdentityGapCannotEraseFailure(t *testing.T) {
 					if !peer && ((p >= 1 && p <= 3 && !history) || (p >= 4 && p <= 6 && history)) {
 						task["status"] = "OK"
 						if history {
-							invalid := map[string]any{"upid": "unidentified", "type": "vzdump", "id": "101", "status": "OK"}
+							invalid := map[string]any{"upid": "unidentified", "type": "vzdump", "id": "101", "status": "OK", "starttime": 1792350000, "endtime": 1792350060}
 							rows = append(rows, invalid)
 							switch p {
 							case 4:
@@ -67,7 +67,7 @@ func TestPVEBackupTaskIdentityGapCannotEraseFailure(t *testing.T) {
 							case 2:
 								delete(task, "upid")
 							case 3:
-								rows = append(rows, map[string]any{"upid": primaryUPID, "type": "vzdump", "id": "100", "node": "pve-a", "status": "ERROR: contradictory reply"})
+								rows = append(rows, map[string]any{"upid": primaryUPID, "type": "vzdump", "id": "100", "node": "pve-a", "status": "ERROR: contradictory reply", "starttime": 1792350000, "endtime": 1792350060})
 							}
 						}
 					}

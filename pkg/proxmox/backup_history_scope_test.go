@@ -32,7 +32,7 @@ func TestBackupHistoryRejectsForeignNodePages(t *testing.T) {
 						if later && r.URL.Query().Get("start") == "0" {
 							tasks := make([]Task, 200)
 							for i := range tasks {
-								tasks[i] = Task{UPID: fmt.Sprintf("prior-%d", i), Node: "pve-a", Type: "vzdump", ID: "100", Status: "ERROR: retained failure"}
+								tasks[i] = Task{UPID: fmt.Sprintf("prior-%d", i), Node: "pve-a", Type: "vzdump", ID: "100", Status: "ERROR: retained failure", StartTime: 1700000000, EndTime: 1700000060}
 							}
 							json.NewEncoder(w).Encode(map[string]any{"data": tasks})
 							return
@@ -43,9 +43,9 @@ func TestBackupHistoryRejectsForeignNodePages(t *testing.T) {
 						}
 						// Reject the whole page, not whichever prefix preceded
 						// the foreign row. Do this before cross-page deduplication.
-						fmt.Fprintf(w, `{"data":[{"upid":"page-prefix","node":"pve-a","type":"vzdump","id":"100","status":"OK"},{"upid":%q,"node":"pve-b","type":"vzdump","id":"100","status":"OK"}]}`, foreign)
+						fmt.Fprintf(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"page-prefix","node":"pve-a","type":"vzdump","id":"100","status":"OK"},{"endtime":1700000060,"starttime":1700000000,"upid":%q,"node":"pve-b","type":"vzdump","id":"100","status":"OK"}]}`, foreign)
 					case "/api2/json/nodes/pve-b/tasks":
-						fmt.Fprint(w, `{"data":[{"upid":"independent","type":"vzdump","id":"200","status":"OK"}]}`)
+						fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"independent","type":"vzdump","id":"200","status":"OK"}]}`)
 					case "/api2/json/access/permissions":
 						if r.URL.Query().Get("path") == "/nodes/pve-a" {
 							badNodeAudits++

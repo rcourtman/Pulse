@@ -52,12 +52,12 @@ func TestBackupTaskInventoryOverlappingExecutionIdentity(t *testing.T) {
 						case "all":
 							tasks := make([]Task, 200)
 							for i := range tasks {
-								tasks[i] = Task{UPID: fmt.Sprint("independent-", i), Type: "vzdump", ID: "200", Status: "OK"}
+								tasks[i] = Task{UPID: fmt.Sprint("independent-", i), Type: "vzdump", ID: "200", Status: "OK", StartTime: 1700000000, EndTime: 1700000060}
 							}
 							tasks[index] = recent
 							data = tasks
 						case "active":
-							data = []Task{{UPID: "independent-active", Type: "vzdump", ID: "200"}, active}
+							data = []Task{{UPID: "independent-active", Type: "vzdump", ID: "200", StartTime: 1700000000}, active}
 						default:
 							t.Fatalf("unexpected source: %s", r.URL)
 						}

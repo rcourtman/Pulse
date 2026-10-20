@@ -68,6 +68,17 @@ func readTasks(resp *http.Response) ([]Task, error) {
 		if strings.TrimSpace(task.UPID) == "" || strings.TrimSpace(task.Type) == "" {
 			return nil, errInvalidTaskResponse
 		}
+		// A task's interval and verdict jointly establish whether it ended.
+		// Missing start times or contradictory completion fields cannot rule
+		// out an archive writer, replace a prior failure, or complete History.
+		// Active tasks may omit status/endtime; terminal results (including
+		// errors and warnings) require an end at or after their positive start.
+		status := strings.TrimSpace(task.Status)
+		active := status == "" || strings.EqualFold(status, "running")
+		if task.StartTime <= 0 || task.EndTime < 0 ||
+			(active && task.EndTime != 0) || (!active && task.EndTime < task.StartTime) {
+			return nil, errInvalidTaskResponse
+		}
 		if _, duplicate := seen[task.UPID]; duplicate {
 			return nil, errInvalidTaskResponse
 		}

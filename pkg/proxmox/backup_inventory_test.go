@@ -68,7 +68,7 @@ func TestBackupTaskInventoryScopesOfflineNodes(t *testing.T) {
 					require.Equal(t, "all", r.URL.Query().Get("source"))
 					require.Equal(t, "200", r.URL.Query().Get("limit"))
 					require.Equal(t, "vzdump", r.URL.Query().Get("typefilter"))
-					fmt.Fprint(w, `{"data":[{"upid":"job","type":"vzdump","id":"100","status":"OK"}]}`)
+					fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"job","type":"vzdump","id":"100","status":"OK"}]}`)
 				case "/api2/json/access/permissions":
 					require.Equal(t, "/nodes/a", r.URL.Query().Get("path"))
 					fmt.Fprint(w, `{"data":{"/nodes/a":{"Sys.Audit":1}}}`)
@@ -97,8 +97,8 @@ func TestBackupTaskInventoryScopesOfflineNodes(t *testing.T) {
 func TestBackupTaskInventoryRejectsUnobservedOrMisattributedScopes(t *testing.T) {
 	for _, tc := range []struct{ name, nodes, tasks string }{
 		{"no-nodes", `[]`, `[]`},
-		{"wrong-task-node", `[{"node":"a","status":"online"}]`, `[{"upid":"job","node":"b","type":"vzdump"}]`},
-		{"failed-online-node", `[{"node":"a","status":"online"},{"node":"b","status":"online"}]`, `[{"upid":"job","node":"a","type":"vzdump"}]`},
+		{"wrong-task-node", `[{"node":"a","status":"online"}]`, `[{"starttime":1700000000,"upid":"job","node":"b","type":"vzdump"}]`},
+		{"failed-online-node", `[{"node":"a","status":"online"},{"node":"b","status":"online"}]`, `[{"starttime":1700000000,"upid":"job","node":"a","type":"vzdump"}]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func TestBackupTaskInventoryQualifiesOtherUserVisibility(t *testing.T) {
 				case "/api2/json/nodes":
 					body = `{"data":[{"node":"node","status":"online"}]}`
 				case "/api2/json/nodes/node/tasks":
-					body = `{"data":[{"upid":"visible","type":"vzdump","id":"100","status":"ERROR"}]}`
+					body = `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"visible","type":"vzdump","id":"100","status":"ERROR"}]}`
 				case "/api2/json/access/permissions":
 					require.Equal(t, "/nodes/node", r.URL.Query().Get("path"))
 					reads++
@@ -164,7 +164,7 @@ func TestBackupTaskInventoryQualifiesOtherUserVisibility(t *testing.T) {
 			})
 			got, err := c.GetBackupTaskInventory(context.Background())
 			require.NoError(t, err, "a visibility limitation must not discard valid positive observations")
-			require.Equal(t, []Task{{UPID: "visible", Node: "node", Type: "vzdump", ID: "100", Status: "ERROR"}}, got.Tasks)
+			require.Equal(t, []Task{{UPID: "visible", Node: "node", Type: "vzdump", ID: "100", Status: "ERROR", StartTime: 1700000000, EndTime: 1700000060}}, got.Tasks)
 			if tc.confirmed {
 				require.Empty(t, got.UnconfirmedNodes)
 			} else {
@@ -195,18 +195,18 @@ func TestBackupTaskInventoryQualifiesSaturatedActiveReads(t *testing.T) {
 						case "empty":
 							body = `{"data":[]}`
 						case "overlap":
-							body = `{"data":[{"upid":"recent-0","type":"vzdump","id":"100","status":"running"}]}`
+							body = `{"data":[{"starttime":1700000000,"upid":"recent-0","type":"vzdump","id":"100","status":"running"}]}`
 						case "denied":
 							body, status = `{"data":null}`, 403
 						case "null":
 							body = `{"data":null}`
 						case "foreign":
-							body = `{"data":[{"upid":"foreign","type":"vzdump","node":"peer"}]}`
+							body = `{"data":[{"starttime":1700000000,"upid":"foreign","type":"vzdump","node":"peer"}]}`
 						}
 					} else {
 						tasks := make([]Task, 200)
 						for i := range tasks {
-							tasks[i] = Task{UPID: fmt.Sprint("recent-", i), Type: "vzdump", ID: "100", Status: "OK"}
+							tasks[i] = Task{UPID: fmt.Sprint("recent-", i), Type: "vzdump", ID: "100", Status: "OK", StartTime: 1700000000, EndTime: 1700000060}
 						}
 						b, err := json.Marshal(map[string]any{"data": tasks})
 						require.NoError(t, err)

@@ -54,8 +54,8 @@ func TestClientStorageAndTasks(t *testing.T) {
 		case "/api2/json/nodes/node1/tasks":
 			writeJSON(t, w, map[string]interface{}{
 				"data": []Task{
-					{UPID: "1", Type: "vzdump"},
-					{UPID: "2", Type: "other"},
+					{UPID: "1", Type: "vzdump", StartTime: 1700000000},
+					{UPID: "2", Type: "other", StartTime: 1700000000},
 				},
 			})
 		default:

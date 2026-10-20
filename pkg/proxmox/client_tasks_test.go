@@ -12,7 +12,7 @@ func TestClient_GetNodeTasks(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes/node1/tasks" {
-			fmt.Fprint(w, `{"data":[{"upid":"upid:1","type":"vzdump","status":"ok"}]}`)
+			fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"upid:1","type":"vzdump","status":"ok"}]}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -45,7 +45,7 @@ func TestClient_GetBackupTasksRejectsPartialOnlineNodes(t *testing.T) {
 		case "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"},{"node":"node2","status":"offline"},{"node":"node3","status":"online"}]}`)
 		case "/api2/json/nodes/node1/tasks":
-			fmt.Fprint(w, `{"data":[{"upid":"upid:1","type":"vzdump"},{"upid":"upid:2","type":"qmstart"}]}`)
+			fmt.Fprint(w, `{"data":[{"starttime":1700000000,"upid":"upid:1","type":"vzdump"},{"starttime":1700000000,"upid":"upid:2","type":"qmstart"}]}`)
 		case "/api2/json/nodes/node3/tasks":
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprint(w, `{"errors":"boom"}`)

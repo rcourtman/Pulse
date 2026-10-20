@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTaskReadsRequireCompleteResponses(t *testing.T) {
@@ -21,7 +25,7 @@ func TestTaskReadsRequireCompleteResponses(t *testing.T) {
 						fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
 						return
 					}
-					row := `{"upid":"task","type":"vzdump","status":"OK"}`
+					row := `{"endtime":1700000060,"starttime":1700000000,"upid":"task","type":"vzdump","status":"OK"}`
 					if read == "log" {
 						row = `{"n":1,"t":"INFO: Finished Backup of VM 100 (00:01:00)"}`
 					}
@@ -45,13 +49,13 @@ func TestTaskReadsRequireCompleteResponses(t *testing.T) {
 						if read == "log" {
 							body = `{"data":[{"n":1,"t":"ERROR: failed","t":"INFO: Finished Backup of VM 100 (00:01:00)"}]}`
 						} else {
-							body = `{"data":[{"upid":"task","type":"vzdump","status":"ERROR","status":"OK"}]}`
+							body = `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"task","type":"vzdump","status":"ERROR","status":"OK"}]}`
 						}
 					case "case-row":
 						if read == "log" {
 							body = `{"data":[{"n":1,"t":"ERROR: failed","T":"INFO: Finished Backup of VM 100 (00:01:00)"}]}`
 						} else {
-							body = `{"data":[{"upid":"task","type":"vzdump","status":"ERROR","Status":"OK"}]}`
+							body = `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"task","type":"vzdump","status":"ERROR","Status":"OK"}]}`
 						}
 					case "invalid-utf8":
 						body = strings.Replace(body, "}", ",\"metadata\":\"\xff\"}", 1)
@@ -114,7 +118,7 @@ func TestTaskResponseCompletionAndLimits(t *testing.T) {
 			case "/api2/json/nodes":
 				fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"},{"node":"offline","status":"offline"}]}`)
 			case "/api2/json/nodes/pve1/tasks":
-				fmt.Fprint(w, `{"data":[{"upid":"running","type":"vzdump","metadata":1},{"upid":"other","type":"qmstart"}],"total":2,"errors":null}`)
+				fmt.Fprint(w, `{"data":[{"starttime":1700000000,"upid":"running","type":"vzdump","metadata":1},{"starttime":1700000000,"upid":"other","type":"qmstart"}],"total":2,"errors":null}`)
 			default:
 				fmt.Fprint(w, `{"data":[],"total":0}`)
 			}
@@ -156,5 +160,117 @@ func TestTaskRowsCloseFailureIsNotCompletion(t *testing.T) {
 	resp := &http.Response{StatusCode: 200, Body: taskCloseFailure{strings.NewReader(`{"data":[]}`)}}
 	if rows, err := readTasks(resp); err == nil || rows != nil {
 		t.Fatalf("close failure published: %+v %v", rows, err)
+	}
+}
+
+// Whole-response admission, not a provider/guest operation. Running tasks may
+// omit status/endtime; terminal verdicts need a coherent, completed interval.
+func TestTaskLifecycleAdmission(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(map[string]any)
+		valid  bool
+	}{
+		{"completed", func(map[string]any) {}, true},
+		{"zero-duration", func(r map[string]any) { r["endtime"] = r["starttime"] }, true},
+		{"failed", func(r map[string]any) { r["status"] = "ERROR: fixture failure" }, true},
+		{"warnings", func(r map[string]any) { r["status"] = "WARNINGS: 1" }, true},
+		{"active-omitted", func(r map[string]any) { delete(r, "status"); delete(r, "endtime") }, true},
+		{"active-explicit", func(r map[string]any) { r["status"] = "running"; r["endtime"] = 0 }, true},
+		{"active-null-end", func(r map[string]any) { r["status"] = ""; r["endtime"] = nil }, true},
+		{"missing-start", func(r map[string]any) { delete(r, "starttime") }, false},
+		{"null-start", func(r map[string]any) { r["starttime"] = nil }, false},
+		{"zero-start", func(r map[string]any) { r["starttime"] = 0 }, false},
+		{"negative-start", func(r map[string]any) { r["starttime"] = -1 }, false},
+		{"negative-end", func(r map[string]any) { r["endtime"] = -1 }, false},
+		{"end-before-start", func(r map[string]any) { r["endtime"] = 1699999999 }, false},
+		{"running-with-end", func(r map[string]any) { r["status"] = "running" }, false},
+		{"spaced-running-with-end", func(r map[string]any) { r["status"] = " Running " }, false},
+		{"missing-result-with-end", func(r map[string]any) { delete(r, "status") }, false},
+		{"null-result-with-end", func(r map[string]any) { r["status"] = nil }, false},
+		{"empty-result-with-end", func(r map[string]any) { r["status"] = " " }, false},
+		{"success-without-end", func(r map[string]any) { delete(r, "endtime") }, false},
+		{"success-null-end", func(r map[string]any) { r["endtime"] = nil }, false},
+		{"success-zero-end", func(r map[string]any) { r["endtime"] = 0 }, false},
+		{"failure-without-end", func(r map[string]any) { r["status"] = "ERROR: fixture failure"; delete(r, "endtime") }, false},
+	}
+	for _, tc := range cases {
+		for _, reader := range []string{"node", "live", "active", "history"} {
+			t.Run(tc.name+"/"+reader, func(t *testing.T) {
+				row := map[string]any{"upid": "current", "type": "vzdump", "id": "100", "starttime": 1700000000, "status": "OK", "endtime": 1700000060, "metadata": "additive"}
+				tc.change(row)
+				audits := 0
+				c := backupTestClient(t, "https://fixture.invalid")
+				c.httpClient.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+					require.Equal(t, http.MethodGet, r.Method)
+					var body []byte
+					switch r.URL.Path {
+					case "/api2/json/nodes":
+						body = []byte(`{"data":[{"node":"node","status":"online"}]}`)
+					case "/api2/json/access/permissions":
+						audits++
+						body = []byte(`{"data":{"/nodes/node":{"Sys.Audit":1}}}`)
+					case "/api2/json/nodes/node/tasks":
+						rows := []any{map[string]any{"upid": "valid-prefix", "type": "vzdump", "id": "101", "starttime": 1699900000, "status": "OK", "endtime": 1699900060}, row}
+						if reader == "active" && r.URL.Query().Get("source") == "all" {
+							rows = make([]any, 200)
+							for i := range rows {
+								rows[i] = Task{UPID: fmt.Sprint("recent-", i), Type: "vzdump", ID: "101", StartTime: 1699900000, Status: "OK", EndTime: 1699900060}
+							}
+						}
+						var err error
+						body, err = json.Marshal(map[string]any{"data": rows})
+						require.NoError(t, err)
+					default:
+						t.Fatalf("unexpected read %s", r.URL)
+					}
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(body))), Header: http.Header{}}, nil
+				})
+				switch reader {
+				case "node":
+					rows, err := c.GetNodeTasks(context.Background(), "node")
+					if tc.valid {
+						require.NoError(t, err)
+						assert.Len(t, rows, 2)
+					} else {
+						assert.Error(t, err)
+						assert.Empty(t, rows, "bad suffix cannot publish a prefix")
+					}
+				case "live", "active":
+					got, err := c.GetBackupTaskInventory(context.Background())
+					if reader == "active" {
+						require.NoError(t, err, "failed active census preserves valid recent observations")
+						if tc.valid {
+							assert.Empty(t, got.UnconfirmedNodes)
+							assert.Len(t, got.Tasks, 202)
+						} else {
+							assert.Equal(t, []string{"node"}, got.UnconfirmedNodes)
+							assert.Len(t, got.Tasks, 200)
+							assert.Zero(t, audits)
+						}
+					} else if tc.valid {
+						require.NoError(t, err)
+						assert.Len(t, got.Tasks, 2)
+						assert.Empty(t, got.UnconfirmedNodes)
+					} else {
+						assert.Error(t, err)
+						assert.Empty(t, got.Tasks)
+						assert.Zero(t, audits)
+					}
+				case "history":
+					got, err := c.GetBackupTaskHistory(context.Background(), time.Unix(1699800000, 0))
+					require.NoError(t, err, "collection quality retains node-specific failure")
+					require.Len(t, got.Nodes, 1)
+					assert.Equal(t, tc.valid, got.Nodes[0].Complete)
+					if tc.valid {
+						assert.Len(t, got.Tasks, 2)
+					} else {
+						assert.Empty(t, got.Tasks)
+						assert.Equal(t, "collection_failed", got.Nodes[0].Reason)
+						assert.Zero(t, audits)
+					}
+				}
+			})
+		}
 	}
 }

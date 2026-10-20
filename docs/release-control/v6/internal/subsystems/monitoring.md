@@ -9305,3 +9305,30 @@ preserving a saved-token reader before and afterwards without listeners.
 `TestClient_SetupMonitoringAccess_PreservesExistingToken` replaces the former
 rotation expectation. API/persistence and consuming-editor proof are separate;
 these controls do not establish installed PBS or guest/backup recovery.
+
+
+### Coherent Proxmox task intervals before backup admission
+
+Node, live/recent, active and paginated History task reads require a positive
+start time. An active task (omitted/empty or `running` status) has no positive
+end; a terminal result, including errors and warnings, needs an end at or after
+its start. Negative times, missing/null starts, terminal results without an end,
+and active results with an end make the whole response unavailable. No prefix
+may replace earlier live evidence or qualify new archive output. Active census
+failure retains valid recent positives with unconfirmed visibility; History
+retains separately admitted pages/nodes and reports the failed page incomplete.
+Missing active status/end, scheduled parents without a guest ID, zero-duration
+completed jobs, explicit failures/warnings, additive metadata and genuine empty
+responses remain supported. UPIDs remain opaque; no fields are guessed from them.
+
+`TestTaskLifecycleAdmission` joins the actual node/live/active/History readers to
+valid and invalid intervals. Existing identity, scope, pagination and transport
+fixtures now supply coherent intervals so their original assertions remain
+independently meaningful. `TestPVETaskLifecycleCannotQualifyArchiveOutput` drives
+GET-only direct/cluster HTTP through ordinary polling, retained failure identity
+and observation time, archives, last-backup age, recovery outcomes, independent
+same-VMID connections, snapshots and completed/empty recovery. The source-bound
+`check-pve-task-lifecycle.cjs` protocol consumes those emitted frames in both
+production Backups views at desktop and 320px, including job and running-evidence
+controls. These are synthetic read-only proofs, not guest/QGA operations, durable
+store acceptance, incident cause, installed recovery or release availability.

@@ -168,7 +168,7 @@ func TestPVEBackupHistoryCrossPageConflictPreservesLiveFailure(t *testing.T) {
 						case 4:
 							task.Type, task.Status = "qmstart", "OK"
 						}
-						tasks = []proxmox.Task{{UPID: "unadmitted-page-prefix", Node: "pve-a", Type: "vzdump", ID: "102", Status: "OK"}, task}
+						tasks = []proxmox.Task{{UPID: "unadmitted-page-prefix", Node: "pve-a", Type: "vzdump", ID: "102", Status: "OK", StartTime: primary.StartTime, EndTime: primary.EndTime}, task}
 					}
 					json.NewEncoder(w).Encode(map[string]any{"data": tasks})
 				default:
