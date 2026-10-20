@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "029ebc72a92ff0a6e2c8c367a0f9e507c04b6154",
+  "changed_paths": [
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/notifications.ts": "2525231fbf2a6ae0bd6b5146317cf7c1b088f193fdc571b7a97695fdfbb15adf",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "c96cba3e02c287c70ec78020d5ed8d28d1c031fdc9780b6218f281f80809c65a",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "925f5590b1ebfd4d07561543bb29ec20b81120e39bdac65d0551b3b346fc961b",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "2106c4abb6fe211ca78d0feb39b05d2376f0c85983f04afac7a928c87eaaa521"
+  },
+  "routes": [
+    "/browser-tests/notification-recovery-boundary.html (full existing Notifications tab, production state owners/API adapters/cards and actual toasts)"
+  ],
+  "states": [
+    "Unreadable delivery-log envelopes become unavailable, not empty; wholly invalid row batches are incomplete, never no attempts or delivered. Mixed batches retain readable failed/sent rows and grouped alert identity with an explicit incomplete warning.",
+    "Rejected Retry and malformed Dismiss 2xx acknowledgements keep persistent unconfirmed feedback and error toasts, with no success toast or automatic follow-up. A later valid empty log clears the incomplete state.",
+    "Explicitly acknowledged zero retries and two dismissals show their exact counts, refresh current health and preserve historical failed audit rows without claiming destination delivery."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch refresh actual activity, expand grouped IDs, confirm four local synthetic queue actions per journey, inspect feedback and clear it. Desktop clear returns focus to the existing feedback anchor.",
+    "CSRF headers, bounded read limits, no unexpected/off-origin requests or page errors, no horizontal overflow, and context/browser/server closure are checked. The three expected diagnostics per journey are the deliberately unreadable log and two unconfirmed acknowledgements."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-20T22:40:55.073228Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All six final captures were opened with native view_image and presented as image content. Desktop partial/unconfirmed messages and grouped IDs are readable; the lower activity row reaches the unconfirmed viewport edge and is shown fully in its partial capture. At 320px dark, warnings, recovery guidance and buttons wrap without horizontal clipping; failed versus delivered evidence stays distinct. The recovered view removes the incomplete warning while retaining the failed audit. Three first-attempt desktop captures were also opened; their missing watchdog fixture remains adverse, not product failure.",
+  "driver": "frontend-modern/browser-tests/notification-recovery-boundary.cjs",
+  "binding": "Exact 029ebc72a92ff0a6e2c8c367a0f9e507c04b6154 / source-azy_dpra compiles and hash-binds 2572 source files and five served artifacts, with terminal command/client 0 and guest stop. Final browser client 0, both journeys complete, twelve behaviour groups and six inspected captures. Product source/tests/manifests are unchanged from 393f640c8d / source-eobf47lf, where isolated ten-case unit, types, every lint audit, production build/embed and bundle budgets all exit 0.",
+  "limits": "Synthetic consuming-surface acceptance, not real queued/destination/SMTP delivery, reporter recovery, protected publication or release availability. Earlier aggregate 217-pass/one STACK_TRACE_ERROR and first incomplete browser attempt remain retained; isolated success does not diagnose them. Guest safety #2439 stays stopped."
+}
