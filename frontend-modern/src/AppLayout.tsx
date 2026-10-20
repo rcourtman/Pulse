@@ -14,6 +14,7 @@ import {
   type MobileNavBarPrimaryTab as PrimaryTab,
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
+import { getMobileNavTabAriaLabel as getUtilityTabAriaLabel } from '@/components/shared/mobileNavBarModel';
 import {
   createStableTabList,
   primaryNavTabEquals,
@@ -139,17 +140,6 @@ const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =
   'group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-hover text-blue-600 transition-colors hover:bg-border hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =
   'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
-
-function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
-  const count = tab.count ?? 0;
-  if (count > 0) {
-    if (tab.id === 'alerts') {
-      return `${count} ${tab.label}`;
-    }
-    return `${tab.label}: ${tab.countLabel ?? `${count} items`}`;
-  }
-  return tab.label;
-}
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -910,7 +900,7 @@ export function AppLayout(props: AppLayoutProps) {
                     <A
                       href={tab.route}
                       class={className()}
-                      aria-label={getDesktopUtilityTabAriaLabel(tab)}
+                      aria-label={getUtilityTabAriaLabel(tab)}
                       aria-current={isActive() ? 'page' : undefined}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onFocus={() => warmNavigationTarget(tab.route)}
@@ -929,7 +919,7 @@ export function AppLayout(props: AppLayoutProps) {
                           }
                           if (tab.id === 'alerts') {
                             return (
-                              <span class="inline-flex items-center gap-1">
+                              <span aria-hidden="true" class="inline-flex items-center gap-1">
                                 {tab.breakdown && tab.breakdown.critical > 0 && (
                                   <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
                                     {tab.breakdown.critical}

@@ -80,6 +80,7 @@ const renderLayout = (
     detail: 'Backend and live data stream are connected.',
     tone: 'healthy',
   }),
+  stateOverrides: Accessor<Partial<State>> = () => ({}),
 ) => {
   window.history.replaceState({}, '', initialPath);
   const RouteStateProbe = () => {
@@ -113,6 +114,7 @@ const renderLayout = (
         ({
           activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
           resources,
+          ...stateOverrides(),
         }) as unknown as State
       }
       platformVisibility={platformVisibility ? () => platformVisibility : undefined}
@@ -199,7 +201,9 @@ describe('AppLayout navigation icons', () => {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
-    expect(within(systemGroup as HTMLElement).getByRole('link', { name: '1 Alerts' })).toBeTruthy();
+    expect(
+      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts: 1 warning' }),
+    ).toBeTruthy();
     expect(
       within(systemGroup as HTMLElement).queryByRole('link', {
         name: 'Pulse Patrol Patrol',
@@ -224,6 +228,48 @@ describe('AppLayout navigation icons', () => {
     expect(mobileSettingsTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
+  });
+
+  it('names the live critical and warning badges consistently on desktop and phone', async () => {
+    const alert = (id: string, level: string, acknowledged = false) =>
+      ({ id, level, acknowledged }) as State['activeAlerts'][number];
+    const [activeAlerts, setActiveAlerts] = createSignal([
+      alert('critical-1', 'critical'),
+      alert('critical-2', 'critical'),
+      alert('warning-1', 'warning'),
+      alert('warning-2', 'warning'),
+      alert('warning-3', 'warning'),
+      alert('acknowledged-critical', 'critical', true),
+    ]);
+    renderLayout([], '/actions', undefined, undefined, undefined, () => ({
+      activeAlerts: activeAlerts(),
+    }));
+
+    const expectAlertNames = async (name: string) => {
+      for (const navName of ['Primary navigation', 'Mobile navigation']) {
+        const nav = screen.getByRole('navigation', { name: navName });
+        await waitFor(() => {
+          const link = within(nav).getByRole('link', { name, exact: true });
+          expect(link).toHaveAttribute('href', '/alerts');
+          expect(link).toHaveTextContent('Alerts');
+        });
+      }
+    };
+
+    await expectAlertNames('Alerts: 2 critical, 3 warning');
+    const desktop = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const desktopAlert = within(desktop).getByRole('link', {
+      name: 'Alerts: 2 critical, 3 warning',
+    });
+    expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).toHaveTextContent('23');
+    expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).not.toHaveTextContent('6');
+
+    setActiveAlerts([alert('warning-only', 'warning')]);
+    await expectAlertNames('Alerts: 1 warning');
+    setActiveAlerts([alert('critical-only', 'critical')]);
+    await expectAlertNames('Alerts: 1 critical');
+    setActiveAlerts([alert('ignored', 'critical', true)]);
+    await expectAlertNames('Alerts');
   });
 
   it('retains navigation labels, icons and focus as backend health changes to sync reconnecting', async () => {

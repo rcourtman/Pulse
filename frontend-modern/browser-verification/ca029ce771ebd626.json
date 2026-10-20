@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "7c379f8a202127b02818dced0ef5dfa11046b8e0",
+  "verified_at": "2026-10-20T00:50:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "cddeb8353bdb62af6aa0e8225f3b51d1ef9eb6ed277606ed7431e94222ab6466"
+  },
+  "routes": [
+    "/actions",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production AppLayout, both navigation rails and Actions/Patrol pages with shipped CSS; synthetic authenticated session and collected read-only observations. Playwright1.56.1 matches the unchanged integration lock; Chromium141 desktop/light and WebKit26 narrow/dark.",
+    "Desktop now exposes the same Alerts:2 critical,3 warning accessible name as the phone rail instead of a severity-free total. Acknowledged critical alerts do not contribute; warning-only, critical-only and zero states update to the exact summaries. No alert evaluation or scope changes.",
+    "All six final captures and two initial current-source captures were opened through native view_image. Red/amber counts remain visible, zero removes the badges, active navigation and keyboard focus styling remain distinct, and narrow content stays readable without page-width overflow. Patrol synthetic unavailability remains visible."
+  ],
+  "interactions": [
+    "The real shell state producer updates both rails through mixed,severity-only,acknowledged and zero active-alert states; the native Alerts link retains its /alerts destination.",
+    "Actual safe GET readers refresh Patrol and Actions counts to zero without stale count names. Desktop keyboard Enter and narrow touch reach the production Patrol and Actions pages with matching aria-current destinations.",
+    "First keyboard Tab reaches the production SkipToContentLink; Enter focuses #main. Ten complete WCAG A/AA scans across the two viewports report no automatic violations under the unchanged axe4.13 engine. This is not axe4.14,new-graph,screen-reader speech,installed recovery or release acceptance."
+  ]
+}
