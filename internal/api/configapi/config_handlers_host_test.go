@@ -473,3 +473,31 @@ func TestGenerateNodeID(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeHostPreservesEndpointAuthority(t *testing.T) {
+	for _, kind := range []string{"pve", "pbs", "pmg"} {
+		port := defaultPortForNodeType(kind)
+		for _, tc := range []struct{ raw, want string }{
+			{"HTTPS://pve.example.invalid", "https://pve.example.invalid:" + port},
+			{"HTTP://pve.example.invalid:8080/api", "http://pve.example.invalid:8080"},
+			{"HTTPS://[2001:db8::1]/api/", "https://[2001:db8::1]:" + port},
+			{"HTTPS://[fe80::1%25ZoneA]:8443", "https://[fe80::1%25ZoneA]:8443"},
+			{"::1", "https://[::1]:" + port},
+			{"pve.example.invalid", "https://pve.example.invalid:" + port},
+		} {
+			t.Run(kind+"/"+tc.raw, func(t *testing.T) {
+				got, err := normalizeNodeHost(tc.raw, kind)
+				if err != nil || got != tc.want {
+					t.Errorf("submitted authority = %q, %v; want %q", got, err, tc.want)
+				}
+			})
+		}
+		for _, raw := range []string{"ftp://pve.example.invalid:8006", "ssh://pve.example.invalid:22", "HTTPS://fixture:synthetic-secret@pve.example.invalid", "https://pve.example.invalid/api?token=synthetic-secret", "https://pve.example.invalid#synthetic-secret"} {
+			t.Run(kind+"/invalid-"+raw, func(t *testing.T) {
+				if got, err := normalizeNodeHost(raw, kind); err == nil || got != "" {
+					t.Error("invalid submitted URL acquired a usable destination")
+				}
+			})
+		}
+	}
+}

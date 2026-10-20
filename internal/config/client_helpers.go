@@ -25,7 +25,8 @@ const (
 )
 
 // normalizeHostPort ensures we always have a scheme and explicit port when talking to
-// Proxmox APIs. It preserves existing ports/schemes and strips any path/query segments.
+// Proxmox APIs. It preserves valid authorities and strips their path segments.
+// Invalid input is left intact for the client to reject, not made usable.
 func normalizeHostPort(host, defaultPort string) string {
 	trimmed := strings.TrimSpace(host)
 	if trimmed == "" || defaultPort == "" {

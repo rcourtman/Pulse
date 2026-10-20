@@ -19,7 +19,8 @@
 
 ### Proxmox endpoint authority before authentication
 
-`internal/config/client_helpers.go` and the PVE/PBS/PMG client constructors
+`internal/config/client_helpers.go`, startup validation, the node save/test
+normalizer and the PVE/PBS/PMG client constructors
 validate the original HTTP(S) base URL before defaulting or changing its port.
 Explicit schemes are case-insensitive: `HTTPS://` continues to address the
 configured host, not a newly invented host named `HTTPS`. Unsupported explicit
@@ -42,7 +43,8 @@ request base, unchanged credentials, CA/pin/explicit-opt-out mode, redirects and
 timeouts without sockets.
 `internal/api/configapi/endpoint_authority_journey_test.go` uses owned IPv4/IPv6
 TLS sockets and ordinary saved/draft handlers: matching uppercase URLs complete
-password login and one read; a wrong pin, an untrusted strict chain or unsupported
+password login and ordinary bounded reads (including PBS datastore RRD/status);
+a wrong pin, an untrusted strict chain or unsupported
 scheme sends neither login credentials nor API reads; restoring the known
 fixture pin recovers. It opens no database and changes no saved configuration.
 The emitted HTTP responses can be consumed by the production connection editor;

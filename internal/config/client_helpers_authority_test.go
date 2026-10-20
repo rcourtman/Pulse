@@ -53,3 +53,43 @@ func TestStripDefaultPortPreservesIPv6Authority(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigValidationPreservesEndpointAuthority(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"HTTPS://pve.example.invalid:8443", "https://pve.example.invalid:8443"},
+		{"HTTP://pve.example.invalid:8080", "http://pve.example.invalid:8080"},
+		{"HTTPS://[fe80::1%25ZoneA]:8443", "https://[fe80::1%25ZoneA]:8443"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			cfg := getValidConfig()
+			cfg.PVEInstances = []PVEInstance{{Host: tc.raw, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: true, Fingerprint: "fixture-pin"}}
+			cfg.PBSInstances = []PBSInstance{{Host: tc.raw, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: true, Fingerprint: "fixture-pin"}}
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			if cfg.PVEInstances[0].Host != tc.want || cfg.PBSInstances[0].Host != tc.want {
+				t.Error("startup validation changed the configured authority")
+			}
+			if !cfg.PVEInstances[0].VerifySSL || !cfg.PBSInstances[0].VerifySSL || cfg.PVEInstances[0].TokenValue != "synthetic-token" || cfg.PBSInstances[0].TokenValue != "synthetic-token" || cfg.PVEInstances[0].Fingerprint != "fixture-pin" || cfg.PBSInstances[0].Fingerprint != "fixture-pin" {
+				t.Error("startup normalization changed trust or credentials")
+			}
+		})
+	}
+	for _, raw := range []string{"ftp://pve.example.invalid:8006", "HTTPS://fixture:synthetic-secret@pve.example.invalid", "https://pve.example.invalid?token=synthetic-secret"} {
+		t.Run("invalid-"+raw, func(t *testing.T) {
+			cfg := getValidConfig()
+			cfg.PVEInstances = []PVEInstance{{Host: raw, Password: "synthetic-password"}}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("invalid PVE startup URL admitted")
+			}
+			cfg.PVEInstances = nil
+			cfg.PBSInstances = []PBSInstance{{Host: raw, Password: "synthetic-password"}}
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			if len(cfg.PBSInstances) != 1 || cfg.PBSInstances[0].Host != raw {
+				t.Error("invalid PBS configuration was silently retargeted or removed")
+			}
+		})
+	}
+}

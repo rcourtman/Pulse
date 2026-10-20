@@ -1794,31 +1794,19 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 		return "", fmt.Errorf("host is required")
 	}
 
-	scheme := "https"
-	if strings.HasPrefix(host, "http://") {
-		scheme = "http"
-		host = strings.TrimPrefix(host, "http://")
-	} else if strings.HasPrefix(host, "https://") {
-		host = strings.TrimPrefix(host, "https://")
-	}
-
-	// Strip any path/query fragments before parsing
-	if slash := strings.Index(host, "/"); slash != -1 {
-		host = host[:slash]
-	}
-
 	hostWithoutBrackets := strings.Trim(host, "[]")
 	if ip := net.ParseIP(hostWithoutBrackets); ip != nil && strings.Contains(hostWithoutBrackets, ":") && !strings.HasPrefix(host, "[") {
 		host = "[" + host + "]"
 	}
 
-	hostForParse := scheme + "://" + host
-	parsed, err := url.Parse(hostForParse)
-	if err != nil || parsed.Host == "" {
+	// Validate the submitted authority before dropping its path or adding a
+	// platform port. A scheme, userinfo or query cannot become another host.
+	parsed, err := securityutil.NormalizeInfrastructureBaseURL(host, "https")
+	if err != nil {
 		return "", fmt.Errorf("invalid host format")
 	}
 
-	// Drop any path/query fragments to avoid persisting unsafe values
+	// Keep the existing platform-config path policy after URL validation.
 	parsed.Path = ""
 	parsed.RawPath = ""
 	parsed.RawQuery = ""

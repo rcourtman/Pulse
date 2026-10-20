@@ -24,6 +24,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -1824,9 +1825,11 @@ func (c *Config) Validate() error {
 		if pve.Host == "" {
 			return fmt.Errorf("PVE instance %d: host is required", i+1)
 		}
-		if !strings.HasPrefix(pve.Host, "http://") && !strings.HasPrefix(pve.Host, "https://") {
-			return fmt.Errorf("PVE instance %d: host must start with http:// or https://", i+1)
+		parsed, err := securityutil.NormalizeInfrastructureBaseURL(pve.Host, "")
+		if err != nil {
+			return fmt.Errorf("PVE instance %d: host must start with http:// or https:// and be a valid base URL: %w", i+1, err)
 		}
+		c.PVEInstances[i].Host = parsed.String()
 		// Must have either password or token
 		if pve.Password == "" && (pve.TokenName == "" || pve.TokenValue == "") {
 			return fmt.Errorf("PVE instance %d: either password or token authentication is required", i+1)
@@ -1845,14 +1848,17 @@ func (c *Config) Validate() error {
 			log.Warn().Int("instance", i+1).Msg("PBS instance missing host, skipping")
 			continue
 		}
-		// Auto-fix missing protocol
-		if !strings.HasPrefix(pbs.Host, "http://") && !strings.HasPrefix(pbs.Host, "https://") {
-			pbs.Host = "https://" + pbs.Host
-			log.Info().Str("host", pbs.Host).Msg("PBS host auto-corrected to include https://")
+		// Default only a valid bare authority. Keep an invalid configured URL
+		// visible for the client to reject, not transformed into another target.
+		if parsed, err := securityutil.NormalizeInfrastructureBaseURL(pbs.Host, "https"); err == nil {
+			if pbs.Host != parsed.String() {
+				log.Info().Str("host", parsed.String()).Msg("PBS host normalized")
+			}
+			pbs.Host = parsed.String()
 		}
 		// Check authentication
 		if pbs.Password == "" && (pbs.TokenName == "" || pbs.TokenValue == "") {
-			log.Warn().Int("instance", i+1).Str("host", pbs.Host).Msg("PBS instance missing authentication, skipping")
+			log.Warn().Int("instance", i+1).Str("host", securityutil.InfrastructureEndpointDiagnostic(pbs.Host)).Msg("PBS instance missing authentication, skipping")
 			continue
 		}
 		validPBS = append(validPBS, pbs)

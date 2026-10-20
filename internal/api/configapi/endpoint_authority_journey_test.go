@@ -61,6 +61,10 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 						fmt.Fprint(w, `{"data":[{"node":"fixture","status":"online"}]}`)
 					case "/api2/json/admin/datastore":
 						fmt.Fprint(w, `{"data":[{"store":"fixture"}]}`)
+					case "/api2/json/admin/datastore/fixture/rrd":
+						fmt.Fprint(w, `{"data":[{"time":1,"dedup_factor":2}]}`)
+					case "/api2/json/admin/datastore/fixture/status":
+						fmt.Fprint(w, `{"data":{"total":100,"used":20,"avail":80,"deduplication-factor":2}}`)
 					case "/api2/json/version":
 						fmt.Fprint(w, `{"data":{"version":"9.1","release":"1"}}`)
 					default:
@@ -124,8 +128,12 @@ func TestNodeEndpointAuthorityJourney(t *testing.T) {
 						if rec.Code != wantStatus || (response["status"] == "success") != success {
 							t.Errorf("%s/%s: unexpected response code=%d body=%s", mode, phase, rec.Code, rec.Body.String())
 						}
-						if success && (reads.Load() != readStart+1 || logins.Load() != loginStart+1) {
-							t.Errorf("%s/%s: ordinary authenticated read not completed exactly once", mode, phase)
+						wantReads := int32(1)
+						if kind == "pbs" {
+							wantReads = 3 // listing, RRD and status for the one real fixture datastore
+						}
+						if success && (reads.Load() != readStart+wantReads || logins.Load() != loginStart+1) {
+							t.Errorf("%s/%s: ordinary authenticated reads not completed exactly once per endpoint", mode, phase)
 						}
 						if !success && (reads.Load() != readStart || logins.Load() != loginStart) {
 							t.Errorf("%s/%s: refused trust or scheme reached provider credentials/reads", mode, phase)
