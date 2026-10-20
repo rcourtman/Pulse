@@ -166,6 +166,7 @@ func TestPBSJobResponseGapReachesResources(t *testing.T) {
 // guest backup times and served Resources without backup/freeze/restore commands.
 func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 	var phase atomic.Value
+	var writerReads, snapshotReads atomic.Int32
 	phase.Store("active")
 	completed := time.Now().Add(-48 * time.Hour).Truncate(time.Second)
 	inFlight := time.Now().Add(-5 * time.Minute).Truncate(time.Second)
@@ -175,11 +176,15 @@ func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 			http.Error(w, "read-only fixture", 405)
 			return
 		}
+		if r.Header.Get("Authorization") != "PBSAPIToken=fixture@pbs!reader:fixture-only" {
+			t.Error("ordinary polling changed credentials")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/groups"):
 			fmt.Fprintf(w, `{"data":[{"backup-type":"vm","backup-id":"117","last-backup":%d,"backup-count":2},{"backup-type":"vm","backup-id":"118","last-backup":%d,"backup-count":1}]}`, inFlight.Unix(), completed.Unix())
 		case strings.HasSuffix(r.URL.Path, "/snapshots"):
+			snapshotReads.Add(1)
 			id := r.URL.Query().Get("backup-id")
 			rows := []map[string]any{{"backup-type": "vm", "backup-id": id, "backup-time": completed.Unix(), "size": 1024, "files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}}}
 			if id == "117" {
@@ -187,6 +192,7 @@ func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": rows})
 		case r.URL.Path == "/api2/json/nodes/localhost/tasks":
+			writerReads.Add(1)
 			switch phase.Load().(string) {
 			case "missing":
 				fmt.Fprint(w, `{}`)
@@ -200,7 +206,20 @@ func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 			}
 			rows := []map[string]any{}
 			if phase.Load().(string) != "empty" && r.URL.Query().Get("typefilter") == "backup" {
-				rows = append(rows, map[string]any{"worker-type": "backup", "worker-id": "archive:vm/117", "starttime": inFlight.Unix()})
+				row := map[string]any{"worker-type": "backup", "worker-id": "archive:vm/117", "starttime": inFlight.Unix()}
+				switch phase.Load().(string) {
+				case "type-conflict":
+					row["worker-type"], row["worker_type"] = "verificationjob", "backup"
+				case "identity-conflict":
+					row["worker-id"], row["worker_id"] = "archive:vm/118", "archive:vm/117"
+				case "invalid-type":
+					row["worker-type"], row["worker_type"] = nil, "backup"
+				case "invalid-identity":
+					row["worker-id"] = 117
+				case "equivalent-aliases":
+					row["worker_type"], row["worker_id"] = " BACKUP ", " archive:vm/117 "
+				}
+				rows = append(rows, row)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": rows})
 		default:
@@ -216,21 +235,32 @@ func TestPBSWriterResponseGapCannotClearGuestActivity(t *testing.T) {
 	m := &Monitor{state: models.NewState()}
 	m.state.UpdateVMs([]models.VM{{ID: makeGuestID("cluster", "pve-a", 117), VMID: 117, Name: "backup-guest", Instance: "cluster", Node: "pve-a", Status: "running"}, {ID: makeGuestID("cluster", "pve-a", 118), VMID: 118, Name: "completed-control", Instance: "cluster", Node: "pve-a", Status: "running"}})
 	observations := map[string]any{}
-	for _, p := range []string{"active", "missing", "null", "trailing", "empty", "active-again"} {
+	for _, p := range []string{"active", "missing", "null", "trailing", "type-conflict", "identity-conflict", "invalid-type", "invalid-identity", "empty", "equivalent-aliases", "active-again"} {
 		phase.Store(p)
+		beforeWriters, beforeSnapshots := writerReads.Load(), snapshotReads.Load()
 		m.pollPBSBackups(context.Background(), "pbs-response-evidence", client, []models.PBSDatastore{{Name: "archive"}})
 		snapshot := m.state.GetSnapshot()
 		front := m.buildBroadcastFrontendStateFromSnapshot(snapshot, m.mockModeFence.begin())
-		observations[p] = map[string]any{"resources": front.Resources, "total": len(front.Resources), "backups": snapshot.PBSBackups, "vms": snapshot.VMs}
+		observations[p] = map[string]any{"resources": front.Resources, "total": len(front.Resources), "backups": snapshot.PBSBackups, "vms": snapshot.VMs, "writerReads": writerReads.Load() - beforeWriters, "snapshotReads": snapshotReads.Load() - beforeSnapshots}
 		if len(snapshot.PBSBackups) != 3 || len(snapshot.VMs) != 2 {
 			t.Fatal("snapshot or guest inventory changed")
+		}
+		wantObserved := p == "active" || p == "empty" || p == "equivalent-aliases" || p == "active-again"
+		wantReads := int32(1)
+		if wantObserved {
+			wantReads = 2
+		}
+		if writerReads.Load()-beforeWriters != wantReads {
+			t.Errorf("%s: unexpected writer retry/read count", p)
+		}
+		if p != "active" && snapshotReads.Load() != beforeSnapshots {
+			t.Errorf("%s: unchanged snapshot cache was refetched", p)
 		}
 		incompleteCount := 0
 		for _, backup := range snapshot.PBSBackups {
 			if backup.InProgress {
 				incompleteCount++
-				wantObserved := p == "active" || p == "empty" || p == "active-again"
-				wantActive := p == "active" || p == "active-again"
+				wantActive := p == "active" || p == "equivalent-aliases" || p == "active-again"
 				if backup.WriteActivityObserved != wantObserved || backup.WriteActive != wantActive {
 					t.Errorf("%s: writer observed/active=%t/%t want %t/%t", p, backup.WriteActivityObserved, backup.WriteActive, wantObserved, wantActive)
 				}

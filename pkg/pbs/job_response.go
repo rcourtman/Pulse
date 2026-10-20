@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -80,4 +81,37 @@ func readPBSJobList(resp *http.Response, fields []string, valid func(map[string]
 		rows = append(rows, row)
 	}
 	return rows, nil
+}
+
+// Aliases are compatibility spellings, not a priority order for conflicting
+// writer identities. Choosing one can hide an active writer and authoritatively
+// mark its incomplete snapshot idle. A missing worker ID remains conservative
+// instance-wide activity; a present but invalid/conflicting ID is unreadable.
+func validPBSRunningTaskIdentity(row map[string]interface{}) bool {
+	return pbsRunningStringAliasesAgree(row, true, true, "worker-type", "worker_type", "type") &&
+		pbsRunningStringAliasesAgree(row, false, false, "worker-id", "worker_id", "id")
+}
+
+func pbsRunningStringAliasesAgree(row map[string]interface{}, required, foldCase bool, keys ...string) bool {
+	var identity string
+	seen := false
+	for _, key := range keys {
+		raw, exists := row[key]
+		if !exists {
+			continue
+		}
+		value, ok := raw.(string)
+		if !ok {
+			return false
+		}
+		value = strings.TrimSpace(value)
+		if foldCase {
+			value = strings.ToLower(value)
+		}
+		if seen && value != identity {
+			return false
+		}
+		identity, seen = value, true
+	}
+	return !required || (seen && identity != "")
 }

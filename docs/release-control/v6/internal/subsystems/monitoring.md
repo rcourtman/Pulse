@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Ambiguous PBS live-writer identities cannot certify idle backups
+
+The live backup/sync task reader admits compatibility aliases for worker type
+and worker ID only when every supplied spelling is a string and agrees after
+existing whitespace normalisation (type names are case-insensitive; IDs are not).
+Conflicting, null or wrongly typed aliases make the complete writer observation
+unavailable, rather than selecting the first value and hiding a running writer.
+A missing or empty worker ID remains conservative instance-wide activity.
+Canonical, underscore and legacy spellings, equivalent aliases, unrelated task
+filtering, request bounds, TLS and credentials retain their existing behaviour.
+
+`TestPBSRunningTaskIdentityAliases` checks the public reader, exact request/body
+cleanup and private diagnostic controls. The ordinary GET-only polling/cache
+journey in `TestPBSWriterResponseGapCannotClearGuestActivity` must retain an
+incomplete guest's conservative Backup Running state and last completed backup
+through ambiguous observations, keep the completed sibling unchanged, accept a
+real empty writer list, and resume on ordinary equivalent/canonical aliases.
+Its actual resource projections feed desktop/phone Machines rows and backup
+status disclosures. These fixtures do not establish guest thaw, installed
+recovery or published availability.
+
 ### PBS datastore status must contain a real capacity observation
 
 A successful status HTTP response is not, by itself, an available or empty

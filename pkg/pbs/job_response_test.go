@@ -181,3 +181,79 @@ func TestPBSRejectedJobListingsRemainPartialEvidence(t *testing.T) {
 		})
 	}
 }
+
+// The real public reader must not choose a first alias and certify that the
+// writer for another alias/subject is absent. Compatibility spellings and an
+// unspecified worker scope remain supported without extra requests or retries.
+func TestPBSRunningTaskIdentityAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name, row string
+		valid     bool
+		worker    string
+	}{
+		{"canonical", `{"worker-type":"backup","worker-id":"archive:vm/117"}`, true, "archive:vm/117"},
+		{"underscore", `{"worker_type":"backup","worker_id":"archive:vm/117"}`, true, "archive:vm/117"},
+		{"legacy", `{"type":"backup","id":"archive:vm/117"}`, true, "archive:vm/117"},
+		{"equal-aliases", `{"worker-type":" BACKUP ","worker_type":"backup","type":"backup","worker-id":" archive:vm/117 ","worker_id":"archive:vm/117","id":"archive:vm/117"}`, true, "archive:vm/117"},
+		{"unscoped", `{"worker-type":"backup"}`, true, ""},
+		{"empty-scope", `{"worker-type":"backup","worker-id":""}`, true, ""},
+		{"type-shadow", `{"worker-type":"verificationjob","worker_type":"backup","worker-id":"archive:vm/117"}`, false, ""},
+		{"legacy-type-shadow", `{"worker-type":"verificationjob","type":"backup","worker-id":"archive:vm/117"}`, false, ""},
+		{"identity-shadow", `{"worker-type":"backup","worker-id":"archive:vm/118","worker_id":"archive:vm/117"}`, false, ""},
+		{"legacy-identity-shadow", `{"worker-type":"backup","worker-id":"archive:vm/118","id":"archive:vm/117"}`, false, ""},
+		{"case-distinct-identity", `{"worker-type":"backup","worker-id":"Archive:vm/117","worker_id":"archive:vm/117"}`, false, ""},
+		{"empty-shadow", `{"worker-type":"backup","worker-id":"","worker_id":"archive:vm/117"}`, false, ""},
+		{"null-type", `{"worker-type":null,"worker_type":"backup"}`, false, ""},
+		{"numeric-type", `{"worker-type":17,"worker_type":"backup"}`, false, ""},
+		{"null-identity", `{"worker-type":"backup","worker-id":null}`, false, ""},
+		{"numeric-identity", `{"worker-type":"backup","worker-id":117}`, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClient(ClientConfig{Host: "http://pbs-writer-fixture.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reads, closed := 0, 0
+			client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				reads++
+				if r.Method != http.MethodGet || r.Header.Get("Authorization") != "PBSAPIToken=fixture@pbs!reader:fixture-only" {
+					t.Error("method or credential changed")
+				}
+				body := `{"data":[]}`
+				if r.URL.Query().Get("typefilter") == "backup" {
+					body = `{"data":[` + tc.row + `],"extension":"private-writer-body"}`
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: &writerIdentityBody{Reader: strings.NewReader(body), closed: &closed}, Header: make(http.Header), ContentLength: -1}, nil
+			})
+			tasks, err := client.ListRunningDataTasks(context.Background())
+			if tc.valid {
+				if err != nil || len(tasks) != 1 || tasks[0].WorkerType != "backup" || tasks[0].WorkerID != tc.worker {
+					t.Fatalf("valid aliases lost: tasks=%+v err=%v", tasks, err)
+				}
+				if reads != 2 {
+					t.Errorf("valid read count=%d want=2", reads)
+				}
+			} else {
+				if err == nil || len(tasks) != 0 {
+					t.Errorf("ambiguous writer admitted: tasks=%+v err=%v", tasks, err)
+				}
+				if reads != 1 {
+					t.Errorf("rejected read count=%d want=1", reads)
+				}
+			}
+			if closed != reads {
+				t.Error("response body not closed")
+			}
+			if err != nil && strings.Contains(err.Error(), "private-writer-body") {
+				t.Error("provider extension leaked")
+			}
+		})
+	}
+}
+
+type writerIdentityBody struct {
+	io.Reader
+	closed *int
+}
+
+func (b *writerIdentityBody) Close() error { *b.closed++; return nil }

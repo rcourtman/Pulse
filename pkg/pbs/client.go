@@ -1170,9 +1170,7 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 			if err != nil {
 				return nil, err
 			}
-			rows, err := readPBSJobList(resp, pbsTaskFields, func(row map[string]interface{}) bool {
-				return stringJobField(row, "worker-type", "worker_type", "type") != ""
-			})
+			rows, err := readPBSJobList(resp, pbsTaskFields, validPBSRunningTaskIdentity)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read running PBS %s tasks: %w", requestedType, err)
 			}
