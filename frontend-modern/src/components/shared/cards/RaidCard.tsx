@@ -35,6 +35,11 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
           {props.title || 'RAID'}
         </div>
+        <Show when={lastKnownTitle()}>
+          <p class="mb-2 whitespace-normal wrap-break-word text-xs text-muted" role="status">
+            RAID states are last known, not current. {props.lastKnownReason}
+          </p>
+        </Show>
 
         <div class="max-h-[160px] overflow-y-auto custom-scrollbar space-y-2">
           <For each={props.arrays}>

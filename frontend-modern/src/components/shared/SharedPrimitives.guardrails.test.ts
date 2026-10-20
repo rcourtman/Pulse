@@ -364,6 +364,11 @@ describe('shared primitive guardrails', () => {
 
   it("keeps a silent agent's retained RAID state out of live colour and rebuild progress", () => {
     const source = readFrontendSource('src/components/shared/cards/RaidCard.tsx');
+    // The qualification must be available to touch/keyboard readers too,
+    // not only the per-array hover titles.
+    expect(source).toMatch(/<Show when=\{lastKnownTitle\(\)\}>\s*<p[^>]*role="status"/);
+    expect(source).toContain('RAID states are last known, not current. {props.lastKnownReason}');
+
     expect(source).toContain('lastKnownReason?: string;');
     expect(source).toContain('`Last known reading, not current: ${reason}`');
     expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?getRaidStateTextClass/);

@@ -10805,3 +10805,16 @@ rebuilt as a non-secret interactive Docker login after registry/image identity
 validation. Malformed quoting, injected suffixes, secrets and unrelated registry
 identities stay withheld without echo or a login copy action. The password note
 explains hidden input and Ctrl+C cancellation. Pull/up commands remain untouched.
+
+### Retained guest hardware is visibly qualified
+
+The shared RAID card exposes its last-known reason in visible wrapping status
+text, not only hover titles. In the guest Overview, the native Proxmox VM power
+state (paused, suspended, stopped/offline) overrides an unexpired in-guest agent
+lease for RAID and agent-supplied physical-disk views. Unknown power, containers
+and unrelated platforms do not acquire an invented Proxmox power diagnosis.
+Array/member state and adverse evidence remain readable, without current state
+colours, rebuild speed or progress claims. GuestHardwareObservation and RaidCard
+regressions cover the live retained presentation; guest-hardware-observation.cjs
+covers actual canonical deltas, the mapper, full drawer and desktop/phone pixels.
+This is not independent thaw, filesystem liveness or installed recovery.

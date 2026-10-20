@@ -63,10 +63,11 @@ vi.mock('@/stores/license', () => ({
 // Records whether the guest's physical disks may read, without their own
 // resource query; GuestPhysicalDisks.test covers what they render.
 vi.mock('./GuestPhysicalDisks', () => ({
-  GuestPhysicalDisks: (props: { historyEnabled?: boolean }) => (
+  GuestPhysicalDisks: (props: { historyEnabled?: boolean; lastKnownReason?: string }) => (
     <div
       data-testid="guest-physical-disks-stub"
       data-history-enabled={String(props.historyEnabled)}
+      data-last-known-reason={props.lastKnownReason}
     />
   ),
 }));
@@ -1606,7 +1607,7 @@ describe('GuestDrawer', () => {
       expect(array).toHaveAttribute('data-raid-reading', 'last-known');
       expect(within(array).getByTestId('raid-card-state')).toHaveAttribute(
         'title',
-        'Last known reading, not current: host agent stopped reporting',
+        'Last known reading, not current: The Pulse Agent in this guest stopped reporting.',
       );
       expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
         'Rebuild was at 42%',
@@ -1872,4 +1873,24 @@ it('forwards the mounted guest clock without changing the evaluated breach or cl
   expect(copy.detail).toBe('Stays open until it reaches 70% or lower.');
   expect(copy.title).toContain('Last reading at or above 80%: 92%, 31 mins ago');
   expect(now).toHaveBeenCalledOnce();
+});
+
+describe('parent-owned guest hardware qualification', () => {
+  it('updates the same lazy disk consumer without eager inventory work or remounting it', async () => {
+    const [guest, setGuest] = createSignal(makeGuest({ agentKind: 'pulse', agentStale: false }));
+    solidRender(() => <GuestDrawer guest={guest()} onClose={() => {}} />);
+    const diskOwner = await screen.findByTestId('guest-physical-disks-stub');
+    expect(diskOwner).not.toHaveAttribute('data-last-known-reason');
+    setGuest(makeGuest({ agentKind: 'pulse', agentStale: false, status: 'paused' }));
+    expect(screen.getByTestId('guest-physical-disks-stub')).toBe(diskOwner);
+    expect(diskOwner).toHaveAttribute('data-last-known-reason', 'Proxmox reports this VM paused.');
+    setGuest(makeGuest({ agentKind: 'pulse', agentStale: true }));
+    expect(diskOwner).toHaveAttribute(
+      'data-last-known-reason',
+      'The Pulse Agent in this guest stopped reporting.',
+    );
+    setGuest(makeGuest({ agentKind: 'pulse', agentStale: false }));
+    expect(screen.getByTestId('guest-physical-disks-stub')).toBe(diskOwner);
+    expect(diskOwner).not.toHaveAttribute('data-last-known-reason');
+  });
 });

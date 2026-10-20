@@ -7994,3 +7994,19 @@ outcomes, namespace scope and storage reconciliation are unchanged.
 `TestHandleAddNodePBSTokenCollisionPreservesConfig` and
 `TestSetupMonitoringAccessCollisionKeepsExistingReader` cover this source
 boundary without native backup, restore or guest operations.
+
+### Parent-qualified guest hardware reports
+
+An open guest's SMART view accepts an explicit parent-owned last-known reason
+when native Proxmox VM power contradicts execution or its own Pulse agent stops
+reporting. The collapsed disk summary and expanded SMART view share that reason:
+no current healthy/temperature verdict, current attribute tones or live I/O from
+the retained report. Reported disk risks remain qualified and readable. Stored
+History identity, range and samples are neither withdrawn nor manufactured.
+The raw resource, health, collection state and timestamps are never rewritten.
+A separately stale disk stays retained when a parent qualifier clears; an
+explicit API-only independent disk does not borrow the guest agent's state.
+Scoped inventory read failures and retry remain authoritative. GuestHardwareObservation,
+useDiskDetailModel and the read-only guest-hardware-observation.cjs protocol cover
+live qualification, source independence and same-open recovery. These synthetic
+consumer proofs do not establish native disk health, thaw or filesystem writes.

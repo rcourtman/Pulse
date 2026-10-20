@@ -125,3 +125,30 @@ describe('useDiskDetailModel', () => {
     expect(result.attributeCards()).toEqual([]);
   });
 });
+
+describe('parent-qualified SMART reports', () => {
+  it('keeps stored History and reported evidence while withdrawing current SMART and live I/O', () => {
+    const original = buildDisk();
+    const [disk, setDisk] = createSignal(original);
+    const [lastKnownReason, setReason] = createSignal<string | undefined>();
+    const { result } = renderHook(() => useDiskDetailModel({ disk, lastKnownReason }));
+    const charts = result.historyCharts();
+    result.setChartRange('7d');
+    setReason('Proxmox reports this VM paused.');
+    expect(result.diskData().lastKnown).toBe(true);
+    expect(result.healthPresentation().summary).toContain('Proxmox reports this VM paused.');
+    expect(result.attributeCards().every((card) => card.lastKnown)).toBe(true);
+    expect(result.liveIOAvailable()).toBe(false);
+    expect(result.historyResourceId()).toBe('agent-tower:sda');
+    expect(result.historyCharts()).toBe(charts);
+    expect(result.chartRange()).toBe('7d');
+    expect(disk()).toBe(original);
+    expect(original.health).toBeUndefined();
+    // Clearing a parent qualifier must never clear the disk's own stale flag.
+    setDisk({ ...original, health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale' }] } });
+    setReason(undefined);
+    expect(result.diskData().lastKnown).toBe(true);
+    expect(result.healthPresentation().summary).toContain('Disk source stopped reporting.');
+    expect(result.liveIOAvailable()).toBe(false);
+  });
+});

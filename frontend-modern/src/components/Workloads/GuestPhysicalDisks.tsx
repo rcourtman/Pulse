@@ -25,6 +25,7 @@ const GuestPhysicalDiskRow: Component<{
   disk: Resource;
   alertResourceIds: string[];
   historyEnabled: boolean;
+  lastKnownReason?: string;
 }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const { getDiskTemperatureThresholds } = useAlertsActivation();
@@ -33,6 +34,11 @@ const GuestPhysicalDiskRow: Component<{
       props.disk,
       getDiskTemperatureThresholds,
       props.alertResourceIds,
+      // An API-only disk can have an independent reporting source. The guest
+      // agent's report cannot withdraw that source's current measurement.
+      props.disk.sourceType === 'api' && !props.disk.sources?.includes('agent')
+        ? undefined
+        : props.lastKnownReason,
     );
   const health = () => getPhysicalDiskHealthStatus(data());
   const temperature = () => getPhysicalDiskTemperaturePresentation(data());
@@ -84,6 +90,7 @@ const GuestPhysicalDiskRow: Component<{
               nodes={[]}
               alertResourceIds={props.alertResourceIds}
               historyEnabled={props.historyEnabled}
+              lastKnownReason={data().lastKnownReason}
             />
           </Suspense>
         </div>
@@ -105,6 +112,8 @@ export const GuestPhysicalDisks: Component<{
    * charts and the list's live refresh pause until it is shown again.
    */
   historyEnabled?: boolean;
+  /** Why this guest's own agent report cannot be a current hardware reading. */
+  lastKnownReason?: string;
 }> = (props) => {
   // The Proxmox Overview snapshot deliberately excludes physical disks. Query
   // only the open guest's direct children rather than hydrating every disk in
@@ -187,6 +196,7 @@ export const GuestPhysicalDisks: Component<{
                   disk={disk}
                   alertResourceIds={props.alertResourceIds ?? []}
                   historyEnabled={props.historyEnabled !== false}
+                  lastKnownReason={props.lastKnownReason}
                 />
               )}
             </For>

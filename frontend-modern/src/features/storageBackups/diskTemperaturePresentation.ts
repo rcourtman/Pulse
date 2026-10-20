@@ -42,6 +42,7 @@ export function getPhysicalDiskTemperaturePresentation(disk: {
   temperature: number;
   collection?: PhysicalDiskCollectionStatus | null;
   lastKnown?: boolean;
+  lastKnownReason?: string;
 }): PhysicalDiskTemperaturePresentation | null {
   if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return null;
   const current = !disk.lastKnown && isPhysicalDiskTemperatureCurrent(disk.collection);
@@ -51,7 +52,7 @@ export function getPhysicalDiskTemperaturePresentation(disk: {
     title: current
       ? undefined
       : disk.lastKnown
-        ? 'Last known reading, not current: disk source stopped reporting'
+        ? `Last known reading, not current: ${disk.lastKnownReason || 'disk source stopped reporting'}`
         : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
   };
 }

@@ -62,6 +62,8 @@ export interface PhysicalDiskPresentationData {
   health: string;
   /** Canonical source expiry, independent of a successful inventory read. */
   lastKnown?: boolean;
+  /** An explicit parent-owned reason, when it invalidates this agent report. */
+  lastKnownReason?: string;
   riskLevel?: string;
   riskReasons: string[];
   /** The same reasons with their codes and severities, as the API sent them. */
@@ -449,6 +451,7 @@ export function extractPhysicalDiskPresentationData(
   resource: Resource,
   resolveTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = resolveFactoryDiskTemperatureThresholds,
   alertResourceIds: string[] = [],
+  lastKnownReason?: string,
 ): PhysicalDiskPresentationData {
   const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
@@ -481,7 +484,8 @@ export function extractPhysicalDiskPresentationData(
     target: pd.target,
     size: pd.sizeBytes || 0,
     health: pd.health || 'UNKNOWN',
-    lastKnown: getResourceStaleness(resource) !== null,
+    lastKnown: Boolean(lastKnownReason) || getResourceStaleness(resource) !== null,
+    lastKnownReason,
     wearout: pd.wearout ?? -1,
     temperature: pd.temperature ?? 0,
     temperatureThresholds: resolveTemperatureThresholds(pd.diskType || '', alertResourceIds),
@@ -829,7 +833,7 @@ export function getPhysicalDiskHealthStatus(
   const hasRisk = getPhysicalDiskHealthVerdict(disk).kind !== 'clear';
   return {
     label: hasRisk ? 'Last known risk' : 'Last known',
-    summary: `${hasRisk ? `Last reported: ${status.label}. ${status.summary} ` : ''}Disk source stopped reporting. SMART readings are last known, not current. Current disk health is unconfirmed.`,
+    summary: `${hasRisk ? `Last reported: ${status.label}. ${status.summary} ` : ''}${disk.lastKnownReason || 'Disk source stopped reporting.'} SMART readings are last known, not current. Current disk health is unconfirmed.`,
     tone: hasRisk ? status.tone : 'text-muted',
   };
 }
