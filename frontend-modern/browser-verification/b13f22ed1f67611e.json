@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "49dfd1ced7f0eb9727d30a657d8ba145e929b1c2",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx",
+    "frontend-modern/src/utils/guestNetworkObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "a8372dff8555118461b0df5bafddb7055599054ccad70cff73288dc1795d56ab",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "6b0f2a68affdc7f361a878e033a4836091f50692236f2f3799c1bc05e829758f",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "af71fa39b9b0f79dba32825a76907ca0e597feda1a3ece5b305571cf64bfd5cb",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx": "da6467052b61aebeb4a41b5c22b23f3cd8956e800a25e8fd978b8bc0844b204f",
+    "frontend-modern/src/utils/guestNetworkObservation.ts": "6fd88bd02a5249efffdf529e259fbb079619d42e071032d6aa0976b7e00077dc"
+  },
+  "routes": [
+    "/browser-tests/guest-network-observation.html (production canonical delta merger, useWorkloads, GuestRow and GuestDrawer)"
+  ],
+  "states": [
+    "Proxmox VM paused/suspended/stopped/offline with retained platform or still-leased agent interfaces, unchanged online carrier, addresses and counters",
+    "Selected silent agent versus independent platform list; host/configuration-derived LXC control",
+    "Replacement running source preserves new address and observed zero counters; no overlay implies a tested connection",
+    "Valid synthetic empty History response keeps the surrounding surface usable without changing stored History or its validator"
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px touch open the read-only Network disclosure without activating the enclosing row",
+    "Same-open native power update changes the explanation, dismiss returns focus, and withdrawn cue returns focus to the row disclosure",
+    "Same row and Details DOM identity survive canonical power/producer changes; primary IP and network detail qualification agree"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-20T14:16:35.480811Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All six final captures were opened with native view_image in this source turn. Desktop light and 320px WebKit dark dialogs wrap their complete qualification with reachable Close controls; the retained IP/status and new address are readable without horizontal overflow. The previously observed red History fixture error is absent after correcting the synthetic response identity/range, not relaxing production validation.",
+  "driver": "frontend-modern/browser-tests/guest-network-observation.cjs",
+  "limits": "Synthetic read-only canonical presentation proof. Not a guest probe, current network connection, collector, thaw, filesystem-write, installed recovery, physical-phone, publication or release acceptance."
+}
