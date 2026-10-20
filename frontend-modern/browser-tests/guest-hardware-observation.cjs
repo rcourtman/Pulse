@@ -326,7 +326,8 @@ const save = () =>
         const evidence = await page.evaluate(() => window.__guestHardware.evidence());
         assert.equal(evidence.canonical.status, 'online');
         assert.equal(evidence.canonical.agent.stale, false);
-        assert.equal(evidence.projected.agentStale, false);
+        // The Workloads adapter omits a false optional flag, it does not renew the lease.
+        assert.equal(Boolean(evidence.projected.agentStale), false);
         assert.equal(evidence.canonical.agent.lastReportAt, '2026-10-20T12:00:00Z');
         assert.equal(
           record.requests.filter((r) => r.path === '/api/resources').length,
