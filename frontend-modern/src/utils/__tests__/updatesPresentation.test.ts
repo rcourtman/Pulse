@@ -145,7 +145,7 @@ describe('getProRuntimeSwitchPresentation', () => {
       proDockerCommands.composePullCommand,
       proDockerCommands.composeUpCommand,
     ]);
-    expect(view.steps[0].note).toContain('At Docker’s Password prompt');
+    expect(view.steps[0].note).toContain('Docker’s hidden Password prompt');
     expect(JSON.stringify(view)).not.toContain('<activation-key>');
     expect(view.note).toContain('PULSE_IMAGE');
     expect(view.steps.some((step) => step.command?.includes('rcourtman/pulse'))).toBe(false);

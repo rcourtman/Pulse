@@ -298,7 +298,7 @@ describe('buildUpdateInstallGuide', () => {
     // Legacy login becomes an interactive password prompt, never a key-bearing command.
     expect(guide?.steps[2]?.id).toBe('docker-pro-login-note');
     expect(guide?.steps[2]?.title).toBe('If the pull is denied, sign in, then repeat the pull');
-    expect(guide?.steps[2]?.note).toContain('At Docker’s Password prompt');
+    expect(guide?.steps[2]?.note).toContain('Docker’s hidden Password prompt');
     expect(guide?.steps[2]?.command).toBe(
       "docker login registry.pulserelay.pro --username 'lic_test'",
     );
