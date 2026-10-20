@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "base_sha": "a2ed5b9d74aaac13ce88e3682de677992a3f02f6",
+  "verified_at": "2026-10-20T12:19:53.901Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "c9dcbcbe8e0d12766d2790e638168888ecd693a4c2c41191cf84e11f09410fdf",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "4ed0fb1ab9062a66c97f77be34d3e90fab3ad2cb6114d27e82e530a2c6a03cb6"
+  },
+  "routes": [
+    "/browser-tests/fleet-details.html (real AvailabilityChecksTable and ResourceDetailDrawer; synthetic snapshots and preserved source-n3h389mz History response)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Fifty attention-ordered checks with determinate/inconclusive/thin History evidence",
+    "Opened and collapsed details in light and dark desktop/phone profiles",
+    "Recovered same-ID snapshot/reordered tile with History filter and active tab retained",
+    "Selection removal/reappearance, filtered search and both empty parent states"
+  ],
+  "interactions": [
+    "Keyboard activation and Tab/Enter collapse, pointer/touch activation, current-tile return",
+    "Poll immutable snapshots without refocus or scroll",
+    "Remove selected check, restore its ID without reopening, return to live neighbour",
+    "Preserve search, do not steal focus when a filter hides selection",
+    "Return focused empty-filter removal to search and empty-inventory removal to Add-check"
+  ],
+  "tool": [
+    "pulse-worker-browser frontend-modern/browser-tests/fleet-details-desktop.cjs",
+    "pulse-worker-browser frontend-modern/browser-tests/fleet-details-phone.cjs",
+    "pulse-worker-browser frontend-modern/browser-tests/fleet-details-desktop-dark.cjs",
+    "pulse-worker-browser frontend-modern/browser-tests/fleet-details-phone-dark.cjs"
+  ],
+  "playwright": "1.56.1",
+  "browsers": {
+    "desktop": "141.0.7390.37",
+    "phone": "26.0",
+    "desktop-dark": "141.0.7390.37",
+    "phone-dark": "26.0"
+  },
+  "captures": [
+    {
+      "file": "desktop-grid.png",
+      "sha256": "802677b34c48a9ebf48a5759b05a9a8b813db00a2ddff7847e657f232d029ac2"
+    },
+    {
+      "file": "desktop-opened.png",
+      "sha256": "ed8063400da76442b13a2b1561d9fa44793c8699583e02851ca0d99a5f0c25b3"
+    },
+    {
+      "file": "desktop-returned.png",
+      "sha256": "a05c1bc0cdb30e7948170ec2bd3034064c586900cde452cbe1fefd2d7274e3d0"
+    },
+    {
+      "file": "desktop-history-preserved.png",
+      "sha256": "286ca0707fe9a9d2a244b8c903d9ad26696e52b75cbaaa8e1e2e631762c83626"
+    },
+    {
+      "file": "desktop-reordered-return.png",
+      "sha256": "95defda26105116badfee89c02ddb93e59eea0aa237a5e374cd92187c764bf18"
+    },
+    {
+      "file": "desktop-removal-return.png",
+      "sha256": "254c0c700ce4bba8d65d60d9163869f1569d115cf983ad057360d7fd4d3e4685"
+    },
+    {
+      "file": "desktop-filter-preserved.png",
+      "sha256": "29c15cabeeb712496f4029a8093f81dd235c34648bc7f60719e74b8b67f55eb6"
+    },
+    {
+      "file": "desktop-empty-filter-return.png",
+      "sha256": "077ce787137e8a4259ee9c5132b370f34290392488e485840201a733330561b8"
+    },
+    {
+      "file": "desktop-empty-inventory-return.png",
+      "sha256": "df2e90b83e934c132d4050ae7d419bd3e42b83db304cb85421d978bbe063406a"
+    },
+    {
+      "file": "phone-grid.png",
+      "sha256": "27bf4dcf250626fc78fd93d03cbfdde58415f44b988c46c681d66c3a70382769"
+    },
+    {
+      "file": "phone-opened.png",
+      "sha256": "cf22b20cb478c78e8f19951f7c06acd9303a992183b29ffc968bff277a8169df"
+    },
+    {
+      "file": "phone-returned.png",
+      "sha256": "905da469cee7e5c2b5c43199099a0c45ef1c88884306c00646f478578c866814"
+    },
+    {
+      "file": "phone-history-preserved.png",
+      "sha256": "e0ab5c64e498da9c0f63e49bc60621cd93547eaebb8c210c1ef7a98bc50b25da"
+    },
+    {
+      "file": "phone-reordered-return.png",
+      "sha256": "641774f72ba1cbf11b96c957e1db87dc960710aaae67f0bb1add0cd71ec430f6"
+    },
+    {
+      "file": "phone-removal-return.png",
+      "sha256": "831a79142c8ee4c3df9e4ad4225360fcae27588517eee476583aadb23e41d206"
+    },
+    {
+      "file": "phone-filter-preserved.png",
+      "sha256": "1be4649e9ad24322d6b19925b8a239effb4c9a0e5453e363fefbc49808935ba5"
+    },
+    {
+      "file": "phone-empty-filter-return.png",
+      "sha256": "630ab0e4908922a649972b426886ea27cb435fe8fe2f680a5e012de423d74d05"
+    },
+    {
+      "file": "phone-empty-inventory-return.png",
+      "sha256": "8f56f1320440bbc8317bec772ee154d21d663d5c3f0c6e558bb1deba6ccc77bc"
+    },
+    {
+      "file": "desktop-dark-opened.png",
+      "sha256": "f63cb1c03a07fc671f8376160141e5ae1c301516e504e846e2ad94079edfdfaa"
+    },
+    {
+      "file": "desktop-dark-returned.png",
+      "sha256": "5739bbed14dca9f05b969ff4d467f29b454f9ad6c6f22b3557ee0cba9c56b636"
+    },
+    {
+      "file": "phone-dark-opened.png",
+      "sha256": "8318d7e541779f75a5d6a4d3bfff1b3a5b6cd0154149e3bb32ed8d6a44513342"
+    },
+    {
+      "file": "phone-dark-returned.png",
+      "sha256": "2165ac4f3234cc6251ccc708479f7be06e053d312ee9e573800eba6841a107d9"
+    }
+  ],
+  "source_binding": {
+    "source": "206072e661f190ca39c2a856dadbc6d960c3a329",
+    "assigned_base": "9d09c91d546d3cbd09db67bcdd13f12b8d048c39",
+    "files": {
+      "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "c9dcbcbe8e0d12766d2790e638168888ecd693a4c2c41191cf84e11f09410fdf",
+      "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "4ed0fb1ab9062a66c97f77be34d3e90fab3ad2cb6114d27e82e530a2c6a03cb6",
+      "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "a9f6116d18eeb473aa86dd91c4b24b98fb1a2e59dda35347718bfb5dbb770f2b",
+      "frontend-modern/package-lock.json": "54b5779a25cb9a10770836e0399d5758b5fc97c3c8eaad82d1c04db052dbc3c0",
+      "frontend-modern/browser-tests/fleet-details.cjs": "5fe65047c47e51d6d19914f93d8ef39f5faa6184922fba3a328adbe2cdb26eae",
+      "frontend-modern/browser-tests/fleet-details.html": "bda5f10347b5efdf7fe1c8f17921777012d9ff9f93a71708126e8a5ce20b482a",
+      "frontend-modern/browser-tests/fleet-details.tsx": "8a6f72adc1c6530904adfb47e9b6b25cecafa05c24ae2e5d6ac3c9311037f383",
+      "frontend-modern/browser-tests/fleet-details-desktop.cjs": "64cf3f8a90526f531fa8606a43520e49cb695f521d905ddeec26d36176ebc021",
+      "frontend-modern/browser-tests/fleet-details-desktop-dark.cjs": "4e96ea0a7fcff000ddaf28765928eac746c0a20929cea5c377d3ebe36569286a",
+      "frontend-modern/browser-tests/fleet-details-phone-dark.cjs": "4d80c779abbd09ffb9668db662403a0e9e1a22205501ad344c98de3643a56a24",
+      "frontend-modern/browser-tests/fleet-details-phone.cjs": "aba726ee2c4a791d59aebcffbb57ea7f177e6979fffb069576e8131354bacd2b"
+    },
+    "original_producer_receipt": "source-n3h389mz",
+    "scope": "Current production table/drawer/filter/client; preserved synthetic history and snapshots. No network check or installed target."
+  },
+  "message_only_source_equality": {
+    "original_source": "206072e661f190ca39c2a856dadbc6d960c3a329",
+    "amended_source": "a2ed5b9d74aaac13ce88e3682de677992a3f02f6",
+    "tree": "32e598ad66bd9b7849d9b7081b40afe7d1b1fc16",
+    "change": "message-only Contract-Neutral trailer; exact source, staged and worktree contents preserved"
+  },
+  "report_sha256": "fecd8a66c19226ddbfa98b3dcc72fd3ec612c34f90e1680d066a06655e10279e",
+  "cases": 36,
+  "cleanup": {
+    "desktop": {
+      "browserClosed": true,
+      "serverClosed": true
+    },
+    "phone": {
+      "browserClosed": true,
+      "serverClosed": true
+    },
+    "desktop-dark": {
+      "browserClosed": true,
+      "serverClosed": true
+    },
+    "phone-dark": {
+      "browserClosed": true,
+      "serverClosed": true
+    }
+  },
+  "limits": [
+    "Offline real-consumer/navigation proof, not native monitoring, fleet load, installed serving or publication.",
+    "Original final aggregate deadline/signal9 remains adverse; complete historical descendant cleanup is unknown. Current per-profile browser/context/server closure is recorded separately."
+  ]
+}
