@@ -15,8 +15,11 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const producerPath = path.join(root, 'tmp/backup-history-pagination/producer.json');
 const producer = JSON.parse(fs.readFileSync(producerPath));
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
+// The production producer/consumer is unchanged from its source-suite receipt.
+// Bind this corrected browser-only continuation separately, preserving the old control.
+const continuation = JSON.parse(fs.readFileSync(path.join(root, 'tmp/backup-history-pagination/continuation-binding.json')));
 const result = {
-  binding, producer: producer.binding,
+  binding, continuation, producer: producer.binding,
   producer_input_sha256: hash(fs.readFileSync(producerPath)),
   protocol_sha256: hash(fs.readFileSync(__filename)),
   playwright: require('playwright/package.json').version,
@@ -59,8 +62,14 @@ async function capture(page, name) {
   assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
   assert.equal(binding.source_sha, producer.binding.source_sha);
   assert.equal(hash(fs.readFileSync(__filename)), hash(fs.readFileSync(path.join(root, 'frontend-modern/browser-tests/backup-history-pagination.cjs'))));
-  for (const [file, digest] of Object.entries(producer.binding.files))
-    assert.equal(hash(fs.readFileSync(path.join(root, file))), digest, file);
+  assert.equal(result.protocol_sha256, continuation.protocol_sha256);
+  assert.equal(continuation.producer_source_sha, producer.binding.source_sha);
+  assert.equal(continuation.consumer_binding_sha256, hash(fs.readFileSync(path.join(compiled, 'binding.json'))));
+  for (const [file, digest] of Object.entries(producer.binding.files)) {
+    const sourceFile = file === 'frontend-modern/browser-tests/backup-history-pagination.cjs'
+      ? continuation.source_tested_protocol_file : file;
+    assert.equal(hash(fs.readFileSync(path.join(root, sourceFile))), digest, file);
+  }
   for (const [file, digest] of Object.entries(binding.sources))
     assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
   for (const file of [ 'src/features/proxmox/ProxmoxCoverageTable.tsx', 'src/features/proxmox/proxmoxBackupRecoveryModel.ts', 'src/features/proxmox/proxmoxBackupInventory.ts' ]) assert(binding.sources[file], file);
@@ -128,7 +137,9 @@ async function capture(page, name) {
         assert.deepEqual(JSON.parse(bytes), payload);
         result.responses.push({ client, viewport: name, phase, sha256: hash(bytes) });
         await page.waitForFunction(() => [...document.querySelectorAll('button[aria-disabled="false"]')].some((button) => button.textContent === 'Refresh backups'));
-        await page.waitForFunction((value) => document.querySelector('[data-backup-task-detail] dd')?.textContent === value, expected);
+        // Job ID is the first value in the definition list. Wait on the
+        // labelled Result in this workload's detail, never a positional value.
+        await field('Result').filter({ hasText: new RegExp('^' + expected + '$') }).waitFor();
         assert.equal(await field('Result').innerText(), expected);
         assert.equal(await field('Job node').innerText(), 'pve-a');
         assert.equal(await field('Job connection').innerText(), 'site');
