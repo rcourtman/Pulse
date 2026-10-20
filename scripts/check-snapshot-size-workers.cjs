@@ -54,6 +54,11 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
     }
   };
   walk(compiled);
+  // Preserve build/source binding even if the execution transport cannot
+  // return its final result. A checkpoint is partial evidence, not a pass.
+  fs.writeFileSync(path.join(out, 'compiled-binding.json'), JSON.stringify({ source, playwright, compiledSources, compiledArtifacts }, null, 2) + '\n');
+  const checkpoint = (stage, details = {}) => fs.writeFileSync(path.join(out, 'browser-progress.json'), JSON.stringify({ source, stage, ...details }, null, 2) + '\n');
+  checkpoint('compiled');
   let phase = 'initial', reads;
   const requests = [], unexpected = [];
   const server = http.createServer((req, res) => {
@@ -110,7 +115,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       await alertPage.goto('http://127.0.0.1:5198/browser-tests/alert-delivery-freshness.html', { waitUntil: 'commit' });
       await alertPage.waitForFunction(() => window.__deliveryFreshness);
       const capture = async (view, name, subject) => {
-        await subject.scrollIntoViewIfNeeded();
+        await subject.evaluate(element => element.scrollIntoView({ block: 'center' }));
         await view.evaluate(() => document.fonts.ready);
         await view.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(await view.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no horizontal overflow');
@@ -119,6 +124,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       };
       const observations = [];
       for (const name of phases) {
+        checkpoint('phase-start', { width, phase: name, results, captures });
         phase = name;
         if (name !== 'initial') {
           const before = reads[name];
@@ -149,16 +155,19 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
           assert((await alertPage.locator('body').innerText()).includes('Acknowledged'));
         } else await alertPage.getByText('No active alerts', { exact: true }).waitFor();
         observations.push({ phase: name, expectedSnapshots: expected, slowText, peerText, active: frames[name].active?.map(alert => ({ id: alert.id, value: alert.value, message: alert.message, acknowledged: alert.acknowledged })) ?? [] });
-        if (['unread', 'recovered', 'empty'].includes(name)) await capture(page, `${width}-${name}-backups.png`, peer);
+        if (['unread', 'recovered', 'empty'].includes(name)) await capture(page, `${width}-${name}-backups.png`, name === 'unread' ? slow : peer);
         if (['unread', 'recovered'].includes(name)) await capture(alertPage, `${width}-${name}-alerts.png`, alertPage.locator('main'));
+        checkpoint('state-observed', { width, phase: name, observations, results, captures, errors });
         if (name === 'recovered') {
           const evidence = slow.getByRole('button', { name: 'Backup evidence for database: Snapshot', exact: true });
+          checkpoint('evidence-open-start', { width, phase: name, results, captures });
           if (width === 320) await evidence.tap();
           else { await evidence.focus(); await evidence.press('Enter'); }
           const dialog = page.getByRole('dialog');
           await dialog.waitFor();
           const text = await dialog.innerText();
           assert(text.includes('not a separate backup') && text.includes('guest responsiveness') && text.includes('successful restore'));
+          checkpoint('evidence-observed', { width, phase: name, text, results, captures });
           await page.keyboard.press('Escape');
           await dialog.waitFor({ state: 'hidden' });
         }
@@ -166,6 +175,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       assert.deepEqual(errors, []);
       assert(phases.every(name => reads[name] === 1), 'one actual PVE inventory read per phase and viewport');
       results.push({ width, dark: width === 320, interaction: width === 320 ? 'touch' : 'keyboard', reads, observations, errors });
+      checkpoint('viewport-complete', { width, results, captures });
       await context.close();
     }
     assert.deepEqual(unexpected, []);
