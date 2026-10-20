@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "32ff341e7bc670b9a3010c2c236e65c01c2be282",
+  "changed_paths": [
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/notificationEvidenceRead.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/alerts.ts": "0539049299ea40bb24f91e725a40a3da8510166de55f1c7f30af253d3604381e",
+    "frontend-modern/src/api/notifications.ts": "13e6c13e73a473069b9cf47ea8c89535ca9359bb2c4316ef55bd54a942a8ee21",
+    "frontend-modern/src/features/alerts/notificationEvidenceRead.ts": "f05e6c0174f098c7f9aab2567ab393d4f4d6c449d525d3744d04cdb982e36660",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "b30150e716441bcda52f9a9a7cbc4f0e338c5f1f98cd1780109b28ba85b783fd",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "79e3aa3645abcbb9bff5914101b6a9886970292b6a1e4d37d177561f9faa746b"
+  },
+  "routes": [
+    "/browser-tests/notification-recovery-boundary.html (full existing Notifications tab; production API client, read owners, health/activity cards and CSS)"
+  ],
+  "states": [
+    "Unanswered health/held headers and a partial attempt JSON body remain pending until the exact 150-second deadline, then expose unavailable rather than empty or healthy evidence, with enabled explicit refresh and no automatic timeout retry.",
+    "Readable failed attempts recover independently of health. A stalled held-event stream later preserves those failed attempts with a visible gap and no empty-history claim. A complete manual refresh clears the gap.",
+    "The actual client honours a 120-second Retry-After, then accepts a readable health response before the deadline; a healthy queue snapshot does not erase failed historical attempts."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch operate actual Refresh controls. Clock-controlled deadlines cover real local HTTP headers/body, with eight transport closures across the two journeys. No mutation or external destination is called.",
+    "All 32 GETs are same-origin, bounds are 200 attempts/100 held events; four deliberately induced timeout diagnostics and one synthetic HTTP 429 per journey, no page errors/unexpected requests or horizontal overflow. Both contexts/browsers and the server close."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-20T23:35:48.984744Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All eight final capture files (six distinct images; health/activity unavailable views share pixels) opened with native view_image and presented to the model. Desktop warnings and preserved failed-attempt evidence are readable. At 320px dark, unavailable explanations, Refresh controls, failed outcome, identity/time and held-only gap wrap without horizontal clipping. Recovery removes only the unavailable notices, not failed history. Three first-attempt desktop captures were also opened; that incomplete journey is retained as adverse.",
+  "driver": "frontend-modern/browser-tests/notification-evidence-deadline.cjs",
+  "binding": "Exact 32ff341e7bc670b9a3010c2c236e65c01c2be282 / source-ubi9fqee static preparation: command/client 0, guest ready/stopped, all 2575 source and five served-artifact hashes match execution. Product source/tests/manifests are unchanged from 2753633082 / source-cubxkgap: all 219 related tests, types, every lint audit, production build/embed and budgets explicitly exit 0.",
+  "limits": "Synthetic consuming-surface verification, not native queue/provider/recipient delivery, installed recovery, protected publication or release availability. Original disk-preparation failure, seven corrected fixture assertions and first desktop-only browser failure remain retained; successful later work does not diagnose the preparation failure. Guest-safety #2439 remains stopped with its existing owners."
+}
