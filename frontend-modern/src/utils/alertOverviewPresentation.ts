@@ -160,8 +160,10 @@ export function getAlertOverviewGroupDisclosureLabel({
   );
 }
 
-export function getAlertOverviewGroupAcknowledgeLabel(count: number): string {
-  return t('alerts.overview.group.acknowledge', { count });
+export function getAlertOverviewGroupAcknowledgeLabel(count: number, processing = false): string {
+  return processing
+    ? t('alerts.overview.action.acknowledging')
+    : t('alerts.overview.group.acknowledge', { count });
 }
 
 export function getAlertOverviewAcknowledgedBadgeLabel(): string {

@@ -107,6 +107,7 @@ describe('alert overview grouping presentation', () => {
       getAlertOverviewGroupDisclosureLabel({ count: 1, correlated: true, expanded: true }),
     ).toBe('Hide');
     expect(getAlertOverviewGroupAcknowledgeLabel(3)).toBe('Acknowledge all (3)');
+    expect(getAlertOverviewGroupAcknowledgeLabel(3, true)).toBe('Acknowledging...');
   });
 });
 

@@ -173,10 +173,192 @@ describe('useAlertAcknowledgementState', () => {
     expect(notificationStore.success).toHaveBeenCalledWith('Alert restored');
     expect(unacknowledgedIds(result)).toEqual(['alert-2', 'alert-3']);
 
+    vi.advanceTimersByTime(1500);
     await result.handleBulkAcknowledge();
     expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledWith(['alert-2', 'alert-3']);
     expect(notificationStore.success).toHaveBeenCalledWith('Acknowledged 1 alert.');
     expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 1 alert.');
     expect(unacknowledgedIds(result)).toEqual(['alert-3']);
+  });
+
+  it.each(['group', 'all'] as const)(
+    'reports partial %s failure without acknowledging the rejected card',
+    async (scope) => {
+      const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2')]);
+      vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValue({
+        results: [
+          { alertIdentifier: 'alert-1', success: true },
+          { alertIdentifier: 'alert-2', success: false, error: 'Synthetic refusal' },
+        ],
+      });
+      await (scope === 'group'
+        ? result.handleGroupAcknowledge(result.alerts())
+        : result.handleBulkAcknowledge());
+      expect(unacknowledgedIds(result)).toEqual(['alert-2']);
+      expect(result.updateAlert).toHaveBeenCalledTimes(1);
+      expect(notificationStore.success).toHaveBeenCalledWith('Acknowledged 1 alert.');
+      expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 1 alert.');
+    },
+  );
+
+  it.each(['group', 'all'] as const)(
+    'reports all %s failures and permits a deliberate retry after release',
+    async (scope) => {
+      const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2')]);
+      const run = () =>
+        scope === 'group'
+          ? result.handleGroupAcknowledge(result.alerts())
+          : result.handleBulkAcknowledge();
+      vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValueOnce({
+        results: result.alerts().map((alert) => ({ alertIdentifier: alert.id, success: false })),
+      });
+      await run();
+      expect(unacknowledgedIds(result)).toEqual(['alert-1', 'alert-2']);
+      expect(result.updateAlert).not.toHaveBeenCalled();
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 2 alerts.');
+      vi.advanceTimersByTime(1500);
+      vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValueOnce({
+        results: result.alerts().map((alert) => ({ alertIdentifier: alert.id, success: true })),
+      });
+      await run();
+      expect(unacknowledgedIds(result)).toEqual([]);
+      expect(notificationStore.success).toHaveBeenCalledWith('Acknowledged 2 alerts.');
+    },
+  );
+
+  it('counts only unique requested confirmations and leaves missing or conflicting results active', async () => {
+    const { result } = renderWithAlertStore([
+      makeAlert('alert-1'),
+      makeAlert('alert-2'),
+      makeAlert('alert-3'),
+      makeAlert('same-name-other'),
+    ]);
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValue({
+      results: [
+        { alertIdentifier: 'alert-1', success: true },
+        { alertIdentifier: 'alert-1', success: true },
+        { alertIdentifier: 'alert-2', success: true },
+        { alertIdentifier: 'alert-2', success: false },
+        { alertIdentifier: 'same-name-other', success: true },
+      ],
+    });
+    await result.handleGroupAcknowledge(result.alerts().slice(0, 3));
+    expect(result.updateAlert).toHaveBeenCalledTimes(1);
+    expect(unacknowledgedIds(result)).toEqual(['alert-2', 'alert-3', 'same-name-other']);
+    expect(notificationStore.success).toHaveBeenCalledWith('Acknowledged 1 alert.');
+    expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 2 alerts.');
+  });
+
+  it('uses current membership, excludes already acknowledged or removed alerts and deduplicates input', async () => {
+    const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2', true)]);
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValue({ results: [] });
+    await result.handleGroupAcknowledge([
+      makeAlert('alert-1'),
+      makeAlert('alert-1'),
+      makeAlert('alert-2'),
+      makeAlert('removed'),
+    ]);
+    expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledWith(['alert-1']);
+    expect(result.updateAlert).not.toHaveBeenCalled();
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 1 alert.');
+    vi.advanceTimersByTime(1500);
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockClear();
+    await result.handleGroupAcknowledge([makeAlert('alert-2'), makeAlert('removed')]);
+    expect(AlertsAPI.bulkAcknowledge).not.toHaveBeenCalled();
+  });
+
+  it('prevents duplicate and overlapping group, individual and all requests while preserving independent groups', async () => {
+    const { result } = renderWithAlertStore([
+      makeAlert('alert-1'),
+      makeAlert('alert-2'),
+      makeAlert('alert-3'),
+    ]);
+    type Response = Awaited<ReturnType<typeof AlertsAPI.bulkAcknowledge>>;
+    let finish!: (response: Response) => void;
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const original = result.handleGroupAcknowledge(result.alerts().slice(0, 2));
+    expect(result.processingAlerts()).toEqual(new Set(['alert-1', 'alert-2']));
+    await result.handleGroupAcknowledge(result.alerts());
+    await result.handleAlertAcknowledgement(result.alerts()[0]);
+    await result.handleBulkAcknowledge();
+    expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledTimes(1);
+    expect(AlertsAPI.acknowledge).not.toHaveBeenCalled();
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValueOnce({
+      results: [{ alertIdentifier: 'alert-3', success: true }],
+    });
+    await result.handleGroupAcknowledge([result.alerts()[2]]);
+    expect(AlertsAPI.bulkAcknowledge).toHaveBeenNthCalledWith(2, ['alert-3']);
+    finish({
+      results: [
+        { alertIdentifier: 'alert-1', success: false },
+        { alertIdentifier: 'alert-2', success: false },
+      ],
+    });
+    await original;
+    vi.advanceTimersByTime(1500);
+    expect(result.processingAlerts().size).toBe(0);
+    expect(unacknowledgedIds(result)).toEqual(['alert-1', 'alert-2']);
+  });
+
+  it('reserves Acknowledge all members against card and group requests until completion', async () => {
+    const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2')]);
+    type Response = Awaited<ReturnType<typeof AlertsAPI.bulkAcknowledge>>;
+    let finish!: (response: Response) => void;
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const original = result.handleBulkAcknowledge();
+    expect(result.bulkAckProcessing()).toBe(true);
+    expect(result.processingAlerts()).toEqual(new Set(['alert-1', 'alert-2']));
+    await result.handleBulkAcknowledge();
+    await result.handleGroupAcknowledge(result.alerts());
+    await result.handleAlertAcknowledgement(result.alerts()[0]);
+    expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledTimes(1);
+    expect(AlertsAPI.acknowledge).not.toHaveBeenCalled();
+    finish({ results: [] });
+    await original;
+    vi.advanceTimersByTime(1500);
+    expect(result.bulkAckProcessing()).toBe(false);
+    expect(result.processingAlerts().size).toBe(0);
+    expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 2 alerts.');
+  });
+
+  it('does not start a group or all request over an individual acknowledgement', async () => {
+    const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2')]);
+    let finish!: () => void;
+    vi.mocked(AlertsAPI.acknowledge).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ success: true });
+        }),
+    );
+    const original = result.handleAlertAcknowledgement(result.alerts()[0]);
+    await result.handleGroupAcknowledge(result.alerts());
+    await result.handleBulkAcknowledge();
+    expect(AlertsAPI.bulkAcknowledge).not.toHaveBeenCalled();
+    finish();
+    await original;
+  });
+
+  it('retains every alert and releases processing after a rejected group request', async () => {
+    const { result } = renderWithAlertStore([makeAlert('alert-1'), makeAlert('alert-2')]);
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockRejectedValue(new Error('Synthetic request failure'));
+    await result.handleGroupAcknowledge(result.alerts());
+    expect(result.updateAlert).not.toHaveBeenCalled();
+    expect(unacknowledgedIds(result)).toEqual(['alert-1', 'alert-2']);
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge alerts');
+    vi.advanceTimersByTime(1500);
+    expect(result.processingAlerts().size).toBe(0);
   });
 });

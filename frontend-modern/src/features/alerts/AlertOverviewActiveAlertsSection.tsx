@@ -21,6 +21,7 @@ import {
 import { AlertOverviewAlertCard } from './AlertOverviewAlertCard';
 import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
+import { getCanonicalAlertId } from './identity';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
@@ -112,7 +113,9 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
               <button
                 type="button"
                 class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/25 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={props.state.bulkAckProcessing()}
+                disabled={
+                  props.state.bulkAckProcessing() || props.state.processingAlerts().size > 0
+                }
                 onClick={() => {
                   void props.state.handleBulkAcknowledge();
                 }}
@@ -139,6 +142,13 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
           >
             {(group) => {
               const relatedAlertsId = createUniqueId();
+              const groupAlerts = () => [group.primary, ...group.related];
+              const pendingCount = () =>
+                groupAlerts().filter((alert) => !alert.acknowledged).length;
+              const acknowledging = () =>
+                groupAlerts().some((alert) =>
+                  props.state.processingAlerts().has(getCanonicalAlertId(alert)),
+                );
               // The correlation's designated primary may be less severe than
               // its supporting signals. Keep that identity, but do not hide
               // unacknowledged critical alerts behind an unqualified count.
@@ -186,18 +196,17 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                             )}
                           </For>
                         </button>
-                        <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
+                        <Show when={pendingCount() > 0}>
                           <button
                             type="button"
-                            class="min-h-11 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors sm:min-h-6"
+                            class="min-h-11 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:cursor-wait disabled:opacity-60 sm:min-h-6"
+                            disabled={acknowledging()}
+                            aria-busy={acknowledging()}
                             onClick={() => {
-                              void props.state.handleGroupAcknowledge([
-                                group.primary,
-                                ...group.related,
-                              ]);
+                              void props.state.handleGroupAcknowledge(groupAlerts());
                             }}
                           >
-                            {getAlertOverviewGroupAcknowledgeLabel(group.related.length + 1)}
+                            {getAlertOverviewGroupAcknowledgeLabel(pendingCount(), acknowledging())}
                           </button>
                         </Show>
                       </div>

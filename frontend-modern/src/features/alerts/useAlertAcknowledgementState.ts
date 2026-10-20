@@ -103,82 +103,87 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     }
   };
 
+  // Count only confirmations for this exact request. Missing results are not
+  // success, duplicate results cannot inflate counts, and another alert's
+  // result must never acknowledge a same-name neighbour.
+  const applyBulkAcknowledgements = (
+    identifiers: string[],
+    result: Awaited<ReturnType<typeof AlertsAPI.bulkAcknowledge>>,
+  ) => {
+    const requested = new Set(identifiers);
+    const confirmations = new Map<string, boolean>();
+    for (const entry of result.results) {
+      if (!requested.has(entry.alertIdentifier)) continue;
+      confirmations.set(
+        entry.alertIdentifier,
+        (confirmations.get(entry.alertIdentifier) ?? true) && entry.success === true,
+      );
+    }
+    const successes = identifiers.filter((id) => confirmations.get(id) === true);
+    const failures = identifiers.length - successes.length;
+    const acknowledgedAt = new Date().toISOString();
+    successes.forEach((id) => {
+      props.updateAlert(id, {
+        acknowledged: true,
+        ackTime: acknowledgedAt,
+        ackUser: undefined,
+      });
+    });
+    if (successes.length > 0) {
+      notificationStore.success(getAlertOverviewBulkAcknowledgedNotification(successes.length));
+    }
+    if (failures > 0) {
+      notificationStore.error(getAlertOverviewBulkAcknowledgeFailureNotification(failures));
+    }
+  };
+
   const handleBulkAcknowledge = async () => {
-    if (bulkAckProcessing()) {
+    if (bulkAckProcessing() || processingAlerts().size > 0) {
       return;
     }
 
-    const pendingAlerts = unacknowledgedAlerts();
-    if (pendingAlerts.length === 0) {
+    const identifiers = [...new Set(unacknowledgedAlerts().map(getCanonicalAlertId))];
+    if (identifiers.length === 0) {
       return;
     }
 
     setBulkAckProcessing(true);
+    setProcessingAlerts((previous) => new Set([...previous, ...identifiers]));
     try {
-      const result = await AlertsAPI.bulkAcknowledge(
-        pendingAlerts.map((alert) => getCanonicalAlertId(alert)),
-      );
-      const acknowledgedAt = new Date().toISOString();
-      const successes = result.results.filter((entry) => entry.success);
-      const failures = result.results.filter((entry) => !entry.success);
-
-      successes.forEach((entry) => {
-        props.updateAlert(entry.alertIdentifier, {
-          acknowledged: true,
-          ackTime: acknowledgedAt,
-          ackUser: undefined,
-        });
-      });
-
-      if (successes.length > 0) {
-        notificationStore.success(getAlertOverviewBulkAcknowledgedNotification(successes.length));
-      }
-
-      if (failures.length > 0) {
-        notificationStore.error(
-          getAlertOverviewBulkAcknowledgeFailureNotification(failures.length),
-        );
-      }
+      const result = await AlertsAPI.bulkAcknowledge(identifiers);
+      applyBulkAcknowledgements(identifiers, result);
     } catch (error) {
       logger.error('Bulk acknowledge failed', error);
       notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
     } finally {
       setBulkAckProcessing(false);
+      identifiers.forEach(releaseAlertProcessing);
     }
   };
 
   const handleGroupAcknowledge = async (alerts: Alert[]) => {
-    const pending = alerts.filter((alert) => {
-      const id = getCanonicalAlertId(alert);
-      return !props.alerts().find((e) => getCanonicalAlertId(e) === id)?.acknowledged;
+    const groupIdentifiers = [...new Set(alerts.map(getCanonicalAlertId))];
+    // A group, individual card and Acknowledge all share the same per-alert
+    // lock. Do not send a second write for an overlapping request.
+    if (bulkAckProcessing() || groupIdentifiers.some((id) => processingAlerts().has(id))) {
+      return;
+    }
+    const current = new Map(props.alerts().map((alert) => [getCanonicalAlertId(alert), alert]));
+    const identifiers = groupIdentifiers.filter((id) => {
+      const alert = current.get(id);
+      return alert && !alert.acknowledged;
     });
-    if (pending.length === 0) return;
+    if (identifiers.length === 0) return;
 
-    const identifiers = pending.map((alert) => getCanonicalAlertId(alert));
-    const groupProcessing = new Set(identifiers);
-    setProcessingAlerts((previous) => new Set([...previous, ...groupProcessing]));
-
+    setProcessingAlerts((previous) => new Set([...previous, ...identifiers]));
     try {
       const result = await AlertsAPI.bulkAcknowledge(identifiers);
-      const acknowledgedAt = new Date().toISOString();
-      const successes = result.results.filter((entry) => entry.success);
-
-      successes.forEach((entry) => {
-        props.updateAlert(entry.alertIdentifier, {
-          acknowledged: true,
-          ackTime: acknowledgedAt,
-          ackUser: undefined,
-        });
-      });
-
-      if (successes.length > 0) {
-        notificationStore.success(getAlertOverviewBulkAcknowledgedNotification(successes.length));
-      }
+      applyBulkAcknowledgements(identifiers, result);
     } catch (error) {
       logger.error('Group acknowledge failed', error);
       notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
     } finally {
-      groupProcessing.forEach((id) => releaseAlertProcessing(id));
+      identifiers.forEach(releaseAlertProcessing);
     }
   };
 
