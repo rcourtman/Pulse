@@ -182,14 +182,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		cfg.Timeout = 60 * time.Second
 	}
 
-	if !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://") {
-		cfg.Host = "https://" + cfg.Host
-	}
-
-	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "https")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PMG host: %w", err)
 	}
+	cfg.Host = baseHostURL.String()
 	// Rejected input can contain pasted credentials, including in malformed URLs.
 	// Only a validated base URL belongs in diagnostics.
 	if baseHostURL.Scheme == "http" {

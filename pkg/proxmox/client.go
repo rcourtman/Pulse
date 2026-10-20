@@ -369,11 +369,8 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	if baseHost == "" {
 		return nil, fmt.Errorf("host is required")
 	}
-	defaultedScheme := !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://")
-	if defaultedScheme {
-		baseHost = "https://" + baseHost
-	}
-	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "")
+	defaultedScheme := !strings.Contains(baseHost, "://")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "https")
 	if err != nil {
 		return nil, fmt.Errorf("invalid Proxmox host: %w", err)
 	}
