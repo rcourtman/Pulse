@@ -4019,6 +4019,17 @@ artifact-selection behaviour.
    `prerelease_only` with the pinned version and is offered neither the
    in-place switch nor the Docker command block, so a stable install is never
    moved onto a preview Pro build; rc-channel installs are still offered it.
+   Settings → Updates is the user-facing entry to that switch, and
+   `docs/UPGRADE_v6.md` and `docs/DOCKER.md` (with their shipped mirrors)
+   point paid community installs there before the download portal.
+   The card distinguishes an accepted request from installed completion and
+   retains an unconfirmed request without offering a duplicate write. Its
+   controls are lazy-loaded only for a known community release build; normal
+   bundle budgets remain unchanged. The offline panel/browser fixture and API
+   controls qualify this presentation, not native switching or rollback.
+   The card-only copy follows its dynamic component into a separate presentation
+   leaf, so the shared Updates helper cannot keep that copy in the eager panel
+   chunk. The existing per-chunk and total budgets still apply to the real build.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`

@@ -1,4 +1,4 @@
-import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js';
+import { Component, Show, For, Accessor, Setter, createUniqueId, lazy, Suspense } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -38,6 +38,14 @@ import {
 import { updateStore } from '@/stores/updates';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
+// Most installs never need the switch. Keep its controls out of the shared
+// Settings chunk, and load them only for a known community release build.
+const ProRuntimeSwitchCard = lazy(() =>
+  import('@/components/Settings/ProRuntimeSwitchCard').then((module) => ({
+    default: module.ProRuntimeSwitchCard,
+  })),
+);
+
 export interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
   updateInfo: Accessor<UpdateInfo | null>;
@@ -63,6 +71,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   // Keys off the compiled runtime identity (same signal UpdateBanner uses):
   // a Pro-runtime install must never be shown community pull commands.
   const isProRuntime = () => runtimeCapabilities()?.runtime?.build === 'pro';
+  const shouldCheckProRuntimeSwitch = () =>
+    runtimeCapabilities()?.runtime?.build === 'community' &&
+    Boolean(props.versionInfo() && !props.versionInfo()?.isSourceBuild);
   const isPreviewChannel = () => props.updateChannel() === 'rc';
   const autoUpdateLocked = () => Boolean(props.versionInfo()?.isSourceBuild || isPreviewChannel());
   const updateChannelOptions = (): SelectionCardOption<UpdateChannelOptionValue>[] =>
@@ -104,6 +115,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     <SettingsPanel title={UPDATES_PANEL_COPY.title} noPadding bodyClass="divide-y divide-border">
       <div class="p-4 sm:p-6">
         <div class="space-y-4">
+          <Show when={shouldCheckProRuntimeSwitch()}>
+            <Suspense>
+              <ProRuntimeSwitchCard shouldCheck={shouldCheckProRuntimeSwitch()} />
+            </Suspense>
+          </Show>
+
           {/* Version Status Section */}
           <div class="rounded-md border border-border overflow-hidden">
             {/* Version Grid */}
