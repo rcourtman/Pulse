@@ -33,6 +33,7 @@ import {
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
+import { validateAlertThresholdEditors } from './alertThresholdValidation';
 import type { OfflineState, ResourceTableProps } from './ResourceTable';
 
 interface AlertResourceTableMobileProps {
@@ -152,7 +153,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
 
     return (
       <div
-        class={`flex items-center justify-center gap-1 ${isDisabledMetric ? 'opacity-60' : ''}`.trim()}
+        class="flex items-center justify-center gap-1"
         title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
@@ -313,6 +314,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           }
 
           const resource = item.resource;
+          let cardElement!: HTMLDivElement;
           const isEditing = () => props.table.editingId() === resource.id;
           const thresholds = () => getThresholds(resource, isEditing());
           const displayValue = (metric: string) => getDisplayValue(resource, metric, isEditing());
@@ -329,6 +331,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
 
           return (
             <Card
+              ref={cardElement}
               padding="sm"
               class={`flex flex-col gap-3 transition-opacity ${resource.disabled || props.table.globalDisableFlag?.() ? 'opacity-60' : ''}`}
             >
@@ -420,7 +423,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                       <X class="w-4 h-4" aria-hidden="true" />
                     </ActionIconButton>
                     <ActionIconButton
-                      onClick={() => saveEditing(resource.id)}
+                      onClick={() => {
+                        if (!validateAlertThresholdEditors(cardElement)) saveEditing(resource.id);
+                      }}
                       label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
                       tone="success"
                       size="sm"

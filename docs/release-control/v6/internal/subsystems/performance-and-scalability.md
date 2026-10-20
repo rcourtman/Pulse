@@ -4481,3 +4481,18 @@ mounted-row budgets and public hook inputs remain unchanged. The observer
 lifecycle control in `PlatformWindowedRows.test.tsx` and the 200-workload Coverage
 identity browser protocol cover this feedback-loop repair, not installed fleet
 or guest recovery.
+
+
+### Shared threshold slider labels (20 October 2026)
+
+The threshold slider's text palette is distinct from its fill palette. Small
+thumb values must remain legible in light and dark themes; theme-aware text
+colours do not change fill colours, value domains, drag/wheel behaviour or
+windowed rendering. Changes to this shared presentation helper retain the
+slider model/state and all resource-table virtualization boundaries.
+
+`thresholdSliderPresentation.test.ts` and `ThresholdSlider.test.tsx` cover the
+text/fill mapping and unchanged interactions. The actual alert settings browser
+fixture covers CPU, memory, disk and temperature thumb text in desktop and
+narrow consumers, including both themes. This is contrast and consumer evidence,
+not a new performance measurement, scaling claim or installed-policy result.

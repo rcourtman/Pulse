@@ -39,6 +39,7 @@ import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceMetricEditor } from './AlertResourceMetricEditor';
 import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
+import { validateAlertThresholdEditors } from './alertThresholdValidation';
 
 type OfflineState = 'off' | 'warning' | 'critical';
 
@@ -142,7 +143,8 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     props.setActiveMetricInput(null);
   };
 
-  const saveEditing = () => {
+  const saveEditing = (row: ParentNode) => {
+    if (validateAlertThresholdEditors(row)) return;
     hasEditingFocus = false;
     props.onSaveEdit(props.resource.id);
     props.setActiveMetricInput(null);
@@ -171,7 +173,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
 
     return (
       <div
-        class={`flex items-center justify-center gap-1 ${isDisabledMetric ? 'opacity-60' : ''}`.trim()}
+        class="flex items-center justify-center gap-1"
         title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
@@ -249,7 +251,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         if (!hasEditingFocus || props.editingId() !== props.resource.id) return;
         const nextFocus = event.relatedTarget;
         if (nextFocus instanceof Node && event.currentTarget.contains(nextFocus)) return;
-        saveEditing();
+        saveEditing(event.currentTarget);
       }}
       class={`transition-colors ${props.resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${props.resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
     >

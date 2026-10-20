@@ -5328,3 +5328,43 @@ Each completed acknowledgement request releases its reservations with one
 1500ms timer and one Set copy for the entire requested batch. Reserving all
 alerts must not introduce a timer and full Set copy per alert during an alert
 flood. The shared-owner regression covers a500-member batch and cleanup.
+
+
+### Invalid threshold drafts never masquerade as saved limits (20 October 2026)
+
+The existing shared numeric threshold editor labels out-of-range, incomplete
+numeric and blank enabled-default drafts inline and exposes their errors to
+assistive technology. Invalid text never replaces the last accepted value.
+A genuinely empty override still inherits, an inherited default may remain blank,
+and the explicit Off control remains the only numeric editor action for disabling
+a limit. Existing fractional metric limits remain accepted: the spinner step
+is not a new persistence restriction. Backend policy and API shapes are unchanged.
+
+Policy Save checks every mounted numeric threshold before any configuration or
+destination write. A rejected save retains the draft, reports that no settings
+were saved, reveals a folded group if needed and focuses its first invalid
+field. Desktop row blur and the narrow card's row-save action apply the same
+validation before accepting an override, so closing a row cannot discard a
+visible invalid limit and silently stage the previous one. Correction and Off
+withdraw the corresponding error; cancellation still discards a row edit.
+
+`alertThresholdValidation.test.tsx` covers bounds, blank/default/inherit/Off,
+fractional recovery, bad-number versus empty input, scoped validation and
+folded-group focus. ResourceTable regression tests and
+`browser-tests/alert-threshold-validation.cjs` exercise the actual configuration
+surface, HTTP adapter, responsive tables and toast consumer with local synthetic
+responses. The baseline reproduces success with a visible150 limit or blank
+default while80 is sent; repaired saves must send nothing until correction,
+then persist the exact corrected limit. No production policy or notification
+operation is part of that proof.
+
+The consuming browser audit also rejects reduced-opacity informational text
+for Off limits and disabled group headings. Off remains explicit in text and
+muted/italic styling; disabled controls remain disabled. Removing whole-label
+opacity restores readable contrast without enabling alerts or altering policy.
+
+The desktop row editor's existing slider thumbs use theme-aware dark text in
+light mode and light text in dark mode, rather than low-contrast mid-tone
+colours. Fill colours and interaction are unchanged. Slider presentation and
+component regressions preserve the text/fill distinction; the browser audits
+all four metric colours, including the temperature consumer, in both themes.

@@ -71,7 +71,7 @@ vi.mock('@/components/shared/Toggle', () => ({
 
 vi.mock('@/components/shared/Card', () => ({
   Card: (props: any) => (
-    <div data-testid="card" class={props.class}>
+    <div ref={props.ref} data-testid="card" class={props.class}>
       {props.children}
     </div>
   ),
@@ -229,6 +229,41 @@ describe('ResourceTable', () => {
   });
 
   describe('rendering basics', () => {
+    it.each([false, true])('keeps Off limit labels readable (mobile=%s)', (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const props = makeProps({
+        resources: [makeResource({ thresholds: { diskRead: -1 } })],
+        columns: ['Disk R MB/s'],
+      });
+      render(() => <ResourceTable {...props} />);
+      expect(screen.getByText('Off').parentElement).not.toHaveClass('opacity-60');
+    });
+
+    it.each([false, true])('refuses an invalid row commit (mobile=%s)', async (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'web-01', thresholds: { diskRead: 100 } })],
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ diskRead: 100 }),
+        columns: ['Disk R MB/s'],
+      });
+      render(() => <ResourceTable {...props} />);
+      const input = screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' });
+      input.focus();
+      fireEvent.input(input, { target: { value: '10001' } });
+      if (mobile)
+        fireEvent.click(screen.getByRole('button', { name: 'Save threshold edits for web-01' }));
+      else fireEvent.focusOut(input, { relatedTarget: null });
+      expect(props.onSaveEdit).not.toHaveBeenCalled();
+      expect(input).toHaveFocus();
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      fireEvent.input(input, { target: { value: '125.5' } });
+      if (mobile)
+        fireEvent.click(screen.getByRole('button', { name: 'Save threshold edits for web-01' }));
+      else fireEvent.focusOut(input, { relatedTarget: null });
+      expect(props.onSaveEdit).toHaveBeenCalledWith('vm-1');
+    });
+
     it.each([false, true])(
       'keeps filesystem reading explanations visible and reactive (mobile=%s)',
       (mobile) => {

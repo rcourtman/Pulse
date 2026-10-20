@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createEffect, createSignal, createUniqueId, on, Show } from 'solid-js';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import {
   getAlertResourceTableMetricInputTitle,
@@ -14,6 +14,7 @@ import {
   resolveAlertResourceMetricEnableValue,
   type AlertResourceGlobalDefaultFallback,
 } from './alertResourceTableModel';
+import { getAlertThresholdInputError } from './alertThresholdValidation';
 
 interface AlertResourceMetricEditorProps {
   metric: string;
@@ -32,6 +33,9 @@ interface AlertResourceMetricEditorProps {
 
 /** Numeric threshold editing owns one Off/inherit contract across both layouts. */
 export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps) {
+  const [inputError, setInputError] = createSignal('');
+  const errorId = createUniqueId();
+  let inputElement: HTMLInputElement | undefined;
   const bounds = () => getAlertResourceMetricBounds(props.metric);
   const defaultCell = () =>
     resolveAlertResourceGlobalDefaultCell(props.metric, props.value, props.fallback);
@@ -54,6 +58,15 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
       ? defaultCell().enableValue
       : resolveAlertResourceMetricEnableValue(props.inheritedDefault, props.metric);
 
+  // Off, inherit, reset and a refreshed saved policy replace the numeric draft.
+  // An ignored invalid keystroke does not change props.value, so keeps its error.
+  createEffect(
+    on([() => props.value, isOff, follows], () => {
+      inputElement?.setCustomValidity('');
+      setInputError('');
+    }),
+  );
+
   const inputClass = () => {
     if (props.layout === 'card') {
       return isDefault()
@@ -68,64 +81,88 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
   };
 
   return (
-    <div
-      class={`flex items-center gap-1.5 ${props.layout === 'card' ? '[&_button]:min-h-11' : 'justify-center'} ${isDefault() ? 'w-full' : ''}`}
-    >
-      <div class={`relative ${props.layout === 'card' && isDefault() ? 'flex-1 min-w-0' : ''}`}>
-        <input
-          ref={(input) => {
-            queueMicrotask(() => {
-              if (!props.autoFocus || !input.isConnected) return;
-              input.focus();
-              input.select();
-            });
-          }}
-          type="number"
-          aria-label={controlName()}
-          onFocus={props.onFocus}
-          min={bounds().min}
-          max={bounds().max}
-          step={getAlertResourceMetricStep(props.metric)}
-          value={isOff() || follows() ? '' : (props.value ?? '')}
-          placeholder={
-            follows() && !isOff()
-              ? props.fallback?.label
-              : getAlertResourceTableMetricPlaceholder(isOff())
-          }
-          title={follows() ? props.fallback?.title : getAlertResourceTableMetricInputTitle(isOff())}
-          disabled={isDefault() && isOff()}
-          class={inputClass()}
-          onInput={(event) => {
-            const raw = event.currentTarget.value;
-            // Clearing an override inherits. A blank global default is mid-edit.
-            if (raw === '') {
-              if (!isDefault()) props.onChange(undefined);
-              return;
+    <div class="flex min-w-0 flex-col gap-1">
+      <div
+        class={`flex items-center gap-1.5 ${props.layout === 'card' ? '[&_button]:min-h-11' : 'justify-center'} ${isDefault() ? 'w-full' : ''}`}
+      >
+        <div class={`relative ${props.layout === 'card' && isDefault() ? 'flex-1 min-w-0' : ''}`}>
+          <input
+            ref={(input) => {
+              inputElement = input;
+              queueMicrotask(() => {
+                if (!props.autoFocus || !input.isConnected) return;
+                input.focus();
+                input.select();
+              });
+            }}
+            type="number"
+            aria-label={controlName()}
+            data-alert-threshold-editor
+            aria-invalid={inputError() ? 'true' : undefined}
+            aria-describedby={inputError() ? errorId : undefined}
+            required={isDefault() && !follows() && !isOff()}
+            onInvalid={() => setInputError(inputElement?.validationMessage ?? '')}
+            onFocus={props.onFocus}
+            min={bounds().min}
+            max={bounds().max}
+            step={getAlertResourceMetricStep(props.metric)}
+            value={isOff() || follows() ? '' : (props.value ?? '')}
+            placeholder={
+              follows() && !isOff()
+                ? props.fallback?.label
+                : getAlertResourceTableMetricPlaceholder(isOff())
             }
-            const value = parseFloat(raw);
-            if (Number.isFinite(value) && value >= bounds().min && value <= bounds().max) {
-              props.onChange(value);
+            title={
+              follows() ? props.fallback?.title : getAlertResourceTableMetricInputTitle(isOff())
             }
-          }}
-        />
-        <Show when={isDefault() && isOff()}>
-          <button
-            type="button"
-            class="absolute inset-0 w-full rounded-sm cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
-            onClick={() => props.onChange(enableValue())}
-            title={getAlertResourceTableMetricInputTitle(true)}
-            aria-label={`Enable ${props.column} default`}
+            disabled={isDefault() && isOff()}
+            class={inputClass()}
+            onInput={(event) => {
+              const input = event.currentTarget;
+              const message = getAlertThresholdInputError(input);
+              input.setCustomValidity(message);
+              setInputError(message);
+              if (message) return;
+              const raw = input.value;
+              // A truly empty override inherits; a browser's bad numeric input
+              // also looks empty, but was rejected above and must not inherit.
+              if (raw === '') {
+                if (!isDefault()) props.onChange(undefined);
+                return;
+              }
+              props.onChange(input.valueAsNumber);
+            }}
           />
-        </Show>
+          <Show when={isDefault() && isOff()}>
+            <button
+              type="button"
+              class="absolute inset-0 w-full rounded-sm cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
+              onClick={() => props.onChange(enableValue())}
+              title={getAlertResourceTableMetricInputTitle(true)}
+              aria-label={`Enable ${props.column} default`}
+            />
+          </Show>
+        </div>
+        <div onMouseDown={(event) => event.preventDefault()}>
+          <StatusBadge
+            isEnabled={!isOff()}
+            onToggle={() =>
+              props.onChange(isOff() ? enableValue() : ALERT_RESOURCE_METRIC_OFF_VALUE)
+            }
+            {...getAlertResourceTableMetricOffToggleProps()}
+            ariaLabel={`${controlName()} alerts`}
+          />
+        </div>
       </div>
-      <div onMouseDown={(event) => event.preventDefault()}>
-        <StatusBadge
-          isEnabled={!isOff()}
-          onToggle={() => props.onChange(isOff() ? enableValue() : ALERT_RESOURCE_METRIC_OFF_VALUE)}
-          {...getAlertResourceTableMetricOffToggleProps()}
-          ariaLabel={`${controlName()} alerts`}
-        />
-      </div>
+      <Show when={inputError()}>
+        <p
+          id={errorId}
+          role="alert"
+          class="max-w-40 whitespace-normal text-xs text-red-700 dark:text-red-300"
+        >
+          {inputError()}
+        </p>
+      </Show>
     </div>
   );
 }

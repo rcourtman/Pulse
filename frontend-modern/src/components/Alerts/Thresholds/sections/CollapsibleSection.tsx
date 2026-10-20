@@ -84,7 +84,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 
   return (
     <div
-      class={`rounded-md border transition-all duration-200 ${props.isGloballyDisabled ? ' bg-surface-alt opacity-60' : 'border-border bg-surface '} ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
+      class={`rounded-md border transition-all duration-200 ${props.isGloballyDisabled ? ' bg-surface-alt' : 'border-border bg-surface '} ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
       data-testid={props.testId || `section-${props.id}`}
     >
       {/*
