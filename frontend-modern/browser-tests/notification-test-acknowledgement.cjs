@@ -90,7 +90,6 @@ let browser, context;
         run.unexpected.push('External ' + route.request().url()); return route.abort();
       });
       await context.addInitScript(dark => {
-        if (dark) document.documentElement.classList.add('dark');
         localStorage.setItem('theme', dark ? 'dark' : 'light');
       }, spec.dark);
       const page = await context.newPage();
