@@ -66,23 +66,28 @@ const migratedAlertsOverviewCopy = [
 ] as const;
 
 // Check shipped copy, not explanatory comments which can legitimately name
-// an action. Lexing preserves strings, including comment-like text within them.
+// an action. The parser handles template-expression rescanning and JSX, while
+// the printer preserves literal copy, including comment-like text within it.
 function withoutComments(source: string): string {
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.JSX, source);
-  const code: string[] = [];
-  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-    if (
-      token !== ts.SyntaxKind.SingleLineCommentTrivia &&
-      token !== ts.SyntaxKind.MultiLineCommentTrivia
-    ) {
-      code.push(scanner.getTokenText());
-    }
-  }
-  return code.join('');
+  const file = ts.createSourceFile(
+    'alert-surface.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  return ts.createPrinter({ removeComments: true }).printFile(file);
 }
 
 describe('alerts overview localization guardrails', () => {
   it('ignores comments without excluding hardcoded string or JSX copy', () => {
+    expect(withoutComments('const label = `${value} title`; // Acknowledge all')).not.toContain(
+      'Acknowledge all',
+    );
+    expect(withoutComments('const label = `${value} Acknowledge all`;')).toContain(
+      'Acknowledge all',
+    );
+
     expect(
       withoutComments('// Acknowledge all\n/* Active Alerts */\nconst translated = label();'),
     ).not.toContain('Acknowledge all');
