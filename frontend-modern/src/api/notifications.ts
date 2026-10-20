@@ -161,6 +161,8 @@ export interface NotificationDeliveryLogEntry {
 
 export interface NotificationDeliveryLog {
   entries: NotificationDeliveryLogEntry[];
+  // Readable rows are useful evidence even when another row is malformed.
+  incomplete?: boolean;
   windowDays: number;
   completedRetentionDays: number;
   deadLetterRetentionDays: number;
@@ -214,21 +216,33 @@ function normalizeDeliveryLogEntry(value: unknown): NotificationDeliveryLogEntry
   const notificationId = strictString(record.notificationId);
   const outcome = record.outcome;
   const timestamp = strictString(record.timestamp);
+  const type = strictString(record.type);
+  const alertCount = nonNegativeCount(record.alertCount);
+  const attempts = nonNegativeCount(record.attempts);
   if (
-    !notificationId ||
-    !timestamp ||
-    !notificationDeliveryOutcomes.includes(outcome as NotificationDeliveryOutcome)
+    !notificationId.trim() ||
+    !type.trim() ||
+    !Number.isFinite(Date.parse(timestamp)) ||
+    !notificationDeliveryOutcomes.includes(outcome as NotificationDeliveryOutcome) ||
+    typeof record.success !== 'boolean' ||
+    record.success !== (outcome === 'sent') ||
+    !Array.isArray(record.alertIds) ||
+    !record.alertIds.every((id) => typeof id === 'string') ||
+    alertCount === undefined ||
+    !Number.isSafeInteger(alertCount) ||
+    attempts === undefined ||
+    !Number.isSafeInteger(attempts)
   ) {
     return undefined;
   }
   const failureClass = record.failureClass;
   const entry: NotificationDeliveryLogEntry = {
     notificationId,
-    type: strictString(record.type),
+    type,
     outcome: outcome as NotificationDeliveryOutcome,
     alertIds: stringArray(record.alertIds),
-    alertCount: nonNegativeCount(record.alertCount) ?? 0,
-    attempts: nonNegativeCount(record.attempts) ?? 0,
+    alertCount,
+    attempts,
     success: strictBoolean(record.success),
     timestamp,
   };
@@ -253,6 +267,17 @@ function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCo
     counts[failureClass] = count;
   }
   return counts;
+}
+
+function confirmedTerminalFailureAction(value: unknown): NotificationTerminalFailureActionResult {
+  const payload = apiRecord(value);
+  const affected = nonNegativeCount(payload.affected);
+  // A 2xx response alone does not acknowledge the mutation. Never invent a
+  // zero count or a success toast from a rejected/partially written response.
+  if (payload.success !== true || affected === undefined || !Number.isSafeInteger(affected)) {
+    throw new Error('Notification recovery result could not be confirmed.');
+  }
+  return { success: true, affected };
 }
 
 export class NotificationsAPI {
@@ -356,7 +381,10 @@ export class NotificationsAPI {
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/delivery-log${query}`,
     );
-    const rawEntries = arrayOrEmpty<unknown>(payload.entries);
+    if (!Array.isArray(payload?.entries)) {
+      throw new Error('Notification delivery log could not be read.');
+    }
+    const rawEntries: unknown[] = payload.entries;
     const entries: NotificationDeliveryLogEntry[] = [];
     for (const rawEntry of rawEntries) {
       const entry = normalizeDeliveryLogEntry(rawEntry);
@@ -368,6 +396,7 @@ export class NotificationsAPI {
     const deadLetterRetentionDays = nonNegativeCount(payload.dead_letter_retention_days);
     return {
       entries,
+      incomplete: entries.length !== rawEntries.length,
       windowDays: normalizedWindowDays,
       // Older servers exposed only window_days plus the dead-letter window.
       // Preserve an honest seven-day completed-row fallback while accepting
@@ -388,10 +417,7 @@ export class NotificationsAPI {
       `${this.baseUrl}/terminal-failures/retry`,
       { method: 'POST' },
     );
-    return {
-      success: strictBoolean(payload.success),
-      affected: nonNegativeCount(payload.affected) ?? 0,
-    };
+    return confirmedTerminalFailureAction(payload);
   }
 
   static async dismissTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
@@ -399,10 +425,7 @@ export class NotificationsAPI {
       `${this.baseUrl}/terminal-failures/dismiss`,
       { method: 'POST' },
     );
-    return {
-      success: strictBoolean(payload.success),
-      affected: nonNegativeCount(payload.affected) ?? 0,
-    };
+    return confirmedTerminalFailureAction(payload);
   }
 
   static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {

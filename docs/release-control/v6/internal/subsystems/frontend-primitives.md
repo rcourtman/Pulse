@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Notification activity preserves readable partial evidence
+
+The existing Notifications tab's activity card uses a visible wrapping status
+for incomplete attempts, alongside any readable rows, never its empty claim.
+Recovery feedback stays in its existing polite region and clears to its focus
+anchor; unconfirmed actions direct a refresh rather than claim success.
+`AlertDeliveryLogCard.test.tsx` and `AlertDeliveryHealthCard.test.tsx` cover the
+partial/empty and feedback states. The full-tab browser fixture covers desktop
+keyboard and narrow touch with real cards, state owners and API adapters.
+
+
 ### Retained custom metrics do not claim current service or backup health
 
 The existing machine detail carries the linked agent's expired reporting lease

@@ -297,7 +297,7 @@ describe('NotificationsAPI', () => {
     ]);
   });
 
-  it('normalizes the delivery log payload and drops malformed entries', async () => {
+  it('keeps readable delivery evidence and explicitly marks dropped malformed entries', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       entries: [
         {
@@ -348,6 +348,7 @@ describe('NotificationsAPI', () => {
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(30);
     expect(log.entries).toHaveLength(2);
+    expect(log.incomplete).toBe(true);
     expect(log.entries[0]).toEqual(
       expect.objectContaining({
         notificationId: 'webhook-1',
@@ -367,48 +368,87 @@ describe('NotificationsAPI', () => {
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log');
     expect(log.entries).toEqual([]);
+    expect(log.incomplete).toBe(false);
     // A missing or nonsensical window falls back to the seven-day default.
     expect(log.windowDays).toBe(7);
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(7);
   });
 
-  it('normalizes a malformed delivery-log collection through the shared API boundary', async () => {
+  it.each([null, {}, [], { entries: null }, { entries: {} }, { entries: 'unreadable' }])(
+    'rejects an unreadable activity envelope instead of inventing an empty log: %j',
+    async (payload) => {
+      apiFetchJSONMock.mockResolvedValueOnce(payload as never);
+      await expect(NotificationsAPI.getDeliveryLog()).rejects.toThrow(
+        'Notification delivery log could not be read.',
+      );
+    },
+  );
+
+  const readableAttempt = {
+    notificationId: 'email-1',
+    type: 'email',
+    outcome: 'sent',
+    alertIds: ['disk-1'],
+    alertCount: 1,
+    attempts: 1,
+    success: true,
+    timestamp: '2026-10-20T12:00:00Z',
+  };
+  it.each([
+    { notificationId: ' ' },
+    { type: null },
+    { timestamp: 'not-a-time' },
+    { outcome: 'unknown' },
+    { success: false },
+    { success: 'true' },
+    { attempts: -1 },
+    { attempts: 0.5 },
+    { alertCount: null },
+    { alertIds: [1] },
+    { alertIds: null },
+    { attempts: Number.MAX_SAFE_INTEGER + 1 },
+  ])('marks unreadable attempt evidence as incomplete: %j', async (patch) => {
     apiFetchJSONMock.mockResolvedValueOnce({
-      entries: { notificationId: 'not-a-collection' },
-      window_days: 7,
-    } as any);
-
-    const log = await NotificationsAPI.getDeliveryLog();
-
-    expect(log).toEqual({
+      entries: [{ ...readableAttempt, ...patch }],
+    } as never);
+    expect(await NotificationsAPI.getDeliveryLog()).toMatchObject({
       entries: [],
-      windowDays: 7,
-      completedRetentionDays: 7,
-      deadLetterRetentionDays: 7,
+      incomplete: true,
     });
   });
 
-  it('retries retained terminal deliveries through the operator recovery endpoint', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({ affected: 3, success: true } as any);
+  it.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)(
+    '%s requires an explicit acknowledgement and exact safe affected count',
+    async (action) => {
+      for (const affected of [0, 1, 3]) {
+        apiFetchJSONMock.mockResolvedValueOnce({ success: true, affected } as never);
+        expect(await NotificationsAPI[action]()).toEqual({ success: true, affected });
+      }
+      expect(apiFetchJSONMock).toHaveBeenCalledWith(
+        `/api/notifications/terminal-failures/${action === 'retryTerminalFailures' ? 'retry' : 'dismiss'}`,
+        { method: 'POST' },
+      );
+    },
+  );
 
-    const result = await NotificationsAPI.retryTerminalFailures();
-
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/retry', {
-      method: 'POST',
+  describe.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)('%s', (action) => {
+    it.each([
+      null,
+      {},
+      { success: false, affected: 2 },
+      { success: 'yes', affected: 2 },
+      { success: true },
+      { success: true, affected: -1 },
+      { success: true, affected: 1.5 },
+      { success: true, affected: '3' },
+      { success: true, affected: Number.MAX_SAFE_INTEGER + 1 },
+    ])('never treats a rejected or malformed result as success: %j', async (payload) => {
+      apiFetchJSONMock.mockResolvedValueOnce(payload as never);
+      await expect(NotificationsAPI[action]()).rejects.toThrow(
+        'Notification recovery result could not be confirmed.',
+      );
     });
-    expect(result).toEqual({ affected: 3, success: true });
-  });
-
-  it('dismisses retained terminal failures and fails closed on malformed counts', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({ affected: -1, success: 'yes' } as any);
-
-    const result = await NotificationsAPI.dismissTerminalFailures();
-
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/dismiss', {
-      method: 'POST',
-    });
-    expect(result).toEqual({ affected: 0, success: false });
   });
 
   it('passes the deliveryPaused flag through from test-send responses', async () => {

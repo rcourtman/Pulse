@@ -279,8 +279,8 @@ describe('useNotificationDeliveryHealth', () => {
             if (outcome === 'rejected') {
               expect(notificationStore.error).toHaveBeenCalledWith(
                 action === 'retryTerminalFailures'
-                  ? 'Unable to retry retained notification deliveries.'
-                  : 'Unable to dismiss retained notification failures.',
+                  ? 'Retry could not be confirmed. Refresh notification activity before trying again.'
+                  : 'Dismissal could not be confirmed. Refresh notification activity before trying again.',
               );
             }
             expect(state.deliveryHealth()).toBe(health);
@@ -431,7 +431,7 @@ describe('useNotificationDeliveryHealth', () => {
         rejectOld(new Error('old failure'));
         await old;
         expect(state.queueActionFeedback()).toBe(
-          'Unable to dismiss retained notification failures.',
+          'Dismissal could not be confirmed. Refresh notification activity before trying again.',
         );
       } finally {
         confirmSpy.mockRestore();

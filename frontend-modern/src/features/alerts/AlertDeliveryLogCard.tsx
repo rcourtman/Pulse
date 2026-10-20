@@ -15,6 +15,7 @@ import {
   getAlertDestinationsDeliveryLogEmpty,
   getAlertDestinationsDeliveryLogTitle,
   getAlertDestinationsDeliveryLogUnavailable,
+  getAlertDestinationsDeliveryLogIncomplete,
   getAlertDestinationsDeliveryLogLoading,
   getAlertDestinationsHeldEventsLoading,
   getAlertDestinationsHeldEventsUnavailable,
@@ -117,6 +118,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
   const confirmedEmpty = () =>
     props.log !== null &&
     !props.unavailable &&
+    !props.log.incomplete &&
     !attemptsLoading() &&
     !props.heldEventsUnavailable &&
     !props.refreshingHeldEvents;
@@ -169,6 +171,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
         <Show when={props.unavailable}>
           <p class="text-sm text-red-800 dark:text-red-300" role="alert">
             {getAlertDestinationsDeliveryLogUnavailable()}
+          </p>
+        </Show>
+        <Show when={!props.unavailable && props.log?.incomplete}>
+          <p class="text-sm text-amber-800 dark:text-amber-200" role="status">
+            {getAlertDestinationsDeliveryLogIncomplete()}
           </p>
         </Show>
         <Show when={props.heldEventsUnavailable}>
