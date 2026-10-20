@@ -97,7 +97,13 @@ export const getStorageRecordAlertResourceIds = (record: StorageRecord): string[
 
   return Array.from(
     new Set(
-      [record.id, refs.resourceId, derivedLegacyId, ...(record.absorbedAlertResourceIds ?? [])]
+      [
+        record.id,
+        refs.resourceId,
+        refs.alertResourceId,
+        derivedLegacyId,
+        ...(record.absorbedAlertResourceIds ?? []),
+      ]
         .filter((value): value is string => typeof value === 'string')
         .map((value) => value.trim())
         .filter((value) => value.length > 0),
