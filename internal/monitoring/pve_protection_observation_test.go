@@ -421,6 +421,11 @@ func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
 		switch {
 		case r.URL.Path == "/api2/json/nodes":
 			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/access/permissions":
+			if r.Method != http.MethodGet || r.URL.Query().Get("path") != "/nodes/pve1" {
+				t.Errorf("unexpected permission read: %s %s", r.Method, r.URL)
+			}
+			fmt.Fprint(w, `{"data":{"/nodes/pve1":{"Sys.Audit":1}}}`)
 		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
 			fmt.Fprint(w, `{"data":[{"upid":"running-job","node":"pve1","type":"vzdump","starttime":1792028280}]}`)
 		case strings.HasSuffix(r.URL.Path, "/log"):
@@ -490,6 +495,11 @@ func TestPVELogSequenceRejectsFalseCompletionAndResumes(t *testing.T) {
 				switch {
 				case r.URL.Path == "/api2/json/nodes":
 					fmt.Fprint(w, `{"data":[{"node":"pve-a","status":"online"}]}`)
+				case r.URL.Path == "/api2/json/access/permissions":
+					if r.Method != http.MethodGet || r.URL.Query().Get("path") != "/nodes/pve-a" {
+						t.Errorf("unexpected permission read: %s %s", r.Method, r.URL)
+					}
+					fmt.Fprint(w, `{"data":{"/nodes/pve-a":{"Sys.Audit":1}}}`)
 				case r.URL.Path == "/api2/json/nodes/pve-a/tasks":
 					upid, status := "job", ""
 					taskStart := start
