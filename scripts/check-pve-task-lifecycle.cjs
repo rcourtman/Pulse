@@ -108,7 +108,7 @@ let payload, server, browser;
         }
         if (phase.startsWith('history-')) {
           assert.equal(ownTasks[0].status, 'running', 'bad History lifecycle cannot finish the actual live writer');
-          assert(payload.storageBackups.find((backup) => backup.id.endsWith('-current.vma.zst')).inProgress);
+          assert(payload.storageBackups.find((backup) => backup.volid.endsWith('-current.vma.zst')).inProgress);
         }
         if (partial) {
           assert(body.includes('1 incomplete entry'));
