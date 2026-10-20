@@ -47,6 +47,13 @@ stateful collision controls preserve non-destructive setup. The pinned-TLS
 operation logs and same-credential empty-datastore recovery. Its exact emitted
 logs feed the production `SystemLogsPanel` via the error-log browser control.
 
+The diagnostics consumer also recognises the body-free HTTP marker after an
+outstanding PBS poll error becomes serialized `LastError.message`. Actual
+API/login 401/403/429/503, direct and wrapped failures, must retain the typed
+classification and the positional monitor guidance in `Errors Detected` without
+restoring response bodies. `TestDiagnosticsPBSRetainedHTTPFailures` covers this
+producer-to-consumer boundary; legacy retained markers remain supported.
+
 ### PBS status diagnostics do not retain whole provider payloads
 
 Node-status and datastore-status diagnostics report bounded response lengths,

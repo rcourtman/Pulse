@@ -12552,6 +12552,18 @@ Routes, caller scope/token filtering, cache policy and probe count are unchanged
 HTTP statuses, private-body controls, same-credential fixture recovery and wire
 attribution. They are not installed permission or guest-recovery acceptance.
 
+Retained PBS `LastError.message` must preserve the same HTTP classification and
+bounded guidance as a typed live failure after JSON serialization. Recognise
+legacy `API error N` / `authentication failed (status N)` markers and body-free
+`API request failed (HTTP N ...)` / `authentication failed (HTTP N ...)`, including
+wrapped failures. The first explicit producer status wins, never a number in a
+host, token or quoted payload. HTTP 401/403 retain their authentication/ACL
+meanings; 429/503 remain `proxmox_api_error`, not transport or credential claims.
+`Errors Detected` includes the positional PBS monitor guidance in all four cases.
+`TestDiagnosticsPBSRetainedHTTPFailures` joins actual pinned-TLS PBS refusals,
+monitor aggregation, connection JSON, diagnostic classification and summary JSON;
+`TestDiagnosticsPBSRetainedLegacyMarkers` preserves older retained records.
+
 ### Proxmox setup output consumption
 
 The existing PVE/PBS setup URL, credential-free script and agent-install client
