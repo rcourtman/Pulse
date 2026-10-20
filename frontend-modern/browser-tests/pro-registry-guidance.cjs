@@ -60,6 +60,14 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
         page.on('pageerror', (error) => result.errors.push(error.message));
         await page.addInitScript(() => {
           window.__copied = [];
+          window.__dateCalls = [];
+          const nativeDate = Date.prototype.toLocaleDateString;
+          Date.prototype.toLocaleDateString = function (...args) {
+            const start = performance.now();
+            const result = Reflect.apply(nativeDate, this, args);
+            window.__dateCalls.push({ elapsedMs: performance.now() - start, result });
+            return result;
+          };
           Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copied.push(text); } } });
         });
         await page.route('**/*', async (route) => {
@@ -73,12 +81,18 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
           if (url.pathname === '/api/version') return route.fulfill({ json: { version: '6.5.0', build: 'release', runtime: 'go', isDocker: true, isSourceBuild: false, isDevelopment: false, deploymentType: 'docker' } });
           if (url.pathname === '/api/updates/history') return route.fulfill({ json: [] });
           if (url.pathname === '/api/updates/pro-runtime' && mode === 'switch') return route.fulfill({ json: { available: true, currentVersion: '6.5.0', version: '6.6.0', installInPlace: false, docker } });
-          if (url.pathname === '/api/updates/check' && mode === 'update') return route.fulfill({ json: { available: true, currentVersion: '6.5.0', latestVersion: '6.6.0', releaseNotes: '', downloadUrl: '', isPrerelease: false, isMajorUpgrade: false, dockerUpdate: docker } });
+          if (url.pathname === '/api/updates/check' && mode === 'update') return route.fulfill({ json: { available: true, currentVersion: '6.5.0', latestVersion: '6.6.0', releaseDate: '2026-09-10T14:06:01Z', releaseNotes: '', downloadUrl: '', isPrerelease: false, isMajorUpgrade: false, dockerUpdate: docker } });
           result.unexpected.push(url.pathname);
           return route.fulfill({ status: 405, body: 'Unexpected fixture request' });
         });
         await page.goto(`${origin}/browser-tests/pro-registry-guidance.html?mode=${mode}`, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+        if (mode === 'update') {
+          await expect(page.getByText(/^Released /)).toBeVisible();
+          result.dateCalls = await page.evaluate(() => window.__dateCalls);
+          assert.ok(result.dateCalls.length >= 2, 'the real release-date consumer must render');
+          assert.ok(result.dateCalls.every((c) => c.result === result.dateCalls[0].result));
+        }
         if (label === 'phone') await page.evaluate(() => document.documentElement.classList.add('dark'));
         const guide = mode === 'switch' ? page.getByTestId('pro-runtime-switch')
           : page.locator('div.overflow-hidden.border-green-200').filter({ has: page.getByRole('heading', { name: 'Update Available', exact: true }) });
@@ -141,6 +155,11 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
           const file = `${label}-${mode}-${variant}.png`;
           await guide.screenshot({ path: path.join(output, file), animations: 'disabled' });
           report.captures.push({ file, sha256: sha(fs.readFileSync(path.join(output, file))) });
+          if (mode === 'update' && variant === 'legacy') {
+            const dateFile = `${label}-release-date.png`;
+            await page.getByText(/^Released /).locator('..').screenshot({ path: path.join(output, dateFile), animations: 'disabled' });
+            report.captures.push({ file: dateFile, sha256: sha(fs.readFileSync(path.join(output, dateFile))) });
+          }
         }
         assert.deepEqual(result.errors, []);
         assert.deepEqual(result.unexpected, []);
