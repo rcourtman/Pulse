@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### Retryable PBS reads retain history, not healthy protection
+
+HTTP 408 (request timeout) and 429 (rate limit) at datastore discovery,
+namespace discovery, group listing or snapshot reads retain last-known backup
+rows at their original timestamp and cache age. They do not establish missing
+backups or revoked access, refresh evidence, certify complete protection, or
+trigger an immediate retry from Retry-After. Readable siblings keep progressing.
+An ordinary subsequent complete read restores current observations; a complete
+empty inventory still reconciles absence. HTTP 401/403 and other terminal 4xx
+responses retain existing raw-scope withdrawal. Historical recovery facts and
+other connections remain independent. Legacy error compatibility uses the first
+4xx marker, not a later status quoted by the provider.
+
+`TestPBSBackupRetryableStatusLifecycle` exercises real pinned-TLS HTTP and the
+ordinary foreground/background collector through repeated 408/429 and 403
+controls at all four boundaries, stored protection, age/cache preservation,
+sibling progress, same-credential recovery and authoritative emptiness.
+`TestPBSBackupCacheHTTPStatusClassification` covers direct/wrapped typed statuses
+and contradictory private bodies; `TestShouldReuseCachedPBSBackups` keeps legacy
+controls. Source-bound Backups consumer proof uses the emitted rows and postures,
+not invented healthy readings. These are closed fixtures, not guest thaw,
+filesystem liveness, installed recovery or published availability.
+
 ### PBS response failures are not diagnostic payloads
 
 PBS authentication and API errors expose the observed HTTP status and standard

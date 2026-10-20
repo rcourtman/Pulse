@@ -94,6 +94,35 @@ func TestShouldReuseCachedPBSBackups(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "408 request timeout should reuse cache",
+			err:  errors.New("poll failed: API error 408: request timeout"),
+			want: true,
+		},
+		{
+			name: "429 rate limit should reuse cache",
+			err:  errors.New("poll failed: API error 429: too many requests"),
+			want: true,
+		},
+		{
+			name: "403 body cannot override denial with 429 marker",
+			err:  errors.New("API error 403: provider says API error 429: retry"),
+			want: false,
+		},
+		{
+			name: "400 body cannot override rejection with 408 marker",
+			err:  errors.New("API error 400: provider says API error 408: timeout"),
+			want: false,
+		},
+		{
+			name: "401 authentication denial should not reuse cache",
+			err:  errors.New("API error 401: unauthorized"),
+			want: false,
+		},
+		{
+			name: "nil error does not authorize cache reuse",
+			want: false,
+		},
+		{
 			name: "500 server error should reuse cache",
 			err:  errors.New("API error 500: internal server error"),
 			want: true,
