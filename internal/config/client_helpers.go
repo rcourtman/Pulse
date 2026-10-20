@@ -2,9 +2,9 @@ package config
 
 import (
 	"net"
-	"net/url"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -32,13 +32,11 @@ func normalizeHostPort(host, defaultPort string) string {
 		return trimmed
 	}
 
-	candidate := trimmed
-	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
-		candidate = "https://" + candidate
-	}
-
-	parsed, err := url.Parse(candidate)
-	if err != nil || parsed.Host == "" {
+	// Validate before removing anything. An explicit scheme is not a hostname,
+	// and stripping userinfo/query/fragment must not turn rejected input into a
+	// usable credential destination. The client owns reporting invalid input.
+	parsed, err := securityutil.NormalizeInfrastructureBaseURL(trimmed, "https")
+	if err != nil {
 		return trimmed
 	}
 
@@ -52,7 +50,7 @@ func normalizeHostPort(host, defaultPort string) string {
 		parsed.Host = net.JoinHostPort(parsed.Hostname(), defaultPort)
 	}
 
-	return parsed.Scheme + "://" + parsed.Host
+	return parsed.String()
 }
 
 // CreateProxmoxConfig creates a proxmox.ClientConfig from a PVEInstance
@@ -153,13 +151,8 @@ func StripDefaultPort(host, defaultPort string) string {
 		return trimmed
 	}
 
-	candidate := trimmed
-	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
-		candidate = "https://" + candidate
-	}
-
-	parsed, err := url.Parse(candidate)
-	if err != nil || parsed.Host == "" {
+	parsed, err := securityutil.NormalizeInfrastructureBaseURL(trimmed, "https")
+	if err != nil {
 		return trimmed
 	}
 
@@ -168,7 +161,9 @@ func StripDefaultPort(host, defaultPort string) string {
 	}
 
 	parsed.Host = parsed.Hostname()
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.Scheme + "://" + parsed.Host + strings.TrimSuffix(parsed.Path, "/")
+	if strings.Contains(parsed.Host, ":") {
+		parsed.Host = "[" + parsed.Host + "]"
+	}
+	// URL.String retains IPv6 brackets and escapes a zone separator once.
+	return parsed.String()
 }
