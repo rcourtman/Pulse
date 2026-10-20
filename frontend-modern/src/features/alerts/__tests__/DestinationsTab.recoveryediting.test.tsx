@@ -268,7 +268,11 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       editor.focus();
       expect(screen.getByRole('button', { name: label })).toBeDisabled();
       reject(new Error('fixture rejection'));
-      await waitFor(() => expect(status).toHaveTextContent('Unable to ' + verb));
+      await waitFor(() =>
+        expect(status).toHaveTextContent(
+          verb === 'retry' ? 'Retry could not be confirmed.' : 'Dismissal could not be confirmed.',
+        ),
+      );
       expect(editor).toHaveFocus();
       expect(editor).toHaveValue('unfinished.smtp.example');
       expect(emailConfig().server).toBe('unfinished.smtp.example');
@@ -284,7 +288,9 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('button', { name: label })).toBeEnabled();
       expect(screen.getByRole('status')).toBe(status);
-      expect(status).toHaveTextContent('Unable to ' + verb);
+      expect(status).toHaveTextContent(
+        verb === 'retry' ? 'Retry could not be confirmed.' : 'Dismissal could not be confirmed.',
+      );
       expect(editor).toHaveFocus();
       expect(editor).toHaveValue('unfinished.smtp.example');
       expect(dirty).not.toHaveBeenCalledWith(false);

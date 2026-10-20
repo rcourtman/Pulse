@@ -287,8 +287,10 @@ describe('useNotificationDeliveryLog', () => {
         expect(state.refreshingDeliveryLog()).toBe(false);
         recovery.resolve([]);
         await recovery.promise;
-        expect(state.heldEventsUnavailable()).toBe(false);
-        expect(state.refreshingHeldEvents()).toBe(false);
+        await vi.waitFor(() => {
+          expect(state.heldEventsUnavailable()).toBe(false);
+          expect(state.refreshingHeldEvents()).toBe(false);
+        });
       } finally {
         dispose();
       }
@@ -315,8 +317,10 @@ describe('useNotificationDeliveryLog', () => {
           expect(state.heldEventsUnavailable()).toBe(false);
           newer.resolve([]);
           await newer.promise;
-          expect(state.refreshingHeldEvents()).toBe(false);
-          expect(state.heldEventsUnavailable()).toBe(false);
+          await vi.waitFor(() => {
+            expect(state.refreshingHeldEvents()).toBe(false);
+            expect(state.heldEventsUnavailable()).toBe(false);
+          });
         } finally {
           dispose();
         }

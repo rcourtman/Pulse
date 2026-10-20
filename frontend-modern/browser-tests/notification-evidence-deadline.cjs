@@ -251,11 +251,9 @@ let browser, context;
       await page.clock.install({ time: now });
       await page.clock.pauseAt(now);
       const card = page.locator('#notification-delivery-activity');
-      const warning = page
-        .getByRole('alert')
-        .filter({
-          has: page.getByRole('heading', { name: 'Notification delivery status is unavailable' }),
-        });
+      const warning = page.getByRole('alert').filter({
+        has: page.getByRole('heading', { name: 'Notification delivery status is unavailable' }),
+      });
       const count = (stream) => run.reads.filter((read) => read.stream === stream).length;
       const activate = async (locator) => {
         await locator.scrollIntoViewIfNeeded();
@@ -300,6 +298,7 @@ let browser, context;
       for (const stream of Object.keys(endpoints))
         assert.equal(count(stream), 1, 'Expiry never retries automatically');
       await capture('unavailable', warning);
+      await capture('activity-unavailable', card);
       run.checks.push(
         'Exact 150-second header/body deadline, three transport aborts, explicit unavailable-not-empty evidence and enabled refresh; no automatic retry.',
       );
