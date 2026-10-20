@@ -4,6 +4,7 @@ This changelog describes the changes since `v6.5.0`. Stable `v6.5.0` remains the
 
 ## Changes since v6.5.0
 
+- Release v6.6.0-rc.5 (#3073)
 - Cluster retained metrics storage to remove chart row lookups (#3070)
 - Keep guest HTTP tests on namespaced fixture identities (#3069)
 - Stabilize private bootstrap and guest-agent HTTP fixtures (#3068)
