@@ -250,3 +250,7 @@ type statusDiagnosticBody struct {
 }
 
 func (b *statusDiagnosticBody) Close() error { *b.closes++; return nil }
+
+// Failure bodies, unlike typed measurements, are never diagnostic content.
+func TestPBSProviderFailureDiagnostics(t *testing.T) { testPBSFailureDiagnostics(t) }
+func TestPBSTokenFailureDiagnostics(t *testing.T)    { testPBSTokenFailureDiagnostics(t) }

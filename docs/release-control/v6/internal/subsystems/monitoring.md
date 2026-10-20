@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### PBS response failures are not diagnostic payloads
+
+PBS authentication and API errors expose the observed HTTP status and standard
+status name, plus fixed local body-read/size diagnostics. No provider error
+body is kept in the returned error or logs: it may echo a password, ticket,
+CSRF token, API secret or private provider metadata. Unknown statuses remain
+numeric, rather than trusting the provider's status text. Malformed or empty
+successful token-creation responses likewise return fixed messages, never the
+credential-bearing body or decoder detail.
+
+The existing JSON-to-form fallback remains limited to HTTP 400/415. Typed HTTP
+status remains available through wrapped errors for permission, cache-retention
+and not-found decisions. Legacy PBS user/token collision responses at HTTP
+400/409/500 retain an internal flag from the bounded body; authentication,
+transport and unrelated failures cannot become collisions just by mentioning
+"already exists". Repeated setup still performs no token deletion/replacement.
+Successful credentials, TLS policy, request selection and the 8 MiB response
+limit are unchanged. This does not sanitise arbitrary transport errors, all
+successful provider fields or historical logs, or prove installed recovery.
+
+`TestPBSProviderFailureDiagnostics` covers API/auth failures across ten statuses,
+JSON/HTML/oversize/read-error bodies, exact request/closure counts, failed-session
+nonpublication and bounded private diagnostics. `TestPBSTokenFailureDiagnostics`
+covers malformed, wrong-type, missing-value and valid token responses;
+`TestPBSCollisionClassificationDoesNotDependOnDiagnosticText` and the existing
+stateful collision controls preserve non-destructive setup. The pinned-TLS
+`TestPBSConnectionFailureDiagnostics` joins actual Settings ingress, PBS HTTP,
+operation logs and same-credential empty-datastore recovery. Its exact emitted
+logs feed the production `SystemLogsPanel` via the error-log browser control.
+
 ### PBS status diagnostics do not retain whole provider payloads
 
 Node-status and datastore-status diagnostics report bounded response lengths,
