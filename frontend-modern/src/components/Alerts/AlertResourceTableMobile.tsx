@@ -154,24 +154,24 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     value: number;
     isOverridden: boolean;
   }) => {
-    const isDisabledMetric = metricProps.value <= 0;
-    const displayText = metricValueText(metricProps.metric, metricProps.value);
+    const isDisabledMetric = () => metricProps.value <= 0;
+    const displayText = () => metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
         class="flex items-center justify-center gap-1"
-        title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
+        title={isDisabledMetric() ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
           class={`text-sm ${
-            isDisabledMetric
+            isDisabledMetric()
               ? 'text-muted italic'
               : metricProps.isOverridden
                 ? 'text-base-content font-bold'
                 : 'text-base-content'
           }`}
         >
-          {displayText}
+          {displayText()}
         </span>
         <Show when={props.table.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
           <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
@@ -499,7 +499,8 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     // disabled config (#1126). Render the same on/off
                     // toggle the desktop rows use instead.
                     if (metric === 'backup' || metric === 'snapshot') {
-                      const config = metric === 'backup' ? resource.backup : resource.snapshot;
+                      const config = () =>
+                        metric === 'backup' ? resource.backup : resource.snapshot;
                       const onToggle =
                         metric === 'backup'
                           ? props.table.onToggleBackup
@@ -513,7 +514,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             {column}
                           </span>
                           <StatusBadge
-                            isEnabled={config?.enabled ?? true}
+                            isEnabled={config()?.enabled ?? true}
                             onToggle={() => onToggle(resource.id)}
                             titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                             titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}

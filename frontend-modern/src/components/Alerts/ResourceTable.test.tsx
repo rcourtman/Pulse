@@ -230,6 +230,83 @@ describe('ResourceTable', () => {
 
   describe('rendering basics', () => {
     it.each([false, true])(
+      'keeps accepted metric text and Off/inheritance reactive in retained rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = (thresholds: Record<string, number> = {}, defaultRate = 100) =>
+          makeResource({
+            id: 'vm-1',
+            name: 'web-01',
+            defaults: { diskRead: defaultRate },
+            thresholds,
+          });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({ columns: ['Disk R MB/s'] });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        const cell = () =>
+          screen.getByRole('button', { name: /Edit Disk R MB\/s threshold for web-01:/ });
+        const initialCell = cell();
+        expect(initialCell).toHaveTextContent('100');
+        setResources([resource({ diskRead: 125.5 })]);
+        expect(cell()).toBe(initialCell);
+        expect(cell()).toHaveAccessibleName('Edit Disk R MB/s threshold for web-01: 125.5');
+        expect(cell()).toHaveTextContent('125.5');
+        setResources([resource({ diskRead: -1 })]);
+        expect(cell()).toHaveTextContent('Off');
+        expect(cell()).toHaveAttribute('aria-label', 'Edit Disk R MB/s threshold for web-01: Off');
+        setResources([resource({}, 150)]);
+        expect(cell()).toBe(initialCell);
+        expect(cell()).toHaveAccessibleName('Edit Disk R MB/s threshold for web-01: 150');
+        expect(cell()).toHaveTextContent('150');
+      },
+    );
+
+    it.each([false, true])(
+      'refreshes protection and connectivity controls in retained rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = (updated = false) =>
+          makeResource({
+            id: 'vm-1',
+            name: 'web-01',
+            type: 'guest',
+            disabled: updated,
+            backup: { enabled: !updated },
+            snapshot: { enabled: updated },
+            poweredOffSeverity: updated ? 'critical' : 'warning',
+          });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({
+          columns: ['Backup', 'Snapshot'],
+          onToggleDisabled: vi.fn(),
+          onToggleBackup: vi.fn(),
+          onToggleSnapshot: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onSetOfflineState: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        setResources([resource(true)]);
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toHaveAttribute(
+          'aria-checked',
+          'false',
+        );
+        expect(
+          screen.getByRole('button', { name: 'Backup alerts for web-01: Off' }),
+        ).toHaveAttribute('aria-pressed', 'false');
+        expect(
+          screen.getByRole('button', { name: 'Snapshot alerts for web-01: On' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts for web-01: Crit' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
       'retains an invalid draft through resampled rows (mobile=%s)',
       (mobile) => {
         mockIsMobile.mockReturnValue(mobile);

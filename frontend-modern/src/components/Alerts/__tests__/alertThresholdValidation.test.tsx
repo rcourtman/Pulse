@@ -13,7 +13,7 @@ afterEach(cleanup);
 function editor(scope: 'default' | 'override' = 'default', initial: number | undefined = 80) {
   const change = vi.fn();
   const view = render(() => {
-    const [value, setValue] = createSignal(initial);
+    const [value, setValue] = createSignal<number | undefined>(initial);
     return (
       <AlertResourceMetricEditor
         metric="cpu"

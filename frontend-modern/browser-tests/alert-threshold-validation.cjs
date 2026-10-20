@@ -272,6 +272,11 @@ async function dismissToasts(page) {
           await expect(input).toBeVisible();
           return input;
         };
+        const rateCell = (value) =>
+          section.getByRole('button', {
+            name: `Edit Disk R MB/s threshold for validation-guest: ${value} MB/s`,
+            exact: true,
+          });
         const commitRow = async () => {
           if (spec.touch)
             await section
@@ -319,6 +324,7 @@ async function dismissToasts(page) {
         const overrides = Object.values(current.saves[1].overrides);
         assert.equal(overrides.length, 1);
         assert.equal(overrides[0].diskRead.trigger, 125.5);
+        await expect(rateCell('125.5')).toHaveText('125.5 MB/s');
         current.checks.push(
           'Invalid rate and incomplete exponent cannot commit a row; corrected 125.5 persists through the real policy consumer',
         );
@@ -331,7 +337,10 @@ async function dismissToasts(page) {
         await expect.poll(() => current.saves.length).toBe(3);
         for (const override of Object.values(current.saves[2].overrides))
           assert.equal(override.diskRead, undefined);
-        current.checks.push('A genuinely empty override inherits and never stores an Off limit');
+        await expect(rateCell('100')).toHaveText('100 MB/s');
+        current.checks.push(
+          'A genuinely empty override inherits and never stores an Off limit; retained row text and accessible name both show the inherited 100 MB/s',
+        );
         await dismissToasts(page);
 
         await memory().fill('86');
@@ -355,6 +364,50 @@ async function dismissToasts(page) {
         );
         await capture(page, 'off-and-inherited');
         await scan(page, 'off-and-inherited');
+
+        // Stable resource identities must also refresh the existing protection
+        // badges, not leave an earlier enabled/disabled snapshot on screen.
+        await dismissToasts(page);
+        for (const metric of ['Backup', 'Snapshot']) {
+          await activate(
+            section.getByRole('button', {
+              name: `${metric} alerts for validation-guest: Disabled`,
+              exact: true,
+            }),
+            spec.touch,
+          );
+          await expect(
+            section.getByRole('button', {
+              name: `${metric} alerts for validation-guest: Enabled`,
+              exact: true,
+            }),
+          ).toHaveText('Enabled');
+        }
+        await activate(page.getByRole('button', { name: 'Save Changes', exact: true }), spec.touch);
+        await expect.poll(() => current.saves.length).toBe(5);
+        const protectedOverride = Object.values(current.saves[4].overrides)[0];
+        assert.equal(protectedOverride.backup.enabled, true);
+        assert.equal(protectedOverride.snapshot.enabled, true);
+        await capture(page, 'protection-controls-refreshed');
+        await scan(page, 'protection-controls-refreshed');
+        for (const metric of ['Backup', 'Snapshot']) {
+          await activate(
+            section.getByRole('button', {
+              name: `${metric} alerts for validation-guest: Enabled`,
+              exact: true,
+            }),
+            spec.touch,
+          );
+          await expect(
+            section.getByRole('button', {
+              name: `${metric} alerts for validation-guest: Disabled`,
+              exact: true,
+            }),
+          ).toHaveText('Disabled');
+        }
+        current.checks.push(
+          'Retained backup and snapshot badges follow enable and disable actions',
+        );
       }
       await context.close();
       await browser.close();

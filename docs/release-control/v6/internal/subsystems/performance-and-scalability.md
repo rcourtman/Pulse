@@ -4508,3 +4508,11 @@ The ResourceTable resampling regression covers both layouts and the browser
 changes another real global limit while a row is invalid, checks whole-policy
 Save sends nothing, and verifies that the invalid value and visible reason
 survive the capture and accessibility scan.
+
+Retaining a row must not freeze its accepted policy display. Numeric value text,
+Off styling and backup/snapshot badges read reactive props rather than taking a
+construction-time snapshot. ResourceTable controls cover accepted override,
+Off, inheritance, protection badges and connectivity after resampling in both
+layouts. The browser also compares the visible rate text and accessible name
+with the actual saved override and its removal; an HTTP-only inheritance pass
+is insufficient when the consumer still displays the previous override.
