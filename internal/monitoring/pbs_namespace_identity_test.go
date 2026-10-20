@@ -68,6 +68,16 @@ func TestPBSNamespaceIdentityLifecycle(t *testing.T) {
 			body = `{"data":[{"store":"archive"},{"store":"mirror"}]}`
 		case strings.HasSuffix(r.URL.Path, "/status"):
 			body = `{"data":{"status":"available","total":1000,"used":250,"avail":750}}`
+		case strings.HasSuffix(r.URL.Path, "/rrd"):
+			if r.URL.Query().Get("cf") != "AVERAGE" || r.URL.Query().Get("timeframe") != "hour" {
+				t.Error("ordinary RRD query changed")
+			}
+		case strings.HasSuffix(r.URL.Path, "/gc"):
+			body = `{"data":{}}`
+		case strings.HasSuffix(r.URL.Path, "/nodes/localhost/tasks"):
+			if r.URL.Query().Get("typefilter") != "backup" || (r.URL.Query().Get("store") != "archive" && r.URL.Query().Get("store") != "mirror") {
+				t.Error("unexpected backup task query")
+			}
 		case strings.HasSuffix(r.URL.Path, "/namespace"):
 			if !mirror {
 				body = `{"data":[{"ns":"team/production"}]}`
@@ -189,6 +199,17 @@ func TestPBSNamespaceIdentityLifecycle(t *testing.T) {
 			t.Errorf("%s: collection crossed the independent connection boundary", phases[p])
 		}
 		current, postures := rows(instance), f.postures(t)
+		mu.Lock()
+		discoveryReads := 0
+		for _, read := range reads[p] {
+			if strings.HasSuffix(read, "/namespace") {
+				discoveryReads++
+			}
+		}
+		mu.Unlock()
+		if discoveryReads != 2 {
+			t.Errorf("%s: namespace reads=%d, want one per datastore without retry", phases[p], discoveryReads)
+		}
 		found, mirrorAdvanced := false, false
 		for _, b := range current {
 			if b.VMID == "101" {
