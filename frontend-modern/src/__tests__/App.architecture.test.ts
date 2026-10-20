@@ -796,15 +796,18 @@ describe('App architecture', () => {
       'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
-    expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
-    expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
+    // Both rails share the severity-aware name rather than a desktop-only total.
+    expect(appLayoutSource).toContain(
+      "import { getMobileNavTabAriaLabel as getUtilityTabAriaLabel } from '@/components/shared/mobileNavBarModel';",
+    );
+    expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel(');
     expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
     expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={tab.label}');
-    expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain('aria-label={getUtilityTabAriaLabel(tab)}');
     expect(appLayoutSource).toContain(
       '<span aria-hidden="true" class="inline-flex items-center justify-center">',
     );
