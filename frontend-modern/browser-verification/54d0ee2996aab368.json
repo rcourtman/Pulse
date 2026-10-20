@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3934939d5cb303d55a79988c8dbf179f526989bb",
+  "verified_at": "2026-10-20T04:00:46Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "7ddc2bcf0ae939d5a3b7d7194c78793d1a578c14d7f8f62c72900d0ffa90dfca"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/backups?view=coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Estate-wide five-target posture summary beside four active hiding filters and zero matching rows",
+    "All four counted postures after native count selection, with exact resource identity matching",
+    "Canonical and legacy coverage entry, chronological restore evidence, and refreshed active zero-count state"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow WebKit touch select the counted posture set and atomically clear search/node/type/location/source/day/view hiding filters while preserving unrelated URL state",
+    "Toggle the selected count off, retain actual desktop focus and reveal all five rated targets without extra API reads",
+    "Exercise attention, unknown and protected counts from canonical and legacy routes; switch to By date and retain unmatched restore evidence",
+    "Refresh collected inventory and server postures to zero protected, keep the zero count selectable, then toggle it off without inventing healthy rows"
+  ],
+  "execution_source": "3934939d5cb303d55a79988c8dbf179f526989bb",
+  "execution_tree": "73cb651f1a2b1362392a2c5f551101e491c88d55",
+  "source_proof_receipt": "source-d2ygv5u6",
+  "source_proof_snapshot": "e0c0cffa9acd883b212927e5cd49be17ffe761af08076be3bd3cf97382efb5c4",
+  "protocol": "frontend-modern/browser-tests/backup-health-counts.cjs, unchanged interaction matrix, with VM-compiled fixture bytes served instead of building inside browser execution",
+  "protocol_sha256": "515a8a30757f11ff869a88a537efddf1c523c680ff3999a8c7e9146a7552c98b",
+  "fixture_archive_sha256": "4bfeac62548d4f32c2622fc2aa07964e8e4e489cf59ee6b549fef6bd56e3b1ef",
+  "fixture_manifest_sha256": "856ed34cc876e744f92ac30e50c753d841bd77ed91e40111624058db23bcabd9",
+  "compiled_table_sha256": "7ddc2bcf0ae939d5a3b7d7194c78793d1a578c14d7f8f62c72900d0ffa90dfca",
+  "compiled_source_count": 297,
+  "playwright": "1.56.1",
+  "engines": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "assertions": 8,
+      "page_errors": 0,
+      "http_reads": 23
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "assertions": 8,
+      "page_errors": 0,
+      "http_reads": 23
+    }
+  ],
+  "captures": [
+    {
+      "file": "chromium-filtered.png",
+      "state": "filtered",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "sha256": "8b88c78e0c8fd712c18549b8aeeca04c98707262fd8ee4d761f335780eac7775",
+      "inspected_with": "native view_image",
+      "pixel_review": "The estate-wide strip shows two unprotected targets while the four hiding scopes leave 0 of 5 rows. The saved-location warning and count-selection explanation are readable; no clipping is visible at 1440px."
+    },
+    {
+      "file": "chromium-count-reveals-targets.png",
+      "state": "count-reveals-targets",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "sha256": "927cddf2d2aa7c344f5f0ea1ff960608b2cb193a82f76c7c2a3a2830381aa8d0",
+      "inspected_with": "native view_image",
+      "pixel_review": "The focused 2 unprotected count has a visible blue ring. The search and scope chips are cleared and the two matching VM/LXC rows appear with their node identities; the unmatched restore evidence remains separate."
+    },
+    {
+      "file": "chromium-protected-target.png",
+      "state": "protected-target",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "sha256": "d007ca220b9bdb6a9d083608ca54ae227f011f2e18fd8cfbc918f6908649162a",
+      "inspected_with": "native view_image",
+      "pixel_review": "The focused 1 protected control selects the one protected-0 / pve-0 row and the filter reads Protected. Unmatched evidence stays separately labelled; no layout clipping is visible."
+    },
+    {
+      "file": "chromium-active-zero-count.png",
+      "state": "active-zero-count",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "sha256": "120e0c580f987708c0c862e9a7e82d34580b0179f17a486fc3c3b6c03e11a8ea",
+      "inspected_with": "native view_image",
+      "pixel_review": "After the posture refresh, 0 protected remains visibly selected and keyboard focused, alongside 2 unknown. No matching coverage rows are invented; the empty-state guidance remains visible."
+    },
+    {
+      "file": "webkit-filtered.png",
+      "state": "filtered",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "sha256": "6ee13c4cb4a407fe4078cba26b550524ddcff60af204dd516f6c1be0a0185a4e",
+      "inspected_with": "native view_image",
+      "pixel_review": "At 375px in dark mode the saved-location warning, wrapped global-count explanation and Filters 5 badge are readable. The empty-state heading is visible below the controls; this viewport capture does not claim to show the entire empty-state body."
+    },
+    {
+      "file": "webkit-count-reveals-targets.png",
+      "state": "count-reveals-targets",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "sha256": "4412c5628a12d1ba61a1da0a3e688021ec47151c80acad5a39457cc1dbabf47c",
+      "inspected_with": "native view_image",
+      "pixel_review": "Tapping the count clears the hiding scopes: Filters falls to 1 and both unprotected rows are visible with VM/LXC, connection and node context. The full count explanation wraps within the phone card; no horizontal clipping is visible."
+    },
+    {
+      "file": "webkit-protected-target.png",
+      "state": "protected-target",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "sha256": "63bd18905955ec59ade9a049e2593cc16a4fa6651c57c173b3dd4f931b2cd77a",
+      "inspected_with": "native view_image",
+      "pixel_review": "The selected 1 protected control, Filters 1 badge and single protected-0 / pve-0 row are visible within the phone viewport; the unmatched restore record remains a separate disclosure."
+    },
+    {
+      "file": "webkit-active-zero-count.png",
+      "state": "active-zero-count",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "sha256": "143b12e961532a34d0abd4e86e1ec7338d26cf04f5ad5b38be76f23f9e710b89",
+      "inspected_with": "native view_image",
+      "pixel_review": "The selected 0 protected count remains reachable on the phone after refresh, with 2 unknown and an empty coverage view. The explanatory text and empty-state guidance wrap within the viewport, without an invented protected row."
+    }
+  ],
+  "cleanup": {
+    "browser_closed": true,
+    "server_closed": true
+  },
+  "limits": "Synthetic collected snapshots and server-owned postures through production readers, mapper, router and tables. No native recovery, guest thaw/liveness, publication, production operations or screen-reader speech proof. Production frontend build and budgets pass separately in the same source-proof VM. The browser serves a production-component fixture build, not the authenticated embedded application. Formatting is token-preserving and adds no behaviour."
+}
