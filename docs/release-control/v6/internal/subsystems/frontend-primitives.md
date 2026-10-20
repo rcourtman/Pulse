@@ -10665,3 +10665,15 @@ checks validity without forcing focus back during the blur event; explicit
 policy/card Save still reveals and focuses the first invalid field. The
 browser checks both the rejected value and visible error before and after its
 light/dark captures, following the pixel review that caught the earlier reset.
+
+Threshold resource snapshots are temporary objects, not editor identities.
+Desktop rows use the existing bounded renderer's logical key extractor; narrow
+cards reconcile their existing keyed items before windowing. Resampling a
+resource or changing another default must preserve the mounted numeric editor,
+its rejected native draft and its labelled error. This does not pin removed
+resources or change the existing window size, runway or source identity.
+
+The ResourceTable resampling regression covers both layouts and the browser
+changes another real global limit while a row is invalid, checks whole-policy
+Save sends nothing, and verifies that the invalid value and visible reason
+survive the capture and accessibility scan.

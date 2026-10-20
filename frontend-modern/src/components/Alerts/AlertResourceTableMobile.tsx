@@ -1,4 +1,5 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createEffect, createMemo } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import Check from 'lucide-solid/icons/check';
 import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
@@ -69,6 +70,11 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     }
     return items;
   });
+  // Fresh observations/defaults rebuild the row objects. Keep the cards keyed
+  // by logical identity so that resampling cannot discard a rejected native
+  // draft or its explanation while the operator is correcting it.
+  const [stableMobileItems, setStableMobileItems] = createStore<AlertResourceMobileItem[]>([]);
+  createEffect(() => setStableMobileItems(reconcile(mobileItems(), { key: 'key' })));
 
   const getThresholds = (resource: Resource, isEditing: boolean) =>
     isEditing ? props.table.editingThresholds() : (resource.thresholds ?? {});
@@ -296,7 +302,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
       </Show>
 
       <PlatformWindowedList
-        items={mobileItems}
+        items={() => stableMobileItems}
         estimatedItemHeight={240}
         enableThreshold={18}
         windowSize={24}

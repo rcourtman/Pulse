@@ -139,6 +139,12 @@ async function activate(button, touch) {
     await button.press('Enter');
   }
 }
+async function dismissToasts(page) {
+  const buttons = page
+    .getByRole('region', { name: 'Notifications' })
+    .getByRole('button', { name: 'Dismiss notification' });
+  while (await buttons.count()) await buttons.first().click();
+}
 (async () => {
   fs.mkdirSync(output, { recursive: true });
   try {
@@ -235,6 +241,7 @@ async function activate(button, touch) {
         );
         await capture(page, 'corrected-save');
         await scan(page, 'corrected-save');
+        await dismissToasts(page);
 
         // The actual override editor commits on desktop blur, and on a card's
         // Save action on a phone. Neither may close an invalid visible draft.
@@ -263,6 +270,9 @@ async function activate(button, touch) {
         };
         let rowInput = await editRow();
         await rowInput.fill('10001');
+        // Another default rebuilds the real resource rows, as live resampling
+        // does. Neither layout may remount away the rejected native draft.
+        await memory().fill('86');
         await commitRow();
         await expect(rowInput).toBeVisible();
         if (spec.touch) await expect(rowInput).toBeFocused();
@@ -270,6 +280,9 @@ async function activate(button, touch) {
         await expect(rowInput).toHaveAttribute('aria-invalid', 'true');
         const rowError = section.getByText('Enter a number from 0.01 to 10000.', { exact: true });
         await expect(rowError).toBeVisible();
+        assert.equal(current.saves.length, 1);
+        await activate(page.getByRole('button', { name: 'Save Changes', exact: true }), spec.touch);
+        await expect(rowInput).toHaveValue('10001');
         assert.equal(current.saves.length, 1);
         await capture(page, 'row-save-blocked');
         await scan(page, 'row-save-blocked');
@@ -308,6 +321,7 @@ async function activate(button, touch) {
         for (const override of Object.values(current.saves[2].overrides))
           assert.equal(override.diskRead, undefined);
         current.checks.push('A genuinely empty override inherits and never stores an Off limit');
+        await dismissToasts(page);
 
         await memory().fill('86');
         await cpu().fill('150');

@@ -229,6 +229,30 @@ describe('ResourceTable', () => {
   });
 
   describe('rendering basics', () => {
+    it.each([false, true])(
+      'retains an invalid draft through resampled rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = () =>
+          makeResource({ id: 'vm-1', name: 'web-01', thresholds: { diskRead: 100 } });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({
+          editingId: () => 'vm-1',
+          editingThresholds: () => ({ diskRead: 100 }),
+          columns: ['Disk R MB/s'],
+        });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        const input = screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' });
+        fireEvent.input(input, { target: { value: '10001' } });
+        setResources([resource()]);
+        expect(screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' })).toBe(input);
+        expect(input).toHaveValue(10001);
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(input).toHaveAccessibleDescription('Enter a number from 0.01 to 10000.');
+        expect(props.onSaveEdit).not.toHaveBeenCalled();
+      },
+    );
+
     it.each([false, true])('keeps Off limit labels readable (mobile=%s)', (mobile) => {
       mockIsMobile.mockReturnValue(mobile);
       const props = makeProps({
