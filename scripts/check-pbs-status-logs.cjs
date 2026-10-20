@@ -63,7 +63,7 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
         return;
       }
     }
-    if (url.pathname === '/fixture/emit' && req.method === 'POST') { emit('rrd'); return res.end(); }
+    if (url.pathname === '/fixture/emit' && req.method === 'POST') { emit('rrd'); res.writeHead(204); return res.end(); }
     if (url.pathname === '/favicon.ico') { res.writeHead(204); return res.end(); }
     const key = url.pathname === '/' ? 'tmp/pbs-status-logs/index.html' : decodeURIComponent(url.pathname).slice(1);
     if (!Object.hasOwn(binding.artifacts, key)) { unexpected.push({method:req.method,path:url.pathname}); res.writeHead(404); return res.end('Not found'); }
@@ -121,10 +121,18 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       await capture('debug');
       await activate(page.getByRole('button',{name:'Pause Stream',exact:true}));
       assert.equal(await page.getByRole('button',{name:'Resume Stream',exact:true}).getAttribute('aria-pressed'),'true');
-      await page.evaluate(()=>fetch('/fixture/emit',{method:'POST'})); await settle();
+      await page.evaluate(async () => {
+        const response = await fetch('/fixture/emit', {method:'POST'});
+        if (response.status !== 204) throw new Error('Fixture emission did not complete');
+        await response.arrayBuffer(); // Finish the control request, not just its headers.
+      }); await settle();
       assert.equal(await logRows.count(),debugCount,'paused display must not add arrivals');
       await activate(page.getByRole('button',{name:'Resume Stream',exact:true}));
-      await page.evaluate(()=>fetch('/fixture/emit',{method:'POST'}));
+      await page.evaluate(async () => {
+        const response = await fetch('/fixture/emit', {method:'POST'});
+        if (response.status !== 204) throw new Error('Fixture emission did not complete');
+        await response.arrayBuffer(); // Finish the control request, not just its headers.
+      });
       const resumedCount = debugCount + frames['debug/rrd'].lines.length;
       await page.waitForFunction(n=>document.querySelectorAll('main .font-mono > div > span').length===n,resumedCount);
       await check('resumed');
@@ -132,13 +140,15 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
       await page.getByText('Waiting for log output.',{exact:true}).waitFor();
       assert.equal(await logRows.count(),0);
       await capture('cleared');
-      assert.deepEqual(errors,[]); assert.deepEqual(consoleErrors,[]); assert.deepEqual(requestFailures,[]);
       const uiRequests = requests.slice(startRequests);
+      const result = {width,theme:width===320?'dark':'light',interaction:width===320?'touch':'keyboard',infoRows:1,debugCount,resumedCount,errors,consoleErrors,requestFailures,overflows,captures,requests:uiRequests,passed:false};
+      results.push(result); // Preserve the census even if a final assertion fails.
+      assert.deepEqual(errors,[]); assert.deepEqual(consoleErrors,[]); assert.deepEqual(requestFailures,[]);
       assert.equal(uiRequests.filter(r=>r.path==='/api/logs/level'&&r.method==='POST').length,1);
       assert.equal(uiRequests.filter(r=>r.path==='/api/logs/stream').length,1);
       assert(!uiRequests.some(r=>r.path==='/api/logs/download'),'view controls cannot download a bundle');
       await context.close();
-      results.push({width,theme:width===320?'dark':'light',interaction:width===320?'touch':'keyboard',infoRows:1,debugCount,resumedCount,errors,consoleErrors,requestFailures,overflows,captures,requests:uiRequests});
+      result.passed = true;
     }
     assert.deepEqual(unexpected,[]);
   } catch(error) { failure = {name:error.name,message:error.message}; process.exitCode=1; }
