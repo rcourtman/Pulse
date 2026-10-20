@@ -102,18 +102,20 @@ describe('OverviewTab group acknowledgement', () => {
       ],
     });
     await vi.advanceTimersByTimeAsync(1500);
-    expect(groupButton).toBeEnabled();
-    expect(groupButton).toHaveTextContent('Acknowledge all (1)');
-    expect(groupButton).toHaveAttribute('aria-busy', 'false');
+    // The live grouped projection replaces its group when acknowledgement
+    // changes. Inspect the newly rendered retry, not a detached old button.
+    const retryButton = screen.getByRole('button', { name: 'Acknowledge all (1)', exact: true });
+    expect(retryButton).toBeEnabled();
+    expect(retryButton).toHaveAttribute('aria-busy', 'false');
     expect(notificationStore.success).toHaveBeenCalledWith('Acknowledged 1 alert.');
     expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 1 alert.');
     vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValueOnce({
       results: [{ alertIdentifier: 'related', success: true }],
     });
-    await fireEvent.click(groupButton);
+    await fireEvent.click(retryButton);
     await vi.advanceTimersByTimeAsync(1500);
     expect(AlertsAPI.bulkAcknowledge).toHaveBeenLastCalledWith(['related']);
-    expect(groupButton).not.toBeInTheDocument();
+    expect(retryButton).not.toBeInTheDocument();
     // The independent same-name host remains active and is not a group member.
     expect(
       screen.getByRole('button', { name: 'Acknowledge all (1)', exact: true }),
