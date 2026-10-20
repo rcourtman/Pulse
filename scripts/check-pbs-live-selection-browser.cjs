@@ -5,6 +5,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const http = require('node:http');
+const { createRequire } = require('node:module');
+const { pathToFileURL } = require('node:url');
+const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 (async () => {
   const root = path.resolve('frontend-modern');
@@ -17,40 +21,71 @@ const { chromium } = require('playwright');
   const phases = ['initial', 'changed', 'transient', 'denied', 'recovered', 'empty', 'restored'];
   assert.deepEqual(Object.keys(frames).sort(), phases.slice().sort());
   assert.deepEqual(frames.changed.backups, frames.transient.backups);
-  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  process.chdir(root);
+  // The existing backup-identity proof compiles this same consumer before
+  // navigation. Reuse that route instead of racing cold dev-module requests
+  // against page.goto. No product or primary assertion is changed.
+  const { build } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href);
+  const frontendRequire = createRequire(path.join(root, 'package.json'));
+  const solid = frontendRequire('vite-plugin-solid');
+  const tailwind = (await import(pathToFileURL(frontendRequire.resolve('@tailwindcss/vite')).href)).default;
+  const compiled = path.join(out, 'static');
+  const compiledSources = {};
+  await build({
+    root, configFile: false, publicDir: false, logLevel: 'error',
+    resolve: { alias: { '@': path.join(root, 'src') }, conditions: ['import', 'browser', 'default'] },
+    plugins: [tailwind(), solid(), {
+      name: 'pbs-live-selection-compiled-source-binding',
+      generateBundle() {
+        for (const id of this.getModuleIds()) {
+          const file = id.split('?')[0];
+          if (!file.startsWith(root + '/') || file.includes('/node_modules/')) continue;
+          if (fs.existsSync(file) && fs.statSync(file).isFile()) compiledSources[path.relative(root, file)] = hash(fs.readFileSync(file));
+        }
+      },
+    }],
+    build: { target: 'esnext', outDir: compiled, emptyOutDir: true,
+      rollupOptions: { input: path.join(root, 'browser-tests/backups.html') } },
+  });
+  const compiledArtifacts = {};
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else compiledArtifacts[path.relative(compiled, file)] = hash(fs.readFileSync(file));
+    }
+  };
+  walk(compiled);
   let activePhase = 'initial';
   let reads;
-  const server = await createServer({
-    root, configFile: path.join(root, 'vite.config.ts'), cacheDir: path.join(out, 'vite-cache'), logLevel: 'error',
-    optimizeDeps: { noDiscovery: true, include: ['solid-js', 'solid-js/web', '@solidjs/router'] },
-    server: { host: '127.0.0.1', port: 5198, strictPort: true },
-    plugins: [{ name: 'pbs-live-selection-consumer', configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const pathname = new URL(req.url, 'http://fixture.invalid').pathname;
-        if (pathname.startsWith('/proxmox/backups/')) req.url = '/browser-tests/backups.html';
-        let payload;
-        if (pathname === '/fixture/workloads') payload = [100, 101].map((vmid, index) => ({
-          id: frames.initial.postures[index].subjectResourceId, type: 'vm', name: `guest-${vmid}`, displayName: `guest-${vmid}`,
-          platformId: 'cluster', platformType: 'proxmox-pve', sourceType: 'api', status: 'running', lastSeen: Date.now(),
-          proxmox: { vmid, node: `node-${index}`, instance: 'cluster' },
-        }));
-        else if (pathname === '/api/backups/pbs') {
-          reads[activePhase]++;
-          payload = { data: { backups: frames[activePhase].backups } };
-        } else if (pathname === '/api/backups/pve') payload = { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } };
-        else if (pathname.startsWith('/api/')) payload = { data: pathname === '/api/recovery/postures' ? frames[activePhase].postures : [], policy: { freshnessWindowSeconds: 86400, verificationWindowSeconds: 604800, requireVerification: false } };
-        if (payload === undefined) return next();
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(payload));
-      });
-    } }],
+  const server = http.createServer((req, res) => {
+    const pathname = new URL(req.url, 'http://fixture.invalid').pathname;
+    let payload;
+    if (pathname === '/fixture/workloads') payload = [100, 101].map((vmid, index) => ({
+      id: frames.initial.postures[index].subjectResourceId, type: 'vm', name: `guest-${vmid}`, displayName: `guest-${vmid}`,
+      platformId: 'cluster', platformType: 'proxmox-pve', sourceType: 'api', status: 'running', lastSeen: Date.now(),
+      proxmox: { vmid, node: `node-${index}`, instance: 'cluster' },
+    }));
+    else if (pathname === '/api/backups/pbs') {
+      reads[activePhase]++;
+      payload = { data: { backups: frames[activePhase].backups } };
+    } else if (pathname === '/api/backups/pve') payload = { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } };
+    else if (pathname.startsWith('/api/')) payload = { data: pathname === '/api/recovery/postures' ? frames[activePhase].postures : [], policy: { freshnessWindowSeconds: 86400, verificationWindowSeconds: 604800, requireVerification: false } };
+    if (payload !== undefined) {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(payload));
+    }
+    if (pathname === '/favicon.ico') { res.statusCode = 204; return res.end(); }
+    const key = pathname.startsWith('/proxmox/backups/') ? 'browser-tests/backups.html' : decodeURIComponent(pathname).slice(1);
+    if (!Object.hasOwn(compiledArtifacts, key)) { res.statusCode = 404; return res.end('Not found'); }
+    const artifact = fs.readFileSync(path.join(compiled, key));
+    assert.equal(hash(artifact), compiledArtifacts[key], 'served bytes must match this compiled consumer');
+    res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(key)] || 'application/octet-stream');
+    res.end(artifact);
   });
   let browser;
   const results = [];
   try {
-    await server.listen();
-    await server.transformRequest('/browser-tests/backups.tsx');
+    await new Promise(resolve => server.listen(5198, '127.0.0.1', resolve));
     browser = await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
     for (const width of [1440, 320]) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: width === 320 });
@@ -129,11 +164,11 @@ const { chromium } = require('playwright');
       results.push({ width, reads, observations, errors, captures: snapshots, interaction: width === 320 ? 'touch' : 'keyboard' });
       await context.close();
     }
-    const receipt = { source, playwright: require('playwright/package.json').version, browser: browser.version(), producerSHA256: crypto.createHash('sha256').update(bytes).digest('hex'), results };
+    const receipt = { source, compiledSources, compiledArtifacts, playwright: require('playwright/package.json').version, browser: browser.version(), producerSHA256: crypto.createHash('sha256').update(bytes).digest('hex'), results };
     fs.writeFileSync(path.join(out, 'browser-result.json'), JSON.stringify(receipt, null, 2) + '\n');
     console.log(JSON.stringify(receipt));
   } finally {
     await browser?.close();
-    await server.close();
+    await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
