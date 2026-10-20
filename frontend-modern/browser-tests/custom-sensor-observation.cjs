@@ -71,6 +71,7 @@ let browser, context;
       });
       const page = await context.newPage();
       page.setDefaultTimeout(10000);
+      await page.clock.install({ time: new Date('2026-10-20T12:00:00Z') });
       const run = {
         name,
         width,
@@ -105,6 +106,21 @@ let browser, context;
         }
         if (!url.pathname.startsWith('/api/')) return route.continue();
         run.reads.push(url.pathname);
+        if (url.pathname === '/api/metrics-store/history') {
+          assert.equal(url.searchParams.get('resourceType'), 'agent');
+          assert.equal(url.searchParams.get('resourceId'), 'sensor-machine');
+          return route.fulfill({
+            json: {
+              resourceType: 'agent',
+              resourceId: 'sensor-machine',
+              range: url.searchParams.get('range'),
+              source: 'store',
+              start: Date.parse('2026-10-19T12:00:00Z'),
+              end: Date.parse('2026-10-20T12:00:00Z'),
+              metrics: {},
+            },
+          });
+        }
         const data = {
           '/api/security/status': {
             hasAuthentication: true,

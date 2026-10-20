@@ -57,6 +57,7 @@ const initial: Resource = {
     hostname: 'machine.invalid',
     stale: false,
     agentVersion: 'fixture',
+    cpuCount: 2,
     sensors: { custom: [] },
   },
 };
