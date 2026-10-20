@@ -33,6 +33,7 @@ const guest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   diskWrite: 0,
   uptime: 100,
   template: false,
+  lock: '',
   tags: [],
   lastBackup: 0,
   lastSeen: '2026-10-20T12:00:00Z',
