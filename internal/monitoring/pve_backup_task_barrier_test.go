@@ -550,6 +550,9 @@ func TestPVEArchiveScanRejectsHistoryExecutionIdentity(t *testing.T) {
 					}
 				case "/api2/json/nodes/node/storage/archive/content":
 					data, _ = c.GetStorageContent(r.Context(), "node", "archive")
+					if c.phase == "empty" {
+						data = []proxmox.StorageContent{}
+					}
 				case "/api2/json/nodes/node/qemu/100/snapshot":
 					snapshotStarted.Store(true)
 					data, _ = c.GetVMSnapshots(r.Context(), "node", 100)
