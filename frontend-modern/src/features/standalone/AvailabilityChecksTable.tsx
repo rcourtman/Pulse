@@ -184,25 +184,40 @@ export const AvailabilityChecksTable: Component<{
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'availability-check-detail' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  let surface: HTMLDivElement | undefined;
+  let mounted = true;
+  onCleanup(() => (mounted = false));
+  const returnFromEmptyFleet = () => {
+    queueMicrotask(() => {
+      if (!mounted || !surface?.isConnected) return;
+      // Search survives an empty filtered list. With no inventory, the
+      // existing Add-check link is the useful next destination instead.
+      const target = surface.querySelector<HTMLInputElement | HTMLAnchorElement>('input, a[href]');
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    });
+  };
 
   return (
     <Show
       when={props.resources.length > 0}
       fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-          actions={
-            <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
-              <PlusIcon class="h-3.5 w-3.5" />
-              Add service/device check
-            </A>
-          }
-        />
+        <div ref={surface}>
+          <PlatformTableEmptyState
+            icon={props.emptyIcon}
+            title={props.emptyTitle}
+            description={props.emptyDescription}
+            actions={
+              <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
+                <PlusIcon class="h-3.5 w-3.5" />
+                Add service/device check
+              </A>
+            }
+          />
+        </div>
       }
     >
-      <div class="space-y-3">
+      <div ref={surface} class="space-y-3">
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
@@ -257,6 +272,7 @@ export const AvailabilityChecksTable: Component<{
                 historyError={history()?.error}
                 probeAgentOptions={props.probeAgentOptions}
                 onRetryHistory={() => void historyActions.refetch()}
+                onFocusedDetailsUnmount={returnFromEmptyFleet}
               />
             }
           >
