@@ -288,12 +288,23 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState({}, '', '/proxmox/backups/date?source=archive&node=pve-a');
     const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
     await screen.findByRole('group', { name: 'Backup activity days' });
-    fireEvent.click(screen.getByRole('button', { name: '1y' }));
+    const ranges = screen.getByRole('group', { name: 'Activity range' });
+    const metrics = screen.getByRole('group', { name: 'Activity metric' });
+    fireEvent.click(within(ranges).getByRole('button', { name: '1y' }));
     const chart = screen.getByRole('group', { name: 'Backup activity days' });
-    const days = within(chart).getAllByRole('button');
+    // Enumerate the native day controls without recomputing CSS visibility for
+    // all 365 columns. Check visibility and the accessible name on the actual
+    // interaction target below; the metric control is in its own small group.
+    const days = within(chart).getAllByRole('button', { hidden: true });
     expect(days).toHaveLength(365);
     expect(days.filter((day) => day.tabIndex === 0)).toEqual([days.at(-1)]);
-    const point = within(chart).getByRole('button', { name: /: 1 backup$/ });
+    const populatedDays = days.filter((day) =>
+      /: 1 backup$/.test(day.getAttribute('aria-label') ?? ''),
+    );
+    expect(populatedDays).toHaveLength(1);
+    const point = populatedDays[0];
+    expect(point).toBeVisible();
+    expect(point).toHaveAccessibleName(/: 1 backup$/);
     point.focus();
     fireEvent.keyDown(point, { key: 'ArrowLeft' });
     expect(document.activeElement).not.toBe(point);
@@ -306,7 +317,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(selectedDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
     point.focus();
-    fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+    fireEvent.click(within(metrics).getByRole('button', { name: 'Volume' }));
     expect(point).toHaveAccessibleName(/1\.00 MB, selected/);
     expect(document.activeElement).toBe(point);
     expect(point).toHaveAttribute('tabindex', '0');
