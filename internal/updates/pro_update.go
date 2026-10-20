@@ -164,6 +164,15 @@ func proDockerUpdateCommands(manifest *proBrokerResponse) *DockerUpdateCommands 
 		return nil
 	}
 	pinnedRef := image + "@" + digest
+	// Current brokers put the digest in Image as well as ImageDigest. Older
+	// responses used a bare image name. Accept both, but never replace a
+	// conflicting pin or append a second one to the current response.
+	if base, pin, pinned := strings.Cut(image, "@"); pinned {
+		if base == "" || pin != digest {
+			return nil
+		}
+		pinnedRef = image
+	}
 	if !strings.Contains(pull, pinnedRef) || !strings.Contains(up, pinnedRef) {
 		return nil
 	}
