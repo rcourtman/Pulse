@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Alert evidence remains recoverable after a stalled read
+
+The existing notification cards leave loading after a 150-second evidence-read
+deadline, exposing their unavailable explanations and usable Refresh controls.
+Missing attempts or held events never produce the empty-history claim; readable
+independent attempts remain visible. No new card, route or visual primitive is
+added. `notification-evidence-deadline.cjs` exercises the actual Notifications
+tab at desktop/320px widths with real header/body stalls and explicit recovery;
+`notificationEvidenceDeadline.test.tsx` pins lifecycle and independent read state.
+
 ### Notification activity preserves readable partial evidence
 
 The existing Notifications tab's activity card uses a visible wrapping status

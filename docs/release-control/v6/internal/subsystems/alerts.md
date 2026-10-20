@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Notification evidence reads have independent lifetimes
+
+Health, delivery attempts and held/deferred-event reads each have a 150-second
+header/body deadline, leaving the API client's existing two-minute Retry-After
+allowance intact. Expiry aborts the transport and settles locally even when a
+reader ignores abort; the existing unavailable warning replaces loading, never
+an empty-history or healthy claim. A later response cannot clear that gap.
+An explicit refresh owns a new read and may restore evidence. The streams fail
+independently, without new polling or automatic timeout retries.
+
+Replacement and unmount cancel read transports and clear their timers. Retired
+read completions cannot update the view or start work. This is read-only
+cancellation, not cancellation or rollback of an issued Retry/Dismiss mutation;
+an acknowledged action stays acknowledged if its health/activity readback
+expires. Authentication, scopes, producer schemas, retention and sender/queue
+behaviour are unchanged. `notificationEvidenceDeadline.test.tsx` joins the real
+API adapters and state owners; existing lifecycle/order/action tests remain.
+`notification-evidence-deadline.cjs` exercises the full Notifications tab with
+real local HTTP header/body stalls, stream isolation, explicit recovery and the
+client's 120-second rate-limit wait on desktop Chromium and narrow WebKit.
+
 ### Notification recovery separates incomplete evidence from an empty history
 
 The activity card visibly names incomplete attempt data without dropping its
@@ -5207,8 +5228,8 @@ A callback scheduled before retirement is checked again before invocation;
 already-started activity failures cannot restore retired feedback. Calls to
 retired health/action/clear handlers do nothing, including no confirmation.
 
-An already-dispatched mutation or read is not cancelled, undone or declared
-failed by navigation. Active views retain the existing confirmation,
+An already-dispatched mutation is not cancelled, undone or declared failed
+by navigation. Read-only transports are retired on unmount as specified above. Active views retain the existing confirmation,
 acknowledgement, read ordering and persistent failure feedback. A replacement
 view owns its independent read and any deliberately confirmed action; source
 checks do not establish notification delivery or installed queue recovery.

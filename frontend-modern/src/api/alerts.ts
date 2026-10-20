@@ -37,19 +37,25 @@ export class AlertsAPI {
     return arrayOrEmpty<AlertDeliveryDiagnosis>(diagnoses);
   }
 
-  static async getEvents(params?: {
-    alertIdentifier?: string;
-    types?: string[];
-    since?: string;
-    limit?: number;
-  }): Promise<AlertEvent[]> {
+  static async getEvents(
+    params?: {
+      alertIdentifier?: string;
+      types?: string[];
+      since?: string;
+      limit?: number;
+    },
+    signal?: AbortSignal,
+  ): Promise<AlertEvent[]> {
     const query = new URLSearchParams();
     if (params?.alertIdentifier) query.set('alertIdentifier', params.alertIdentifier);
     if (params?.types?.length) query.set('type', params.types.join(','));
     if (params?.since) query.set('since', params.since);
     if (params?.limit) query.set('limit', String(params.limit));
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
-    const events = (await apiFetchJSON(`${this.baseUrl}/events${suffix}`)) as AlertEvent[];
+    const events = (await apiFetchJSON(
+      `${this.baseUrl}/events${suffix}`,
+      signal ? { signal } : undefined,
+    )) as AlertEvent[];
     return arrayOrEmpty<AlertEvent>(events);
   }
 

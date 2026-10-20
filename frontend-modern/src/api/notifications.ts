@@ -287,8 +287,11 @@ export class NotificationsAPI {
     return apiFetchJSON(`${this.baseUrl}/apprise`);
   }
 
-  static async getHealth(): Promise<NotificationHealth> {
-    const payload = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/health`);
+  static async getHealth(signal?: AbortSignal): Promise<NotificationHealth> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/health`,
+      signal ? { signal } : undefined,
+    );
     const queue = apiRecord(payload.queue);
     const pending = nonNegativeCount(queue.pending);
     const sending = nonNegativeCount(queue.sending);
@@ -376,10 +379,14 @@ export class NotificationsAPI {
     };
   }
 
-  static async getDeliveryLog(limit?: number): Promise<NotificationDeliveryLog> {
+  static async getDeliveryLog(
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<NotificationDeliveryLog> {
     const query = limit && limit > 0 ? `?limit=${limit}` : '';
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/delivery-log${query}`,
+      signal ? { signal } : undefined,
     );
     if (!Array.isArray(payload?.entries)) {
       throw new Error('Notification delivery log could not be read.');

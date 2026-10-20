@@ -17,6 +17,17 @@
 
 ## Purpose
 
+### Stalled evidence does not imply a healthy queue
+
+Notification health, attempt and held-event consumers expire independent reads
+after 150 seconds, including unanswered headers and partial bodies. They enter
+existing unavailable states without a timeout retry or mutation. Replacements
+and unmount abort read transports; obsolete results cannot overwrite a refresh.
+Accepted Retry/Dismiss acknowledgements remain accepted when their readbacks
+expire, with no reissued mutation. Sender, queue and retention are unchanged.
+`notificationEvidenceDeadline.test.tsx` and the full-tab
+`notification-evidence-deadline.cjs` cover independent failure/recovery.
+
 ### Unreadable delivery evidence is not empty or accepted recovery
 
 The existing activity consumer names partial attempt-read failure and preserves

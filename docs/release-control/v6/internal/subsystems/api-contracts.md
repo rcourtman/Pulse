@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### Notification evidence reads forward cancellation
+
+The notification-health, delivery-log and alert-event read adapters accept an
+optional AbortSignal and forward it through the existing authenticated client,
+including headers and JSON-body reads. The Notifications consumer uses separate
+150-second read lifetimes; its expiry cannot assert empty history or a healthy
+queue. Producer fields, query bounds, response validation and mutation APIs are
+unchanged. `notificationEvidenceDeadline.test.tsx` joins all three adapters to
+their real read owners; `notification-evidence-deadline.cjs` checks actual HTTP
+stalls and the client's existing two-minute Retry-After allowance.
+
 ### Notification recovery responses require affirmative evidence
 
 `NotificationsAPI.getDeliveryLog` rejects missing/non-array `entries` as

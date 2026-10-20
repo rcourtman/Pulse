@@ -173,7 +173,7 @@ describe('NotificationsAPI', () => {
 
     const health = await NotificationsAPI.getHealth();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health', undefined);
     expect(health).toEqual({
       overallHealthy: false,
       queue: {
@@ -343,7 +343,10 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog(25);
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log?limit=25');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/notifications/delivery-log?limit=25',
+      undefined,
+    );
     expect(log.windowDays).toBe(30);
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(30);
@@ -366,7 +369,7 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log', undefined);
     expect(log.entries).toEqual([]);
     expect(log.incomplete).toBe(false);
     // A missing or nonsensical window falls back to the seven-day default.

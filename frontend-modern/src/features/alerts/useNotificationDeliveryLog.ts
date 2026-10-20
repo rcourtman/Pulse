@@ -4,6 +4,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, type NotificationDeliveryLog } from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
 import { logger } from '@/utils/logger';
+import { createNotificationEvidenceReader } from './notificationEvidenceRead';
 
 const HELD_EVENT_TYPES = ['notification_suppressed', 'notification_deferred'];
 const HELD_EVENT_WINDOW_DAYS = 7;
@@ -28,12 +29,16 @@ export function useNotificationDeliveryLog() {
   const [heldEventsUnavailable, setHeldEventsUnavailable] = createSignal(false);
   // Before the first read, an empty array means unknown, not no held alerts.
   const [refreshingHeldEvents, setRefreshingHeldEvents] = createSignal(true);
+  const logReader = createNotificationEvidenceReader();
+  const heldReader = createNotificationEvidenceReader();
 
   // Both reads belong to the same refresh, but held events never block the log.
   let latestRequest = 0;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
+    logReader.cancel();
+    heldReader.cancel();
   });
   const ownsRequest = (request: number) => !disposed && request === latestRequest;
 
@@ -43,11 +48,9 @@ export function useNotificationDeliveryLog() {
       const since = new Date(
         Date.now() - HELD_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
       ).toISOString();
-      const events = await AlertsAPI.getEvents({
-        types: HELD_EVENT_TYPES,
-        since,
-        limit: HELD_EVENT_LIMIT,
-      });
+      const events = await heldReader.read((signal) =>
+        AlertsAPI.getEvents({ types: HELD_EVENT_TYPES, since, limit: HELD_EVENT_LIMIT }, signal),
+      );
       if (!ownsRequest(request)) return;
       setHeldEvents(events);
       setHeldEventsUnavailable(false);
@@ -72,7 +75,9 @@ export function useNotificationDeliveryLog() {
       // Request the server's bounded maximum. A degraded queue can retain more
       // than the default page of 50 failures, and the evidence view should not
       // hide them behind unrelated successful attempts when space is available.
-      const log = await NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT);
+      const log = await logReader.read((signal) =>
+        NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT, signal),
+      );
       if (!ownsRequest(request)) return;
       setDeliveryLog(log);
       setDeliveryLogUnavailable(false);

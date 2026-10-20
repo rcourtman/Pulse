@@ -479,6 +479,7 @@ describe('useAlertDestinationsTabState', () => {
         types: ['notification_suppressed', 'notification_deferred'],
         limit: 100,
       }),
+      expect.any(AbortSignal),
     );
     expect(result.deliveryHealth()?.queue.status).toBe('healthy');
     expect(result.deliveryLog()?.entries).toHaveLength(1);

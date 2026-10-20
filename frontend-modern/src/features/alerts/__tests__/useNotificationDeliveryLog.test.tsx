@@ -60,7 +60,7 @@ describe('useNotificationDeliveryLog', () => {
       const state = useNotificationDeliveryLog();
 
       await state.loadDeliveryLog();
-      expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledWith(200);
+      expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledWith(200, expect.any(AbortSignal));
       expect(state.deliveryLog()?.entries).toHaveLength(1);
       expect(state.deliveryLogUnavailable()).toBe(false);
       dispose();

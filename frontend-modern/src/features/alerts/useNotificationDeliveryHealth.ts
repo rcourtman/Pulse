@@ -3,6 +3,7 @@ import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { createNotificationEvidenceReader } from './notificationEvidenceRead';
 import {
   getAlertDestinationsDeliveryDismissConfirmation,
   getAlertDestinationsDeliveryRetryConfirmation,
@@ -21,11 +22,13 @@ export function useNotificationDeliveryHealth(options?: {
   const [deliveryHealthUnavailable, setDeliveryHealthUnavailable] = createSignal(false);
   const [refreshingDeliveryHealth, setRefreshingDeliveryHealth] = createSignal(false);
   const [loadedOnce, setLoadedOnce] = createSignal(false);
-  // A request already sent is not cancelled on navigation. Its retired view
+  const healthReader = createNotificationEvidenceReader();
+  // A mutation already sent is not cancelled on navigation. Its retired view
   // must not publish a toast or start follow-up reads in the replacement view.
   let disposed = false;
   onCleanup(() => {
     disposed = true;
+    healthReader.cancel();
   });
 
   // Mount, configuration retry and queue actions can overlap. Only the latest
@@ -37,7 +40,7 @@ export function useNotificationDeliveryHealth(options?: {
     const request = ++latestHealthRequest;
     setRefreshingDeliveryHealth(true);
     try {
-      const health = await NotificationsAPI.getHealth();
+      const health = await healthReader.read((signal) => NotificationsAPI.getHealth(signal));
       if (!ownsHealthRequest(request)) return;
       // Snapshot and availability change together. Set one at a time and
       // deliveryNeedsAttention reads a half-updated pair (no health, not yet
