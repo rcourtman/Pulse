@@ -5316,3 +5316,10 @@ busy/disabled controls and retained failed members. The presentation regression
 and `browser-tests/alert-group-acknowledgement.cjs` bind the same existing flow
 to desktop keyboard and narrow touch interactions through the real HTTP adapter
 and toast consumer with synthetic local responses only.
+
+Pending acknowledgement dims only disabled actions, not the whole alert card.
+The first pending-state browser audit found twelve contrast failures from
+whole-card processing opacity. Removing that opacity preserves readable current
+conditions and timestamps until a reply arrives; busy/disabled controls and the
+processing lock remain explicit. Presentation regressions cover active and
+acknowledged cards at every severity while processing.

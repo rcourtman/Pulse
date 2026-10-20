@@ -320,7 +320,7 @@ describe('alertOverviewPresentation', () => {
     });
     expect(getAlertOverviewCardPresentation('warning', true, true)).toEqual({
       cardClassName:
-        'border border-l-4 rounded-md px-3 py-2.5 transition-all opacity-50 border-border border-l-border bg-surface-alt',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-border bg-surface-alt',
       iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400',
       resourceClassName,
     });
@@ -358,8 +358,11 @@ describe('alertOverviewPresentation', () => {
       expect(presentation.cardClassName).not.toMatch(/opacity-/);
       expect(presentation.cardClassName).toContain('border-l-border bg-surface-alt');
       expect(presentation.iconClassName).toContain('text-green-600');
-      expect(getAlertOverviewCardPresentation(level, true, true).cardClassName).toContain(
-        'opacity-50',
+      expect(getAlertOverviewCardPresentation(level, true, true).cardClassName).not.toMatch(
+        /opacity-/,
+      );
+      expect(getAlertOverviewCardPresentation(level, false, true).cardClassName).not.toMatch(
+        /opacity-/,
       );
     },
   );
