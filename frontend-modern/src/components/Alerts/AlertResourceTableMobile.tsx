@@ -1,4 +1,5 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createEffect, createMemo } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import Check from 'lucide-solid/icons/check';
 import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
@@ -33,6 +34,7 @@ import {
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
+import { validateAlertThresholdEditors } from './alertThresholdValidation';
 import type { OfflineState, ResourceTableProps } from './ResourceTable';
 
 interface AlertResourceTableMobileProps {
@@ -68,6 +70,11 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     }
     return items;
   });
+  // Fresh observations/defaults rebuild the row objects. Keep the cards keyed
+  // by logical identity so that resampling cannot discard a rejected native
+  // draft or its explanation while the operator is correcting it.
+  const [stableMobileItems, setStableMobileItems] = createStore<AlertResourceMobileItem[]>([]);
+  createEffect(() => setStableMobileItems(reconcile(mobileItems(), { key: 'key' })));
 
   const getThresholds = (resource: Resource, isEditing: boolean) =>
     isEditing ? props.table.editingThresholds() : (resource.thresholds ?? {});
@@ -147,24 +154,24 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     value: number;
     isOverridden: boolean;
   }) => {
-    const isDisabledMetric = metricProps.value <= 0;
-    const displayText = metricValueText(metricProps.metric, metricProps.value);
+    const isDisabledMetric = () => metricProps.value <= 0;
+    const displayText = () => metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
-        class={`flex items-center justify-center gap-1 ${isDisabledMetric ? 'opacity-60' : ''}`.trim()}
-        title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
+        class="flex items-center justify-center gap-1"
+        title={isDisabledMetric() ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
           class={`text-sm ${
-            isDisabledMetric
+            isDisabledMetric()
               ? 'text-muted italic'
               : metricProps.isOverridden
                 ? 'text-base-content font-bold'
                 : 'text-base-content'
           }`}
         >
-          {displayText}
+          {displayText()}
         </span>
         <Show when={props.table.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
           <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
@@ -295,7 +302,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
       </Show>
 
       <PlatformWindowedList
-        items={mobileItems}
+        items={() => stableMobileItems}
         estimatedItemHeight={240}
         enableThreshold={18}
         windowSize={24}
@@ -313,6 +320,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           }
 
           const resource = item.resource;
+          let cardElement!: HTMLDivElement;
           const isEditing = () => props.table.editingId() === resource.id;
           const thresholds = () => getThresholds(resource, isEditing());
           const displayValue = (metric: string) => getDisplayValue(resource, metric, isEditing());
@@ -329,6 +337,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
 
           return (
             <Card
+              ref={cardElement}
               padding="sm"
               class={`flex flex-col gap-3 transition-opacity ${resource.disabled || props.table.globalDisableFlag?.() ? 'opacity-60' : ''}`}
             >
@@ -420,7 +429,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                       <X class="w-4 h-4" aria-hidden="true" />
                     </ActionIconButton>
                     <ActionIconButton
-                      onClick={() => saveEditing(resource.id)}
+                      onClick={() => {
+                        if (!validateAlertThresholdEditors(cardElement)) saveEditing(resource.id);
+                      }}
                       label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
                       tone="success"
                       size="sm"
@@ -488,7 +499,8 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     // disabled config (#1126). Render the same on/off
                     // toggle the desktop rows use instead.
                     if (metric === 'backup' || metric === 'snapshot') {
-                      const config = metric === 'backup' ? resource.backup : resource.snapshot;
+                      const config = () =>
+                        metric === 'backup' ? resource.backup : resource.snapshot;
                       const onToggle =
                         metric === 'backup'
                           ? props.table.onToggleBackup
@@ -502,7 +514,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             {column}
                           </span>
                           <StatusBadge
-                            isEnabled={config?.enabled ?? true}
+                            isEnabled={config()?.enabled ?? true}
                             onToggle={() => onToggle(resource.id)}
                             titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                             titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}

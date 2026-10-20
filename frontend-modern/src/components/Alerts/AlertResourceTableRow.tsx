@@ -39,6 +39,7 @@ import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceMetricEditor } from './AlertResourceMetricEditor';
 import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
+import { validateAlertThresholdEditors } from './alertThresholdValidation';
 
 type OfflineState = 'off' | 'warning' | 'critical';
 
@@ -142,7 +143,10 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     props.setActiveMetricInput(null);
   };
 
-  const saveEditing = () => {
+  const saveEditing = (row: ParentNode) => {
+    // Blur is not an explicit Save action: leave focus where the user put it.
+    // Refocusing here can reopen/remount a virtual row while blur is bubbling.
+    if (validateAlertThresholdEditors(row, false)) return;
     hasEditingFocus = false;
     props.onSaveEdit(props.resource.id);
     props.setActiveMetricInput(null);
@@ -166,24 +170,24 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     value: number;
     isOverridden: boolean;
   }) => {
-    const isDisabledMetric = metricProps.value <= 0;
-    const displayText = metricValueText(metricProps.metric, metricProps.value);
+    const isDisabledMetric = () => metricProps.value <= 0;
+    const displayText = () => metricValueText(metricProps.metric, metricProps.value);
 
     return (
       <div
-        class={`flex items-center justify-center gap-1 ${isDisabledMetric ? 'opacity-60' : ''}`.trim()}
-        title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
+        class="flex items-center justify-center gap-1"
+        title={isDisabledMetric() ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
           class={`text-sm ${
-            isDisabledMetric
+            isDisabledMetric()
               ? 'text-muted italic'
               : metricProps.isOverridden
                 ? 'text-base-content font-bold'
                 : 'text-base-content'
           }`}
         >
-          {displayText}
+          {displayText()}
         </span>
         <Show when={props.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
           <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
@@ -249,7 +253,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         if (!hasEditingFocus || props.editingId() !== props.resource.id) return;
         const nextFocus = event.relatedTarget;
         if (nextFocus instanceof Node && event.currentTarget.contains(nextFocus)) return;
-        saveEditing();
+        saveEditing(event.currentTarget);
       }}
       class={`transition-colors ${props.resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${props.resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
     >
@@ -381,8 +385,8 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           const isSpecialToggle = metric === 'backup' || metric === 'snapshot';
 
           if (isSpecialToggle) {
-            const config = metric === 'backup' ? props.resource.backup : props.resource.snapshot;
-            const isEnabled = config?.enabled ?? true;
+            const config = () =>
+              metric === 'backup' ? props.resource.backup : props.resource.snapshot;
             const onToggle = metric === 'backup' ? props.onToggleBackup : props.onToggleSnapshot;
             const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
 
@@ -398,7 +402,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                 >
                   <div class="flex items-center justify-center">
                     <StatusBadge
-                      isEnabled={isEnabled}
+                      isEnabled={config()?.enabled ?? true}
                       onToggle={() => onToggle?.(props.resource.id)}
                       titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
                       titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}

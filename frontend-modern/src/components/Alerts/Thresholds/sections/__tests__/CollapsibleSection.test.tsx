@@ -402,7 +402,9 @@ describe('CollapsibleSection', () => {
     ));
 
     const wrapper = container.querySelector('[data-testid="section-test"]')!;
-    expect(wrapper.className).toContain('opacity-60');
+    expect(wrapper.className).not.toContain('opacity-60');
+    expect(wrapper.className).toContain('bg-surface-alt');
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
   });
 
   it('applies hasChanges ring styling', () => {

@@ -4481,3 +4481,38 @@ mounted-row budgets and public hook inputs remain unchanged. The observer
 lifecycle control in `PlatformWindowedRows.test.tsx` and the 200-workload Coverage
 identity browser protocol cover this feedback-loop repair, not installed fleet
 or guest recovery.
+
+
+### Shared threshold slider labels (20 October 2026)
+
+The threshold slider's text palette is distinct from its fill palette. Small
+thumb values must remain legible in light and dark themes; theme-aware text
+colours do not change fill colours, value domains, drag/wheel behaviour or
+windowed rendering. Changes to this shared presentation helper retain the
+slider model/state and all resource-table virtualization boundaries.
+
+`thresholdSliderPresentation.test.ts` and `ThresholdSlider.test.tsx` cover the
+text/fill mapping and unchanged interactions. The actual alert settings browser
+fixture covers CPU, memory, disk and temperature thumb text in desktop and
+narrow consumers, including both themes. This is contrast and consumer evidence,
+not a new performance measurement, scaling claim or installed-policy result.
+
+Threshold resource snapshots are temporary objects, not editor identities.
+Desktop rows use the existing bounded renderer's logical key extractor; narrow
+cards reconcile their existing keyed items before windowing. Resampling a
+resource or changing another default must preserve the mounted numeric editor,
+its rejected native draft and its labelled error. This does not pin removed
+resources or change the existing window size, runway or source identity.
+
+The ResourceTable resampling regression covers both layouts and the browser
+changes another real global limit while a row is invalid, checks whole-policy
+Save sends nothing, and verifies that the invalid value and visible reason
+survive the capture and accessibility scan.
+
+Retaining a row must not freeze its accepted policy display. Numeric value text,
+Off styling and backup/snapshot badges read reactive props rather than taking a
+construction-time snapshot. ResourceTable controls cover accepted override,
+Off, inheritance, protection badges and connectivity after resampling in both
+layouts. The browser also compares the visible rate text and accessible name
+with the actual saved override and its removal; an HTTP-only inheritance pass
+is insufficient when the consumer still displays the previous override.

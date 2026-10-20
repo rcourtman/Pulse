@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "base_sha": "609d3e8f14fd3a05abdf89aaaf30c2fec72bbc8a",
+  "verified_at": "2026-10-20T06:03:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx",
+    "frontend-modern/src/components/Alerts/alertThresholdValidation.ts",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/utils/thresholdSliderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx": "f40b9f171cb40eefd1f6b9508cee7523d6ddc0494d70e29f76e0612c585d0475",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "f9486e19bcf3025ee5ac268cfa5043fa4e9bd43b846dd82e87c97742ae186008",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "8d09f9611bcca3ea34cf8014c6e8eae88ce86e9f42f5ee763652f7c800d76ad4",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "3318d1e3ebebddc7869fcb09461e289ec07ab500fe1b280bed2693f92b14e53b",
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx": "63d954c28c5987f9eab29c0cfed02ab6521439153a4c1f916da1e49e885a707c",
+    "frontend-modern/src/components/Alerts/alertThresholdValidation.ts": "a5d1931ab5b33cdc3876849015cb3ce7e3917d20ca4734143285abe976d8ce22",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "45c627283e27b388175bc40a4d909816669be85b802b820a6243c94cf6343af6",
+    "frontend-modern/src/utils/thresholdSliderPresentation.ts": "c5e388ee275ec8e160a8eb3a7de375270e170786b1dfdcbee38a7ee0686995bf"
+  },
+  "routes": [
+    "/alerts thresholds (real AlertsConfigurationSurface, responsive ResourceTable, HTTP adapters and ToastContainer in /browser-tests/alert-threshold-validation.html)"
+  ],
+  "viewports": [
+    {
+      "width": 2200,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Invalid 150, blank enabled defaults, out-of-range rate 10001 and incomplete exponent cannot masquerade as saved accepted values. Row and policy saves retain invalid drafts/reasons across sibling-default resampling, capture and audit. No configuration PUT occurs on rejected saves.",
+    "Corrected 90.5 default and 125.5 rate override persist exactly. Empty override inherits 100 MB/s; retained row text and accessible name agree with the actual saved payload. Off saves the existing zero-trigger representation and read-only CPU text changes to Off.",
+    "Backup/snapshot badges visibly update to Enabled and back to Disabled in retained desktop and phone rows. Folded invalid groups reopen and focus the rejected field. No horizontal page overflow or unexpected requests/page errors.",
+    "All twelve final captures opened with native view_image and inspected. Inline errors, CPU Off, inherited 100 MB/s and protection badge updates are visible. Earlier nominal/intermediate captures were rejected for stale/reset text, not counted as final acceptance.",
+    "Ten whole-page light WCAG A/AA scans and two scoped changed-slider/input/error dark scans have zero violations. Whole-page dark scans retain nine desktop/eighteen phone existing badge/filter/label contrast nodes; this is not a whole-page dark accessibility pass."
+  ],
+  "interactions": [
+    "Chromium141.0.7390.37 desktop keyboard Enter; WebKit26.0 narrow320px touch. Playwright1.56.1 matches the committed integration lock.",
+    "Existing row blur, phone row Save, whole-policy Save, decimal correction, empty override inheritance, explicit Off, folded-group reveal, and backup/snapshot toggles use production consumers with synthetic local configuration responses only. No real alert policy, appliance or notification operation.",
+    "Browser and same-script Vite preview server closed. Source and dependency hashes checked before execution."
+  ],
+  "source_binding": {
+    "browser_executed_commit": "609d3e8f14fd3a05abdf89aaaf30c2fec72bbc8a",
+    "receipt_parent": "609d3e8f14fd3a05abdf89aaaf30c2fec72bbc8a",
+    "runtime_content_matches": true,
+    "result_sha256": "7edef97ced3fe6d1cbc34a587234eb1347670e570d7690f3234414a90ef2176b",
+    "browser_script_sha256": "97bfce225595938d7816974a40d9829e034af47df9f3be9ca75ffb7cc71a9058",
+    "captures": [
+      {
+        "file": "desktop-invalid-save-blocked.png",
+        "sha256": "e83df8833aaea4e1c1281eccaada94e8fafdc194cd7cbb437ef962b28b93ae77"
+      },
+      {
+        "file": "desktop-corrected-save.png",
+        "sha256": "6b6d1a3eed05dbe3e9c060601a195f4b57febcd72200e4598736f4acb95df733"
+      },
+      {
+        "file": "desktop-row-save-blocked.png",
+        "sha256": "22263260bb4155c092344e7f8557c7b7b97c40f7412577bcc585d55de7b7d35a"
+      },
+      {
+        "file": "desktop-row-save-blocked-dark.png",
+        "sha256": "975cc56f73aa5662430f91e15b0ceb74087831694585a5ce77ff1592aa9566fd"
+      },
+      {
+        "file": "desktop-off-and-inherited.png",
+        "sha256": "907ec486ee278e18d3b802b87f8d315e22182a322888c6f82d329368dfeb3deb"
+      },
+      {
+        "file": "desktop-protection-controls-refreshed.png",
+        "sha256": "80b1dde388ac31648bbe495fe1bff64144abdd5c76576ec56ac4429347edb840"
+      },
+      {
+        "file": "phone-invalid-save-blocked.png",
+        "sha256": "7b84b67a32395b753d90b6e43e1d17dc4bdc04278412dc84e284d68fc7a5df09"
+      },
+      {
+        "file": "phone-corrected-save.png",
+        "sha256": "8202888e32e78e685995afe88895744a98e32a32bc051bfb38fb6880d4b189a3"
+      },
+      {
+        "file": "phone-row-save-blocked.png",
+        "sha256": "1c966aea5b5e1004bcf19d45339969452530eb073530b287a5facfca7d337ece"
+      },
+      {
+        "file": "phone-row-save-blocked-dark.png",
+        "sha256": "11ff2790237e34a1c434cc82edf405aa31ad05dc8bdf63bbd16c5a5911b5d7d4"
+      },
+      {
+        "file": "phone-off-and-inherited.png",
+        "sha256": "3995de2b8ffb2b25dd09468f9b2d6b8580e4f9e6ed4add71f4c9fe17efaa861b"
+      },
+      {
+        "file": "phone-protection-controls-refreshed.png",
+        "sha256": "70a766312f2955e42ce17b26b8ebfdeb55eb305af26c262e79dd786b1a1b6239"
+      }
+    ]
+  }
+}

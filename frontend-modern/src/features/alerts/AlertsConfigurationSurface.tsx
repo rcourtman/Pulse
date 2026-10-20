@@ -11,6 +11,7 @@ import {
 } from '@/utils/alertConfigPresentation';
 import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
+import { validateAlertThresholdEditors } from '@/components/Alerts/alertThresholdValidation';
 
 import { DestinationsTab } from './tabs/DestinationsTab';
 import { ScheduleTab } from './tabs/ScheduleTab';
@@ -21,6 +22,7 @@ import {
 } from './useAlertsConfigurationState';
 
 export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProps) {
+  let surfaceElement!: HTMLDivElement;
   const state = useAlertsConfigurationState(props);
   const escalationDestinations = createMemo(() => [
     {
@@ -44,7 +46,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
   ]);
 
   return (
-    <>
+    <div ref={surfaceElement} class="contents">
       <Show
         when={
           !state.isConfigLoaded() &&
@@ -109,6 +111,13 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
                 }
                 aria-busy={state.isSavingConfig()}
                 onClick={async () => {
+                  const invalid = validateAlertThresholdEditors(surfaceElement);
+                  if (invalid) {
+                    notificationStore.error(
+                      `${invalid.getAttribute('aria-label')}: ${invalid.validationMessage} No settings were saved.`,
+                    );
+                    return;
+                  }
                   try {
                     await state.saveAlertConfiguration();
                   } catch (error) {
@@ -306,6 +315,6 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           escalationDestinations={escalationDestinations}
         />
       </Show>
-    </>
+    </div>
   );
 }

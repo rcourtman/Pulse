@@ -71,7 +71,7 @@ vi.mock('@/components/shared/Toggle', () => ({
 
 vi.mock('@/components/shared/Card', () => ({
   Card: (props: any) => (
-    <div data-testid="card" class={props.class}>
+    <div ref={props.ref} data-testid="card" class={props.class}>
       {props.children}
     </div>
   ),
@@ -229,6 +229,142 @@ describe('ResourceTable', () => {
   });
 
   describe('rendering basics', () => {
+    it.each([false, true])(
+      'keeps accepted metric text and Off/inheritance reactive in retained rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = (thresholds: Record<string, number> = {}, defaultRate = 100) =>
+          makeResource({
+            id: 'vm-1',
+            name: 'web-01',
+            defaults: { diskRead: defaultRate },
+            thresholds,
+          });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({ columns: ['Disk R MB/s'] });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        const cell = () =>
+          screen.getByRole('button', { name: /Edit Disk R MB\/s threshold for web-01:/ });
+        const initialCell = cell();
+        expect(initialCell).toHaveTextContent('100');
+        setResources([resource({ diskRead: 125.5 })]);
+        expect(cell()).toBe(initialCell);
+        expect(cell()).toHaveAccessibleName('Edit Disk R MB/s threshold for web-01: 125.5');
+        expect(cell()).toHaveTextContent('125.5');
+        setResources([resource({ diskRead: -1 })]);
+        expect(cell()).toHaveTextContent('Off');
+        expect(cell()).toHaveAttribute('aria-label', 'Edit Disk R MB/s threshold for web-01: Off');
+        setResources([resource({}, 150)]);
+        expect(cell()).toBe(initialCell);
+        expect(cell()).toHaveAccessibleName('Edit Disk R MB/s threshold for web-01: 150');
+        expect(cell()).toHaveTextContent('150');
+      },
+    );
+
+    it.each([false, true])(
+      'refreshes protection and connectivity controls in retained rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = (updated = false) =>
+          makeResource({
+            id: 'vm-1',
+            name: 'web-01',
+            type: 'guest',
+            disabled: updated,
+            backup: { enabled: !updated },
+            snapshot: { enabled: updated },
+            poweredOffSeverity: updated ? 'critical' : 'warning',
+          });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({
+          columns: ['Backup', 'Snapshot'],
+          onToggleDisabled: vi.fn(),
+          onToggleBackup: vi.fn(),
+          onToggleSnapshot: vi.fn(),
+          showOfflineAlertsColumn: true,
+          onSetOfflineState: vi.fn(),
+        });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        setResources([resource(true)]);
+        expect(screen.getByRole('switch', { name: 'Alerts for web-01' })).toHaveAttribute(
+          'aria-checked',
+          'false',
+        );
+        expect(
+          screen.getByRole('button', { name: 'Backup alerts for web-01: Off' }),
+        ).toHaveAttribute('aria-pressed', 'false');
+        expect(
+          screen.getByRole('button', { name: 'Snapshot alerts for web-01: On' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        expect(
+          screen.getByRole('button', { name: 'Offline alerts for web-01: Crit' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it.each([false, true])(
+      'retains an invalid draft through resampled rows (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const resource = () =>
+          makeResource({ id: 'vm-1', name: 'web-01', thresholds: { diskRead: 100 } });
+        const [resources, setResources] = createSignal([resource()]);
+        const props = makeProps({
+          editingId: () => 'vm-1',
+          editingThresholds: () => ({ diskRead: 100 }),
+          columns: ['Disk R MB/s'],
+        });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        const input = screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' });
+        fireEvent.input(input, { target: { value: '10001' } });
+        setResources([resource()]);
+        expect(screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' })).toBe(input);
+        expect(input).toHaveValue(10001);
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(input).toHaveAccessibleDescription('Enter a number from 0.01 to 10000.');
+        expect(props.onSaveEdit).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([false, true])('keeps Off limit labels readable (mobile=%s)', (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const props = makeProps({
+        resources: [makeResource({ thresholds: { diskRead: -1 } })],
+        columns: ['Disk R MB/s'],
+      });
+      render(() => <ResourceTable {...props} />);
+      expect(screen.getByText('Off').parentElement).not.toHaveClass('opacity-60');
+    });
+
+    it.each([false, true])('refuses an invalid row commit (mobile=%s)', async (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'web-01', thresholds: { diskRead: 100 } })],
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ diskRead: 100 }),
+        columns: ['Disk R MB/s'],
+      });
+      render(() => <ResourceTable {...props} />);
+      const input = screen.getByRole('spinbutton', { name: 'Disk R MB/s for web-01' });
+      input.focus();
+      fireEvent.input(input, { target: { value: '10001' } });
+      if (mobile)
+        fireEvent.click(screen.getByRole('button', { name: 'Save threshold edits for web-01' }));
+      else fireEvent.focusOut(input, { relatedTarget: null });
+      expect(props.onSaveEdit).not.toHaveBeenCalled();
+      if (mobile) expect(input).toHaveFocus();
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      fireEvent.input(input, { target: { value: '125.5' } });
+      if (mobile)
+        fireEvent.click(screen.getByRole('button', { name: 'Save threshold edits for web-01' }));
+      else fireEvent.focusOut(input, { relatedTarget: null });
+      expect(props.onSaveEdit).toHaveBeenCalledWith('vm-1');
+    });
+
     it.each([false, true])(
       'keeps filesystem reading explanations visible and reactive (mobile=%s)',
       (mobile) => {
