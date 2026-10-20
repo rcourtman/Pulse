@@ -19,6 +19,7 @@ type UseDiskDetailModelOptions = {
   disk: Accessor<Resource>;
   /** Alert override keys of the machine whose agent reports the disk. */
   alertResourceIds?: Accessor<string[] | undefined>;
+  lastKnownReason?: Accessor<string | undefined>;
 };
 
 export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
@@ -30,6 +31,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
       options.disk(),
       getDiskTemperatureThresholds,
       options.alertResourceIds?.(),
+      options.lastKnownReason?.(),
     ),
   );
   const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));

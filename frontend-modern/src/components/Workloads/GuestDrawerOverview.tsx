@@ -1,6 +1,7 @@
 import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getGuestNetworkLastKnownReason } from '@/utils/guestNetworkObservation';
+import { getGuestHardwareLastKnownReason } from '@/utils/guestHardwareObservation';
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
 import {
@@ -144,6 +145,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   const agentLastKnownReason = () =>
     props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
   const networkLastKnownReason = () => getGuestNetworkLastKnownReason(props.guest);
+  const hardwareLastKnownReason = () => getGuestHardwareLastKnownReason(props.guest);
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -512,6 +514,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               ...getWorkloadAlertResourceIdCandidates(props.guest),
             ]}
             historyEnabled={props.historyEnabled ?? true}
+            lastKnownReason={hardwareLastKnownReason()}
           />
         </Suspense>
       </Show>
@@ -519,7 +522,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         <RaidCard
           arrays={props.guest.agentRaid}
           title="Guest RAID"
-          lastKnownReason={agentLastKnownReason()}
+          lastKnownReason={hardwareLastKnownReason()}
         />
       </Show>
 

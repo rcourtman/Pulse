@@ -4516,3 +4516,16 @@ Off, inheritance, protection badges and connectivity after resampling in both
 layouts. The browser also compares the visible rate text and accessible name
 with the actual saved override and its removal; an HTTP-only inheritance pass
 is insufficient when the consumer still displays the previous override.
+
+### Guest hardware power qualification stays in the open drawer
+
+Native VM power qualification of retained in-guest RAID/SMART reports is an
+open-Overview presentation calculation. It does not hydrate physical disks in
+the workload table, replace their scoped reader, introduce a probe, or remount
+the existing lazy disk owner on a power-only update. SMART History keeps its
+stable disk identity, chart catalogue and selected range; current live I/O is
+withheld while the report is qualified. GuestDrawer's parent-owned hardware
+regression protects the same lazy owner across power/lease changes, and
+useDiskDetailModel protects stable History through qualification. Browser proof
+uses the real scoped HTTP reader and confirms native power changes require no
+extra disk read. No fleet CPU/RSS, installed or native recovery gain is claimed.

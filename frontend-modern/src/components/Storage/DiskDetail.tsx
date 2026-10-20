@@ -61,6 +61,8 @@ interface DiskDetailProps {
   alertResourceIds?: string[];
   /** False pauses this disk's chart reads, e.g. while a drawer tab is hidden. */
   historyEnabled?: boolean;
+  /** Parent-owned qualification of an in-guest report, not a wire mutation. */
+  lastKnownReason?: string;
 }
 
 export const DiskDetail: Component<DiskDetailProps> = (props) => {
@@ -78,6 +80,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   } = useDiskDetailModel({
     disk: () => props.disk,
     alertResourceIds: () => props.alertResourceIds,
+    lastKnownReason: () => props.lastKnownReason,
   });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(DISK_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
