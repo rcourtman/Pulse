@@ -198,7 +198,11 @@ export const useResourceDetailDrawerDerivedState = (
       lastKnownReason: agentReadingsLastKnownReason(),
     }),
   );
-  const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
+  const customSensorRows = createMemo(() =>
+    buildCustomSensorRows(agentInfo()?.sensors, {
+      lastKnownReason: agentReadingsLastKnownReason(),
+    }),
+  );
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
   const dockerHostSourceId = createMemo(

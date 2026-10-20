@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### Custom sensor freshness remains a local projection
+
+Retained custom metrics use the selected agent's existing reporting-lease flag,
+not another query, probe or per-row timer. Formatting is bounded by the existing
+custom sensor list and preserves its values and producer status. The shared card
+reacts to first/removed reports inside the same drawer. Mapper, full drawer and
+shared primitive regressions plus `custom-sensor-observation.cjs` cover the
+same-open consumer, including independent platform updates. Normal production
+build and chunk budgets still apply; this is not fleet CPU or RSS recovery.
+
+
 ### Coverage expansion keeps the existing mounted-workload budget
 
 Expandable Coverage uses cumulative summary/detail heights, with measurements

@@ -23,6 +23,26 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Retained custom metrics do not claim current service or backup health
+
+The existing machine detail carries the linked agent's expired reporting lease
+into every custom sensor row, even when an independent platform keeps the machine
+online. Boolean and numeric evidence remains visibly last known; unavailable
+values stay unavailable. A retained timestamp is its age **when observed**, not
+an age relative to now. Sensor-specific failures remain stale after the parent
+reports again, and reported statuses/errors are preserved as historical evidence.
+A wrapping, visible explanation reaches keyboard and touch users without hover.
+The shared sensor card reacts to first reports and removal without remounting the
+machine or losing its open disclosure. Provider state, readings, alert evaluation,
+collection and independently sourced disk temperature rules are unchanged.
+
+`resourceDetailMappers.test.ts`, `ResourceDetailDrawer.machine-history.test.tsx`
+and `browser-tests/custom-sensor-observation.cjs` cover current, parent-retained,
+sensor-retained, missing, zero, replacement and removal states through the actual
+canonical merger and machine drawer at desktop and 320px touch widths. This is
+synthetic consumer proof, not a service, backup, thaw or installed recovery check.
+
+
 ### PBS backup counts preserve source attribution
 
 The Backups consumer selects one whole PBS inventory source per server.

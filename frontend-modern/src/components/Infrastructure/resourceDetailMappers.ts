@@ -569,7 +569,10 @@ const formatCustomSensorAge = (seconds: number): string => {
   return `${Math.floor(normalized / 86400)}d ago`;
 };
 
-export const buildCustomSensorRows = (sensors?: HostSensorSummary) =>
+export const buildCustomSensorRows = (
+  sensors?: HostSensorSummary,
+  options: { lastKnownReason?: string } = {},
+) =>
   (sensors?.custom ?? [])
     .filter((metric) => metric.id?.trim() && metric.name?.trim())
     .sort((a, b) =>
@@ -584,17 +587,31 @@ export const buildCustomSensorRows = (sensors?: HostSensorSummary) =>
       const status = (metric.status || 'unknown').trim().toLowerCase();
       const hasValue = typeof metric.value === 'number' && Number.isFinite(metric.value);
       const kind = (metric.kind || 'number').trim().toLowerCase();
+      // Per-sensor success cannot renew an expired parent-agent report.
+      // Keep its evidence, including errors, without claiming current health.
+      const lastKnownReason = options.lastKnownReason?.trim();
+      const retained = Boolean(lastKnownReason || metric.stale);
       let measured = 'Unavailable';
       if (hasValue && kind === 'boolean') {
         measured = (metric.value as number) >= 0.5 ? 'Online' : 'Offline';
       } else if (hasValue && kind === 'timestamp') {
-        measured = formatCustomSensorAge(metric.value as number);
+        const age = formatCustomSensorAge(metric.value as number);
+        // The producer sends age-at-observation, not a clock that keeps
+        // advancing. A retained backup age must not keep reading "2h ago".
+        measured = retained ? age.replace(/ ago$/, ' old when observed') : age;
       } else if (hasValue) {
         measured = formatCustomSensorValue(metric.value as number, metric.unit);
       }
-      const value = metric.stale ? `${measured} (stale)` : measured;
+      const value =
+        hasValue && lastKnownReason
+          ? `${measured} (last known)`
+          : metric.stale
+            ? `${measured} (stale)`
+            : measured;
+      const statusLabel = status === 'ok' ? 'OK' : titleCaseDelimitedLabel(status);
       const details = [
-        status === 'ok' ? 'OK' : titleCaseDelimitedLabel(status),
+        lastKnownReason ? `Last known reading, not current: ${lastKnownReason}` : undefined,
+        retained ? `Last reported status: ${statusLabel}` : statusLabel,
         metric.error?.trim(),
       ].filter(Boolean);
       const label = [metric.group, metric.subgroup, metric.name]

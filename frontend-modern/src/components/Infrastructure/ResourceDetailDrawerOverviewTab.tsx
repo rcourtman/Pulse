@@ -194,7 +194,12 @@ const HostDetailsDisclosure: Component<{
               lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
             />
             <TemperaturesCard rows={props.drawer.temperatureRows()} title="Thermals" />
-            <TemperaturesCard rows={props.drawer.customSensorRows()} title="Custom Metrics" />
+            <TemperaturesCard
+              rows={props.drawer.customSensorRows()}
+              title="Custom Metrics"
+              lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
+              wrapValues
+            />
           </>
         )}
       </Show>

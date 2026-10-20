@@ -207,6 +207,91 @@ describe('ResourceDetailDrawer machine inventory', () => {
   });
 });
 
+describe('ResourceDetailDrawer retained custom metrics', () => {
+  it('keeps an open hybrid machine honest across parent lease expiry and new sensor reports', () => {
+    const sensors = {
+      custom: [
+        {
+          id: 'service',
+          name: 'Checkout',
+          kind: 'boolean',
+          value: 1,
+          status: 'ok',
+          observedAt: '2026-10-20T12:00:00Z',
+        },
+      ],
+    };
+    const [value, setValue] = createSignal(
+      resource({
+        sourceType: 'hybrid',
+        status: 'online',
+        agent: { agentId: 'agent-1', stale: false, sensors },
+      }),
+    );
+    render(() => (
+      <ResourceDetailDrawer resource={value()} initialShowHostDetails presentation="table-row" />
+    ));
+    expandPlatformDetails();
+    const host = screen.getByTestId('resource-host-details-section');
+    expect(within(host).getByText('Online', { exact: true })).toBeVisible();
+    const details = host.closest('details');
+    setValue({ ...value(), agent: { ...value().agent, stale: true } });
+    expect(within(host).getByText('Online (last known)')).toBeVisible();
+    expect(within(host).getByRole('status')).toHaveTextContent(
+      'Last known readings, not current: host agent stopped reporting.',
+    );
+    expect(value().status).toBe('online');
+    expect(value().agent?.sensors).toBe(sensors);
+    setValue({ ...value(), agent: { ...value().agent, stale: false } });
+    expect(within(host).getByText('Online', { exact: true })).toBeVisible();
+    expect(within(host).queryByText('Online (last known)')).toBeNull();
+    // A current parent cannot renew an independently failed metric.
+    setValue({
+      ...value(),
+      agent: {
+        ...value().agent,
+        sensors: { custom: [{ ...sensors.custom[0], stale: true, status: 'error' }] },
+      },
+    });
+    expect(within(host).getByText('Online (stale)')).toBeVisible();
+    expect(host.closest('details')).toBe(details);
+    expect(details).toHaveAttribute('open');
+  });
+
+  it('shows the first custom report without reopening the machine and withdraws removed metrics', () => {
+    const [value, setValue] = createSignal(
+      resource({ agent: { agentId: 'agent-1', stale: false, sensors: { custom: [] } } }),
+    );
+    render(() => (
+      <ResourceDetailDrawer resource={value()} initialShowHostDetails presentation="table-row" />
+    ));
+    expandPlatformDetails();
+    expect(screen.queryByText('Custom Metrics')).toBeNull();
+    setValue({
+      ...value(),
+      agent: {
+        ...value().agent,
+        sensors: {
+          custom: [
+            {
+              id: 'queue',
+              name: 'Queue',
+              value: 0,
+              unit: 'items',
+              status: 'ok',
+              observedAt: '2026-10-20T12:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+    expect(screen.getByText('Custom Metrics')).toBeVisible();
+    expect(screen.getByText('0 items')).toBeVisible();
+    setValue({ ...value(), agent: { ...value().agent, sensors: { custom: [] } } });
+    expect(screen.queryByText('Custom Metrics')).toBeNull();
+  });
+});
+
 describe('ResourceDetailDrawer machine metrics history', () => {
   it('charts metrics history on Overview for Pulse Agent machines, with no History tab', async () => {
     render(() => (
