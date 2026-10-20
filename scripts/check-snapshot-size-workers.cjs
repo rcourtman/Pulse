@@ -5,8 +5,6 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { createRequire } = require('node:module');
-const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
@@ -18,51 +16,33 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
   const source = JSON.parse(fs.readFileSync(path.join(out, 'source.json')));
   const phases = ['initial', 'unread', 'missing-size', 'recovered', 'empty'];
   assert.match(source.head, /^[0-9a-f]{40}$/);
-  assert.equal(source.head, source.producerSource);
+  assert.match(source.producerSource, /^[0-9a-f]{40}$/);
+  assert.equal(source.helperSHA256, hash(fs.readFileSync(__filename)));
+  for (const [file, digest] of Object.entries(source.producerFiles))
+    assert.equal(hash(fs.readFileSync(file)), digest, 'producer bytes differ from proved source');
+  assert([1440, 320].includes(source.viewportWidth), 'one preselected viewport per bounded execution');
   assert.equal(source.producerSHA256, hash(bytes));
   assert.deepEqual(Object.keys(frames).sort(), phases.slice().sort());
   const playwright = require('playwright/package.json').version;
   assert.equal(playwright, JSON.parse(fs.readFileSync('tests/integration/package-lock.json')).packages['node_modules/@playwright/test'].version);
-  const { build } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href);
-  const frontendRequire = createRequire(path.join(root, 'package.json'));
-  const solid = frontendRequire('vite-plugin-solid');
-  const tailwind = (await import(pathToFileURL(frontendRequire.resolve('@tailwindcss/vite')).href)).default;
   const compiled = path.join(out, 'static');
-  const compiledSources = {}, compiledArtifacts = {}, servedArtifacts = {};
-  await build({
-    root, configFile: false, publicDir: false, logLevel: 'error',
-    resolve: { alias: { '@': path.join(root, 'src') }, conditions: ['import', 'browser', 'default'] },
-    plugins: [tailwind(), solid(), {
-      name: 'snapshot-size-consumer-source-binding',
-      generateBundle() {
-        for (const id of this.getModuleIds()) {
-          const file = id.split('?')[0];
-          if (!file.startsWith(root + '/') || file.includes('/node_modules/')) continue;
-          if (fs.existsSync(file) && fs.statSync(file).isFile()) compiledSources[path.relative(root, file)] = hash(fs.readFileSync(file));
-        }
-      },
-    }],
-    build: { target: 'esnext', outDir: compiled, emptyOutDir: true, rollupOptions: {
-      input: ['backups', 'alert-delivery-freshness'].map(name => path.join(root, `browser-tests/${name}.html`)),
-    } },
-  });
-  const walk = dir => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(file);
-      else compiledArtifacts[path.relative(compiled, file)] = hash(fs.readFileSync(file));
-    }
-  };
-  walk(compiled);
+  const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
+  assert.equal(binding.source, source.compilerSource);
+  const compiledSources = binding.compiledSources, compiledArtifacts = binding.artifacts, servedArtifacts = {};
+  for (const [file, digest] of Object.entries(compiledSources))
+    assert.equal(hash(fs.readFileSync(path.join(root, file))), digest, 'compiled bytes differ from containing source');
+  for (const [file, digest] of Object.entries(compiledArtifacts))
+    assert.equal(hash(fs.readFileSync(path.join(compiled, file))), digest, 'compiled artifact changed');
   // Preserve build/source binding even if the execution transport cannot
   // return its final result. A checkpoint is partial evidence, not a pass.
-  fs.writeFileSync(path.join(out, 'compiled-binding.json'), JSON.stringify({ source, playwright, compiledSources, compiledArtifacts }, null, 2) + '\n');
-  const checkpoint = (stage, details = {}) => fs.writeFileSync(path.join(out, 'browser-progress.json'), JSON.stringify({ source, stage, ...details }, null, 2) + '\n');
+  fs.writeFileSync(path.join(out, `compiled-binding-${source.viewportWidth}.json`), JSON.stringify({ source, playwright, compiledSources, compiledArtifacts }, null, 2) + '\n');
+  const checkpoint = (stage, details = {}) => fs.writeFileSync(path.join(out, `browser-progress-${source.viewportWidth}.json`), JSON.stringify({ source, stage, ...details }, null, 2) + '\n');
   checkpoint('compiled');
   let phase = 'initial', reads;
-  const requests = [], unexpected = [];
+  const requests = [], allRequests = [], unexpected = [];
   const server = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://fixture.invalid').pathname;
+    allRequests.push({ method: req.method, path: pathname, phase });
     if (req.method !== 'GET') { unexpected.push(`${req.method} ${pathname}`); res.statusCode = 405; return res.end('{}'); }
     let payload;
     if (pathname === '/fixture/workloads') payload = [
@@ -88,18 +68,27 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
     res.end(artifact);
   });
   const results = [], captures = [];
-  let browser;
+  let browser, browserVersion, failure = null;
+  const cleanup = { browserClosed: false, serverClosed: false };
+  const overflowCensus = [];
   try {
     await new Promise(resolve => server.listen(5198, '127.0.0.1', resolve));
     browser = await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
-    for (const width of [1440, 320]) {
+    browserVersion = browser.version();
+    for (const width of [source.viewportWidth]) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: width === 320, reducedMotion: 'reduce', colorScheme: width === 320 ? 'dark' : 'light' });
       if (width === 320) await context.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('dark')));
       const page = await context.newPage();
       const alertPage = await context.newPage();
-      const errors = [];
+      const errors = [], consoleErrors = [], requestFailures = [], teardownRequests = [];
+      let closing = false;
       for (const view of [page, alertPage]) {
         view.on('pageerror', error => errors.push(error.message));
+        view.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+        view.on('requestfailed', request => {
+          const observation = { path: new URL(request.url()).pathname, error: request.failure()?.errorText };
+          (closing ? teardownRequests : requestFailures).push(observation);
+        });
         await view.route('**/*', route => {
           const req = route.request(), url = new URL(req.url());
           if (url.origin !== 'http://127.0.0.1:5198' || req.method() !== 'GET') {
@@ -154,6 +143,12 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
           await alertPage.waitForFunction(message => document.body.innerText.includes(message), message);
           assert((await alertPage.locator('body').innerText()).includes('Acknowledged'));
         } else await alertPage.getByText('No active alerts', { exact: true }).waitFor();
+        for (const [surface, view] of [['backups', page], ['alerts', alertPage]]) {
+          const overflow = await view.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth,
+            overflowing: Array.from(document.querySelectorAll('main, main *')).filter(el => el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1).map(el => ({tag:el.tagName,classes:el.className,width:el.clientWidth,scroll:el.scrollWidth})).slice(0,50) }));
+          overflowCensus.push({ width, phase: name, surface, ...overflow });
+          assert(overflow.documentWidth <= width, 'no document overflow in any phase');
+        }
         observations.push({ phase: name, expectedSnapshots: expected, slowText, peerText, active: frames[name].active?.map(alert => ({ id: alert.id, value: alert.value, message: alert.message, acknowledged: alert.acknowledged })) ?? [] });
         if (['unread', 'recovered', 'empty'].includes(name)) await capture(page, `${width}-${name}-backups.png`, name === 'unread' ? slow : peer);
         if (['unread', 'recovered'].includes(name)) await capture(alertPage, `${width}-${name}-alerts.png`, alertPage.locator('main'));
@@ -168,25 +163,31 @@ const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
           const text = await dialog.innerText();
           assert(text.includes('not a separate backup') && text.includes('guest responsiveness') && text.includes('successful restore'));
           checkpoint('evidence-observed', { width, phase: name, text, results, captures });
+          await capture(page, `${width}-recovered-evidence.png`, dialog);
           await page.keyboard.press('Escape');
           await dialog.waitFor({ state: 'hidden' });
         }
       }
       assert.deepEqual(errors, []);
+      assert.deepEqual(consoleErrors, []);
+      assert.deepEqual(requestFailures, []);
       assert(phases.every(name => reads[name] === 1), 'one actual PVE inventory read per phase and viewport');
-      results.push({ width, dark: width === 320, interaction: width === 320 ? 'touch' : 'keyboard', reads, observations, errors });
+      results.push({ width, dark: width === 320, interaction: width === 320 ? 'touch' : 'keyboard', reads, observations, errors, consoleErrors, requestFailures, teardownRequests });
       checkpoint('viewport-complete', { width, results, captures });
+      closing = true;
       await context.close();
     }
     assert.deepEqual(unexpected, []);
-    const receipt = { source, playwright, browser: browser.version(), compiledSources, compiledArtifacts, servedArtifacts, producerSHA256: hash(bytes), results, captures, requests, unexpected };
-    fs.writeFileSync(path.join(out, 'browser-result.json'), JSON.stringify(receipt, null, 2) + '\n');
-    console.log(JSON.stringify({ result: 'pass', browser: receipt.browser, playwright, results, captures }));
   } catch (error) {
-    fs.writeFileSync(path.join(out, 'browser-failure.json'), JSON.stringify({ source, results, captures, requests, unexpected, error: String(error) }, null, 2) + '\n');
-    throw error;
+    failure = { name: error.name, message: error.message };
+    process.exitCode = 1;
   } finally {
-    await browser?.close();
-    await new Promise(resolve => server.close(resolve));
+    if (browser) { await browser.close(); cleanup.browserClosed = true; }
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve)); cleanup.serverClosed = true;
+    const receipt = { source, playwright, browser: browserVersion, compiledSources, compiledArtifacts, servedArtifacts,
+      producerSHA256: hash(bytes), results, captures, requests, allRequests, unexpected, overflowCensus, cleanup, failure };
+    fs.writeFileSync(path.join(out, `browser-result-${source.viewportWidth}.json`), JSON.stringify(receipt, null, 2) + '\n');
+    console.log(JSON.stringify({ width: source.viewportWidth, result: failure ? 'fail' : 'pass', failure, cleanup, captures: captures.length }));
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
