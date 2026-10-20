@@ -236,10 +236,12 @@ async function activate(page, button, touch) {
         const otherGroup = page.locator('#alert-other-primary').locator('..');
         await group.getByRole('button', { name: /^\+2 linked signals/ }).click();
         await expect(group.locator('#alert-critical')).toBeVisible();
-        const groupButton = group.getByRole('button', { name: /^Acknowledge all/ });
+        const groupButton = group.getByRole('button', { name: /^(Acknowledge all|Acknowledging)/ });
         await expect(groupButton).toHaveText(`Acknowledge all (${phase === 'baseline' ? 3 : 2})`);
         const allButton = page.getByRole('button', { name: 'Acknowledge all (4)', exact: true });
-        const otherButton = otherGroup.getByRole('button', { name: /^Acknowledge all/ });
+        const otherButton = otherGroup.getByRole('button', {
+          name: /^(Acknowledge all|Acknowledging)/,
+        });
         await activate(page, groupButton, spec.touch);
         await expect.poll(() => pending.length).toBe(1);
         // Native activation of a disabled button cannot submit another write.
@@ -260,7 +262,7 @@ async function activate(page, button, touch) {
           await expect(
             group
               .locator('#alert-primary')
-              .getByRole('button', { name: 'Acknowledge', exact: true }),
+              .getByRole('button', { name: 'Processing...', exact: true }),
           ).toBeDisabled();
           assert.equal(pending.length, 1);
           current.checks.push(
@@ -325,7 +327,9 @@ async function activate(page, button, touch) {
           release([{ alertIdentifier: 'critical', success: true }]);
           await expect(page.getByText('Acknowledged 1 alert.', { exact: true })).toBeVisible();
           await page.clock.runFor(1600);
-          await expect(group.getByRole('button', { name: /^Acknowledge all/ })).toHaveCount(0);
+          await expect(
+            group.getByRole('button', { name: /^(Acknowledge all|Acknowledging)/ }),
+          ).toHaveCount(0);
           assert.equal(
             (await page.evaluate(() => window.__alertAckProof.snapshot())).critical.acknowledged,
             true,
