@@ -208,6 +208,9 @@ module.exports = async (profile) => {
             await expect(guide).toContainText(prompt);
             await expect(guide).toContainText('Docker’s hidden Password prompt');
             await expect(guide).toContainText('Ctrl+C cancels.');
+            await expect(guide).toContainText('In a terminal');
+            await expect(guide).toContainText('Never put keys in commands.');
+            await expect(guide).toContainText('Docker may save it locally.');
           } else if (loginCommand) {
             await expect(guide).toContainText('could not be checked safely');
             await expect(guide).toContainText('https://pulserelay.pro/download.html');

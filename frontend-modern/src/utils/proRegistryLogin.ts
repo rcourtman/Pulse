@@ -1,10 +1,10 @@
 import type { DockerUpdateCommands } from '@/api/updates';
 
 export const PRO_REGISTRY_PASSWORD_NOTE =
-  'In a terminal, enter your Settings → License key at Docker’s hidden Password prompt. Ctrl+C cancels. Never put your key in a shell command. Docker may save it locally.';
+  'In a terminal, enter the Settings → License key at Docker’s hidden Password prompt. Ctrl+C cancels. Never put keys in commands. Docker may save it locally.';
 
 const UNRECOGNISED_LOGIN_NOTE =
-  'Sign-in could not be checked safely. See https://pulserelay.pro/download.html. Never put your key in a shell command.';
+  'Sign-in could not be checked safely. See https://pulserelay.pro/download.html. Never put keys in commands.';
 
 // Never render or copy arbitrary broker login text. In particular, old brokers
 // put a key placeholder in printf: substituting it records the key in shell
