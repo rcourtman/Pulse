@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "b5288317d18e9b81daf31c526c413a4cfe365c5b",
+  "verified_at": "2026-10-20T03:25:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "e31a794c462374c0720dc98d94a3129abe36e0528baf3eca1c7954c7a36926ee",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "d2ab49667a9a4957a8493c862d3b22a7aae0737ceb5c0325b93578e50c13f350"
+  },
+  "routes": [
+    "/alerts (real OverviewTab in /browser-tests/alert-group-severity.html)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Exact baseline23670 versus final byte-identical runtime d55ad166: collapsed warning primary with hidden critical/warning/info supporting cards and separately acknowledged critical signal; independent same-name resource group.",
+    "Expanded and collapsed production cards, every alert still inspectable; acknowledged cards preserve readable evidence without opacity. Baseline axe contrast failures6 desktop/3 phone; six final-state scans have zero WCAG A/AA violations.",
+    "Live critical removal withdraws Critical badge; info acknowledgement withdraws Info without inflating Critical; removing final related records removes only their disclosure.",
+    "Chromium141.0.7390.37 light desktop and touch WebKit26.0 dark320px; Playwright1.56.1 matches integration lock. All ten final captures opened with native view_image; first five failed-attempt captures also inspected and retained."
+  ],
+  "interactions": [
+    "Keyboard Enter expands and Space collapses the native disclosure; phone tap does the same. Unique aria-controls resolves only to its own cards while expanded and is absent when collapsed.",
+    "Expanded the independent same-name group, checked separate target identity, and collapsed it without affecting the correlated group.",
+    "Full critical reason is readable and wraps without horizontal overflow; phone disclosure has44px minimum target. Synthetic notification-health and diagnosis GETs through actual adapters; all writes and off-origin requests refused. Browser and preview server closed."
+  ],
+  "source_binding": {
+    "browser_executed_commit": "d55ad16638ce93752459a9c8d3d12192593baf60",
+    "replacement_runtime_commit": "b5288317d18e9b81daf31c526c413a4cfe365c5b",
+    "runtime_hashes_match": true,
+    "reason": "Own unshared candidate recomposed with missing dependent frontend contract before initial browser receipt; no runtime change or receipt rebinding."
+  }
+}
