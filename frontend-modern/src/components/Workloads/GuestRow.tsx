@@ -35,6 +35,7 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { getMetricSeverity } from '@/utils/metricThresholds';
+import { getGuestNetworkLastKnownReason } from '@/utils/guestNetworkObservation';
 import {
   getWorkloadMemoryGuestKind,
   getWorkloadMemoryObservationPresentation,
@@ -62,6 +63,7 @@ import { getGuestColumnStyle } from './guestRowModel';
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
   const selectionGuard = createRowTextSelectionGuard();
+  const networkLastKnownReason = createMemo(() => getGuestNetworkLastKnownReason(props.guest));
   const runRowAction = (event: MouseEvent) => {
     if (!selectionGuard.isSelectionClick(event)) rowActionProps.onClick?.();
   };
@@ -815,8 +817,8 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* IP Address with Network Tooltip */}
         <Show when={isColVisible('ip')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
+          <td data-workload-col="ip" class="px-1.5 sm:px-2 py-0.5 align-middle">
+            <div class="flex flex-col items-center">
               <Show
                 when={ipAddresses().length > 0 || hasNetworkInterfaces()}
                 fallback={
@@ -828,7 +830,19 @@ export function GuestRow(props: GuestRowProps) {
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
                   networkInterfaces={networkInterfaces()}
+                  lastKnownReason={networkLastKnownReason()}
                 />
+                <Show when={networkLastKnownReason()}>
+                  {(reason) => (
+                    <WorkloadReadingStatus
+                      metric="Network"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label="Last known"
+                      message={reason()}
+                    />
+                  )}
+                </Show>
               </Show>
             </div>
           </td>

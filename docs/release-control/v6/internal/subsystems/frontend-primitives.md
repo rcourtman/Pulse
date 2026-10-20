@@ -403,6 +403,26 @@ exact-source same-open desktop/narrow browser proof using the retained actual
 producer HTTP phases and native inspection of captures; component proof alone
 is not browser, native-appliance, protected-source or release acceptance.
 
+### Retained guest network details are not a current connection
+
+The Workloads row, read-only Network disclosure, hover evidence and guest drawer
+share `getGuestNetworkLastKnownReason`. Native Proxmox paused, suspended or
+stopped VM state qualifies retained interface addresses and cumulative counters
+as last known, even when the resource stays online or its linked agent lease has
+not expired. The primary-IP fact carries the same qualification. Interface
+identity, addresses and counter values are preserved, not erased or renewed.
+
+A silent linked agent qualifies only its selected interface list; an explicit
+platform list remains independent. Host-derived LXC configuration, unrelated
+platforms and unknown native states do not acquire invented power diagnoses.
+No collection, network-rate metric, stored History, agent action, backup action
+or wire contract changes. Clearing a presentation cue is not proof of a live
+connection, thaw or filesystem recovery. `guestNetworkObservation`,
+`GuestNetworkObservation`, `GuestRow` and `GuestRowCells.network` regressions and
+`guest-network-observation.cjs` cover live source changes, preservation,
+keyboard/touch access, dismissal and desktop/narrow pixels through the real
+canonical merger, Workloads mapper and production consumers.
+
 ### Paused VM filesystem readings are not current
 
 The shared `getWorkloadGuestDiskRead` rule downgrades otherwise-current VM

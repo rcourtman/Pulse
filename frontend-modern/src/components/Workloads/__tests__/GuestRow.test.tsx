@@ -3863,3 +3863,42 @@ describe('backup disclosures keep completion separate from guest safety', () => 
     },
   );
 });
+
+describe('guest network read disclosure', () => {
+  it('qualifies a same-row power change and keeps touch/keyboard disclosure separate from row action', () => {
+    const onClick = vi.fn();
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        ipAddresses: ['192.0.2.80'],
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.0.2.80'], rxBytes: 1024 }],
+        networkInterfacesFromAgent: false,
+      }),
+    );
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'ip']} onClick={onClick} />
+        </tbody>
+      </table>
+    ));
+    const row = container.querySelector('tr');
+    expect(container.querySelector('[data-workload-network-read-status]')).toBeNull();
+    setGuest({ ...guest(), status: 'paused' });
+    const trigger = screen.getByRole('button', { name: 'Network reading for test-vm: Last known' });
+    fireEvent.click(trigger);
+    expect(onClick).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: 'Network reading for test-vm' });
+    expect(dialog).toHaveTextContent('Proxmox reports this VM paused');
+    setGuest({ ...guest(), status: 'stopped' });
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(dialog).toHaveTextContent('Proxmox reports this VM stopped');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close reading details' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Removing the cue while open withdraws the read-only dialog too.
+    fireEvent.click(trigger);
+    setGuest({ ...guest(), status: 'running' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(container.querySelector('[data-workload-network-read-status]')).toBeNull();
+    expect(container.querySelector('tr')).toBe(row);
+  });
+});
