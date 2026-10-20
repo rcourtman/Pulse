@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
+import type { Alert } from '@/types/api';
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({ hash: '', pathname: '/alerts', search: '', query: {} }),
@@ -10,7 +12,7 @@ vi.mock('@solidjs/router', () => ({
 const getConfigMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/alerts', () => ({
-  AlertsAPI: { getConfig: getConfigMock },
+  AlertsAPI: { getConfig: getConfigMock, getDeliveryDiagnoses: vi.fn().mockResolvedValue([]) },
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -91,6 +93,125 @@ describe('OverviewTab empty state', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Alerting is paused')).not.toBeInTheDocument();
+  });
+});
+
+function groupedAlert(id: string, overrides: Partial<Alert> = {}): Alert {
+  return {
+    id,
+    type: 'connection',
+    level: 'warning',
+    resourceId: `resource-${id}`,
+    resourceName: `Resource ${id}`,
+    instance: 'lab',
+    node: '',
+    message: `Current condition for ${id}`,
+    value: 0,
+    threshold: 0,
+    startTime: '2026-10-20T12:00:00Z',
+    acknowledged: false,
+    ...overrides,
+  };
+}
+
+describe('OverviewTab grouped alert disclosure', () => {
+  afterEach(() => {
+    cleanup();
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
+  it.each(['shared-system', 'infrastructure-incident'] as const)(
+    'exposes hidden severities without replacing the %s primary',
+    (kind) => {
+      const primary = groupedAlert('primary', {
+        correlation: { key: 'incident:one', kind, role: 'primary', reason: 'Synthetic source' },
+      });
+      const related = (id: string, level: Alert['level'], acknowledged = false) =>
+        groupedAlert(id, {
+          level,
+          acknowledged,
+          correlation: {
+            key: 'incident:one',
+            kind,
+            role: 'supporting',
+            reason: 'Synthetic source',
+          },
+        });
+      const critical = related('critical', 'critical');
+      const warning = related('warning', 'warning');
+      const info = related('info', 'info');
+      const acknowledged = related('acknowledged', 'critical', true);
+      render(() => (
+        <OverviewTab
+          {...defaultProps({
+            activeAlerts: { primary, critical, warning, info, acknowledged },
+            showAcknowledged: () => true,
+          })}
+        />
+      ));
+
+      expect(screen.getByText(primary.message)).toBeVisible();
+      expect(screen.queryByText(critical.message)).not.toBeInTheDocument();
+      const disclosure = screen.getByRole('button', {
+        name: '+4 linked signals 1 Critical 1 Warning 1 Info',
+      });
+      expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+      expect(disclosure).not.toHaveAttribute('aria-controls');
+      expect(disclosure).toHaveClass('min-h-11', 'sm:min-h-6');
+      fireEvent.click(disclosure);
+      expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+      const controlled = document.getElementById(disclosure.getAttribute('aria-controls')!);
+      expect(controlled).not.toBeNull();
+      expect(within(controlled!).getByText(critical.message)).toBeVisible();
+      expect(within(controlled!).getByText(acknowledged.message)).toBeVisible();
+      fireEvent.click(disclosure);
+      expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText(critical.message)).not.toBeInTheDocument();
+    },
+  );
+
+  it('updates the summary on ordinary observation and acknowledgement changes', () => {
+    const primary = groupedAlert('primary', { resourceId: 'same-resource' });
+    const critical = groupedAlert('critical', {
+      resourceId: 'same-resource',
+      level: 'critical',
+      acknowledged: true,
+    });
+    const warning = groupedAlert('warning', { resourceId: 'same-resource' });
+    const [alerts, setAlerts] = createSignal({ primary, critical, warning });
+    render(() => (
+      <OverviewTab {...defaultProps({ showAcknowledged: () => true })} activeAlerts={alerts()} />
+    ));
+    expect(screen.getByRole('button', { name: '+2 related 1 Warning' })).toBeVisible();
+    setAlerts({ primary, critical: { ...critical, level: 'warning' }, warning });
+    expect(screen.getByRole('button', { name: '+2 related 1 Warning' })).toBeVisible();
+    setAlerts({ primary, critical: { ...critical, acknowledged: false }, warning });
+    // With no designated correlation primary, the critical card itself leads.
+    expect(screen.getByText(critical.message)).toBeVisible();
+    expect(screen.getByRole('button', { name: '+2 related 2 Warning' })).toBeVisible();
+    setAlerts({ primary, critical: { ...critical, acknowledged: true }, warning });
+    expect(screen.queryByText(critical.message)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+2 related 1 Warning' })).toBeVisible();
+  });
+
+  it('keeps independent group disclosures uniquely bound', () => {
+    const alerts = Object.fromEntries(
+      ['one', 'two'].flatMap((group) =>
+        ['primary', 'related'].map((role) => {
+          const alert = groupedAlert(`${group}-${role}`, { resourceId: group });
+          return [alert.id, alert];
+        }),
+      ),
+    );
+    render(() => <OverviewTab {...defaultProps({ activeAlerts: alerts })} />);
+    const disclosures = screen.getAllByRole('button', { name: '+1 related 1 Warning' });
+    disclosures.forEach((button) => fireEvent.click(button));
+    const ids = disclosures.map((button) => button.getAttribute('aria-controls'));
+    expect(new Set(ids).size).toBe(2);
+    ids.forEach((id) => expect(document.getElementById(id!)).toBeInTheDocument());
+    fireEvent.click(disclosures[0]);
+    expect(document.getElementById(ids[0]!)).not.toBeInTheDocument();
+    expect(document.getElementById(ids[1]!)).toBeInTheDocument();
   });
 });
 

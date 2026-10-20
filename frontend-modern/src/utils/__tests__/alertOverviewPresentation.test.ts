@@ -350,6 +350,19 @@ describe('alertOverviewPresentation', () => {
     );
   });
 
+  it.each(['critical', 'warning', 'info'])(
+    'keeps acknowledged %s evidence readable without restoring severity emphasis',
+    (level) => {
+      const presentation = getAlertOverviewCardPresentation(level, true, false);
+      expect(presentation.cardClassName).not.toMatch(/opacity-/);
+      expect(presentation.cardClassName).toContain('border-l-border bg-surface-alt');
+      expect(presentation.iconClassName).toContain('text-green-600');
+      expect(getAlertOverviewCardPresentation(level, true, true).cardClassName).toContain(
+        'opacity-50',
+      );
+    },
+  );
+
   it('keeps the Started run on the footer baseline (#2119)', () => {
     // The alert-card footer is an items-center flex row that already carries the
     // top margin. A vertical margin on this child shifted the Started run below

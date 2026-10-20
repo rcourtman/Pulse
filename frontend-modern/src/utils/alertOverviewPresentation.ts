@@ -485,7 +485,9 @@ export function getAlertOverviewCardPresentation(
 ): AlertOverviewCardPresentation {
   const isCritical = level === 'critical';
   const isInformational = level === 'info';
-  const opacityClass = processing ? 'opacity-50' : acknowledged ? 'opacity-60' : '';
+  // Acknowledgement changes the border, surface, badge and icon, not text
+  // contrast. Dimming the whole card makes retained evidence hard to read.
+  const opacityClass = processing ? 'opacity-50' : '';
   // Severity rides on a left edge, the icon and the badge rather than a fully
   // tinted card, so a page of warnings stays scannable instead of one block
   // of colour.
