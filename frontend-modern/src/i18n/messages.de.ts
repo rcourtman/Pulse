@@ -107,6 +107,11 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.hydration.unavailable.title':
     'Der Status aktiver Warnmeldungen ist voruebergehend nicht verfuegbar',
   'alerts.overview.nodePrefix': 'auf {node}',
+  'alerts.overview.deliveryUnavailable.region': 'Benachrichtigungsstatus der Warnmeldungen',
+  'alerts.overview.deliveryUnavailable.title':
+    'Der Benachrichtigungsstatus der Warnmeldungen ist nicht verfuegbar.',
+  'alerts.overview.deliveryUnavailable.description':
+    'Pulse konnte den Zustellungs- oder Pausengrund fuer diese Warnmeldungen nicht aktualisieren. Die Pruefung wird automatisch wiederholt.',
   'alerts.overview.notification.acknowledged': 'Warnmeldung bestaetigt',
   'alerts.overview.notification.acknowledgeFailed': 'Warnmeldung konnte nicht bestaetigt werden',
   'alerts.overview.notification.bulkFailure.singular':

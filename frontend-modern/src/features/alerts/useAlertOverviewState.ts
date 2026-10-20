@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
@@ -57,22 +57,28 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   } = useAlertSnoozeState({ alerts: activeAlerts, updateAlert: props.updateAlert });
 
   // Delivery diagnoses answer "did/will this alert notify?" per card. One
-  // bulk request covers every active alert; a failed refresh keeps the last
-  // snapshot and the card simply shows no delivery line for unknown alerts.
+  // bulk request covers every active alert. A failed latest read withdraws
+  // the old reasons: time-based holds and dispatch eligibility can change
+  // even when the active alert set has not changed.
   const [deliveryDiagnoses, setDeliveryDiagnoses] = createSignal<
     Record<string, AlertDeliveryDiagnosis>
   >({});
+  const [deliveryDiagnosesUnavailable, setDeliveryDiagnosesUnavailable] = createSignal(false);
   let diagnosisStateDisposed = false;
   let diagnosisRequestVersion = 0;
   onCleanup(() => {
     diagnosisStateDisposed = true;
   });
   const refreshDeliveryDiagnoses = async () => {
+    if (diagnosisStateDisposed) return;
     // A slower previous refresh must not replace a newer notification state.
     // Increment even for an empty alert set to invalidate outstanding requests.
     const requestVersion = ++diagnosisRequestVersion;
     if (activeAlerts().length === 0) {
-      setDeliveryDiagnoses({});
+      batch(() => {
+        setDeliveryDiagnoses({});
+        setDeliveryDiagnosesUnavailable(false);
+      });
       return;
     }
     try {
@@ -82,9 +88,16 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
       for (const diagnosis of list) {
         next[diagnosis.alertIdentifier || diagnosis.alertId] = diagnosis;
       }
-      setDeliveryDiagnoses(next);
+      batch(() => {
+        setDeliveryDiagnoses(next);
+        setDeliveryDiagnosesUnavailable(false);
+      });
     } catch {
-      // Silent degrade: no diagnosis, no delivery line.
+      if (diagnosisStateDisposed || requestVersion !== diagnosisRequestVersion) return;
+      batch(() => {
+        setDeliveryDiagnoses({});
+        setDeliveryDiagnosesUnavailable(true);
+      });
     }
   };
   const activeAlertIdsKey = createMemo(() =>
@@ -178,6 +191,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     snoozeProcessingAlerts,
     bulkAckProcessing,
     deliveryDiagnoses,
+    deliveryDiagnosesUnavailable,
     refreshDeliveryDiagnoses,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,

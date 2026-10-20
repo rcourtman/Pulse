@@ -111,6 +111,14 @@ export function getAlertOverviewHydrationState(status: 'pending' | 'ready' | 'un
   } as const;
 }
 
+export function getAlertOverviewDeliveryUnavailable() {
+  return {
+    label: t('alerts.overview.deliveryUnavailable.region'),
+    title: t('alerts.overview.deliveryUnavailable.title'),
+    description: t('alerts.overview.deliveryUnavailable.description'),
+  } as const;
+}
+
 export function getAlertOverviewStatsLabels() {
   return {
     last24Hours: t('alerts.overview.stats.triggered24h'),

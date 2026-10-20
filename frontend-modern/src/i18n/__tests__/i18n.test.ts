@@ -34,6 +34,23 @@ import { I18N_MESSAGES } from '@/i18n/catalogs';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 describe('i18n foundation', () => {
+  it.each(SUPPORTED_LOCALES)('localizes unavailable alert notification status in %s', (locale) => {
+    setActiveLocale(locale);
+    const title = t('alerts.overview.deliveryUnavailable.title');
+    const description = t('alerts.overview.deliveryUnavailable.description');
+    expect(title).toBe(I18N_MESSAGES[locale]['alerts.overview.deliveryUnavailable.title']);
+    expect(description).toBe(
+      I18N_MESSAGES[locale]['alerts.overview.deliveryUnavailable.description'],
+    );
+    expect(title).not.toMatch(/alerts\.overview/);
+    expect(description).not.toMatch(/alerts\.overview/);
+    if (locale !== 'en') {
+      expect(title).not.toBe(I18N_MESSAGES.en['alerts.overview.deliveryUnavailable.title']);
+      expect(description).not.toBe(
+        I18N_MESSAGES.en['alerts.overview.deliveryUnavailable.description'],
+      );
+    }
+  });
   afterEach(() => {
     localStorage.removeItem(STORAGE_KEYS.LOCALE_PREFERENCE);
     setActiveLocale(DEFAULT_LOCALE);

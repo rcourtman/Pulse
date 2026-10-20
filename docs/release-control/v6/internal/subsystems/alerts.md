@@ -4657,6 +4657,27 @@ intent snapshots, changing alert histories and database writes remain separate.
 It changes neither alert latency nor the selected release candidate.
 
 
+### Active alert notification status must not outlive a failed read
+
+The latest failed bulk delivery-diagnosis read withdraws the prior per-alert
+reasons and marks that observation unavailable. Quiet-hours, cooldown and
+dispatch eligibility can change while the active alert IDs stay the same;
+silently retaining those reasons would present old policy as current. The
+overview explains the unavailable observation once in a persistent polite
+status region, without claiming that a notification failed or hiding alerts.
+The next successful minute read atomically replaces the reasons and clears
+the notice. An empty active set clears both without another request.
+Superseded successes and failures, and completions after disposal, cannot
+publish state; disposal also prevents new reads. The existing minute cadence,
+acknowledgement ownership and notification actions are unchanged.
+
+`useAlertOverviewState.test.tsx` pins failure, recovery, overlap, empty-set and
+teardown ownership; `OverviewTab.delivery-freshness.test.tsx` exercises the
+actual cards and single live notice. `alert-delivery-freshness.cjs` exercises
+the production API reader and overview with read-only fixtures, periodic 503s,
+ordinary recovery, desktop keyboard and narrow touch. These are observation
+and consuming-surface proofs, not installed or recipient-delivery acceptance.
+
 ### Resource incident reads retain lifecycle ownership
 
 The resource incident hook gives each started read a unique per-resource owner.
