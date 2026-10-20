@@ -8962,3 +8962,15 @@ describe('production CSP inline style guardrails', () => {
     expect(offenders).toEqual([]);
   }, 120_000);
 });
+
+describe('shared sensor card live-report boundary', () => {
+  it('keeps sensor presence reactive and a retained reason visible without truncating custom evidence', () => {
+    const source = readFrontendSource('src/components/shared/cards/TemperaturesCard.tsx');
+    expect(source).toContain('<Show when={props.rows?.length}>');
+    expect(source).not.toMatch(/if\s*\([^)]*!props\.rows/);
+    expect(source).toContain('<Show when={props.lastKnownReason}>');
+    expect(source).toContain('Last known readings, not current:');
+    expect(source).toContain('role="status"');
+    expect(source).toContain("props.wrapValues ? 'whitespace-normal wrap-anywhere' : 'truncate'");
+  });
+});

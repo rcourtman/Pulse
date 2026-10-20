@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e1ce060ce0f04aad1cfc3392c0118310f17566d9",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/shared/cards/TemperaturesCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "642c2d2f6d4fed673f9104e79fff66ef0186826de6e4f32ee9b444825896f7f5",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "e16792b5044941d0490f21bf0d6feda77921755c8e4685a2b5e9d78e03d31c20",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "bf907cd7e60b678288264e862d1894978bb7e2cefc636325f477f9a34a1e28d8",
+    "frontend-modern/src/components/shared/cards/TemperaturesCard.tsx": "a8e8047a48875a75e4d13df306056fd9298744c0a8db44b89ff2d5883d935c37"
+  },
+  "routes": [
+    "/browser-tests/custom-sensor-observation.html (production canonical delta merger, full machine ResourceDetailDrawer, custom sensor mapper and CSS)"
+  ],
+  "states": [
+    "An initially empty card shows its first report without reopening the existing machine. Current boolean/age/zero, independently stale boolean and unavailable values stay distinct.",
+    "An expired parent agent qualifies every retained custom reading and visibly explains why, while an independent platform keeps the machine online. Ages read as age when observed rather than relative to now.",
+    "A current parent does not renew an independently failed sensor. Removal and reappearance preserve the same open disclosure. Reported values, times, statuses and errors remain unchanged."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch open the existing Details disclosure; first report, lease expiry, independent platform update, parent renewal, removal and new report flow through the production canonical merger.",
+    "Scoped synthetic machine History and runtime-capability reads complete, with no mutations, off-origin/unexpected reads, page errors or console errors. The same disclosure remains open and neither viewport overflows."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-20T16:44:36.402578Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All four final captures were opened with native view_image. Desktop light custom labels/readings are aligned and readable; the row reaches the viewport lower edge, but all five values are visible. At 320px dark, the full last-known reason and age-when-observed wrap without ellipsis or horizontal clipping. Online versus last-known/stale, genuine zero and Unavailable remain distinguishable. Two earlier desktop captures were also opened; their red missing-History fixture banner remains adverse evidence.",
+  "driver": "frontend-modern/browser-tests/custom-sensor-observation.cjs",
+  "binding": "Exact e1ce060ce0 / source-_ww3p48o records child Vitest exit 0, JSON success with 178 passes, and bound static compilation. All 2571 source and five artifact hashes match at execution. Product/test/manifests are byte-identical to b533bb08, whose serial proof completes types, lint, production build/embed and budgets but retains an unexplained terminal exit 1; this is not relabelled as an overall pass.",
+  "limits": "Synthetic consumer acceptance, not native service/backup health, thaw, filesystem liveness, installed recovery, protected publication or release availability. The initial five-second unit timeout, serial terminal 1 and incomplete first browser attempt remain retained."
+}
