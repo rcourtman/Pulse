@@ -361,4 +361,18 @@ describe('useAlertAcknowledgementState', () => {
     vi.advanceTimersByTime(1500);
     expect(result.processingAlerts().size).toBe(0);
   });
+
+  it('releases a flood-sized batch with one timer rather than one full Set copy per alert', async () => {
+    const alerts = Array.from({ length: 500 }, (_, index) => makeAlert(`alert-${index}`));
+    const { result } = renderWithAlertStore(alerts);
+    const timersBefore = vi.getTimerCount();
+    vi.mocked(AlertsAPI.bulkAcknowledge).mockResolvedValue({ results: [] });
+    await result.handleBulkAcknowledge();
+    expect(result.processingAlerts().size).toBe(500);
+    expect(vi.getTimerCount()).toBe(timersBefore + 1);
+    vi.advanceTimersByTime(1500);
+    expect(result.processingAlerts().size).toBe(0);
+    expect(vi.getTimerCount()).toBe(timersBefore);
+    expect(result.updateAlert).not.toHaveBeenCalled();
+  });
 });

@@ -5323,3 +5323,8 @@ whole-card processing opacity. Removing that opacity preserves readable current
 conditions and timestamps until a reply arrives; busy/disabled controls and the
 processing lock remain explicit. Presentation regressions cover active and
 acknowledged cards at every severity while processing.
+
+Each completed acknowledgement request releases its reservations with one
+1500ms timer and one Set copy for the entire requested batch. Reserving all
+alerts must not introduce a timer and full Set copy per alert during an alert
+flood. The shared-owner regression covers a500-member batch and cleanup.

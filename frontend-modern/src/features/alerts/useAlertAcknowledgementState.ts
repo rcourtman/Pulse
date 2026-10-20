@@ -29,16 +29,7 @@ export interface UseAlertAcknowledgementStateProps {
 export function useAlertAcknowledgementState(props: UseAlertAcknowledgementStateProps) {
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
-  const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-  const clearProcessingReleaseTimer = (alertIdentifier: string) => {
-    const timer = processingReleaseTimers.get(alertIdentifier);
-    if (timer === undefined) {
-      return;
-    }
-    clearTimeout(timer);
-    processingReleaseTimers.delete(alertIdentifier);
-  };
+  const processingReleaseTimers = new Set<ReturnType<typeof setTimeout>>();
 
   onCleanup(() => {
     processingReleaseTimers.forEach((timer) => clearTimeout(timer));
@@ -49,17 +40,18 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     props.alerts().filter((alert) => !alert.acknowledged),
   );
 
-  const releaseAlertProcessing = (alertIdentifier: string) => {
-    clearProcessingReleaseTimer(alertIdentifier);
+  // One timer and one Set copy per completed request, not per alert. Acknowledge
+  // all is also used during floods; releasing N locks must not do N full copies.
+  const releaseAlertProcessing = (identifiers: string[]) => {
     const timer = setTimeout(() => {
-      processingReleaseTimers.delete(alertIdentifier);
+      processingReleaseTimers.delete(timer);
       setProcessingAlerts((previous) => {
         const next = new Set(previous);
-        next.delete(alertIdentifier);
+        identifiers.forEach((id) => next.delete(id));
         return next;
       });
     }, 1500);
-    processingReleaseTimers.set(alertIdentifier, timer);
+    processingReleaseTimers.add(timer);
   };
 
   const handleAlertAcknowledgement = async (alert: Alert) => {
@@ -99,7 +91,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       logger.error(`Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`, error);
       notificationStore.error(getAlertOverviewAcknowledgementFailureNotification(wasAcknowledged));
     } finally {
-      releaseAlertProcessing(alertIdentifier);
+      releaseAlertProcessing([alertIdentifier]);
     }
   };
 
@@ -157,7 +149,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
     } finally {
       setBulkAckProcessing(false);
-      identifiers.forEach(releaseAlertProcessing);
+      releaseAlertProcessing(identifiers);
     }
   };
 
@@ -183,7 +175,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       logger.error('Group acknowledge failed', error);
       notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
     } finally {
-      identifiers.forEach(releaseAlertProcessing);
+      releaseAlertProcessing(identifiers);
     }
   };
 
