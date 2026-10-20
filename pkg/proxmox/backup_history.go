@@ -39,7 +39,8 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			history.Nodes = append(history.Nodes, observation)
 			continue
 		}
-		seen := map[string]bool{}
+		seen := map[string]Task{}
+		var nodeTasks []Task
 		for page := 0; page < 30; page++ {
 			params := url.Values{"typefilter": {"vzdump"}, "source": {"all"}, "limit": {"200"}, "start": {fmt.Sprint(page * 200)}, "since": {fmt.Sprint(since.Unix())}, "until": {fmt.Sprint(until)}}
 			resp, readErr := c.get(ctx, "/nodes/"+url.PathEscape(node.Node)+"/tasks?"+params.Encode())
@@ -67,16 +68,44 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			if observation.Reason != "" {
 				break
 			}
-			added := 0
-			for _, task := range pageTasks {
-				if task.Type != "vzdump" || task.UPID == "" || seen[task.UPID] {
-					continue
-				}
-				seen[task.UPID] = true
+			// Offset pages can overlap while the provider inventory moves.
+			// Deduplicate only equivalent executions, after binding an omitted
+			// redundant node. A changed outcome or identity has no first/last
+			// winner: neither version may replace the live observation.
+			conflicts := make(map[string]bool)
+			for i := range pageTasks {
+				task := &pageTasks[i]
 				if task.Node == "" {
 					task.Node = node.Node
 				}
-				history.Tasks = append(history.Tasks, task)
+				if previous, duplicate := seen[task.UPID]; duplicate && previous != *task {
+					conflicts[task.UPID] = true
+				}
+			}
+			if len(conflicts) > 0 {
+				// The whole new page is unavailable, including a valid prefix.
+				// Withdraw every ambiguous earlier row, not unrelated earlier
+				// executions or independently readable nodes.
+				kept := nodeTasks[:0]
+				for _, task := range nodeTasks {
+					if !conflicts[task.UPID] {
+						kept = append(kept, task)
+					}
+				}
+				nodeTasks = kept
+				observation.Reason = "collection_failed"
+				break
+			}
+			added := 0
+			for _, task := range pageTasks {
+				if _, duplicate := seen[task.UPID]; duplicate {
+					continue
+				}
+				seen[task.UPID] = task
+				if task.Type != "vzdump" {
+					continue
+				}
+				nodeTasks = append(nodeTasks, task)
 				added++
 			}
 			if len(pageTasks) < 200 {
@@ -92,6 +121,7 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			observation.Complete = false
 			observation.Reason = "audit_permission_unconfirmed"
 		}
+		history.Tasks = append(history.Tasks, nodeTasks...)
 		history.Nodes = append(history.Nodes, observation)
 	}
 	return history, nil
