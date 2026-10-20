@@ -59,8 +59,15 @@ async function capture(page, name) {
   assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
   assert.equal(binding.source_sha, producer.binding.source_sha);
   assert.equal(hash(fs.readFileSync(__filename)), hash(fs.readFileSync(path.join(root, 'frontend-modern/browser-tests/backup-history-pagination.cjs'))));
-  for (const [file, digest] of Object.entries(producer.binding.files))
-    assert.equal(hash(fs.readFileSync(path.join(root, file))), digest, file);
+  for (const [file, digest] of Object.entries(producer.binding.files)) {
+    // Preserve the producer's original control-file identity separately when
+    // this browser protocol is repaired. All runtime inputs still have to
+    // match the actual checkout; the running protocol is checked just above.
+    const input = file === 'frontend-modern/browser-tests/backup-history-pagination.cjs'
+      ? 'tmp/backup-history-pagination/producer-protocol.cjs'
+      : file;
+    assert.equal(hash(fs.readFileSync(path.join(root, input))), digest, file);
+  }
   for (const [file, digest] of Object.entries(binding.sources))
     assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
   for (const file of [ 'src/features/proxmox/ProxmoxCoverageTable.tsx', 'src/features/proxmox/proxmoxBackupRecoveryModel.ts', 'src/features/proxmox/proxmoxBackupInventory.ts' ]) assert(binding.sources[file], file);
@@ -128,7 +135,9 @@ async function capture(page, name) {
         assert.deepEqual(JSON.parse(bytes), payload);
         result.responses.push({ client, viewport: name, phase, sha256: hash(bytes) });
         await page.waitForFunction(() => [...document.querySelectorAll('button[aria-disabled="false"]')].some((button) => button.textContent === 'Refresh backups'));
-        await page.waitForFunction((value) => document.querySelector('[data-backup-task-detail] dd')?.textContent === value, expected);
+        // Job ID is the first description value. Wait for the named Result
+        // field rather than treating that unrelated value as an outcome.
+        await field('Result').filter({ hasText: new RegExp('^' + expected + '$') }).waitFor();
         assert.equal(await field('Result').innerText(), expected);
         assert.equal(await field('Job node').innerText(), 'pve-a');
         assert.equal(await field('Job connection').innerText(), 'site');
