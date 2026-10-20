@@ -390,3 +390,13 @@ describe('Apprise API transport policy, not connection evidence', () => {
     },
   );
 });
+
+describe('incomplete notification activity', () => {
+  it('names missing evidence and a safe refresh rather than a healthy or empty verdict', async () => {
+    const { getAlertDestinationsDeliveryLogIncomplete } =
+      await import('../alertDestinationsPresentation');
+    expect(getAlertDestinationsDeliveryLogIncomplete()).toBe(
+      'Some delivery attempts could not be read. This activity list is incomplete. Refresh to check again.',
+    );
+  });
+});

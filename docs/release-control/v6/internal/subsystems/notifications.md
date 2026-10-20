@@ -17,6 +17,19 @@
 
 ## Purpose
 
+### Unreadable delivery evidence is not empty or accepted recovery
+
+The existing activity consumer names partial attempt-read failure and preserves
+readable rows, or reports an unreadable collection as unavailable. It cannot
+claim no attempts from malformed evidence. Retry/Dismiss success requires an
+explicit true acknowledgement and an exact non-negative safe count. Otherwise
+the recovery feedback remains unconfirmed and directs an activity refresh before
+another attempt; it does not claim an issued mutation was undone. No sender,
+queue policy, retention, authentication or producer response changes.
+`notifications.test.ts` and `notification-recovery-boundary` browser acceptance
+join the real adapter and recovery surface with safe local response fixtures.
+
+
 ### Approved addresses share a bounded connection budget
 
 Webhook and HTTP Apprise transports pass their validated numeric destinations

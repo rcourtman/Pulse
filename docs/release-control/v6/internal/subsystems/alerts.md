@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### Notification recovery separates incomplete evidence from an empty history
+
+The activity card visibly names incomplete attempt data without dropping its
+readable rows. Partial data never earns the no-attempts empty state; a valid
+refresh clears the gap. Unreadable collections enter the existing unavailable
+state. Retry/Dismiss rejected or malformed acknowledgements publish persistent
+unconfirmed feedback and no success toast or automatic recovery follow-up;
+operators are directed to refresh activity before another attempt.
+`AlertDeliveryLogCard.test.tsx`, health feedback/lifecycle tests and the full-tab
+`notification-recovery-boundary` browser fixture pin normal, incomplete,
+unavailable, rejected and explicitly acknowledged outcomes. This is synthetic
+consumer proof, not provider delivery or installed-queue recovery.
+
+
 ### Collapsed active-alert groups retain visible severity evidence
 
 The Alerts overview keeps a correlation's designated primary, even when a

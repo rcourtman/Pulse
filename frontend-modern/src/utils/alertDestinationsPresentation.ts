@@ -336,6 +336,10 @@ export function getAlertDestinationsDeliveryLogEmpty() {
   return ALERT_DESTINATIONS_DELIVERY_LOG_EMPTY;
 }
 
+export function getAlertDestinationsDeliveryLogIncomplete() {
+  return 'Some delivery attempts could not be read. This activity list is incomplete. Refresh to check again.';
+}
+
 export function getAlertDestinationsDeliveryLogUnavailable() {
   return ALERT_DESTINATIONS_DELIVERY_LOG_UNAVAILABLE;
 }

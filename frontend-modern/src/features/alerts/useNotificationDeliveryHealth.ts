@@ -123,8 +123,12 @@ export function useNotificationDeliveryHealth(options?: {
       if (disposed) return;
       logger.error('Failed to retry retained notification deliveries', error);
       if (action === latestAction)
-        setQueueActionFeedback('Unable to retry retained notification deliveries.');
-      notificationStore.error('Unable to retry retained notification deliveries.');
+        setQueueActionFeedback(
+          'Retry could not be confirmed. Refresh notification activity before trying again.',
+        );
+      notificationStore.error(
+        'Retry could not be confirmed. Refresh notification activity before trying again.',
+      );
     } finally {
       if (!disposed) setRetryingTerminalFailures(false);
     }
@@ -150,8 +154,12 @@ export function useNotificationDeliveryHealth(options?: {
       if (disposed) return;
       logger.error('Failed to dismiss retained notification failures', error);
       if (action === latestAction)
-        setQueueActionFeedback('Unable to dismiss retained notification failures.');
-      notificationStore.error('Unable to dismiss retained notification failures.');
+        setQueueActionFeedback(
+          'Dismissal could not be confirmed. Refresh notification activity before trying again.',
+        );
+      notificationStore.error(
+        'Dismissal could not be confirmed. Refresh notification activity before trying again.',
+      );
     } finally {
       if (!disposed) setDismissingTerminalFailures(false);
     }

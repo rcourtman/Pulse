@@ -279,8 +279,8 @@ describe('useNotificationDeliveryHealth', () => {
             if (outcome === 'rejected') {
               expect(notificationStore.error).toHaveBeenCalledWith(
                 action === 'retryTerminalFailures'
-                  ? 'Unable to retry retained notification deliveries.'
-                  : 'Unable to dismiss retained notification failures.',
+                  ? 'Retry could not be confirmed. Refresh notification activity before trying again.'
+                  : 'Dismissal could not be confirmed. Refresh notification activity before trying again.',
               );
             }
             expect(state.deliveryHealth()).toBe(health);
@@ -310,7 +310,7 @@ describe('useNotificationDeliveryHealth', () => {
             await state.loadDeliveryHealth();
             await state[action]();
             const failure = state.queueActionFeedback();
-            expect(failure).toMatch(/^Unable to/);
+            expect(failure).toMatch(/^(Retry|Dismissal) could not be confirmed\./);
             await vi.advanceTimersByTimeAsync(11000);
             vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthWith('healthy'));
             await state.loadDeliveryHealth();
@@ -399,7 +399,8 @@ describe('useNotificationDeliveryHealth', () => {
               rejectOld(new Error('old activity failed'));
               await pending;
               expect(state.queueActionFeedback()).toBe(current);
-              if (next === 'newer') expect(current).toMatch(/^Unable to/);
+              if (next === 'newer')
+                expect(current).toMatch(/^(Retry|Dismissal) could not be confirmed\./);
             } finally {
               confirmSpy.mockRestore();
               dispose();
@@ -431,7 +432,7 @@ describe('useNotificationDeliveryHealth', () => {
         rejectOld(new Error('old failure'));
         await old;
         expect(state.queueActionFeedback()).toBe(
-          'Unable to dismiss retained notification failures.',
+          'Dismissal could not be confirmed. Refresh notification activity before trying again.',
         );
       } finally {
         confirmSpy.mockRestore();

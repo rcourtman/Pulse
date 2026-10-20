@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### Notification recovery responses require affirmative evidence
+
+`NotificationsAPI.getDeliveryLog` rejects missing/non-array `entries` as
+unavailable. Invalid row identity, time, outcome/success, alert IDs or counts
+marks the result incomplete while preserving readable rows. Explicit empty
+arrays remain empty evidence; retention fallbacks and optional diagnostics
+remain compatible. Retry/Dismiss require literal `success: true` and a
+non-negative safe-integer affected count, including zero. Malformed/rejected
+2xx bodies reject rather than invent a zero/success acknowledgement.
+`notifications.test.ts` pins complete, partial, contradictory and malformed
+responses against the existing producer fields; no backend schema changes.
+
+
 ### Endpoint diagnostics do not change node HTTP responses
 
 The existing add/test request diagnostics display a validated infrastructure

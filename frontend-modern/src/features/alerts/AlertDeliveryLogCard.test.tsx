@@ -123,6 +123,34 @@ describe('AlertDeliveryLogCard', () => {
     },
   );
 
+  it.each([{ entries: [] }, { entries: log.entries }])(
+    'names incomplete evidence without hiding readable rows: %j',
+    ({ entries }) => {
+      const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>({
+        ...log,
+        entries,
+        incomplete: true,
+      });
+      render(() => (
+        <AlertDeliveryLogCard
+          log={currentLog()}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+      expect(screen.getByRole('status')).toHaveTextContent('This activity list is incomplete.');
+      expect(
+        screen.queryByText('No alert deliveries were attempted in this window.'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('listitem')).toHaveLength(entries.length);
+      setCurrentLog({ ...log, entries: [], incomplete: false });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByText('No alert deliveries were attempted in this window.')).toBeVisible();
+    },
+  );
+
   it('says test sends are not listed so their absence is not read as failure', () => {
     render(() => (
       <AlertDeliveryLogCard
