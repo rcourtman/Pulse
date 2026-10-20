@@ -249,7 +249,7 @@ describe('AppLayout navigation icons', () => {
       for (const navName of ['Primary navigation', 'Mobile navigation']) {
         const nav = screen.getByRole('navigation', { name: navName });
         await waitFor(() => {
-          const link = within(nav).getByRole('link', { name, exact: true });
+          const link = within(nav).getByRole('link', { name });
           expect(link).toHaveAttribute('href', '/alerts');
           expect(link).toHaveTextContent('Alerts');
         });
