@@ -1,7 +1,7 @@
 import type { DockerUpdateCommands } from '@/api/updates';
 
 export const PRO_REGISTRY_PASSWORD_NOTE =
-  'Run interactively. At Docker’s Password prompt, enter the key from Settings → License. Input is hidden. Never put it in a shell command; Docker may store it locally.';
+  'Run interactively. At Docker’s Password prompt, enter the key from Settings → License. Input is hidden. Never put it in a shell command. Docker may save it locally.';
 
 const UNRECOGNISED_LOGIN_NOTE =
   'Registry sign-in instructions could not be checked safely. See https://pulserelay.pro/download.html. Never put your key in a shell command.';
