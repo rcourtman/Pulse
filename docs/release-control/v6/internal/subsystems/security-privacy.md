@@ -18,6 +18,19 @@
 
 ## Purpose
 
+### PBS response failures do not copy credential-bearing provider bodies
+
+Authentication/API failure errors retain status and fixed local diagnostics,
+not response bodies or arbitrary body-read error text. Token-creation decoder
+and missing-value errors also exclude the complete successful response, which
+may already contain a one-time secret. Typed classification preserves form
+fallback, permission/not-found/cache handling and non-destructive collision
+behaviour. See the [monitoring contract](monitoring.md#pbs-response-failures-are-not-diagnostic-payloads)
+for exact synthetic transport, pinned-TLS ingress and real Logs-consumer proof.
+No live credential, permission, TLS or provider operation is changed by these
+controls. Other transport diagnostics, successful provider fields and previous
+logs are not certified public-safe.
+
 ### Issue label automation does not inherit the App's full grant
 
 `issue-version-label-sync.yml` requests a short-lived App token for only

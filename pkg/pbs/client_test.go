@@ -14,18 +14,18 @@ func TestAuthHTTPError_Error(t *testing.T) {
 	}{
 		{
 			name:     "unauthorized",
-			err:      &authHTTPError{status: http.StatusUnauthorized, body: "invalid credentials"},
-			contains: []string{"authentication failed", "401", "invalid credentials"},
+			err:      &authHTTPError{status: http.StatusUnauthorized},
+			contains: []string{"authentication failed", "HTTP 401 Unauthorized"},
 		},
 		{
 			name:     "forbidden",
-			err:      &authHTTPError{status: http.StatusForbidden, body: "access denied"},
-			contains: []string{"authentication failed", "403", "access denied"},
+			err:      &authHTTPError{status: http.StatusForbidden},
+			contains: []string{"authentication failed", "HTTP 403 Forbidden"},
 		},
 		{
 			name:     "other error",
-			err:      &authHTTPError{status: http.StatusInternalServerError, body: "server error"},
-			contains: []string{"authentication failed", "server error"},
+			err:      &authHTTPError{status: http.StatusInternalServerError},
+			contains: []string{"authentication failed", "HTTP 500 Internal Server Error"},
 		},
 	}
 
@@ -49,22 +49,22 @@ func TestShouldFallbackToForm(t *testing.T) {
 	}{
 		{
 			name:     "bad request should fallback",
-			err:      &authHTTPError{status: http.StatusBadRequest, body: "bad request"},
+			err:      &authHTTPError{status: http.StatusBadRequest},
 			expected: true,
 		},
 		{
 			name:     "unsupported media type should fallback",
-			err:      &authHTTPError{status: http.StatusUnsupportedMediaType, body: "unsupported"},
+			err:      &authHTTPError{status: http.StatusUnsupportedMediaType},
 			expected: true,
 		},
 		{
 			name:     "unauthorized should not fallback",
-			err:      &authHTTPError{status: http.StatusUnauthorized, body: "unauthorized"},
+			err:      &authHTTPError{status: http.StatusUnauthorized},
 			expected: false,
 		},
 		{
 			name:     "server error should not fallback",
-			err:      &authHTTPError{status: http.StatusInternalServerError, body: "error"},
+			err:      &authHTTPError{status: http.StatusInternalServerError},
 			expected: false,
 		},
 		{

@@ -20,13 +20,15 @@ import (
 
 const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
 
+var errResponseBodyTooLarge = fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(body)) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+		return nil, errResponseBodyTooLarge
 	}
 	return body, nil
 }
@@ -335,11 +337,8 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
-		}
-		return &authHTTPError{status: resp.StatusCode, body: string(body)}
+		_, err := readResponseBodyLimited(resp.Body)
+		return &authHTTPError{status: resp.StatusCode, diagnostic: responseReadDiagnostic(err)}
 	}
 	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
 		return err
@@ -365,16 +364,37 @@ func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) er
 	return nil
 }
 
+// HTTP failures retain only status and local diagnostics. Provider bodies can
+// echo submitted passwords/tickets/tokens and must never become error text.
+func responseReadDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, errResponseBodyTooLarge) {
+		return errResponseBodyTooLarge.Error()
+	}
+	return "could not read response body"
+}
+
+func httpFailureMessage(prefix string, status int, diagnostic string) string {
+	message := fmt.Sprintf("%s (HTTP %d", prefix, status)
+	if text := http.StatusText(status); text != "" {
+		message += " " + text
+	}
+	message += ")"
+	if diagnostic != "" {
+		message += ": " + diagnostic
+	}
+	return message
+}
+
 type authHTTPError struct {
-	status int
-	body   string
+	status     int
+	diagnostic string
 }
 
 func (e *authHTTPError) Error() string {
-	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
-		return fmt.Sprintf("authentication failed (status %d): %s", e.status, e.body)
-	}
-	return fmt.Sprintf("authentication failed: %s", e.body)
+	return httpFailureMessage("authentication failed", e.status, e.diagnostic)
 }
 
 func shouldFallbackToForm(err error) bool {
@@ -387,15 +407,20 @@ func shouldFallbackToForm(err error) bool {
 	return false
 }
 
-// apiHTTPError preserves the response status separately from the server body
-// so callers can make retry and permission decisions without parsing text.
+// apiHTTPError preserves classification separately from its public message.
+// A collision flag retains the legacy PBS 400/409/500 collision behaviour,
+// without keeping provider text in an error or classifying transport failures.
 type apiHTTPError struct {
-	status int
-	body   string
+	status        int
+	diagnostic    string
+	alreadyExists bool
 }
 
 func (e *apiHTTPError) Error() string {
-	message := fmt.Sprintf("API error %d: %s", e.status, e.body)
+	message := httpFailureMessage("API request failed", e.status, e.diagnostic)
+	if e.alreadyExists {
+		message += "; resource already exists"
+	}
 	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
 		return "authentication error: " + message
 	}
@@ -496,11 +521,12 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, &apiHTTPError{status: resp.StatusCode, body: fmt.Sprintf("read response body: %v", err)}
+		collisionStatus := resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusInternalServerError
+		return nil, &apiHTTPError{
+			status:        resp.StatusCode,
+			diagnostic:    responseReadDiagnostic(err),
+			alreadyExists: err == nil && collisionStatus && bytes.Contains(bytes.ToLower(body), []byte("already exists")),
 		}
-
-		return nil, &apiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
@@ -557,7 +583,8 @@ func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
 }
 
 func isAlreadyExistsError(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "already exists")
+	var apiErr *apiHTTPError
+	return errors.As(err, &apiErr) && apiErr.alreadyExists
 }
 
 // SetUserACL sets ACL permissions for a user
@@ -599,7 +626,7 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 
 	body, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, fmt.Errorf("read PBS token creation response: %s", responseReadDiagnostic(err))
 	}
 
 	// Parse response - PBS returns {"data": {"tokenid": "...", "value": "..."}}
@@ -607,11 +634,11 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 		Data TokenResponse `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parse response: %w (body: %s)", err, string(body))
+		return nil, errors.New("invalid PBS token creation response")
 	}
 
 	if result.Data.Value == "" {
-		return nil, fmt.Errorf("empty token value in response: %s", string(body))
+		return nil, errors.New("PBS token creation response contains no token value")
 	}
 
 	log.Info().

@@ -21,6 +21,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // Re-adding a PBS through a different address must not rotate a token used by
@@ -484,5 +486,90 @@ func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
 			}
 			assertTenantEvents(t, owner, other, "nodes_updated", "node_deleted")
 		})
+	}
+}
+
+// The existing Settings test endpoint already returns a generic response, but
+// its real error log must also keep provider echoes private. Use only an owned
+// pinned-TLS loopback fixture: no saved node, persistence or runtime is touched.
+func TestPBSConnectionFailureDiagnostics(t *testing.T) {
+	priorLogger, priorLevel := log.Logger, zerolog.GlobalLevel()
+	defer func() { log.Logger = priorLogger; zerolog.SetGlobalLevel(priorLevel) }()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	for _, mode := range []string{"api", "auth"} {
+		for _, status := range []int{401, 403, 429, 503} {
+			t.Run(fmt.Sprintf("%s-%d", mode, status), func(t *testing.T) {
+				const marker = "synthetic-private-response-"
+				var recovered atomic.Bool
+				var calls atomic.Int32
+				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					calls.Add(1)
+					if !(r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/ticket") && !(r.Method == http.MethodGet && r.URL.Path == "/api2/json/admin/datastore") {
+						t.Error("test performed an unexpected provider operation")
+						http.Error(w, "unexpected", 500)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					if !recovered.Load() {
+						w.WriteHeader(status)
+						_, _ = w.Write([]byte(`{"errors":{"message":"` + marker + strings.Repeat("x", 1<<20) + `"}}`))
+						return
+					}
+					if r.URL.Path == "/api2/json/access/ticket" {
+						_, _ = w.Write([]byte(`{"data":{"ticket":"fixture-ticket","CSRFPreventionToken":"fixture-csrf"}}`))
+						return
+					}
+					_, _ = w.Write([]byte(`{"data":[]}`))
+				}))
+				defer server.Close()
+				reqBody := map[string]any{"type": "pbs", "name": "fixture-backup", "host": server.URL, "verifySSL": true, "fingerprint": fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))}
+				if mode == "api" {
+					reqBody["tokenName"] = "fixture@pbs!pulse"
+					reqBody["tokenValue"] = "fixture-token"
+				} else {
+					reqBody["user"] = "fixture@pbs"
+					reqBody["password"] = "fixture-password"
+				}
+				body, err := json.Marshal(reqBody)
+				if err != nil {
+					t.Fatal(err)
+				}
+				h := &ConfigHandlers{}
+				var captured bytes.Buffer
+				log.Logger = zerolog.New(&captured).Level(zerolog.ErrorLevel)
+				rec := httptest.NewRecorder()
+				h.HandleTestConnection(rec, httptest.NewRequest(http.MethodPost, "/api/config/connection/test", bytes.NewReader(body)))
+				if rec.Code != 400 || !strings.Contains(rec.Body.String(), "Failed to initialize connection") && !strings.Contains(rec.Body.String(), "Connection failed. Please check your credentials and network settings") {
+					t.Fatal("failed provider became a successful Settings test")
+				}
+				if strings.Contains(captured.String(), marker) || strings.Contains(rec.Body.String(), marker) {
+					t.Error("provider echo crossed the Settings/log boundary")
+				}
+				if captured.Len() > 1024 {
+					t.Error("provider payload inflated the real operation log")
+				}
+				lines := strings.Split(strings.TrimSpace(captured.String()), "\n")
+				if len(lines) != 1 || !strings.Contains(lines[0], fmt.Sprint(status)) {
+					t.Error("safe real operation diagnostic lost status or attribution")
+				}
+				recovered.Store(true)
+				next := httptest.NewRecorder()
+				h.HandleTestConnection(next, httptest.NewRequest(http.MethodPost, "/api/config/connection/test", bytes.NewReader(body)))
+				if next.Code != 200 || !strings.Contains(next.Body.String(), `"datastoreCount":0`) {
+					t.Error("same credentials did not resume ordinary read-only discovery")
+				}
+				want := int32(2)
+				if mode == "auth" {
+					want = 3
+				}
+				if calls.Load() != want {
+					t.Error("error formatting added provider work")
+				}
+				if !t.Failed() {
+					frame, _ := json.Marshal(map[string]any{"case": fmt.Sprintf("%s-%d", mode, status), "providerStatus": status, "lines": lines, "httpStatus": rec.Code, "body": rec.Body.String(), "recoveryStatus": next.Code, "recoveryBody": next.Body.String(), "requests": calls.Load(), "verifySSL": true})
+					t.Logf("PBS_ERROR_CONSUMER %s", base64.StdEncoding.EncodeToString(frame))
+				}
+			})
+		}
 	}
 }
