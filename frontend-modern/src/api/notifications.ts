@@ -169,12 +169,52 @@ export interface NotificationDeliveryLog {
 }
 
 export interface NotificationTestResult {
-  status?: string;
+  status: 'success';
   message?: string;
   // True when the test was delivered but real alert delivery is paused by the
   // activation gate, so a successful test must not be read as proof that live
   // alerts are getting through.
   deliveryPaused?: boolean;
+}
+
+export interface WebhookTestResult {
+  success: true;
+  message?: string;
+  deliveryPaused?: boolean;
+}
+
+// A completed HTTP request is not evidence that the test send succeeded.
+// These two existing producers use different affirmative markers; neither may
+// be inferred from an empty body or a contradictory response. Do not echo an
+// unconfirmed producer message, which can contain destination diagnostics.
+function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook') {
+  const record = apiRecord(value);
+  const confirmed =
+    kind === 'notification' ? record.status === 'success' : record.success === true;
+  const conflictingMarker =
+    kind === 'notification'
+      ? record.success !== undefined && record.success !== true
+      : record.status !== undefined &&
+        !(
+          typeof record.status === 'number' &&
+          Number.isInteger(record.status) &&
+          record.status >= 200 &&
+          record.status < 300
+        );
+  if (
+    !confirmed ||
+    conflictingMarker ||
+    record.error !== undefined ||
+    (record.deliveryPaused !== undefined && typeof record.deliveryPaused !== 'boolean')
+  ) {
+    throw new Error(
+      'Test result could not be confirmed. Check the destination before sending another test.',
+    );
+  }
+  return {
+    ...(typeof record.message === 'string' ? { message: record.message } : {}),
+    ...(typeof record.deliveryPaused === 'boolean' ? { deliveryPaused: record.deliveryPaused } : {}),
+  };
 }
 
 function apiRecord(value: unknown): Record<string, unknown> {
@@ -567,18 +607,20 @@ export class NotificationsAPI {
       body.webhookId = request.webhookId;
     }
 
-    return apiFetchJSON(`${this.baseUrl}/test`, {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/test`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    return { status: 'success', ...confirmedTestResponse(result, 'notification') };
   }
 
   static async testWebhook(
     webhook: Omit<Webhook, 'id'>,
-  ): Promise<{ success?: boolean; message?: string; deliveryPaused?: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
+  ): Promise<WebhookTestResult> {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),
     });
+    return { success: true, ...confirmedTestResponse(result, 'webhook') };
   }
 }

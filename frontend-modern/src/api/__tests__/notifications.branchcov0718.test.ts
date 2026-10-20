@@ -224,7 +224,7 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
 
   describe('testNotification', () => {
     it('includes config and omits webhookId for a config-only email test', async () => {
-      apiFetchJSONMock.mockResolvedValueOnce({ success: true, message: 'sent' } as any);
+      apiFetchJSONMock.mockResolvedValueOnce({ status: 'success', message: 'sent' } as any);
 
       const config = { server: 'smtp.x', port: 25 };
       const result = await NotificationsAPI.testNotification({
@@ -236,16 +236,18 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
         method: 'POST',
         body: JSON.stringify({ method: 'email', config }),
       });
-      expect(result).toEqual({ success: true, message: 'sent' });
+      expect(result).toEqual({ status: 'success', message: 'sent' });
     });
 
-    it('includes webhookId and omits config for a webhook-id-only test', async () => {
+    it('includes webhookId without config but rejects a negative test acknowledgement', async () => {
       apiFetchJSONMock.mockResolvedValueOnce({ success: false, message: 'no webhook' } as any);
 
-      await NotificationsAPI.testNotification({
-        type: 'webhook',
-        webhookId: 'wh-9',
-      });
+      await expect(
+        NotificationsAPI.testNotification({
+          type: 'webhook',
+          webhookId: 'wh-9',
+        }),
+      ).rejects.toThrow('Test result could not be confirmed.');
 
       expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/test', {
         method: 'POST',
@@ -254,7 +256,7 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
     });
 
     it('includes BOTH config and webhookId when both are supplied', async () => {
-      apiFetchJSONMock.mockResolvedValueOnce({ success: true } as any);
+      apiFetchJSONMock.mockResolvedValueOnce({ status: 'success' } as any);
 
       const appriseCfg: AppriseConfig = {
         enabled: true,
@@ -278,7 +280,7 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
     });
 
     it('omits BOTH config and webhookId when neither is supplied', async () => {
-      apiFetchJSONMock.mockResolvedValueOnce({ success: true } as any);
+      apiFetchJSONMock.mockResolvedValueOnce({ status: 'success' } as any);
 
       await NotificationsAPI.testNotification({ type: 'email' });
 
@@ -289,7 +291,7 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
     });
 
     it('treats a falsy config value as absent (truthy-check branch)', async () => {
-      apiFetchJSONMock.mockResolvedValueOnce({ success: true } as any);
+      apiFetchJSONMock.mockResolvedValueOnce({ status: 'success' } as any);
 
       // NotificationTestRequest.config is typed as object-only; cast an
       // empty string through `unknown` to exercise the `if (request.config)`

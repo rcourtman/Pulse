@@ -17,6 +17,21 @@
 
 ## Purpose
 
+### Test-send success requires a confirmed result
+
+Email, Apprise and saved-webhook tests require the existing literal
+`status: "success"` response; an unsaved-webhook test requires literal
+`success: true`. Missing, malformed or contradictory acknowledgements cannot
+announce a sent test. A supplied webhook HTTP status must be an integer 2xx;
+error fields and non-boolean delivery-pause fields make the result unconfirmed.
+The user is told to check the destination before sending again, without echoing
+an unconfirmed body or automatically replaying the send. An affirmative result
+with `deliveryPaused: true` retains the existing warning, never a plain success.
+`notifications.test.ts` covers the adapters and the full-tab
+`notification-test-acknowledgement.cjs` joins them to all four actual controls.
+This is synthetic UI acceptance, not recipient or ordinary-alert delivery.
+Sender, saved configuration, authentication and queue policy do not change.
+
 ### Stalled evidence does not imply a healthy queue
 
 Notification health, attempt and held-event consumers expire independent reads

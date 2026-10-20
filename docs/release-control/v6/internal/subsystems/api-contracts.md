@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### Notification test responses retain producer-specific acknowledgements
+
+`NotificationsAPI.testNotification` accepts the existing `/test` producer's
+literal `status: "success"`; `testWebhook` accepts `/webhooks/test`'s literal
+`success: true`, with an optional integer 2xx destination status. Contradictory
+markers, an error field or a non-boolean supplied `deliveryPaused` reject with
+an input-free unconfirmed-result message. Valid pause evidence survives for the
+consumer warning, and existing transport errors/details propagate unchanged.
+No endpoint, request payload, retry, producer or persistence contract changes.
+`notifications.test.ts` tests malformed/negative/affirmative
+results and one-send request preservation; the containing Notifications browser
+fixture exercises the actual email, Apprise, saved- and draft-webhook controls.
+
 ### Notification evidence reads forward cancellation
 
 The notification-health, delivery-log and alert-event read adapters accept an

@@ -10,13 +10,14 @@ import type { Webhook } from '../src/api/notifications';
 import '../src/index.css';
 
 function Fixture() {
+  const sendTests = new URLSearchParams(location.search).has('send-tests');
   const [email, setEmail] = createSignal<UIEmailConfig>({
-    enabled: false,
+    enabled: sendTests,
     provider: 'smtp',
-    server: '',
+    server: sendTests ? 'smtp.example.test' : '',
     port: 587,
-    from: '',
-    to: [],
+    from: sendTests ? 'pulse@example.test' : '',
+    to: sendTests ? ['operator@example.test'] : [],
     username: '',
     password: '',
     rateLimit: 0,
@@ -24,9 +25,9 @@ function Fixture() {
     startTLS: true,
   });
   const [apprise, setApprise] = createSignal<UIAppriseConfig>({
-    enabled: false,
+    enabled: sendTests,
     mode: 'cli',
-    targetsText: '',
+    targetsText: sendTests ? 'mailto://operator@example.test' : '',
     cliPath: 'apprise',
     timeoutSeconds: 10,
     serverUrl: '',

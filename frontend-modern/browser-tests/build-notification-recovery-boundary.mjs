@@ -58,6 +58,7 @@ try {
     'browser-tests/notification-recovery-boundary.html',
     'browser-tests/notification-recovery-boundary.cjs',
     'browser-tests/notification-evidence-deadline.cjs',
+    'browser-tests/notification-test-acknowledgement.cjs',
     'browser-tests/build-notification-recovery-boundary.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));

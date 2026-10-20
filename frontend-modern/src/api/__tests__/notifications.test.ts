@@ -4,7 +4,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
-import { NotificationsAPI } from '@/api/notifications';
+import { NotificationsAPI, type NotificationTestRequest, type Webhook } from '@/api/notifications';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 describe('NotificationsAPI', () => {
@@ -485,4 +485,98 @@ describe('email minimum severity save/reload (#2069)', () => {
       expect((await NotificationsAPI.getEmailConfig()).minimumSeverity).toBe(minimumSeverity);
     },
   );
+});
+
+const fetchJSON = vi.mocked(apiFetchJSON);
+const unconfirmed = 'Test result could not be confirmed. Check the destination before sending another test.';
+const draft: Omit<Webhook, 'id'> = {
+  name: 'Synthetic destination',
+  url: 'https://example.test/notifications',
+  method: 'POST',
+  headers: {},
+  enabled: true,
+};
+beforeEach(() => fetchJSON.mockReset());
+
+// The public producer emits status: "success" for all three methods. An HTTP
+// 200, a truthy string or a bare success boolean is not that acknowledgement.
+describe.each(['email', 'apprise', 'webhook'] as const)('%s test acknowledgement', (type) => {
+  it.each([
+    null, undefined, [], ['success'], {}, '', true,
+    { success: true }, { success: false }, { status: 'failed' },
+    { status: true }, { status: 'SUCCESS' }, { status: 200 },
+    { status: 'success', success: false },
+    { status: 'success', success: 'true' },
+    { status: 'success', error: 'untrusted-destination-diagnostic' },
+    { status: 'success', error: null },
+    { status: 'success', deliveryPaused: 'false' },
+    { status: 'success', deliveryPaused: null },
+    { deliveryPaused: true },
+  ])('rejects a malformed or contradictory 2xx response: %j', async (payload) => {
+    fetchJSON.mockResolvedValueOnce(payload);
+    await expect(NotificationsAPI.testNotification({ type })).rejects.toThrow(unconfirmed);
+    expect(fetchJSON).toHaveBeenCalledTimes(1); // No automatic second send.
+  });
+
+  it.each([undefined, false, true])('preserves valid delivery pause evidence: %s', async (deliveryPaused) => {
+    const payload = { status: 'success', deliveryPaused, message: 'Test notification sent' };
+    fetchJSON.mockResolvedValueOnce(payload);
+    await expect(NotificationsAPI.testNotification({ type })).resolves.toEqual(payload);
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the original transport failure and detail without a second send', async () => {
+    const failure = Object.assign(new Error('Synthetic provider failure'), { detail: 'Safe fixture detail' });
+    fetchJSON.mockRejectedValueOnce(failure);
+    await expect(NotificationsAPI.testNotification({ type })).rejects.toBe(failure);
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('unsaved webhook test acknowledgement', () => {
+  it.each([
+    null, undefined, [], {}, '', true,
+    { status: 'success' }, { success: false }, { success: 'true' },
+    { success: 1 }, { success: true, error: 'untrusted-destination-diagnostic' },
+    { success: true, error: null }, { success: true, status: 199 },
+    { success: true, status: 300 }, { success: true, status: 400 },
+    { success: true, status: 200.5 }, { success: true, status: '200' },
+    { success: true, status: 'success' }, { success: true, status: null },
+    { success: true, deliveryPaused: 'true' }, { success: true, deliveryPaused: null },
+    { success: false, deliveryPaused: true },
+  ])('rejects malformed or contradictory 2xx response: %j', async (payload) => {
+    fetchJSON.mockResolvedValueOnce(payload);
+    await expect(NotificationsAPI.testWebhook(draft)).rejects.toThrow(unconfirmed);
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, 200, 202, 204, 299])('accepts an affirmative send with compatible status %s', async (status) => {
+    fetchJSON.mockResolvedValueOnce({ success: true, status, response: 'Not consumed' });
+    await expect(NotificationsAPI.testWebhook(draft)).resolves.toEqual({ success: true });
+  });
+
+  it.each([false, true])('keeps the pause caveat: %s', async (deliveryPaused) => {
+    fetchJSON.mockResolvedValueOnce({ success: true, status: 200, deliveryPaused });
+    await expect(NotificationsAPI.testWebhook(draft)).resolves.toEqual({ success: true, deliveryPaused });
+  });
+});
+
+it('keeps the saved, draft and email/config request bodies distinct and unchanged', async () => {
+  const requests: NotificationTestRequest[] = [
+    { type: 'email', config: { server: 'smtp.example.test', port: 587 } },
+    { type: 'apprise', config: { enabled: true, mode: 'cli', targets: ['mailto://operator@example.test'] } },
+    { type: 'webhook', webhookId: 'saved-hook' },
+  ];
+  for (const { type, ...request } of requests) {
+    fetchJSON.mockResolvedValueOnce({ status: 'success' });
+    await NotificationsAPI.testNotification({ type, ...request });
+    expect(fetchJSON).toHaveBeenLastCalledWith('/api/notifications/test', {
+      method: 'POST', body: JSON.stringify({ method: type, ...request }),
+    });
+  }
+  fetchJSON.mockResolvedValueOnce({ success: true, status: 200 });
+  await NotificationsAPI.testWebhook(draft);
+  expect(fetchJSON).toHaveBeenLastCalledWith('/api/notifications/webhooks/test', {
+    method: 'POST', body: JSON.stringify(draft),
+  });
 });
