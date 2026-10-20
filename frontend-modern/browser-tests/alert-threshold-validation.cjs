@@ -265,14 +265,21 @@ async function activate(button, touch) {
         await rowInput.fill('10001');
         await commitRow();
         await expect(rowInput).toBeVisible();
-        await expect(rowInput).toBeFocused();
+        if (spec.touch) await expect(rowInput).toBeFocused();
+        await expect(rowInput).toHaveValue('10001');
         await expect(rowInput).toHaveAttribute('aria-invalid', 'true');
+        const rowError = section.getByText('Enter a number from 0.01 to 10000.', { exact: true });
+        await expect(rowError).toBeVisible();
         assert.equal(current.saves.length, 1);
         await capture(page, 'row-save-blocked');
         await scan(page, 'row-save-blocked');
+        await expect(rowInput).toHaveValue('10001');
+        await expect(rowError).toBeVisible();
         await page.evaluate(() => document.documentElement.classList.add('dark'));
         await capture(page, 'row-save-blocked-dark');
         await scan(page, 'row-save-blocked-dark');
+        await expect(rowInput).toHaveValue('10001');
+        await expect(rowError).toBeVisible();
         await page.evaluate(() => document.documentElement.classList.remove('dark'));
 
         await rowInput.fill('');

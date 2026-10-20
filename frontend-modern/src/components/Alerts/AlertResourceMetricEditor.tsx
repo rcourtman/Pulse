@@ -1,4 +1,4 @@
-import { createEffect, createSignal, createUniqueId, on, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, on, Show } from 'solid-js';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import {
   getAlertResourceTableMetricInputTitle,
@@ -45,6 +45,15 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
       ? defaultCell().isOff
       : isAlertResourceMetricOff(props.value, props.inheritedDefault);
   const follows = () => isDefault() && defaultCell().follows;
+  // Parent focus and sibling-field updates can recreate their props object
+  // without changing this limit. Only an actual value/state change may replace
+  // the native input's rejected draft or clear its inline error.
+  const acceptedValue = createMemo(() => props.value);
+  const acceptedOff = createMemo(isOff);
+  const acceptedFollows = createMemo(follows);
+  const displayedValue = createMemo(() =>
+    acceptedOff() || acceptedFollows() ? '' : (acceptedValue() ?? ''),
+  );
   // A thresholds page holds dozens of alike inputs and On/Off badges. Each
   // names its metric, and an override its resource, so assistive tech and
   // voice control can tell them apart; the column header alone is not read
@@ -61,7 +70,7 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
   // Off, inherit, reset and a refreshed saved policy replace the numeric draft.
   // An ignored invalid keystroke does not change props.value, so keeps its error.
   createEffect(
-    on([() => props.value, isOff, follows], () => {
+    on([acceptedValue, acceptedOff, acceptedFollows], () => {
       inputElement?.setCustomValidity('');
       setInputError('');
     }),
@@ -106,7 +115,7 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
             min={bounds().min}
             max={bounds().max}
             step={getAlertResourceMetricStep(props.metric)}
-            value={isOff() || follows() ? '' : (props.value ?? '')}
+            value={displayedValue()}
             placeholder={
               follows() && !isOff()
                 ? props.fallback?.label

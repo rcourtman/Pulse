@@ -10657,3 +10657,11 @@ light mode and light text in dark mode, rather than low-contrast mid-tone
 colours. Fill colours and interaction are unchanged. Slider presentation and
 component regressions preserve the text/fill distinction; the browser audits
 all four metric colours, including the temperature consumer, in both themes.
+
+An unrelated parent or focus update must not overwrite the rejected native
+draft with the last accepted value or withdraw its error. The shared numeric
+editor memoizes accepted value/state boundaries. Implicit desktop row blur
+checks validity without forcing focus back during the blur event; explicit
+policy/card Save still reveals and focuses the first invalid field. The
+browser checks both the rejected value and visible error before and after its
+light/dark captures, following the pixel review that caught the earlier reset.

@@ -35,6 +35,31 @@ function editor(scope: 'default' | 'override' = 'default', initial: number | und
 }
 
 describe('threshold draft validation', () => {
+  it('keeps an invalid draft and error through an unrelated parent update', () => {
+    let update!: () => void;
+    const view = render(() => {
+      const [limits, setLimits] = createSignal({ cpu: 80, memory: 85 });
+      update = () => setLimits((current) => ({ ...current, memory: 86 }));
+      return (
+        <AlertResourceMetricEditor
+          metric="cpu"
+          column="CPU %"
+          scope="default"
+          layout="table"
+          value={limits().cpu}
+          onChange={() => {}}
+        />
+      );
+    });
+    const input = screen.getByRole('spinbutton');
+    fireEvent.input(input, { target: { value: '150' } });
+    update();
+    expect(input).toHaveValue(150);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription('Enter a number from 1 to 100.');
+    expect(validateAlertThresholdEditors(view.container, false)).toBe(input);
+  });
+
   it.each(['0', '-1', '101', '150'])('keeps %s out of the draft and names the error', (value) => {
     const { input, change, container } = editor();
     fireEvent.input(input, { target: { value } });

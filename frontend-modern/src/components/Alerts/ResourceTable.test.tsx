@@ -255,7 +255,7 @@ describe('ResourceTable', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save threshold edits for web-01' }));
       else fireEvent.focusOut(input, { relatedTarget: null });
       expect(props.onSaveEdit).not.toHaveBeenCalled();
-      expect(input).toHaveFocus();
+      if (mobile) expect(input).toHaveFocus();
       expect(input).toHaveAttribute('aria-invalid', 'true');
       fireEvent.input(input, { target: { value: '125.5' } });
       if (mobile)

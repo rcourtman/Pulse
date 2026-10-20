@@ -18,7 +18,10 @@ export function getAlertThresholdInputError(input: HTMLInputElement): string {
   return '';
 }
 
-export function validateAlertThresholdEditors(root: ParentNode): HTMLInputElement | undefined {
+export function validateAlertThresholdEditors(
+  root: ParentNode,
+  focus = true,
+): HTMLInputElement | undefined {
   let firstInvalid: HTMLInputElement | undefined;
   for (const input of root.querySelectorAll<HTMLInputElement>('[data-alert-threshold-editor]')) {
     const message = getAlertThresholdInputError(input);
@@ -29,7 +32,7 @@ export function validateAlertThresholdEditors(root: ParentNode): HTMLInputElemen
     input.dispatchEvent(new Event('invalid', { cancelable: true }));
     firstInvalid ??= input;
   }
-  if (firstInvalid) {
+  if (firstInvalid && focus) {
     // A group can be folded after an invalid edit. Use its existing disclosure
     // control to reveal the error before moving keyboard focus to the field.
     const folded = firstInvalid.closest<HTMLElement>('[inert][id]');

@@ -144,7 +144,9 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
   };
 
   const saveEditing = (row: ParentNode) => {
-    if (validateAlertThresholdEditors(row)) return;
+    // Blur is not an explicit Save action: leave focus where the user put it.
+    // Refocusing here can reopen/remount a virtual row while blur is bubbling.
+    if (validateAlertThresholdEditors(row, false)) return;
     hasEditingFocus = false;
     props.onSaveEdit(props.resource.id);
     props.setActiveMetricInput(null);
