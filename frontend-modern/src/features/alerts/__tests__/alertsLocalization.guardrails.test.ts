@@ -101,8 +101,9 @@ describe('alerts overview localization guardrails', () => {
 
   it('prevents migrated alerts overview copy from reverting to hardcoded English', () => {
     for (const source of migratedAlertsSurfaceSources) {
+      const code = withoutComments(source);
       for (const copy of migratedAlertsOverviewCopy) {
-        expect(withoutComments(source)).not.toContain(copy);
+        expect(code).not.toContain(copy);
       }
     }
 
