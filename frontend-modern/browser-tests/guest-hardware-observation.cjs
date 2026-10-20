@@ -27,7 +27,7 @@ const report = {
   limits:
     'Synthetic canonical deltas and scoped HTTP disk responses, real merger/useWorkloads/GuestDrawer/SMART/RAID/CSS. No live collection, guest probe, hardware health, thaw, filesystem writes, installed recovery or release acceptance.',
 };
-let server, browser, context;
+let server, browser, context, currentPage;
 const save = () =>
   fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n');
 (async () => {
@@ -139,6 +139,7 @@ const save = () =>
       });
       report.cleanup.contexts_created++;
       const page = await context.newPage();
+      currentPage = page;
       page.setDefaultTimeout(10000);
       const record = {
         name,
@@ -150,9 +151,14 @@ const save = () =>
         requests: [],
         errors: [],
         failed: [],
+        resource_response_headers: [],
       };
       report.profiles.push(record);
       page.on('pageerror', (error) => record.errors.push(error.message));
+      page.on('response', (response) => {
+        if (new URL(response.url()).pathname === '/api/resources')
+          record.resource_response_headers.push({ status: response.status(), at: Date.now() });
+      });
       page.on('console', (message) => {
         if (message.type() === 'error') record.errors.push(message.text());
       });
@@ -323,7 +329,9 @@ const save = () =>
       await page.waitForFunction(() => window.__guestHardware?.evidence().projected);
       const drawer = page.getByRole('region', { name: 'Workload drawer' });
       const row = drawer.getByTestId('guest-physical-disk');
-      await expect(row).toHaveCount(1);
+      // The scoped reader has a 20-second deadline. Do not mistake Playwright's
+      // shorter default 5-second assertion limit for completed read failure.
+      await expect(row).toHaveCount(1, { timeout: 20_000 });
       const summary = row.locator('summary');
       if (width < 768) await summary.tap();
       else {
@@ -515,6 +523,7 @@ const save = () =>
       assert.deepEqual(record.errors, []);
       await context.close();
       context = undefined;
+      currentPage = undefined;
       report.cleanup.contexts_closed++;
       await browser.close();
       browser = undefined;
@@ -524,6 +533,14 @@ const save = () =>
     report.result = 'passed';
   } catch (error) {
     report.error = { name: error.name, message: error.message, stack: error.stack };
+    if (currentPage) {
+      // This fixture has no real credentials or customer fields. Preserve the
+      // actual failed surface rather than assigning a cause to missing pixels.
+      report.failure_surface_text = (await currentPage.locator('body').innerText()).slice(0, 16000);
+      const file = `failure-${report.profiles.at(-1)?.name || 'unknown'}.png`;
+      await currentPage.screenshot({ path: path.join(output, file), animations: 'disabled' });
+      report.captures.push({ file, sha256: hash(fs.readFileSync(path.join(output, file))) });
+    }
     process.exitCode = 1;
   } finally {
     if (context) {
