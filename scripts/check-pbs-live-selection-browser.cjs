@@ -62,6 +62,17 @@ const { chromium } = require('playwright');
       await page.goto('http://127.0.0.1:5198/proxmox/backups/date?q=guest-100', { waitUntil: 'commit' });
       const snapshots = [];
       const observations = [];
+      const capture = async (name, subject) => {
+        await subject.scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.fonts.ready);
+        // Visibility is not settled pixels: the empty-state fade may still
+        // be running, and a narrow table row can sit below the viewport.
+        await page.waitForFunction(() => !document.getAnimations().some(animation =>
+          animation.playState === 'running' && Number.isFinite(animation.effect?.getComputedTiming().iterations)));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await page.screenshot({ path: path.join(out, name), fullPage: true });
+        snapshots.push(name);
+      };
       for (const phase of phases) {
         activePhase = phase;
         if (phase !== 'initial') {
@@ -73,7 +84,13 @@ const { chromium } = require('playwright');
           assert(reads[phase] > before, 'refresh must consume this exact producer frame');
         }
         const count = frames[phase].backups.length;
-        await page.getByText(`${count} restore points`, { exact: false }).first().waitFor();
+        try {
+          await page.getByText(`${count} restore points`, { exact: false }).first().waitFor();
+        } catch (error) {
+          await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true });
+          fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ width, phase, count, reads, errors, text: await page.locator('body').innerText() }, null, 2));
+          throw error;
+        }
         const target = frames[phase].backups.find(backup => backup.vmid === '100');
         let rowText = '';
         if (target) {
@@ -90,6 +107,7 @@ const { chromium } = require('playwright');
             const text = await page.getByRole('dialog').innerText();
             assert(text.includes(state));
             assert(text.includes('guest responsiveness') && text.includes('successful restore'), 'evidence must retain its safety limit');
+            await capture(`${width}-${phase}-evidence.png`, page.getByRole('dialog'));
             await page.keyboard.press('Escape');
             await page.getByRole('dialog').waitFor({ state: 'hidden' });
             await evidence.focus();
@@ -101,10 +119,10 @@ const { chromium } = require('playwright');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         observations.push({ phase, fullProducerRows: count, selectedTarget: target?.id ?? null, rowText });
         if (['changed', 'denied', 'recovered'].includes(phase)) {
-          await page.evaluate(() => document.fonts.ready);
-          const capture = `${width}-${phase}.png`;
-          await page.screenshot({ path: path.join(out, capture), fullPage: true });
-          snapshots.push(capture);
+          const subject = target
+            ? page.locator(`[data-proxmox-backup-key="artifact:pbs:${target.id}"]`)
+            : page.getByText('No recoverable artifacts match current filters', { exact: true });
+          await capture(`${width}-${phase}.png`, subject);
         }
       }
       assert.deepEqual(errors, []);
