@@ -4526,6 +4526,24 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Paid Docker broker image identity
+
+The public updater accepts both supported Docker response shapes: the current
+broker's already digest-pinned `image`, and the legacy bare image plus
+`image_digest`. A pinned image must agree exactly with the validated digest;
+empty, conflicting or double pins withhold the commands. Both Compose commands
+must still reference that same pin. The reader preserves the broker's image,
+login and Compose strings rather than appending a second digest or rebuilding
+the operator's project/file/service selection. Authentication, channel rules
+and archive verification are unchanged.
+
+`TestProDockerUpdateCommandsImageShapes` covers both identities and fail-closed
+alternatives; `TestCheckProUpdatesDockerBrokerImageShapes` exercises the real
+authenticated HTTP reader into update-check JSON. The shared reader also serves
+the Docker runtime-switch guide. Synthetic HTTP and consuming desktop/phone
+proof establish source compatibility, not an installed registry login, the
+separate credential-guidance repair, or published availability.
+
 ### Registered Windows native-exit completion proof (8 October 2026)
 
 The workflow's seven immediate native exit checks and the lifecycle harness's
