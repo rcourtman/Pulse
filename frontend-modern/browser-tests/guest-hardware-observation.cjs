@@ -130,7 +130,11 @@ const save = () =>
         if (message.type() === 'error') record.errors.push(message.text());
       });
       page.on('requestfailed', (request) =>
-        record.failed.push({ path: new URL(request.url()).pathname, failure: request.failure() }),
+        record.failed.push({
+          url: request.url(),
+          path: new URL(request.url()).pathname,
+          failure: request.failure(),
+        }),
       );
       await page.routeWebSocket('**/*', (socket) => socket.close());
       let diskMode = 'current';
@@ -246,6 +250,38 @@ const save = () =>
             ? { capabilities: [], limits: [], max_history_days: 7, runtime: { build: 'community' } }
             : { enabled: true, activationState: 'active' },
         });
+      });
+      // History chart replacement/unmount can cancel a pending fetch. Retain
+      // every failed request and require a matching observed client AbortSignal;
+      // a network error, unmatched cancellation or asset failure still fails.
+      await page.addInitScript(() => {
+        const audit = [];
+        window.__guestHardwareFetchAudit = audit;
+        const original = window.fetch;
+        window.fetch = function (input, init) {
+          const url = new URL(
+            typeof input === 'string' || input instanceof URL ? input : input.url,
+            window.location.href,
+          ).href;
+          if (new URL(url).pathname !== '/api/metrics-store/history')
+            return original.call(this, input, init);
+          const signal = init?.signal || (input instanceof Request ? input.signal : undefined);
+          const item = {
+            id: audit.length,
+            url,
+            signal_observed: Boolean(signal),
+            aborted: Boolean(signal?.aborted),
+          };
+          audit.push(item);
+          signal?.addEventListener(
+            'abort',
+            () => {
+              item.aborted = true;
+            },
+            { once: true },
+          );
+          return original.call(this, input, init);
+        };
       });
       await page.addInitScript(
         (dark) =>
@@ -417,8 +453,35 @@ const save = () =>
         ),
         'stored disk History was consumed',
       );
+      await page.waitForLoadState('networkidle');
+      record.history_fetch_audit = await page.evaluate(() => window.__guestHardwareFetchAudit);
+      const observedAborts = record.history_fetch_audit.filter(
+        (item) => item.signal_observed && item.aborted,
+      );
+      const matched = new Set();
+      for (const failed of record.failed) {
+        assert.equal(
+          failed.path,
+          '/api/metrics-store/history',
+          'only a stored History fetch may be cancelled',
+        );
+        assert(
+          ['net::ERR_ABORTED', 'cancelled', 'Cancelled', 'Load cancelled'].includes(
+            failed.failure?.errorText,
+          ),
+          'unexpected request failure',
+        );
+        const owner = observedAborts.find(
+          (item) => item.url === failed.url && !matched.has(item.id),
+        );
+        assert(owner, 'failed request has no matching observed client abort signal');
+        matched.add(owner.id);
+      }
+      record.verified_client_aborts = matched.size;
+      record.cases.push(
+        'Every failed request is a stored History cancellation matched one-to-one to its observed client AbortSignal. All non-abort failures remain fatal.',
+      );
       assert.deepEqual(record.errors, []);
-      assert.deepEqual(record.failed, []);
       await context.close();
       context = undefined;
       report.cleanup.contexts_closed++;
