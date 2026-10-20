@@ -121,7 +121,7 @@ let payload, server, browser;
           await page.waitForFunction(() => document.querySelectorAll('[data-proxmox-backup-row="coverage"]').length === 2);
           assert.equal(await coverageRows.count(), 2, 'History cannot invent a different guest or parent row');
           const row = coverageRows.filter({ hasText: 'fixture-guest' });
-          const toggle = row.getByRole('button', { name: 'Expand details for fixture-guest', exact: true });
+          const toggle = row.getByRole('button', { name: /^Expand details for fixture-guest/ });
           if (phone) await row.locator('[data-backup-workload-target]').tap(); else { await toggle.focus(); await toggle.press('Enter'); }
           const detail = page.locator('[data-backup-task-detail]');
           await detail.waitFor();
@@ -139,7 +139,7 @@ let payload, server, browser;
             await page.screenshot({ path: file, fullPage: true });
             result.captures.push({ file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
           }
-          const collapse = row.getByRole('button', { name: 'Collapse details for fixture-guest', exact: true });
+          const collapse = row.getByRole('button', { name: /^Collapse details for fixture-guest/ });
           if (phone) await row.locator('[data-backup-workload-target]').tap(); else { await collapse.focus(); await collapse.press('Enter'); }
           await detail.waitFor({ state: 'hidden' });
           const date = page.getByRole('link', { name: 'By date', exact: true });
