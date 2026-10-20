@@ -49,6 +49,11 @@ jobs:
         with:
           app-id: 2484142
           private-key: ${{ secrets.PULSE_TRIAGE_APP_PRIVATE_KEY }}
+          # The helper reads issues/events and changes labels, not source or
+          # Actions. Never inherit the App installation's full permissions.
+          owner: rcourtman
+          repositories: Pulse
+          permission-issues: write
 
       - name: Sync issue version metadata
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

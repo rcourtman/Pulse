@@ -294,6 +294,50 @@ function createCore() {
   };
 }
 
+test("label sync needs only same-repository issue methods, including delayed topic history", async () => {
+  for (const delayed of [false, true]) {
+    const issue = {
+      number: 3071,
+      title: "Wrong readings",
+      body: "### Pulse version\n6.5.0\n\n### Additional actionable topics\nAlso cannot save the interval.",
+      labels: [{ name: "bug" }, { name: "needs-version-info" }],
+      updated_at: "2026-10-08T10:00:00Z",
+    };
+    const { github, calls } = createGithub({
+      currentIssue: { ...issue, state: "open", ...(delayed ? { updated_at: "2026-10-08T10:01:00Z" } : {}) },
+      issueEvents: [],
+    });
+    const issueMethods = new Set(["get", "getLabel", "createLabel", "addLabels", "removeLabel", "listEvents"]);
+    const scopedIssues = new Proxy(github.rest.issues, {
+      get(target, method) {
+        assert.ok(issueMethods.has(method), `unexpected issue API: ${String(method)}`);
+        if (method === "listEvents") return target[method];
+        return async args => {
+          assert.equal(args.owner, "rcourtman");
+          assert.equal(args.repo, "Pulse");
+          return target[method](args);
+        };
+      },
+    });
+    github.rest = new Proxy({ issues: scopedIssues }, {
+      get(target, resource) {
+        assert.equal(resource, "issues", "label sync must not require source, Actions or other repository permissions");
+        return target.issues;
+      },
+    });
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-decomposition", "affects-6.5.0"]);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0", "needs-decomposition"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+    assert.equal(calls.eventHistory.length, delayed ? 1 : 0);
+    if (delayed) {
+      assert.deepEqual(calls.eventHistory[0], {
+        owner: "rcourtman", repo: "Pulse", issue_number: 3071, per_page: 100,
+      });
+    }
+  }
+});
+
 test("syncLabels classifies older bug reports without requesting a retest", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
   const issue = {

@@ -18,6 +18,25 @@
 
 ## Purpose
 
+### Issue label automation does not inherit the App's full grant
+
+`issue-version-label-sync.yml` requests a short-lived App token for only
+`rcourtman/Pulse`, with `permission-issues: write`. It must not inherit the
+installation's source, Actions, administration or other repository grants.
+GitHub's implicit metadata read remains necessary. The pinned token action's
+normal post-job revocation remains enabled. Parser checks still precede minting;
+read-only job permissions, no persisted checkout credential, and disabled
+credential-job caching are unchanged. This does not alter the App installation
+or any other maintainer identity's authority.
+
+`triage-comment-policy.test.cjs` checks the actual issuer's exact input map and
+rejects omitted, wider, duplicate and misplaced grants. The restricted-client
+control in `issue-version-triage.test.cjs` runs the real helper's issue reads,
+label creation/addition/removal and delayed event-history consumer without
+source or Actions APIs. Source proof is not provider token issuance or live
+issue-mutation acceptance; the published workflow's next issue event supplies
+that separate observation.
+
 ### Private lifecycle values cannot lose NUL bytes through a shell
 
 The descriptor-safe Go reader rejects any NUL before returning a private value
