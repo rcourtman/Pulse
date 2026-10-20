@@ -17,17 +17,14 @@ export function getProRegistryLogin(
   if (!docker.loginCommand) return null;
   const legacy =
     /^printf '%s' '<activation-key>' \| docker login ([a-zA-Z0-9.:-]+) -u '([a-zA-Z0-9_.@-]+)' --password-stdin$/;
-  const prompt = /^docker login ([a-zA-Z0-9.:-]+) (?:-u|--username) '([a-zA-Z0-9_.@-]+)'$/;
-  // Current brokers quote the registry. Remove only paired quotes around an
-  // inert host token before matching the same complete command grammar.
-  const command = docker.loginCommand.replace(
-    /^docker login '([a-zA-Z0-9.:-]+)' /,
-    'docker login $1 ',
-  );
-  const match = legacy.exec(command) ?? prompt.exec(command);
-  if (!match) return { note: UNRECOGNISED_LOGIN_NOTE };
+  const prompt = /^docker login ('?)([a-zA-Z0-9.:-]+)\1 (?:-u|--username) '([a-zA-Z0-9_.@-]+)'$/;
+  // Return the same [registry, username] pair from either complete grammar.
+  // The prompt's delimiter capture/backreference requires paired host quotes.
+  const identity =
+    legacy.exec(docker.loginCommand)?.slice(1) ?? prompt.exec(docker.loginCommand)?.slice(2);
+  if (!identity) return { note: UNRECOGNISED_LOGIN_NOTE };
 
-  const [, registry, username] = match;
+  const [registry, username] = identity;
   // Bind login to the image's registry, not an unrelated credential receiver.
   // Restrict host/port and username to inert shell tokens; a secret in place of
   // a username is not a supported login identity either.
