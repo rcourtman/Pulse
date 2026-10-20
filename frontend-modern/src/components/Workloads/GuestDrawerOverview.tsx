@@ -1,5 +1,6 @@
 import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getGuestNetworkLastKnownReason } from '@/utils/guestNetworkObservation';
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
 import {
@@ -142,8 +143,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   // the guest, so its RAID, network and filesystem rows read as last known.
   const agentLastKnownReason = () =>
     props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
-  const networkLastKnownReason = () =>
-    props.guest.networkInterfacesFromAgent === false ? undefined : agentLastKnownReason();
+  const networkLastKnownReason = () => getGuestNetworkLastKnownReason(props.guest);
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -336,15 +336,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         ? {
             label: 'Network',
             rows: compactDetailRows([
-              // Agent freshness applies only to the selected agent list,
-              // not interfaces supplied independently by Proxmox.
-              makeDetailRow(
-                'Status',
-                networkLastKnownReason()
-                  ? 'Using last known interface details. The Pulse Agent in this guest stopped reporting.'
-                  : null,
-                { layout: 'stacked', wrap: true },
-              ),
+              makeDetailRow('Status', networkLastKnownReason(), {
+                layout: 'stacked',
+                wrap: true,
+              }),
               ...props.networkInterfaces.slice(0, 4).map((iface, index) => {
                 const addresses = iface.addresses ?? [];
                 const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
@@ -440,7 +435,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       props.guest.cpus ? `${props.guest.cpus} vCPU` : '',
       memoryFact(),
       diskFact(),
-      props.ipAddresses[0] ?? '',
+      props.ipAddresses[0]
+        ? `${networkLastKnownReason() ? 'Last known IP ' : ''}${props.ipAddresses[0]}`
+        : '',
       // A late or missing backup is listed under Worth checking instead.
       supportsBackup() && protectionPresentation().tone === 'success'
         ? `Last completed backup ${protectionPresentation().label}`

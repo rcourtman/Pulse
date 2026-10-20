@@ -2,7 +2,7 @@ import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 
 interface WorkloadReadingStatusProps {
-  metric: 'Memory' | 'Disk';
+  metric: 'Memory' | 'Disk' | 'Network';
   guestId: string;
   guestName: string;
   label: string;
@@ -38,6 +38,7 @@ export function WorkloadReadingStatus(props: WorkloadReadingStatusProps) {
       <p
         data-workload-memory-read-status={props.metric === 'Memory' ? '' : undefined}
         data-workload-disk-read-status={props.metric === 'Disk' ? '' : undefined}
+        data-workload-network-read-status={props.metric === 'Network' ? '' : undefined}
         class={`mt-0.5 text-center text-[10px] leading-none ${
           props.needsAction ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
         }`}

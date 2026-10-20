@@ -131,6 +131,7 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
 function NetworkInfoCell(props: {
   ipAddresses: string[];
   networkInterfaces: GuestNetworkInterface[];
+  lastKnownReason?: string | null;
 }) {
   const tip = useTooltip();
 
@@ -173,6 +174,9 @@ function NetworkInfoCell(props: {
         y={tip.pos().y}
       >
         <div class="min-w-[180px] max-w-[280px]">
+          <Show when={props.lastKnownReason}>
+            <p class="mb-2 whitespace-normal wrap-break-word text-muted">{props.lastKnownReason}</p>
+          </Show>
           <div class="font-medium mb-1 text-base-content border-b border-border pb-1">
             Network Interfaces
           </div>
