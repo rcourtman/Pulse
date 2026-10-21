@@ -171,7 +171,7 @@ export function getMobileNavTabCountSuffix(tab: MobileNavBarUtilityTab): string 
   const badges = getMobileNavAlertBadgeCounts(tab);
   if (!badges) {
     if (tab.count && tab.count > 0) {
-      return `: ${tab.countLabel ?? `${tab.count} items`}`;
+      return tab.countLabel ?? `${tab.count} items`;
     }
     return '';
   }
@@ -182,7 +182,7 @@ export function getMobileNavTabCountSuffix(tab: MobileNavBarUtilityTab): string 
   if (badges.warning > 0) {
     parts.push(`${badges.warning} warning`);
   }
-  return parts.length ? `: ${parts.join(', ')}` : '';
+  return parts.join(', ');
 }
 
 export function getMobileNavTabButtonClass(options: {

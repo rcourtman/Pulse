@@ -216,7 +216,7 @@ function api(req, res, next) {
         exact: true,
       });
       await expect(
-        nav.getByRole('link', { name: 'Actions: 6 actions await approval', exact: true }),
+        nav.getByRole('link', { name: 'Actions 6 actions await approval', exact: true }),
       ).toBeVisible();
       for (const link of await nav.getByRole('link').all()) {
         if (binding.phase === 'after') await expect(link).not.toHaveAttribute('aria-label');
@@ -230,10 +230,10 @@ function api(req, res, next) {
       await capture('actions-with-counts');
       if (binding.phase === 'after') {
         const alerts = (name) => nav.getByRole('link', { name, exact: true });
-        await expect(alerts('Alerts: 2 critical, 3 warning')).toBeVisible();
-        await expect(alerts('Alerts: 2 critical, 3 warning')).toHaveAttribute('href', '/alerts');
+        await expect(alerts('Alerts 2 critical, 3 warning')).toBeVisible();
+        await expect(alerts('Alerts 2 critical, 3 warning')).toHaveAttribute('href', '/alerts');
         await expect(
-          nav.getByRole('link', { name: 'Actions: 6 actions await approval', exact: true }),
+          nav.getByRole('link', { name: 'Actions 6 actions await approval', exact: true }),
         ).toHaveAttribute('aria-current', 'page');
         current.checks.push(
           'The actual shell renders the two critical and three warning badges with the same complete accessible name on desktop and phone.',
@@ -248,12 +248,12 @@ function api(req, res, next) {
             { id: 'live-warning', level: 'warning', acknowledged: false },
             { id: 'acknowledged-critical', level: 'critical', acknowledged: true },
           ],
-          'Alerts: 1 warning',
+          'Alerts 1 warning',
         );
         await scan('actions-warning-only');
         await setAlerts(
           [{ id: 'live-critical', level: 'critical', acknowledged: false }],
-          'Alerts: 1 critical',
+          'Alerts 1 critical',
         );
         await scan('actions-critical-only');
         await setAlerts(

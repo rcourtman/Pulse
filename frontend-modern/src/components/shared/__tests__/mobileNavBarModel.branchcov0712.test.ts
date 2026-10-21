@@ -120,7 +120,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 12,
         countLabel: '12 pending',
       });
-      expect(getMobileNavTabCountSuffix(tab)).toBe(': 12 pending');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('12 pending');
     });
 
     it('synthesizes "N items" when countLabel is absent (default count text)', () => {
@@ -130,7 +130,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 12,
         countLabel: undefined,
       });
-      expect(getMobileNavTabCountSuffix(tab)).toBe(': 12 items');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('12 items');
     });
 
     it('returns no suffix for an alerts tab whose breakdown is all zeros (parts.length === 0 arm)', () => {
@@ -150,7 +150,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 3, warning: 0 },
       });
-      expect(getMobileNavTabCountSuffix(tab)).toBe(': 3 critical');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('3 critical');
     });
 
     it('lists only warning when critical is 0 (critical push guard false)', () => {
@@ -160,7 +160,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 0, warning: 2 },
       });
-      expect(getMobileNavTabCountSuffix(tab)).toBe(': 2 warning');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('2 warning');
     });
 
     it('joins both severities with a comma when both are > 0', () => {
@@ -170,7 +170,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 10,
         breakdown: { critical: 3, warning: 7 },
       });
-      expect(getMobileNavTabCountSuffix(tab)).toBe(': 3 critical, 7 warning');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('3 critical, 7 warning');
     });
   });
 
