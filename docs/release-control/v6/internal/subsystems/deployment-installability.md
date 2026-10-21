@@ -2582,6 +2582,9 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 
 ## Canonical Files
 
+Toolchain acquisition: `scripts/install-go-toolchain.sh`, with executable
+transport and private-file controls in `scripts/tests/test_install_go_toolchain.py`.
+
 1. `internal/updates/`
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
@@ -4556,6 +4559,31 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+### Private authenticated Go toolchain inputs
+
+The developer toolchain installer reads a single stable `goX.Y.Z` pin (or its
+governed default when the pin file is absent) without writing source via sudo.
+It downloads the archive and its official SHA-256 into a fresh private directory
+for each invocation, never reusing the former shared `go-install` cache.
+Curl ignores saved configuration and proxies, permits only HTTPS including
+redirects, and uses five-second connection and 300/60-second archive/digest
+budgets without automatic retry. Both downloads and one complete 64-hex digest
+must succeed and match before any privileged install command. Failure and
+handled HUP/INT/TERM remove the private downloads, preserving a failed exit.
+The selected compiler, archive origin and existing privileged install sequence
+are unchanged; this is not an atomic installation/recovery transaction.
+
+`scripts/tests/test_install_go_toolchain.py` executes the complete script with
+real curl and a disposable HTTPS origin; only sudo is an inert recorded
+boundary. It covers private fresh files, saved insecure configuration, proxy
+exclusion, concurrent downloads, certificate/downgrade/status/partial-response
+refusal, pin and digest validation, missing-pin fallback, allocator/privileged
+failures and TERM cleanup. The unchanged helper also meets a short fixture
+total deadline, while full-script controls pin the real production budgets.
+Normal smoke discovery includes this suite. These are source/transport proofs,
+not a real Go installation, host activation, compiled-product qualification or
+resolution of a missing current-compiler dependency.
 
 ### Unix installer certificate probing has a total deadline
 

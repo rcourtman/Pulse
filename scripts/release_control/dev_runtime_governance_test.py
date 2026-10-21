@@ -5,6 +5,20 @@ from subsystem_lookup import lookup_paths
 
 
 class DevRuntimeGovernanceTest(unittest.TestCase):
+    def test_go_installer_requires_its_private_transport_controls(self) -> None:
+        result = lookup_paths(["scripts/install-go-toolchain.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        entry = result["files"][0]
+        self.assertEqual(entry["classification"], "runtime")
+        self.assertEqual(len(entry["matches"]), 1)
+        match = entry["matches"][0]
+        self.assertEqual(match["subsystem"], "deployment-installability")
+        proof = match["verification_requirement"]
+        self.assertEqual(proof["id"], "toolchain-installer-download")
+        self.assertFalse(proof["allow_same_subsystem_tests"])
+        self.assertEqual(proof["test_prefixes"], [])
+        self.assertEqual(proof["exact_files"], ["scripts/tests/test_install_go_toolchain.py"])
+
     def test_e2e_image_distribution_has_exact_scoped_proof(self) -> None:
         files = [
             ".github/workflows/test-e2e.yml",

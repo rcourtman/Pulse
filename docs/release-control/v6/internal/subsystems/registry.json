@@ -4705,6 +4705,7 @@
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
         "scripts/install-docker.sh",
+        "scripts/install-go-toolchain.sh",
         "scripts/install-mcp.ps1",
         "scripts/install-mcp.sh",
         "scripts/install.ps1",
@@ -5270,6 +5271,19 @@
               "scripts/tests/test-toggle-mock.sh",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
+            ]
+          },
+          {
+            "id": "toolchain-installer-download",
+            "label": "Go toolchain private authenticated download proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install-go-toolchain.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_install_go_toolchain.py"
             ]
           },
           {
