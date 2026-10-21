@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "49d437331ea8bed816c01edea961fa6588136ed2",
+  "verified_at": "2026-10-21T10:39:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
+    "frontend-modern/src/utils/licensePresentation.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx": "f7ddde74cf49d595cf6cde00c6b7b71b291e451850dd17ad46b0fcfc6c557ce5",
+    "frontend-modern/src/utils/licensePresentation.ts": "16d72348980fa7d5e48f3642cfbd6787e241b6b52e301a78aaf3dd97a8fc7609",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "8ceb6e402f57c4d40a4a515f2f85a135e25a47822bea0ce577daad03f0c9cb84"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Community stack built from this content: mock estate, no licence, licence server stubbed",
+    "Dark theme 1440px: Pro card with tinted header (Available plans, Pulse Pro, tagline), $79/year with or $8.99/month, primary View plans button, then three grouped columns with check marks",
+    "Light theme 1440px: same layout with readable contrast in header and groups",
+    "Light theme 375px: header stacks, full-width View plans button, groups stack in one column, scrollWidth equals viewport width",
+    "After the pass, ProLicensePlanSection.tsx changed only its prop type annotation to the shared SelfHostedPlanComparisonCardPresentation type; TypeScript types are erased at build, so the rendered card is unchanged"
+  ],
+  "interactions": [
+    "Located the card as the Pulse Pro plan region and scrolled it into view in each theme and width",
+    "Confirmed View plans is a primary button targeting /auth/license-purchase-start"
+  ]
+}
