@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "c82daa3f441c4abc81cd46f270e5745ccdf99f2c",
+  "verified_at": "2026-10-21T05:42:27.126Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f6dcc083d7f6ddb8169066e595e1e5c7747a6688730bedf03ac642a94958e560"
+  },
+  "routes": [
+    "/tmp/lxc-disk-availability/fixture.html"
+  ],
+  "states": [
+    "Proxmox LXC missing canonical disk metric and capacity-only aggregate are No data, not measured zero, in bars and sparklines",
+    "Independently current linked Pulse agent filesystem stays usable while aggregate remains missing",
+    "Normal measured-zero HTTP replacement withdraws the cue/dialog without closing selected guest details",
+    "Templates, another platform and app-container kind do not inherit this LXC gap cue; positive measured aggregate resumes normally"
+  ],
+  "interactions": [
+    "Real HTTP API client/useWorkloads decoder feeds production GuestRow, complete GuestDrawer, Dialog and CSS",
+    "Desktop keyboard Space/Enter opens the existing disclosure, Tab traps focus, Escape restores the trigger; trusted touch taps work at 320px",
+    "Ordinary same-resource replacement removes the cue/dialog and focuses that same row disclosure without toggling its existing expanded drawer",
+    "Reading disclosure adds no API read or mutation; no off-origin request or page error",
+    "All eight final row/dialog/measured-zero captures opened with native view_image; full copy and No data cue legible without horizontal overflow"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "limits": "Synthetic canonical read-only HTTP, production row, complete drawer, resource mapper, dialog and CSS. No native LXC/storage/guest/backup/liveness/recovery, alert resolution, installation or release acceptance. Preview uses the existing Vite transforms and synthetic HTTP fixtures, not a whole-app navigation or production-asset acceptance. Full source build evidence is separate."
+}
