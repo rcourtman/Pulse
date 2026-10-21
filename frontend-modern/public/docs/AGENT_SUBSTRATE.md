@@ -156,11 +156,15 @@ Pulse; verification can be unavailable without proving that nothing ran.
   `--emit-notifications` to translate Pulse's SSE events into JSON-RPC
   notifications on the stdio channel, which lets an autonomous MCP-bound agent
   react to push events without holding a separate HTTP connection. The
-  one-line installers `install-mcp.sh` and `install-mcp.ps1` fetch the
+  release installers `install-mcp.sh` and `install-mcp.ps1` fetch the
   matching binary from the latest Pulse release, verify the checksum manifest
   against Pulse's pinned release key, and then verify the binary's checksum.
   They refuse installation when any integrity evidence is unavailable or
-  invalid. Building from source stays available.
+  invalid; they require `ssh-keygen` with `-Y verify` support. Download and
+  inspect a trusted release script before running it, rather than piping a
+  download into Bash or PowerShell. HTTPS and inspection do not cryptographically
+  authenticate the script itself. Neither installer needs an API token.
+  Building from source stays available.
 
 - **`cmd/agent-probe`** is a worked source example for discovery, triage,
   depth and push, not a production diagnostic tool. Its current credential input
@@ -198,10 +202,14 @@ Pulse; verification can be unavailable without proving that nothing ran.
 
 ## Known rough edges
 
-- **Unsigned macOS binary.** The installer verifies release checksums, but the
-  first launch of the macOS `pulse-mcp` binary can still show a Gatekeeper
-  warning because the binary is not notarised. Homebrew and other
-  package-manager distribution may follow.
+- **Release signatures are not platform approval.** The installers verify a
+  signed checksum manifest with Pulse's pinned release key before accepting
+  the binary's checksum. That is separate from Apple notarisation and Windows
+  Authenticode. A macOS `pulse-mcp` binary can pass Pulse's verification and
+  still be blocked by Gatekeeper because it is not notarised. Leave the block
+  in place; do not clear quarantine or bypass execution policy just to launch
+  it. Use your organisation's approved verification and distribution route.
+  Verification alone does not prove installation or a working MCP connection.
 
 - **Field acceptance is separate.** The in-app panel, adapters and contract
   fixtures do not establish every external client's compatibility, scale or
