@@ -1175,6 +1175,9 @@ describe('Docker native tables', () => {
                 lastChecked: '2026-05-24T13:00:00Z',
               },
             },
+            capabilities: [
+              { name: 'update', type: 'common', platform: 'docker', minimumApprovalLevel: 'admin' },
+            ],
           }),
         ]}
         emptyIcon={<span />}
