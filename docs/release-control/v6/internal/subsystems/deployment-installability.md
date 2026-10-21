@@ -6037,8 +6037,8 @@ governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
 The hosted control-plane source builder and integration mock builder are both
-on the reviewed `golang:1.26.9-alpine` digest
-`sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade`.
+on the reviewed `golang:1.26.10-alpine` digest
+`sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca`.
 `TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
 it does not pull the image, prove its registry contents, or qualify a deployed
 control plane. The release publisher's prebuilt control-plane target is a
@@ -6104,14 +6104,19 @@ generated row-level inventory that does prove completeness, needs a declarative 
 record in the preparation snapshot: a marker in the body alone could be deleted to restore
 legacy acceptance, and a frozen in-flight release keeps its own renderer.
 
-As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
-`1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
-call paths reported by `govulncheck` after the 2026-10-08 advisories, including
-`net/http`, `crypto/tls`, `html/template`, `os`, and `net/textproto`. The
+As of 2026-10-21, the governed release floor is Go `1.26.10`. It supersedes
+`1.26.9`, whose `crypto/x509` still verifies chains through the compromised
+eMudhra intermediate CAs that Go 1.26.10 distrusts (CVE-2026-111943, Go issue
+82345). Pulse's certificate-verifying outbound TLS clients, such as licence,
+update, webhook and AI-provider connections, verify chains with that package, so
+an older compiler leaves an interception path open even though `govulncheck`
+need not report a called symbol for a trust-store change. The 2026-10-11 floor
+of `1.26.9` remains the minimum for the 2026-10-08 `net/http`, `crypto/tls`,
+`html/template`, `os`, and `net/textproto` advisories, and the
 `golang.org/x/net` floor is `v0.60.0` for the same advisories. Source-built
 container stages pin the Docker Official Images manifest list for
-`golang:1.26.9-alpine`,
-`sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade`;
+`golang:1.26.10-alpine`,
+`sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
@@ -6135,6 +6140,12 @@ audit pass or consuming application qualification.
 Vitest migration must preserve test assertions while using constructable
 constructor mocks and explicit standalone mock-history cleanup. Dependency
 updates must retain the required full-graph audit rather than suppressing it.
+The same boundary keeps Vite on 6.x at or above `6.4.5`: 6.4.4 bundles the
+patched `launch-editor` (GHSA-587h-7wmj-h5pm, GHSA-r825-w8mm-5pxw,
+GHSA-698v-4r3x-3vcv) and 6.4.5 applies the dev-server `server.fs` check after
+stripping the query. These reach only the local dev server, never the built
+product, and the same proof file pins the manifest range and the single locked
+copy.
 
 The October deserialization/parsing advisory floors are Seroval `1.6.3`
 (GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp), postcss-selector-parser `7.1.6`

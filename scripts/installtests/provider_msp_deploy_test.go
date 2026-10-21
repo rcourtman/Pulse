@@ -15,7 +15,7 @@ func TestProviderMSPGoBuilderMatchesIntegrationMock(t *testing.T) {
 	// These builders use the same Go patch level and immutable image. The
 	// mock's build must not exercise a different compiler from the hosted
 	// control plane merely because Dependabot advanced one Dockerfile.
-	const expected = "golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade"
+	const expected = "golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca"
 	pattern := regexp.MustCompile(`(?m)^FROM (?:--platform=\$BUILDPLATFORM )?(golang:[^[:space:]]+) AS builder$`)
 	for _, path := range [][]string{
 		{"deploy", "provider-msp", "Dockerfile.control-plane"},
@@ -328,7 +328,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"FROM --platform=linux/amd64 node:24-alpine@sha256:"+node24Amd64FrontendDigest+" AS frontend-builder",
 		"npm ci",
 		"npm run build",
-		"FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:",
+		"FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:",
 		"FROM alpine:3.24@sha256:",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",
@@ -355,7 +355,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"CGO_ENABLED=0 go build -o /pulse-control-plane ./cmd/pulse-control-plane",
 	)
 	assertDigestPinnedDockerStage(t, text, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, text, `FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:`, ` AS builder`)
+	assertDigestPinnedDockerStage(t, text, `FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:`, ` AS builder`)
 	assertDigestPinnedDockerStage(t, text, `FROM alpine:3.24@sha256:`, ` AS control-plane-runtime-foundation`)
 }
 

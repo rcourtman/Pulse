@@ -556,6 +556,25 @@ proof cover date order, both boundaries, range changes, volume and clearing
 the day filter. This changes no route, posture, provider completion judgment
 or native recovery authority.
 
+### Locked update pill names the command-access option by its shared label (21 October 2026)
+
+For a host whose agent was installed without command access, the locked pill
+names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
+("Allow Pulse to run commands on this host") and the host to run the new
+install command on, instead of the retired "legacy combined command profile"
+wording and its advanced-options path.
+
+### Container update control offers only what the server advertises (21 October 2026)
+
+`UpdateButton` is live only when the server advertises the `update` capability
+and records no refusal for it. A recorded refusal, or no advertised capability
+(for example a host whose inventory is stale), renders the locked amber pill
+with the reason. When the refusal is a disconnected command agent and the
+host's agent facet reports no command access, the explanation names the host
+and the install option that grants access. The locked pill reads `Update` so
+it fits the Updates column at its narrowest; Local joins Pinned as a neutral
+uncheckable state rather than Check failed.
+
 
 ### Aggregate disk bars preserve percentage-only evidence (14 October 2026)
 

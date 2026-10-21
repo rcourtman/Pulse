@@ -10,12 +10,16 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"reflect"
+	"runtime"
+	"sort"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 func TestHistoryProjectionIncrementalReadersPreserveChronologyAndIsolation(t *testing.T) {
@@ -289,5 +293,392 @@ func TestHistoryProjectionWalksEveryLifecycleEventBeyondQueryCap(t *testing.T) {
 	}
 	if limited[0].ID != "history-cap-1204" || limited[24].ID != "history-cap-1180" {
 		t.Fatalf("limited projection order = %q ... %q", limited[0].ID, limited[24].ID)
+	}
+}
+
+// Windowed and limited history reads are answered from the one shared
+// full-history fold (#1803). Before, every read deep-copied the whole fold and
+// every Since read re-decoded each snapshot in its window. These tests hold
+// the shared answer equal to an independent walk of only the window's events,
+// which is the original algorithm.
+
+// referenceWindowedHistory is the original read path: a fresh fold of only
+// the events the log's Since filter admits, the live overlay, then the sort.
+func referenceWindowedHistory(t *testing.T, m *Manager, since time.Time, limit int) []Alert {
+	t.Helper()
+	type occurrence struct {
+		alert      Alert
+		firstEvent time.Time
+	}
+	occurrences := map[string]*occurrence{}
+	var order []string
+	err := m.eventLogStore().WalkOldest(eventlog.Filter{
+		Types: []string{
+			eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved,
+			eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged,
+			eventlog.TypeSnoozed, eventlog.TypeUnsnoozed, eventlog.TypeEscalated,
+			eventlog.TypeHistoryImported, eventlog.TypeHistoryCleared,
+		},
+		Since: since,
+	}, func(event eventlog.Event) error {
+		if event.Type == eventlog.TypeHistoryCleared {
+			occurrences = map[string]*occurrence{}
+			order = order[:0]
+			return nil
+		}
+		var snapshot Alert
+		if len(event.Snapshot) == 0 || json.Unmarshal(event.Snapshot, &snapshot) != nil {
+			return nil
+		}
+		key := historyOccurrenceKey(event.AlertID, &snapshot)
+		occ, exists := occurrences[key]
+		if !exists {
+			occ = &occurrence{alert: snapshot, firstEvent: event.OccurredAt}
+			occurrences[key] = occ
+			order = append(order, key)
+		} else {
+			occ.alert = mergeHistoryAlertSnapshots(occ.alert, snapshot)
+		}
+		if event.Type == eventlog.TypeResolved && event.OccurredAt.After(occ.alert.LastSeen) {
+			occ.alert.LastSeen = event.OccurredAt
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("reference walk: %v", err)
+	}
+	m.mu.RLock()
+	var active []*Alert
+	for storageKey, alert := range m.activeAlerts {
+		exported := cloneAlertForOutput(alert)
+		if exported.ID == "" {
+			exported.ID = effectiveAlertID(alert, storageKey)
+		}
+		active = append(active, exported)
+	}
+	m.mu.RUnlock()
+	for _, alert := range active {
+		key := historyOccurrenceKey(alert.ID, alert)
+		if occ, exists := occurrences[key]; exists {
+			ack, ackTime, ackUser := occ.alert.Acknowledged, occ.alert.AckTime, occ.alert.AckUser
+			occ.alert = *alert
+			if ack && !occ.alert.Acknowledged {
+				occ.alert.Acknowledged, occ.alert.AckTime, occ.alert.AckUser = true, ackTime, ackUser
+			}
+		} else if since.IsZero() || alert.StartTime.After(since) {
+			occurrences[key] = &occurrence{alert: *alert, firstEvent: alert.StartTime}
+			order = append(order, key)
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		return occurrences[order[i]].firstEvent.Before(occurrences[order[j]].firstEvent)
+	})
+	results := []Alert{}
+	for i := len(order) - 1; i >= 0; i-- {
+		if limit > 0 && len(results) >= limit {
+			break
+		}
+		results = append(results, occurrences[order[i]].alert)
+	}
+	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(results))
+}
+
+// writeRandomHistory appends a lifecycle history with acknowledgements on
+// both sides of window boundaries, out-of-order LastSeen values, uneven
+// fractional seconds (so RFC3339Nano text order and time order can differ),
+// same-instant events and a history clear. It returns every event time.
+func writeRandomHistory(t *testing.T, m *Manager, seed int64) []time.Time {
+	t.Helper()
+	rng := rand.New(rand.NewSource(seed))
+	store := m.eventLogStore()
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	kinds := []string{
+		eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeAcknowledged,
+		eventlog.TypeUnacknowledged, eventlog.TypeSnoozed, eventlog.TypeEscalated, eventlog.TypeResolved,
+	}
+	fractions := []time.Duration{0, 500 * time.Millisecond, 50 * time.Millisecond, 123456789}
+	var times []time.Time
+	at := base
+	for i := 0; i < 120; i++ {
+		if rng.Intn(4) != 0 {
+			at = at.Add(time.Duration(rng.Intn(3)) * time.Second)
+		}
+		occurred := at.Add(fractions[rng.Intn(len(fractions))])
+		times = append(times, occurred)
+		if i == 60 {
+			if err := store.AppendDurable(eventlog.Event{Type: eventlog.TypeHistoryCleared, AlertID: "history", OccurredAt: occurred}); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		id := fmt.Sprintf("alert-%d", rng.Intn(5))
+		snapshot := Alert{
+			ID:         id,
+			ResourceID: "vm-" + id,
+			StartTime:  base.Add(time.Duration(rng.Intn(3)) * time.Hour),
+			LastSeen:   occurred.Add(time.Duration(rng.Intn(240)-120) * time.Second),
+			Value:      float64(i),
+		}
+		kind := kinds[rng.Intn(len(kinds))]
+		if kind == eventlog.TypeAcknowledged || (kind != eventlog.TypeUnacknowledged && rng.Intn(5) == 0) {
+			ackTime := occurred
+			snapshot.Acknowledged, snapshot.AckTime, snapshot.AckUser = true, &ackTime, fmt.Sprintf("user-%d", i)
+		}
+		payload, err := json.Marshal(snapshot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(eventlog.Event{Type: kind, AlertID: id, OccurredAt: occurred, Snapshot: payload}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return times
+}
+
+func TestWindowedHistoryMatchesAWalkOfOnlyTheWindow(t *testing.T) {
+	for seed := int64(1); seed <= 25; seed++ {
+		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
+			m := newHistoryParityManager(t)
+			times := writeRandomHistory(t, m, seed)
+			// Live overlay: one alert the log knows (with a fresh value) and
+			// one it never saw fire.
+			m.mu.Lock()
+			m.activeAlerts["live-known"] = &Alert{ID: "alert-1", ResourceID: "vm-alert-1",
+				StartTime: time.Date(2026, 9, 1, 1, 0, 0, 0, time.UTC), LastSeen: times[len(times)-1], Value: 999}
+			m.activeAlerts["live-new"] = &Alert{ID: "alert-new", ResourceID: "vm-new",
+				StartTime: times[len(times)/2], LastSeen: times[len(times)-1], Value: 7}
+			m.mu.Unlock()
+
+			windows := []time.Time{{}, times[0].Add(-time.Hour), times[len(times)-1].Add(time.Hour)}
+			for i := 0; i < len(times); i += 7 {
+				windows = append(windows, times[i], times[i].Add(time.Nanosecond), times[i].Add(-time.Nanosecond))
+			}
+			for _, since := range windows {
+				for _, limit := range []int{0, 1, 3} {
+					got, ok := m.AlertHistoryFromEvents(since, limit)
+					if !ok {
+						t.Fatal("history unavailable")
+					}
+					want := referenceWindowedHistory(t, m, since, limit)
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("since=%s limit=%d: shared fold differs from a walk of only the window\n got: %+v\nwant: %+v",
+							since.Format(time.RFC3339Nano), limit, got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestWindowedHistoryReusesTheFullHistoryFold(t *testing.T) {
+	m := newHistoryParityManager(t)
+	times := writeRandomHistory(t, m, 7)
+	if _, ok := m.AlertHistoryFromEvents(time.Time{}, 0); !ok {
+		t.Fatal("history unavailable")
+	}
+	m.historyProjectionMu.Lock()
+	full := m.historyProjection
+	m.historyProjectionMu.Unlock()
+	if full == nil {
+		t.Fatal("a full-history read did not keep its fold")
+	}
+	for _, since := range []time.Time{times[10], times[90], times[len(times)-1]} {
+		if _, ok := m.AlertHistoryFromEvents(since, 0); !ok {
+			t.Fatal("history unavailable")
+		}
+		m.historyProjectionMu.Lock()
+		current := m.historyProjection
+		m.historyProjectionMu.Unlock()
+		if current != full {
+			t.Fatalf("a Since read at %s replaced the shared fold instead of reusing it", since)
+		}
+	}
+}
+
+func TestHistoryReadResultsDoNotAliasTheSharedFold(t *testing.T) {
+	m := newHistoryParityManager(t)
+	times := writeRandomHistory(t, m, 11)
+	m.mu.Lock()
+	m.activeAlerts["live-known"] = &Alert{ID: "alert-2", ResourceID: "vm-alert-2",
+		StartTime: time.Date(2026, 9, 1, 2, 0, 0, 0, time.UTC), LastSeen: times[len(times)-1]}
+	m.mu.Unlock()
+	for _, since := range []time.Time{{}, times[30], times[100]} {
+		first, _ := m.AlertHistoryFromEvents(since, 0)
+		before := referenceWindowedHistory(t, m, since, 0)
+		for i := range first {
+			first[i].Value = -1
+			first[i].LastSeen = time.Time{}
+			if first[i].AckTime != nil {
+				*first[i].AckTime = time.Time{}
+			}
+		}
+		if again, _ := m.AlertHistoryFromEvents(since, 0); !reflect.DeepEqual(again, before) {
+			t.Fatalf("since=%s: mutating a result changed the next read", since)
+		}
+	}
+}
+
+// A limited read copies only the rows it returns, not the whole fold.
+func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
+	m := newHistoryParityManager(t)
+	store := m.eventLogStore()
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	metadata := map[string]interface{}{}
+	for i := 0; i < 40; i++ {
+		metadata[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("value-%d-with-some-detail", i)
+	}
+	for i := 0; i < 2000; i++ {
+		occurred := at.Add(time.Duration(i) * time.Minute)
+		snapshot, err := json.Marshal(Alert{ID: fmt.Sprintf("alert-%d", i), ResourceID: "vm", StartTime: occurred,
+			LastSeen: occurred, Message: "disk usage above threshold on a long resource name", Metadata: metadata})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(eventlog.Event{Type: eventlog.TypeFired, AlertID: fmt.Sprintf("alert-%d", i),
+			OccurredAt: occurred, Snapshot: snapshot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allocated := func(limit int) uint64 {
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		if got, ok := m.AlertHistoryFromEvents(time.Time{}, limit); !ok || (limit > 0 && len(got) != limit) {
+			t.Fatalf("history read with limit %d failed", limit)
+		}
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	allocated(0) // build the shared fold
+	everything, ten := allocated(0), allocated(10)
+	if ten*5 > everything {
+		t.Fatalf("a 10-row read allocated %d bytes against %d for all 2000 rows; it must not copy the whole fold", ten, everything)
+	}
+}
+
+// historyEvidence builds n envelopes whose ObservedAt order differs from their
+// position, so "newest" must be chosen by time, not by slice order.
+func historyEvidence(base time.Time, n int, newestIndex int) []operationaltrust.EvidenceEnvelope {
+	evidence := make([]operationaltrust.EvidenceEnvelope, 0, n)
+	for i := 0; i < n; i++ {
+		observed := base.Add(time.Duration(n-i) * time.Second)
+		if i == newestIndex {
+			observed = base.Add(time.Hour)
+		}
+		evidence = append(evidence, operationaltrust.EvidenceEnvelope{ID: fmt.Sprintf("ev-%02d", i), ObservedAt: observed})
+	}
+	return evidence
+}
+
+func TestNewestHistoryEvidenceChoosesByObservationTime(t *testing.T) {
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	if got := newestHistoryEvidence(nil); got != nil {
+		t.Fatalf("no evidence must stay nil, got %+v", got)
+	}
+	got := newestHistoryEvidence(historyEvidence(base, 64, 17))
+	if len(got) != 1 || got[0].ID != "ev-17" {
+		t.Fatalf("newest by ObservedAt = %+v, want ev-17", got)
+	}
+	tied := []operationaltrust.EvidenceEnvelope{{ID: "first", ObservedAt: base}, {ID: "second", ObservedAt: base}}
+	if got := newestHistoryEvidence(tied); len(got) != 1 || got[0].ID != "second" {
+		t.Fatalf("a tie must keep the later envelope, got %+v", got)
+	}
+}
+
+// A history entry carries only its newest evidence envelope, in the shared
+// fold as well as the response; the event log and the record keep everything.
+func TestHistoryEntriesKeepOnlyTheNewestEvidence(t *testing.T) {
+	m := newHistoryParityManager(t)
+	store := m.eventLogStore()
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	ids := make([]string, 0, 64)
+	for i := 0; i < 64; i++ {
+		ids = append(ids, fmt.Sprintf("ev-%02d", i))
+	}
+	write := func(kind string, occurred time.Time, evidence []operationaltrust.EvidenceEnvelope) {
+		t.Helper()
+		snapshot, err := json.Marshal(Alert{ID: "disk-1", ResourceID: "vm-1", StartTime: start, LastSeen: occurred,
+			Evidence: evidence, OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-1", EvidenceIDs: ids}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(eventlog.Event{Type: kind, AlertID: "disk-1", OccurredAt: occurred, Snapshot: snapshot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(eventlog.TypeFired, start, historyEvidence(start, 5, 2))
+	write(eventlog.TypeResolved, start.Add(time.Minute), historyEvidence(start, 64, 40))
+
+	for _, since := range []time.Time{{}, start.Add(30 * time.Second)} {
+		history, ok := m.AlertHistoryFromEvents(since, 0)
+		if !ok || len(history) != 1 {
+			t.Fatalf("since=%s: history = %d entries, ok=%v", since, len(history), ok)
+		}
+		if got := history[0].Evidence; len(got) != 1 || got[0].ID != "ev-40" {
+			t.Fatalf("since=%s: evidence = %+v, want only the newest envelope ev-40", since, got)
+		}
+		if got := history[0].OperationalRecord; got == nil || len(got.EvidenceIDs) != 64 {
+			t.Fatalf("since=%s: the record must keep its full evidence ID list, got %+v", since, got)
+		}
+	}
+	m.historyProjectionMu.Lock()
+	for _, occ := range m.historyProjection.occurrences {
+		if len(occ.alert.Evidence) != 1 {
+			t.Errorf("the shared fold holds %d evidence envelopes; it must hold only the newest", len(occ.alert.Evidence))
+		}
+	}
+	m.historyProjectionMu.Unlock()
+
+	var logged []int
+	if err := store.WalkOldest(eventlog.Filter{AlertID: "disk-1"}, func(event eventlog.Event) error {
+		var snapshot Alert
+		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
+			return err
+		}
+		logged = append(logged, len(snapshot.Evidence))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(logged, []int{5, 64}) {
+		t.Fatalf("the event log must keep every snapshot whole, evidence lengths = %v", logged)
+	}
+}
+
+func TestHistoryOverlayKeepsOnlyTheNewestEvidence(t *testing.T) {
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	m := newHistoryParityManager(t)
+	m.mu.Lock()
+	m.activeAlerts["live"] = &Alert{ID: "cpu-1", ResourceID: "vm-2", StartTime: start, LastSeen: start,
+		Evidence: historyEvidence(start, 12, 3)}
+	m.mu.Unlock()
+	history, ok := m.AlertHistoryFromEvents(time.Time{}, 0)
+	if !ok || len(history) != 1 {
+		t.Fatalf("overlay history = %d entries, ok=%v", len(history), ok)
+	}
+	if got := history[0].Evidence; len(got) != 1 || got[0].ID != "ev-03" {
+		t.Fatalf("a live overlay entry carries %+v, want only ev-03", got)
+	}
+	m.mu.RLock()
+	live := len(m.activeAlerts["live"].Evidence)
+	m.mu.RUnlock()
+	if live != 12 {
+		t.Fatalf("trimming history output changed the live alert's evidence to %d envelopes", live)
+	}
+}
+
+// A separate test: two newTestManager calls on one t deadlock.
+func TestHistoryFallbackKeepsOnlyTheNewestEvidence(t *testing.T) {
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	fallback := newTestManager(t)
+	fallback.SetEventLog(nil) // read the JSON-backed history, not a projection
+	fallback.historyManager.AddAlert(Alert{ID: "mem-1", ResourceID: "vm-3", StartTime: start, LastSeen: start,
+		Evidence: historyEvidence(start, 9, 6)})
+	entries := fallback.GetAlertHistory(0)
+	if len(entries) != 1 {
+		t.Fatalf("fallback history = %d entries", len(entries))
+	}
+	if got := entries[0].Evidence; len(got) != 1 || got[0].ID != "ev-06" {
+		t.Fatalf("a JSON-history entry carries %+v, want only ev-06", got)
 	}
 }

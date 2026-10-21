@@ -112,6 +112,14 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
+// The server advertises update on a container with an available update.
+const UPDATE_CAPABILITY = {
+  name: 'update',
+  type: 'common',
+  platform: 'docker',
+  minimumApprovalLevel: 'admin',
+} as NonNullable<Resource['capabilities']>[number];
+
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
     id: overrides.id ?? 'app-container-1',
@@ -330,6 +338,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
               lastChecked: '2026-10-14T10:00:00Z',
             },
           },
+          capabilities: [UPDATE_CAPABILITY],
         })}
       />
     ));
@@ -363,6 +372,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
             createdAt: '2026-10-01T10:00:00Z',
             updateStatus: { updateAvailable: true, lastChecked: '2026-10-14T10:00:00Z' },
           },
+          capabilities: [UPDATE_CAPABILITY],
         });
       const [current, setCurrent] = createSignal(proxy(10));
       render(() => <ResourceDetailDrawer presentation="table-row" resource={current()} />);
@@ -403,7 +413,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     const locked = within(lifted).getByLabelText(
       /Pulse cannot apply it: Command agent disconnected/,
     );
-    expect(locked).toHaveTextContent('Update available');
+    expect(locked).toHaveTextContent('Update');
     expect(locked).toHaveClass('max-sm:min-h-11');
     expect(within(lifted).queryByRole('button')).toBeNull();
   });
@@ -424,6 +434,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
             createdAt: '2026-10-01T10:00:00Z',
             updateStatus: { updateAvailable: true, lastChecked: '2026-10-14T10:00:00Z' },
           },
+          capabilities: [UPDATE_CAPABILITY],
         });
       const [current, setCurrent] = createSignal(proxy(10));
       render(() => <ResourceDetailDrawer presentation="table-row" resource={current()} />);

@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Command access is a named token-step choice, not a legacy option (21 October 2026)
+
+The installer's command-access checkbox reads **Allow Pulse to run commands on
+this host** and sits in the token step, before the credential is minted,
+instead of behind the advanced connection options as "Enable legacy combined
+command profile". The behaviour behind it is unchanged: default off, an
+explicit choice adds `--enable-commands`, records `command-capable`, and mints
+an execution-scoped token; toggling after a mint still regenerates and revokes
+the superseded token, and a `monitoring-only` install still cannot be promoted
+remotely. The old name told the users who need Docker/Podman updates not to
+use the only working route: Docker updates dispatch through the agent command
+session, the separate action runner's container actions are unqualified, and
+rootful Docker under the safe collector profile carries no update checks or
+actions. The label is owned by `getUnifiedAgentCommandAccessOptionLabel`, which
+the locked Docker update pill and the Proxmox setup guide also read, so copy
+that sends users to it cannot drift from the checkbox.
+`InfrastructureInstallerSection.test.tsx` pins the checkbox in the token step
+with its root-access description.
+
+### Manual update checks skip images with no registry tag (21 October 2026)
+
+A manual container update check counts a `local image` status as skipped,
+alongside `digest-pinned image`, rather than as a checked image with a
+registry error. No agent authority or transport changes.
+`TestSummarizeManualUpdateCheckSkipsUncheckableImages` covers the summary.
+
+
 ### Malformed Unix installer invocations preserve local state
 
 An unrecognised argument exits 16 before credential reads or lifecycle work,

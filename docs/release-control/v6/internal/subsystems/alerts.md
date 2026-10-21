@@ -1265,6 +1265,26 @@ Live active-alert overlays and returned objects are independent clones. Explicit
 Since queries preserve their existing event-window semantics without evicting
 the normal full-history fold. Repeated attention requests must not replay all
 retained snapshots independently or accumulate behind the history connection pool.
+Since queries are answered from that same fold (#1803). Each occurrence keeps one
+mark per folded event (time, durable ID and the LastSeen it contributed) and the
+index of its latest acknowledged snapshot. A window starts at the occurrence's
+first event that the log's own `occurred_at >= since` text comparison admits,
+takes LastSeen and acknowledgement from that point on, and orders occurrences by
+their first in-window event as a walk of only the window would. A read selects
+and limits rows before copying, so only returned rows are cloned.
+`TestWindowedHistoryMatchesAWalkOfOnlyTheWindow` holds this equal to an
+independent walk of only the window, and
+`TestLimitedHistoryReadCopiesOnlyReturnedRows`,
+`TestWindowedHistoryReusesTheFullHistoryFold` and
+`TestHistoryReadResultsDoNotAliasTheSharedFold` pin the copy, reuse and
+isolation rules.
+The fold keeps only each snapshot's newest evidence envelope
+(`newestHistoryEvidence`, by `observedAt` then position), and history output
+applies the same rule to live overlays and the JSON fallback. A resolved
+alert's trail of up to 64 envelopes was about 83% of its snapshot. The event log
+still stores every snapshot whole. `TestHistoryEntriesKeepOnlyTheNewestEvidence`,
+`TestHistoryOverlayKeepsOnlyTheNewestEvidence` and
+`TestHistoryFallbackKeepsOnlyTheNewestEvidence` pin this.
 
 
 PBS node-status availability is distinct from connectivity. While a connected

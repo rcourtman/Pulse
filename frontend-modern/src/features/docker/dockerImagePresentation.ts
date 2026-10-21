@@ -1,5 +1,9 @@
 import type { Resource } from '@/types/resource';
-import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
+import {
+  isContainerUpdateLocalImage,
+  isContainerUpdatePinned,
+  isContainerUpdateUncheckable,
+} from '@/components/shared/containerUpdateBadgeModel';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 export type DockerImageUpdateTone = 'danger' | 'warning' | 'success' | 'muted';
@@ -76,7 +80,7 @@ export function getDockerImageOperationalPresentation(
     .map((resource) => resource.docker?.updateStatus)
     .filter((state): state is NonNullable<typeof state> => state !== undefined);
   const failed = updateStates.find(
-    (state) => trimmed(state.error).length > 0 && !isContainerUpdatePinned(state),
+    (state) => trimmed(state.error).length > 0 && !isContainerUpdateUncheckable(state),
   );
 
   if (consumerCount > 0 && isPulseManagedImage(image)) {
@@ -113,6 +117,16 @@ export function getDockerImageOperationalPresentation(
       updateLabel: 'Pinned',
       updateDetail:
         'The image is pinned to a specific digest, so there is no tag to check against.',
+      updateTone: 'muted',
+    };
+  }
+  if (updateStates.some((state) => isContainerUpdateLocalImage(state))) {
+    return {
+      consumerCount,
+      consumerSummary: summarizeConsumers(consumers, reportedCount),
+      updateLabel: 'Local',
+      updateDetail:
+        'The image was built or loaded on this host, so no registry has a newer version to check.',
       updateTone: 'muted',
     };
   }

@@ -17,6 +17,21 @@
 
 ## Purpose
 
+### Locally built images report an uncheckable update state (21 October 2026)
+
+An image with no RepoDigest was built or loaded on its host, so no registry
+holds a copy to compare against. The Docker agent reports such a container's
+update status with the `local image` sentinel and no digests, and does not
+query a registry. Previously it asked Docker Hub for the unknown repository and
+reported the resulting `authentication required` as a failed check on every
+cycle. Like `digest-pinned image`, the sentinel is a state, not a failure:
+update alerts already ignore update-check errors, and the presentation reads it
+as Local. `TestCollectContainerReportsLocallyBuiltImageWithoutRegistryCheck`
+covers the collect path without network access, and
+`TestGenerateDockerContainerUpdateStatusLocalImageShape` keeps the mock
+fixtures to the same shape.
+
+
 ### Proxmox endpoint authority before authentication
 
 `internal/config/client_helpers.go`, startup validation, the node save/test

@@ -1117,7 +1117,7 @@ it, use the snooze and unsnooze endpoints below.
 - `GET /api/alerts/active`
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
 - `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` — append-only alert event log: lifecycle transitions and notification decisions, including suppressions with reasons; all parameters optional, newest first
-- `GET /api/alerts/history`
+- `GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest; `operationalRecord.evidenceIds` keeps the full list, and `GET /api/alerts/active` returns an open alert's full evidence
 - `DELETE /api/alerts/history`
 - `GET /api/alerts/incidents`
 - `POST /api/alerts/incidents/note`

@@ -150,6 +150,11 @@ describe('settings architecture guardrails', () => {
     expect(auditLogPanelSource).not.toContain('SavedViews');
   });
 
+  it('sends Proxmox Docker-in-LXC users to the shared command-access option', () => {
+    expect(nodeModalSetupGuideSectionSource).toContain('getUnifiedAgentCommandAccessOptionLabel()');
+    expect(nodeModalSetupGuideSectionSource).not.toContain('combined command profile');
+  });
+
   it('keeps the Proxmox installer TLS override explicit and request-bound', () => {
     expect(nodeModalSetupGuideSectionSource).toContain(
       'Skip TLS certificate verification when downloading the installer and',

@@ -6,13 +6,14 @@ import {
   getContainerUpdateBadgeTooltip,
   getContainerUpdateCurrentTooltip,
   getContainerUpdateErrorTooltip,
-  getContainerUpdatePinnedTooltip,
+  getContainerUpdateUncheckableLabel,
+  getContainerUpdateUncheckableTooltip,
   getUpdateButtonClass,
   getUpdateIconTooltip,
   hasContainerUpdate,
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
-  isContainerUpdatePinned,
+  isContainerUpdateUncheckable,
   type ContainerUpdateBadgeProps,
   type UpdateButtonProps,
   type UpdateIconProps,
@@ -79,7 +80,7 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
       when={
         hasContainerUpdate(props.updateStatus) ||
         hasContainerUpdateError(props.updateStatus) ||
-        isContainerUpdatePinned(props.updateStatus) ||
+        isContainerUpdateUncheckable(props.updateStatus) ||
         (props.showCurrent && hasContainerUpdateCurrent(props.updateStatus))
       }
     >
@@ -107,20 +108,25 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             </Show>
           </span>
         </Match>
-        <Match when={isContainerUpdatePinned(props.updateStatus)}>
+        <Match when={isContainerUpdateUncheckable(props.updateStatus)}>
           <span
             class="inline-flex items-center justify-center gap-1 rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium text-muted cursor-help"
-            aria-label={getContainerUpdatePinnedTooltip()}
+            aria-label={getContainerUpdateUncheckableTooltip(props.updateStatus)}
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(getContainerUpdatePinnedTooltip(), rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-              });
+              showTooltip(
+                getContainerUpdateUncheckableTooltip(props.updateStatus),
+                rect.left + rect.width / 2,
+                rect.top,
+                {
+                  align: 'center',
+                  direction: 'up',
+                },
+              );
             }}
             onMouseLeave={() => hideTooltip()}
           >
-            <span>Pinned</span>
+            <span>{getContainerUpdateUncheckableLabel(props.updateStatus)}</span>
           </span>
         </Match>
         <Match when={hasContainerUpdateError(props.updateStatus)}>
@@ -218,8 +224,7 @@ const UPDATE_TOUCH_TARGET_CLASS = ' max-sm:min-h-11 max-sm:px-3';
 
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
-  const readOnlyUpdateExplanation = () =>
-    `Update available. Pulse cannot apply it: ${state.updateUnavailableReason()}\nApply this update using your container manager on the host.`;
+  const readOnlyUpdateExplanation = () => state.updateUnavailableExplanation();
   const showReadOnlyUpdateExplanation = (target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
     showTooltip(readOnlyUpdateExplanation(), rect.left + rect.width / 2, rect.top, {
@@ -231,7 +236,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     state.currentState() === 'idle' &&
     (hasContainerUpdateError(props.updateStatus) ||
       hasContainerUpdateCurrent(props.updateStatus) ||
-      isContainerUpdatePinned(props.updateStatus) ||
+      isContainerUpdateUncheckable(props.updateStatus) ||
       state.isUpdateUnavailable() ||
       (state.settingsLoaded() && state.shouldHideButton()));
 
@@ -332,7 +337,9 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
             }}
           >
             <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span>Update available</span>
+            {/* "Update" fits the Updates column at its narrowest; the lock,
+                amber tone and explanation state that Pulse cannot apply it. */}
+            <span>Update</span>
           </span>
         </Show>
       </Show>

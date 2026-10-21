@@ -231,6 +231,19 @@ describe('docsLinks', () => {
     expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
   });
 
+  it('documents alert history entries carrying only the newest evidence envelope', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain(
+      '`GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest',
+    );
+    expect(api).toContain('`operationalRecord.evidenceIds` keeps the full list');
+    const projection = readFileSync(
+      path.join(repoRoot, 'internal', 'alerts', 'history_projection.go'),
+      'utf8',
+    );
+    expect(projection).toContain('snapshot.Evidence = newestHistoryEvidence(snapshot.Evidence)');
+  });
+
   it('documents alert configuration saves as replacing only the keys they send', () => {
     const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     expect(api).toContain('`PUT /api/alerts/config` — replaces only the top-level keys the body');

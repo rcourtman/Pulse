@@ -821,6 +821,16 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 				Str("container", container.Name).
 				Str("image", imageToCheck).
 				Msg("Skipping update check: local image digest unavailable")
+		} else if registry, _, _ := parseImageReference(imageToCheck); len(currentDigests) == 0 && registry != "" {
+			// An image with no RepoDigests was built or loaded on this host and
+			// never pulled, so no registry holds it to compare against. Asking
+			// anyway reads as a failed check ("authentication required" from
+			// Docker Hub for an unknown repository); report it as local.
+			container.UpdateStatus = &agentsdocker.UpdateStatus{
+				UpdateAvailable: false,
+				LastChecked:     time.Now(),
+				Error:           localImageUpdateStatus,
+			}
 		} else {
 			a.logger.Debug().
 				Str("container", container.Name).

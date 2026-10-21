@@ -63,6 +63,13 @@ export function getUnifiedAgentCommandsUnavailableMessage(): string {
   return 'Agent ID unavailable for command configuration';
 }
 
+// The one install-time choice that gives an agent command access. Copy that
+// sends users to it (the installer, locked Docker update pills) must name it
+// exactly, so it lives here rather than in each surface.
+export function getUnifiedAgentCommandAccessOptionLabel(): string {
+  return 'Allow Pulse to run commands on this host';
+}
+
 export function getUnifiedAgentConfigUpdateSuccessMessage(enabled: boolean): string {
   return `Pulse command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`;
 }
