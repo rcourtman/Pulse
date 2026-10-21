@@ -39,6 +39,16 @@ vi.mock('../useInfrastructureOperationsState', () => ({
 }));
 
 describe('InfrastructureInstallerSection', () => {
+  it('lets long Docker-in-LXC opt-in identifiers wrap within the guidance at phone widths', () => {
+    render(() => <InfrastructureInstallerSection focus="docker" />);
+    for (const name of [
+      'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
+      'PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102',
+    ]) {
+      expect(screen.getByText(name, { exact: true })).toHaveClass('break-all');
+    }
+  });
+
   beforeEach(() => {
     stateOverrides.selectedAgentUrl = () => 'https://pulse.example.invalid';
     stateOverrides.insecureMode = () => false;

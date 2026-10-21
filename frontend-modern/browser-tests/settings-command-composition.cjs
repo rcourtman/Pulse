@@ -246,6 +246,29 @@ module.exports = (async () => {
       await expect(note).toContainText('Allow Pulse to run commands on this host');
       await expect(note).toContainText('Discover Docker in LXC guests');
       await expect(note).toContainText('not a monitoring-only install');
+      const identifiers = await note.locator('code').evaluateAll((elements) =>
+        elements.map((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const owner = element.closest('p').getBoundingClientRect();
+          return {
+            text: element.textContent,
+            owner: { left: owner.left, right: owner.right },
+            rects: Array.from(range.getClientRects()).map((rect) => ({
+              left: rect.left,
+              right: rect.right,
+            })),
+          };
+        }),
+      );
+      for (const identifier of identifiers)
+        for (const rect of identifier.rects) {
+          assert(
+            rect.left >= identifier.owner.left - 1 && rect.right <= identifier.owner.right + 1,
+            `Clipped guidance identifier: ${JSON.stringify(identifier)}`,
+          );
+        }
+      profile.guidance_identifiers = identifiers;
       await capture('docker-command-guidance', note);
       profile.checks.push(
         'Docker-LXC guidance preserves command-authority and independent server opt-in disclosures with the shared option name.',
