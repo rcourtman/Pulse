@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"math"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1825,5 +1826,18 @@ func TestGetGuestThresholds_InvalidGuest(t *testing.T) {
 	if thresholds.CPU == nil {
 		// Just check it returns something valid (defaults)
 		// actually default has nil pointers, so this check is just ensuring no panic
+	}
+}
+
+func TestGuestCPUUnknownCannotMatchNumericFilters(t *testing.T) {
+	for _, cpu := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		for _, op := range []string{"<", "<=", "==", "!=", ">", ">="} {
+			if evaluateGuestCondition(guestMetrics{CPU: cpu}, FilterCondition{Type: "metric", Field: "CPU", Operator: op, Value: 0}) {
+				t.Fatalf("unknown CPU %v matched %s0", cpu, op)
+			}
+		}
+	}
+	if !evaluateGuestCondition(guestMetrics{CPU: 0}, FilterCondition{Type: "metric", Field: "cpu", Operator: "==", Value: 0}) {
+		t.Fatal("measured idle CPU stopped matching")
 	}
 }

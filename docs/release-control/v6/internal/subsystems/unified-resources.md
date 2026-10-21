@@ -3538,6 +3538,23 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Guest CPU absence replaces, rather than refreshes, a sample (21 October 2026)
+
+Complete Proxmox guest observations own `proxmox.cpuUsageUnavailable` (a boolean,
+including false on recovery). When true there is no canonical CPU metric. The
+registry withdraws previous CPU and must not substitute an in-guest agent's
+incomparable accounting; independent memory, storage and identities are intact.
+Guest scalar compatibility views return -1 for explicit unavailable CPU, not
+measured zero. Legacy unannotated producers remain compatible. A real zero
+reinstates the ordinary ratio-to-percent metric without changing CPU authority.
+
+The existing frontend full-snapshot, slow/fast delta and store-commit paths remove
+cached CPU only on that source-authored withdrawal. Omission alone can still be a
+thin snapshot. Workload rows/drawers use their existing unavailable presentation;
+no route or feature is added. Regression proof covers registry lifecycle, clone,
+views, metric authority and all four frontend merge paths.
+
+
 The backup inventory Refresh button remains focusable while it announces its
 pending read with `aria-disabled`; its existing single-flight handler refuses
 repeated activations until both inventories and posture settle. This avoids

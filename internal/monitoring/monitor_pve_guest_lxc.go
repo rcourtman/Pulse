@@ -152,7 +152,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 		Instance:       instanceName,
 		Status:         res.Status,
 		Type:           "lxc",
-		CPU:            safeFloat(res.CPU),
+		CPU:            guestCPUUsage(res.CPU),
 		CPUs:           res.MaxCPU,
 		Memory:         memory,
 		Disk:           containerDiskUsage(res.MaxDisk, res.Disk, res.DiskUsage),

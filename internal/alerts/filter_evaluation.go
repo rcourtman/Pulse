@@ -3,6 +3,7 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -57,6 +58,10 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 		)
 		switch strings.ToLower(condition.Field) {
 		case "cpu":
+			// Missing CPU is not idle, including for <, = and != rules.
+			if metrics.CPU < 0 || math.IsNaN(metrics.CPU) || math.IsInf(metrics.CPU, 0) {
+				return false
+			}
 			value = metrics.CPU
 		case "memory":
 			if metrics.MemoryUnavailable {

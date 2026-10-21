@@ -135,7 +135,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				)
 
 				// Set CPU to 0 for non-running containers
-				cpuUsage := safeFloat(container.CPU)
+				cpuUsage := guestCPUUsage(container.CPU)
 				if container.Status != "running" {
 					cpuUsage = 0
 				}

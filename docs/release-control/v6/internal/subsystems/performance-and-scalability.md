@@ -2182,6 +2182,17 @@ without contention or cross-delivery.
 
 ## Current State
 
+### Guest CPU withdrawal across snapshot and delta merges (21 October 2026)
+
+A complete Proxmox guest observation can withdraw current CPU via
+`cpuUsageUnavailable`, without invalidating independent metrics. Full and
+slow-delta canonical merges and fast per-key/store writes must all remove the
+cached CPU on that marker. Thin omission alone retains existing compatibility;
+measured zero restores the metric. This adds no estate walk, query, timer or
+history rewrite. Adapter and websocket regressions exercise source-owned
+withdrawal, identity/independent-memory preservation and ordinary recovery.
+
+
 ### Retained component state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` retain one keyed renderer

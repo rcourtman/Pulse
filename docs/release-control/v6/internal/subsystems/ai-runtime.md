@@ -5063,6 +5063,16 @@ verdict on its own check.
 
 ## Current State
 
+### Unavailable Proxmox CPU in Patrol inputs (21 October 2026)
+
+Guest scalar compatibility views and the legacy guest inventory retain -1 for
+explicit unavailable CPU; a measured idle guest remains zero. The detailed
+Patrol guest table renders that marker as `unavailable`, never as zero or a
+negative measured percentage. `TestGuestCPUUnavailableIsNotIdleInPatrolInputs`
+checks both legacy and current read-state inputs. No model, command, autonomy or
+provider authority changes.
+
+
 ### AI Discovery removed (2026-10-11)
 
 AI Discovery, the model-backed service-identification layer, is gone. The

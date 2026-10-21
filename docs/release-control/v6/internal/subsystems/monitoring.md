@@ -5215,6 +5215,19 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+### Proxmox guest CPU observation gaps (21 October 2026)
+
+Both cluster and node QEMU/LXC listings distinguish omitted/null CPU from a
+measured idle ratio. The existing listing authority and core-independent units
+remain unchanged; detail or an in-guest agent must not silently replace that
+observation. The internal unavailable marker is -1, including non-finite or
+negative alternate-client readings. Stopped guests retain their existing policy.
+History's CPU writer skips unavailable readings while recording independent
+current series and genuine zero. No new queries, guest commands or privileges.
+`TestGuestCPUObservationContract` joins both HTTP clients and both collectors
+through alerts, public state, History and ordinary idle recovery.
+
+
 ### LXC runtime observations own running-only work
 
 Both the cluster/resources and per-node LXC collectors apply the nonempty

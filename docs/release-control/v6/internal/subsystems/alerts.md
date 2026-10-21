@@ -1562,6 +1562,18 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Missing guest CPU is not an idle observation (21 October 2026)
+
+The unavailable Proxmox CPU marker cannot become a unified metric candidate or
+match any numeric CPU filter (including equals, less-than and not-equal). The
+existing observation-gap reducer interrupts pending runs, preserves original
+active incidents/acknowledgements and permits ordinary measured-zero recovery.
+Independent guest memory, disk and I/O retain their own evidence and policies.
+`TestGuestCPUUnknownInterruptsPendingAndPreservesAcknowledgement` and
+`TestGuestCPUUnknownCannotMatchNumericFilters` pin this boundary; the real-client
+collector matrix also crosses the public consumer and History paths.
+
+
 ### Retired AI Discovery progress frames (2026-10-11)
 
 The websocket store no longer handles `ai_discovery_progress` frames or emits

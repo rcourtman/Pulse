@@ -465,3 +465,36 @@ func TestLXCMountDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
 		t.Fatal("legacy in-process mount producer lost explicit-zero compatibility")
 	}
 }
+
+func TestGuestCPUObservationDistinguishesMissingNullAndIdle(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       float64
+	}{
+		{"missing", `{}`, -1},
+		{"null", `{"cpu":null}`, -1},
+		{"idle", `{"cpu":0}`, 0},
+		{"busy", `{"cpu":0.98}`, .98},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var vm VM
+			var ct Container
+			var resource ClusterResource
+			var status VMStatus
+			for _, target := range []any{&vm, &ct, &resource, &status} {
+				if err := json.Unmarshal([]byte(tc.body), target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, got := range []float64{vm.CPU, ct.CPU, resource.CPU, status.CPU} {
+				if got != tc.want {
+					t.Fatalf("CPU=%v, want %v (missing/null is not measured zero)", got, tc.want)
+				}
+			}
+		})
+	}
+	// Older manually constructed producers retain their measured-zero meaning.
+	if (VM{}).CPU != 0 || (Container{}).CPU != 0 || (ClusterResource{}).CPU != 0 {
+		t.Fatal("legacy in-process zero changed")
+	}
+}

@@ -126,6 +126,53 @@ describe('websocket store unified resource contract', () => {
     vi.unstubAllGlobals();
   });
 
+  it('withdraws guest CPU on a source-owned gap and restores measured idle on delta', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      const guest = {
+        id: 'vm-106',
+        type: 'vm',
+        name: 'guest',
+        status: 'running',
+        cpu: { current: 98 },
+        memory: { current: 25 },
+        proxmox: { vmid: 106, cpuUsageUnavailable: false },
+      };
+      emitMessage({ type: 'rawData', data: { resources: [guest], lastUpdate: 100 } });
+      expect(store.state.resources[0].cpu?.current).toBe(98);
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [{ id: guest.id, cpu: null, proxmox: { cpuUsageUnavailable: true } }],
+            removed: [],
+            order: [guest.id],
+          },
+        },
+      });
+      expect(store.state.resources[0].cpu).toBeUndefined();
+      expect(store.state.resources[0].proxmox?.cpuUsageUnavailable).toBe(true);
+      expect(store.state.resources[0].memory?.current).toBe(25);
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [{ id: guest.id, cpu: { current: 0 }, proxmox: { cpuUsageUnavailable: false } }],
+            removed: [],
+            order: [guest.id],
+          },
+        },
+      });
+      expect(store.state.resources[0].cpu?.current).toBe(0);
+      expect(store.state.resources[0].proxmox?.cpuUsageUnavailable).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
   it('tracks resource admission separately from status frames and retains it through reconnect only', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
