@@ -16,6 +16,28 @@
 
 ## Purpose
 
+### Retired mock-alert cleanup preserves history and monitoring
+
+`scripts/clean-mock-alerts.sh` is a compatibility refusal, not a recovery tool.
+Resource IDs containing `mock`, including apparent mock-prefixed names, are not
+authenticated provenance for deleting an incident. The old substring filter
+could delete genuine history and stop unrelated runtimes or services.
+
+Normal invocations now exit 2 with a fixed retirement explanation; `--help`
+and `-h` alone exit 0. No argument or legacy environment override enables
+cleanup. The helper reads no history, creates no backup or temporary file,
+invokes no external command or privilege tool, and never stops or restarts
+monitoring. It does not echo caller-supplied paths or arguments. Operators
+retain existing history for diagnosis and keep mock/test instances on separate
+disposable data, rather than attempting name-based production cleanup.
+
+`test_clean_mock_alerts.py` exercises actual shell invocations with mixed real
+and synthetic-looking IDs, malformed/missing histories, symlink/FIFO targets,
+legacy overrides, rejected force/apply options, empty PATH and concurrent
+callers. It checks byte/metadata preservation, no temporary/backup files and
+no command or runtime-control calls. The managed-runtime smoke suite consumes
+the same focused proof instead of requiring destructive legacy behaviour.
+
 ### Portal build drift is rejected before ordinary CI fan-out
 
 Build and Test checks the portal's existing ordered input/byte hash in its
