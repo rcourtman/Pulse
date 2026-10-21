@@ -494,7 +494,7 @@ const save = () =>
         await expect(row.getByRole('combobox', { name: 'Disk history range' })).toHaveValue('24h');
         const evidence = await page.evaluate(() => window.__guestHardware.evidence());
         assert.equal(evidence.canonical.status, 'online');
-        assert.equal(evidence.projected.type, 'lxc');
+        assert.equal(evidence.projected.type, 'system-container');
         assert.equal(Boolean(evidence.projected.agentStale), false);
         assert.equal(evidence.canonical.agent.lastReportAt, '2026-10-20T12:00:00Z');
         assert.equal(record.requests.filter((r) => r.path === '/api/resources').length, before);
