@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "e306ce7b46647e459b3ab7e43d8d72f0679d49e4",
+  "verified_at": "2026-10-21T09:15:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AISettings.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AISettings.tsx": "0a16d1d91bcb591bf75dccfbf6cc4dc1e466992c7a7aee098b015fceabc30592",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "420f572f1e5816591d83f1278b34c5f13fa01844f5af58d99e04bd3c83ca1102",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "65bb7af77d915395688959b6c5f8a453ae6590587837383f571c8fd474751714"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/patrol",
+    "/settings/infrastructure",
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/pulse-intelligence/patrol",
+    "/auth/license-purchase-start?feature=self_hosted_plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Community stack built from this commit: mock estate, no licence, telemetry off, licence server replaced by a local stub",
+    "Free install: dashboard and Patrol page show no Pro badge, upgrade, buy or Plans & Billing text",
+    "Settings sidebar lists Plans & Billing under Pulse Intelligence",
+    "Plans & Billing shows Current plan: Community, then Available plans with the Pulse Pro plan card and View plans; no Select a plan prompt",
+    "Settings > Patrol: container update risk lock reads Higher license plan required with a Plans & Billing link",
+    "375px plan page: comparison and View plans present, scrollWidth equals viewport width"
+  ],
+  "interactions": [
+    "Clicked Plans & Billing in the Settings sidebar and landed on the plan route",
+    "Followed View plans: purchase start sent the stub a website-finish handoff (thanks and pricing pages, web JTI, no return token) and redirected to license.pulserelay.pro/buy with the handoff id",
+    "Opened Settings > Patrol and confirmed the lock link targets /settings/pulse-intelligence/billing/plan"
+  ]
+}
