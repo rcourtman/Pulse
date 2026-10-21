@@ -49,6 +49,7 @@ describe('canonical native-power agent cards', () => {
       const initial: Resource = {
         id: 'guest-a',
         name: 'Guest A',
+        displayName: 'Guest A',
         type,
         platformId: 'site-a',
         platformType: 'proxmox-pve',
