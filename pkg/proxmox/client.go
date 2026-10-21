@@ -1186,8 +1186,9 @@ type ContainerNetworkConfig struct {
 
 // ContainerDiskUsage captures disk usage details returned by the LXC status API.
 type ContainerDiskUsage struct {
-	Total uint64 `json:"total,omitempty"`
-	Used  uint64 `json:"used,omitempty"`
+	Total     uint64            `json:"total,omitempty"`
+	Used      uint64            `json:"used,omitempty"`
+	DiskUsage DiskUsagePresence `json:"-"`
 }
 
 // ContainerInterfaceAddress describes an IP entry associated with a container interface.

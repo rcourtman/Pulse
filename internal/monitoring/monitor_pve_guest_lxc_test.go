@@ -1145,3 +1145,9 @@ func TestLXCDiskUsageIndependentAgentRootRemainsCurrent(t *testing.T) {
 		t.Fatal("missing API counters suppressed an independent current measured zero")
 	}
 }
+
+// Both real HTTP clients and both collectors must preserve missing/null mount
+// counters through enrichment, acknowledged incidents and canonical projection.
+func TestLXCMountDiskObservationContract(t *testing.T) {
+	testLXCMountDiskObservationLifecycle(t)
+}

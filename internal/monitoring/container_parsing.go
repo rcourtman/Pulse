@@ -72,25 +72,10 @@ func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]con
 
 	if status != nil && len(status.DiskInfo) > 0 {
 		for name, info := range status.DiskInfo {
-			total := clampToInt64(info.Total)
-			used := clampToInt64(info.Used)
-			if total > 0 && used > total {
-				used = total
-			}
-			free := total - used
-			if free < 0 {
-				free = 0
-			}
-
-			disk := models.Disk{
-				Total: total,
-				Used:  used,
-				Free:  free,
-			}
-
-			if total > 0 {
-				disk.Usage = safePercentage(float64(used), float64(total))
-			}
+			// A present mount row can still omit its measured counters. Apply
+			// the same unknown sentinel as the listing, without borrowing a
+			// capacity/usage pair from config, another mount or the rollup.
+			disk := containerDiskUsage(info.Total, info.Used, info.DiskUsage)
 
 			label := strings.TrimSpace(name)
 			lowerLabel := strings.ToLower(label)

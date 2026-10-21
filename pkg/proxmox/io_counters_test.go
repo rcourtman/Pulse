@@ -419,3 +419,49 @@ func TestLXCDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
 		t.Fatal("legacy in-process producer lost compatibility")
 	}
 }
+
+func TestLXCMountDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name, wire string
+		known      bool
+	}{
+		{"zero", `{"total":1000,"used":0}`, true},
+		{"used", `{"total":1000,"used":980}`, true},
+		{"missing-used", `{"total":1000}`, false},
+		{"null-used", `{"total":1000,"used":null}`, false},
+		{"missing-total", `{"used":0}`, false},
+		{"null-total", `{"total":null,"used":0}`, false},
+		{"missing-both", `{}`, false},
+		{"null-row", `null`, false},
+		{"untrusted-presence", `{"total":1000,"DiskUsage":{"Explicit":false,"Used":true,"Total":true}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Decode into a reused destination as well: no earlier measured
+			// counters or presence bits may survive a replacement observation.
+			ct := Container{DiskInfo: map[string]ContainerDiskUsage{"mp0": {Total: 1000, Used: 980}}}
+			if err := json.Unmarshal([]byte(`{"diskinfo":{"mp0":`+tc.wire+`}}`), &ct); err != nil {
+				t.Fatal(err)
+			}
+			mount, ok := ct.DiskInfo["mp0"]
+			if !ok || !mount.DiskUsage.Explicit || mount.DiskUsage.Known() != tc.known {
+				t.Fatalf("lost per-mount field presence: %+v", mount)
+			}
+			encoded, err := json.Marshal(ct)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), "DiskUsage") {
+				t.Fatal("internal presence leaked into JSON")
+			}
+		})
+	}
+	for _, wire := range []string{`{"used":-1}`, `{"used":"0"}`, `{"total":true}`, `{"used":18446744073709551616}`, `{"total":1.5}`} {
+		var ct Container
+		if err := json.Unmarshal([]byte(`{"diskinfo":{"rootfs":`+wire+`}}`), &ct); err == nil {
+			t.Errorf("malformed mount counter accepted: %s", wire)
+		}
+	}
+	if !(ContainerDiskUsage{Total: 1000, Used: 0}).DiskUsage.Known() {
+		t.Fatal("legacy in-process mount producer lost explicit-zero compatibility")
+	}
+}

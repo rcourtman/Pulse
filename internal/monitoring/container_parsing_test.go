@@ -1378,7 +1378,7 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 					Total:      0,
 					Used:       500, // Not clamped because total == 0
 					Free:       0,   // Clamped from -500 to 0
-					Usage:      0,   // No calculation when total == 0
+					Usage:      -1,  // Zero capacity is not a measured empty filesystem
 					Mountpoint: "/",
 					Type:       "rootfs",
 				},
@@ -1705,7 +1705,7 @@ func TestEnsureContainerRootDiskEntry(t *testing.T) {
 						Total:      0,
 						Used:       500, // Not clamped because total == 0 (clamping only when total > 0)
 						Free:       0,   // Clamped from -500 to 0
-						Usage:      0,   // No calculation when total == 0
+						Usage:      -1,  // Zero capacity is not a measured empty filesystem
 						Mountpoint: "/",
 						Type:       "rootfs",
 					},

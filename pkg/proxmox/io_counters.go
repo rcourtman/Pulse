@@ -94,6 +94,21 @@ func (c *Container) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (d *ContainerDiskUsage) UnmarshalJSON(data []byte) error {
+	type alias ContainerDiskUsage
+	var decoded alias
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*d = ContainerDiskUsage(decoded)
+	d.DiskUsage = DiskUsagePresence{Explicit: true, Used: jsonFieldPresent(raw, "used"), Total: jsonFieldPresent(raw, "total")}
+	return nil
+}
+
 func (r *ClusterResource) UnmarshalJSON(data []byte) error {
 	type alias ClusterResource
 	var decoded alias
