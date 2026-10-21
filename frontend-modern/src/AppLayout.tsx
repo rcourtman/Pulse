@@ -14,7 +14,7 @@ import {
   type MobileNavBarPrimaryTab as PrimaryTab,
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
-import { getMobileNavTabAriaLabel as getUtilityTabAriaLabel } from '@/components/shared/mobileNavBarModel';
+import { getMobileNavTabCountSuffix as getUtilityTabCountSuffix } from '@/components/shared/mobileNavBarModel';
 import {
   createStableTabList,
   primaryNavTabEquals,
@@ -900,7 +900,6 @@ export function AppLayout(props: AppLayoutProps) {
                     <A
                       href={tab.route}
                       class={className()}
-                      aria-label={getUtilityTabAriaLabel(tab)}
                       aria-current={isActive() ? 'page' : undefined}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onFocus={() => warmNavigationTarget(tab.route)}
@@ -910,8 +909,7 @@ export function AppLayout(props: AppLayoutProps) {
                         <Icon class={NAV_TAB_ICON_CLASS} />
                       </span>
                       <span class="flex items-center gap-1">
-                        <span class="hidden xs:inline">{tab.label}</span>
-                        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+                        <span>{tab.label}</span>
                         {(() => {
                           const total = tab.count ?? 0;
                           if (total <= 0) {
@@ -934,7 +932,10 @@ export function AppLayout(props: AppLayoutProps) {
                             );
                           }
                           return (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full">
+                            <span
+                              aria-hidden="true"
+                              class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full"
+                            >
                               {total}
                             </span>
                           );
@@ -954,6 +955,7 @@ export function AppLayout(props: AppLayoutProps) {
                           Pro
                         </span>
                       </Show>
+                      <span class="sr-only">{getUtilityTabCountSuffix(tab)}</span>
                     </A>
                   );
                 }}

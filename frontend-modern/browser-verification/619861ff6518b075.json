@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "926f800da5d762d8b7c228c8ecf97c97fc7a3a01",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "c4a0dbcb0e139a7b7816cc1517c37226d1c2459f7dbb782e3725eea68a5e2e70",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "410d2acf83cda9a4f56a9385b82d2850a658cb500f04cc8cd9ec407f55c626b2",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "46c7ce9bbfa8b49aca44f6e00527519385c7c48aef95cca3b2697dec01399862"
+  },
+  "routes": [
+    "/actions and /patrol through the real AppLayout, MobileNavBar, router, Actions and Patrol page consumers; offline GET observations only"
+  ],
+  "states": [
+    "Two critical/three warning, critical-only, warning-only, acknowledged/zero alerts",
+    "Patrol attention/approval counts transition to zero without stale names; current destination preserved"
+  ],
+  "interactions": [
+    "Chromium keyboard Enter and WebKit 320px touch navigate between real Actions and Patrol",
+    "Skip link remains first keyboard destination and focuses main",
+    "Both default WCAG A/AA scans and explicit label-content-name-mismatch are empty in ten settled surface scans; actual native names retain severity/approval context without an aria-label override"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-21T03:04:58Z",
+  "evidence": {
+    "source": "926f800da5d762d8b7c228c8ecf97c97fc7a3a01",
+    "driver": "frontend-modern/browser-tests/navigation-visible-names.cjs",
+    "binding": "NAV-BROWSER.tar.xz: after/result.json binds every frontend source input and manifests",
+    "result": "NAV-FINAL-BROWSER.json in ORIGINALS.tar.xz",
+    "pixels": "PIXEL-REVIEW.md; all six final images opened with native view_image",
+    "playwright": "1.56.1",
+    "axe": "4.13.0, with the future-default mismatch rule explicitly selected in addition to unchanged WCAG tags",
+    "limits": "Not new Axe4.14/DOMPurify/SRI graph qualification, installed acceptance or released availability. Exact source-suite/build still pending."
+  }
+}

@@ -641,7 +641,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await expect(
       desktopNav.getByRole("link", {
-        name: /Patrol: 1 (?:action awaits approval|active attention item)/,
+        name: /Patrol 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();
     await expect(

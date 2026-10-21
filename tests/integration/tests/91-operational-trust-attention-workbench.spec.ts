@@ -783,9 +783,9 @@ test("makes active operational work primary and preserves the evidence boundary"
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByRole("link", { name: "Patrol: 2 active attention items" }).or(
+    page.getByRole("link", { name: "Patrol 2 active attention items" }).or(
       page.getByRole("button", {
-        name: "Patrol: 2 active attention items",
+        name: "Patrol 2 active attention items",
       }),
     ),
   ).toBeVisible();

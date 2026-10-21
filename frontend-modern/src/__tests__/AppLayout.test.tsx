@@ -202,7 +202,7 @@ describe('AppLayout navigation icons', () => {
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
     expect(
-      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts: 1 warning' }),
+      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts 1 warning' }),
     ).toBeTruthy();
     expect(
       within(systemGroup as HTMLElement).queryByRole('link', {
@@ -256,18 +256,18 @@ describe('AppLayout navigation icons', () => {
       }
     };
 
-    await expectAlertNames('Alerts: 2 critical, 3 warning');
+    await expectAlertNames('Alerts 2 critical, 3 warning');
     const desktop = screen.getByRole('navigation', { name: 'Primary navigation' });
     const desktopAlert = within(desktop).getByRole('link', {
-      name: 'Alerts: 2 critical, 3 warning',
+      name: 'Alerts 2 critical, 3 warning',
     });
     expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).toHaveTextContent('23');
     expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).not.toHaveTextContent('6');
 
     setActiveAlerts([alert('warning-only', 'warning')]);
-    await expectAlertNames('Alerts: 1 warning');
+    await expectAlertNames('Alerts 1 warning');
     setActiveAlerts([alert('critical-only', 'critical')]);
-    await expectAlertNames('Alerts: 1 critical');
+    await expectAlertNames('Alerts 1 critical');
     setActiveAlerts([alert('ignored', 'critical', true)]);
     await expectAlertNames('Alerts');
   });
@@ -322,18 +322,22 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
-      name: 'Patrol: 2 active attention items',
+      name: 'Patrol 2 active attention items',
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
+    expect(desktopPatrolTab).not.toHaveAttribute('aria-label');
+    expect(desktopPatrolTab).toHaveAccessibleName('Patrol 2 active attention items');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     const mobilePatrolTab = within(mobileNav).getByRole('link', {
-      name: 'Patrol: 2 active attention items',
+      name: 'Patrol 2 active attention items',
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
+    expect(mobilePatrolTab).not.toHaveAttribute('aria-label');
+    expect(mobilePatrolTab).toHaveAccessibleName('Patrol 2 active attention items');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -361,7 +365,7 @@ describe('AppLayout navigation icons', () => {
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
     const actionsTab = within(systemGroup as HTMLElement).getByRole('link', {
-      name: 'Actions: 3 actions await approval',
+      name: 'Actions 3 actions await approval',
     });
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
@@ -370,7 +374,7 @@ describe('AppLayout navigation icons', () => {
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(mobileNav).getByRole('link', { name: 'Actions: 3 actions await approval' }),
+      within(mobileNav).getByRole('link', { name: 'Actions 3 actions await approval' }),
     ).toHaveAttribute('aria-current', 'page');
     expect(document.title).toContain('Actions');
   });

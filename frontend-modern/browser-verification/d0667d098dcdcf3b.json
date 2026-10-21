@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9645fde89dc621db064ff815689102f72fed6bdb",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "0605a9d0c6660a7461a38034f35f824de6a57e1e0c10867a008a45d22e30ffd1"
+  },
+  "routes": [
+    "Actual AppLayout/MobileNavBar with routed Actions and Patrol consumers and safe GET observation fixtures"
+  ],
+  "states": [
+    "Two critical/three warning; warning-only; critical-only; acknowledged/zero alerts; live approval and Patrol counts return to zero"
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard and320px WebKit touch navigate between actual Actions and Patrol; current destination and skip-link focus remain correct",
+    "Ten unchanged WCAG scans plus explicit label-content-name-mismatch return no violations; native names retain severity and approval meaning without duplicate label content",
+    "Six final captures opened with the native view_image tool; visible layouts unchanged after removing the unreachable desktop abbreviation"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-21T22:49:26.502182Z",
+  "evidence": {
+    "source": "9645fde89dc621db064ff815689102f72fed6bdb",
+    "driver": "frontend-modern/browser-tests/navigation-visible-names.cjs",
+    "report": "NAVIGATION-BROWSER.json retained with lane outcome",
+    "captures": "Six captures under captures/, each opened natively",
+    "playwright": "1.56.1",
+    "axe": "4.13.0",
+    "limits": "Not pending Axe4.14/DOMPurify/SRI group qualification, installed service recovery or release availability."
+  }
+}
