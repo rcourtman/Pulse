@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e089872d5552a9fbcc23457829e36f938738db2a",
+  "changed_paths": [
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/alerts.ts": "35c3405d85f3b0df94829a89a4513e4062e05d020e9b1836c78c55d5d3137919",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "9bd9639c2a8cf9d62c3588375d2bacf51fcc88d163400b59b3afb4adbcdbd97f",
+    "frontend-modern/src/i18n/messages.de.ts": "b53e18b425a376cb10afa7cb9cb791ee42c693f5453cf7035c3a5d7a4b55fcf1",
+    "frontend-modern/src/i18n/messages.es.ts": "b5d9d90df68201895ff0fe042053581f0186dc6ef69f90e0c77f3555cbc826a3",
+    "frontend-modern/src/i18n/messages.ts": "16b0c0c58d7ac880458aba86aae8d47bfa71762ad8736be8b94c5db6e5c6cb49"
+  },
+  "routes": [
+    "/alerts (actual OverviewTab/cards/state/API/toast consumer under the offline alert-action-confirmation fixture)"
+  ],
+  "states": [
+    "All four single-alert actions: explicit rejection, missing marker, contradictory error or wrong snooze expiry enters unconfirmed feedback without retained state change or success.",
+    "Snooze keeps the same pending dialog node through an ordinary observation resample and rollback; controls become usable after rejection.",
+    "Modal Cancel and explicit view reload precede the next chosen action. Affirmative action advances only its canonical target; critical incidents remain critical.",
+    "English, German and Spanish feedback; desktop light and narrow dark touch."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and 320px WebKit touch activate actual acknowledgement/restore/snooze/resume controls.",
+    "A second click on each disabled pending control sends no extra write. No rejected response causes an automatic write.",
+    "For each snooze, compute the exact expected one-hour instant from the paused page clock before interaction, then require request and accepted state to match.",
+    "Reject first response, inspect unchanged/rolled-back target and same-name neighbour, cancel modal if present, explicitly reload, then choose one confirmed action."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-21T02:33:48Z",
+  "evidence": {
+    "source_proof": "9fa822e98d / source-qz2rq1rx: 221 related tests, types, lint, production build/embed and bundle budgets. FULL-PROOF-COMPARISON.json verifies unchanged production inputs.",
+    "exact_browser_build": "e089872d5552a9fbcc23457829e36f938738db2a / source-6el88kq_",
+    "browser_driver": "frontend-modern/browser-tests/alert-action-confirmation.cjs",
+    "browser_result": "BROWSER-RESULT.json",
+    "binding": "BROWSER-BINDING.json",
+    "pixel_review": "PIXEL-REVIEW.md",
+    "playwright": "1.56.1",
+    "cases": 24,
+    "explicit_fixture_writes": 48,
+    "native_captures_opened": 10,
+    "limits": "Synthetic local observations/HTTP only. Not installed alert suppression, provider delivery, reporter cause, protected landing or released availability. All prior adverse attempts retained separately."
+  }
+}
