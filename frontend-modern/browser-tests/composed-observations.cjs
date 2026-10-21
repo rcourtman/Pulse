@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
     crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
   );
   for (const name of ['root-disk-observation.cjs', 'resource-composition-observation.cjs']) {
-    await require(path.join(__dirname, name));
+    await require(path.resolve('frontend-modern/browser-tests', name));
     if (process.exitCode) break;
   }
 })().catch((error) => {
