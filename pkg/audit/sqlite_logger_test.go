@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
 func TestNewSQLiteLogger(t *testing.T) {
@@ -802,5 +803,34 @@ func TestSQLiteLoggerCloseIdempotent(t *testing.T) {
 	}
 	if err := logger.Close(); err != nil {
 		t.Fatalf("second Close failed: %v", err)
+	}
+}
+
+// The audit database grows large on long-running installs, so it must take the
+// shared page cache bound. Its former private 64 MB cache held about 120 MB of
+// resident memory outside the Go heap (#1803).
+func TestSQLiteLoggerUsesSharedPageCacheBound(t *testing.T) {
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       t.TempDir(),
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	defer logger.Close()
+	assertSharedPageCacheBound(t, "audit", logger.db)
+}
+
+func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) {
+	t.Helper()
+	var size int
+	if err := conn.QueryRow(`PRAGMA cache_size`).Scan(&size); err != nil {
+		t.Fatalf("%s: read cache_size: %v", name, err)
+	}
+	if size != -pdb.MaxPageCacheKiB {
+		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
 	}
 }

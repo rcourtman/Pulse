@@ -875,6 +875,9 @@ That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path
 helper instead of joining raw caller-provided directory strings.
+The queue database takes its SQLite page cache from `pdb.PageCachePragma` in
+`pkg/db/pagecache.go` rather than a private `cache_size`. The modernc driver holds that cache outside the Go heap at about twice its size, where neither the garbage collector nor `GOMEMLIMIT` reaches it (#1803).
+`TestNotificationQueueUsesSharedPageCacheBound` pins the effective value.
 That same queue owner also governs alert-resolution cancellation policy.
 Cancelling queued work by alert identifier must remove outstanding firing
 deliveries for that alert, but it must preserve already-queued resolved

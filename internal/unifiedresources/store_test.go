@@ -16,6 +16,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -4527,5 +4528,29 @@ func TestMonitorStateHoldsBackAnOperatorSplitNodeAgentLink(t *testing.T) {
 				assertCycles("after splitting again", 3, want, false)
 			})
 		}
+	}
+}
+
+// The resource store must take the shared page cache bound instead of a
+// private 64 MB cache held outside the Go heap (#1803).
+func TestSQLiteResourceStoreUsesSharedPageCacheBound(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	assertSharedPageCacheBound(t, "unified resources", store.db)
+}
+
+func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) {
+	t.Helper()
+	var size int
+	if err := conn.QueryRow(`PRAGMA cache_size`).Scan(&size); err != nil {
+		t.Fatalf("%s: read cache_size: %v", name, err)
+	}
+	if size != -pdb.MaxPageCacheKiB {
+		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
 	}
 }

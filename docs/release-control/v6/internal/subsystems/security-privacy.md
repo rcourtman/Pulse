@@ -1508,6 +1508,15 @@ tokens, and path-normalization variants.
     `internal/api/rbac_handlers_test.go`, and the rejection cases in
     `pkg/auth/sqlite_manager_test.go`.
 
+The audit (`pkg/audit/sqlite_logger.go`) and RBAC (`pkg/auth/sqlite_manager.go`)
+stores take their SQLite page cache from `pdb.PageCachePragma` in
+`pkg/db/pagecache.go`, 2000 KiB per connection, not a private `cache_size`.
+The modernc driver holds that cache outside the Go heap at about twice its size, where neither the garbage collector nor `GOMEMLIMIT` reaches it (#1803).
+The former 64 MB audit cache held about 120 MB of resident memory once the audit
+database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
+`TestSQLiteManagerUsesSharedPageCacheBound` pin the effective value, and
+`TestNoStoreSetsItsOwnPageCache` rejects any other `cache_size` in production code.
+
 14. Security posture presentation must never be computed from a payload the
     caller was not authorized to read. `/api/security/status` truncates its
     response by authority and declares which tier it returned through
