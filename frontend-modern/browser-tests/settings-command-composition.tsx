@@ -25,20 +25,41 @@ function NodeSetup() {
     onSave: () => {},
   };
   const state = useNodeModalState(props);
-  return <>
-    <h1 class="text-xl font-semibold">Connect Proxmox VE</h1>
-    <NodeModalBasicInfoSection modalProps={props} state={state} />
-    <NodeModalAuthenticationSection modalProps={props} state={state} />
-  </>;
+  return (
+    <>
+      <h1 class="text-xl font-semibold">Connect Proxmox VE</h1>
+      <NodeModalBasicInfoSection modalProps={props} state={state} />
+      <NodeModalAuthenticationSection modalProps={props} state={state} />
+    </>
+  );
 }
 
-render(() => <Router><Route path="/*" component={() => {
-  const query = new URLSearchParams(location.search);
-  return <main class="mx-auto max-w-4xl space-y-4 p-3 text-base-content">
-    <Show when={query.get('surface') === 'node'} fallback={
-      <InfrastructureOperationsStateProvider embedded>
-        <InfrastructureInstallerSection focus={query.get('focus') === 'docker' ? 'docker' : 'agent'} />
-      </InfrastructureOperationsStateProvider>
-    }><NodeSetup /></Show>
-  </main>;
-}} /></Router>, document.getElementById('root')!);
+render(
+  () => (
+    <Router>
+      <Route
+        path="/*"
+        component={() => {
+          const query = new URLSearchParams(location.search);
+          return (
+            <main class="mx-auto max-w-4xl space-y-4 p-3 text-base-content">
+              <Show
+                when={query.get('surface') === 'node'}
+                fallback={
+                  <InfrastructureOperationsStateProvider embedded>
+                    <InfrastructureInstallerSection
+                      focus={query.get('focus') === 'docker' ? 'docker' : 'agent'}
+                    />
+                  </InfrastructureOperationsStateProvider>
+                }
+              >
+                <NodeSetup />
+              </Show>
+            </main>
+          );
+        }}
+      />
+    </Router>
+  ),
+  document.getElementById('root')!,
+);
