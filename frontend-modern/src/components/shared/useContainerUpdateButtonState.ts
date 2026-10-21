@@ -15,10 +15,11 @@ import {
   getUpdateButtonLabel,
   getUpdateButtonTooltip,
   getUpdatePlanErrorMessage,
+  getUpdateUnavailableExplanation,
   hasContainerUpdate,
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
-  isContainerUpdatePinned,
+  isContainerUpdateUncheckable,
   type UpdateButtonProps,
   type UpdateState,
 } from './containerUpdateBadgeModel';
@@ -70,19 +71,32 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     hasContainerUpdate(props.updateStatus) ||
     hasContainerUpdateError(props.updateStatus) ||
     hasContainerUpdateCurrent(props.updateStatus) ||
-    isContainerUpdatePinned(props.updateStatus) ||
+    isContainerUpdateUncheckable(props.updateStatus) ||
     currentState() !== 'idle';
 
   // Server-evaluated refusal for the update capability (agent disconnected,
-  // agent too old, stale inventory). Render a passive update status with the
-  // reason instead of suggesting that Pulse can apply the update.
+  // agent too old, stale inventory), or the capability not advertised at all.
+  // Render a passive update status with the reason instead of suggesting that
+  // Pulse can apply the update.
   // Only gates the actionable states; in-flight and settled states keep their
   // own presentation.
   const updateUnavailableReason = (): string | undefined => {
     if (currentState() !== 'idle') return undefined;
-    return getActionReadinessRefusal(props.actionReadiness, 'update');
+    return (
+      getActionReadinessRefusal(props.actionReadiness, 'update') ??
+      (hasContainerUpdate(props.updateStatus) ? props.updateNotOfferedReason : undefined)
+    );
   };
   const isUpdateUnavailable = () => Boolean(updateUnavailableReason());
+  const updateUnavailableExplanation = (): string =>
+    getUpdateUnavailableExplanation({
+      reason: updateUnavailableReason() ?? '',
+      reasonCode: props.actionReadiness?.find(
+        (item) => item.name?.trim().toLowerCase() === 'update' && item.available === false,
+      )?.reasonCode,
+      hostName: props.hostName,
+      hostCommandsEnabled: props.hostCommandsEnabled,
+    });
 
   const isButtonDisabled = () =>
     currentState() === 'updating' ||
@@ -209,6 +223,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     reviewDetail,
     settingsLoaded,
     shouldHideButton,
+    updateUnavailableExplanation,
     updateUnavailableReason,
   };
 }

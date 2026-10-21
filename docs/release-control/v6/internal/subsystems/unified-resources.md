@@ -23,6 +23,20 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Websocket-first routes always obtain their REST snapshot (21 October 2026)
+
+Action readiness, scoped facets and other REST-only enrichment arrive only
+from the REST resource endpoints. A `prefer-ws-then-rest` route that mounted on
+a cache seeded from the websocket-fed all-resources cache (in-app navigation
+from another platform page) read that cache as fresh, and websocket ticks kept
+it fresh, so neither the mount fetch nor the delayed revalidation ever reached
+REST. The Docker table then offered container updates that the server had
+already refused. Each cache entry now records `canonicalAt`, set only by a REST
+fetch; such a route revalidates in the background at mount when its REST
+snapshot is absent or older than the cache window, and the delayed revalidation
+forces the network. `revalidates a prefer-ws-then-rest screen seeded from a
+websocket-only cache on mount` covers the navigation path.
+
 ### Native guest power qualifies only its own agent cards
 
 Canonical power-only Proxmox deltas qualify the detail drawer's retained in-guest

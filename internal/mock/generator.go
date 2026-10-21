@@ -4733,9 +4733,10 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 }
 
 // generateDockerContainerUpdateStatus mirrors the states the docker agent's
-// registry checker reports: unchecked, current, update available, and the
-// digest-pinned sentinel for image@sha256 references (no error states, since
-// mock data also feeds the public demo).
+// registry checker reports: unchecked, current, update available, the
+// digest-pinned sentinel for image@sha256 references, and the local-image
+// sentinel for images built on the host (no error states, since mock data
+// also feeds the public demo).
 func generateDockerContainerUpdateStatus(now time.Time) *models.DockerContainerUpdateStatus {
 	roll := rand.Float64()
 	if roll < 0.45 {
@@ -4746,8 +4747,12 @@ func generateDockerContainerUpdateStatus(now time.Time) *models.DockerContainerU
 		LastChecked:   now.Add(-time.Duration(10+rand.Intn(170)) * time.Minute),
 	}
 	switch {
-	case roll < 0.50:
+	case roll < 0.48:
 		status.Error = "digest-pinned image"
+	case roll < 0.50:
+		// A local image has no RepoDigest, so the agent reports no digest.
+		status.CurrentDigest = ""
+		status.Error = "local image"
 	case roll < 0.65:
 		status.UpdateAvailable = true
 		status.LatestDigest = fmt.Sprintf("sha256:%016x%016x%016x%016x", rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64())

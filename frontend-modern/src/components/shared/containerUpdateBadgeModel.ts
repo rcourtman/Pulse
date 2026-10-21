@@ -23,6 +23,14 @@ export interface UpdateButtonProps {
   // unavailable 'update' entry the button renders disabled with the refusal
   // reason, instead of letting the click fail at POST /api/actions/plan.
   actionReadiness?: ResourceActionReadiness[];
+  // Set when the server row does not advertise the update capability at all
+  // (no refusal is recorded then), with the reason to show instead.
+  updateNotOfferedReason?: string;
+  // The container's host and whether its Pulse agent was installed with
+  // command access. The server's refusal reads "not connected" either way;
+  // these let the locked badge say which, and what to do about it.
+  hostName?: string;
+  hostCommandsEnabled?: boolean;
   compact?: boolean;
   /**
    * A 44px minimum height below the `sm` breakpoint, for a control a phone
@@ -59,12 +67,29 @@ export function hasContainerUpdate(updateStatus?: DockerContainerUpdateStatus): 
 // it as its own neutral state instead of "Check failed" (#1666).
 const DIGEST_PINNED_SENTINEL = 'digest-pinned image';
 
+// Sentinel for an image built or loaded on the host: it has no RepoDigest, so
+// no registry holds a copy to compare against. Also not a failure.
+const LOCAL_IMAGE_SENTINEL = 'local image';
+
 export function isContainerUpdatePinned(updateStatus?: { error?: string }): boolean {
   return updateStatus?.error?.trim() === DIGEST_PINNED_SENTINEL;
 }
 
+export function isContainerUpdateLocalImage(updateStatus?: { error?: string }): boolean {
+  return updateStatus?.error?.trim() === LOCAL_IMAGE_SENTINEL;
+}
+
+/** The image has no registry tag to check, which is a state, not a failed check. */
+export function isContainerUpdateUncheckable(updateStatus?: { error?: string }): boolean {
+  return isContainerUpdatePinned(updateStatus) || isContainerUpdateLocalImage(updateStatus);
+}
+
+export function getContainerUpdateUncheckableLabel(updateStatus?: { error?: string }): string {
+  return isContainerUpdateLocalImage(updateStatus) ? 'Local' : 'Pinned';
+}
+
 export function hasContainerUpdateError(updateStatus?: DockerContainerUpdateStatus): boolean {
-  return Boolean(updateStatus?.error) && !isContainerUpdatePinned(updateStatus);
+  return Boolean(updateStatus?.error) && !isContainerUpdateUncheckable(updateStatus);
 }
 
 export function hasContainerUpdateCurrent(updateStatus?: DockerContainerUpdateStatus): boolean {
@@ -79,6 +104,16 @@ export function getContainerUpdatePinnedTooltip(): string {
   return 'This image is pinned to a specific digest, so there is no newer tag to check against';
 }
 
+export function getContainerUpdateLocalImageTooltip(): string {
+  return 'This image was built or loaded on this host, so no registry has a newer version to check against';
+}
+
+export function getContainerUpdateUncheckableTooltip(updateStatus?: { error?: string }): string {
+  return isContainerUpdateLocalImage(updateStatus)
+    ? getContainerUpdateLocalImageTooltip()
+    : getContainerUpdatePinnedTooltip();
+}
+
 export function getContainerUpdateCurrentTooltip(
   updateStatus?: DockerContainerUpdateStatus,
 ): string {
@@ -86,6 +121,37 @@ export function getContainerUpdateCurrentTooltip(
 
   const current = getDigestPreview(updateStatus.currentDigest, 12);
   return `Image is current\nDigest: ${current}...`;
+}
+
+/**
+ * What the locked "Update available" badge says when Pulse cannot apply the
+ * update. An agent installed without command access is the common case and has
+ * one fix, so it is named outright instead of the server's transport wording.
+ */
+export function getUpdateUnavailableExplanation(input: {
+  reason: string;
+  reasonCode?: string;
+  hostName?: string;
+  hostCommandsEnabled?: boolean;
+}): string {
+  const host = input.hostName?.trim() || 'this host';
+  if (input.reasonCode === 'command_agent_disconnected') {
+    if (input.hostCommandsEnabled === false) {
+      return (
+        `Update available. Pulse cannot apply it because the Pulse agent on ${host} was installed without command access.\n` +
+        `To allow updates from Pulse, reinstall the agent from Settings → Infrastructure with ` +
+        '"Enable legacy combined command profile" selected in the advanced install options. ' +
+        'Otherwise, apply the update with your container manager.'
+      );
+    }
+    if (input.hostCommandsEnabled === true) {
+      return (
+        `Update available. Pulse cannot apply it at the moment because the command channel to the Pulse agent on ${host} is not connected.\n` +
+        'Check that the agent is running, or apply the update with your container manager.'
+      );
+    }
+  }
+  return `Update available. Pulse cannot apply it: ${input.reason}\nApply this update using your container manager on the host.`;
 }
 
 export function getContainerUpdateBadgeTooltip(updateStatus?: DockerContainerUpdateStatus): string {

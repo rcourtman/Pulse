@@ -1,6 +1,10 @@
 import { For, Show, getOwner, runWithOwner, type Component, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
+import {
+  isContainerUpdateLocalImage,
+  isContainerUpdatePinned,
+  isContainerUpdateUncheckable,
+} from '@/components/shared/containerUpdateBadgeModel';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
@@ -130,6 +134,7 @@ const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
             updateStatus={update().updateStatus}
             resourceId={update().resourceId}
             actionReadiness={update().actionReadiness}
+            updateNotOfferedReason={update().updateNotOfferedReason}
             touchTarget
           />
         )}
@@ -175,11 +180,13 @@ const dockerSection = (
   const updateState = update
     ? isContainerUpdatePinned(update)
       ? 'Pinned digest'
-      : trimmedDockerValue(update.error)
-        ? 'Check failed'
-        : update.updateAvailable
-          ? 'Available'
-          : 'Current'
+      : isContainerUpdateLocalImage(update)
+        ? 'Local image'
+        : trimmedDockerValue(update.error)
+          ? 'Check failed'
+          : update.updateAvailable
+            ? 'Available'
+            : 'Current'
     : '';
   const image = trimmedDockerValue(docker.image);
   const imageRegistryLink = update?.updateAvailable
@@ -190,7 +197,11 @@ const dockerSection = (
     identityRow('Image', image),
     makeDetailRow('Image update', updateState, {
       title: update?.error,
-      tone: update?.updateAvailable ? 'accent' : update?.error ? 'danger' : 'default',
+      tone: update?.updateAvailable
+        ? 'accent'
+        : update?.error && !isContainerUpdateUncheckable(update)
+          ? 'danger'
+          : 'default',
       // An available update is something to act on: drawers lift it in front.
       lift: update?.updateAvailable === true,
       // An available update offers its next steps where it is stated.

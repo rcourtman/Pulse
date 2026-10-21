@@ -187,7 +187,7 @@ describe('ContainerUpdateBadge', () => {
     ));
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText('Update available')).toBeInTheDocument();
+    expect(screen.getByText('Update')).toBeInTheDocument();
     const status = screen.getByLabelText(/Pulse cannot apply it/);
     expect(status.getAttribute('aria-label')).toContain(
       'The Pulse agent on this host is still on an older version.',
@@ -195,6 +195,59 @@ describe('ContainerUpdateBadge', () => {
     expect(status.getAttribute('aria-label')).toContain('container manager on the host');
     fireEvent.click(status);
     expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
+  });
+
+  it('offers no update the server does not advertise', () => {
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="container-1"
+        containerName="branch-vpn"
+        resourceId="resource-1"
+        updateNotOfferedReason="Docker inventory for this host is offline."
+        updateStatus={{
+          updateAvailable: true,
+          currentDigest: 'sha256:current',
+          latestDigest: 'sha256:latest',
+          lastChecked: 0,
+        }}
+      />
+    ));
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Docker inventory for this host is offline/)).toBeInTheDocument();
+  });
+
+  it('tells a host without command access how to turn it on', () => {
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="container-1"
+        containerName="sonarr"
+        resourceId="resource-1"
+        actionReadiness={[
+          {
+            name: 'update',
+            available: false,
+            reasonCode: 'command_agent_disconnected',
+            reason: 'Docker / Podman command agent is not connected.',
+          },
+        ]}
+        hostName="Tower"
+        hostCommandsEnabled={false}
+        updateStatus={{
+          updateAvailable: true,
+          currentDigest: 'sha256:current',
+          latestDigest: 'sha256:latest',
+          lastChecked: 0,
+        }}
+      />
+    ));
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    const status = screen.getByLabelText(/installed without command access/);
+    expect(status.getAttribute('aria-label')).toContain('the Pulse agent on Tower');
+    expect(status.getAttribute('aria-label')).toContain('Settings → Infrastructure');
   });
 
   it('keeps the button enabled when the update readiness entry is available', () => {

@@ -805,6 +805,51 @@ func TestAgentClose(t *testing.T) {
 	}
 }
 
+// An image built or loaded on the host has no RepoDigests, so no registry
+// holds it. The agent used to ask Docker Hub anyway and reported the 401 for
+// the unknown repository as a failed check on every cycle.
+func TestCollectContainerReportsLocallyBuiltImageWithoutRegistryCheck(t *testing.T) {
+	inspect := baseInspect()
+	inspect.State = &containertypes.State{Running: false, Status: "exited"}
+	inspect.Config.Image = "local/proxmox-backup-server:4.2.3-1-20260729"
+	summary := containertypes.Summary{
+		ID:      "container-pbs",
+		Names:   []string{"/pbs"},
+		Image:   "local/proxmox-backup-server:4.2.3-1-20260729",
+		ImageID: "sha256:pbslocal",
+		State:   "exited",
+		Status:  "Exited (0) 1 minute ago",
+	}
+
+	checker := NewRegistryChecker(zerolog.Nop())
+	checker.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Errorf("unexpected registry request to %s", req.URL)
+		return nil, errors.New("offline")
+	})}
+	agent := &Agent{
+		logger:           zerolog.Nop(),
+		prevContainerCPU: make(map[string]cpuSample),
+		registryChecker:  checker,
+		docker: &fakeDockerClient{
+			containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+				return inspect, nil, nil
+			},
+			imageInspectWithRawFn: func(context.Context, string) (imagetypes.InspectResponse, []byte, error) {
+				return imagetypes.InspectResponse{Architecture: "amd64", Os: "linux"}, nil, nil
+			},
+		},
+	}
+
+	container, err := agent.collectContainer(context.Background(), summary)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	status := container.UpdateStatus
+	if status == nil || status.UpdateAvailable || status.Error != localImageUpdateStatus {
+		t.Fatalf("locally built image reported %+v, want the %q state", status, localImageUpdateStatus)
+	}
+}
+
 // A failed image inspect leaves the local digest unknown. Comparing an empty
 // digest reported "no update available", which the server treats as an
 // affirmative clear, so a pending update alert resolved and re-fired a whole
