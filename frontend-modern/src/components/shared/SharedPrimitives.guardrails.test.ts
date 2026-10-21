@@ -13,7 +13,7 @@ import { traverse, transformSync, types as t } from '@babel/core';
 import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { settingsDocumentationLinkViolations } from './__tests__/settingsDocumentationLinkContract';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
@@ -353,14 +353,22 @@ const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), pa
 describe('shared primitive guardrails', () => {
   it('replaces the real root usage bar with visible unavailable evidence in the same card', () => {
     const [disk, setDisk] = createSignal<Disk>({ total: 100, used: 0 });
-    const view = renderPrimitive(() =>
-      createComponent(RootDiskCard, {
-        get node() {
-          return { disk: disk() } as Node;
-        },
-      }),
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
     );
     try {
+      renderPrimitive(() =>
+        createComponent(RootDiskCard, {
+          get node() {
+            return { disk: disk() } as Node;
+          },
+        }),
+      );
       const card = primitiveScreen.getByTestId('root-disk-card');
       expect(card.querySelector('[data-stacked-disk-trigger]')).not.toBeNull();
       setDisk({ total: 100 });
@@ -370,8 +378,8 @@ describe('shared primitive guardrails', () => {
       expect(card.querySelector('[data-stacked-disk-trigger]')).toBeNull();
       expect(primitiveScreen.getByTestId('root-disk-card')).toBe(card);
     } finally {
-      view.unmount();
       cleanup();
+      vi.unstubAllGlobals();
     }
   });
   it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
