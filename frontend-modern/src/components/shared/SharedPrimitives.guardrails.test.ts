@@ -371,6 +371,13 @@ describe('shared primitive guardrails', () => {
       );
       const card = primitiveScreen.getByTestId('root-disk-card');
       expect(card.querySelector('[data-stacked-disk-trigger]')).not.toBeNull();
+      for (const percent of [0.5, 25, 93, 100]) {
+        setDisk({ total: 100, used: percent });
+        expect(card.querySelector('[data-stacked-disk-fill="single"]')).toHaveAttribute(
+          'width',
+          String(percent),
+        );
+      }
       setDisk({ total: 100 });
       expect(primitiveScreen.getByRole('status')).toHaveTextContent(
         'Usage unavailable · 100 B total',

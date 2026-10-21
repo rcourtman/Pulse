@@ -28,7 +28,8 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
       total,
       used,
       free: total - used,
-      usage: used / total,
+      // The shared aggregate bar consumes percentage units, not a fraction.
+      usage: (used / total) * 100,
     };
   };
   const capacityLabel = () => {

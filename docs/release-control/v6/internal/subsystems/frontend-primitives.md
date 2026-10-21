@@ -26,7 +26,9 @@ The existing machine detail's Root Disk card renders a wrapping, neutral
 `Usage unavailable` status instead of synthetic zero bytes or a usage bar when
 its aggregate lacks valid capacity/used bytes or carries an unavailable sentinel.
 Known capacity remains visible; explicitly measured zero usage keeps its normal
-bar. First, partial and removed reports update the mounted card. No new surface,
+bar. Measured byte ratios reach the shared aggregate bar in percentage units,
+including sub-1% and high-pressure readings; 93/100 must not become 1%.
+First, partial and removed reports update the mounted card. No new surface,
 collection, health or alert rule is introduced. `RootDiskCard.test.tsx`, the real
 bar lifecycle in `SharedPrimitives.guardrails.test.ts` and the full-drawer
 `browser-tests/root-disk-observation.cjs` fixture cover this contract.

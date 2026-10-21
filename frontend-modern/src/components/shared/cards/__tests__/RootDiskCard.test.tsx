@@ -51,12 +51,12 @@ describe('RootDiskCard observation availability', () => {
     expect(screen.queryByText(/0 B|NaN|Infinity|%/)).toBeNull();
   });
 
-  it.each([0, 25, 100])('keeps explicitly measured %i%%, including zero', (percent) => {
+  it.each([0, 0.5, 25, 93, 100])('keeps explicitly measured %s%%, including zero', (percent) => {
     render(() => (
       <RootDiskCard node={node({ total: 100 * GB, used: percent * GB, usage: percent / 100 })} />
     ));
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-usage', String(percent / 100));
+    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-usage', String(percent));
     expect(screen.getByText(`${formatBytes(percent * GB)} / 100 GB`)).toBeInTheDocument();
   });
 
@@ -77,7 +77,7 @@ describe('RootDiskCard observation availability', () => {
     render(() => <RootDiskCard node={toNodeFromProxmox(resource())!} />);
     expect(screen.getByRole('status')).toHaveTextContent(/^Usage unavailable$/);
     setResource({ ...initial, disk: { current: 25, total: 100 * GB, used: 25 * GB } });
-    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-usage', '0.25');
+    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-usage', '25');
     setResource({ ...initial, disk: { current: 0, total: 100 * GB } });
     expect(screen.getByRole('status')).toHaveTextContent('Usage unavailable · 100 GB total');
     expect(screen.queryByTestId('disk-bar')).toBeNull();
