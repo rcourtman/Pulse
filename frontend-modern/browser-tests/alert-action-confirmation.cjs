@@ -224,6 +224,8 @@ async function dismissToasts(page) {
               ),
             );
           await page.clock.install({ time: new Date('2026-10-21T12:00:00Z') });
+          // Keep Date fixed while runFor advances UI release/toast timers.
+          await page.clock.setFixedTime(new Date('2026-10-21T12:00:00Z'));
           await page.clock.pauseAt(new Date('2026-10-21T12:00:00Z'));
           await page.goto(
             `${origin}/browser-tests/alert-action-confirmation.html?locale=${locale}&action=${action}`,
