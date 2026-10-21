@@ -364,7 +364,7 @@ Docker or Podman administration tool, after checking the workload's existing
 image/state and recovery path. Deliberately opting into Pulse-managed changes
 is a separate trust decision: the
 [agent privilege model](AGENT_SECURITY.md#agent-privilege-model) explains the
-legacy combined command profile, and the
+combined command profile behind **Allow Pulse to run commands on this host**, and the
 [least-privilege profile](AGENT_SECURITY.md#least-privilege-agent-profile)
 describes the supported separate runner. Neither is a diagnostic prerequisite;
 do not change a working profile just to obtain evidence.
@@ -485,7 +485,8 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 - **Pulse Agent** installed on the container host (see [Unified Agent](UNIFIED_AGENT.md)) and currently connected
 - **Command execution enabled** on the agent — it is disabled by default. Either:
   - start the agent with `--enable-commands` (or `PULSE_ENABLE_COMMANDS=true`), or
-  - tick **Enable legacy combined command profile** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission (this is the transitional combined profile, not a least-privilege setting)
+  - tick **Allow Pulse to run commands on this host** in the token step of **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission. Pulse can then run commands as root on that host: this is the full-trust combined profile, not a least-privilege setting
+  - an agent installed without it cannot be switched on from Pulse; run the new install command on the host
 - **Admin approval**: every lifecycle action requires confirmation by an admin in the UI before it runs. The agent then verifies the container's state before the change and confirms it actually reached the requested state afterwards.
 
 ### Limitations

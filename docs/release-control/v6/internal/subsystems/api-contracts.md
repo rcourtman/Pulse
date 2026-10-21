@@ -21,6 +21,15 @@
 
 ## Purpose
 
+### Proxmox setup guide names the command-access option by its shared label (21 October 2026)
+
+The Proxmox node setup guide's Docker-in-LXC note now points to the Pulse
+Agent installer option through `getUnifiedAgentCommandAccessOptionLabel`
+("Allow Pulse to run commands on this host") instead of the "combined command
+profile" wording. The node setup client still sends `enableCommands: false`
+and mints monitoring-only credentials; no request or scope changes.
+`settingsArchitecture.test.ts` pins the shared label.
+
 ### Reporting telemetry observes canonical generation and delivery boundaries
 
 `internal/api/reporting_activity.go` records best-effort content-free events to

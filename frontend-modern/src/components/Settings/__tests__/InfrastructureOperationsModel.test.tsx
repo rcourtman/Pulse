@@ -330,11 +330,12 @@ describe('infrastructure operations model', () => {
       'commands keep it separate: copy the command first, then use Show token only.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Install the transitional combined runtime that can accept server command requests',
+      'getUnifiedAgentCommandAccessOptionLabel',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Enable legacy combined command profile',
+      'Pulse can then run commands as root on this host',
     );
+    expect(infrastructureInstallerSectionSource).not.toContain('legacy combined');
     expect(infrastructureInstallerSectionSource).not.toContain('Patrol auto-fix');
     expect(infrastructureInstallerSectionSource).not.toContain('auto-fix requires Pulse Pro');
     expect(infrastructureInstallerSectionSource).not.toContain('<api-token>');
