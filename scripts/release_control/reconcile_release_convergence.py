@@ -262,6 +262,18 @@ def transient_api_read_failure(returncode: int, diagnostic: str) -> str | None:
     return None
 
 
+def definite_api_not_found(returncode: int, diagnostic: str) -> bool:
+    """Recognise a complete gh not-found response, not text in another error.
+
+    Missing owner history permits attested recovery, so a refusal, mixed
+    diagnostic, timeout or signal must never acquire that meaning from a 404
+    substring. Unrecognised formats remain unavailable, not missing.
+    """
+    return returncode == 1 and re.fullmatch(
+        r"(?:HTTP 404|gh: Not Found \(HTTP 404\))\n?", diagnostic
+    ) is not None
+
+
 class GitHub:
     def __init__(
         self,
@@ -316,7 +328,7 @@ class GitHub:
             detail = result.stderr.strip().splitlines() if output else []
             suffix = f": {detail[-1]}" if detail else ""
             operation = read_subject or " ".join(arguments[:3])
-            if re.findall(r"\bHTTP ([0-9]{3})\b", result.stderr or "") == ["404"]:
+            if retry_read and definite_api_not_found(result.returncode, result.stderr or ""):
                 raise GitHubNotFound(
                     f"GitHub object was not found ({operation}){suffix}"
                 )
