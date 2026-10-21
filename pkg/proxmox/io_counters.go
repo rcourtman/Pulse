@@ -69,9 +69,12 @@ func decodeWithCounterPresence(data []byte, target any) (IOCounterPresence, Disk
 	return counterPresence(raw), DiskUsagePresence{Explicit: true, Used: jsonFieldPresent(raw, "disk"), Total: jsonFieldPresent(raw, "maxdisk")}, nil
 }
 
+// CPU uses -1 for an omitted/null observation. encoding/json leaves that
+// initial value unchanged for null; a measured zero still overwrites it.
+// Keep the same marker through node inventories, cluster listings and detail.
 func (v *VM) UnmarshalJSON(data []byte) error {
 	type alias VM
-	var decoded alias
+	decoded := alias{CPU: -1}
 	presence, _, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
@@ -83,7 +86,7 @@ func (v *VM) UnmarshalJSON(data []byte) error {
 
 func (c *Container) UnmarshalJSON(data []byte) error {
 	type alias Container
-	var decoded alias
+	decoded := alias{CPU: -1}
 	presence, diskPresence, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
@@ -111,7 +114,7 @@ func (d *ContainerDiskUsage) UnmarshalJSON(data []byte) error {
 
 func (r *ClusterResource) UnmarshalJSON(data []byte) error {
 	type alias ClusterResource
-	var decoded alias
+	decoded := alias{CPU: -1}
 	presence, diskPresence, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
@@ -124,7 +127,7 @@ func (r *ClusterResource) UnmarshalJSON(data []byte) error {
 
 func (s *VMStatus) UnmarshalJSON(data []byte) error {
 	type alias VMStatus
-	var decoded alias
+	decoded := alias{CPU: -1}
 	presence, _, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err

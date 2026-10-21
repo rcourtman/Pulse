@@ -190,10 +190,17 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	// Intent context: explicit metric policies replace the legacy delay.
 	var intent *reducer.DiscreteIntent
 	delaySeconds := 0
-	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType))
+	// resourceType is also a legacy display label (for example "Container").
+	// Policy lookup must use the typed spec, not an intentionally unsupported
+	// ambiguous label, or a system container silently loses its guest delay.
+	policyResourceType := string(spec.ResourceType)
+	if policyResourceType == "" {
+		policyResourceType = resourceType // Compatibility for untyped callers.
+	}
+	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, policyResourceType, MetricAlertIntentSignal(metricType))
 	stability := metricStabilityPolicy{}
 	if effectiveIntent.Explicit {
-		decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, triggered, BackupIntentContext{})
+		decision := m.evaluateIntentNoLock(spec.ResourceID, policyResourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, triggered, BackupIntentContext{})
 		if decision.StateChanged {
 			m.saveActiveAlertsAsync("canonical metric intent pending state")
 		}
@@ -204,7 +211,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			OperatorReason:     decision.Reason,
 		}
 	} else if triggered {
-		delaySeconds = m.getTimeThreshold(spec.ResourceID, resourceType, metricType)
+		delaySeconds = m.getTimeThreshold(spec.ResourceID, policyResourceType, metricType)
 	}
 	if !effectiveIntent.Explicit {
 		stability = metricStabilityFor(metricType, effectiveIntent.GraceSeconds)

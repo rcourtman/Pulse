@@ -1562,6 +1562,29 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Typed policy identity stays separate from display labels (21 October 2026)
+
+Canonical metric intent and legacy-delay lookup use the typed spec's resource
+kind, while existing alert display labels stay unchanged. In particular,
+`Container` is not a policy alias for `system-container`; using the display
+label silently bypassed the configured guest CPU delay. Legacy untyped callers
+retain their compatibility fallback. The CPU lifecycle controls cover VM/LXC
+pending interruption and ordinary activation, plus actual collector-generated
+pending/unknown frames for the existing consumer surfaces. No configured delay,
+threshold or intent policy is weakened or redefined.
+
+### Missing guest CPU is not an idle observation (21 October 2026)
+
+The unavailable Proxmox CPU marker cannot become a unified metric candidate or
+match any numeric CPU filter (including equals, less-than and not-equal). The
+existing observation-gap reducer interrupts pending runs, preserves original
+active incidents/acknowledgements and permits ordinary measured-zero recovery.
+Independent guest memory, disk and I/O retain their own evidence and policies.
+`TestGuestCPUUnknownInterruptsPendingAndPreservesAcknowledgement` and
+`TestGuestCPUUnknownCannotMatchNumericFilters` pin this boundary; the real-client
+collector matrix also crosses the public consumer and History paths.
+
+
 ### Retired AI Discovery progress frames (2026-10-11)
 
 The websocket store no longer handles `ai_discovery_progress` frames or emits

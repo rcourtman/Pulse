@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -100,6 +101,15 @@ func guestObservedInCycle(lastSeen, cycleStart time.Time) bool {
 	return !lastSeen.Before(cycleStart)
 }
 
+// guestCPUUsage preserves the provider ratio, including a measured zero, but
+// never sanitizes unavailable or non-finite readings into an idle observation.
+func guestCPUUsage(value float64) float64 {
+	if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return -1
+	}
+	return value
+}
+
 // recordGuestMetrics records metrics for all running VMs and containers that
 // this cycle actually observed.
 func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.Container, cycleStart time.Time) {
@@ -191,7 +201,9 @@ func (m *Monitor) recordGuestMetric(
 	}
 
 	if m.metricsHistory != nil {
-		m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
+		if cpu >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
+		}
 		if memory >= 0 {
 			m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
 		}
@@ -216,7 +228,9 @@ func (m *Monitor) recordGuestMetric(
 	}
 
 	if m.metricsStore != nil {
-		m.metricsStore.Write(resourceType, resourceID, "cpu", cpu, now)
+		if cpu >= 0 {
+			m.metricsStore.Write(resourceType, resourceID, "cpu", cpu, now)
+		}
 		if memory >= 0 {
 			m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)
 		}

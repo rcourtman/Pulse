@@ -691,6 +691,8 @@ export interface ResourceProxmoxMeta {
   sourceId?: string;
   /** Proxmox-authored VM/LXC power state, kept separate from collection freshness. */
   runtimeStatus?: string;
+  /** Current guest CPU was not observed; omission alone may be a partial snapshot. */
+  cpuUsageUnavailable?: boolean;
   /** Pulse-owned immutable identity for the node within one PVE connection. */
   nodeIdentity?: string;
   vmid?: number;

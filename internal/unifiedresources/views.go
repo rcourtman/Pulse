@@ -359,6 +359,9 @@ func (v VMView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0
 	}
+	if v.r.Proxmox != nil && v.r.Proxmox.CPUUsageUnavailable {
+		return -1
+	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
 }
 
@@ -703,6 +706,9 @@ func (v ContainerView) ParentName() string {
 func (v ContainerView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0
+	}
+	if v.r.Proxmox != nil && v.r.Proxmox.CPUUsageUnavailable {
+		return -1
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
 }

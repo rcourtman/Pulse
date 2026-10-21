@@ -2626,3 +2626,16 @@ func TestGuestMemoryEvidenceUsesSelectedMetricOnly(t *testing.T) {
 		r.Metrics.Memory = &MetricValue{Percent: 24, Observation: selected}
 	}
 }
+
+func TestGuestCPUViewRetainsUnavailableWithoutChangingLegacyZero(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		r := &Resource{Proxmox: &ProxmoxData{VMID: 106, CPUUsageUnavailable: missing}, Metrics: &ResourceMetrics{}}
+		want := 0.0
+		if missing {
+			want = -1
+		}
+		if (VMView{r: r}).CPUPercent() != want || (ContainerView{r: r}).CPUPercent() != want {
+			t.Fatal("guest view invented idle CPU or broke legacy scalar compatibility")
+		}
+	}
+}

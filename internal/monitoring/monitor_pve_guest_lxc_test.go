@@ -1151,3 +1151,8 @@ func TestLXCDiskUsageIndependentAgentRootRemainsCurrent(t *testing.T) {
 func TestLXCMountDiskObservationContract(t *testing.T) {
 	testLXCMountDiskObservationLifecycle(t)
 }
+
+// Both concrete clients and collectors keep VM/LXC CPU gaps distinct from idle.
+func TestGuestCPUObservationContract(t *testing.T) {
+	testGuestCPUObservationLifecycle(t)
+}

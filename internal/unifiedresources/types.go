@@ -354,6 +354,7 @@ type ProxmoxData struct {
 	ContainerType                string              `json:"containerType,omitempty"`
 	IsOCI                        bool                `json:"isOci,omitempty"`
 	CPUs                         int                 `json:"cpus,omitempty"`
+	CPUUsageUnavailable          bool                `json:"cpuUsageUnavailable"` // A complete guest observation withdraws current CPU, including a previous cached reading.
 	Template                     bool                `json:"template,omitempty"`
 	Temperature                  *float64            `json:"temperature,omitempty"` // Max node CPU temp in Celsius
 	TemperatureDetails           *models.Temperature `json:"temperatureDetails,omitempty"`

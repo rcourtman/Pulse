@@ -663,3 +663,26 @@ func TestGuestMemoryClusterResourcesIsTypeAware(t *testing.T) {
 		}
 	}
 }
+
+func TestProxmoxGuestCPUObservationsOmitUnknownAndKeepMeasuredIdle(t *testing.T) {
+	for _, cpu := range []float64{-1, -.2, math.NaN(), math.Inf(1), math.Inf(-1), 0, .0058, .98} {
+		for name, metric := range map[string]*ResourceMetrics{"vm": metricsFromVM(models.VM{CPU: cpu}), "lxc": metricsFromContainer(models.Container{CPU: cpu})} {
+			known := cpu >= 0 && !math.IsInf(cpu, 0)
+			if !known && (metric.CPU != nil || ProxmoxGuestCPUPercent(cpu) != -1) {
+				t.Fatalf("%s invalid CPU became a measurement: %v %+v", name, cpu, metric.CPU)
+			}
+			if known && (metric.CPU == nil || metric.CPU.Percent != cpu*100 || metric.CPU.Source != SourceProxmox) {
+				t.Fatalf("%s valid CPU lost/changed units: %v %+v", name, cpu, metric.CPU)
+			}
+		}
+	}
+	// An explicit missing platform observation cannot be replaced by an
+	// incomparable in-guest host CPU, regardless of freshness or merge order.
+	target := &Resource{Type: ResourceTypeVM, Proxmox: &ProxmoxData{VMID: 106, CPUUsageUnavailable: true}}
+	for _, source := range []DataSource{SourceAgent, SourceProxmox} {
+		merged := mergeMetrics(target, &ResourceMetrics{CPU: &MetricValue{Percent: 98, Source: SourceProxmox}}, &ResourceMetrics{CPU: &MetricValue{Percent: 10, Source: source}, Memory: &MetricValue{Percent: 25, Source: source}}, source, time.Now(), nil, nil)
+		if merged.CPU != nil || merged.Memory == nil || merged.Memory.Percent != 25 {
+			t.Fatalf("CPU withdrawal lost scope or borrowed a sample: %+v", merged)
+		}
+	}
+}

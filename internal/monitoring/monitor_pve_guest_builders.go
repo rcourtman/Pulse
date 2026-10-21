@@ -547,7 +547,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		Instance: instanceName,
 		Status:   res.Status,
 		Type:     "qemu",
-		CPU:      safeFloat(res.CPU),
+		CPU:      guestCPUUsage(res.CPU),
 		CPUs:     res.MaxCPU,
 		Memory:   memory,
 		Disk: models.Disk{

@@ -3689,6 +3689,16 @@ vdev layout is reported` in
 
 ## Current State
 
+### Shared guest availability metadata keeps CPU separate from storage (21 October 2026)
+
+`ProxmoxData.cpuUsageUnavailable` belongs to a complete guest CPU observation.
+It withdraws only current CPU and cannot clear or replace filesystem capacity,
+usage, storage identity or independent backup evidence. Partial non-guest
+facets do not erase that source-owned state. Ordinary CPU recovery restores
+only its own metric; no storage, backup or guest action is added. Registry,
+clone and collector lifecycle controls retain this shared-type boundary.
+
+
 ### Protection evaluations settle or release their owner
 
 One 150-second read budget covers every 200-subject batch, including API-client
