@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "ee0157887074f3256f1fa34371c45fe3cfedbab8",
+  "verified_at": "2026-10-21T04:18:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/licensePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/licensePresentation.ts": "dcb1d21c2a41bf6c6990aa2387acdfdef2a4d739de4bfe15419aa939aa34256d"
+  },
+  "routes": [
+    "/auth/license-purchase-activate",
+    "/settings/system/billing/plan",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "states": [
+    "Unfinished synthetic checkout returns failed without claiming payment completion or unchanged entitlement",
+    "Failed return with existing active Pro still shows current Pro plan",
+    "Confirmed activation keeps success presentation",
+    "Activated query with Community cannot claim checkout completion or grant Pro"
+  ],
+  "interactions": [
+    "Native recorded bridge form POST retains all emitted signed fields and consumes the pending 409 callback in the real rebuilt ProLicensePanel",
+    "Refresh preserves unconfirmed notice and reloads actual entitlement API",
+    "Keyboard desktop and native touch phone open recovery and toggle manual disclosure; key textarea receives focus",
+    "Purchase query is consumed; no activation, clear, trial or purchase API mutation; no opener required",
+    "All six final captures opened via native view_image; no horizontal overflow"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "Chromium": "141.0.7390.37",
+    "WebKit": "26.0"
+  },
+  "limits": "Recorded synthetic transaction callback and API bodies, not live backend services or payments. Source/lock/assets checked before preview. Existing callback, signing, grant, persistence, replay, CSP and COOP code unchanged. This is not installed or release acceptance."
+}

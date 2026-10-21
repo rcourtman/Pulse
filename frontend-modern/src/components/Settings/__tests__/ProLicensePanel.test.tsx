@@ -1145,7 +1145,7 @@ describe('ProLicensePanel', () => {
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
-      title: 'Plan needs attention',
+      title: 'Purchase activation not confirmed',
       actionLabel: 'Open recovery',
       actionHref: getSelfHostedBillingHref('plan', {
         detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
@@ -1322,6 +1322,49 @@ describe('ProLicensePanel', () => {
       scroll: false,
     });
   });
+
+  it.each(['free', 'pro'] as const)(
+    'keeps a failed purchase return unconfirmed while showing the actual %s plan',
+    async (tier) => {
+      if (tier === 'pro') {
+        mockEntitlements = {
+          ...mockEntitlements!,
+          capabilities: ['ai_autofix'],
+          subscription_state: 'active',
+          tier,
+          runtime: PRO_RUNTIME_IDENTITY,
+        };
+      }
+      useLocationMock.mockReturnValue({
+        search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED}`,
+        pathname: '/settings/system/billing/plan',
+        hash: '',
+      });
+
+      renderPanel();
+
+      await waitFor(() => expect(loadLicenseEntitlementsMock).toHaveBeenCalled());
+      expect(screen.getByText('Purchase activation not confirmed')).toBeInTheDocument();
+      expect(
+        screen.getByText(/check Pulse Account before starting another purchase/),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Checkout completed/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/plan.*unchanged/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(`Current plan: ${tier === 'free' ? 'Community' : 'Pulse Pro'}`),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open recovery' })).toHaveAttribute(
+        'href',
+        getSelfHostedBillingHref('plan', { detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL }),
+      );
+      expect(screen.getAllByText('Manual key recovery')[0]?.closest('details')).toHaveAttribute(
+        'open',
+      );
+      expect(activateLicenseMock).not.toHaveBeenCalled();
+      expect(clearLicenseMock).not.toHaveBeenCalled();
+      expect(startProTrialMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('opens recovery by default when the billing route requests the recovery detail', async () => {
     useLocationMock.mockReturnValue({

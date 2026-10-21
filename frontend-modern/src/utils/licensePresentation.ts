@@ -1145,8 +1145,8 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
     case 'failed':
       return {
         tone: 'border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 text-red-900 dark:text-red-100',
-        title: 'Plan needs attention',
-        body: 'Checkout completed, but this instance could not apply the plan automatically. Review the current plan below, then open recovery if you already have a key from this purchase.',
+        title: 'Purchase activation not confirmed',
+        body: 'Pulse could not confirm automatic plan activation for this checkout. Review the current plan below, and check Pulse Account before starting another purchase. If you already have an activation key, open recovery below.',
       };
     case 'unavailable':
       return {

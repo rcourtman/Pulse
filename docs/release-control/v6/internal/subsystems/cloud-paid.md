@@ -34,6 +34,20 @@ destination and its unchanged return boundaries. Local fixtures do not establish
 that `/buy` is deployed, that old Cloud links redirect, or that payment has
 completed; those need separate exact-source/served acceptance.
 
+### An unconfirmed purchase return is not payment evidence
+
+The shared `purchase=failed` arrival covers an unfinished or unpaid checkout,
+a failed lookup, and errors after a fulfilled purchase (including after local
+activation). Its Plans notice must not claim checkout completed, payment failed,
+or the current plan is unchanged. It directs the operator to the actual current
+plan and Pulse Account before another purchase, retaining existing manual-key
+recovery. No new purchase state, grant, retry or trust exception is introduced.
+
+`licensePresentation.test.ts` pins the shared copy; `ProLicensePanel.test.tsx`
+checks Community and already-active Pro, recovery routing and absence of
+activation/clear/trial writes. Browser proof consumes the previously emitted
+pending callback through the real panel. It is not installed or payment proof.
+
 ### Retired mobile settings keep information separate from entitlement
 
 Pulse Mobile retirement guidance is a full-text labelled note, not a paid
