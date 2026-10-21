@@ -486,6 +486,11 @@ identity, addresses and counter values are preserved, not erased or renewed.
 A silent linked agent qualifies only its selected interface list; an explicit
 platform list remains independent. Host-derived LXC configuration, unrelated
 platforms and unknown native states do not acquire invented power diagnoses.
+Stopped/offline Proxmox LXC guests also qualify explicitly agent-selected
+interface details, even with an unexpired agent lease. This does not qualify
+host-derived or unspecified-provenance LXC configuration; paused/suspended LXC
+states are not borrowed from VM semantics. Positive workload and platform
+identity are required, including the legacy `lxc` shape without platform metadata.
 No collection, network-rate metric, stored History, agent action, backup action
 or wire contract changes. Clearing a presentation cue is not proof of a live
 connection, thaw or filesystem recovery. `guestNetworkObservation`,
@@ -10884,8 +10889,10 @@ explains hidden input and Ctrl+C cancellation. Pull/up commands remain untouched
 The shared RAID card exposes its last-known reason in visible wrapping status
 text, not only hover titles. In the guest Overview, the native Proxmox VM power
 state (paused, suspended, stopped/offline) overrides an unexpired in-guest agent
-lease for RAID and agent-supplied physical-disk views. Unknown power, containers
-and unrelated platforms do not acquire an invented Proxmox power diagnosis.
+lease for RAID and agent-supplied physical-disk views. Stopped/offline Proxmox
+LXC guests apply the same retention boundary to their own agent hardware reports,
+without imposing it on independent API-only disks. Unknown power, paused LXC
+states and unrelated platforms do not acquire invented Proxmox power semantics.
 Array/member state and adverse evidence remain readable, without current state
 colours, rebuild speed or progress claims. GuestHardwareObservation and RaidCard
 regressions cover the live retained presentation; guest-hardware-observation.cjs

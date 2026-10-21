@@ -8015,7 +8015,10 @@ boundary without native backup, restore or guest operations.
 
 An open guest's SMART view accepts an explicit parent-owned last-known reason
 when native Proxmox VM power contradicts execution or its own Pulse agent stops
-reporting. The collapsed disk summary and expanded SMART view share that reason:
+reporting. Stopped/offline Proxmox LXC guests likewise qualify their own agent's
+retained RAID/SMART reports before its lease expires. Host configuration and
+explicit independent API disks remain independent; VM pause/suspend semantics
+are not inferred for containers. The collapsed disk summary and expanded SMART view share that reason:
 no current healthy/temperature verdict, current attribute tones or live I/O from
 the retained report. Reported disk risks remain qualified and readable. Stored
 History identity, range and samples are neither withdrawn nor manufactured.

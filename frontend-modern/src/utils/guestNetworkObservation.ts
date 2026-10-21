@@ -1,5 +1,9 @@
 import type { WorkloadGuest } from '@/types/workloads';
-import { getWorkloadPlatformScopes, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getWorkloadPlatformScopes,
+  resolveWorkloadType,
+  resolveWorkloadTypeFromString,
+} from '@/utils/workloads';
 
 type GuestNetworkEvidence = Pick<
   WorkloadGuest,
@@ -25,6 +29,19 @@ export const getGuestNetworkLastKnownReason = (guest: GuestNetworkEvidence): str
   if (proxmoxVM && ['paused', 'suspended', 'stopped', 'offline'].includes(status ?? '')) {
     const power = status === 'offline' ? 'stopped' : status;
     return `Using last known interface details. Proxmox reports this VM ${power}. Retained addresses and counters do not establish a current connection.`;
+  }
+  const proxmoxContainer =
+    (resolveWorkloadTypeFromString(guest.workloadType) ??
+      resolveWorkloadTypeFromString(guest.type)) === 'system-container' &&
+    (scopes.includes('proxmox-pve') || (scopes.length === 0 && guest.type === 'lxc'));
+  // Only an explicitly selected in-container agent list is execution evidence.
+  // Host-derived LXC configuration can legitimately survive a stopped guest.
+  if (
+    proxmoxContainer &&
+    guest.networkInterfacesFromAgent === true &&
+    ['stopped', 'offline'].includes(status ?? '')
+  ) {
+    return 'Using last known interface details. Proxmox reports this container stopped. Retained addresses and counters do not establish a current connection.';
   }
   // A stale linked agent cannot invalidate independently supplied platform
   // interfaces (including host-derived LXC configuration). Preserve the

@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "6a4596d8826e4bf3627fe68132e2f076404f6d8e",
+  "changed_paths": [
+    "frontend-modern/src/utils/guestHardwareObservation.ts",
+    "frontend-modern/src/utils/guestNetworkObservation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/guestHardwareObservation.ts": "30d9ca97da1677a291ef9fa3d7178455d861d409bc511d470a888227e4d1dd3b",
+    "frontend-modern/src/utils/guestNetworkObservation.ts": "e665408e64a9bb5d3764a08d23350159ccf5db896fe3767ae5376418e4c95a81"
+  },
+  "routes": [
+    "/ (isolated read-only canonical resource/HTTP fixtures consuming the production Workloads row, Network disclosure, full guest drawer, SMART, RAID and CSS)"
+  ],
+  "states": [
+    "VM paused/suspended/stopped/offline controls, including independent agent staleness and stored disk risk",
+    "Proxmox LXC stopped/offline with online canonical carrier and unexpired selected agent: retained SMART, RAID and interfaces are last known",
+    "Host-derived LXC configuration remains independent; native running clears only the parent qualifier",
+    "Same-open disk/row/details identity, adverse RAID member/rebuild evidence, addresses, counters, disk History owner/range remain intact"
+  ],
+  "interactions": [
+    "Keyboard Enter and 320px touch expand real SMART details",
+    "Keyboard/touch open the Network reading disclosure without triggering row actions; Escape/Close restores focus",
+    "Consume source changes through canonical delta merger/useWorkloads; no guest operation or collection probe",
+    "Twenty-two final native captures opened with view_image: readable stopped-container status/SMART/RAID and network warning at desktop and 320px; fresh narrow-address control is DOM-only below the captured viewport"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-21T10:25:38Z",
+  "evidence": {
+    "runtime_source": "ed433303518f74d3cb1fcf58b0ce6b9ef094c649",
+    "executing_source": "6a4596d8826e4bf3627fe68132e2f076404f6d8e",
+    "source_tests_receipt": "source-_zgg2mut",
+    "remaining_phases_receipt": "source-s0tdjss_",
+    "source_tests_limit": "Containing test run failed one unchanged 5000ms filter-contract timeout (4129 passes), not cleared by successful types/lint/build/budgets or browser proof.",
+    "hardware_execution_binding": {
+      "version": 1,
+      "source_sha": "6a4596d8826e4bf3627fe68132e2f076404f6d8e",
+      "compiled_source_sha": "ed433303518f74d3cb1fcf58b0ce6b9ef094c649",
+      "compiled_binding_sha256": "58a47bfc60a5f5631202f80f686837a5dac3fa8b77d90561f9e9f4aa40b013dc",
+      "driver_path": "browser-tests/guest-hardware-observation.cjs",
+      "driver_sha256": "b78b6aa48f2d89f40e6dc0089a8a6ab0c8b3523bd9c7ca5418dd2075c51ea523"
+    },
+    "browser_case_groups": 62,
+    "captures": [
+      {
+        "file": "desktop-current-hardware.png",
+        "sha256": "d7428109cbcaa0d6ccb1615eac353bc2c14242fed0a36888134931f5647016d5",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-paused-smart.png",
+        "sha256": "68370b545bb720f7948654ea413c85f201b4b2538aacf70f33e8c9f46255c2eb",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-paused-raid.png",
+        "sha256": "7ddf66d7d0ec58244f3093d7a21af6ed3b0b10ed1055edaa99732133fe712fc6",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-retained-risk.png",
+        "sha256": "03458f4aa0452aa669964f59cb7358d3384e54da47f56974cc29a0126bf7b35d",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-stopped-lxc-smart.png",
+        "sha256": "b33823e2e06d58ff3b8aa917b09e9fbbbc087235e0d54b1758aac464927b27b7",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-stopped-lxc-raid.png",
+        "sha256": "b33823e2e06d58ff3b8aa917b09e9fbbbc087235e0d54b1758aac464927b27b7",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-current-hardware.png",
+        "sha256": "835eac027877aa5a3aac641ea9fbfdac94a3a4bc598cbea8e837d82a5f97dc42",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-paused-smart.png",
+        "sha256": "673dc089b6b3396fb8e8f33241bdc204589ad692871a71faf21fd4ed8b92062f",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-paused-raid.png",
+        "sha256": "95e75f9067c6aadd163f22882ee608123835c381034138d4da49c2336b087dd6",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-retained-risk.png",
+        "sha256": "da76efb9cf5304e5259014cd40375b365e07634cc22e72a5c8b76129cebba7e2",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-stopped-lxc-smart.png",
+        "sha256": "d6d0a379d2fcc2aaf1384aa2f3fe6527ddc9bedaf367a7c4f43ef54699874345",
+        "kind": "hardware"
+      },
+      {
+        "file": "narrow-stopped-lxc-raid.png",
+        "sha256": "d5dcf9214cad309177bb68654bfc0290db1bbde6b5a575b3f7b329fb3013119e",
+        "kind": "hardware"
+      },
+      {
+        "file": "desktop-paused-disclosure.png",
+        "sha256": "1270361e7e8239a57083bbac8af4c3aa2a1cbce2511589e3a05232044afe71b3",
+        "kind": "network"
+      },
+      {
+        "file": "desktop-stopped-lxc-disclosure.png",
+        "sha256": "3f8d47a708994e7a957c4f704d5ad86e97d334cbc4f080b90fb602f348732f0d",
+        "kind": "network"
+      },
+      {
+        "file": "desktop-stopped-lxc-details.png",
+        "sha256": "ccbf18042e16d9f268d9c2ca17fe512fa1e1a63b2a63e1aac9e7d4f625f324ef",
+        "kind": "network"
+      },
+      {
+        "file": "desktop-stopped-details.png",
+        "sha256": "82898fcd831722ed33379743f4fd955d80fa319039ca01bd22bc46bf2f8dc809",
+        "kind": "network"
+      },
+      {
+        "file": "desktop-new-address.png",
+        "sha256": "41331ce205bc945065e488702b217aae0024b0d9f2d97571308b1fa5cdb5c80e",
+        "kind": "network"
+      },
+      {
+        "file": "narrow-paused-disclosure.png",
+        "sha256": "62d4989683e905d2f9758760ebaaba83750385e6d799caf2580d4d93493e2158",
+        "kind": "network"
+      },
+      {
+        "file": "narrow-stopped-lxc-disclosure.png",
+        "sha256": "8ebf587d20d3c551445714766e71fa652ef0bc2ab67184f69f91f066b5d0bc51",
+        "kind": "network"
+      },
+      {
+        "file": "narrow-stopped-lxc-details.png",
+        "sha256": "46fcd274706ca57446ec9ae8035d955711d7b8ff482eceec1aa3233a5e6398b6",
+        "kind": "network"
+      },
+      {
+        "file": "narrow-stopped-details.png",
+        "sha256": "3898475b5a5ea2961ad3f268df55e72c21dd6141aebc212cc92343a1830ad10c",
+        "kind": "network"
+      },
+      {
+        "file": "narrow-new-address.png",
+        "sha256": "befcaa69d8207e9f10cd03adc6daebb05c6e30ae3c38ed1dc1bc2999c896b722",
+        "kind": "network"
+      }
+    ],
+    "pixel_review": "22 final captures and five initial captures opened using native view_image. Worker dossier retains full protocol results, source hashes and pixel observations."
+  },
+  "limits": "Read-only synthetic canonical/HTTP observations through production consumers. No native collection, guest probe, thaw, filesystem liveness, installed or released result."
+}

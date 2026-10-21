@@ -195,7 +195,7 @@ const save = () =>
           diskType: 'sata',
           sizeBytes: 1_000_000_000,
           health: 'PASSED',
-          temperature: diskMode === 'recovered' ? 42 : 45,
+          temperature: diskMode === 'lxc' ? 41 : diskMode === 'recovered' ? 42 : 45,
           smart: {
             reallocatedSectors: 0,
             pendingSectors: diskMode === 'risk' ? 8 : 0,
@@ -473,6 +473,43 @@ const save = () =>
       await apply('power', 'paused');
       await expect(arrays.first()).toHaveAttribute('data-raid-reading', 'current');
       record.cases.push('A container does not acquire the native Proxmox VM power interpretation.');
+      diskMode = 'lxc';
+      await apply('reread');
+      // Distinct response bytes establish that the prior API-only disk has
+      // actually been replaced before observing the power-only transition.
+      await expect(row.locator('[data-temperature-reading]')).toContainText('41°C');
+      for (const power of ['stopped', 'offline']) {
+        const before = record.requests.filter((r) => r.path === '/api/resources').length;
+        await apply('power', power);
+        await expect(row.getByTestId('disk-detail-health')).toContainText(
+          'Proxmox reports this container stopped.',
+        );
+        await expect(summary.getByText('Last known', { exact: true })).toBeVisible();
+        await expect(row.getByText('Last known temperature', { exact: true })).toBeVisible();
+        await expect(arrays.first()).toHaveAttribute('data-raid-reading', 'last-known');
+        await expect(arrays.last()).toContainText('Rebuild was at 37%');
+        await expect(arrays.last()).toContainText('/dev/sdb · faulty');
+        await expect(arrays.last()).not.toContainText('100M/sec');
+        await expect(row).toHaveAttribute('data-proof-owner', 'same-open-disk');
+        await expect(row.getByRole('combobox', { name: 'Disk history range' })).toHaveValue('24h');
+        const evidence = await page.evaluate(() => window.__guestHardware.evidence());
+        assert.equal(evidence.canonical.status, 'online');
+        assert.equal(evidence.projected.type, 'system-container');
+        assert.equal(Boolean(evidence.projected.agentStale), false);
+        assert.equal(evidence.canonical.agent.lastReportAt, '2026-10-20T12:00:00Z');
+        assert.equal(record.requests.filter((r) => r.path === '/api/resources').length, before);
+        record.cases.push(
+          `LXC ${power}: online/unexpired agent does not renew SMART/RAID; same-open disk, risk, range and stored History remain without a reread.`,
+        );
+      }
+      await capture('stopped-lxc-smart', row.getByTestId('disk-detail-health'));
+      await capture('stopped-lxc-raid', arrays.last());
+      await apply('power', 'running');
+      await expect(summary.getByText('Healthy', { exact: true })).toBeVisible();
+      await expect(arrays.first()).toHaveAttribute('data-raid-reading', 'current');
+      record.cases.push(
+        'LXC running clears only its parent presentation qualifier, not independent disk staleness or liveness.',
+      );
       await apply('kind', 'vm');
       await apply('power', 'unknown');
       await expect(arrays.first()).toHaveAttribute('data-raid-reading', 'current');
