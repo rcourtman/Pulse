@@ -258,7 +258,7 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the self-hosted billing page non-promotional by default', async () => {
+  it('shows a free install what Pro adds and how to buy it without an upgrade prompt', async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -267,11 +267,12 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByText(/^Expired$/)).not.toBeInTheDocument();
+    // The plan-selection prompt still belongs to an explicit upgrade arrival.
     expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
-    expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
+    expect(screen.getByText('Available plans')).toBeInTheDocument();
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
-    expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'View plans' }).length).toBeGreaterThan(0);
   });
 
   it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {

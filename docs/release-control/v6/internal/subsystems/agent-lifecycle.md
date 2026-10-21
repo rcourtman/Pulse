@@ -2924,6 +2924,12 @@ grant an agent scope, authorize a command channel, or replace live agent
 readiness and dispatch admission. Any agent-mediated action still crosses the
 existing lifecycle identity, authorization, and receipt boundaries.
 
+Self-hosted purchase start under shared `internal/api/` (the Plans & Billing
+Buy handoff, including its website-finish path for plain-HTTP installs) is an
+adjacent cloud-paid boundary. It changes no agent install command, registration,
+token or lifecycle state, and lifecycle flows must not surface its purchase
+action.
+
 First-run security discovery under shared `internal/api/` is likewise an
 adjacent API/security boundary, not an agent-lifecycle discovery surface.
 Unauthenticated `/api/security/status` responses must stay on the public tier

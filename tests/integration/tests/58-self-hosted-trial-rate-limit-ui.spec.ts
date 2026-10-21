@@ -90,7 +90,8 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     await expect(page.getByRole('button', { name: 'Users' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Audit Webhooks' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toHaveCount(0);
+    // Plans & Billing is listed so a free install can find the plan and buy.
+    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toBeVisible();
     await expect(page.getByRole('link', { name: /upgrade to pro/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start free trial/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start trial/i })).toHaveCount(0);
@@ -102,14 +103,13 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole('heading', { level: 1, name: 'Roles' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toHaveCount(0);
     await page.screenshot({
       path: testInfo.outputPath('free-default-settings-narrow.png'),
       fullPage: true,
     });
   });
 
-  test('keeps the Plans & Billing direct route available as an explicit opt-in surface', async ({
+  test('offers Pro on the Plans & Billing page of a free install', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -122,7 +122,9 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     await page.goto('/settings/pulse-intelligence/billing/plan');
 
     await expect(page.getByRole('heading', { name: 'Plans & Billing' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toBeVisible();
+    await expect(page.getByText('Pulse Pro plan')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View plans' }).first()).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('free-explicit-billing-route.png'),
       fullPage: true,

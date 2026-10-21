@@ -1457,16 +1457,23 @@ its estate is, and no estate data crosses the bootstrap.
     pricing/checkout, upgrade-metrics, or infrastructure-onboarding analytics
     fields, controls, routes, stores, or startup DB artifacts to normal product
     users.
-17. Keep ordinary self-hosted v6 commercial surfaces explicitly opt-in under
-    the 2026-04-25 posture. Default free self-hosted browser surfaces hide
-    paid-feature settings navigation, Plans & Billing navigation, upgrade
-    calls to action, trial ceremony, hosted handoff prompts, and proactive
-    commercial cards. Direct plan, activation, recovery, and feature-gate
-    routes remain available for an operator who deliberately enters that
-    context. Hosted sessions and installs with an existing paid, activation,
-    or recovery context may expose the corresponding navigation.
-    `presentationPolicy.hideUpgrade` is the fail-closed navigation and prompt
-    contract. Demo mode and white-label runtimes also force
+17. Keep ordinary self-hosted v6 commercial surfaces quiet, but keep buying
+    findable (2026-10-21, revising the 2026-04-25 opt-in posture). Default
+    free self-hosted browser surfaces hide paid-feature settings navigation,
+    upgrade calls to action, trial ceremony, hosted handoff prompts,
+    proactive commercial cards, and Pro badges on monitoring surfaces. Plans
+    & Billing navigation is listed for every install that does not hide
+    commercial surfaces, and the plan page shows a free install the Pro
+    comparison and its purchase action without requiring an upgrade-prompt
+    arrival; the plan-selection prompt itself stays intent-only. Plan-locked
+    lines inside Settings name the plan and link to Plans & Billing. Before
+    2026-10-21 free installs had no in-product path to buy at all: Plans &
+    Billing was unlisted, the plan page offered nothing, and the only
+    purchase handoff failed. Direct activation and recovery routes remain
+    available. Hosted sessions and installs with an existing paid,
+    activation, or recovery context may expose the rest of the commercial
+    navigation. `presentationPolicy.hideUpgrade` remains the fail-closed
+    prompt contract for proactive surfaces. Demo mode and white-label runtimes also force
     `hideCommercial`, which keeps all commercial surfaces suppressed for demos,
     kiosks, and MSP tenant containers. The authenticated app shell must still
     skip background `/api/license/commercial-posture` bootstrap while the
@@ -2186,6 +2193,14 @@ selection and paid extras rather than monitored-system-cap expansion. Shared
 helpers and route-owned browser symbols should name that commercial state as
 plan selection as well; the monitored-system alias belongs only to
 backward-compatible handoff normalization and non-commercial usage review.
+When the instance has no secure address to return to (plain HTTP on a LAN
+address, or no public URL), Pulse must not mint or send the purchase return
+token. The start route still creates the handoff, with a fresh
+`web`-prefixed `purchase_return_jti` and the website's checkout-result and
+pricing pages as success and cancel targets, so checkout finishes on the
+website, which shows and emails the activation key for pasting into Plans &
+Billing. Before 2026-10-21 this case failed with the unavailable page, which
+blocked buying from most plain-HTTP homelab installs.
 If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
 start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser
@@ -2282,9 +2297,9 @@ Browser and shell coverage now guard that retired boundary:
 `tests/integration/scripts/retired-trial-acquisition-contract.sh` must expect `404` from the
 retired route and prove entitlements remain unchanged. The paid-prompt browser
 proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
-must keep trial CTAs, hosted handoff prompts, paid-feature navigation, and
-Plans & Billing navigation out of the default free self-hosted UI while keeping
-explicit direct routes available for activation and recovery.
+must keep trial CTAs, hosted handoff prompts and paid-feature navigation out
+of the default free self-hosted UI, while proving Plans & Billing is listed
+and its plan page offers Pro with a purchase action.
 `scripts/tests/test-retired-trial-acquisition-docs.sh` guards the same documentation posture
 so active operator docs and eval metadata describe the retired route instead of
 the old hosted-signup acquisition contract.

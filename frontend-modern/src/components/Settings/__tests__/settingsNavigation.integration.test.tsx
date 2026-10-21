@@ -113,12 +113,12 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(true);
   });
 
-  it('keeps self-hosted billing direct-routeable while hiding free default navigation', () => {
+  it('lists self-hosted Plans & Billing for free installs so buying is findable', () => {
     expect(deriveTabFromPath('/settings/pulse-intelligence/billing/plan')).toBe('system-billing');
     expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
     expect(settingsTabPath('system-billing')).toBe('/settings/pulse-intelligence/billing/plan');
     expect(getSettingsNavItem('system-billing')?.hideFromSidebar).not.toBe(true);
-    expect(getSettingsNavItem('system-billing')?.hideWhenUpgradeHidden).toBe(true);
+    expect(getSettingsNavItem('system-billing')?.hideWhenUpgradeHidden).not.toBe(true);
     const freeContext = {
       hasFeature: hasFeatures([]),
       runtimeCapabilitiesLoaded: () => true,
@@ -126,14 +126,15 @@ describe('settingsNavigation integration scaffold', () => {
       presentationPolicyHidesUpgrade: true,
       hostedModeEnabled: false,
     };
-    expect(shouldHideSettingsNavItem('system-billing', freeContext)).toBe(true);
+    expect(shouldHideSettingsNavItem('system-billing', freeContext)).toBe(false);
     expect(shouldBlockSettingsRouteItem('system-billing', freeContext)).toBe(false);
+    // Demo and white-label runtimes still hide every commercial surface.
     expect(
       shouldHideSettingsNavItem('system-billing', {
         ...freeContext,
-        presentationPolicyHidesUpgrade: false,
+        presentationPolicyHidesCommercial: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('keeps resource privacy route-backed but out of the normal sidebar', () => {

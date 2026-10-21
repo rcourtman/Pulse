@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +42,13 @@ const (
 	selfHostedBillingPurchaseFailed         = "failed"
 	selfHostedBillingPurchaseUnavailable    = "unavailable"
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
+)
+
+// Where checkout finishes when this instance has no secure address to return
+// to: the website shows the activation key and emails it.
+const (
+	licensePurchaseWebsiteSuccessURL = "https://pulserelay.pro/thanks.html?session_id={CHECKOUT_SESSION_ID}"
+	licensePurchaseWebsiteCancelURL  = "https://pulserelay.pro/pricing"
 )
 
 func wantsMockFixturesFromEnv() bool {
@@ -1079,66 +1088,9 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		writeLicensePurchaseStartFailurePage(w, statusCode, feature, message)
 	}
 
-	expectedHost := purchaseReturnExpectedHost(r, h.cfg)
-	returnURL := licensePurchaseCallbackURLForRequest(r, h.cfg)
-	if expectedHost == "" || returnURL == "" {
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not open Pulse Account from this instance right now. Retry from this instance in a moment, or use recovery below if you already have a key.",
-		)
-		return
-	}
-
-	signingKey, err := h.purchaseReturnSigningKey()
-	if err != nil {
-		log.Error().Err(err).Msg("Purchase return signing key unavailable")
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
-		)
-		return
-	}
-
-	orgID := strings.TrimSpace(GetOrgID(r.Context()))
-	if orgID == "" {
-		orgID = "default"
-	}
-	returnToken, err := signPurchaseReturnTokenFromLicensing(signingKey, purchaseReturnClaimsModel{
-		OrgID:        orgID,
-		Feature:      feature,
-		InstanceHost: expectedHost,
-		ReturnURL:    returnURL,
-	})
-	if err != nil {
-		log.Error().Err(err).Str("org_id", orgID).Str("feature", feature).Msg("Failed to sign purchase return token")
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
-		)
-		return
-	}
-
-	activationURLTemplate, err := licensePurchaseActivationTemplateURL(returnURL, returnToken)
-	if err != nil {
-		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account activation template")
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
-		)
-		return
-	}
-
-	cancelURL, err := publicAbsoluteURLForPath(
-		r,
-		h.cfg,
-		licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseCancelled),
-	)
-	if err != nil {
-		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account cancellation return url")
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
-		)
+	successURL, cancelURL, purchaseReturnJTI, failure := h.purchaseHandoffTargets(r, feature)
+	if failure != "" {
+		writeUnavailable(http.StatusServiceUnavailable, failure)
 		return
 	}
 
@@ -1151,22 +1103,9 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	purchaseReturnJTI := ""
-	if claims, verifyErr := h.verifiedPurchaseReturnClaims(r, returnToken); verifyErr == nil && claims != nil {
-		purchaseReturnJTI = strings.TrimSpace(claims.ID)
-	}
-	if purchaseReturnJTI == "" {
-		log.Error().Str("feature", feature).Msg("Pulse Account purchase return token omitted jti")
-		writeUnavailable(
-			http.StatusServiceUnavailable,
-			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
-		)
-		return
-	}
-
 	portalHandoff, err := lsClient.CreateCheckoutPortalHandoff(r.Context(), checkoutPortalHandoffRequestModel{
 		Feature:           feature,
-		SuccessURL:        activationURLTemplate,
+		SuccessURL:        successURL,
 		CancelURL:         cancelURL,
 		PurchaseReturnJTI: purchaseReturnJTI,
 	})
@@ -1199,6 +1138,74 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	}
 
 	http.Redirect(w, r, destination, http.StatusSeeOther)
+}
+
+// purchaseHandoffTargets returns where checkout sends the buyer afterwards,
+// plus the purchase return JTI bound to the handoff. With a secure address for
+// this instance, success returns here with a signed return token so the plan
+// activates itself. Without one (plain HTTP on a LAN address, or no public
+// URL), the token must not travel over plain HTTP, so checkout finishes on the
+// website instead: it shows and emails the activation key, which the operator
+// pastes into Plans & Billing. A non-empty failure is the operator message.
+func (h *LicenseHandlers) purchaseHandoffTargets(r *http.Request, feature string) (successURL, cancelURL, purchaseReturnJTI, failure string) {
+	const prepareFailure = "Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key."
+
+	expectedHost := purchaseReturnExpectedHost(r, h.cfg)
+	returnURL := licensePurchaseCallbackURLForRequest(r, h.cfg)
+	if expectedHost == "" || returnURL == "" {
+		nonce := make([]byte, 16)
+		if _, err := cryptorand.Read(nonce); err != nil {
+			log.Error().Err(err).Str("feature", feature).Msg("Failed to create website purchase handoff id")
+			return "", "", "", prepareFailure
+		}
+		return licensePurchaseWebsiteSuccessURL, licensePurchaseWebsiteCancelURL, "web" + hex.EncodeToString(nonce), ""
+	}
+
+	signingKey, err := h.purchaseReturnSigningKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Purchase return signing key unavailable")
+		return "", "", "", prepareFailure
+	}
+
+	orgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if orgID == "" {
+		orgID = "default"
+	}
+	returnToken, err := signPurchaseReturnTokenFromLicensing(signingKey, purchaseReturnClaimsModel{
+		OrgID:        orgID,
+		Feature:      feature,
+		InstanceHost: expectedHost,
+		ReturnURL:    returnURL,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Str("feature", feature).Msg("Failed to sign purchase return token")
+		return "", "", "", prepareFailure
+	}
+
+	successURL, err = licensePurchaseActivationTemplateURL(returnURL, returnToken)
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account activation template")
+		return "", "", "", prepareFailure
+	}
+
+	cancelURL, err = publicAbsoluteURLForPath(
+		r,
+		h.cfg,
+		licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseCancelled),
+	)
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account cancellation return url")
+		return "", "", "", prepareFailure
+	}
+
+	if claims, verifyErr := h.verifiedPurchaseReturnClaims(r, returnToken); verifyErr == nil && claims != nil {
+		purchaseReturnJTI = strings.TrimSpace(claims.ID)
+	}
+	if purchaseReturnJTI == "" {
+		log.Error().Str("feature", feature).Msg("Pulse Account purchase return token omitted jti")
+		return "", "", "", prepareFailure
+	}
+	return successURL, cancelURL, purchaseReturnJTI, ""
 }
 
 // HandleCheckoutActivation handles the local checkout return at

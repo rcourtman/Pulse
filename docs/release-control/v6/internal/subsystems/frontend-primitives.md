@@ -1796,9 +1796,11 @@ The settings panel registry supplies organisation overview, access and sharing w
 Settings navigation discoverability is part of the shared settings-shell
 boundary. A settings route that is available in normal commercial presentation
 must be reachable through the sidebar unless it is explicitly a hidden
-deep-link flow. Ordinary free self-hosted sessions use the explicit opt-in
-boundary: `system-billing` is hidden from navigation while
-`presentationPolicy.hideUpgrade` is true, and paid-feature items including
+deep-link flow. `system-billing` (Plans & Billing) is listed for every
+session that does not hide commercial surfaces, including ordinary free
+self-hosted sessions, so an operator can find the plan and buy; only demo and
+white-label runtimes hide it. Ordinary free sessions keep the quiet boundary
+for everything proactive: paid-feature items including
 `system-relay`, `support-reporting`, `security-roles`, `security-users`,
 `security-audit`, and `security-webhooks` use `hideWhenUnavailable`. Their
 direct routes remain available because the owning panels still handle explicit

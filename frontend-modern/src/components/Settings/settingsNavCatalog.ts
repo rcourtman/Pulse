@@ -82,8 +82,9 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: 'system-billing',
         label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
         icon: PulseLogoIcon,
+        // Listed for free installs too: it is the one place to see the plan
+        // and buy. Demo and white-label runtimes still hide it.
         hideWhenCommercialHidden: true,
-        hideWhenUpgradeHidden: true,
       },
       {
         id: 'system-ai-assistant',

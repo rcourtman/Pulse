@@ -845,12 +845,33 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 }
 
-func TestHandleCheckoutStart_FailsClosedOnInsecureNonLoopbackCallbackURL(t *testing.T) {
+// A plain-HTTP install on a LAN address has no secure place to receive the
+// signed return token, so the token is never minted for it. Checkout still
+// opens, and finishes on the website, which shows and emails the key.
+func TestHandleCheckoutStart_InsecureNonLoopbackFinishesOnWebsite(t *testing.T) {
 	handler := createTestHandler(t)
+	var capturedReq struct {
+		Feature           string `json:"feature"`
+		SuccessURL        string `json:"success_url"`
+		CancelURL         string `json:"cancel_url"`
+		PurchaseReturnJTI string `json:"purchase_return_jti"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/portal-handoff" || r.Method != http.MethodPost {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
+			t.Fatalf("decode checkout portal handoff request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"portal_handoff_id": "cph_lan_http"})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"http://192.168.1.25:7655/auth/license-purchase-start?feature=relay",
+		"http://192.168.1.25:7655/auth/license-purchase-start?feature=self_hosted_plan",
 		nil,
 	)
 	req.Host = "192.168.1.25:7655"
@@ -859,11 +880,30 @@ func TestHandleCheckoutStart_FailsClosedOnInsecureNonLoopbackCallbackURL(t *test
 
 	handler.HandleCheckoutStart(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Pulse could not open Pulse Account from this instance right now") {
-		t.Fatalf("body = %q, want secure callback failure message", rec.Body.String())
+	redirectURL, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if redirectURL.Host != "license.pulserelay.pro" || redirectURL.Path != "/buy" ||
+		redirectURL.Query().Get("portal_handoff_id") != "cph_lan_http" {
+		t.Fatalf("redirect location = %q, want licence server purchase page for the handoff", redirectURL)
+	}
+	if capturedReq.SuccessURL != licensePurchaseWebsiteSuccessURL || capturedReq.CancelURL != licensePurchaseWebsiteCancelURL {
+		t.Fatalf("success_url = %q cancel_url = %q, want website finish", capturedReq.SuccessURL, capturedReq.CancelURL)
+	}
+	for _, value := range []string{capturedReq.SuccessURL, capturedReq.CancelURL, rec.Header().Get("Location")} {
+		if strings.Contains(value, licensePurchaseReturnTokenField) || strings.Contains(value, "192.168.1.25") {
+			t.Fatalf("%q must not carry a return token or the plain-HTTP instance address", value)
+		}
+	}
+	if !strings.HasPrefix(capturedReq.PurchaseReturnJTI, "web") || len(capturedReq.PurchaseReturnJTI) != 35 {
+		t.Fatalf("purchase_return_jti = %q, want a fresh website handoff id", capturedReq.PurchaseReturnJTI)
+	}
+	if capturedReq.Feature != "self_hosted_plan" {
+		t.Fatalf("feature = %q, want self_hosted_plan", capturedReq.Feature)
 	}
 }
 
