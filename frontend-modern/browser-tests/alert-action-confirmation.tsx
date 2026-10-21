@@ -74,6 +74,7 @@ function Fixture() {
         restore: t('alerts.overview.action.unacknowledge'),
         snooze: t('alerts.overview.action.snooze'),
         resume: t('alerts.overview.action.resume'),
+        cancel: t('alerts.overview.action.cancel'),
         snoozeTitle: t('alerts.overview.snooze.title'),
         oneHour: t('alerts.overview.snooze.option.oneHour'),
         error: t(

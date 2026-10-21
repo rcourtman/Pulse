@@ -310,10 +310,32 @@ async function dismissToasts(page) {
           }
           if (action === 'snooze' || (locale === 'en' && action === 'acknowledge'))
             await capture(page, 'unconfirmed');
+          // The modal rightly blocks outside controls. Close it through its
+          // own Cancel, then do the explicit refresh requested by the message.
+          if (action === 'snooze') {
+            await activate(
+              page,
+              page.getByRole('dialog').getByRole('button', { name: labels.cancel, exact: true }),
+              spec.touch,
+            );
+            await expect(page.getByRole('dialog')).toHaveCount(0);
+          }
           await dismissToasts(page);
-          await page.clock.runFor(1600);
-          // Explicit operator choice after the readback; no automatic retry.
-          assert.deepEqual(await snapshot(), before);
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await expect.poll(() => page.evaluate(() => window.__actionProof?.ready)).toBe(true);
+          const refreshed = await snapshot();
+          assert.equal(refreshed['proof-target'].acknowledged, before['proof-target'].acknowledged);
+          assert.deepEqual(
+            refreshed['proof-target'].operationalRecord,
+            before['proof-target'].operationalRecord,
+          );
+          assert.equal(
+            run.requests.filter((request) => request.method === 'POST').length,
+            writesBefore,
+          );
+          run.checks.push(
+            'Cancel respects the open modal; explicit view reload precedes the next chosen action, without an automatic write.',
+          );
           await submit();
           const accepted =
             action === 'snooze'
@@ -324,7 +346,7 @@ async function dismissToasts(page) {
           await expect(notifications.getByRole('alert')).toHaveCount(0);
           if (action === 'snooze') await expect(page.getByRole('dialog')).toHaveCount(0);
           const after = await snapshot();
-          assert.deepEqual(after['proof-neighbour'], before['proof-neighbour']);
+          assert.deepEqual(after['proof-neighbour'], refreshed['proof-neighbour']);
           if (action === 'acknowledge') assert.equal(after['proof-target'].acknowledged, true);
           if (action === 'unacknowledge') assert.equal(after['proof-target'].acknowledged, false);
           if (action === 'snooze')
