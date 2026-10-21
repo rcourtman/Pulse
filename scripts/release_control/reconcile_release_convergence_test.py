@@ -107,6 +107,70 @@ class TransientReadTests(unittest.TestCase):
                 sleep.assert_not_called()
 
 
+class NotFoundReadTests(unittest.TestCase):
+    def test_only_complete_api_not_found_responses_become_missing_history(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for detail in ("HTTP 404", "HTTP 404\n", "gh: Not Found (HTTP 404)",
+                       "gh: Not Found (HTTP 404)\n"):
+            with self.subTest(detail=detail):
+                result = subprocess.CompletedProcess([], 1, stdout="failed-response", stderr=detail)
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    self.assertEqual("history-missing", subject.activation_owner_state(
+                        github, 90, workflow_id=42,
+                        display_title="Release convergence v6.5.0-rc.1 source 200",
+                    ))
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_ambiguous_owner_failures_never_reach_recovery_submission(self):
+        cases = [(code, "gh: Not Found (HTTP 404)")
+                 for code in (-9, -15, 2, 124, 130, 143)]
+        cases.extend((1, detail) for detail in (
+            "permission denied (HTTP 404)", "transport refused (HTTP 404)",
+            "gh: Not Found (HTTP 404)\ntransport refused",
+            "gh: Not Found (HTTP 404)\npermission denied",
+            "gh: Forbidden (HTTP 404)", "gh: unauthorised (HTTP 404)",
+            "gh: Not Found (HTTP 404)\nstream error: stream ID 1; CANCEL; received from peer",
+            "HTTP 404\nHTTP 403", "HTTP 404\nHTTP 504", "HTTP 404\nHTTP 404",
+            "gh: unexpected HTTP 4040", "HTTP 404\n\n", "unknown failure HTTP 404",
+        ))
+        for code, detail in cases:
+            with self.subTest(code=code, detail=detail):
+                github = FakeGitHub()
+                original = github.api
+                reader = subject.GitHub(github.repository, "gh")
+
+                def api(endpoint):
+                    if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                        return reader.api(endpoint)
+                    return original(endpoint)
+
+                github.api = api
+                result = subprocess.CompletedProcess([], code, stdout="failed-response", stderr=detail)
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError) as failure:
+                        subject.reconcile(github, github.run_id, 5)
+                self.assertIs(type(failure.exception), subject.ReconciliationError)
+                self.assertEqual([], github.posts)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_non_api_commands_cannot_report_missing_history(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        operations = [lambda: github.post("repos/rcourtman/Pulse/actions/dispatches"),
+                      lambda: github.download_marker("v6.5.0", Path("unused-fixture-output")),
+                      lambda: github.job_log("rcourtman/Pulse", 1)]
+        for index, operation in enumerate(operations):
+            with self.subTest(operation=index):
+                result = subprocess.CompletedProcess([], 1, stdout="", stderr="gh: Not Found (HTTP 404)")
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError) as failure:
+                        operation()
+                self.assertIs(type(failure.exception), subject.ReconciliationError)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+
 class CancelledReadTests(unittest.TestCase):
     diagnostic = "stream error: stream ID 1; CANCEL; received from peer\n"
 
@@ -1113,7 +1177,7 @@ if endpoint == "repos/rcourtman/Pulse/actions/workflows/release-convergence.yml"
     print('{"id":42}')
 elif endpoint == "repos/rcourtman/Pulse/actions/runs/90":
     if "error" in x:
-        print(x["error"], file=sys.stderr); sys.exit(1)
+        print(x["error"], file=sys.stderr); sys.exit(x.get("error_exit", 1))
     print(x["raw"] if "raw" in x else json.dumps(x["run"]))
 else:
     raise AssertionError(endpoint)
@@ -1127,6 +1191,10 @@ else:
                 ({"run": owner}, 0, "completed\n"),
                 ({"run": {**owner, "status": "in_progress"}}, 0, "active\n"),
                 ({"error": "gh: Not Found (HTTP 404)"}, 0, "history-missing\n"),
+                ({"error": "permission denied (HTTP 404)"}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)\ntransport refused"}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)", "error_exit": 124}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)", "error_exit": 143}, 1, ""),
                 ({"error": "gh: Forbidden (HTTP 403)"}, 1, ""),
                 ({"error": "gh: unauthorised (HTTP 401)"}, 1, ""),
                 ({"error": "gh: limit (HTTP 429)"}, 1, ""),

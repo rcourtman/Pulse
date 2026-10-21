@@ -62,6 +62,21 @@ the global promotion lease are unchanged. Focused `CancelledReadTests` cover
 the real closed CLI boundary, discovery consumer and fail-closed alternatives.
 These fixtures are not a successful hosted reconciliation or installed delivery.
 
+### Missing activation history cannot be inferred from a failed read
+
+The existing attested convergence recovery accepts missing owner history only
+from an exit-1 API read with a complete recognised not-found diagnostic. A 404
+substring in a refusal, mixed/unknown diagnostic, interrupted command or timeout
+is unavailable evidence, not `history-missing`. Non-API commands cannot grant
+that classification. No such failure is retried or submitted for recovery.
+
+`NotFoundReadTests` exercises the real read adapter through the reconciliation
+consumer, asserting no submission or retry for the adverse matrix. The actual
+owner-observation CLI also rejects compound refusals and timeout-shaped exits.
+Exact immutable attestation, marker identity, containment, retry budgets and
+the unchanged global lease remain required. These closed fixtures establish
+classification and safety, not hosted convergence or release acceptance.
+
 ### Unknown agent-installer arguments stop without a prompt
 
 The Unix agent parser rejects an unsupported option or stray value with exit
