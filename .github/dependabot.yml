@@ -56,6 +56,18 @@ updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        # The SQLite/native runtime has separate compatibility evidence. Keep
+        # its named updates out of independent compression/metrics/agent PRs;
+        # the resulting full transitive graph still needs ordinary review/CI.
+        exclude-patterns:
+          - "modernc.org/*"
+        update-types:
+          - "minor"
+          - "patch"
+      go-storage-minor-patch:
+        applies-to: "version-updates"
+        patterns:
+          - "modernc.org/*"
         update-types:
           - "minor"
           - "patch"
