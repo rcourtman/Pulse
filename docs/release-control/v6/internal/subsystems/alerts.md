@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Duplicate guest filesystem identities cannot hide a breach
+
+Guest filesystem rows which resolve to the same existing alert key are evaluated
+once, using the highest observed usage, not the first row in response order.
+Selection preserves one whole row's mount/device, percentage and byte metadata;
+when percentages tie, deterministic row fields break the tie. Display inventory,
+capacity aggregation, alert IDs, per-filesystem override keys, migration and
+request/guest-command policy do not change. This is conservative evaluation of
+an existing shared identity, not proof that colliding labels are one filesystem
+or a new independent identity for each colliding row.
+
+An otherwise eligible row with a non-finite or above-100 percentage keeps that
+identity's observation unavailable instead of allowing a healthy duplicate to
+establish recovery. Existing nonpositive-capacity/negative-sentinel filtering,
+retained/unavailable inventory handling and explicit disablement remain intact.
+An ordinary usable inventory where every alias is below the clear threshold
+can recover the existing occurrence. Separate guest/device identities, their
+thresholds, acknowledgements, grace periods and notification lifecycle remain
+independent. Selection does not mutate caller-owned rows.
+
+`TestGuestFilesystemDuplicateIdentityOrder` in `guest_snapshot_test.go` covers
+VM/LXC, identical and sanitized-key aliases in both response orders.
+`guest_duplicate_identity_test.go` covers activation grace, reordering,
+acknowledgement, retained readings, invalid duplicates, overrides, peer isolation,
+one firing/recovery event and exact public Alert consumer projections. Offline
+browser verification consumes those projections in production Alerts Overview
+at desktop and narrow widths. These controls do not establish guest thaw,
+filesystem liveness, the cause of an existing report, installed recovery or
+published availability.
+
+
 ### Bounded alert settings recovery
 
 The policy editor and each notification-configuration stream have a 150-second header/body read deadline, retaining the API client’s two-minute Retry-After allowance. Expiry leaves the existing load-error/reload controls usable; incomplete destinations keep whole-policy Save blocked. A new reload, reset or unmount retires pending reads and cannot apply their late answers. No write is timed out, cancelled or repeated.

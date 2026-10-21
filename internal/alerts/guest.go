@@ -255,19 +255,9 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	if !snapshot.DiskUnavailable {
 		diskMetric = &UnifiedResourceMetric{Percent: diskUsage}
 	}
+	diskRows := guestDiskAlertRows(disks)
 	if !snapshot.DiskUnavailable && len(disks) > 0 {
-		seenAggregateDiskKeys := make(map[string]struct{})
-		for idx, disk := range disks {
-			if disk.Total <= 0 || disk.Usage < 0 {
-				continue
-			}
-			_, _, sanitizedKey := guestDiskIdentity(disk, idx)
-			if _, exists := seenAggregateDiskKeys[sanitizedKey]; exists {
-				continue
-			}
-			seenAggregateDiskKeys[sanitizedKey] = struct{}{}
-		}
-		if len(seenAggregateDiskKeys) > 0 {
+		if len(diskRows) > 0 {
 			// Filesystem evidence is more actionable than the guest-wide rollup.
 			// Evaluating both creates two incidents for the same full filesystem.
 			diskMetric = nil
@@ -300,7 +290,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	}
 
 	if len(disks) > 0 {
-		seenDiskKeys := make(map[string]struct{})
 		seenDiskResources := make(map[string]struct{})
 		for idx, disk := range disks {
 			if disk.Total <= 0 {
@@ -312,11 +301,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 
 			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
 
-			// Avoid duplicate checks if two disks resolve to the same key
-			if _, exists := seenDiskKeys[sanitizedKey]; exists {
+			// One conservative observation per existing alert identity, not
+			// whichever alias happened to arrive first in the inventory.
+			if diskRows[sanitizedKey] != idx {
 				continue
 			}
-			seenDiskKeys[sanitizedKey] = struct{}{}
 
 			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
 			seenDiskResources[perDiskResourceID] = struct{}{}
@@ -413,6 +402,56 @@ func guestDiskIdentity(disk models.Disk, idx int) (label, keySource, sanitizedKe
 		sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
 	}
 	return label, keySource, sanitizedKey
+}
+
+// Preserve the existing alert/override identities, but do not let a low alias
+// hide or recover a full filesystem. Select a whole observed row, never a
+// synthetic percentage/byte tuple. An impossible percentage remains a gap in
+// evidence rather than being discarded in favour of a healthy duplicate.
+// Original indices keep fallback identities and metadata intact; caller-owned
+// inventories are never reordered or modified.
+func guestDiskAlertRows(disks []models.Disk) map[string]int {
+	rows := make(map[string]int)
+	for idx, disk := range disks {
+		if disk.Total <= 0 || disk.Usage < 0 {
+			continue
+		}
+		_, _, key := guestDiskIdentity(disk, idx)
+		previous, exists := rows[key]
+		if !exists || guestDiskAlertRowPreferred(disk, disks[previous]) {
+			rows[key] = idx
+		}
+	}
+	return rows
+}
+
+func guestDiskAlertRowPreferred(candidate, current models.Disk) bool {
+	candidateInvalid := !finiteMetricValue(candidate.Usage) || candidate.Usage > 100
+	currentInvalid := !finiteMetricValue(current.Usage) || current.Usage > 100
+	if candidateInvalid != currentInvalid {
+		return candidateInvalid
+	}
+	if !candidateInvalid && candidate.Usage != current.Usage {
+		return candidate.Usage > current.Usage
+	}
+	// A stable tie-break keeps messages and byte metadata on the same actual
+	// row when equivalent keys have equal percentages in a different order.
+	if candidate.Mountpoint != current.Mountpoint {
+		return candidate.Mountpoint < current.Mountpoint
+	}
+	if candidate.Device != current.Device {
+		return candidate.Device < current.Device
+	}
+	if candidate.Type != current.Type {
+		return candidate.Type < current.Type
+	}
+	if candidate.Total != current.Total {
+		return candidate.Total > current.Total
+	}
+	if candidate.Used != current.Used {
+		return candidate.Used > current.Used
+	}
+	return candidate.Free > current.Free
 }
 
 // guestDiskUsageThresholdNoLock resolves the usage threshold one guest

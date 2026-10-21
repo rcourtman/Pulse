@@ -504,3 +504,52 @@ func TestSnapshotPartialEvidenceClockCorrectionCannotEstablishRecovery(t *testin
 		t.Fatal("clock correction changed the original age evidence")
 	}
 }
+
+// Identical/colliding existing alert identities must not use response order
+// to select healthy evidence over an observed full filesystem.
+func TestGuestFilesystemDuplicateIdentityOrder(t *testing.T) {
+	for _, kind := range []string{"vm", "container"} {
+		for _, collision := range []bool{false, true} {
+			for _, lowFirst := range []bool{true, false} {
+				name := kind
+				if collision {
+					name += "-sanitized-alias"
+				} else {
+					name += "-same-row-identity"
+				}
+				if lowFirst {
+					name += "-low-first"
+				} else {
+					name += "-high-first"
+				}
+				t.Run(name, func(t *testing.T) {
+					m, _ := filesystemRecoveryManager(t, 0, false)
+					vm := filesystemRecoveryVM(105)
+					high := vm.Disks[1]
+					low := high
+					low.Usage, low.Used, low.Free = 20, 200, 800
+					if collision {
+						low.Mountpoint += "!"
+					}
+					_, _, expectedKey := guestDiskIdentity(high, 0)
+					if _, _, key := guestDiskIdentity(low, 1); key != expectedKey {
+						t.Fatal("fixture identities are not shared")
+					}
+					vm.Disks = []models.Disk{high, low}
+					if lowFirst {
+						vm.Disks[0], vm.Disks[1] = vm.Disks[1], vm.Disks[0]
+					}
+					var guest any = vm
+					if kind == "container" {
+						guest = models.Container{ID: vm.ID, VMID: vm.VMID, Name: vm.Name, Node: vm.Node, Instance: vm.Instance, Type: "lxc", Status: vm.Status, Memory: vm.Memory, Disk: vm.Disk, Disks: vm.Disks, IORateValidity: vm.IORateValidity}
+					}
+					m.CheckGuest(guest, "site")
+					active := m.GetActiveAlerts()
+					if len(active) != 1 || active[0].ResourceID != vm.ID+"-disk-"+expectedKey || active[0].Value != 95 || active[0].Metadata["usedBytes"] != int64(950) || active[0].Metadata["mountpoint"] != high.Mountpoint {
+						t.Fatalf("healthy first row hid full filesystem or mixed its tuple: %+v", active)
+					}
+				})
+			}
+		}
+	}
+}
