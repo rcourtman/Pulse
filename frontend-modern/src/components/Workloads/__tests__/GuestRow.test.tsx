@@ -3563,6 +3563,122 @@ describe('GuestRow backup evidence disclosure', () => {
 
 describe('GuestRow accessible reading explanations', () => {
   it.each(['bars', 'sparklines'] as const)(
+    'exposes missing LXC aggregate evidence in %s without a hover or a guest action',
+    async (metricDisplayMode) => {
+      const onClick = vi.fn();
+      const [guest, setGuest] = createSignal(
+        makeGuest({
+          type: 'lxc',
+          platformScopes: ['proxmox-pve'],
+          disk: { total: 10 * 1024 ** 3, used: 0, usage: -1 },
+        }),
+      );
+      const { container } = renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name', 'disk'],
+        workloadTableLayoutMode: 'narrow',
+        metricDisplayMode,
+        onClick,
+      });
+      const row = container.querySelector('tr');
+      const trigger = screen.getByRole('button', { name: 'Disk reading for test-vm: No data' });
+      expect(trigger).toHaveTextContent('No data');
+      expect(screen.queryByTestId('disk-bar')).toBeNull();
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Disk reading for test-vm' });
+      expect(dialog).toHaveTextContent('no current aggregate disk-usage measurement');
+      expect(dialog).toHaveTextContent('a missing reading does not mean an empty filesystem');
+      expect(dialog).toHaveTextContent('individually reported filesystems');
+      expect(dialog.querySelectorAll('button')).toHaveLength(1);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await Promise.resolve();
+      expect(screen.getByRole('button', { name: 'Close reading details' })).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(trigger).toHaveFocus();
+      fireEvent.click(trigger);
+      // A later explicit zero is a measurement, not the old unknown sentinel.
+      setGuest({ ...guest(), disk: { total: 10 * 1024 ** 3, used: 0, usage: 0 } });
+      await Promise.resolve();
+      expect(container.querySelector('tr')).toBe(row);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Disk reading for/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Expand test-vm' })).toHaveFocus();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { disk: { total: 100 }, platformScopes: ['proxmox-pve'] },
+    { disk: { total: 0, used: 0, usage: -1 }, platformScopes: ['proxmox-pve'] },
+    { disk: { total: 100, used: NaN }, platformScopes: ['proxmox-pve'] },
+    {
+      disk: { total: 100, used: 50, usage: 50 },
+      telemetryAvailability: {
+        cpu: true,
+        memory: true,
+        disk: false,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      },
+      platformScopes: ['proxmox-pve'],
+    },
+    { disk: { total: 100, used: 0, usage: -1 }, platformScopes: undefined },
+  ] satisfies Array<Partial<WorkloadGuest>>)(
+    'explains omitted canonical usage and invalid legacy LXC aggregates without inventing a cause (%j)',
+    (evidence) => {
+      renderGuestRow({
+        guest: makeGuest({ type: 'lxc', ...evidence }),
+        visibleColumnIds: ['name', 'disk'],
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: No data' }));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).not.toHaveTextContent(/permission|restart|probe|backup succeeded/i);
+      expect(dialog).toHaveTextContent('Capacity and configured mounts alone');
+    },
+  );
+
+  it.each([
+    { type: 'lxc', template: true },
+    { type: 'lxc', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'qemu', platformScopes: ['proxmox-pve'] },
+    { type: 'app-container', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'pod', platformScopes: ['kubernetes'] },
+  ] satisfies Array<Partial<WorkloadGuest>>)(
+    'does not call unsupported, template or other-platform storage a missing LXC measurement (%j)',
+    (scope) => {
+      renderGuestRow({
+        guest: makeGuest({ disk: { total: 100, used: 0, usage: -1 }, ...scope }),
+        visibleColumnIds: ['name', 'disk'],
+      });
+      expect(screen.queryByRole('button', { name: /Disk reading for .*: No data/ })).toBeNull();
+    },
+  );
+
+  it('keeps an independently stale agent reading ahead of the missing aggregate explanation', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        type: 'lxc',
+        disk: { usage: -1 },
+        disksFromAgent: true,
+        agentStale: true,
+      }),
+      visibleColumnIds: ['name', 'disk'],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'The Pulse Agent in this guest stopped reporting',
+    );
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('no current aggregate');
+  });
+
+  it.each(['bars', 'sparklines'] as const)(
     'regression: %s exposes safe disk evidence without opening the enclosing row',
     async (metricDisplayMode) => {
       const onClick = vi.fn();
