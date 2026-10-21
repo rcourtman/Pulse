@@ -151,14 +151,18 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementSummary: getSelfHostedPlanEntitlementSummary('pro'),
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
+    // Pro is sold as the plan for teams and larger estates: organisation
+    // features lead, Patrol autonomy and longer history follow.
     comparisonSummary:
-      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
     highlights: [
+      'Team controls: 3 named seats, RBAC, and audit logging',
+      'Reporting and agent profiles',
+      'External probes check your services from another site',
+      'Commercial support, typically within two business days',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-      'Patrol investigates issues and explains the root cause',
-      'Patrol applies safe fixes and verifies the result',
+      'Patrol investigates issues, applies safe fixes, and verifies the result',
       '90-day metric history',
-      'Team controls: RBAC, audit logging, reporting, and agent profiles',
     ],
   },
 ] as const;

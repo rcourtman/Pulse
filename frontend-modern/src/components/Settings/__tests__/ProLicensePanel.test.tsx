@@ -310,19 +310,22 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
     expect(screen.queryByText(/remote web access/i)).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Patrol modes: Ask first, Safe auto-fix, or Autopilot'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Patrol investigates issues and explains the root cause'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Patrol applies safe fixes and verifies the result'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('90-day metric history')).toBeInTheDocument();
-    expect(
-      screen.getByText('Team controls: RBAC, audit logging, reporting, and agent profiles'),
-    ).toBeInTheDocument();
+    // Team and estate value leads; Patrol and history follow.
+    const highlightTexts = [
+      'Team controls: 3 named seats, RBAC, and audit logging',
+      'Reporting and agent profiles',
+      'External probes check your services from another site',
+      'Commercial support, typically within two business days',
+      'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+      'Patrol investigates issues, applies safe fixes, and verifies the result',
+      '90-day metric history',
+    ];
+    const rendered = highlightTexts.map((text) => screen.getByText(text));
+    for (let i = 1; i < rendered.length; i += 1) {
+      expect(
+        rendered[i - 1].compareDocumentPosition(rendered[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
 
     expect(screen.queryByText(/unlimited/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
