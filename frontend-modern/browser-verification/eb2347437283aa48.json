@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ff4ab5ddaa1aab2f753777e644db39035e9ad8be",
+  "changed_paths": [
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/api/relay.ts",
+    "frontend-modern/src/features/alerts/notificationEvidenceRead.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/alerts.ts": "3b8ea604f3637d3667aff9d456c759d33a8a408cfb968be838f3f94c377f6393",
+    "frontend-modern/src/api/notifications.ts": "ea475db6a3edcc01507eb56446fe0f13488f2b271dfa5a248656e419c328f9d9",
+    "frontend-modern/src/api/relay.ts": "b514f8b23494579d0ddac8f6f1fffd6dcedd45c71d9f214b73d705df32d8c414",
+    "frontend-modern/src/features/alerts/notificationEvidenceRead.ts": "861cdab262f029cbbcd55e5cd3365a265b44e92899c067e20beccacd7e524979",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "862e03905f1bb1ff10c363df46e313bc01ed6359e334130126667a2fa906c356",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "453dcbd85805caebdcf899c18bb9f54004fefc96cf04610e44a9a3d5195ed62e",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "dedee28cfd73c6941977a6fe6696d52c7fc04d5a156024cd8b48a060f53c66e8"
+  },
+  "routes": [
+    "/alerts/notifications (actual AlertsConfigurationSurface under the offline alert-configuration-deadline fixture)"
+  ],
+  "states": [
+    "Unanswered policy headers; incomplete email body; unanswered Apprise headers; incomplete dead-man body; unanswered legacy Relay headers; incomplete webhooks body",
+    "Each 150-second read expiry: existing unavailable settings feedback, explicit retry and blocked whole-policy Save",
+    "Explicit reload honours 120-second Retry-After; all saved values restored",
+    "Two explicit complete policy saves; existing subscriber critical-only push preserved; no test send or automatic write",
+    "Early view retirement aborts unanswered policy read without feedback or retry"
+  ],
+  "interactions": [
+    "Keyboard Enter at desktop and touch at 320px WebKit for Reload settings, Retry and Save Changes",
+    "Check each producer at 149999ms and 150000ms, transport abort, no automatic retry or write, blocked Save with an edited draft",
+    "Reload every failed producer explicitly, confirm recovered SMTP data and enabled Save",
+    "One explicit normal Save per viewport: five exact CSRF-protected writes, unchanged SMTP/rate limit/push severity and corrected synthetic watchdog URL",
+    "Retire still-loading view and verify transport closes before the deadline"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-21T01:20:45Z",
+  "evidence": {
+    "source_proof": "source-xownotlf",
+    "browser_driver": "frontend-modern/browser-tests/alert-configuration-deadline.cjs",
+    "browser_result": "BROWSER-RESULT.json",
+    "binding": "BROWSER-BINDING.json",
+    "pixel_review": "PIXEL-REVIEW.md",
+    "playwright": "1.56.1",
+    "cases": 14,
+    "native_captures_opened": 6,
+    "limits": "Synthetic HTTP/settings saves only. No installed policy, actual provider/recipient, release availability or original reporter cause established. Expected timeout and 429 console messages retained."
+  }
+}
