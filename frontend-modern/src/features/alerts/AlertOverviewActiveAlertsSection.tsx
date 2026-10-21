@@ -24,7 +24,7 @@ import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import { getCanonicalAlertId } from './identity';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import type { AlertOverviewState } from './useAlertOverviewState';
+import type { AlertGroup, AlertOverviewState } from './useAlertOverviewState';
 
 interface AlertOverviewActiveAlertsSectionProps {
   state: AlertOverviewState;
@@ -38,6 +38,13 @@ interface AlertOverviewActiveAlertsSectionProps {
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
   const { isGroupExpanded, toggleGroup } = useAlertGroupExpansion();
+  // Live snapshots and optimistic snoozes replace projection objects. Feed
+  // stable identities to the existing window renderer so an open card/dialog
+  // survives a resample, including the rollback of an unconfirmed action.
+  const groupsByKey = createMemo(
+    () => new Map(props.state.groupedAlerts().map((group) => [group.key, group])),
+  );
+  const groupKeys = createMemo(() => [...groupsByKey().keys()]);
   return (
     <div>
       <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -135,14 +142,23 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
             </div>
           </Show>
           <PlatformWindowedList
-            items={props.state.groupedAlerts}
+            items={groupKeys}
             estimatedItemHeight={104}
             enableThreshold={24}
             windowSize={32}
           >
-            {(group) => {
+            {(key) => {
+              // A removed keyed child can read once during its teardown.
+              const group = createMemo<AlertGroup>(
+                (previous) => groupsByKey().get(key) ?? previous,
+                groupsByKey().get(key)!,
+              );
               const relatedAlertsId = createUniqueId();
-              const groupAlerts = () => [group.primary, ...group.related];
+              const relatedById = createMemo(
+                () => new Map(group().related.map((alert) => [getCanonicalAlertId(alert), alert])),
+              );
+              const relatedIds = createMemo(() => [...relatedById().keys()]);
+              const groupAlerts = () => [group().primary, ...group().related];
               const pendingCount = () =>
                 groupAlerts().filter((alert) => !alert.acknowledged).length;
               const acknowledging = () =>
@@ -156,7 +172,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                 (['critical', 'warning', 'info'] as const)
                   .map((level) => ({
                     level,
-                    count: group.related.filter(
+                    count: group().related.filter(
                       (alert) => !alert.acknowledged && alert.level === level,
                     ).length,
                   }))
@@ -164,28 +180,32 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
               );
               return (
                 <div>
-                  <AlertIncidentSynthesisSummary alert={group.primary} />
-                  <AlertOverviewAlertCard
-                    alert={group.primary}
-                    state={props.state}
-                    timelineState={props.timelineState}
-                    deliveryPausedGlobally={props.deliveryPausedGlobally}
-                  />
-                  <Show when={group.related.length > 0}>
+                  <AlertIncidentSynthesisSummary alert={group().primary} />
+                  {/* Changing the actual primary must retire its local state,
+                      never retarget an old dialog to a different alert. */}
+                  <Show when={getCanonicalAlertId(group().primary)} keyed>
+                    <AlertOverviewAlertCard
+                      alert={group().primary}
+                      state={props.state}
+                      timelineState={props.timelineState}
+                      deliveryPausedGlobally={props.deliveryPausedGlobally}
+                    />
+                  </Show>
+                  <Show when={group().related.length > 0}>
                     <div class="ml-4 border-l-2 border-border pl-3 mt-1">
                       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
                         <button
                           type="button"
                           class="inline-flex min-h-11 flex-wrap items-center gap-2 text-left text-xs text-muted hover:text-base-content transition-colors sm:min-h-6"
-                          aria-expanded={isGroupExpanded(group.key)}
-                          aria-controls={isGroupExpanded(group.key) ? relatedAlertsId : undefined}
-                          onClick={() => toggleGroup(group.key)}
+                          aria-expanded={isGroupExpanded(key)}
+                          aria-controls={isGroupExpanded(key) ? relatedAlertsId : undefined}
+                          onClick={() => toggleGroup(key)}
                         >
                           <span>
                             {getAlertOverviewGroupDisclosureLabel({
-                              count: group.related.length,
-                              correlated: group.correlated,
-                              expanded: isGroupExpanded(group.key),
+                              count: group().related.length,
+                              correlated: group().correlated,
+                              expanded: isGroupExpanded(key),
                             })}
                           </span>
                           <For each={relatedSeverities()}>
@@ -210,17 +230,23 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                           </button>
                         </Show>
                       </div>
-                      <Show when={isGroupExpanded(group.key)}>
+                      <Show when={isGroupExpanded(key)}>
                         <div id={relatedAlertsId} class="space-y-2 mt-1">
-                          <For each={group.related}>
-                            {(alert) => (
-                              <AlertOverviewAlertCard
-                                alert={alert}
-                                state={props.state}
-                                timelineState={props.timelineState}
-                                deliveryPausedGlobally={props.deliveryPausedGlobally}
-                              />
-                            )}
+                          <For each={relatedIds()}>
+                            {(id) => {
+                              const alert = createMemo<Alert>(
+                                (previous) => relatedById().get(id) ?? previous,
+                                relatedById().get(id)!,
+                              );
+                              return (
+                                <AlertOverviewAlertCard
+                                  alert={alert()}
+                                  state={props.state}
+                                  timelineState={props.timelineState}
+                                  deliveryPausedGlobally={props.deliveryPausedGlobally}
+                                />
+                              );
+                            }}
                           </For>
                         </div>
                       </Show>

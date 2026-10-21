@@ -18,6 +18,17 @@
 
 ## Purpose
 
+### Single-alert response failures do not echo diagnostics
+
+Client admission of acknowledgement/restore/snooze/resume bodies requires the
+existing affirmative marker and, for snooze, the requested expiry. An error
+field conflicts with success. Rejected bodies produce input-free uncertainty;
+the existing translated failure consumer never echoes response diagnostics.
+`alertActionConfirmation.test.tsx` covers contradictory bodies and preserved
+transport failures; `alert-action-confirmation.cjs` verifies no diagnostic text
+reaches the actual overview/toast consumer in English, German and Spanish.
+No authentication, scope, CSRF, mutation transport, persistence or actor changes.
+
 ### PBS response failures do not copy credential-bearing provider bodies
 
 Authentication/API failure errors retain status and fixed local diagnostics,

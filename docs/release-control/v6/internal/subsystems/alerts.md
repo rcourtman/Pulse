@@ -45,6 +45,35 @@ at desktop and narrow widths. These controls do not establish guest thaw,
 filesystem liveness, the cause of an existing report, installed recovery or
 published availability.
 
+### Overview action state follows canonical alert identity
+
+The existing windowed overview receives stable group keys and related-alert IDs,
+not fresh projection object identities. Observation resampling and optimistic
+snooze/rollback preserve the mounted card, open dialog and pending controls. A
+changed primary alert ID or a removed group/member retires the old local dialog
+instead of retargeting it or retaining a ghost. Group ordering, membership,
+severity, disclosure and window bounds do not change.
+`OverviewTab.actionidentity.test.tsx` covers primary and supporting cards,
+resampling, rejection/retry, primary replacement and removal. The actual HTTP
+browser fixture keeps the same pending dialog node across ordinary resampling.
+
+### Single-alert actions require an affirmative result
+
+Acknowledging/restoring an alert and snoozing/resuming its notifications require
+literal `success: true` without an error field. Snooze also confirms the exact
+requested instant, accepting the producer's equivalent UTC representation.
+An unconfirmed response follows the existing error/rollback path, never a success
+toast or an automatic second write. Existing acknowledgement and optimistic
+snooze semantics, monitoring, actor, request identity and delivery policy stay
+unchanged. Failure copy in English, German and Spanish directs a refresh before
+another attempt instead of asserting that an uncertain write failed.
+
+`alertActionConfirmation.test.tsx` joins real adapters/state owners, malformed
+bodies, UTC expiry, rollback and same-name isolation. The existing API,
+acknowledgement, snooze, overview and localization suites remain required;
+`alert-action-confirmation.cjs` exercises actual overview controls and translated
+toasts through a synthetic HTTP producer at desktop and narrow touch widths.
+This proves no installed suppression, notification delivery or reporter cause.
 
 ### Bounded alert settings recovery
 
