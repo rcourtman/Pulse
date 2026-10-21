@@ -40,6 +40,7 @@ func TestPulseAccountFrontendManifestListsCanonicalInputs(t *testing.T) {
 	manifest := readPortalFrontendManifest(t)
 
 	requiredInputs := map[string]struct{}{
+		"package.json":     {},
 		"build_config.mjs": {},
 		"src/styles.css":   {},
 	}
@@ -56,6 +57,7 @@ func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
 	manifest := readPortalFrontendManifest(t)
 
 	requiredInputs := map[string]struct{}{
+		"package.json":     {},
 		"build_config.mjs": {},
 		"src/styles.css":   {},
 	}

@@ -3835,3 +3835,16 @@ metric/recovery retention remain unchanged. This source change does not deploy
 a runtime or change customer subscriptions. Private renderer tests cover formats,
 missing/observed-zero distinction, formula-safe CSV and PDF generation. Runtime
 hook tests and final-source Pro browser delivery qualify registration/composition.
+
+
+### Portal dependency updates retain generated-source identity
+
+The portal's declared dependency manifest is a required canonical build input,
+even when a maintenance change affects only its test runner. A change to that
+input must regenerate the checked-in bundle and source-hash manifest with the
+actual committed graph. The early source-hash preflight is reused, not relaxed;
+`TestPulseAccountFrontendManifestListsCanonicalInputs` and
+`TestPulseAccountFrontendBundleStaysInSync` pin manifest inclusion and readback.
+Portal frontend tests, type checking and its actual build still qualify an
+updated runner; a corrected hash alone is not build proof. No billing, access,
+account scope, entitlement or installed runtime is changed by this update.
