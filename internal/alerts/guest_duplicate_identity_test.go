@@ -104,6 +104,7 @@ func TestGuestFilesystemDuplicateIdentityPolicyAndInvalidObservation(t *testing.
 				m, _ := filesystemRecoveryManager(t, 0, false)
 				vm := duplicateFilesystemVM()
 				m.CheckGuest(vm, "site")
+				original := m.GetActiveAlerts()[0].Clone()
 				low := vm.Disks[0]
 				invalid := low
 				invalid.Usage = value
