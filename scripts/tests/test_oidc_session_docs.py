@@ -66,6 +66,46 @@ def assert_unauthorised_sso_routes(case, guide):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_hiding_the_form_does_not_promise_password_rejection(self):
+        text = guide_section("### Hiding the local login form", "## ⚙️ Configuration")
+        for expected in (
+            "Hiding is not password rejection", "change the login page only",
+            "Local password authentication remains enabled", "POST /api/login",
+            "?show_local=true", "rate limits and lockouts still apply",
+            "MFA requirement does not apply to a local password sign-in",
+            "does **not** enforce it", "every reachable Pulse listener",
+            "direct backend access", "HTTP Basic authentication is a separate path",
+            "scoped API-token and agent access", "do not block all API routes",
+            "policy-compliant administrator recovery path", "separate browser session",
+            "Do not disable Pulse authentication, remove credentials or delete configuration",
+        ):
+            with self.subTest(boundary=expected):
+                self.assertIn(expected, text)
+        self.assertNotIn("```", text, "no credential-bearing probe or unqualified proxy recipe")
+
+    def test_configuration_reference_links_the_visibility_boundary(self):
+        guide = (ROOT / "docs/CONFIGURATION.md").read_text()
+        row = next(line for line in guide.splitlines()
+                   if line.startswith("| `PULSE_AUTH_HIDE_LOCAL_LOGIN` |"))
+        self.assertIn("does not disable password authentication", row)
+        self.assertIn("OIDC.md#hiding-the-local-login-form", row)
+        self.assertEqual(guide.encode(),
+                         (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
+
+    def test_visibility_advice_matches_password_entry_points(self):
+        login = (ROOT / "frontend-modern/src/components/Login.tsx").read_text()
+        visibility = login.split("const shouldShowLocalLogin =", 1)[1].split("return (", 1)[0]
+        self.assertIn("params.get('show_local') === 'true'", visibility)
+        self.assertIn("!authStatus()?.hideLocalLogin", visibility)
+        handler = (ROOT / "internal/api/router.go").read_text().split(
+            "func (r *Router) handleLogin(", 1)[1].split("\nfunc ", 1)[0]
+        self.assertNotIn("HideLocalLogin", handler)
+        for marker in ("GetLockoutInfo(loginReq.Username)", "GetLockoutInfo(clientIP)",
+                       "authLimiter.Allow(clientIP)", "auth.CheckPasswordHash"):
+            self.assertIn(marker, handler)
+        auth = (ROOT / "internal/api/auth.go").read_text()
+        self.assertIn('const prefix = "Basic "', auth)
+
     def test_login_symptom_chooser_reaches_provider_save_recovery(self):
         assert_provider_edit_entry(self, (ROOT / "docs/TROUBLESHOOTING.md").read_text())
 

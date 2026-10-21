@@ -404,7 +404,7 @@ logs or delete `system.json` to recover the interface.
 | `DISCOVERY_SCAN_GATEWAYS` | Include gateway IPs in discovery (`true`/`false`) | `true` |
 | `DISCOVERY_DIAL_TIMEOUT_MS` | TCP dial timeout (ms) | `1000` |
 | `DISCOVERY_HTTP_TIMEOUT_MS` | HTTP probe timeout (ms) | `2000` |
-| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
+| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide the username/password form only; does not disable password authentication. See [OIDC login visibility](OIDC.md#hiding-the-local-login-form). | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated immediate proxy IPs/CIDRs trusted for forwarded client IP, scheme, host and port. Use the peer seen by Pulse; wildcard ranges are rejected. See [Reverse Proxy](REVERSE_PROXY.md#before-configuring-the-proxy). | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
