@@ -16,6 +16,7 @@ const queryState = vi.hoisted(() => ({
   error: undefined as unknown,
   errorAccessor: undefined as (() => unknown) | undefined,
   loading: false,
+  loadingAccessor: undefined as (() => boolean) | undefined,
   refetch: vi.fn(),
   query: '',
   enabled: false,
@@ -50,7 +51,7 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
       error: () => queryState.errorAccessor?.() ?? queryState.error,
-      loading: () => queryState.loading,
+      loading: () => queryState.loadingAccessor?.() ?? queryState.loading,
       refetch: queryState.refetch,
     };
   },
@@ -91,6 +92,7 @@ describe('GuestPhysicalDisks', () => {
     queryState.error = undefined;
     queryState.errorAccessor = undefined;
     queryState.loading = false;
+    queryState.loadingAccessor = undefined;
     queryState.refetch.mockReset();
     queryState.query = '';
     queryState.enabled = false;
@@ -175,9 +177,46 @@ describe('GuestPhysicalDisks', () => {
     }
   });
 
-  it('does not add an empty storage card to an uninstrumented guest', () => {
+  it('distinguishes an empty inventory from disk absence or health', () => {
     render(() => <GuestPhysicalDisks parentId="vm-resource-102" />);
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No physical disks were reported for this guest. Missing inventory does not establish disk absence or health.',
+    );
+    expect(screen.queryByText('Healthy')).toBeNull();
+    expect(queryState.refetch).not.toHaveBeenCalled();
+  });
+
+  it('shows a pending read before declaring an empty inventory and clears it on real rows', () => {
+    const [loading, setLoading] = createSignal(true);
+    const [resources, setResources] = createSignal<Resource[]>([]);
+    queryState.loadingAccessor = loading;
+    queryState.accessor = resources;
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading physical disk inventory');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "This reads Pulse's collected inventory, not the guest.",
+    );
+    expect(screen.queryByText(/No physical disks were reported/)).toBeNull();
+    setLoading(false);
+    expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported');
+    setResources([disk]);
+    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
+    expect(screen.getByText('Guest SATA')).toBeVisible();
+    // A refresh must not hide an accepted report or replace it with "no disks".
+    setLoading(true);
+    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
+    expect(screen.getByText('Guest SATA')).toBeVisible();
+  });
+
+  it('does not count unrelated or non-disk resources as this guest’s inventory', () => {
+    queryState.resources = [
+      { ...disk, parentId: 'another-guest' },
+      { ...disk, id: 'not-a-disk', type: 'vm' },
+    ];
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported');
+    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
   });
 
   it('encodes the parent value and never widens an empty parent to all disks', () => {
@@ -187,6 +226,7 @@ describe('GuestPhysicalDisks', () => {
     render(() => <GuestPhysicalDisks parentId=" " />);
     expect(queryState.enabled).toBe(false);
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
+    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
   });
 
   it('marks a retained disk temperature as last known', () => {
@@ -333,6 +373,7 @@ describe('GuestPhysicalDisks', () => {
         'Physical disk details are unavailable.',
       );
       expect(screen.getByRole('status')).toHaveTextContent('not a guest probe');
+      expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
       expect(screen.queryByText(/PRIVATE_PROVIDER_TEXT/)).toBeNull();
       expect(screen.getByRole('button', { name: 'Retry physical disk details' })).toBeEnabled();
       expect(queryState.refetch).not.toHaveBeenCalled();
@@ -396,7 +437,9 @@ describe('GuestPhysicalDisks', () => {
     });
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     fireEvent.click(screen.getByRole('button', { name: 'Retry physical disk details' }));
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported'),
+    );
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
     expect(screen.queryByText('Healthy')).toBeNull();
     expect(queryState.refetch).toHaveBeenCalledTimes(1);

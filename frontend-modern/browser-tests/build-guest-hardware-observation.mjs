@@ -57,6 +57,7 @@ try {
     'package-lock.json',
     'browser-tests/guest-hardware-observation.html',
     'browser-tests/guest-hardware-observation.cjs',
+    'browser-tests/guest-disk-inventory-state.cjs',
     'browser-tests/build-guest-hardware-observation.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
