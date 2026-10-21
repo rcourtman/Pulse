@@ -2191,6 +2191,19 @@ start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser
 on a raw error page, so the runtime can explain that Pulse Account is
 temporarily unavailable and offer a retry from the same instance.
+Hosted Cloud was hibernated on 2026-06-01, and from then the
+`https://cloud.pulserelay.pro/portal` page that consumed this handoff answered
+with a Cloudflare 522, so every in-app Buy, Upgrade and Renew action failed.
+The self-hosted purchase page is now served by the licence server at
+`https://license.pulserelay.pro/buy`, which is
+`pkg/licensing.DefaultPulseAccountPortalURL`. It resolves the same
+`portal_handoff_id` through `GET /v1/checkout/portal-handoff`, lists checkout
+plans from the public pricing model, and starts checkout by posting the chosen
+plan with only that `portal_handoff_id` to `/v1/checkout/session`, so success
+and cancel targets still come from the server-owned handoff. The purchase-start
+redirect must point at a page that is being served; when the host that consumes
+the handoff changes, the start route's default target, its redirect tests and
+the upgrade-return browser spec change together.
 That portal handoff is now intentionally narrowly stateful rather than a bare
 lookup row: lookup must stamp a first `resolved_at`, and the reported handoff
 lifecycle must stay derived from the owned portal handoff plus the bound
