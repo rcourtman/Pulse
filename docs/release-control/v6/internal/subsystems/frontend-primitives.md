@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Overview action state follows canonical alert identity
+
+The existing windowed overview receives stable group keys and related-alert IDs,
+not fresh projection object identities. Observation resampling and optimistic
+snooze/rollback preserve the mounted card, open dialog and pending controls. A
+changed primary alert ID or a removed group/member retires the old local dialog
+instead of retargeting it or retaining a ghost. Group ordering, membership,
+severity, disclosure and window bounds do not change.
+`OverviewTab.actionidentity.test.tsx` covers primary and supporting cards,
+resampling, rejection/retry, primary replacement and removal. The actual HTTP
+browser fixture keeps the same pending dialog node across ordinary resampling.
+
 ### Unconfirmed alert actions retain truthful feedback
 
 The existing overview's acknowledge/restore and snooze/resume error paths keep

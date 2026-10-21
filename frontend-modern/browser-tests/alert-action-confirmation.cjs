@@ -266,6 +266,18 @@ async function dismissToasts(page) {
           };
           // Unconfirmed, conflicting and negative bodies use the same real error path.
           await submit();
+          if (action === 'snooze') {
+            const dialog = await page.getByRole('dialog').elementHandle();
+            assert.ok(dialog);
+            await page.evaluate(() => window.__actionProof.resample());
+            assert.equal(await dialog.evaluate((element) => element.isConnected), true);
+            await dialog.dispose();
+            before['proof-target'].message += ' Resampled.';
+            before['proof-neighbour'].message += ' Resampled.';
+            run.checks.push(
+              'Pending snooze dialog retains the same mounted node through an ordinary full resample.',
+            );
+          }
           const writesBefore = run.requests.filter((request) => request.method === 'POST').length;
           const response =
             action === 'acknowledge'
