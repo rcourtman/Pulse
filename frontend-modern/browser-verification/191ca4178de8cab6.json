@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "10df43cb8037a125e8111d5de39611395e5862e2",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "88d1f025ce3b28a329890a93064a5e082e71d1e979f6a5f508c16c25b6dae8c9",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "d19cd97171b12efee52e3875edc530da837b8548664b3959be5ee82124c266da",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "39e0249c2586d90e28cce6eece98947e5c312313d08e98cc402cb1d02c16fb3a"
+  },
+  "routes": [
+    "/browser-tests/notification-recovery-boundary.html?send-tests&test-ownership (actual full Notifications tab, state owners, API adapters, form, toasts and CSS; inert same-origin HTTP producer)"
+  ],
+  "states": [
+    "A pending saved webhook test disables every saved Test and a draft opened on a different webhook. Competing and duplicate events do not send or replace the pending owner.",
+    "A pending draft test retains ownership after Cancel; saved Test controls stay disabled until its response settles. An HTTP 400 unlocks without retry; a subsequent explicit saved test works and preserves the delivery-paused warning.",
+    "An acknowledged test from a retired tab cannot publish success into its replacement. No saved configuration or queue action is performed."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px WebKit touch each complete four explicit sends through the actual CSRF path. Stale/programmatic activation events on disabled controls exercise the state guard in addition to real button interactions; suppressed attempts are discarded, not queued.",
+    "Open and edit a different draft during the first test, preserve it after acknowledgement, cancel a sending draft, observe rejection and a paused result, then hide/remount the tab before releasing the last success. No extra sends, page errors, unexpected/external requests or horizontal overflow; both contexts/browsers and server close."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-21T00:45:50.591414Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All six final capture files opened with native view_image and image content presented to the model. Desktop and dark 320px show both saved rows, a subdued Testing label and disabled peer Test; the pending draft label remains readable beside Cancel/Update. Replacement captures show restored Test controls and no stale toast. No clipping or horizontal overflow. The initial incomplete browser capture was also opened and retained.",
+  "driver": "frontend-modern/browser-tests/webhook-test-ownership.cjs",
+  "binding": "10df43cb8037a125e8111d5de39611395e5862e2 / source-dupxsluy: exact offline static build, driver syntax and complete hash-matched raw output, command/client 0 and guest ready/stopped. All 2578 source/five artifact hashes match browser execution. Product source, tests, manifests and all five artifacts are byte-identical to 06e12b0086 / source-svsr3y7m, which passed 275 related tests, types, every lint audit, production build/embed and budgets. Only the browser driver changed.",
+  "limits": "Per mounted webhook-test owner, not server-side idempotency, cross-tab/reload, native provider/recipient delivery, installed queue recovery, protected publication or release availability. Initial test-query type failure and incomplete toast-dismiss browser journey remain retained, not relabelled as passing proof."
+}
