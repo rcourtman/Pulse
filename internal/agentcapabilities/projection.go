@@ -1,6 +1,7 @@
 package agentcapabilities
 
 import (
+	"strconv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -546,8 +547,11 @@ func ProjectCapabilityCall(cap Capability, args map[string]any) (ProjectedCall, 
 			if pathParams[k] {
 				continue
 			}
-			if s, ok := v.(string); ok {
-				query.Set(k, s)
+			switch typed := v.(type) {
+			case string:
+				query.Set(k, typed)
+			case bool:
+				query.Set(k, strconv.FormatBool(typed))
 			}
 		}
 		if len(query) > 0 {
