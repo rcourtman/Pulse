@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "f667f27d6157d02ee9d6251322636b81426f72ac",
+  "verified_at": "2026-10-21T13:59:54Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
+    "frontend-modern/src/utils/licensePresentation.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx": "f7ddde74cf49d595cf6cde00c6b7b71b291e451850dd17ad46b0fcfc6c557ce5",
+    "frontend-modern/src/utils/licensePresentation.ts": "a0ca545a27495eff68db0503432aed884f111958b9c15085d345e8f07a36ce34",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "8ceb6e402f57c4d40a4a515f2f85a135e25a47822bea0ce577daad03f0c9cb84"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/pulse-intelligence/billing/plan?purchase=failed&intent=self_hosted_plan",
+    "/settings/pulse-intelligence/billing/plan?purchase=activated&intent=self_hosted_plan"
+  ],
+  "states": [
+    "Real ProLicensePanel/router/useProLicensePanelState/entitlement and policy HTTP readers; synthetic Community/Pro responses, production CSS and unchanged final composed utility.",
+    "Community normal entry shows grouped Pulse Pro card, small-teams tagline, $79/year and $8.99/month alternative, primary View plans and three feature groups. No retired Relay offer.",
+    "Failed return on Community and active Pro shows Purchase activation not confirmed and Pulse Account guidance, not Checkout completed or an unchanged-plan claim. The current entitlement plan remains truthful; purchase offers are suppressed and recovery opens.",
+    "Forged activated query with free entitlements cannot claim active Pro or completed checkout.",
+    "Desktop 1440x900 Chromium 141.0.7390.37 and narrow 320x900 WebKit 26.0 in light/dark themes; all twelve actual capture files opened with native view_image. Card groups stack and text/actions remain inside the narrow panel."
+  ],
+  "interactions": [
+    "Keyboard View plans opens its real same-origin purchase-start destination in a new tab. A context-level allowlist returns an inert GET-only loopback document, never the purchase backend.",
+    "Actual failed-return hook consumes purchase query and opens Manual key recovery. Keyboard/touch Open recovery works. Type and erase a synthetic non-key: Apply key enables then disables without submission.",
+    "Refresh issues another entitlement GET while preserving failed-return uncertainty and suppressing purchase offers. No activation, licence clearing, checkout, external network or non-GET request.",
+    "32 browser check groups passed, no unexpected/failed requests or page/console errors. Four browsers and contexts closed and preview server closed."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "evidence": {
+    "command": "pulse-worker-browser frontend-modern/browser-tests/pricing-composition.cjs",
+    "source": "f667f27d6157d02ee9d6251322636b81426f72ac",
+    "binding_sha256": "8dabfc06a4d55a0d9ef3549ccd27e3140db9a5be358e62baacd8535e38565219",
+    "result": "BROWSER-RESULT.json",
+    "pixels": "PIXEL-REVIEW.md",
+    "captures": [
+      {
+        "file": "desktop-light-available-plan.png",
+        "sha256": "f5b7f8d6973bebc1df7482480db50f9b56f92f06a378ffbdd1c5329063490f59",
+        "name": "desktop-light",
+        "label": "available-plan"
+      },
+      {
+        "file": "desktop-light-free-failed.png",
+        "sha256": "1008be22b9263c0ab6f8f6ab975fcacd66d75dc625dffc55529350b05a96597a",
+        "name": "desktop-light",
+        "label": "free-failed"
+      },
+      {
+        "file": "desktop-light-pro-failed.png",
+        "sha256": "8fc2efa10fc83d7e92a6bbd5f5646900942eec41e822510fc5ec3f547160ddf8",
+        "name": "desktop-light",
+        "label": "pro-failed"
+      },
+      {
+        "file": "desktop-dark-available-plan.png",
+        "sha256": "4062fb8311a5b71e3485213d0c1e59dba731dcbc86d757abcd63c2f00262b6bf",
+        "name": "desktop-dark",
+        "label": "available-plan"
+      },
+      {
+        "file": "desktop-dark-free-failed.png",
+        "sha256": "2a15eaf0d2a645307cf7d5afaed5e7727bf6cd6758101d8cccd184350ee2be35",
+        "name": "desktop-dark",
+        "label": "free-failed"
+      },
+      {
+        "file": "desktop-dark-pro-failed.png",
+        "sha256": "1d74982404aa07bbfe8d0230aab02db7a415f33932cbf73147496ab3c8239f62",
+        "name": "desktop-dark",
+        "label": "pro-failed"
+      },
+      {
+        "file": "narrow-light-available-plan.png",
+        "sha256": "a57219ad9f953ceb6e80f10b053ab1a6e139ad54cfe16dd79a38af5cdc37ef04",
+        "name": "narrow-light",
+        "label": "available-plan"
+      },
+      {
+        "file": "narrow-light-free-failed.png",
+        "sha256": "c4cb33d664e0dc26434edd22b39b018c4648b4abb519a4ab6e659cb386f5d3f8",
+        "name": "narrow-light",
+        "label": "free-failed"
+      },
+      {
+        "file": "narrow-light-pro-failed.png",
+        "sha256": "5eeb4403dc9dd64998476386fca4c414adecb3369bab5d4c3497bcaaf752a6ce",
+        "name": "narrow-light",
+        "label": "pro-failed"
+      },
+      {
+        "file": "narrow-dark-available-plan.png",
+        "sha256": "d2831d50e44ed55ddcf5af30aeceeafc3a777b3d850fe4fb3abf164fc67d1b01",
+        "name": "narrow-dark",
+        "label": "available-plan"
+      },
+      {
+        "file": "narrow-dark-free-failed.png",
+        "sha256": "e11eeb36930e046af2fdefd578025ee0a4cec3fecd7cd1348580add7e7821c3a",
+        "name": "narrow-dark",
+        "label": "free-failed"
+      },
+      {
+        "file": "narrow-dark-pro-failed.png",
+        "sha256": "79e69542a0c79eac5682c2370857a4ed1b5346fdc0cdb8c18181f72b028fa1d2",
+        "name": "narrow-dark",
+        "label": "pro-failed"
+      }
+    ]
+  },
+  "limits": "Browser proof only. Compiler/archive prefix on source-837av8zx is complete and all 2582 source hashes plus three served assets match. Its later production build, and the earlier source-vcz5xi58 build, lost command observation (TimeoutError); neither aggregate supplies a build/budget pass or command exit. Source-8_gt_qej completes the earlier consumer compilation but predates the context-level popup-driver correction. No installed/native recovery, customer transaction, publication or release acceptance."
+}
