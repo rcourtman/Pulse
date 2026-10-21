@@ -1,11 +1,14 @@
 package eventlog
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
 	"time"
+
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -254,5 +257,31 @@ func TestDurableAppendAndFlushReportDatabaseFailure(t *testing.T) {
 	store.Append(Event{Type: TypeNotificationSuppressed, AlertID: "async-failure"})
 	if err := store.Flush(); err == nil {
 		t.Fatal("Flush reported success after the async batch failed")
+	}
+}
+
+// The writer and both read-only connections each hold their own page cache,
+// so all of them must take the shared bound instead of a private 16 MB cache
+// held outside the Go heap (#1803).
+func TestEventLogConnectionsUseSharedPageCacheBound(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+	assertSharedPageCacheBound(t, "event log writer", store.db)
+	assertSharedPageCacheBound(t, "event log reader", store.readDB)
+}
+
+func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) {
+	t.Helper()
+	var size int
+	if err := conn.QueryRow(`PRAGMA cache_size`).Scan(&size); err != nil {
+		t.Fatalf("%s: read cache_size: %v", name, err)
+	}
+	if size != -pdb.MaxPageCacheKiB {
+		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
 	}
 }

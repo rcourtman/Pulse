@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog/log"
 	sqlite "modernc.org/sqlite"
 )
@@ -180,7 +181,7 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 			"foreign_keys(ON)",
-			"cache_size(-64000)",
+			pdb.PageCachePragma,
 		},
 	}.Encode()
 	db, err := sql.Open("sqlite", dsn)

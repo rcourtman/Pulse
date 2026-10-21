@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
@@ -212,7 +213,7 @@ func queueSQLiteDSN(path string) string {
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 			"foreign_keys(ON)",
-			"cache_size(-64000)",
+			pdb.PageCachePragma,
 		},
 	}.Encode()
 }

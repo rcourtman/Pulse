@@ -1007,6 +1007,10 @@ transitions. Disk-backed event logs use a bounded read-only WAL pool alongside
 the serialized durable writer. An open history snapshot cannot block a durable
 append or acquire mutation authority. In-memory test stores retain their single
 connection because their private database is connection-local.
+Every event-log connection, the writer and both readers, takes its SQLite page
+cache from `pdb.PageCachePragma` in `pkg/db/pagecache.go` instead of a private
+16 MB `cache_size`, because each connection holds its own cache. The modernc driver holds that cache outside the Go heap at about twice its size, where neither the garbage collector nor `GOMEMLIMIT` reaches it (#1803).
+`TestEventLogConnectionsUseSharedPageCacheBound` pins all three.
 
 Chronological replay selects bounded event IDs in time-index order before
 loading snapshots and details. Pages preserve occurrence-time and ID ordering,

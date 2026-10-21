@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
@@ -69,7 +70,7 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 			"foreign_keys(ON)",
-			"cache_size(-32000)",
+			pdb.PageCachePragma,
 		},
 	}.Encode()
 	db, err := sql.Open("sqlite", dsn)
