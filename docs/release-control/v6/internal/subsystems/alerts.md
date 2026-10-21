@@ -15,6 +15,12 @@
 
 ## Purpose
 
+### Bounded alert settings recovery
+
+The policy editor and each notification-configuration stream have a 150-second header/body read deadline, retaining the API client’s two-minute Retry-After allowance. Expiry leaves the existing load-error/reload controls usable; incomplete destinations keep whole-policy Save blocked. A new reload, reset or unmount retires pending reads and cannot apply their late answers. No write is timed out, cancelled or repeated.
+
+Verification: `alertConfigurationDeadline.test.tsx` covers all six real read adapters, save admission, retirement and explicit recovery; `alert-configuration-deadline.cjs` exercises the complete settings surface, saved values and ordinary save through a synthetic HTTP producer at desktop/narrow viewports.
+
 ### Draft webhook test controls remain readable after touch or hover
 
 The existing draft webhook Test button uses semantic foreground and hover

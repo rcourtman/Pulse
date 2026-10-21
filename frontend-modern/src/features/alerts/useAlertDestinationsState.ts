@@ -17,6 +17,7 @@ import {
 } from './alertDestinationsModel';
 import { createDefaultAppriseConfig, createDefaultEmailConfig } from './helpers';
 import type { AlertTab, UIAppriseConfig, UIEmailConfig } from './types';
+import { createNotificationEvidenceReader } from './notificationEvidenceRead';
 
 interface AlertDestinationsStateOptions {
   activeTab: Accessor<AlertTab>;
@@ -34,15 +35,23 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   const [pushMinimumSeverity, setPushMinimumSeverity] = createSignal<'all' | 'critical'>('all');
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
 
+  // A failed/stalled destination must release the editor into its existing
+  // unavailable state, never silently turn a missing configuration into defaults.
+  const readers = Array.from({ length: 5 }, () => createNotificationEvidenceReader());
+  const cancelReads = () => readers.forEach((reader) => reader.cancel());
+  let disposed = false;
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
 
   onCleanup(() => {
+    disposed = true;
     ++reloadVersion;
+    cancelReads();
   });
 
   const resetDestinations = () => {
     ++reloadVersion;
+    cancelReads();
     setIsLoadingDestinations(false);
     setDestConfigLoadError(null);
     setEmailConfig(createDefaultEmailConfig());
@@ -53,19 +62,21 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   };
 
   const loadDestinations = async (options: { indicateLoading?: boolean } = {}) => {
+    if (disposed) return;
     const indicateLoading = options.indicateLoading ?? false;
     const thisVersion = ++reloadVersion;
 
-    if (indicateLoading) {
-      setIsLoadingDestinations(true);
-    }
+    cancelReads();
+    setIsLoadingDestinations(indicateLoading);
 
     const results = await Promise.allSettled([
-      NotificationsAPI.getEmailConfig(),
-      NotificationsAPI.getAppriseConfig(),
-      AlertsAPI.getDeadManConfig(),
-      hasFeature('relay') ? RelayAPI.getConfig() : Promise.resolve(null),
-      NotificationsAPI.getWebhooks(),
+      readers[0].read((signal) => NotificationsAPI.getEmailConfig(signal)),
+      readers[1].read((signal) => NotificationsAPI.getAppriseConfig(signal)),
+      readers[2].read((signal) => AlertsAPI.getDeadManConfig(signal)),
+      hasFeature('relay')
+        ? readers[3].read((signal) => RelayAPI.getConfig(signal))
+        : Promise.resolve(null),
+      readers[4].read((signal) => NotificationsAPI.getWebhooks(signal)),
     ]);
 
     if (thisVersion !== reloadVersion) {

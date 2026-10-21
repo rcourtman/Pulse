@@ -17,6 +17,12 @@
 
 ## Purpose
 
+### Bounded alert settings recovery
+
+A stalled email, Apprise or webhook configuration read expires after 150 seconds and enters the existing unavailable-settings state. Partial readable settings do not admit policy Save. Explicit Retry reloads saved configuration without automatically sending tests or writes. Read transports are aborted on retirement; sender/configuration wire formats and queue semantics are unchanged.
+
+Verification: `alertConfigurationDeadline.test.tsx` and `alert-configuration-deadline.cjs` join the actual adapters, settings/save consumer, late-read protection and explicit recovery.
+
 ### Test-send success requires a confirmed result
 
 Email, Apprise and saved-webhook tests require the existing literal

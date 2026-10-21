@@ -190,6 +190,9 @@ describe('useAlertDestinationsState', () => {
     expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(2);
     expect(RelayAPI.getConfig).toHaveBeenCalledTimes(2);
+    // The real tab keeps its destination editors hidden until this reload
+    // finishes. Wait for that admission instead of a fixed microtask count.
+    await waitFor(() => expect(result.isLoadingDestinations()).toBe(false));
 
     setActiveTab('overview');
     await Promise.resolve();

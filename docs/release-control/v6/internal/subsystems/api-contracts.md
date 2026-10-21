@@ -21,6 +21,12 @@
 
 ## Purpose
 
+### Bounded alert settings recovery
+
+Optional AbortSignal arguments on alert-policy, email/Apprise/webhook, dead-man and existing-subscriber Relay configuration GETs propagate into the ordinary API client. The settings owners expire header/body reads after 150 seconds without removing the existing two-minute Retry-After allowance. No route, payload, authentication, entitlement or mutation contract changes.
+
+Verification: the existing adapter suites plus `alertConfigurationDeadline.test.tsx` cover propagation and retirement. `alert-configuration-deadline.cjs` exercises the actual HTTP producer/consumer boundary, including a two-minute rate limit and a single explicit normal save.
+
 ### Notification test responses retain producer-specific acknowledgements
 
 `NotificationsAPI.testNotification` accepts the existing `/test` producer's

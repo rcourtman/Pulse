@@ -32,7 +32,7 @@ describe('NotificationsAPI', () => {
 
     const config = await NotificationsAPI.getEmailConfig();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email', undefined);
     expect(config).toEqual({
       enabled: false,
       provider: 'smtp',
@@ -134,7 +134,7 @@ describe('NotificationsAPI', () => {
 
     const result = await NotificationsAPI.getWebhooks();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks', undefined);
     expect(result).toEqual([]);
   });
 

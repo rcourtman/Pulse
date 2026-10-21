@@ -189,8 +189,7 @@ export interface WebhookTestResult {
 // unconfirmed producer message, which can contain destination diagnostics.
 function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook') {
   const record = apiRecord(value);
-  const confirmed =
-    kind === 'notification' ? record.status === 'success' : record.success === true;
+  const confirmed = kind === 'notification' ? record.status === 'success' : record.success === true;
   const conflictingMarker =
     kind === 'notification'
       ? record.success !== undefined && record.success !== true
@@ -213,7 +212,9 @@ function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook')
   }
   return {
     ...(typeof record.message === 'string' ? { message: record.message } : {}),
-    ...(typeof record.deliveryPaused === 'boolean' ? { deliveryPaused: record.deliveryPaused } : {}),
+    ...(typeof record.deliveryPaused === 'boolean'
+      ? { deliveryPaused: record.deliveryPaused }
+      : {}),
   };
 }
 
@@ -323,8 +324,8 @@ function confirmedTerminalFailureAction(value: unknown): NotificationTerminalFai
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
-  static async getAppriseConfig(): Promise<AppriseConfig> {
-    return apiFetchJSON(`${this.baseUrl}/apprise`);
+  static async getAppriseConfig(signal?: AbortSignal): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`, signal ? { signal } : undefined);
   }
 
   static async getHealth(signal?: AbortSignal): Promise<NotificationHealth> {
@@ -483,8 +484,11 @@ export class NotificationsAPI {
   }
 
   // Email configuration
-  static async getEmailConfig(): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+  static async getEmailConfig(signal?: AbortSignal): Promise<EmailConfig> {
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/email`,
+      signal ? { signal } : undefined,
+    );
     const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
@@ -553,8 +557,11 @@ export class NotificationsAPI {
   }
 
   // Webhook management
-  static async getWebhooks(): Promise<Webhook[]> {
-    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
+  static async getWebhooks(signal?: AbortSignal): Promise<Webhook[]> {
+    const data = await apiFetchJSON<Webhook[] | null>(
+      `${this.baseUrl}/webhooks`,
+      signal ? { signal } : undefined,
+    );
     return arrayOrEmpty<Webhook>(data);
   }
 
@@ -614,9 +621,7 @@ export class NotificationsAPI {
     return { status: 'success', ...confirmedTestResponse(result, 'notification') };
   }
 
-  static async testWebhook(
-    webhook: Omit<Webhook, 'id'>,
-  ): Promise<WebhookTestResult> {
+  static async testWebhook(webhook: Omit<Webhook, 'id'>): Promise<WebhookTestResult> {
     const result = await apiFetchJSON<unknown>(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),

@@ -17,8 +17,8 @@ export interface RelayStatus {
 export class RelayAPI {
   private static baseUrl = '/api/settings/relay';
 
-  static async getConfig(): Promise<RelayConfig> {
-    return apiFetchJSON(this.baseUrl) as Promise<RelayConfig>;
+  static async getConfig(signal?: AbortSignal): Promise<RelayConfig> {
+    return apiFetchJSON(this.baseUrl, signal ? { signal } : undefined) as Promise<RelayConfig>;
   }
 
   static async updateConfig(
