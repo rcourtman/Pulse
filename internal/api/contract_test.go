@@ -9905,6 +9905,47 @@ func TestContract_ReleaseDemoFixtureRuntimeGuardrailsRemainCanonical(t *testing.
 	}
 }
 
+// A plain-HTTP LAN install has no secure callback, so its handoff request is
+// pinned to the website finish: website success and cancel pages and a fresh
+// web-prefixed JTI, with no return token anywhere.
+func TestContract_SelfHostedPurchaseHandoffWebsiteFinishJSON(t *testing.T) {
+	handler := createTestHandler(t)
+	var raw map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/portal-handoff" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Fatalf("decode checkout portal handoff request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"portal_handoff_id": "cph_web_finish"})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "http://10.0.0.7:7655"+licensePurchaseStartPath+"?feature=self_hosted_plan", nil)
+	req.Host = "10.0.0.7:7655"
+	req.RemoteAddr = "10.0.0.20:40000"
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+	jti, _ := raw["purchase_return_jti"].(string)
+	if len(raw) != 4 || raw["feature"] != "self_hosted_plan" ||
+		raw["success_url"] != "https://pulserelay.pro/thanks.html?session_id={CHECKOUT_SESSION_ID}" ||
+		raw["cancel_url"] != "https://pulserelay.pro/pricing" ||
+		!strings.HasPrefix(jti, "web") || len(jti) != 35 {
+		t.Fatalf("website-finish handoff request = %#v", raw)
+	}
+	if strings.Contains(rec.Header().Get("Location"), licensePurchaseReturnTokenField) {
+		t.Fatalf("redirect %q must not carry a return token", rec.Header().Get("Location"))
+	}
+}
+
 func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
@@ -10148,45 +10189,6 @@ func TestContract_SelfHostedPurchaseActivationBridgeCopyStaysPlanOwned(t *testin
 		"failure_open_label": true,
 		"failure_guidance": true,
 		"failure_legacy_brand": false
-	}`
-
-	assertJSONSnapshot(t, got, want)
-}
-
-func TestContract_SelfHostedPurchaseHandoffRejectsInsecureNonLoopbackCallbackURL(t *testing.T) {
-	handler := createTestHandler(t)
-
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"http://192.168.1.25:7655"+licensePurchaseStartPath+"?feature=max_monitored_systems",
-		nil,
-	)
-	req.Host = "192.168.1.25:7655"
-	req.RemoteAddr = "192.168.1.50:54321"
-	rec := httptest.NewRecorder()
-
-	handler.HandleCheckoutStart(rec, req)
-
-	got, err := json.MarshalIndent(struct {
-		StatusCode           int  `json:"status_code"`
-		TitlePresent         bool `json:"title_present"`
-		SecureFailureMessage bool `json:"secure_failure_message"`
-		OwnedRedirectPath    bool `json:"owned_redirect_path"`
-	}{
-		StatusCode:           rec.Code,
-		TitlePresent:         strings.Contains(rec.Body.String(), "Pulse Account unavailable"),
-		SecureFailureMessage: strings.Contains(rec.Body.String(), "Pulse could not open Pulse Account from this instance right now"),
-		OwnedRedirectPath:    strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable"),
-	}, "", "\t")
-	if err != nil {
-		t.Fatalf("marshal insecure handoff snapshot: %v", err)
-	}
-
-	const want = `{
-		"status_code": 503,
-		"title_present": true,
-		"secure_failure_message": true,
-		"owned_redirect_path": true
 	}`
 
 	assertJSONSnapshot(t, got, want)

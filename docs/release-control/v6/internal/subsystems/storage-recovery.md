@@ -911,6 +911,12 @@ compression diagnostics, and agent warning behavior remain owned by
 reinterpret an accepted large inventory report as backup coverage, recovery
 freshness, or restore evidence.
 
+Self-hosted purchase start under shared `internal/api/`, including the
+website-finish handoff used when an install has no secure callback address, is
+cloud-paid state. It carries no backup, restore or recovery evidence, and
+storage and recovery surfaces must not treat a purchase or activation key as
+recovery readiness.
+
 Commercial v5-to-v6 migration posture may be carried by `internal/api/`
 handlers that storage/recovery references for setup or support-adjacent flows,
 but it remains API/cloud-paid state. Storage and recovery surfaces may point
