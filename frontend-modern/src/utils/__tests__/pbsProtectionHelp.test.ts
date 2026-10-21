@@ -79,6 +79,12 @@ describe('PBS protection disagreement help', () => {
     expect(coverage).toContain('Access {evidenceQualityLabel(provider.permissions)}');
   });
 
+  it('names the current coverage strip without losing the older-version signpost', () => {
+    expect(text()).toContain('Backup coverage strip (called Backup health in older versions)');
+    const source = read('frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx');
+    expect(source).toContain('title="Backup coverage"');
+  });
+
   it('distinguishes the available observations without claiming a PBS cause or verification failure', () => {
     expect(text()).toContain('an older or absent point in Pulse is an inventory discrepancy');
     expect(text()).toContain(

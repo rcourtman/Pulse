@@ -54,7 +54,7 @@ let server, browser, current, origin;
 const scoped = 'q=missing-workload&node=missing-node&type=host&location=missing-repository';
 const clearedKeys = ['q', 'node', 'type', 'location', 'source', 'day', 'view'];
 const coverageLimits =
-  'Protected rates recorded backup evidence, not current guest health. It does not prove a successful restore, guest thaw or filesystem writes.';
+  'Protected describes recorded backup evidence, not current guest health. It does not prove a successful restore, guest thaw or filesystem writes.';
 function serve(req, res, next) {
   if (!req.url.startsWith('/api/')) return next();
   try {
@@ -121,11 +121,13 @@ function serve(req, res, next) {
     });
     // The guidance must resolve through the shipped viewer and actual Markdown,
     // not an HTML fallback or a mock document body.
-    const doc = 'frontend-modern/public/docs/VM_DISK_MONITORING.md';
-    const docBytes = fs.readFileSync(path.join(root, doc));
-    assert.equal(hash(docBytes), binding.files[doc]);
-    fs.mkdirSync(path.join(compiled, 'docs'), { recursive: true });
-    fs.writeFileSync(path.join(compiled, 'docs/VM_DISK_MONITORING.md'), docBytes);
+    for (const filename of ['VM_DISK_MONITORING.md', 'PBS.md']) {
+      const doc = `frontend-modern/public/docs/${filename}`;
+      const docBytes = fs.readFileSync(path.join(root, doc));
+      assert.equal(hash(docBytes), binding.files[doc]);
+      fs.mkdirSync(path.join(compiled, 'docs'), { recursive: true });
+      fs.writeFileSync(path.join(compiled, 'docs', filename), docBytes);
+    }
     report.artifacts = {};
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -314,6 +316,14 @@ function serve(req, res, next) {
           viewport: current.viewport,
           sha256: hash(fs.readFileSync(path.join(output, file))),
         });
+        await docPage.goto(`${origin}/docs/PBS#backups-are-visible-but-coverage-says-unprotected`);
+        const pbsText = 'The Backup coverage strip (called Backup health in older versions) and the backup list answer different questions.';
+        await expect(docPage.locator('article')).toContainText(pbsText);
+        await expect(docPage.getByRole('heading', { name: 'Backups are visible but Coverage says Unprotected', exact: true })).toBeVisible();
+        await docPage.getByRole('heading', { name: 'Backups are visible but Coverage says Unprotected', exact: true }).scrollIntoViewIfNeeded();
+        const pbsFile = `${spec.name}-shipped-coverage-guide.png`;
+        await docPage.screenshot({ path: path.join(output, pbsFile), animations: 'disabled', timeout: 30000 });
+        report.captures.push({ file: pbsFile, state: 'current-and-older-coverage-labels-in-shipped-guide', viewport: current.viewport, sha256: hash(fs.readFileSync(path.join(output, pbsFile))) });
         await docPage.close();
         assert.equal(page.url(), sourceUrl);
         assert.equal(current.requests.length, readsBeforeDoc);

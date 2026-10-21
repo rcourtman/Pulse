@@ -1076,7 +1076,7 @@ describe('ProxmoxBackupsTable', () => {
       const expectLimits = () => {
         expect(limits()).toBeVisible();
         expect(limits()).toHaveTextContent(
-          'Protected rates recorded backup evidence, not current guest health.',
+          'Protected describes recorded backup evidence, not current guest health.',
         );
         expect(limits()).toHaveTextContent(
           'It does not prove a successful restore, guest thaw or filesystem writes.',

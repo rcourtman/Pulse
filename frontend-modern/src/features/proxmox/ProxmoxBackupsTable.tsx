@@ -828,8 +828,8 @@ export const ProxmoxBackupsTable: Component<{
               footnote={
                 <>
                   <span class="mb-1 block text-base-content" data-backup-coverage-limits>
-                    Protected rates recorded backup evidence, not current guest health. It does not
-                    prove a successful restore, guest thaw or filesystem writes.{' '}
+                    Protected describes recorded backup evidence, not current guest health. It does
+                    not prove a successful restore, guest thaw or filesystem writes.{' '}
                     <ExternalTextLink
                       href={getShippedDocUrl('VM_DISK_MONITORING.md')}
                       variant="compactInherit"

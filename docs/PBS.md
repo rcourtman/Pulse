@@ -499,7 +499,8 @@ History just to change a colour.
 
 ### Backups are visible but Coverage says Unprotected
 
-The **Backup health** strip and the backup list answer different questions.
+The **Backup coverage** strip (called **Backup health** in older versions) and
+the backup list answer different questions.
 If they disagree, use **PBS's own backup and verification records** for the
 same guest while checking Pulse's assessment; do not assume either a failed
 backup or working protection from the strip alone.
