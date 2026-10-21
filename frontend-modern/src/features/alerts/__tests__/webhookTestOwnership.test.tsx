@@ -178,19 +178,17 @@ describe('webhook test ownership', () => {
         testing={owner.testingWebhook()}
       />
     ));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Test', exact: true })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Test' })[0]);
     expect(screen.getByRole('button', { name: 'Testing…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Test', exact: true })).toBeDisabled();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edit', exact: true })[1]);
+    expect(screen.getByRole('button', { name: 'Test' })).toBeDisabled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Keep this draft' } });
     const form = screen.getByLabelText('Name').closest('fieldset')!;
-    expect(within(form).getByRole('button', { name: 'Test', exact: true })).toBeDisabled();
-    fireEvent.click(within(form).getByRole('button', { name: 'Test', exact: true }));
+    expect(within(form).getByRole('button', { name: 'Test' })).toBeDisabled();
+    fireEvent.click(within(form).getByRole('button', { name: 'Test' }));
     expect(NotificationsAPI.testWebhook).not.toHaveBeenCalled();
     pending.resolve({ status: 'success' } as never);
-    await waitFor(() =>
-      expect(within(form).getByRole('button', { name: 'Test', exact: true })).toBeEnabled(),
-    );
+    await waitFor(() => expect(within(form).getByRole('button', { name: 'Test' })).toBeEnabled());
     expect(screen.getByLabelText('Name')).toHaveValue('Keep this draft');
     expect(NotificationsAPI.testNotification).toHaveBeenCalledTimes(1);
   });
