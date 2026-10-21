@@ -141,6 +141,8 @@ func TestGuestRulePolicyPriorityAndFinalOverrides(t *testing.T) {
 			}
 			if test.relaxed {
 				vm.Tags = []string{"pulse-relaxed"}
+				// The floor makes both trigger and recovery policies identical.
+				known.Thresholds.Memory.Clear = unknown.Thresholds.Memory.Clear
 			}
 			m.UpdateConfig(cfg)
 			m.mu.RLock()
@@ -187,7 +189,7 @@ func TestGuestRuleUnknownCannotFireAndKeepsIndependentMetrics(t *testing.T) {
 }
 
 func TestGuestRuleUnknownInterruptsPendingAndRecovery(t *testing.T) {
-	m := guestObservationManager(t)
+	m, elapsed := continuityManager(t, false)
 	cfg := m.GetConfig()
 	cfg.GuestDefaults = ThresholdConfig{Memory: &HysteresisThreshold{Trigger: -1}}
 	cfg.CustomRules = []CustomAlertRule{{Enabled: true, Priority: 10,
@@ -197,11 +199,12 @@ func TestGuestRuleUnknownInterruptsPendingAndRecovery(t *testing.T) {
 	cfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"memory": 60}}
 	m.UpdateConfig(cfg)
 	vm := guestObservationVM()
-	vm.CPU = .98
+	vm.CPU, vm.Memory.Usage = .98, 90 // Below critical: activation must use the configured delay.
 	m.CheckGuest(vm, "site")
-	m.mu.Lock()
-	m.core.ShiftPending(-2 * time.Minute)
-	m.mu.Unlock()
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("ordinary breach bypassed the configured delay")
+	}
+	elapsed.Store(int64(2 * time.Minute))
 	vm.CPU = -1
 	m.CheckGuest(vm, "site")
 	vm.CPU = .98
@@ -209,31 +212,39 @@ func TestGuestRuleUnknownInterruptsPendingAndRecovery(t *testing.T) {
 	if len(m.GetActiveAlerts()) != 0 {
 		t.Fatal("missing rule input completed an activation delay")
 	}
-	m.mu.Lock()
-	m.core.ShiftPending(-2 * time.Minute)
-	m.mu.Unlock()
+	elapsed.Store(int64(3 * time.Minute))
 	m.CheckGuest(vm, "site")
 	if len(m.GetActiveAlerts()) != 1 {
 		t.Fatal("known continuous rule did not complete activation")
 	}
+	elapsed.Store(int64(3*time.Minute + time.Second))
 	vm.Memory.Usage = 10
-	m.CheckGuest(vm, "site") // First current recovery confirmation.
+	m.CheckGuest(vm, "site")
+	incident, _ := continuityIncident(m, vm.ID, "memory")
+	if incident.RecoverySince.IsZero() {
+		t.Fatal("known current recovery did not start its configured window")
+	}
 	before := guestObservationBytes(t, m)
+	elapsed.Store(int64(4*time.Minute + time.Second))
 	vm.CPU = -1
 	for i := 0; i < 3; i++ {
 		m.CheckGuest(vm, "site")
 	}
-	if !bytes.Equal(before, guestObservationBytes(t, m)) {
-		t.Fatal("unknown rule input completed recovery")
+	incident, _ = continuityIncident(m, vm.ID, "memory")
+	if !incident.RecoverySince.IsZero() || !bytes.Equal(before, guestObservationBytes(t, m)) {
+		t.Fatal("unknown rule input completed recovery or retained its clock")
 	}
 	vm.CPU = .98
 	m.CheckGuest(vm, "site")
-	if len(m.GetActiveAlerts()) != 1 {
-		t.Fatal("recovery confirmation spanned a policy gap")
-	}
+	elapsed.Store(int64(5 * time.Minute))
 	m.CheckGuest(vm, "site")
-	if len(m.GetActiveAlerts()) != 0 || len(m.GetRecentlyResolved()) != 1 {
-		t.Fatal("known current recovery did not resolve once")
+	if len(m.GetActiveAlerts()) != 1 {
+		t.Fatal("recovery window spanned a policy gap")
+	}
+	elapsed.Store(int64(5*time.Minute + time.Second))
+	m.CheckGuest(vm, "site")
+	if len(m.GetActiveAlerts()) != 0 || len(m.GetRecentlyResolved()) != 1 || m.ShadowDivergences() != 0 {
+		t.Fatal("known sustained recovery did not resolve once with reducer parity")
 	}
 }
 
