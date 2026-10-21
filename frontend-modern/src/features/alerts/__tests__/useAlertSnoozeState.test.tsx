@@ -69,7 +69,9 @@ describe('useAlertSnoozeState', () => {
       result.handleSnooze(alerts()[0], new Date('2026-08-27T14:00:00Z')),
     ).rejects.toThrow('offline');
     expect(result.effectiveAlerts()[0].operationalRecord).toBeUndefined();
-    expect(notificationStore.error).toHaveBeenCalledWith('Failed to snooze alert');
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'Snooze could not be confirmed. Refresh alerts before trying again.',
+    );
   });
 
   it.each([false, true])(
@@ -111,7 +113,9 @@ describe('useAlertSnoozeState', () => {
       expect(alerts()[0].operationalRecord).toEqual(suppressedRecord);
       expect(isAlertSnoozed(result.effectiveAlerts()[0])).toBe(true);
       expect(notificationStore.success).not.toHaveBeenCalled();
-      expect(notificationStore.error).toHaveBeenCalledWith('Failed to resume alert notifications');
+      expect(notificationStore.error).toHaveBeenCalledWith(
+        'Resuming notifications could not be confirmed. Refresh alerts before trying again.',
+      );
 
       vi.mocked(AlertsAPI.unsnooze).mockResolvedValueOnce({ success: true });
       await result.handleUnsnooze(result.effectiveAlerts()[0]);

@@ -113,7 +113,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.deliveryUnavailable.description':
     'Pulse konnte den Zustellungs- oder Pausengrund fuer diese Warnmeldungen nicht aktualisieren. Die Pruefung wird automatisch wiederholt.',
   'alerts.overview.notification.acknowledged': 'Warnmeldung bestaetigt',
-  'alerts.overview.notification.acknowledgeFailed': 'Warnmeldung konnte nicht bestaetigt werden',
+  'alerts.overview.notification.acknowledgeFailed':
+    'Die Bestaetigung konnte nicht verifiziert werden. Aktualisieren Sie die Warnmeldungen vor einem weiteren Versuch.',
   'alerts.overview.notification.bulkFailure.singular':
     '{count} Warnmeldung konnte nicht bestaetigt werden.',
   'alerts.overview.notification.bulkFailure.plural':
@@ -123,11 +124,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.notification.bulkSuccess.singular': '{count} Warnmeldung bestaetigt.',
   'alerts.overview.notification.bulkSuccess.plural': '{count} Warnmeldungen bestaetigt.',
   'alerts.overview.notification.restored': 'Warnmeldung wiederhergestellt',
-  'alerts.overview.notification.restoreFailed': 'Warnmeldung konnte nicht wiederhergestellt werden',
+  'alerts.overview.notification.restoreFailed':
+    'Die Wiederherstellung konnte nicht bestaetigt werden. Aktualisieren Sie die Warnmeldungen vor einem weiteren Versuch.',
   'alerts.overview.notification.resumed': 'Warnmeldungen werden fortgesetzt',
-  'alerts.overview.notification.resumeFailed': 'Warnmeldungen konnten nicht fortgesetzt werden',
+  'alerts.overview.notification.resumeFailed':
+    'Das Fortsetzen der Benachrichtigungen konnte nicht bestaetigt werden. Aktualisieren Sie die Warnmeldungen vor einem weiteren Versuch.',
   'alerts.overview.notification.snoozed': 'Warnmeldung zurueckgestellt bis {until}',
-  'alerts.overview.notification.snoozeFailed': 'Warnmeldung konnte nicht zurueckgestellt werden',
+  'alerts.overview.notification.snoozeFailed':
+    'Die Zurueckstellung konnte nicht bestaetigt werden. Aktualisieren Sie die Warnmeldungen vor einem weiteren Versuch.',
   'alerts.overview.paused.description':
     'Schalten Sie Warnmeldungen ein, um die Ueberwachung fortzusetzen und Konfigurationstabs freizugeben',
   'alerts.overview.paused.title': 'Warnmeldungen sind pausiert',

@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Unconfirmed alert actions retain truthful feedback
+
+The existing overview's acknowledge/restore and snooze/resume error paths keep
+state unchanged or roll back the provisional state when a response cannot be
+confirmed. The existing translated toast explains uncertainty and asks for a
+refresh before another attempt. A failed snooze keeps its dialog open, restores
+the previous record and releases its controls; a confirmed action retains the
+ordinary success/close interaction. No new dialog, route or primitive is added.
+`alertActionConfirmation.test.tsx`, existing presentation/localization tests and
+`alert-action-confirmation.cjs` cover actual English/German/Spanish feedback and
+target-only changes at desktop and 320px touch widths.
+
 ### Bounded alert settings recovery
 
 Unavailable notification settings retain a usable explicit Retry and the whole-policy save lock, rather than an indefinite loading indicator. The error copy states the actual lock instead of warning that the blocked save can overwrite defaults. Late retired reads cannot install state in a replacement editor.

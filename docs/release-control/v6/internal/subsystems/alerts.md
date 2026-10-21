@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Single-alert actions require an affirmative result
+
+Acknowledging/restoring an alert and snoozing/resuming its notifications require
+literal `success: true` without an error field. Snooze also confirms the exact
+requested instant, accepting the producer's equivalent UTC representation.
+An unconfirmed response follows the existing error/rollback path, never a success
+toast or an automatic second write. Existing acknowledgement and optimistic
+snooze semantics, monitoring, actor, request identity and delivery policy stay
+unchanged. Failure copy in English, German and Spanish directs a refresh before
+another attempt instead of asserting that an uncertain write failed.
+
+`alertActionConfirmation.test.tsx` joins real adapters/state owners, malformed
+bodies, UTC expiry, rollback and same-name isolation. The existing API,
+acknowledgement, snooze, overview and localization suites remain required;
+`alert-action-confirmation.cjs` exercises actual overview controls and translated
+toasts through a synthetic HTTP producer at desktop and narrow touch widths.
+This proves no installed suppression, notification delivery or reporter cause.
+
 ### Bounded alert settings recovery
 
 The policy editor and each notification-configuration stream have a 150-second header/body read deadline, retaining the API client’s two-minute Retry-After allowance. Expiry leaves the existing load-error/reload controls usable; incomplete destinations keep whole-policy Save blocked. A new reload, reset or unmount retires pending reads and cannot apply their late answers. No write is timed out, cancelled or repeated.

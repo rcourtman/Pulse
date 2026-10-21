@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Single-alert mutation response admission
+
+The client requires the existing acknowledge/unacknowledge/snooze/unsnooze
+producer's literal `success: true` with no error field. A snooze response must
+also contain a string `snoozedUntil` matching the requested instant; equivalent
+UTC/offset representations remain valid. Malformed or contradictory successful
+HTTP bodies reject with input-free uncertainty. Existing transport failures
+propagate, and no second mutation is issued by this admission logic. Routes,
+request bodies, actor, authentication, persistence and server schemas do not
+change. `alertActionConfirmation.test.tsx` covers all four adapters and their
+real state owners; `alert-action-confirmation.cjs` covers the HTTP/overview path.
+
 ### Bounded alert settings recovery
 
 Optional AbortSignal arguments on alert-policy, email/Apprise/webhook, dead-man and existing-subscriber Relay configuration GETs propagate into the ordinary API client. The settings owners expire header/body reads after 150 seconds without removing the existing two-minute Retry-After allowance. No route, payload, authentication, entitlement or mutation contract changes.

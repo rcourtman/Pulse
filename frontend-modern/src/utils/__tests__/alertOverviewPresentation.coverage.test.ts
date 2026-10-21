@@ -69,13 +69,13 @@ describe('alertOverviewPresentation coverage', () => {
   describe('ack-state projection', () => {
     it('reports a restore failure when an already-acknowledged alert fails to toggle', () => {
       expect(getAlertOverviewAcknowledgementFailureNotification(true)).toBe(
-        'Failed to restore alert',
+        'Restoring the alert could not be confirmed. Refresh alerts before trying again.',
       );
     });
 
     it('reports an acknowledge failure when an unacknowledged alert fails to toggle', () => {
       expect(getAlertOverviewAcknowledgementFailureNotification(false)).toBe(
-        'Failed to acknowledge alert',
+        'Acknowledgement could not be confirmed. Refresh alerts before trying again.',
       );
     });
 

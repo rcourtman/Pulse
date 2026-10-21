@@ -3,6 +3,22 @@ import type { AlertConfig, DeadManStatus } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty } from './responseUtils';
 
+// A completed HTTP response does not confirm an alert-state mutation. Keep
+// unconfirmed bodies on the existing error/rollback path, without echoing
+// response diagnostics or issuing another write.
+function confirmedAlertAction(value: unknown): Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    (value as Record<string, unknown>).success !== true ||
+    (value as Record<string, unknown>).error !== undefined
+  ) {
+    throw new Error('Alert action could not be confirmed. Refresh alerts before trying again.');
+  }
+  return value as Record<string, unknown>;
+}
+
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
 
@@ -101,35 +117,53 @@ export class AlertsAPI {
 
   static async acknowledge(alertIdentifier: string, user?: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
-    return apiFetchJSON(`${this.baseUrl}/acknowledge`, {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/acknowledge`, {
       method: 'POST',
       body: JSON.stringify({ alertIdentifier, user }),
     });
+    confirmedAlertAction(result);
+    return { success: true };
   }
 
   static async unacknowledge(alertIdentifier: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
-    return apiFetchJSON(`${this.baseUrl}/unacknowledge`, {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/unacknowledge`, {
       method: 'POST',
       body: JSON.stringify({ alertIdentifier }),
     });
+    confirmedAlertAction(result);
+    return { success: true };
   }
 
   static async snooze(
     alertIdentifier: string,
     until: string,
   ): Promise<{ success: boolean; snoozedUntil: string }> {
-    return apiFetchJSON(`${this.baseUrl}/snooze`, {
-      method: 'POST',
-      body: JSON.stringify({ alertIdentifier, until }),
-    });
+    const result = confirmedAlertAction(
+      await apiFetchJSON<unknown>(`${this.baseUrl}/snooze`, {
+        method: 'POST',
+        body: JSON.stringify({ alertIdentifier, until }),
+      }),
+    );
+    // The producer echoes the requested instant in UTC, not necessarily the
+    // same string form. Another expiry cannot confirm this local hold.
+    if (
+      typeof result.snoozedUntil !== 'string' ||
+      !Number.isFinite(Date.parse(until)) ||
+      Date.parse(result.snoozedUntil) !== Date.parse(until)
+    ) {
+      throw new Error('Alert snooze could not be confirmed. Refresh alerts before trying again.');
+    }
+    return { success: true, snoozedUntil: result.snoozedUntil };
   }
 
   static async unsnooze(alertIdentifier: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/unsnooze`, {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/unsnooze`, {
       method: 'POST',
       body: JSON.stringify({ alertIdentifier }),
     });
+    confirmedAlertAction(result);
+    return { success: true };
   }
 
   // Alert configuration methods

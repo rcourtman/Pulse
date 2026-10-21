@@ -181,9 +181,11 @@ describe('alertOverviewPresentation', () => {
       'Alert snoozed until 27/08/2026, 17:00',
     );
     expect(getAlertOverviewResumedNotification()).toBe('Alert notifications resumed');
-    expect(getAlertOverviewSnoozeFailureNotification(false)).toBe('Failed to snooze alert');
+    expect(getAlertOverviewSnoozeFailureNotification(false)).toBe(
+      'Snooze could not be confirmed. Refresh alerts before trying again.',
+    );
     expect(getAlertOverviewSnoozeFailureNotification(true)).toBe(
-      'Failed to resume alert notifications',
+      'Resuming notifications could not be confirmed. Refresh alerts before trying again.',
     );
   });
 
