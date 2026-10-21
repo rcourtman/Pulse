@@ -62,7 +62,15 @@ func newPinPreflight(t *testing.T) *pinPreflight {
 	}
 	f.writeTool("uname", "case \"$1\" in -s) echo Darwin;; -m) echo x86_64;; *) exit 97;; esac\n")
 	f.writeTool("openssl", "if [ \"$1\" = s_client ]; then printf '%s' \"$$\" > \"$FIXTURE/probe-pid\"; fi\nexec "+strconv.Quote(openssl)+" \"$@\"\n")
-	f.writeTool("systemctl", "[ \"$*\" = 'is-active --quiet pulse-agent' ] && exit 3\nprintf mutation >> \"$FIXTURE/mutations\"\nexit 97\n")
+	f.writeTool("systemctl", `case "$*" in
+    'is-active --quiet pulse-agent') exit 3 ;;
+    'show -p FragmentPath --value pulse-agent')
+        printf 'fragment-path\n' >> "$FIXTURE/manager-reads"
+        exit 1 ;;
+esac
+printf mutation >> "$FIXTURE/mutations"
+exit 97
+`)
 	for _, tool := range []string{"sudo", "launchctl", "service", "rc-service", "install", "chown"} {
 		f.writeTool(tool, "printf mutation >> \"$FIXTURE/mutations\"\nexit 97\n")
 	}
@@ -240,6 +248,12 @@ func TestInstallSHPinTrustAndPreflight(t *testing.T) {
 			}
 			if strings.Contains(string(out), f.state["runtime.token"]) {
 				t.Fatal("preflight printed the saved credential")
+			}
+			if tc.name == "saved_pin_update" {
+				reads, err := os.ReadFile(filepath.Join(f.root, "manager-reads"))
+				if err != nil || string(reads) != "fragment-path\n" {
+					t.Fatalf("saved-state fallback did not use the bounded read-only manager peer: %q %v", reads, err)
+				}
 			}
 			if tc.want == 0 {
 				var result map[string]any
