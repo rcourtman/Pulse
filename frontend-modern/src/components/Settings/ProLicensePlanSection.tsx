@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import CheckIcon from 'lucide-solid/icons/check';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { InlineNotice, type InlineNoticeTone } from '@/components/shared/InlineNotice';
@@ -8,6 +9,7 @@ import {
   getLicenseStatusLoadingState,
   getNoActiveSelfHostedActivationState,
   type SelfHostedPatrolControlActionIntent,
+  type SelfHostedPlanComparisonCardPresentation,
 } from '@/utils/licensePresentation';
 import { isExternalUpgradeHref, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
@@ -70,11 +72,7 @@ interface ProLicensePlanSectionProps {
   loading: boolean;
   onReload: () => void;
   planComparisonSummary: {
-    cards: Array<{
-      title: string;
-      body: string;
-      highlights: string[];
-    }>;
+    cards: SelfHostedPlanComparisonCardPresentation[];
     action: {
       label: string;
       destination: UpgradeDestination;
@@ -349,45 +347,61 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         )}
       </Show>
       <Show when={props.planComparisonSummary.cards.length > 0}>
-        <div class="mb-4 rounded-md border border-border bg-surface p-4">
-          <p class="text-sm font-medium text-base-content">
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle}
-          </p>
-          <div class="mt-3 grid gap-3 lg:grid-cols-2">
-            <For each={props.planComparisonSummary.cards}>
-              {(card) => (
-                <div class="rounded-md border border-border bg-surface-alt p-3">
-                  <p class="text-sm font-medium text-base-content">{card.title}</p>
-                  <p class="mt-1 text-xs text-muted">{card.body}</p>
-                  <ul class="mt-3 grid gap-2">
-                    <For each={card.highlights}>
-                      {(feature) => (
-                        <li class="text-xs text-base-content flex items-center gap-2">
-                          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
-                          {feature}
-                        </li>
-                      )}
-                    </For>
-                  </ul>
+        <For each={props.planComparisonSummary.cards}>
+          {(card) => (
+            <section
+              class="mb-4 overflow-hidden rounded-lg border border-blue-200 bg-surface dark:border-blue-900"
+              aria-label={`${card.title} plan`}
+            >
+              <div class="flex flex-col gap-4 border-b border-blue-100 bg-blue-50 p-5 sm:flex-row sm:items-start sm:justify-between dark:border-blue-900 dark:bg-blue-950/30">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                    {SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle}
+                  </p>
+                  <h3 class="mt-1 text-lg font-semibold text-base-content">{card.title}</h3>
+                  <p class="mt-1 text-sm text-muted">{card.tagline}</p>
                 </div>
-              )}
-            </For>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <Show when={props.planComparisonSummary.action}>
-              {(action) => (
-                <UpgradeButtonLink
-                  variant="outline"
-                  size="settingsActionXs"
-                  class="mt-4 gap-1"
-                  destination={action().destination}
-                >
-                  {action().label}
-                </UpgradeButtonLink>
-              )}
-            </Show>
-          </div>
-        </div>
+                <div class="flex shrink-0 flex-col gap-3 sm:items-end sm:text-right">
+                  <div>
+                    <p class="text-2xl font-semibold text-base-content">{card.price}</p>
+                    <p class="text-xs text-muted">{card.priceNote}</p>
+                  </div>
+                  <Show when={props.planComparisonSummary.action}>
+                    {(action) => (
+                      <UpgradeButtonLink variant="primary" destination={action().destination}>
+                        {action().label}
+                      </UpgradeButtonLink>
+                    )}
+                  </Show>
+                </div>
+              </div>
+              <div class="grid gap-5 p-5 sm:grid-cols-3">
+                <For each={card.groups}>
+                  {(group) => (
+                    <div class="min-w-0">
+                      <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                        {group.title}
+                      </p>
+                      <ul class="mt-2 space-y-2">
+                        <For each={group.items}>
+                          {(item) => (
+                            <li class="flex gap-2 text-sm text-base-content">
+                              <CheckIcon
+                                class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400"
+                                aria-hidden="true"
+                              />
+                              <span>{item}</span>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </section>
+          )}
+        </For>
       </Show>
       <Show when={props.commercialMigrationNotice}>
         {(notice) => (

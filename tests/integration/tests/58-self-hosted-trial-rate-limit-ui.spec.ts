@@ -123,7 +123,7 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
 
     await expect(page.getByRole('heading', { name: 'Plans & Billing' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Plans & Billing' })).toBeVisible();
-    await expect(page.getByText('Pulse Pro plan')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Pulse Pro plan' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'View plans' }).first()).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('free-explicit-billing-route.png'),

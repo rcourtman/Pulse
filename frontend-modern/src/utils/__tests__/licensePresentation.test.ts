@@ -901,16 +901,31 @@ describe('licensePresentation', () => {
     ).toEqual({
       cards: [
         {
-          title: 'Pulse Pro plan',
-          body: 'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
-          highlights: [
-            'Team controls: 3 named seats, RBAC, and audit logging',
-            'Reporting and agent profiles',
-            'External probes check your services from another site',
-            'Commercial support, typically within two business days',
-            'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-            'Patrol investigates issues, applies safe fixes, and verifies the result',
-            '90-day metric history',
+          title: 'Pulse Pro',
+          tagline: 'For small teams and larger estates',
+          price: '$79/year',
+          priceNote: 'or $8.99/month',
+          groups: [
+            {
+              title: 'For your team',
+              items: ['3 named team seats', 'Roles and permissions (RBAC)', 'Audit logging'],
+            },
+            {
+              title: 'For larger estates',
+              items: [
+                'Reporting and agent profiles',
+                'External probes from another site',
+                'Commercial support, typically within two business days',
+              ],
+            },
+            {
+              title: 'Patrol and history',
+              items: [
+                'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+                'Patrol fixes issues and verifies the result',
+                '90-day metric history (Community keeps 7 days)',
+              ],
+            },
           ],
         },
       ],

@@ -17,7 +17,39 @@ export interface SelfHostedPlanDefinition {
   includedExtras: readonly string[];
   comparisonSummary: string;
   highlights: readonly string[];
+  // Short line under the plan name on the in-app comparison card.
+  comparisonTagline?: string;
+  // Feature groups for the in-app comparison card; falls back to highlights.
+  comparisonGroups?: readonly SelfHostedPlanComparisonGroup[];
 }
+
+export interface SelfHostedPlanComparisonGroup {
+  title: string;
+  items: readonly string[];
+}
+
+const PRO_COMPARISON_GROUPS: readonly SelfHostedPlanComparisonGroup[] = [
+  {
+    title: 'For your team',
+    items: ['3 named team seats', 'Roles and permissions (RBAC)', 'Audit logging'],
+  },
+  {
+    title: 'For larger estates',
+    items: [
+      'Reporting and agent profiles',
+      'External probes from another site',
+      'Commercial support, typically within two business days',
+    ],
+  },
+  {
+    title: 'Patrol and history',
+    items: [
+      'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+      'Patrol fixes issues and verifies the result',
+      '90-day metric history (Community keeps 7 days)',
+    ],
+  },
+];
 
 export interface SelfHostedFeatureRow {
   key: string;
@@ -155,15 +187,9 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     // features lead, Patrol autonomy and longer history follow.
     comparisonSummary:
       'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
-    highlights: [
-      'Team controls: 3 named seats, RBAC, and audit logging',
-      'Reporting and agent profiles',
-      'External probes check your services from another site',
-      'Commercial support, typically within two business days',
-      'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-      'Patrol investigates issues, applies safe fixes, and verifies the result',
-      '90-day metric history',
-    ],
+    comparisonTagline: 'For small teams and larger estates',
+    comparisonGroups: PRO_COMPARISON_GROUPS,
+    highlights: PRO_COMPARISON_GROUPS.flatMap((group) => group.items),
   },
 ] as const;
 
