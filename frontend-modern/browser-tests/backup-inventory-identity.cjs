@@ -134,7 +134,14 @@ async function capture(page, name) {
           const payload = key
             ? sources[key]
             : url.pathname === '/api/recovery/postures'
-              ? { data: [], policy: {} }
+              ? {
+                  data: [],
+                  policy: {
+                    freshnessWindowSeconds: 604800,
+                    verificationWindowSeconds: 604800,
+                    requireVerification: true,
+                  },
+                }
               : null;
           assert(payload, `Unexpected API: ${url.pathname}`);
           current.requests.push({
@@ -315,12 +322,18 @@ async function capture(page, name) {
           current.requests.filter((r) => r.path === `/api/backups/${other}`).length,
           otherReads,
         );
+        if (kind === 'storageBackups') {
+          const identifier = page.getByText(valid.volid, { exact: true });
+          await expect(identifier).toBeVisible();
+          await identifier.scrollIntoViewIfNeeded();
+          await capture(page, `${spec.name}-${kind}-recovered-path`);
+        }
+        if (kind === 'guestSnapshots')
+          await expect(page.getByText(valid.description, { exact: true })).toBeVisible();
         await activate(artifactRow().getByRole('button', { name: /Backup evidence/ }), spec.touch);
         await expect(dialog).toBeVisible();
         await expect(dialog).toContainText(point.id);
-        await expect(dialog).toContainText(
-          kind === 'pbs' ? 'Unverified' : kind === 'storageBackups' ? valid.volid : point.id,
-        );
+        if (kind === 'pbs') await expect(dialog).toContainText('Unverified');
         await expect(dialog).not.toContainText('SYNTHETIC_PRIVATE_SOURCE_SENTINEL');
         await capture(page, `${spec.name}-${kind}-recovered-evidence`);
         if (spec.touch) await dialog.getByRole('button', { name: 'Close backup evidence' }).tap();
