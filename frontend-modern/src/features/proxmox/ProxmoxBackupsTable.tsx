@@ -13,6 +13,8 @@ import {
   type ProxmoxBackupsView,
 } from '@/routing/resourceLinks';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { getShippedDocUrl } from '@/utils/docsLinks';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   PlatformErrorState,
@@ -822,9 +824,19 @@ export const ProxmoxBackupsTable: Component<{
 
             {/* The health strip renders identically in both route-backed views. */}
             <ProxmoxBackupsCoverageStrip
-              title="Backup health"
+              title="Backup coverage"
               footnote={
                 <>
+                  <span class="mb-1 block text-base-content" data-backup-coverage-limits>
+                    Protected describes recorded backup evidence, not current guest health. It does
+                    not prove a successful restore, guest thaw or filesystem writes.{' '}
+                    <ExternalTextLink
+                      href={getShippedDocUrl('VM_DISK_MONITORING.md')}
+                      variant="compactInherit"
+                    >
+                      Backup safety guidance
+                    </ExternalTextLink>
+                  </span>
                   Counts cover all targets. Choose a count to clear other filters and show those
                   targets.
                   <Show when={getBackupPostureRuleText(protectionPostures.policy())}>

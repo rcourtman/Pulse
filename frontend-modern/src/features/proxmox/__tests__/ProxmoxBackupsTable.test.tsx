@@ -4,6 +4,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 import { measureProxmoxBackupBlocks } from '../useProxmoxBackupTableWindowing';
 import {
   BACKUP_IDENTITY_NOW,
@@ -1058,6 +1059,46 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByText('Checking')).not.toBeInTheDocument();
   });
 
+  it.each(['/proxmox/backups/date', '/proxmox/backups/coverage'])(
+    'qualifies the top-level protection verdict on %s before and after evaluation',
+    async (route) => {
+      mockBackupAPIs();
+      const response = await apiFetchJSONMock();
+      apiFetchJSONMock.mockClear();
+      let finish!: (value: unknown) => void;
+      apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      window.history.replaceState({}, '', route);
+      const { container } = renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      await screen.findByText('Backup coverage');
+      const limits = () => container.querySelector('[data-backup-coverage-limits]')!;
+      const expectLimits = () => {
+        expect(limits()).toBeVisible();
+        expect(limits()).toHaveTextContent(
+          'Protected describes recorded backup evidence, not current guest health.',
+        );
+        expect(limits()).toHaveTextContent(
+          'It does not prove a successful restore, guest thaw or filesystem writes.',
+        );
+        const guidance = within(limits() as HTMLElement).getByRole('link', {
+          name: 'Backup safety guidance',
+        });
+        expect(guidance).toHaveAttribute('href', getShippedDocUrl('VM_DISK_MONITORING.md'));
+        expect(guidance).toHaveAttribute('target', '_blank');
+        expect(guidance).toHaveAttribute('rel', 'noopener noreferrer');
+      };
+      // The limits do not depend on a healthy verdict or a successful read.
+      expectLimits();
+      finish(response);
+      await screen.findByRole('button', { name: '1 protected' });
+      expectLimits();
+      expect(window.location.pathname).toBe(route);
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each(['transport failure', 'conflicting verdicts', 'malformed provider evidence'])(
     'withdraws %s without losing restore evidence and retries only posture',
     async (failure) => {
@@ -1072,7 +1113,7 @@ describe('ProxmoxBackupsTable', () => {
       const coverageRow = () => container.querySelector('[data-proxmox-backup-row="coverage"]')!;
       const healthFootnote = () => container.querySelector('[data-coverage-strip-footnote]')!;
       const scopeGuidance =
-        /^Counts cover all targets\. Choose a count to clear other filters and show those targets\.$/;
+        /Counts cover all targets\. Choose a count to clear other filters and show those targets\.$/;
       await waitFor(() => expect(coverageRow()).toHaveTextContent('Protected'));
       expect(healthFootnote()).toHaveTextContent(
         'Attention: the newest backup is older than 7 days,',
@@ -1105,9 +1146,12 @@ describe('ProxmoxBackupsTable', () => {
       expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
       expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
       expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_FAILURE');
-      // Static count guidance remains, but no rule may survive the failed
-      // policy read. The complete footnote must contain only that guidance.
+      // Static safety and count guidance remain, but no policy rule may
+      // survive the failed policy read.
       expect(healthFootnote()).toHaveTextContent(scopeGuidance);
+      expect(healthFootnote()).not.toHaveTextContent('Attention: the newest backup');
+      expect(healthFootnote()).toHaveTextContent('not current guest health');
+      expect(healthFootnote()).toHaveTextContent('guest thaw or filesystem writes');
       expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
         '0protected',
       );
@@ -1119,6 +1163,8 @@ describe('ProxmoxBackupsTable', () => {
       expect(screen.getByRole('button', { name: 'Retrying protection posture…' })).toBeDisabled();
       expect(coverageRow()).toHaveTextContent('Unknown');
       expect(healthFootnote()).toHaveTextContent(scopeGuidance);
+      expect(healthFootnote()).not.toHaveTextContent('Attention: the newest backup');
+      expect(healthFootnote()).toHaveTextContent('not current guest health');
       const retryReads = apiFetchJSONMock.mock.calls.length;
       fireEvent.click(screen.getByRole('button', { name: 'Retrying protection posture…' }));
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(retryReads);
