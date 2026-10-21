@@ -135,8 +135,9 @@ let server, browser, context;
           ),
         dark,
       );
-      await page.routeWebSocket('**/*', (socket) => socket.close());
-      await page.route('**/*', (route) => {
+      // Context interception also covers the first navigation of the purchase popup.
+      await context.routeWebSocket('**/*', (socket) => socket.close());
+      await context.route('**/*', (route) => {
         const req = route.request(),
           url = new URL(req.url());
         if (url.origin !== origin || req.method() !== 'GET') {
