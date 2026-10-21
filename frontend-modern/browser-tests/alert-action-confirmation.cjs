@@ -100,7 +100,7 @@ const server = http.createServer((req, res) => {
       const payload = JSON.parse(body);
       assert.equal(payload.alertIdentifier, 'proof-target');
       assert.equal(url.pathname, `/api/alerts/${run.action}`);
-      if (run.action === 'snooze') assert.equal(payload.until, '2026-10-21T13:00:00.000Z');
+      if (run.action === 'snooze') assert.equal(payload.until, run.expectedUntil);
       observation.payload = payload;
       assert.equal(pending, undefined, 'Only one write can be pending');
       pending = { res, payload };
@@ -258,6 +258,12 @@ async function dismissToasts(page) {
                 : card.getByRole('button', { name: controlName, exact: true });
             const element = await control.elementHandle();
             assert.ok(element);
+            if (action === 'snooze') {
+              run.expectedUntil = await page.evaluate(() =>
+                new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              );
+              run.checks.push(`Before interaction: one-hour expiry must be ${run.expectedUntil}.`);
+            }
             await activate(page, control, spec.touch);
             await expect.poll(() => Boolean(pending)).toBe(true);
             await expect.poll(() => element.evaluate((button) => button.disabled)).toBe(true);
@@ -352,7 +358,7 @@ async function dismissToasts(page) {
           if (action === 'snooze')
             assert.equal(
               after['proof-target'].operationalRecord.suppression.expiresAt,
-              '2026-10-21T13:00:00.000Z',
+              run.expectedUntil,
             );
           if (action === 'unsnooze')
             assert.equal(after['proof-target'].operationalRecord.suppression, undefined);
