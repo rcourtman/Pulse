@@ -147,7 +147,7 @@ func TestGuestRuleObservationProducerLifecycle(t *testing.T) {
 							if cpu >= 0 && (front.Resources[0].CPU == nil || front.Resources[0].CPU.Current != cpu*100) {
 								t.Fatalf("measured CPU lost or changed units: %+v, ratio %v", front.Resources[0].CPU, cpu)
 							}
-							frames[label] = map[string]any{"resources": front.Resources, "active": am.GetActiveAlerts(), "cpu": cpu}
+							frames[label] = map[string]any{"resources": front.Resources, "active": am.GetActiveAlerts(), "cpu": cpu, "config": am.GetConfig()}
 							return cpu
 						}
 						if cpu := collect("busy"); cpu != .98 || len(am.GetActiveAlerts()) != 1 || am.GetActiveAlerts()[0].Type != "memory" {
