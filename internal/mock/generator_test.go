@@ -1669,3 +1669,24 @@ func TestFixtureRefreshMovesCurrentGuestMemoryObservationTime(t *testing.T) {
 		})
 	}
 }
+
+// The mock update states mirror what the agent reports. A local image has no
+// RepoDigest, so its status carries the sentinel and no digests, and is never
+// an available update.
+func TestGenerateDockerContainerUpdateStatusLocalImageShape(t *testing.T) {
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	seen := false
+	for i := 0; i < 5000 && !seen; i++ {
+		status := generateDockerContainerUpdateStatus(now)
+		if status == nil || status.Error != "local image" {
+			continue
+		}
+		seen = true
+		if status.UpdateAvailable || status.CurrentDigest != "" || status.LatestDigest != "" {
+			t.Fatalf("local image status = %+v, want no update and no digests", status)
+		}
+	}
+	if !seen {
+		t.Fatal("generator never produced the local image state")
+	}
+}

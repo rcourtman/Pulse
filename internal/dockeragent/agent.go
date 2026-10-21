@@ -1686,7 +1686,7 @@ func summarizeManualUpdateCheck(report agentsdocker.Report) string {
 			continue
 		}
 		updateError := strings.TrimSpace(container.UpdateStatus.Error)
-		if strings.EqualFold(updateError, "digest-pinned image") {
+		if strings.EqualFold(updateError, "digest-pinned image") || strings.EqualFold(updateError, localImageUpdateStatus) {
 			skipped++
 			continue
 		}

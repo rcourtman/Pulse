@@ -33,6 +33,17 @@ collection, health or alert rule is introduced. `RootDiskCard.test.tsx`, the rea
 bar lifecycle in `SharedPrimitives.guardrails.test.ts` and the full-drawer
 `browser-tests/root-disk-observation.cjs` fixture cover this contract.
 
+### Container update control offers only what the server advertises (21 October 2026)
+
+`UpdateButton` is live only when the server advertises the `update` capability
+and records no refusal for it. A recorded refusal, or no advertised capability
+(for example a host whose inventory is stale), renders the locked amber pill
+with the reason. When the refusal is a disconnected command agent and the
+host's agent facet reports no command access, the explanation names the host
+and the install option that grants access. The locked pill reads `Update` so
+it fits the Updates column at its narrowest; Local joins Pinned as a neutral
+uncheckable state rather than Check failed.
+
 ### Infrastructure agent cards honour native guest power
 
 The existing canonical detail drawer qualifies its selected in-guest agent report

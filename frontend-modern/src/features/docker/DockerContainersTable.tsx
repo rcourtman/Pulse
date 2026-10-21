@@ -4,7 +4,10 @@ import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getDockerContainerUpdateAction } from './dockerContainerUpdateAction';
-import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
+import {
+  getContainerUpdateUncheckableLabel,
+  isContainerUpdateUncheckable,
+} from '@/components/shared/containerUpdateBadgeModel';
 import {
   GroupedTableModeSegmentedControl,
   type GroupedTableMode,
@@ -186,7 +189,7 @@ const isContainerRunning = (resource: Resource): boolean =>
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
   if (!update) return '—';
-  if (isContainerUpdatePinned(update)) return 'Pinned';
+  if (isContainerUpdateUncheckable(update)) return getContainerUpdateUncheckableLabel(update);
   if (asTrimmedString(update.error)) return 'Error';
   return update.updateAvailable ? 'Available' : 'Current';
 };
@@ -450,6 +453,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       ? [...scopedRows()].sort(compareDockerContainers)
       : sortedRows();
   });
+  const hostResourceById = createMemo(() => {
+    const map = new Map<string, Resource>();
+    for (const hostResource of props.hosts ?? []) map.set(hostResource.id, hostResource);
+    return map;
+  });
   const hostResourceByName = createMemo(() => {
     const map = new Map<string, Resource>();
     for (const hostResource of props.hosts ?? []) {
@@ -531,7 +539,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const mounts = () => mountsSummary(resource);
     const updates = () => updateStatusLabel(resource);
     const updateTitle = () => updateStatusTitle(resource);
-    const action = getDockerContainerUpdateAction(resource);
+    // An accessor, not a value: action readiness can arrive after the row
+    // mounts (the REST revalidation follows a websocket paint), and a value
+    // captured at mount kept offering an update the server had refused.
+    const action = () =>
+      getDockerContainerUpdateAction(resource, hostResourceById().get(resource.parentId ?? ''));
     const detailRowId = () => drawer.detailRowId(resource);
     const isExpanded = () => drawer.isExpanded(resource);
     const renderColumnCell = (column: DockerContainerTableColumn): JSX.Element => {
@@ -668,14 +680,26 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content docker-container-update-cell`}
             >
               <Show
-                when={action}
+                when={action()}
                 fallback={
                   <span class="block max-w-full truncate" title={updateTitle()}>
                     {updates()}
                   </span>
                 }
               >
-                {(updateAction) => <UpdateButton {...updateAction()} />}
+                {(updateAction) => (
+                  <UpdateButton
+                    agentId={updateAction().agentId}
+                    containerId={updateAction().containerId}
+                    containerName={updateAction().containerName}
+                    updateStatus={updateAction().updateStatus}
+                    resourceId={updateAction().resourceId}
+                    actionReadiness={updateAction().actionReadiness}
+                    updateNotOfferedReason={updateAction().updateNotOfferedReason}
+                    hostName={updateAction().hostName}
+                    hostCommandsEnabled={updateAction().hostCommandsEnabled}
+                  />
+                )}
               </Show>
             </TableCell>
           );

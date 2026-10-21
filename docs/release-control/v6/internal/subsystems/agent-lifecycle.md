@@ -15,6 +15,13 @@
 
 ## Purpose
 
+### Manual update checks skip images with no registry tag (21 October 2026)
+
+A manual container update check counts a `local image` status as skipped,
+alongside `digest-pinned image`, rather than as a checked image with a
+registry error. No agent authority or transport changes.
+`TestSummarizeManualUpdateCheckSkipsUncheckableImages` covers the summary.
+
 ### Malformed Unix installer invocations preserve local state
 
 An unrecognised argument exits 16 before credential reads or lifecycle work,

@@ -1607,6 +1607,65 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('revalidates a prefer-ws-then-rest screen seeded from a websocket-only cache on mount', async () => {
+    // In-app navigation onto a platform page: the all-resources cache is fed
+    // by the websocket alone, so the scoped route seeds from it and reads as
+    // fresh. Action readiness only arrives over REST, and a route that never
+    // fetched it offered Docker updates the server had already refused.
+    apiFetchMock.mockImplementation(() => new Promise(() => undefined));
+
+    let disposeAll = () => {};
+    let allResources: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeAll = d;
+      allResources = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws-then-rest',
+      });
+    });
+    await waitForResourceCount(() => allResources!.resources().length);
+    await flushAsync();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    disposeAll();
+
+    apiFetchMock.mockReset();
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...v2Resource,
+          actionReadiness: [
+            {
+              name: 'update',
+              available: false,
+              reasonCode: 'command_agent_disconnected',
+              reason: 'Docker / Podman command agent is not connected.',
+            },
+          ],
+        },
+      ]),
+    );
+
+    let disposeScoped = () => {};
+    let scoped: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeScoped = d;
+      scoped = useUnifiedResources({
+        query: 'type=agent',
+        cacheKey: 'seeded-platform-overview',
+        initialHydration: 'prefer-ws-then-rest',
+      });
+    });
+
+    await flushAsync();
+    expect(scoped!.resources()[0]?.id).toBe('node-1');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await waitForValue(() => scoped!.resources()[0]?.actionReadiness?.[0]?.name, 'update');
+    expect(scoped!.loading()).toBe(false);
+
+    disposeScoped();
+  });
+
   it('waits for the first canonical REST snapshot before painting immediate hydration screens', async () => {
     let resolveFetch:
       | ((value: { ok: true; json: () => Promise<{ data: Array<typeof v2Resource> }> }) => void)

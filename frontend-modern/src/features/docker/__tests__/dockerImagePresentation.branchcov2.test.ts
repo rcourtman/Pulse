@@ -388,6 +388,21 @@ describe('dockerImagePresentation.branchcov2', () => {
       });
     });
 
+    it('reads a locally built image as Local, not a failed check', () => {
+      const result = getDockerImageOperationalPresentation(
+        image({
+          docker: {
+            runtime: 'docker',
+            image: 'linkplayer-transcoder:latest',
+            updateStatus: { error: 'local image' },
+          },
+        }),
+        [],
+      );
+      expect(result.updateLabel).toBe('Local');
+      expect(result.updateTone).toBe('muted');
+    });
+
     it('trims the error text for updateDetail', () => {
       const result = getDockerImageOperationalPresentation(
         image({

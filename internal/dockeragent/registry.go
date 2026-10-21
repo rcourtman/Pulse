@@ -238,6 +238,11 @@ func (r *RegistryChecker) ForceCheck() {
 // broker's digest-pinned commands instead, so the generic checker stays out.
 const proBrokerRegistry = "license.pulserelay.pro"
 
+// localImageUpdateStatus is the update-status sentinel for an image built or
+// loaded on the host, which no registry holds. Like "digest-pinned image" it
+// is not a failure, and Pulse's update surfaces render it as its own state.
+const localImageUpdateStatus = "local image"
+
 // CheckImageUpdate checks if a newer version of the image is available.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, goos, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
