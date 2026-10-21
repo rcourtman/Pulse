@@ -3590,7 +3590,7 @@ describe('GuestRow accessible reading explanations', () => {
       fireEvent.click(trigger);
       const dialog = screen.getByRole('dialog', { name: 'Disk reading for test-vm' });
       expect(dialog).toHaveTextContent('no current aggregate disk-usage measurement');
-      expect(dialog).toHaveTextContent('a missing reading does not mean an empty filesystem');
+      expect(dialog).toHaveTextContent('A missing reading does not mean an empty filesystem');
       expect(dialog).toHaveTextContent('individually reported filesystems');
       expect(dialog.querySelectorAll('button')).toHaveLength(1);
       expect(onClick).not.toHaveBeenCalled();

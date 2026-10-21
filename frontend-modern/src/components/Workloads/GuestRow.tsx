@@ -402,7 +402,7 @@ export function GuestRow(props: GuestRowProps) {
         return {
           label: 'No data',
           message:
-            "Pulse has no current aggregate disk-usage measurement for this container. Capacity and configured mounts alone do not show used or free space; a missing reading does not mean an empty filesystem. Open the container's details for individually reported filesystems.",
+            "Pulse has no current aggregate disk-usage measurement for this container. Capacity and configured mounts alone do not show used or free space. A missing reading does not mean an empty filesystem. Open the container's details for individually reported filesystems.",
           valueLabelContext: 'unavailable' as const,
           needsAction: false,
         };
