@@ -118,7 +118,15 @@ function Fixture() {
     kind: (type: Resource['type']) => update({ type }, ['type']),
     scope: (scope: string) => update({ platformScopes: [scope] }, ['platformScopes']),
     noAgentNetwork: () =>
-      update({ agent: { ...snapshot()[0].agent, networkInterfaces: [] } }, ['agent']),
+      update(
+        {
+          agent: { ...snapshot()[0].agent, networkInterfaces: [] },
+          // The existing API-only host card requires its actual host context;
+          // a guest facet alone is not proof that this branch was consumed.
+          platformData: { sources: ['agent', 'proxmox'], proxmox: { nodeName: 'fixture-node' } },
+        },
+        ['agent', 'platformData'],
+      ),
     stale: (stale: boolean) => update({ agent: { ...snapshot()[0].agent, stale } }, ['agent']),
     platform: () =>
       update({ status: 'online', lastSeen: Date.parse('2026-10-20T12:05:00Z') }, [

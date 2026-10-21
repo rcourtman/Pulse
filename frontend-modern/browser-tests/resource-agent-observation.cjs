@@ -275,16 +275,17 @@ let server, browser, context;
       check(
         'Stopped/offline LXC reports are qualified with their own native state, not VM semantics.',
       );
+      await act('kind', 'agent');
       await act('noAgentNetwork');
       await expect(host.getByText('192.0.2.99/24')).toBeVisible();
       const apiNetwork = host.getByText('Network', { exact: true }).locator('..');
       await expect(apiNetwork.getByRole('status')).toHaveCount(0);
       await expect(apiNetwork.getByText('192.0.2.99/24')).toHaveClass(/text-blue-700/);
       check(
-        'Removing the agent list exposes independent Proxmox host configuration without downgrading it.',
+        'Removing a physical host's agent list exposes its independently sourced Proxmox configuration without downgrading it.',
       );
       await act('report');
-      await assertRetained('Proxmox reports this container stopped');
+      await assertCurrent();
       await act('kind', 'agent');
       await act('stale', false);
       await assertCurrent();
