@@ -460,3 +460,36 @@ func TestHTTPCallResponseFailureErrorUsesStableEnvelope(t *testing.T) {
 		t.Fatalf("failure error = %q", got)
 	}
 }
+
+
+func TestBuildCapabilityHTTPRequestForwardsBooleanFleetFilters(t *testing.T) {
+	cap := Capability{
+		Name: FleetContextCapabilityName,
+		Method: http.MethodGet,
+		Path: "/api/agent/fleet-context",
+	}
+	for _, tc := range []struct {
+		name string
+		value bool
+		want string
+	}{
+		{name: "true", value: true, want: "true"},
+		{name: "false", value: false, want: "false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, projected, err := BuildCapabilityHTTPRequest(
+				context.Background(), "http://pulse.local/", "token", cap,
+				map[string]any{"hasFindings": tc.value},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := projected.Query.Get("hasFindings"); got != tc.want {
+				t.Errorf("projected filter = %q, want %q", got, tc.want)
+			}
+			if got := req.URL.Query().Get("hasFindings"); got != tc.want {
+				t.Errorf("request filter = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
