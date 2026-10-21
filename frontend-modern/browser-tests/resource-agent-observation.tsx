@@ -4,6 +4,7 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
+import { ResourceCompositionFixture } from './resource-composition-observation';
 import { mergeCanonicalResourceDeltaSnapshot } from '../src/utils/resourceStateAdapters';
 import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
@@ -68,6 +69,7 @@ const guest: Resource = {
 };
 // Reuse the production drawer/merger fixture for the API host aggregate path.
 const rootDiskOnly = new URLSearchParams(window.location.search).get('kind') === 'root-disk';
+const compositionOnly = new URLSearchParams(window.location.search).get('kind') === 'composition';
 const initial: Resource = rootDiskOnly
   ? {
       id: 'root-disk-host',
@@ -190,7 +192,7 @@ render(
           <DarkModeContext.Provider
             value={() => document.documentElement.classList.contains('dark')}
           >
-            <Fixture />
+            {compositionOnly ? <ResourceCompositionFixture /> : <Fixture />}
           </DarkModeContext.Provider>
         )}
       />
