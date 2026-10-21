@@ -111,7 +111,7 @@ function api(req, res, next) {
     const origin = 'http://127.0.0.1:5262';
     for (const spec of [
       { name: 'chromium-desktop', engine: chromium, width: 1440, height: 900, touch: false },
-      { name: 'webkit-phone', engine: webkit, width: 390, height: 844, touch: true },
+      { name: 'webkit-phone', engine: webkit, width: 320, height: 844, touch: true },
     ]) {
       current = {
         name: spec.name,
@@ -174,9 +174,22 @@ function api(req, res, next) {
       };
       const scan = async (state) => {
         const result = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+        const names = await new AxeBuilder({ page })
+          .withRules(['label-content-name-mismatch'])
+          .analyze();
+        // The rule is experimental in the launch graph and enabled by default
+        // in the proposed one. Exercise it explicitly without dropping WCAG.
+        const violations = [
+          ...new Map(
+            [...result.violations, ...names.violations].map((violation) => [
+              violation.id,
+              violation,
+            ]),
+          ).values(),
+        ];
         current.scans.push({
           state,
-          violations: result.violations.map((v) => ({
+          violations: violations.map((v) => ({
             id: v.id,
             impact: v.impact,
             help: v.help,
@@ -205,12 +218,14 @@ function api(req, res, next) {
       await expect(
         nav.getByRole('link', { name: 'Actions: 6 actions await approval', exact: true }),
       ).toBeVisible();
-      for (const link of await nav.getByRole('link').all())
+      for (const link of await nav.getByRole('link').all()) {
+        if (binding.phase === 'after') await expect(link).not.toHaveAttribute('aria-label');
         current.names.push({
           text: await link.innerText(),
           aria: await link.getAttribute('aria-label'),
           snapshot: await link.ariaSnapshot(),
         });
+      }
       await scan('actions-with-counts');
       await capture('actions-with-counts');
       if (binding.phase === 'after') {

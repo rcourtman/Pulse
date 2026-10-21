@@ -165,13 +165,15 @@ export function getMobileNavAlertBadgeCounts(
   };
 }
 
-export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
+// Let links take their name from the rendered label. Append badge meaning once,
+// as native screen-reader content, instead of overriding the visible name.
+export function getMobileNavTabCountSuffix(tab: MobileNavBarUtilityTab): string {
   const badges = getMobileNavAlertBadgeCounts(tab);
   if (!badges) {
     if (tab.count && tab.count > 0) {
-      return `${tab.label}: ${tab.countLabel ?? `${tab.count} items`}`;
+      return `: ${tab.countLabel ?? `${tab.count} items`}`;
     }
-    return tab.label;
+    return '';
   }
   const parts: string[] = [];
   if (badges.critical > 0) {
@@ -180,8 +182,7 @@ export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
   if (badges.warning > 0) {
     parts.push(`${badges.warning} warning`);
   }
-  if (parts.length === 0) return tab.label;
-  return `${tab.label}: ${parts.join(', ')}`;
+  return parts.length ? `: ${parts.join(', ')}` : '';
 }
 
 export function getMobileNavTabButtonClass(options: {

@@ -798,7 +798,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
     // Both rails share the severity-aware name rather than a desktop-only total.
     expect(appLayoutSource).toContain(
-      "import { getMobileNavTabAriaLabel as getUtilityTabAriaLabel } from '@/components/shared/mobileNavBarModel';",
+      "import { getMobileNavTabCountSuffix as getUtilityTabCountSuffix } from '@/components/shared/mobileNavBarModel';",
     );
     expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel(');
     expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
@@ -807,7 +807,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={tab.label}');
-    expect(appLayoutSource).toContain('aria-label={getUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).not.toContain('aria-label={getUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain(
+      '<span class="sr-only">{getUtilityTabCountSuffix(tab)}</span>',
+    );
     expect(appLayoutSource).toContain(
       '<span aria-hidden="true" class="inline-flex items-center justify-center">',
     );

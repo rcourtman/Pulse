@@ -326,6 +326,8 @@ describe('AppLayout navigation icons', () => {
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
+    expect(desktopPatrolTab).not.toHaveAttribute('aria-label');
+    expect(desktopPatrolTab).toHaveAccessibleName('Patrol: 2 active attention items');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -334,6 +336,8 @@ describe('AppLayout navigation icons', () => {
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
+    expect(mobilePatrolTab).not.toHaveAttribute('aria-label');
+    expect(mobilePatrolTab).toHaveAccessibleName('Patrol: 2 active attention items');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 

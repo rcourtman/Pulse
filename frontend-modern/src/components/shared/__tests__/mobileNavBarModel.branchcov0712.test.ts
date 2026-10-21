@@ -4,7 +4,7 @@ import {
   buildOrderedMobileNavTabs,
   getMobileNavAlertBadgeCounts,
   getMobileNavDestinationHref,
-  getMobileNavTabAriaLabel,
+  getMobileNavTabCountSuffix,
   getMobileNavTabButtonClass,
 } from '@/components/shared/mobileNavBarModel';
 import type {
@@ -102,45 +102,45 @@ describe('mobileNavBarModel.branchcov2', () => {
     });
   });
 
-  describe('getMobileNavTabAriaLabel', () => {
-    it('returns the bare label for a non-alerts tab with no count (badges null + count falsy)', () => {
+  describe('getMobileNavTabCountSuffix', () => {
+    it('returns no suffix for a non-alerts tab with no count (badges null + count falsy)', () => {
       const tab = makeUtilityTab({ id: 'settings', label: 'Settings', count: undefined });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Settings');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('');
     });
 
-    it('returns the bare label when count is 0 (count && count > 0 false arm)', () => {
+    it('returns no suffix when count is 0 (count && count > 0 false arm)', () => {
       const tab = makeUtilityTab({ id: 'settings', label: 'Settings', count: 0 });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Settings');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('');
     });
 
-    it('uses countLabel when count > 0 (countLabel ?? right-side fallback NOT taken)', () => {
+    it('uses countLabel when count > 0 (countLabel supplied)', () => {
       const tab = makeUtilityTab({
         id: 'ai',
         label: 'Patrol',
         count: 12,
         countLabel: '12 pending',
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 pending');
+      expect(getMobileNavTabCountSuffix(tab)).toBe(': 12 pending');
     });
 
-    it('synthesizes "N items" when countLabel is absent (countLabel ?? right arm)', () => {
+    it('synthesizes "N items" when countLabel is absent (default count text)', () => {
       const tab = makeUtilityTab({
         id: 'ai',
         label: 'Patrol',
         count: 12,
         countLabel: undefined,
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 items');
+      expect(getMobileNavTabCountSuffix(tab)).toBe(': 12 items');
     });
 
-    it('returns the bare label for an alerts tab whose breakdown is all zeros (parts.length === 0 arm)', () => {
+    it('returns no suffix for an alerts tab whose breakdown is all zeros (parts.length === 0 arm)', () => {
       const tab = makeUtilityTab({
         id: 'alerts',
         label: 'Alerts',
         count: 5,
         breakdown: { critical: 0, warning: 0 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts');
+      expect(getMobileNavTabCountSuffix(tab)).toBe('');
     });
 
     it('lists only critical when warning is 0 (warning push guard false)', () => {
@@ -150,7 +150,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 3, warning: 0 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 3 critical');
+      expect(getMobileNavTabCountSuffix(tab)).toBe(': 3 critical');
     });
 
     it('lists only warning when critical is 0 (critical push guard false)', () => {
@@ -160,7 +160,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 0, warning: 2 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 2 warning');
+      expect(getMobileNavTabCountSuffix(tab)).toBe(': 2 warning');
     });
 
     it('joins both severities with a comma when both are > 0', () => {
@@ -170,7 +170,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 10,
         breakdown: { critical: 3, warning: 7 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 3 critical, 7 warning');
+      expect(getMobileNavTabCountSuffix(tab)).toBe(': 3 critical, 7 warning');
     });
   });
 
