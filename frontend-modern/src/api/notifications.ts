@@ -189,8 +189,7 @@ export interface WebhookTestResult {
 // unconfirmed producer message, which can contain destination diagnostics.
 function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook') {
   const record = apiRecord(value);
-  const confirmed =
-    kind === 'notification' ? record.status === 'success' : record.success === true;
+  const confirmed = kind === 'notification' ? record.status === 'success' : record.success === true;
   const conflictingMarker =
     kind === 'notification'
       ? record.success !== undefined && record.success !== true
@@ -213,7 +212,9 @@ function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook')
   }
   return {
     ...(typeof record.message === 'string' ? { message: record.message } : {}),
-    ...(typeof record.deliveryPaused === 'boolean' ? { deliveryPaused: record.deliveryPaused } : {}),
+    ...(typeof record.deliveryPaused === 'boolean'
+      ? { deliveryPaused: record.deliveryPaused }
+      : {}),
   };
 }
 
@@ -484,7 +485,8 @@ export class NotificationsAPI {
 
   // Email configuration
   static async getEmailConfig(signal?: AbortSignal): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`,
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/email`,
       signal ? { signal } : undefined,
     );
     const port = finiteNumberOrUndefined(backendConfig.port);
@@ -619,9 +621,7 @@ export class NotificationsAPI {
     return { status: 'success', ...confirmedTestResponse(result, 'notification') };
   }
 
-  static async testWebhook(
-    webhook: Omit<Webhook, 'id'>,
-  ): Promise<WebhookTestResult> {
+  static async testWebhook(webhook: Omit<Webhook, 'id'>): Promise<WebhookTestResult> {
     const result = await apiFetchJSON<unknown>(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),

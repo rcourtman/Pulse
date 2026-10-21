@@ -14,14 +14,23 @@ function Fixture() {
   return (
     <main class="mx-auto min-h-screen max-w-4xl space-y-4 bg-surface p-3 text-base-content sm:p-6">
       <h1 class="text-lg font-semibold">Alert notification settings</h1>
-      <p class="text-sm text-muted">Synthetic settings only. No real policy or destination is used.</p>
+      <p class="text-sm text-muted">
+        Synthetic settings only. No real policy or destination is used.
+      </p>
       <button onClick={() => setVisible(false)}>Retire synthetic settings view</button>
       <Show when={visible()}>
         <AlertsConfigurationSurface
-          activeTab={() => 'destinations'} allResources={() => []} byType={() => []}
-          children={() => []} activeAlerts={{}} removeAlerts={() => {}}
-          setOverviewOverrides={() => {}} hasUnsavedChanges={dirty} setHasUnsavedChanges={setDirty}
-          alertsActivationState={() => 'active'} alertsActivationConfig={() => ({ enabled: true })}
+          activeTab={() => 'destinations'}
+          allResources={() => []}
+          byType={() => []}
+          children={() => []}
+          activeAlerts={{}}
+          removeAlerts={() => {}}
+          setOverviewOverrides={() => {}}
+          hasUnsavedChanges={dirty}
+          setHasUnsavedChanges={setDirty}
+          alertsActivationState={() => 'active'}
+          alertsActivationConfig={() => ({ enabled: true })}
         />
       </Show>
       <ToastContainer />
@@ -30,4 +39,11 @@ function Fixture() {
 }
 // Keep existing subscribers' compatibility read in this recovery matrix.
 await loadRuntimeCapabilities();
-render(() => <Router><Route path="*" component={Fixture} /></Router>, document.getElementById('root')!);
+render(
+  () => (
+    <Router>
+      <Route path="*" component={Fixture} />
+    </Router>
+  ),
+  document.getElementById('root')!,
+);
