@@ -90,7 +90,7 @@ describe('overview alert action identity through resampling', () => {
     'keeps the %s-related card, open dialog and rejected snooze retry through resampling',
     async (related) => {
       const { card, rows, setRows } = mount(related);
-      fireEvent.click(within(card).getByRole('button', { name: 'Snooze', exact: true }));
+      fireEvent.click(within(card).getByRole('button', { name: 'Snooze' }));
       const dialog = screen.getByRole('dialog', { name: 'Snooze this alert' });
       let fail!: (error: Error) => void;
       vi.mocked(AlertsAPI.snooze).mockImplementationOnce(
@@ -135,14 +135,14 @@ describe('overview alert action identity through resampling', () => {
       await settle();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(document.getElementById('alert-target')).toBe(card);
-      expect(within(card).getByRole('button', { name: 'Resume', exact: true })).toBeInTheDocument();
+      expect(within(card).getByRole('button', { name: 'Resume' })).toBeInTheDocument();
       expect(AlertsAPI.snooze).toHaveBeenCalledTimes(2);
     },
   );
   it('retires an open primary dialog when a different alert becomes the primary', () => {
     const { rows, setRows } = mount(true);
     const oldPrimary = document.getElementById('alert-neighbour')!;
-    fireEvent.click(within(oldPrimary).getByRole('button', { name: 'Snooze', exact: true }));
+    fireEvent.click(within(oldPrimary).getByRole('button', { name: 'Snooze' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     setRows({
       target: { ...rows().target, correlation: { ...rows().target.correlation!, role: 'primary' } },
@@ -157,7 +157,6 @@ describe('overview alert action identity through resampling', () => {
     expect(
       within(document.getElementById('alert-target')!).getByRole('button', {
         name: 'Snooze',
-        exact: true,
       }),
     ).toBeInTheDocument();
   });
@@ -165,7 +164,7 @@ describe('overview alert action identity through resampling', () => {
     'removes a vanished %s-related alert without retaining a ghost dialog',
     (related) => {
       const { card, rows, setRows } = mount(related);
-      fireEvent.click(within(card).getByRole('button', { name: 'Snooze', exact: true }));
+      fireEvent.click(within(card).getByRole('button', { name: 'Snooze' }));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       setRows({ neighbour: rows().neighbour });
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

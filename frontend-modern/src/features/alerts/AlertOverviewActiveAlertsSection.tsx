@@ -24,7 +24,7 @@ import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import { getCanonicalAlertId } from './identity';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import type { AlertOverviewState } from './useAlertOverviewState';
+import type { AlertGroup, AlertOverviewState } from './useAlertOverviewState';
 
 interface AlertOverviewActiveAlertsSectionProps {
   state: AlertOverviewState;
@@ -149,7 +149,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
           >
             {(key) => {
               // A removed keyed child can read once during its teardown.
-              const group = createMemo(
+              const group = createMemo<AlertGroup>(
                 (previous) => groupsByKey().get(key) ?? previous,
                 groupsByKey().get(key)!,
               );
@@ -234,7 +234,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                         <div id={relatedAlertsId} class="space-y-2 mt-1">
                           <For each={relatedIds()}>
                             {(id) => {
-                              const alert = createMemo(
+                              const alert = createMemo<Alert>(
                                 (previous) => relatedById().get(id) ?? previous,
                                 relatedById().get(id)!,
                               );
