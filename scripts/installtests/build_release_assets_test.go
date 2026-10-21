@@ -22,6 +22,118 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Run the maintained evidence/writer shells with a fake proof process and a
+// capturing, credential-free provider. This protects the actual exit mapping
+// and token separation without creating a check or executing a timed workload.
+func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type step struct {
+		ID, Run, Uses string
+		Env           map[string]string
+	}
+	var workflow struct {
+		Permissions map[string]string
+		Jobs        map[string]struct {
+			Permissions map[string]string
+			Needs       any
+			If          string
+			Steps       []step
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	evidence := workflow.Jobs["chart-latency-slo"]
+	writer := workflow.Jobs["chart-latency-verdict"]
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(evidence.Permissions) != 0 {
+		t.Fatal("PR-built executables must keep the read-only workflow token")
+	}
+	if len(writer.Permissions) != 1 || writer.Permissions["checks"] != "write" || writer.Needs != "chart-latency-slo" ||
+		!strings.Contains(writer.If, "always()") || !strings.Contains(writer.If, "'failure'") || len(writer.Steps) != 1 || writer.Steps[0].Uses != "" {
+		t.Fatal("verdict writer must remain a separate no-checkout job, including failed evidence")
+	}
+	publish := writer.Steps[0]
+	if publish.Env["CONCLUSION"] != "${{ needs.chart-latency-slo.outputs.conclusion || 'failure' }}" ||
+		publish.Env["HEAD_SHA"] != "${{ github.event.pull_request.head.sha }}" {
+		t.Fatal("missing proof output must fail at the exact PR head")
+	}
+	proofShell := ""
+	for _, candidate := range evidence.Steps {
+		if candidate.ID == "proof" {
+			proofShell = candidate.Run
+		}
+	}
+	if proofShell == "" || publish.Run == "" || !strings.Contains(proofShell, "chart_latency_proof.py") {
+		t.Fatal("missing actual chart proof/writer shell")
+	}
+	for _, tc := range []struct {
+		name, conclusion string
+		processExit      int
+		stepPass         bool
+	}{
+		{"valid", "success", 0, true},
+		{"contended", "neutral", 78, true},
+		{"budget failure", "failure", 1, false},
+		{"broken proof", "failure", 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			directory := t.TempDir()
+			bin := filepath.Join(directory, "bin")
+			samples := filepath.Join(directory, "chart-latency", "samples")
+			for _, path := range []string{bin, samples} {
+				if err := os.MkdirAll(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for name, script := range map[string]string{
+				"python3": "#!/bin/sh\nexit \"$CHART_PROOF_STATUS\"\n",
+				"gh":      "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$CAPTURE_ARGS\"\n",
+			} {
+				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			const report = "charts/workloads p50=40ms p95=82ms p99=86ms SLO=90ms"
+			if err := os.WriteFile(filepath.Join(samples, "candidate.log"), []byte(report+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			outputs := filepath.Join(directory, "outputs")
+			summary := filepath.Join(directory, "summary")
+			capture := filepath.Join(directory, "provider-args")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			command := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", proofShell)
+			command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"RUNNER_TEMP="+directory, "GITHUB_OUTPUT="+outputs, "GITHUB_STEP_SUMMARY="+summary,
+				"CHART_PROOF_STATUS="+strconv.Itoa(tc.processExit))
+			if output, err := command.CombinedOutput(); (err == nil) != tc.stepPass {
+				t.Fatalf("evidence shell status: %v\n%s", err, output)
+			}
+			got, err := os.ReadFile(outputs)
+			if err != nil || string(got) != "conclusion="+tc.conclusion+"\nreport="+report+"\n" {
+				t.Fatalf("wrong downstream evidence: %q, %v", got, err)
+			}
+			command = exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", publish.Run)
+			const head = "1234567890123456789012345678901234567890"
+			command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"CONCLUSION="+tc.conclusion, "REPORT="+report, "CAPTURE_ARGS="+capture, "HEAD_SHA="+head,
+				"GITHUB_REPOSITORY=rcourtman/Pulse", "DETAILS_URL=https://github.com/rcourtman/Pulse/actions/runs/1", "GH_TOKEN=")
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("writer shell: %v\n%s", err, output)
+			}
+			args, err := os.ReadFile(capture)
+			if err != nil || !strings.Contains(string(args), "api\nrepos/rcourtman/Pulse/check-runs\n") ||
+				!strings.Contains(string(args), "head_sha="+head+"\n") ||
+				!strings.Contains(string(args), "conclusion="+tc.conclusion+"\n") {
+				t.Fatalf("wrong captured check identity/verdict: %q, %v", args, err)
+			}
+		})
+	}
+}
+
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "build-release.sh"))
 	if err != nil {
