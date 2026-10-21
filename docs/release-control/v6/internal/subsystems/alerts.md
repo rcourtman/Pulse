@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Unknown guest status is not a recovery observation
+
+Only the existing affirmative `running`, `stopped`, `paused` and `suspended`
+states drive guest metric and powered-state lifecycle policy. An omitted,
+unknown, unreachable or additive provider state cannot clear an open metric or
+powered-off incident, announce that a guest is running, remove its filesystems
+or fire from placeholder usage. It preserves the last incident, occurrence,
+acknowledgement and measurement metadata. Metric activation/recovery and stopped
+confirmation/grace runs restart after this gap, including absent filesystems
+and prior-node identities. Independent backup evidence and other guests or
+instances are not interrupted. Normal configuration-save disablement and guest
+suppression remain effective; the existing confirmed non-running policy is
+unchanged. A later supported state resumes ordinary evaluation.
+
+`guest_status_observation_test.go` covers VM/LXC value and pointer entry points,
+metric and powered-state lifecycle, interrupted timing, explicit policy,
+independent evidence and exact public consumer frames. `guest_snapshot_test.go`
+binds unknown node-move observations to prior incidents and independent peer
+recovery. Offline browser verification consumes the exported frames in the
+production Alerts Overview at desktop and narrow widths. This establishes no
+guest thaw, filesystem liveness, reporter cause, installed or released recovery.
+
 ### Duplicate guest filesystem identities cannot hide a breach
 
 Guest filesystem rows which resolve to the same existing alert key are evaluated
