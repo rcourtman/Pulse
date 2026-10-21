@@ -78,9 +78,11 @@ func TestLXCDiskUsagePresenceLifecycle(t *testing.T) {
 					client := windowsBootstrapClient(t, server.URL, kind)
 					am := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
 					defer am.Stop()
-					am.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive,
-						GuestDefaults:        alerts.ThresholdConfig{Disk: &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}},
-						MetricTimeThresholds: map[string]map[string]int{}, TimeThresholds: map[string]int{}})
+					cfg := am.GetConfig()
+					cfg.Enabled, cfg.ActivationState = true, alerts.ActivationActive
+					cfg.GuestDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
+					cfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"disk": 0}}
+					am.UpdateConfig(cfg)
 					adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
 					m := &Monitor{config: &config.Config{}, state: models.NewState(), alertManager: am, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), resourceStore: adapter}
 					m.SetDockerChecker(&mockDockerChecker{results: map[int]bool{}})
