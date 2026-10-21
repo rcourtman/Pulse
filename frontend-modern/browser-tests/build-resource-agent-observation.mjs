@@ -59,6 +59,7 @@ try {
     'browser-tests/resource-agent-observation.cjs',
     'browser-tests/root-disk-observation.cjs',
     'browser-tests/resource-composition-observation.cjs',
+    'browser-tests/composed-observations.cjs',
     'browser-tests/build-resource-agent-observation.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));

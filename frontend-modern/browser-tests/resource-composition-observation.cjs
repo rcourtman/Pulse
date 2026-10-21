@@ -30,7 +30,7 @@ const report = {
 let server, browser, context;
 const save = () =>
   fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n');
-(async () => {
+module.exports = (async () => {
   fs.mkdirSync(output, { recursive: true });
   try {
     assert.equal(

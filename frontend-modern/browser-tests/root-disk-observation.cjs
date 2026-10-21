@@ -28,7 +28,7 @@ const report = {
     'Synthetic host canonical deltas and loopback GETs, real merger/Infrastructure drawer/root card. Not a disk/guest operation, collection, alert policy, installed recovery or release acceptance.',
 };
 let server, browser, context;
-(async () => {
+module.exports = (async () => {
   fs.mkdirSync(output, { recursive: true });
   try {
     assert.equal(
