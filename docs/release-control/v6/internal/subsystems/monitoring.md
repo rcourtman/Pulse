@@ -9428,3 +9428,29 @@ archive/snapshot test in `pve_protection_observation_test.go` keeps independentl
 measured container usage while still retaining complete content and snapshot
 alert hold/recovery. These synthetic read-only controls and consuming browser
 proof do not establish native liveness, reporter cause or installed recovery.
+
+
+### LXC per-mount status rows require measured usage
+
+An LXC `diskinfo` row does not establish an empty filesystem merely because its
+mount is present. The decoder retains whether `total` and `used` were supplied
+and non-null. Conversion uses the listing's existing -1 unknown sentinel when
+either counter is missing/null or capacity is zero; no free space is inferred.
+Mount identity and independently known capacity remain available. Configured
+size, the listing rollup and a readable sibling cannot supply missing mount
+usage or resolve that filesystem's incident. A complete positive-capacity zero
+is still current and recovers normally. Legacy in-process producers, existing
+LXC overcommit clamping, independent agent enrichment, ordinary request counts,
+authentication and TLS policy remain unchanged.
+
+`TestLXCMountDiskPresenceDistinguishesZeroNullAndMissing` exercises nested JSON,
+reused destinations, private presence metadata, malformed counter types and
+legacy compatibility. `TestLXCMountDiskObservationContract` drives both concrete
+HTTP clients through both collectors for root and additional mounts, six gap
+shapes, repeated missing readings, acknowledged alert continuity, public tuples,
+independent CPU/memory/config/rollup History and measured-zero recovery. Its
+emitted resource and alert frames feed the existing Machines drawer and Alerts
+Overview at desktop and narrow widths. History remains the independent listing
+rollup; no per-mount History capability is claimed. These GET-only fixtures do
+not establish guest thaw/liveness, incident cause, installed recovery or release
+availability.
