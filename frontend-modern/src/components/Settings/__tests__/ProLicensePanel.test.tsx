@@ -1357,8 +1357,11 @@ describe('ProLicensePanel', () => {
         'href',
         getSelfHostedBillingHref('plan', { detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL }),
       );
-      expect(screen.getAllByText('Manual key recovery')[0]?.closest('details')).toHaveAttribute(
-        'open',
+      // This fixture records navigation without changing useLocationMock.
+      // Real disclosure opening is exercised by the native browser regression.
+      expect(navigateMock).toHaveBeenCalledWith(
+        getSelfHostedBillingHref('plan', { detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL }),
+        { replace: true, scroll: false },
       );
       expect(activateLicenseMock).not.toHaveBeenCalled();
       expect(clearLicenseMock).not.toHaveBeenCalled();
