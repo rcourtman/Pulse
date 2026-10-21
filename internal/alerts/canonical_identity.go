@@ -407,6 +407,9 @@ func canonicalizeAlertHistoryForOutput(history []Alert) []Alert {
 		if exportedAlert == nil {
 			continue
 		}
+		// Live overlays and the JSON fallback follow the projection's rule:
+		// a history entry carries only its newest evidence envelope.
+		exportedAlert.Evidence = newestHistoryEvidence(exportedAlert.Evidence)
 		exported = append(exported, *exportedAlert)
 	}
 	return exported

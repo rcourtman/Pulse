@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 func TestHistoryProjectionIncrementalReadersPreserveChronologyAndIsolation(t *testing.T) {
@@ -552,5 +553,132 @@ func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
 	everything, ten := allocated(0), allocated(10)
 	if ten*5 > everything {
 		t.Fatalf("a 10-row read allocated %d bytes against %d for all 2000 rows; it must not copy the whole fold", ten, everything)
+	}
+}
+
+// historyEvidence builds n envelopes whose ObservedAt order differs from their
+// position, so "newest" must be chosen by time, not by slice order.
+func historyEvidence(base time.Time, n int, newestIndex int) []operationaltrust.EvidenceEnvelope {
+	evidence := make([]operationaltrust.EvidenceEnvelope, 0, n)
+	for i := 0; i < n; i++ {
+		observed := base.Add(time.Duration(n-i) * time.Second)
+		if i == newestIndex {
+			observed = base.Add(time.Hour)
+		}
+		evidence = append(evidence, operationaltrust.EvidenceEnvelope{ID: fmt.Sprintf("ev-%02d", i), ObservedAt: observed})
+	}
+	return evidence
+}
+
+func TestNewestHistoryEvidenceChoosesByObservationTime(t *testing.T) {
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	if got := newestHistoryEvidence(nil); got != nil {
+		t.Fatalf("no evidence must stay nil, got %+v", got)
+	}
+	got := newestHistoryEvidence(historyEvidence(base, 64, 17))
+	if len(got) != 1 || got[0].ID != "ev-17" {
+		t.Fatalf("newest by ObservedAt = %+v, want ev-17", got)
+	}
+	tied := []operationaltrust.EvidenceEnvelope{{ID: "first", ObservedAt: base}, {ID: "second", ObservedAt: base}}
+	if got := newestHistoryEvidence(tied); len(got) != 1 || got[0].ID != "second" {
+		t.Fatalf("a tie must keep the later envelope, got %+v", got)
+	}
+}
+
+// A history entry carries only its newest evidence envelope, in the shared
+// fold as well as the response; the event log and the record keep everything.
+func TestHistoryEntriesKeepOnlyTheNewestEvidence(t *testing.T) {
+	m := newHistoryParityManager(t)
+	store := m.eventLogStore()
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	ids := make([]string, 0, 64)
+	for i := 0; i < 64; i++ {
+		ids = append(ids, fmt.Sprintf("ev-%02d", i))
+	}
+	write := func(kind string, occurred time.Time, evidence []operationaltrust.EvidenceEnvelope) {
+		t.Helper()
+		snapshot, err := json.Marshal(Alert{ID: "disk-1", ResourceID: "vm-1", StartTime: start, LastSeen: occurred,
+			Evidence: evidence, OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-1", EvidenceIDs: ids}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(eventlog.Event{Type: kind, AlertID: "disk-1", OccurredAt: occurred, Snapshot: snapshot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(eventlog.TypeFired, start, historyEvidence(start, 5, 2))
+	write(eventlog.TypeResolved, start.Add(time.Minute), historyEvidence(start, 64, 40))
+
+	for _, since := range []time.Time{{}, start.Add(30 * time.Second)} {
+		history, ok := m.AlertHistoryFromEvents(since, 0)
+		if !ok || len(history) != 1 {
+			t.Fatalf("since=%s: history = %d entries, ok=%v", since, len(history), ok)
+		}
+		if got := history[0].Evidence; len(got) != 1 || got[0].ID != "ev-40" {
+			t.Fatalf("since=%s: evidence = %+v, want only the newest envelope ev-40", since, got)
+		}
+		if got := history[0].OperationalRecord; got == nil || len(got.EvidenceIDs) != 64 {
+			t.Fatalf("since=%s: the record must keep its full evidence ID list, got %+v", since, got)
+		}
+	}
+	m.historyProjectionMu.Lock()
+	for _, occ := range m.historyProjection.occurrences {
+		if len(occ.alert.Evidence) != 1 {
+			t.Errorf("the shared fold holds %d evidence envelopes; it must hold only the newest", len(occ.alert.Evidence))
+		}
+	}
+	m.historyProjectionMu.Unlock()
+
+	var logged []int
+	if err := store.WalkOldest(eventlog.Filter{AlertID: "disk-1"}, func(event eventlog.Event) error {
+		var snapshot Alert
+		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
+			return err
+		}
+		logged = append(logged, len(snapshot.Evidence))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(logged, []int{5, 64}) {
+		t.Fatalf("the event log must keep every snapshot whole, evidence lengths = %v", logged)
+	}
+}
+
+func TestHistoryOverlayKeepsOnlyTheNewestEvidence(t *testing.T) {
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	m := newHistoryParityManager(t)
+	m.mu.Lock()
+	m.activeAlerts["live"] = &Alert{ID: "cpu-1", ResourceID: "vm-2", StartTime: start, LastSeen: start,
+		Evidence: historyEvidence(start, 12, 3)}
+	m.mu.Unlock()
+	history, ok := m.AlertHistoryFromEvents(time.Time{}, 0)
+	if !ok || len(history) != 1 {
+		t.Fatalf("overlay history = %d entries, ok=%v", len(history), ok)
+	}
+	if got := history[0].Evidence; len(got) != 1 || got[0].ID != "ev-03" {
+		t.Fatalf("a live overlay entry carries %+v, want only ev-03", got)
+	}
+	m.mu.RLock()
+	live := len(m.activeAlerts["live"].Evidence)
+	m.mu.RUnlock()
+	if live != 12 {
+		t.Fatalf("trimming history output changed the live alert's evidence to %d envelopes", live)
+	}
+}
+
+// A separate test: two newTestManager calls on one t deadlock.
+func TestHistoryFallbackKeepsOnlyTheNewestEvidence(t *testing.T) {
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	fallback := newTestManager(t)
+	fallback.SetEventLog(nil) // read the JSON-backed history, not a projection
+	fallback.historyManager.AddAlert(Alert{ID: "mem-1", ResourceID: "vm-3", StartTime: start, LastSeen: start,
+		Evidence: historyEvidence(start, 9, 6)})
+	entries := fallback.GetAlertHistory(0)
+	if len(entries) != 1 {
+		t.Fatalf("fallback history = %d entries", len(entries))
+	}
+	if got := entries[0].Evidence; len(got) != 1 || got[0].ID != "ev-06" {
+		t.Fatalf("a JSON-history entry carries %+v, want only ev-06", got)
 	}
 }

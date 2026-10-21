@@ -1041,6 +1041,13 @@ independent walk of only the window, and
 `TestWindowedHistoryReusesTheFullHistoryFold` and
 `TestHistoryReadResultsDoNotAliasTheSharedFold` pin the copy, reuse and
 isolation rules.
+The fold keeps only each snapshot's newest evidence envelope
+(`newestHistoryEvidence`, by `observedAt` then position), and history output
+applies the same rule to live overlays and the JSON fallback. A resolved
+alert's trail of up to 64 envelopes was about 83% of its snapshot. The event log
+still stores every snapshot whole. `TestHistoryEntriesKeepOnlyTheNewestEvidence`,
+`TestHistoryOverlayKeepsOnlyTheNewestEvidence` and
+`TestHistoryFallbackKeepsOnlyTheNewestEvidence` pin this.
 
 
 PBS node-status availability is distinct from connectivity. While a connected

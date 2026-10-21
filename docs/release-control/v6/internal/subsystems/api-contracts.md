@@ -645,7 +645,14 @@ grouping-key fields while silently ignoring `enabled`.
 `warning`, and `critical` (plus omitted/`all` for no severity filter) and
 returns only matching rows after the time and resource filters. Alert payloads
 use the same closed three-level vocabulary; legacy `error` data is normalized
-to `critical` before it crosses the API boundary. Notification configuration
+to `critical` before it crosses the API boundary.
+Each history entry carries at most one `evidence` envelope, the newest by
+`observedAt`, whether it comes from the event-log projection, a live overlay or
+the JSON fallback (#1803). `operationalRecord.evidenceIds` and
+`transitions[].evidenceIds` keep their full lists, so some identifiers name
+envelopes the entry omits. The alert event log keeps every snapshot whole, and
+`GET /api/alerts/active` returns an open alert's full evidence.
+Notification configuration
 round-trips destination minimum severity as `all`, `warning`, or `critical`.
 The Relay adapter has a deliberately narrower persisted floor of `all` or
 `critical`, but an all-alert mobile payload still preserves canonical `info`
