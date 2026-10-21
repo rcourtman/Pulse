@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import {
   buildPowerShellInstallScriptBootstrap,
   buildWindowsAgentInstallCommand,
+  buildWindowsAgentUninstallCommand,
 } from '@/utils/agentInstallCommand';
 
 const powerShellRuntime = process.platform === 'win32' ? 'powershell.exe' : undefined;
@@ -17,6 +18,33 @@ const installerScript = `
 param([string]$Url, [string]$TokenFile)
 $phase = if ($env:PULSE_PREFLIGHT_ONLY -eq "true") { "preflight" } else { "install" }
 Add-Content -LiteralPath $env:PULSE_TEST_MARKER -Value $phase
+`.trim();
+
+// A recorder, not the production installer: execute the copied producer over
+// real HTTPS without touching SCM, agent state, credentials or the trust store.
+const uninstallRecorder = `
+param(
+  [bool]$Uninstall,
+  [string]$Url = $env:PULSE_URL,
+  [string]$Token = $env:PULSE_TOKEN,
+  [string]$TokenFile = $env:PULSE_TOKEN_FILE,
+  [string]$AgentId = $env:PULSE_AGENT_ID,
+  [string]$Hostname = $env:PULSE_HOSTNAME,
+  [bool]$Insecure,
+  [string]$CACertPath,
+  [string]$ServerFingerprint,
+  [bool]$PreflightOnly,
+  [string]$Output,
+  [bool]$NonInteractive
+)
+if (-not $Uninstall -or -not $NonInteractive -or $PreflightOnly) {
+  throw 'Expected one noninteractive removal, not installation or preflight.'
+}
+[ordered]@{
+  url = $Url; token = $Token; tokenFile = $TokenFile;
+  agentId = $AgentId; hostname = $Hostname;
+  insecure = $Insecure; ca = $CACertPath; fingerprint = $ServerFingerprint
+} | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:PULSE_TEST_MARKER -Encoding ascii
 `.trim();
 
 const runPowerShell = (command: string, env: NodeJS.ProcessEnv) =>
@@ -32,7 +60,7 @@ const runPowerShell = (command: string, env: NodeJS.ProcessEnv) =>
         '-Command',
         command,
       ],
-      { env: { ...process.env, ...env }, windowsHide: true },
+      { env: { ...process.env, ...env }, windowsHide: true, timeout: 25_000 },
     );
     let stdout = '';
     let stderr = '';
@@ -53,6 +81,7 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
   let testDirectory: string;
   let markerPath: string;
   let certificatePath: string;
+  let requests: string[] = [];
 
   beforeAll(async () => {
     suiteDirectory = await mkdtemp(join(tmpdir(), 'pulse-windows-tls-suite-'));
@@ -61,6 +90,7 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
     await runPowerShell(
       `$ErrorActionPreference="Stop"; ` +
+        `if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; ` +
         `$rsa=[System.Security.Cryptography.RSACryptoServiceProvider]::new(2048); ` +
         `try { ` +
         `$request=[System.Security.Cryptography.X509Certificates.CertificateRequest]::new(` +
@@ -90,6 +120,15 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
       `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`,
     );
     const testServer = createServer({ pfx, passphrase: 'pulse-test' }, (request, response) => {
+      requests.push(request.url ?? '');
+      if (request.url === '/refused/install.ps1') {
+        response.writeHead(503).end('Synthetic installer unavailable');
+        return;
+      }
+      if (request.url === '/uninstall/install.ps1') {
+        response.writeHead(200, { 'content-type': 'text/plain' }).end(uninstallRecorder);
+        return;
+      }
       if (request.url !== '/install.ps1') {
         response.writeHead(404).end();
         return;
@@ -104,6 +143,7 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
   }, 30_000);
 
   beforeEach(async () => {
+    requests = [];
     testDirectory = await mkdtemp(join(tmpdir(), 'pulse-windows-tls-'));
     markerPath = join(testDirectory, 'result.txt');
     certificatePath = join(testDirectory, 'server.crt');
@@ -146,5 +186,70 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     });
 
     await expect(readFile(markerPath, 'utf8')).resolves.toMatch(/preflight\r?\ninstall\r?\n/);
+  }, 30_000);
+
+  it('executes copied removal with selected CA and identity, not ambient installation credentials', async () => {
+    await runPowerShell(
+      buildWindowsAgentUninstallCommand({
+        baseUrl: `${baseUrl}/uninstall`,
+        caCertPath: certificatePath,
+        agentId: "agent'$()",
+        hostname: "host'$name",
+      }),
+      {
+        PULSE_TEST_MARKER: markerPath,
+        PULSE_URL: 'https://wrong.invalid',
+        PULSE_TOKEN: 'synthetic-ambient-install-token',
+        PULSE_TOKEN_FILE: 'synthetic-wrong-token-file',
+        PULSE_AGENT_ID: 'wrong-agent',
+        PULSE_HOSTNAME: 'wrong-host',
+      },
+    );
+    expect(JSON.parse(await readFile(markerPath, 'utf8'))).toEqual({
+      url: '',
+      token: '',
+      tokenFile: '',
+      agentId: "agent'$()",
+      hostname: "host'$name",
+      insecure: false,
+      ca: certificatePath,
+      fingerprint: '',
+    });
+    expect(requests).toEqual(['/uninstall/install.ps1']);
+  }, 30_000);
+
+  it.each(['Continue', 'Ignore'])(
+    'makes an HTTPS 503 catchable under %s and restores the selected trust callback',
+    async (preference) => {
+      const command = buildWindowsAgentUninstallCommand({
+        baseUrl: `${baseUrl}/refused`,
+        caCertPath: certificatePath,
+      });
+      const result = await runPowerShell(
+        `$ErrorActionPreference='${preference}'; ` +
+          `$before=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; ` +
+          `try { ${command}; throw 'Download refusal was ignored' } catch { ` +
+          `if ($_.Exception.Message -eq 'Download refusal was ignored') { throw }; ` +
+          `if ([System.Net.ServicePointManager]::ServerCertificateValidationCallback -ne $before -or ` +
+          `[PulseInstallerCertificateValidator]::CustomCa -ne $null) { throw 'Download trust was not restored' }; ` +
+          `if ($ErrorActionPreference -ne '${preference}') { throw 'Caller error preference changed' }; ` +
+          `Write-Output 'Expected download refusal with restored trust' }`,
+        { PULSE_TEST_MARKER: markerPath },
+      );
+      expect(result.stdout).toContain('Expected download refusal with restored trust');
+      await expect(readFile(markerPath)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(requests).toEqual(['/refused/install.ps1']);
+    },
+    30_000,
+  );
+
+  it('does not execute copied removal when the HTTPS certificate is untrusted', async () => {
+    await expect(
+      runPowerShell(buildWindowsAgentUninstallCommand({ baseUrl: `${baseUrl}/uninstall` }), {
+        PULSE_TEST_MARKER: markerPath,
+      }),
+    ).rejects.toThrow('PowerShell exited');
+    await expect(readFile(markerPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(requests).toEqual([]);
   }, 30_000);
 });

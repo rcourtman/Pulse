@@ -1755,6 +1755,14 @@ credential/connection parameters, so ambient install variables cannot shadow
 saved state. Its download uses only selected trust, restores the TLS callback
 and does not assign shell environment variables. Identity and paths are quoted
 as literals. Installation's private-input/preflight path remains separate.
+Both Windows download families pass `-TimeoutSec 60 -ErrorAction Stop` to
+their single installer request, under system trust and explicit custom trust.
+A failed request must not execute an installer or trigger a retry, even when
+the caller's error preference is Continue or Ignore. The custom-trust callback
+is restored on refusal as well as success. The existing native Windows TLS
+suite exercises copied removal with a recorder, literal identity and empty
+installation credentials, HTTPS refusal and untrusted-certificate controls;
+that recorder is not saved-state recovery or actual service removal.
 `agentInstallCommand.test.ts` executes a terminal-free Unix recorder and retains
 its success/failure exit and inherited-state boundaries; the real composed hook
 and Doctor model prove all token/platform/identity branches. The parent/final
