@@ -23,6 +23,21 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest physical-disk inventory distinguishes pending and empty reads
+
+The existing guest drawer names the pending scoped inventory read. A successful
+response with no physical disks belonging to this guest shows missing inventory,
+not disk absence or healthy hardware. Foreign-parent and non-disk rows cannot
+fill that result. Existing disks remain visible during an ordinary refresh;
+read failures still withdraw them and retain the existing explicit Retry.
+A successful empty retry clears the failure without inventing a disk. No guest
+probe, collector, identity, reporting lease or health rule changes.
+
+`GuestPhysicalDisks.test.tsx` and `browser-tests/guest-disk-inventory-state.cjs`
+cover these transitions through the actual guest drawer and scoped reader at
+desktop and 320px touch widths. This is consumer-state proof, not a repair or
+verification of native disk collection, guest thaw or filesystem liveness.
+
 ### Retained custom metrics do not claim current service or backup health
 
 The existing machine detail carries the linked agent's expired reporting lease

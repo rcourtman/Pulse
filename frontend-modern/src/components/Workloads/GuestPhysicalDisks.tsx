@@ -166,6 +166,18 @@ export const GuestPhysicalDisks: Component<{
 
   return (
     <>
+      <Show when={parentId.length > 0 && !source.error() && disks().length === 0}>
+        <InfoCardFrame data-testid="guest-physical-disk-inventory-status">
+          <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
+            Physical Disks &amp; SMART
+          </h3>
+          <p class="text-xs text-muted" role="status">
+            {source.loading()
+              ? "Loading physical disk inventory… This reads Pulse's collected inventory, not the guest."
+              : 'No physical disks were reported for this guest. Missing inventory does not establish disk absence or health.'}
+          </p>
+        </InfoCardFrame>
+      </Show>
       <Show when={source.error()}>
         <div class="space-y-2 rounded-md border border-border p-3 text-xs text-muted">
           <p role="status">
