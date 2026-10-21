@@ -4,6 +4,8 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
+import { createTooltipSystem } from '../src/components/shared/Tooltip';
+import { ResourceCompositionFixture } from './resource-composition-observation';
 import { mergeCanonicalResourceDeltaSnapshot } from '../src/utils/resourceStateAdapters';
 import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
@@ -40,7 +42,7 @@ const metrics: HostCustomSensorMetric[] = [
     observedAt,
   },
 ];
-const initial: Resource = {
+const guest: Resource = {
   id: 'sensor-machine',
   name: 'Hybrid machine',
   displayName: 'Hybrid machine',
@@ -66,6 +68,25 @@ const initial: Resource = {
     sensors: { custom: [] },
   },
 };
+// Reuse the production drawer/merger fixture for the API host aggregate path.
+const rootDiskOnly = new URLSearchParams(window.location.search).get('kind') === 'root-disk';
+const compositionOnly = new URLSearchParams(window.location.search).get('kind') === 'composition';
+const initial: Resource = rootDiskOnly
+  ? {
+      id: 'root-disk-host',
+      name: 'API host',
+      displayName: 'API host',
+      type: 'agent',
+      platformId: 'fixture',
+      platformType: 'proxmox-pve',
+      platformScopes: ['proxmox-pve'],
+      sourceType: 'api',
+      sources: ['proxmox'],
+      status: 'online',
+      lastSeen: Date.parse(observedAt),
+      platformData: { proxmox: { nodeName: 'API host' } },
+    }
+  : guest;
 syncAIRuntimeSettings({ discovery_enabled: false });
 function Fixture() {
   const [snapshot, setSnapshot] = createSignal<Resource[]>([structuredClone(initial)]);
@@ -79,6 +100,7 @@ function Fixture() {
       ),
     );
   (window as any).__resourceAgent = {
+    rootDisk: (disk?: Resource['disk']) => update({ disk }, ['disk']),
     report: (stale = false) =>
       update(
         {
@@ -147,7 +169,9 @@ function Fixture() {
   return (
     <WebSocketContext.Provider value={ws as any}>
       <main class="mx-auto min-h-screen max-w-4xl space-y-3 bg-surface p-3 text-base-content">
-        <h1 class="text-base font-semibold">Canonical guest agent observations</h1>
+        <h1 class="text-base font-semibold">
+          {rootDiskOnly ? 'Canonical root disk observations' : 'Canonical guest agent observations'}
+        </h1>
         <p class="text-xs text-muted">
           Synthetic stored reports. No agent, service or backup checks are sent.
         </p>
@@ -165,13 +189,17 @@ render(
     <Router>
       <Route
         path="*"
-        component={() => (
-          <DarkModeContext.Provider
-            value={() => document.documentElement.classList.contains('dark')}
-          >
-            <Fixture />
-          </DarkModeContext.Provider>
-        )}
+        component={() => {
+          const TooltipRoot = createTooltipSystem();
+          return (
+            <DarkModeContext.Provider
+              value={() => document.documentElement.classList.contains('dark')}
+            >
+              {compositionOnly ? <ResourceCompositionFixture /> : <Fixture />}
+              <TooltipRoot />
+            </DarkModeContext.Provider>
+          );
+        }}
       />
     </Router>
   ),

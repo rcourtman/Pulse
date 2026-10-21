@@ -208,10 +208,24 @@ export const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>)
 };
 
 export const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Disk => {
-  const total = metric?.total ?? fallback?.total ?? 0;
-  const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : (fallback?.usage ?? 0);
+  // The root-disk aggregate carries explicit used bytes, including zero.
+  // Preserve their absence all the way to the card; capacity is not usage.
+  const total = metric?.total ?? fallback?.total;
+  const used = metric?.used ?? fallback?.used;
+  const hasBytes =
+    typeof total === 'number' &&
+    Number.isFinite(total) &&
+    total > 0 &&
+    typeof used === 'number' &&
+    Number.isFinite(used) &&
+    used >= 0;
+  const free = metric?.free ?? fallback?.free ?? (hasBytes ? Math.max(total - used, 0) : undefined);
+  const usage =
+    metric && (!Number.isFinite(metric.current) || metric.current < 0 || metric.current > 100)
+      ? -1
+      : hasBytes
+        ? used / total
+        : fallback?.usage;
   return {
     total,
     used,

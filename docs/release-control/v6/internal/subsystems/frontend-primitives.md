@@ -20,6 +20,48 @@
 
 ## Purpose
 
+### Root disk availability is visible without hover
+
+The existing machine detail's Root Disk card renders a wrapping, neutral
+`Usage unavailable` status instead of synthetic zero bytes or a usage bar when
+its aggregate lacks valid capacity/used bytes or carries an unavailable sentinel.
+Known capacity remains visible; explicitly measured zero usage keeps its normal
+bar. Measured byte ratios reach the shared aggregate bar in percentage units,
+including sub-1% and high-pressure readings; 93/100 must not become 1%.
+First, partial and removed reports update the mounted card. No new surface,
+collection, health or alert rule is introduced. `RootDiskCard.test.tsx`, the real
+bar lifecycle in `SharedPrimitives.guardrails.test.ts` and the full-drawer
+`browser-tests/root-disk-observation.cjs` fixture cover this contract.
+### Locked update pill names the command-access option by its shared label (21 October 2026)
+
+For a host whose agent was installed without command access, the locked pill
+names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
+("Allow Pulse to run commands on this host") and the host to run the new
+install command on, instead of the retired "legacy combined command profile"
+wording and its advanced-options path.
+
+### Container update control offers only what the server advertises (21 October 2026)
+
+`UpdateButton` is live only when the server advertises the `update` capability
+and records no refusal for it. A recorded refusal, or no advertised capability
+(for example a host whose inventory is stale), renders the locked amber pill
+with the reason. When the refusal is a disconnected command agent and the
+host's agent facet reports no command access, the explanation names the host
+and the install option that grants access. The locked pill reads `Update` so
+it fits the Updates column at its narrowest; Local joins Pinned as a neutral
+uncheckable state rather than Check failed.
+
+The read-only refusal explanation remains available on deliberate tap, focus,
+Enter or Space, with Escape/blur dismissal, including coarse-pointer devices.
+Only these deliberate activations opt into the singleton tooltip. Default
+hover calls, including synthesized touch mouseenter, remain suppressed on coarse
+pointers. Neither the locked status nor its explanation plans or executes an
+update, and all server capability/refusal gates remain intact.
+`ContainerUpdateBadge.test.tsx` exercises the actual tooltip consumer and
+`Tooltip.test.tsx` retains both the passive-hover negative control and the
+explicit-intent case. `resource-composition-observation.cjs` uses the normal
+application tooltip root and inspects real keyboard/touch consuming surfaces.
+
 ### Infrastructure agent cards honour native guest power
 
 The existing canonical detail drawer qualifies its selected in-guest agent report
@@ -555,25 +597,6 @@ excluded. The calendar matrix and production-table desktop/narrow browser
 proof cover date order, both boundaries, range changes, volume and clearing
 the day filter. This changes no route, posture, provider completion judgment
 or native recovery authority.
-
-### Locked update pill names the command-access option by its shared label (21 October 2026)
-
-For a host whose agent was installed without command access, the locked pill
-names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
-("Allow Pulse to run commands on this host") and the host to run the new
-install command on, instead of the retired "legacy combined command profile"
-wording and its advanced-options path.
-
-### Container update control offers only what the server advertises (21 October 2026)
-
-`UpdateButton` is live only when the server advertises the `update` capability
-and records no refusal for it. A recorded refusal, or no advertised capability
-(for example a host whose inventory is stale), renders the locked amber pill
-with the reason. When the refusal is a disconnected command agent and the
-host's agent facet reports no command access, the explanation names the host
-and the install option that grants access. The locked pill reads `Update` so
-it fits the Updates column at its narrowest; Local joins Pinned as a neutral
-uncheckable state rather than Check failed.
 
 
 ### Aggregate disk bars preserve percentage-only evidence (14 October 2026)

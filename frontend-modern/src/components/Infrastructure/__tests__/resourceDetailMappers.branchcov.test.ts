@@ -109,7 +109,7 @@ describe('buildMemory', () => {
     expect(buildMemory(undefined, fallback).usage).toBe(0.42);
   });
 
-  it('defaults every field to 0 with no metric and no fallback', () => {
+  it('keeps missing counters absent with no metric and no fallback', () => {
     expect(buildMemory()).toEqual({ total: 0, used: 0, free: 0, usage: 0 });
   });
 
@@ -173,10 +173,10 @@ describe('buildDisk', () => {
 
   it('defaults every field to 0 with no metric and no fallback', () => {
     expect(buildDisk()).toEqual({
-      total: 0,
-      used: 0,
-      free: 0,
-      usage: 0,
+      total: undefined,
+      used: undefined,
+      free: undefined,
+      usage: undefined,
       mountpoint: undefined,
       type: undefined,
       device: undefined,

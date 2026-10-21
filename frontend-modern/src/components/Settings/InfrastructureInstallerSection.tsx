@@ -347,10 +347,10 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               command access to the node, so it is not a monitoring-only install. Then turn on{' '}
               <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
               General (admin only), or set{' '}
-              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
-              environment to lock it on. Optionally restrict it with{' '}
-              <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses bounded{' '}
-              <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
+              <code class="break-all">PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the
+              server environment to lock it on. Optionally restrict it with{' '}
+              <code class="break-all">PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>.
+              Pulse uses bounded <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
               <code>docker stats</code>, skips guests that already have their own agent, and does
               not collect inspect, environment, mount, command, or process details.
             </p>

@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Root aggregate projection preserves missing counters
+
+The existing detail mapper preserves absent capacity and used/free bytes rather
+than defaulting them to zero. It derives free space and utilization only from
+observed byte inputs and retains invalid/unavailable aggregate percentages as
+unavailable. This is a local presentation projection, not a canonical payload,
+collector, identity, freshness or History change. Mapper regressions and the
+source-bound `root-disk-observation.cjs` full-drawer fixture exercise missing,
+partial, invalid, zero, measured and removed canonical observations without
+changing their source values or closing the open disclosure.
+
 ### Websocket-first routes always obtain their REST snapshot (21 October 2026)
 
 Action readiness, scoped facets and other REST-only enrichment arrive only
@@ -36,7 +47,6 @@ fetch; such a route revalidates in the background at mount when its REST
 snapshot is absent or older than the cache window, and the delayed revalidation
 forces the network. `revalidates a prefer-ws-then-rest screen seeded from a
 websocket-only cache on mount` covers the navigation path.
-
 
 ### Native guest power qualifies only its own agent cards
 

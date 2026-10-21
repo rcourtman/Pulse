@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "base_sha": "311faf23746aa8115af18c0fad465aae66b6e3cb",
+  "verified_at": "2026-10-21T18:14:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/tooltipModel.ts",
+    "frontend-modern/src/components/shared/useTooltipState.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "c6b8df96f1771abc645848b54514904cdc74e0b219c300f465f87707b0fa89dc",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "c0f286766c0765c329db571de088d97eeef4fee637cf0b86f3834d00fbed04a7",
+    "frontend-modern/src/components/shared/tooltipModel.ts": "c2c03be8e9ddf4b607135ddfe9962bb6989f2c0acfe470e410fa91151b5cd493",
+    "frontend-modern/src/components/shared/useTooltipState.ts": "8d26fdee9381cb2f2807f0782026839b318e67ddb514ec50c7355a31f16e899d",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "a9cea8424a23e2775359bdf3af636f7fb6d2e702c6b486022b551fa941aa0516"
+  },
+  "routes": [
+    "/browser-tests/resource-agent-observation.html?kind=composition (actual ResourceDetailDrawer, DockerContainersTable and GuestPhysicalDisks consuming synthetic scoped REST DTOs)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Websocket-only cached navigation performs canonical scoped REST hydration; server-refused updates are locked explanations in the real table and drawer, never data-row update buttons. The Updates header sorter remains available.",
+    "The existing refusal explanation is visible on deliberate keyboard/touch activation, including an actual coarse-pointer WebKit profile. Default touch hover stays suppressed. Local and pinned images remain neutral.",
+    "A fresh carrier or independent platform memory does not renew retained guest memory: facts show capacity only and chart states the original observation time. A future current-zero observation stays freshness-unknown; a valid measured zero is current; native stopped state withdraws current/used amounts.",
+    "A background physical-disk503 hides earlier readings and private error text; Retry recovers. The existing20-second abort hides rows, rejects a late99-degree response and keeps Retry available. A successful foreign-parent-only response becomes missing inventory, not healthy/no disks."
+  ],
+  "interactions": [
+    "Navigate between the real scoped REST consumers with desktop keyboard and320px WebKit touch; activate and dismiss read-only explanations in both table and full drawer.",
+    "Feed retained/future/current-zero/stopped DTOs through the actual resource hook, mapper and chart/facts producer.",
+    "Use the actual background metadata reread, deadline AbortSignal and keyboard/touch Retry; only synthetic allowlisted loopback GETs occur.",
+    "Twelve assertion groups pass. All twelve retained final captures were presented through native view_image and inspected. Both browsers/contexts and the server close."
+  ],
+  "source_sha": "311faf23746aa8115af18c0fad465aae66b6e3cb",
+  "source_tree": "f1be304fd261e7927bcdc8720215a88fe003f55b",
+  "playwright": "1.56.1",
+  "browsers": [
+    "Chromium141.0.7390.37",
+    "WebKit26.0"
+  ],
+  "actual_pointer_profiles": {
+    "desktop": "hover/fine",
+    "narrow": "coarse, no hover"
+  },
+  "compilation": {
+    "route": "Small fixture compilation before browser launch inside the existing bounded browser tool",
+    "compiler_exit": 0,
+    "node": "v22.20.0",
+    "expected_git_inputs": 3855,
+    "binding_sha256": "c65fea1c051eb11dbc4773478659f8e5afd2e3502a8b7e4578fe8e26d35cb131",
+    "graph_sha256": "54b5779a25cb9a10770836e0399d5758b5fc97c3c8eaad82d1c04db052dbc3c0"
+  },
+  "capture_sha256": {
+    "desktop-rest-update-refusal.png": "a4428d2c4866d2267d7cc8d545b88eccfe57c51156c03d0093fe9db4c0790795",
+    "desktop-rest-table-refusal.png": "8447de167b442434b5c6b20739f59848de8586ef878c49a7b3f832eca0cf95c9",
+    "desktop-local-image-neutral.png": "c8b0af36b1a03eedba81e59c31ee5eefd436ad6c79a18ee52ba782586e71d599",
+    "desktop-retained-memory.png": "e03720f91a987652087dfe9c9d1af5c0d3719a022dbda49ad8e8b14fe9db37f5",
+    "desktop-measured-zero-memory.png": "b44dec7f851599346a1b2dc8da7472b4bb54e5fdd6d3de6853317bb35eb817ac",
+    "desktop-bounded-background-failure.png": "21340ee0771b882d3b47035ac50d1e14026a59f4853348e494fa40437752c9df",
+    "narrow-rest-update-refusal.png": "75d0f2fdc34aa20e8f2ea1bf32288dc1d0050a5c237dca33736897e1a671049d",
+    "narrow-rest-table-refusal.png": "4aa05b10252a8fbf850afe660fa22c7ccd7a6429fb5148cbf4ecad75e9aeb553",
+    "narrow-local-image-neutral.png": "80aa286eb672b1678732465603cec733c70945680d1c3de6c6b0b8f4f230b6c5",
+    "narrow-retained-memory.png": "10618ffe913d3a88eb496f4b3dba924715656e383a990f501ddc256b26217206",
+    "narrow-measured-zero-memory.png": "1fe01fda1197430da746c226fbd713ddddbe6fd6a2c2d5e51953b3c7c2cedb99",
+    "narrow-bounded-background-failure.png": "9d9bae923efffb0f8fced53fb7638de118ad538fd9ff26f0e9fd54e90ecb97fe"
+  },
+  "limits": "Not a whole-product build/type/lint/test aggregate, full-app navigation, installed recovery, guest liveness/thaw or release availability. Earlier source-aelnwxua186 pass/one unchanged5000ms timeout and source-xbzazwra unknown command exit remain adverse/inconclusive, not cleared by browser success."
+}
