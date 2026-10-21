@@ -57,8 +57,15 @@ main() {
 # --- Cleanup trap ---
 TMP_FILES=()
 AGENT_STAGING_DIRS=()
+SERVER_CERTIFICATE_PROBE_PID=""
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
+    # The pin preflight owns only this direct OpenSSL child. Reap it before
+    # removing its output, including on timeout, interruption or shell failure.
+    if [[ -n "${SERVER_CERTIFICATE_PROBE_PID:-}" ]]; then
+        kill -KILL "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || true
+        wait "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || true
+    fi
     if [[ "${SAFE_PROFILE_TRANSACTION_ACTIVE:-false}" == "true" &&
           "${SAFE_PROFILE_TRANSACTION_COMMITTED:-false}" != "true" &&
           -n "${SAFE_PROFILE_TRANSACTION_DIR:-}" ]] &&
@@ -4884,6 +4891,9 @@ verify_pinned_server_certificate() {
     local host=""
     local target=""
     local actual=""
+    local certificate_file=""
+    local probe_status=0
+    local probe_second=0
     normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
@@ -4902,10 +4912,30 @@ verify_pinned_server_certificate() {
         if [[ "$authority" != *:* ]]; then target="${authority}:443"; fi
     fi
 
-    actual=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
-        | openssl x509 -outform DER 2>/dev/null \
+    # s_client's -timeout is DTLS-only, and GNU timeout is not a prerequisite
+    # on macOS/BSD/NAS. Own the direct child and give the entire TCP/TLS probe
+    # ten one-second waits, not just its connection phase. No pipeline child
+    # or watchdog survives a deadline or a handled installer interruption.
+    certificate_file=$(mktemp) || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
+    TMP_FILES+=("$certificate_file")
+    chmod 600 "$certificate_file" || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
+    openssl s_client -connect "$target" -servername "$host" </dev/null >"$certificate_file" 2>/dev/null &
+    SERVER_CERTIFICATE_PROBE_PID=$!
+    for ((probe_second=0; probe_second<10; probe_second++)); do
+        kill -0 "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || break
+        sleep 1
+    done
+    if kill -0 "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null; then
+        fail "Timed out verifying Pulse server certificate after 10 seconds; installation cannot continue." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    wait "$SERVER_CERTIFICATE_PROBE_PID" || probe_status=$?
+    SERVER_CERTIFICATE_PROBE_PID=""
+    if [[ "$probe_status" -ne 0 ]] || ! actual=$(openssl x509 -in "$certificate_file" -outform DER 2>/dev/null \
         | openssl dgst -sha256 2>/dev/null \
-        | awk '{print tolower($NF)}')
+        | awk '{print tolower($NF)}'); then
+        fail "Could not read Pulse server certificate; installation cannot continue." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    rm -f -- "$certificate_file"
     if [[ -z "$actual" || "$actual" != "$normalized" ]]; then
         fail "Pulse server certificate fingerprint mismatch. Expected ${normalized}, got ${actual:-unavailable}." "$EXIT_PREFLIGHT_FAILED"
     fi

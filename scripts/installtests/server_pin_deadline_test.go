@@ -280,3 +280,22 @@ func TestInstallSHPinInterruptedProbeIsReaped(t *testing.T) {
 		})
 	}
 }
+
+func TestInstallSHPinUnreadableCertificateFailsClosed(t *testing.T) {
+	for _, body := range []string{
+		// A completed failed TLS command and a successful command without a
+		// certificate must both become the normal input-free preflight error.
+		"exit 37\n",
+		"if [ \"$1\" = s_client ]; then printf 'not a certificate'; exit 0; fi\nexec \"$REAL_OPENSSL\" \"$@\"\n",
+	} {
+		f := newPinPreflight(t)
+		f.writeTool("openssl", body)
+		cmd := f.command("https://127.0.0.1:1", strings.Repeat("a", 64))
+		cmd.Env = append(cmd.Env, "REAL_OPENSSL="+f.openssl)
+		out, err := cmd.CombinedOutput()
+		if pinExit(err) != 14 || !strings.Contains(string(out), "Could not read Pulse server certificate") || strings.Contains(string(out), "not a certificate") {
+			t.Fatalf("unreadable certificate did not fail closed: exit %d\n%s", pinExit(err), out)
+		}
+		f.preserved()
+	}
+}
