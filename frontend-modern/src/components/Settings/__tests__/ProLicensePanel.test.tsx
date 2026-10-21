@@ -271,7 +271,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
     expect(screen.getByText('Available plans')).toBeInTheDocument();
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
-    expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pulse Pro plan' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'View plans' }).length).toBeGreaterThan(0);
   });
 
@@ -308,18 +308,24 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Available plans')).toBeInTheDocument();
     // Relay was retired on 2026-09-29: Community sees only the Pro card.
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
-    expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pulse Pro plan' })).toBeInTheDocument();
     expect(screen.queryByText(/remote web access/i)).not.toBeInTheDocument();
     // Team and estate value leads; Patrol and history follow.
     const highlightTexts = [
-      'Team controls: 3 named seats, RBAC, and audit logging',
+      'For your team',
+      '3 named team seats',
+      'Roles and permissions (RBAC)',
+      'Audit logging',
+      'For larger estates',
       'Reporting and agent profiles',
-      'External probes check your services from another site',
+      'External probes from another site',
       'Commercial support, typically within two business days',
+      'Patrol and history',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-      'Patrol investigates issues, applies safe fixes, and verifies the result',
-      '90-day metric history',
+      'Patrol fixes issues and verifies the result',
+      '90-day metric history (Community keeps 7 days)',
     ];
+    expect(screen.getByText('$79/year')).toBeInTheDocument();
     const rendered = highlightTexts.map((text) => screen.getByText(text));
     for (let i = 1; i < rendered.length; i += 1) {
       expect(
@@ -908,7 +914,7 @@ describe('ProLicensePanel', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
-    expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Pulse Pro plan' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Relay status')).toBeInTheDocument();
     expect(screen.getAllByText('Pulse Mobile pairing and push').length).toBeGreaterThan(0);

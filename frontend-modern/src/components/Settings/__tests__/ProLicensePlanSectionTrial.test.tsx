@@ -47,7 +47,15 @@ describe('ProLicensePlanSection retired trial acquisition', () => {
       <ProLicensePlanSection
         {...baseProps()}
         planComparisonSummary={{
-          cards: [{ title: 'Pro', body: 'Everything', highlights: [] }],
+          cards: [
+            {
+              title: 'Pulse Pro',
+              tagline: 'For small teams and larger estates',
+              price: '$79/year',
+              priceNote: 'or $8.99/month',
+              groups: [],
+            },
+          ],
           action: {
             label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
             destination: resolveUpgradeDestination(

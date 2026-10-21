@@ -171,8 +171,10 @@ export type SelfHostedActivationSuccessSource = 'manual' | 'purchase';
 
 export interface SelfHostedPlanComparisonCardPresentation {
   title: string;
-  body: string;
-  highlights: string[];
+  tagline: string;
+  price: string;
+  priceNote: string;
+  groups: { title: string; items: string[] }[];
 }
 
 export interface SelfHostedPlanComparisonPresentation {
@@ -628,10 +630,18 @@ export const getSelfHostedPlanComparisonPresentation = ({
         if (!definition) {
           return null;
         }
+        const groups = definition.comparisonGroups?.length
+          ? definition.comparisonGroups.map((group) => ({
+              title: group.title,
+              items: [...group.items],
+            }))
+          : [{ title: 'Included', items: getSelfHostedPlanComparisonHighlights(definition) }];
         return {
-          title: `${getSelfHostedPlanLabel(tier)} plan`,
-          body: definition.comparisonSummary,
-          highlights: getSelfHostedPlanComparisonHighlights(definition),
+          title: getSelfHostedPlanLabel(tier),
+          tagline: definition.comparisonTagline ?? definition.comparisonSummary,
+          price: definition.price,
+          priceNote: definition.subline,
+          groups,
         };
       })
       .filter((card): card is SelfHostedPlanComparisonCardPresentation => card !== null),

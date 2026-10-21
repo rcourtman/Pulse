@@ -3439,7 +3439,12 @@ artificial feature ladder. Pro is the plan for small teams and larger estates
 probes, and commercial support, with Patrol modes, Patrol fixes, and 90-day
 history following. Paid features for an organisation read as normal, while
 paid features an individual needs for their own setup read as a withheld free
-version (issue #1409), so Pro copy must not lead with individual-only value.
+version (issue #1409), so Pro copy must not lead with individual-only value. The
+in-app comparison card on Plans & Billing presents that offer as one plan
+card: plan name, tagline, price and the primary purchase action in its
+header, then features grouped under "For your team", "For larger estates" and
+"Patrol and history". Groups and tagline come from
+`frontend-modern/src/utils/selfHostedPlans.ts`, not from component-local copy.
 Relay was retired on 2026-09-29 and existing Relay subscribers carry Pro
 entitlements, including Pulse Mobile pairing until the app retires. Retired Pro trial acquisition
 copy and dormant Cloud checkout catalogs must not reappear in the ordinary

@@ -433,7 +433,7 @@ describe('getSelfHostedPlanComparisonPresentation - edge cases', () => {
   it('shows only the Pro card for null / undefined entitlements', () => {
     const result = getSelfHostedPlanComparisonPresentation({ entitlements: null });
     expect(result.cards).toHaveLength(1);
-    expect(result.cards[0].title).toBe('Pulse Pro plan');
+    expect(result.cards[0].title).toBe('Pulse Pro');
   });
 
   it('shows only the Pro card for the community tier', () => {
@@ -446,7 +446,7 @@ describe('getSelfHostedPlanComparisonPresentation - edge cases', () => {
         upgrade_reasons: [],
       },
     });
-    expect(result.cards.map((c) => c.title)).toEqual(['Pulse Pro plan']);
+    expect(result.cards.map((c) => c.title)).toEqual(['Pulse Pro']);
   });
 
   it('returns no cards for an unrecognized tier', () => {
