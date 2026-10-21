@@ -65,6 +65,10 @@ function Fixture() {
       ready: true,
       locale,
       snapshot: () => JSON.parse(JSON.stringify(rows)),
+      resample: () => {
+        for (const [id, row] of Object.entries(rows))
+          setRows(id, { ...row, message: row.message + ' Resampled.' });
+      },
       labels: {
         acknowledge: t('alerts.overview.action.acknowledge'),
         restore: t('alerts.overview.action.unacknowledge'),
