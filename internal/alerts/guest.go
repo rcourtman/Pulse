@@ -141,6 +141,17 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		return
 	}
 
+	switch status {
+	case "running", "stopped", "paused", "suspended":
+		// Only an affirmative supported state can drive the lifecycle below.
+	default:
+		// An outage, omitted state or additive provider state is not a shutdown
+		// or a return to running. Keep open incidents and interrupt activation /
+		// recovery timing without treating placeholder metrics as observations.
+		m.interruptGuestObservationRuns(guestID)
+		return
+	}
+
 	monitorOnly := policy.TagSettings.MonitorOnly
 	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
 		log.Debug().

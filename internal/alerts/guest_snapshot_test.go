@@ -21,6 +21,45 @@ func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
 	}
 }
 
+func TestGuestSnapshotUnknownStatusKeepsMovedGuestAndPeers(t *testing.T) {
+	for _, kind := range []string{"vm", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			m := guestObservationManager(t)
+			vm, peer, other := guestObservationVM(), guestObservationVM(), guestObservationVM()
+			peer.ID, peer.VMID = "site:node:106", 106
+			other.ID, other.Instance = "other:node:105", "other"
+			for _, guest := range []models.VM{vm, peer, other} {
+				m.CheckGuest(statusObservationGuest(guest, kind), guest.Instance)
+			}
+			if len(m.GetActiveAlerts()) != 9 {
+				t.Fatal("expected three independent sets of memory/filesystem incidents")
+			}
+			before := string(guestObservationBytes(t, m))
+			vm.ID, vm.Node, vm.Status = "site:moved:105", "moved", "unknown"
+			vm.Memory.Usage, vm.Disk.Usage, vm.Disks = 0, 0, nil
+			m.CheckGuest(statusObservationGuest(vm, kind), "site")
+			if string(guestObservationBytes(t, m)) != before || len(m.GetRecentlyResolved()) != 0 {
+				t.Fatal("an unknown moved snapshot changed prior-node incidents or a peer")
+			}
+			peer.Memory.Usage, peer.Disk.Usage, peer.Disks = 0, 0, nil
+			m.CheckGuest(statusObservationGuest(peer, kind), "site")
+			if len(m.GetActiveAlerts()) != 6 {
+				t.Fatal("an unknown guest blocked an independent guest's recovery")
+			}
+			vm.Status = "running"
+			m.CheckGuest(statusObservationGuest(vm, kind), "site")
+			if len(m.GetActiveAlerts()) != 3 || len(m.GetRecentlyResolved()) != 6 {
+				t.Fatal("current moved guest failed to recover its prior-node incidents")
+			}
+			for _, alert := range m.GetActiveAlerts() {
+				if !strings.HasPrefix(alert.ResourceID, "other:") {
+					t.Fatal("same VMID in another instance was not isolated")
+				}
+			}
+		})
+	}
+}
+
 func TestGuestSnapshotObservationAvailability(t *testing.T) {
 	for _, test := range []struct {
 		name       string
