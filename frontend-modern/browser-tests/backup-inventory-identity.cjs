@@ -279,6 +279,8 @@ async function capture(page, name) {
         await expect(artifactRow()).toHaveCount(0);
         await expect(dialog).toHaveCount(0);
         await expect(page.getByText('No backups yet', { exact: true })).toHaveCount(0);
+        if (spec.touch)
+          await activate(page.getByRole('button', { name: 'Filters', exact: true }), true);
         await expect(
           page.getByRole('status').filter({ hasText: '1 backup entries read' }),
         ).toBeVisible();
