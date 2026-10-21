@@ -255,6 +255,29 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def test_failed_source_admission_precedes_image_builds_and_cannot_be_ignored(self):
+        source = WORKFLOW.read_text()
+        scope = job_block(source, "scope")
+        admission = scope.split("- name: Check canonical source before dependency work\n", 1)[1]
+        admission = admission.split("\n      - name:", 1)[0]
+        self.assertIn("set -euo pipefail", admission)
+        self.assertIn("check_source_contracts.py --early", admission)
+        self.assertNotIn("continue-on-error", admission)
+        self.assertNotIn("|| true", admission)
+        self.assertNotIn("proof_only=true", admission)
+        self.assertIn("needs: scope", job_block(source, "tier-selection"))
+        self.assertIn("needs: tier-selection", job_block(source, "test-images"))
+        verdict = job_block(source, "e2e-verdict")
+        command = verdict.split("        run: |\n", 1)[1]
+        command = "\n".join(line[10:] for line in command.splitlines())
+        command = re.sub(r"\$\{\{\s*needs\.scope\.result\s*\}\}", "failure", command)
+        command = re.sub(r"\$\{\{.*?\}\}", "skipped", command)
+        result = subprocess.run(["bash", "-c", command], capture_output=True, text=True,
+                                env={**os.environ, "PROOF_ONLY": ""}, timeout=5)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("admission did not pass", result.stdout)
+        self.assertNotIn("passed", result.stdout)
+
     def assert_fixture_admission(self, workflow):
         consumer = job_block(workflow, "e2e")
         image_admission = consumer.index("- name: Admit the source-bound test images")

@@ -80,6 +80,30 @@ const prettierPinIsReviewed = (version: string): boolean =>
   /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
 
 describe('frontend dependency security floors', () => {
+  it('rejects known-invalid source before dependency work without relaxing graph audits', () => {
+    const workflow = readFileSync(
+      new URL('../../../../.github/workflows/build-and-test.yml', import.meta.url),
+      'utf8',
+    );
+    const changes = workflow.split('\n  changes:\n')[1].split('\n  triage-helper:\n')[0];
+    const admission = changes
+      .split('      - name: Check canonical source before dependency work\n')[1]
+      .split('\n      - name: Check shipped docs before dependency work')[0];
+    expect(admission).toContain('set -euo pipefail');
+    expect(admission).toContain('check_source_contracts.py --early');
+    expect(admission).not.toContain('continue-on-error');
+    expect(admission).not.toContain('|| true');
+    expect(admission).not.toContain('frontend_deps=false');
+    // Early admission must not replace the strict changed-graph classifier or
+    // make a live advisory failure look like inherited base findings.
+    expect(changes).toContain('frontend_deps=true');
+    expect(changes).toContain('scripts/(npm-audit-retry\\.sh|npm_audit_process\\.py)');
+    expect(workflow).toContain('NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}');
+    const secretScan = workflow.split('\n  secret-scan:\n')[1].split('\n  changes:\n')[0];
+    expect(secretScan).not.toContain('needs:');
+    expect(secretScan).toContain('bash scripts/scan-ci-secrets.sh');
+  });
+
   it('checks the actual locked Solid serialization edges before accepting security overrides', () => {
     const check = fileURLToPath(
       new URL('../../../../scripts/check-frontend-serialization.mjs', import.meta.url),

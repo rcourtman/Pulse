@@ -82,6 +82,21 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # Reject known-invalid non-rendering proposals before runtime fan-out.
+      # Frontend ranges still need locked formatting tools in the unchanged
+      # full Canonical Governance job; early deferral is not its acceptance.
+      - name: Check canonical source before dependency work
+        env:
+          SOURCE_EVENT: ${{ github.event_name }}
+          SOURCE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SOURCE_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_EVENT" = workflow_dispatch ]; then
+            SOURCE_BASE=$(git rev-parse "${SOURCE_HEAD}^")
+          fi
+          python3 scripts/release_control/check_source_contracts.py --early --base "$SOURCE_BASE" --head "$SOURCE_HEAD"
+
       # Reject deterministic docs drift before queuing builds/tests. Keep the
       # independent per-push secret scan and Public docs check unchanged.
       - name: Check shipped docs before dependency work

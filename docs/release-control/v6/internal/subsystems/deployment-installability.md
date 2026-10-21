@@ -16,6 +16,29 @@
 
 ## Purpose
 
+### Invalid non-rendering proposals stop before runtime CI fan-out
+
+The dependency-free Build and Test changes job, E2E scope job and Canonical
+Governance precheck use the same exact per-commit contract admission. They bind
+the checked-out head and complete related Git range; unavailable/invalid source
+is a failure, never an empty diff or a tip-only substitute. Each ordinary commit
+is checked against its own parent and committed Contract-Neutral trailer. A
+registered split completion must pass its existing exact-pair validator; an
+ambient override or failed history read cannot bypass it. Receipt-only changes
+also run the existing final-content browser guard before dependency work.
+
+Ranges containing frontend runtime source, including intermediate/reverted
+edits and merge resolutions, explicitly defer the early check: their established
+formatting-only exception needs locked Prettier. Full required Canonical
+Governance still installs that graph and checks every contract and final browser
+receipt. Early deferral is not a source, browser or runtime pass. Invalid
+non-rendering ranges fail before application installs, builds and test-shard
+fan-out; the independent delivered-history secret scan remains unconditional.
+All existing required audits and runtime checks remain. No release or installed
+acceptance follows from admission. `scripts/tests/test_ci_source_admission.py`
+executes the actual workflow steps and real guard consumers, including failure,
+source identity, trailer/history, formatting deferral and dependency-stop controls.
+
 ### Portal build drift is rejected before ordinary CI fan-out
 
 Build and Test checks the portal's existing ordered input/byte hash in its
