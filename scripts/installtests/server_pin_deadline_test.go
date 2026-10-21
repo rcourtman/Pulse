@@ -214,14 +214,32 @@ func TestInstallSHPinTrustAndPreflight(t *testing.T) {
 		{"mismatch", strings.Repeat("0", 64), nil, 14, 0, "certificate fingerprint mismatch"},
 		{"insecure_still_requires_pin", strings.Repeat("0", 64), []string{"--insecure"}, 14, 0, "certificate fingerprint mismatch"},
 		{"malformed", "not-a-pin", nil, 14, 0, "Invalid --server-fingerprint"},
-		{"no_pin_still_verifies_tls", "", nil, 14, 0, "Preflight checks failed"},
+		// Existing preflight keeps the health error (14) and finishes with the
+		// later download refusal (11). Neither request may trust this peer.
+		{"no_pin_still_verifies_tls", "", nil, 11, 0, "Preflight checks failed"},
+		{"saved_pin_update", "", []string{"--update"}, 0, 2, "Preflight checks passed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newPinPreflight(t)
+			if tc.name == "saved_pin_update" {
+				f.state["connection.env"] = "PULSE_URL='" + server.URL + "'\n" +
+					"PULSE_TOKEN_FILE='" + filepath.Join(f.root, "state", "runtime.token") + "'\n" +
+					"PULSE_AGENT_ID='unchanged-agent'\nPULSE_HOSTNAME='fixture-host'\n" +
+					"PULSE_SERVER_FINGERPRINT='" + pin + "'\n"
+				if err := os.WriteFile(filepath.Join(f.root, "state", "connection.env"), []byte(f.state["connection.env"]), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			before := reads.Load()
 			out, err := f.command(server.URL, tc.pin, tc.extra...).CombinedOutput()
 			if pinExit(err) != tc.want || !strings.Contains(string(out), tc.message) || reads.Load()-before != tc.reads {
 				t.Fatalf("wrong pin result: exit %d, requests %d\n%s", pinExit(err), reads.Load()-before, out)
+			}
+			if tc.name == "no_pin_still_verifies_tls" && !strings.Contains(string(out), `"code":"pulse_unreachable","message":"Pulse URL not reachable","exitCode":14`) {
+				t.Fatalf("unpinned health request did not retain its trust refusal:\n%s", out)
+			}
+			if strings.Contains(string(out), f.state["runtime.token"]) {
+				t.Fatal("preflight printed the saved credential")
 			}
 			if tc.want == 0 {
 				var result map[string]any
