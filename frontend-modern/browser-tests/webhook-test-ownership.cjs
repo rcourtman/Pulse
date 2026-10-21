@@ -203,7 +203,12 @@ let browser, context;
       const toasts = page.getByRole('region', { name: 'Notifications', exact: true });
       const clearToasts = async () => {
         const buttons = toasts.getByRole('button', { name: 'Dismiss notification', exact: true });
-        while (await buttons.count()) await buttons.first().click();
+        for (let count = await buttons.count(); count > 0; count--) {
+          await operate(buttons.first());
+          // Closing keeps the toast mounted for its exit animation. Do not
+          // click that same departing control again while it is moving.
+          await expect(buttons).toHaveCount(count - 1);
+        }
         await expect(toasts.locator('[role=alert], [role=status]')).toHaveCount(0);
       };
       const operate = async (button) => {
@@ -241,7 +246,7 @@ let browser, context;
       await other.dispatchEvent('click');
       await hooks.getByRole('button', { name: 'Testing…', exact: true }).dispatchEvent('click');
       await expect(toasts.locator('[role=alert], [role=status]')).toHaveCount(0);
-      await hooks.getByRole('button', { name: 'Testing…', exact: true }).scrollIntoViewIfNeeded();
+      await other.scrollIntoViewIfNeeded();
       await capture('saved-pending');
       await operate(hooks.getByRole('button', { name: 'Edit', exact: true }).nth(1));
       const form = hooks.locator('fieldset');
