@@ -553,3 +553,40 @@ func TestGuestFilesystemDuplicateIdentityOrder(t *testing.T) {
 		}
 	}
 }
+
+// Current inventory presence survives a node move even when usage is unknown.
+// Re-home the occurrence and parent link, not its last valid measurement.
+func TestGuestFilesystemInvalidRowNodeMove(t *testing.T) {
+	for _, kind := range []string{"vm", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			m, _ := filesystemRecoveryManager(t, 0, false)
+			vm := filesystemRecoveryVM(105)
+			checkInvalidFilesystemGuest(m, vm, kind)
+			original := filesystemRecoveryActiveAlert(t, m, filesystemRecoveryID(vm))
+			if err := m.AcknowledgeAlert(original.ID, "fixture operator"); err != nil {
+				t.Fatal(err)
+			}
+			vm.Node, vm.ID = "moved", "site:moved:105"
+			vm.Disks[1].Total = 0
+			checkInvalidFilesystemGuest(m, vm, kind)
+			id := filesystemRecoveryID(vm)
+			held := filesystemRecoveryActiveAlert(t, m, id)
+			if len(m.GetActiveAlerts()) != 1 || held.StartTime != original.StartTime || held.Value != original.Value || held.LastSeen != original.LastSeen || !held.Acknowledged || held.Metadata["usedBytes"] != int64(950) || held.Metadata["guestResourceId"] != vm.ID {
+				t.Fatal("node move with invalid usage lost occurrence, last observation, acknowledgement or parent identity")
+			}
+			if m.GetResolvedAlert(original.ID) != nil || m.GetResolvedAlert(id) != nil {
+				t.Fatal("node move with invalid reading published recovery")
+			}
+			vm.Disks[1].Total = 1000
+			setBackupFilesystemUsage(&vm, 20)
+			checkInvalidFilesystemGuest(m, vm, kind)
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("fresh recovery could not resolve moved occurrence")
+			}
+			resolved := m.GetResolvedAlert(id)
+			if resolved == nil || resolved.StartTime != original.StartTime || resolved.ResourceID != held.ResourceID || !resolved.Acknowledged {
+				t.Fatal("node move created a replacement incident")
+			}
+		})
+	}
+}

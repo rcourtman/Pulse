@@ -255,14 +255,12 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	if !snapshot.DiskUnavailable {
 		diskMetric = &UnifiedResourceMetric{Percent: diskUsage}
 	}
-	diskRows := guestDiskAlertRows(disks)
-	if !snapshot.DiskUnavailable && len(disks) > 0 {
-		if len(diskRows) > 0 {
-			// Filesystem evidence is more actionable than the guest-wide rollup.
-			// Evaluating both creates two incidents for the same full filesystem.
-			diskMetric = nil
-			m.clearAlert(canonicalMetricStateID(guestID, "disk"))
-		}
+	diskRows, hasDiskUsageRows := guestDiskAlertRows(disks)
+	if !snapshot.DiskUnavailable && hasDiskUsageRows {
+		// Filesystem evidence is more actionable than the guest-wide rollup.
+		// Evaluating both creates two incidents for the same full filesystem.
+		diskMetric = nil
+		m.clearAlert(canonicalMetricStateID(guestID, "disk"))
 	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
@@ -292,13 +290,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	if len(disks) > 0 {
 		seenDiskResources := make(map[string]struct{})
 		for idx, disk := range disks {
-			if disk.Total <= 0 {
-				continue
-			}
-			if disk.Usage < 0 {
-				continue
-			}
-
 			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
 
 			// One conservative observation per existing alert identity, not
@@ -318,7 +309,17 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
 				continue
 			}
-			if snapshot.DiskUnavailable {
+			if snapshot.DiskUnavailable || !guestDiskAlertRowAvailable(disk) {
+				// Presence is not measurement validity. Keep this identity out
+				// of removal cleanup, without triggering/recovering from its
+				// sentinel or completing activation across the observation gap.
+				if !snapshot.DiskUnavailable {
+					// A current inventory may name the same filesystem on a new
+					// node. Re-home the occurrence before cleanup compares IDs;
+					// an unavailable reading is still not a removed filesystem.
+					m.rehomeStrandedGuestAlert(canonicalMetricStateID(perDiskResourceID, "disk"), canonicalMetricSpecID(perDiskResourceID, "disk"), string(alertspecs.AlertSpecKindMetricThreshold), perDiskResourceID, name, node, instanceName, snapshot.resourceType())
+					m.interruptMetricRunIDs(perDiskResourceID, canonicalMetricSpecID(perDiskResourceID, "disk"), canonicalMetricStateID(perDiskResourceID, "disk"))
+				}
 				if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
 					m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
 				}
@@ -406,15 +407,18 @@ func guestDiskIdentity(disk models.Disk, idx int) (label, keySource, sanitizedKe
 
 // Preserve the existing alert/override identities, but do not let a low alias
 // hide or recover a full filesystem. Select a whole observed row, never a
-// synthetic percentage/byte tuple. An impossible percentage remains a gap in
-// evidence rather than being discarded in favour of a healthy duplicate.
+// synthetic percentage/byte tuple. An unavailable row remains a gap in evidence
+// rather than being discarded in favour of a healthy duplicate or treated as
+// filesystem removal. The second result preserves the existing aggregate
+// fallback for inventories containing only rows the evaluator used to skip.
 // Original indices keep fallback identities and metadata intact; caller-owned
 // inventories are never reordered or modified.
-func guestDiskAlertRows(disks []models.Disk) map[string]int {
+func guestDiskAlertRows(disks []models.Disk) (map[string]int, bool) {
 	rows := make(map[string]int)
+	hasDiskUsageRows := false
 	for idx, disk := range disks {
-		if disk.Total <= 0 || disk.Usage < 0 {
-			continue
+		if disk.Total > 0 && !(disk.Usage < 0) {
+			hasDiskUsageRows = true
 		}
 		_, _, key := guestDiskIdentity(disk, idx)
 		previous, exists := rows[key]
@@ -422,12 +426,16 @@ func guestDiskAlertRows(disks []models.Disk) map[string]int {
 			rows[key] = idx
 		}
 	}
-	return rows
+	return rows, hasDiskUsageRows
+}
+
+func guestDiskAlertRowAvailable(disk models.Disk) bool {
+	return disk.Total > 0 && finiteMetricValue(disk.Usage) && disk.Usage >= 0 && disk.Usage <= 100
 }
 
 func guestDiskAlertRowPreferred(candidate, current models.Disk) bool {
-	candidateInvalid := !finiteMetricValue(candidate.Usage) || candidate.Usage > 100
-	currentInvalid := !finiteMetricValue(current.Usage) || current.Usage > 100
+	candidateInvalid := !guestDiskAlertRowAvailable(candidate)
+	currentInvalid := !guestDiskAlertRowAvailable(current)
 	if candidateInvalid != currentInvalid {
 		return candidateInvalid
 	}
