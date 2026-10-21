@@ -1778,6 +1778,68 @@ describe('independent Proxmox backup inventory reads', () => {
     apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
   });
 
+  it.each(['pbs', 'storageBackups', 'guestSnapshots'] as const)(
+    'withdraws duplicate %s identity and its open evidence, retaining the independent source',
+    async (kind) => {
+      const source = kind === 'pbs' ? 'pbs' : 'pve';
+      const point = kind === 'pbs' ? pbsPayload.data.backups[0] : pvePayload.data[kind][0];
+      const pve = {
+        data: {
+          ...emptyPVE.data,
+          [kind === 'guestSnapshots' ? 'guestSnapshots' : 'storageBackups']: [
+            kind === 'guestSnapshots' ? point : pvePayload.data.storageBackups[0],
+          ],
+        },
+      };
+      const valid = source === 'pbs' ? pbsPayload : pve;
+      let response = Promise.resolve(jsonResponse(valid));
+      apiFetchMock.mockImplementation((url) =>
+        url.endsWith(`/${source}`)
+          ? response
+          : Promise.resolve(jsonResponse(source === 'pbs' ? pve : pbsPayload)),
+      );
+      mountBackupReadState();
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      const prefix = kind === 'pbs' ? 'pbs' : kind === 'storageBackups' ? 'archive' : 'snapshot';
+      const row = document.querySelector(
+        `[data-proxmox-backup-key="artifact:${prefix}:${point.id}"]`,
+      )! as HTMLElement;
+      const pending = deferred<Response>();
+      response = pending.promise;
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
+      // A normal read retains the last accepted points while pending. An
+      // operator may inspect one before the conflicting response arrives.
+      fireEvent.click(within(row).getByRole('button', { name: /Backup evidence/ }));
+      expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toHaveTextContent(
+        point.id,
+      );
+      const conflict = { ...point, instance: 'PRIVATE_SOURCE_SENTINEL', verified: false };
+      pending.resolve(
+        jsonResponse(
+          source === 'pbs'
+            ? { data: { backups: [point, conflict] } }
+            : { data: { ...emptyPVE.data, [kind]: [point, conflict] } },
+        ),
+      );
+      await screen.findByText(/The response format is invalid/);
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+      expect(row).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent('PRIVATE_SOURCE_SENTINEL');
+      const otherSource = source === 'pbs' ? 'pve' : 'pbs';
+      const reads = sourceCalls(otherSource).length;
+      response = Promise.resolve(jsonResponse(valid));
+      fireEvent.click(
+        screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` }),
+      );
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      expect(screen.queryByText(/The response format is invalid/)).not.toBeInTheDocument();
+      expect(sourceCalls(otherSource)).toHaveLength(reads);
+    },
+  );
+
   it.each(['pve', 'pbs'] as const)(
     'keeps malformed HTTP200 %s responses source-local and recovers with an isolated retry',
     async (source) => {
