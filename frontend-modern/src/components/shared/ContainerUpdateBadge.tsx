@@ -225,11 +225,12 @@ const UPDATE_TOUCH_TARGET_CLASS = ' max-sm:min-h-11 max-sm:px-3';
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
   const readOnlyUpdateExplanation = () => state.updateUnavailableExplanation();
-  const showReadOnlyUpdateExplanation = (target: HTMLElement) => {
+  const showReadOnlyUpdateExplanation = (target: HTMLElement, intentional = false) => {
     const rect = target.getBoundingClientRect();
     showTooltip(readOnlyUpdateExplanation(), rect.left + rect.width / 2, rect.top, {
       align: 'center',
       direction: 'up',
+      trigger: intentional ? 'intentional' : 'hover',
     });
   };
   const shouldRenderReadOnlyStatus = () =>
@@ -326,14 +327,19 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
             data-prevent-toggle
             onClick={(event) => {
               event.stopPropagation();
-              showReadOnlyUpdateExplanation(event.currentTarget);
+              showReadOnlyUpdateExplanation(event.currentTarget, true);
             }}
             onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
             onMouseLeave={() => hideTooltip()}
-            onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+            onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget, true)}
             onBlur={() => hideTooltip()}
             onKeyDown={(event) => {
               if (event.key === 'Escape') hideTooltip();
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                showReadOnlyUpdateExplanation(event.currentTarget, true);
+              }
             }}
           >
             <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />

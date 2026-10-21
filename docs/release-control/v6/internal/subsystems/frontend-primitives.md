@@ -44,6 +44,17 @@ and the install option that grants access. The locked pill reads `Update` so
 it fits the Updates column at its narrowest; Local joins Pinned as a neutral
 uncheckable state rather than Check failed.
 
+The read-only refusal explanation remains available on deliberate tap, focus,
+Enter or Space, with Escape/blur dismissal, including coarse-pointer devices.
+Only these deliberate activations opt into the singleton tooltip. Default
+hover calls, including synthesized touch mouseenter, remain suppressed on coarse
+pointers. Neither the locked status nor its explanation plans or executes an
+update, and all server capability/refusal gates remain intact.
+`ContainerUpdateBadge.test.tsx` exercises the actual tooltip consumer and
+`Tooltip.test.tsx` retains both the passive-hover negative control and the
+explicit-intent case. `resource-composition-observation.cjs` uses the normal
+application tooltip root and inspects real keyboard/touch consuming surfaces.
+
 ### Infrastructure agent cards honour native guest power
 
 The existing canonical detail drawer qualifies its selected in-guest agent report

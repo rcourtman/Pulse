@@ -429,11 +429,14 @@ module.exports = (async () => {
       );
       await expect(container.getByRole('button', { name: /update/i })).toHaveCount(0);
       await click(locked);
+      await page.clock.runFor(32);
       await expect(
         page.getByText(/Apply this update using your container manager on the host\./),
       ).toBeVisible();
-      await capture('rest-update-refusal', container);
+      if (width < 500) assert((await locked.boundingBox()).height >= 44);
+      await capture('rest-update-refusal', page.locator('body'));
       await page.keyboard.press('Escape');
+      await expect(page.locator('[data-tooltip="true"]')).toHaveCount(0);
       await view('Container table');
       const table = page.getByRole('region', { name: 'Container table consumer' });
       await expect(

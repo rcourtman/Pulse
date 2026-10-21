@@ -4,6 +4,7 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
+import { createTooltipSystem } from '../src/components/shared/Tooltip';
 import { ResourceCompositionFixture } from './resource-composition-observation';
 import { mergeCanonicalResourceDeltaSnapshot } from '../src/utils/resourceStateAdapters';
 import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
@@ -188,13 +189,17 @@ render(
     <Router>
       <Route
         path="*"
-        component={() => (
-          <DarkModeContext.Provider
-            value={() => document.documentElement.classList.contains('dark')}
-          >
-            {compositionOnly ? <ResourceCompositionFixture /> : <Fixture />}
-          </DarkModeContext.Provider>
-        )}
+        component={() => {
+          const TooltipRoot = createTooltipSystem();
+          return (
+            <DarkModeContext.Provider
+              value={() => document.documentElement.classList.contains('dark')}
+            >
+              {compositionOnly ? <ResourceCompositionFixture /> : <Fixture />}
+              <TooltipRoot />
+            </DarkModeContext.Provider>
+          );
+        }}
       />
     </Router>
   ),
