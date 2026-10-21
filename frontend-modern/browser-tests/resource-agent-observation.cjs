@@ -282,7 +282,7 @@ let server, browser, context;
       await expect(apiNetwork.getByRole('status')).toHaveCount(0);
       await expect(apiNetwork.getByText('192.0.2.99/24')).toHaveClass(/text-blue-700/);
       check(
-        'Removing a physical host's agent list exposes its independently sourced Proxmox configuration without downgrading it.',
+        "Removing a physical host's agent list exposes its independently sourced Proxmox configuration without downgrading it.",
       );
       await act('report');
       await assertCurrent();
