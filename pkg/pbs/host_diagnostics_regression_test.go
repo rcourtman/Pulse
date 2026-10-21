@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -254,3 +255,62 @@ func (b *statusDiagnosticBody) Close() error { *b.closes++; return nil }
 // Failure bodies, unlike typed measurements, are never diagnostic content.
 func TestPBSProviderFailureDiagnostics(t *testing.T) { testPBSFailureDiagnostics(t) }
 func TestPBSTokenFailureDiagnostics(t *testing.T)    { testPBSTokenFailureDiagnostics(t) }
+
+// Token construction is socket-free. URL parsing must never reinterpret an
+// explicit scheme as an HTTPS hostname before an authenticated request is built.
+func TestClientEndpointAuthorityNormalization(t *testing.T) {
+	for _, tc := range []struct{ name, host, want string }{
+		{"upper-https", "HTTPS://pve.example.invalid:8443/tenant", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"mixed-https", "hTtPs://pve.example.invalid:8443/tenant/", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"upper-http", "HTTP://pve.example.invalid:8080/tenant", "http://pve.example.invalid:8080/tenant/api2/json"},
+		{"trimmed-bare", "  pve.example.invalid:8443/tenant  ", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"ipv6", "HTTPS://[2001:db8::1]:8443/tenant", "https://[2001:db8::1]:8443/tenant/api2/json"},
+		{"zoned-ipv6", "HTTPS://[fe80::1%25ZoneA]:8443/tenant", "https://[fe80::1%25ZoneA]:8443/tenant/api2/json"},
+		{"ordinary", "https://pve.example.invalid:8443/tenant", "https://pve.example.invalid:8443/tenant/api2/json"},
+	} {
+		for _, trust := range []struct {
+			name, pin string
+			verify    bool
+		}{{"ca", "", true}, {"pin", strings.Repeat("a", 64), true}, {"explicit-opt-out", "", false}} {
+			t.Run(tc.name+"/"+trust.name, func(t *testing.T) {
+				cfg := ClientConfig{Host: tc.host, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: trust.verify, Fingerprint: trust.pin, Timeout: 3 * time.Second}
+				client, err := NewClient(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer client.httpClient.CloseIdleConnections()
+				if client.baseURL != tc.want {
+					t.Errorf("request destination = %q, want %q", client.baseURL, tc.want)
+				}
+				if client.config.VerifySSL != cfg.VerifySSL || client.config.Fingerprint != cfg.Fingerprint || client.auth.tokenValue != cfg.TokenValue || client.httpClient.Timeout != cfg.Timeout {
+					t.Error("URL normalization changed trust, credentials or request budget")
+				}
+				transport := client.httpClient.Transport.(*http.Transport)
+				if transport.TLSClientConfig.InsecureSkipVerify != (trust.pin != "" || !trust.verify) || (trust.pin != "" && transport.TLSClientConfig.VerifyPeerCertificate == nil) || client.httpClient.CheckRedirect == nil {
+					t.Error("URL normalization changed TLS or redirect policy")
+				}
+			})
+		}
+	}
+}
+
+func TestClientEndpointExplicitSchemeRefused(t *testing.T) {
+	for _, host := range []string{
+		"ftp://pve.example.invalid:8006/tenant", "ws://pve.example.invalid:8006/tenant", "wss://pve.example.invalid:8006/tenant",
+		"file://pve.example.invalid/tenant", "ssh://pve.example.invalid:22/tenant", "https://fixture:synthetic-secret@pve.example.invalid",
+		"HTTPS://fixture:synthetic-secret@pve.example.invalid", "HTTPS://pve.example.invalid?token=synthetic-secret", "HTTPS://pve.example.invalid#synthetic-secret",
+	} {
+		t.Run(host, func(t *testing.T) {
+			client, err := NewClient(ClientConfig{Host: host, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: true})
+			if err == nil || client != nil {
+				if client != nil {
+					client.httpClient.CloseIdleConnections()
+				}
+				t.Fatal("invalid endpoint became an authenticated client")
+			}
+			if strings.Contains(err.Error(), "synthetic-secret") || strings.Contains(err.Error(), "synthetic-token") {
+				t.Error("rejected URL diagnostic disclosed fixture credentials")
+			}
+		})
+	}
+}

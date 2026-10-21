@@ -51,7 +51,9 @@ func TestGuestAgentConfigResponseMustBeComplete(t *testing.T) {
 							backupAgentPayload(w, r)
 						}))
 						defer server.Close()
-						c := backupTestClient(t, server.URL)
+						// Retained VM fences outlive a closed listener. Recycled
+						// ports must not share uncertainty between independent cases.
+						c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 						if err := read(context.Background(), c, 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 							t.Errorf("incomplete config was accepted: %v", err)
 						}
@@ -93,7 +95,7 @@ func TestGuestAgentConfigPrefixDoesNotAdmitCommand(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	if _, err := backupTestClient(t, server.URL).GetVMAgentInfo(ctx, "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
+	if _, err := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)).GetVMAgentInfo(ctx, "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 		t.Errorf("stalled config admitted a command: %v", err)
 	}
 	if got := commands.Load(); got != 0 {
@@ -119,7 +121,8 @@ func TestGuestAgentAdmissionIncludesPostConfigBody(t *testing.T) {
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c1, c2 := backupTestClient(t, server.URL), backupTestClient(t, server.URL)
+	host := guestAgentFixtureEndpoint(t, server.URL)
+	c1, c2 := backupTestClient(t, host), backupTestClient(t, host)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	done := make(chan error, 1)
@@ -146,6 +149,44 @@ func TestGuestAgentAdmissionIncludesPostConfigBody(t *testing.T) {
 	}
 	if _, err := c2.GetVMFSInfo(context.Background(), "node", 105); err != nil {
 		t.Fatalf("admission not released after failed lock check: %v", err)
+	}
+}
+
+func TestGuestAgentLockResponseFixtureIsolation(t *testing.T) {
+	var commands, configs atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			configs.Add(1)
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		fmt.Fprint(w, `{"data":null}`)
+	}))
+	defer server.Close()
+	var hosts []string
+	// Use exactly the same listener/VMID to make port reuse deterministic. Each
+	// independent subtest must get its own scope, but two clients in that case
+	// must still share the original uncertainty fence without another request.
+	for _, name := range []string{"first", "second"} {
+		t.Run(name, func(t *testing.T) {
+			host := guestAgentFixtureEndpoint(t, server.URL)
+			hosts = append(hosts, host)
+			if _, err := backupTestClient(t, host).GetVMNetworkInterfaces(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+				t.Fatalf("independent fixture inherited another case's fence: %v", err)
+			}
+			if _, err := backupTestClient(t, host).GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+				t.Fatalf("same-case client lost its retained uncertainty fence: %v", err)
+			}
+		})
+	}
+	for _, host := range hosts {
+		if _, err := backupTestClient(t, host).GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Fatalf("admitting another fixture erased the existing fence: %v", err)
+		}
+	}
+	if commands.Load() != 2 || configs.Load() != 2 {
+		t.Fatalf("fixture command/config counts = %d/%d, want exactly 2/2", commands.Load(), configs.Load())
 	}
 }
 

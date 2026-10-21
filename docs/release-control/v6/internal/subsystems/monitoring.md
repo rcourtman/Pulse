@@ -17,6 +17,40 @@
 
 ## Purpose
 
+### Proxmox endpoint authority before authentication
+
+`internal/config/client_helpers.go`, startup validation, the node save/test
+normalizer and the PVE/PBS/PMG client constructors
+validate the original HTTP(S) base URL before defaulting or changing its port.
+Explicit schemes are case-insensitive: `HTTPS://` continues to address the
+configured host, not a newly invented host named `HTTPS`. Unsupported explicit
+schemes, URL userinfo, queries and fragments must be refused by the client before
+authentication; configuration helpers must not strip them into a usable URL.
+Bare authorities retain the existing HTTPS and platform-default-port behaviour.
+The helpers retain their existing path-stripping policy for valid configuration
+URLs; direct clients continue to support validated reverse-proxy base paths.
+
+The existing portless PVE recovery helper may remove only its configured default
+port from a valid URL. IPv6 brackets and percent-escaped zone identifiers survive
+that operation. This does not change which failures admit a recovery attempt,
+which endpoint is persisted, authentication, CA verification, pin precedence,
+saved-pin renewal/first-use policy, redirect policy or connection budgets.
+
+`internal/config/client_helpers_authority_test.go` checks all three configuration
+producers and IPv6 fallback, including invalid-input preservation. Constructor
+cases in each platform's `host_diagnostics_regression_test.go` check the actual
+request base, unchanged credentials, CA/pin/explicit-opt-out mode, redirects and
+timeouts without sockets.
+`internal/api/configapi/endpoint_authority_journey_test.go` uses owned IPv4/IPv6
+TLS sockets and ordinary saved/draft handlers: matching uppercase URLs complete
+password login and ordinary bounded reads (including PBS datastore RRD/status);
+a wrong pin, an untrusted strict chain or unsupported
+scheme sends neither login credentials nor API reads; restoring the known
+fixture pin recovers. It opens no database and changes no saved configuration.
+The emitted HTTP responses can be consumed by the production connection editor;
+synthetic acceptance does not establish installed certificate renewal or recovery.
+
+
 ### PBS namespace aliases cannot select conflicting collection scopes
 
 Every supplied namespace identity (`ns`, `path`, or legacy `name`) must be a
@@ -8018,6 +8052,21 @@ the temperature SSH key on disk) and from every system-settings save
 settings API), so repairing the key — or saving settings after repairing SSH
 access any other way — is retried on the next cycle rather than after a window
 that has compounded to fifteen minutes.
+Numeric socket destinations bypass DNS, preserving a scoped IPv6 literal's
+case-sensitive interface zone. The cache's `LookupIP` adapter cannot represent
+that zone in `net.IP`; turning a literal into an answer must not change its
+socket destination. Hostnames still use the same cached answers as discovery
+policy. Existing address-family filters, duplicate removal, caller cancellation,
+socket budgets, authority, TLS and certificate pin checks are unchanged.
+`pkg/tlsutil/literal_destination_test.go` checks exact zone preservation, literal
+sockets without DNS, named cache reuse and cancellation.
+`internal/api/configapi/scoped_literal_journey_test.go` follows scoped IPv6
+through the ordinary saved/draft PVE, PBS and PMG handlers with actual local TLS,
+password authentication, wrong-pin refusal and known-pin recovery. Its emitted
+responses feed the unchanged connection editor in
+`scripts/check-proxmox-scoped-literal.cjs`. Synthetic loopback proof does not
+establish native link-local routing, certificate renewal or guest recovery.
+
 The shared socket dialler also tries the usable addresses in that one cached
 answer rather than discarding all but the first. It preserves answer order,
 filters explicit IPv4/IPv6 networks and deduplicates equivalent literals.
