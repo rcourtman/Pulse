@@ -412,11 +412,13 @@ export const HOST_AGENT_STOPPED_REPORTING_REASON = 'host agent stopped reporting
 // but only the native Proxmox field may make that claim, never row health.
 // Host/API cards and physical disks keep their own independent evidence.
 export const getResourceGuestPowerLastKnownReason = (resource: Resource): string | undefined => {
+  const status = resource.proxmox?.runtimeStatus;
+  if (!status) return undefined;
   const powerReason = getGuestHardwareLastKnownReason({
     type: resource.type,
     platformType: resource.platformType,
     platformScopes: resource.platformScopes,
-    status: resource.proxmox?.runtimeStatus,
+    status,
   });
   // Card explanations add their own punctuation.
   return powerReason?.replace(/\.$/, '');

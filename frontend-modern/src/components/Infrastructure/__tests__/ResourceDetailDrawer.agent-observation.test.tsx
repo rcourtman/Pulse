@@ -80,7 +80,16 @@ describe('canonical native-power agent cards', () => {
           ],
           sensors: {
             temperatureCelsius: { cpu: 42 },
-            custom: [{ id: 'service', name: 'Service', kind: 'boolean', value: 1, status: 'ok' }],
+            custom: [
+              {
+                id: 'service',
+                name: 'Service',
+                kind: 'boolean',
+                value: 1,
+                status: 'ok',
+                observedAt: '2026-10-20T12:00:00Z',
+              },
+            ],
             smart: [{ device: '/dev/sda', temperature: 36 }],
           },
         },

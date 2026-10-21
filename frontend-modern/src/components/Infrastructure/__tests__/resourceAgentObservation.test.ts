@@ -8,6 +8,7 @@ import {
 const resource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'guest-a',
   name: 'Guest A',
+  displayName: 'Guest A',
   type: 'vm',
   platformId: 'site-a',
   platformType: 'proxmox-pve',
