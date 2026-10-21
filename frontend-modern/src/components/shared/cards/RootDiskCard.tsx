@@ -31,7 +31,7 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
       usage: used / total,
     };
   };
-  const capacity = () => {
+  const capacityLabel = () => {
     const total = props.node.disk?.total;
     return typeof total === 'number' && Number.isFinite(total) && total > 0
       ? ` · ${formatBytes(total)} total`
@@ -47,7 +47,7 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
         when={diskStats()}
         fallback={
           <p class="text-xs text-muted whitespace-normal wrap-break-word" role="status">
-            Usage unavailable{capacity()}
+            Usage unavailable{capacityLabel()}
           </p>
         }
       >
