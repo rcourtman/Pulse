@@ -4,6 +4,35 @@ This document is the canonical security policy for Pulse. It combines our
 ongoing hardening guidance with the operational checklists that previously lived
 in `docs/SECURITY.md`.
 
+## Report a vulnerability
+
+Report a suspected security vulnerability privately to
+[security@pulserelay.pro](mailto:security@pulserelay.pro). Do not put exploit
+details or private evidence in a public issue, discussion or pull request.
+
+Include the affected Pulse or agent version if known, the affected component,
+the possible impact and your original observations. A redacted description is
+enough to start; unknown details are valid. If you already have a minimal
+reproduction from an isolated system you own, describe it. Do not repeat an
+outage, trigger notifications, probe someone else's system or change a
+production installation just to produce a report.
+
+Keep passwords, API tokens, client secrets, session cookies, encryption keys,
+raw configuration, diagnostics exports and backups out of the report. A private
+email address is not a reason to send credentials or a full copy of your data.
+Keep the originals private and share only the relevant, locally reviewed,
+redacted observations.
+
+If private information is already public, follow the
+[disclosure containment steps](docs/TROUBLESHOOTING.md#if-you-already-posted-private-information).
+Removing a post does not revoke an exposed credential or erase every copy.
+Do not repost the original evidence in another thread.
+
+For ordinary setup, sign-in or monitoring help without a suspected security
+vulnerability, use the [safe reporting guidance](docs/TROUBLESHOOTING.md#-getting-help)
+and [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions). Review
+anything you share there: those conversations and their attachments are public.
+
 For a high-level overview of the system design and data flow, please refer to
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
