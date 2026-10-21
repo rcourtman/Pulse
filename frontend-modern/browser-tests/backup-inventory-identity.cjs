@@ -273,7 +273,7 @@ async function capture(page, name) {
         await expect(dialog).toHaveCount(0);
         await expect(page.getByText('No backups yet', { exact: true })).toHaveCount(0);
         await expect(
-          page.getByText('Backup inventory is incomplete', { exact: true }),
+          page.getByRole('status').filter({ hasText: '1 backup entries read' }),
         ).toBeVisible();
         await expect(page.locator('body')).not.toContainText('SYNTHETIC_PRIVATE_SOURCE_SENTINEL');
         await expect(page.getByRole('alert')).toHaveCount(0);
