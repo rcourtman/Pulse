@@ -171,7 +171,8 @@ module.exports = (async () => {
       let diskGate;
       const GiB = 1024 ** 3;
       const rawResources = (mode) => {
-        const now = '2026-10-20T12:05:00Z';
+        const now = '2026-10-20T12:00:05Z';
+        const zero = mode === 'current-zero' || mode === 'future-zero';
         const update =
           mode === 'local'
             ? { updateAvailable: false, error: 'local image' }
@@ -227,13 +228,18 @@ module.exports = (async () => {
             metrics: {
               cpu: { percent: 1 },
               memory: {
-                percent: mode === 'current-zero' ? 0 : 75,
-                used: mode === 'current-zero' ? 0 : 3 * GiB,
+                percent: zero ? 0 : 75,
+                used: zero ? 0 : 3 * GiB,
                 total: 4 * GiB,
                 observation: {
-                  state: mode === 'current-zero' || mode === 'offline' ? 'current' : 'last-known',
+                  state: zero || mode === 'offline' ? 'current' : 'last-known',
                   source: 'guest-agent-meminfo',
-                  observedAt: mode === 'current-zero' ? now : '2026-10-20T12:00:00Z',
+                  observedAt:
+                    mode === 'future-zero'
+                      ? '2026-10-20T12:05:00Z'
+                      : zero
+                        ? now
+                        : '2026-10-20T12:00:00Z',
                 },
               },
             },
@@ -504,12 +510,20 @@ module.exports = (async () => {
         '2026-10-20 12:00:00 UTC',
       );
       await expect(memory.locator('[data-history-deferred="memory"]')).not.toContainText(
-        '12:05:00',
+        '12:00:05',
       );
       await capture('retained-memory', memory);
+      await refresh('future-zero');
+      await expect(facts).not.toContainText('of 4.00 GB RAM');
+      await expect(memory.locator('[data-history-current="memory"]')).toHaveCount(0);
+      await expect(memory.locator('[data-history-unknown="memory"]')).toContainText('0.0%');
+      await expect(memory.locator('[data-history-deferred="memory"]')).toContainText(
+        'Observation time unknown',
+      );
       await refresh('current-zero');
       await expect(facts).toContainText('0 B of 4.00 GB RAM');
       await expect(memory.locator('[data-history-current="memory"]')).toContainText('0.0%');
+      await capture('measured-zero-memory', memory);
       await refresh('offline');
       await expect(facts).not.toContainText('of 4.00 GB RAM');
       await expect(memory.locator('[data-history-current="memory"]')).toHaveCount(0);
