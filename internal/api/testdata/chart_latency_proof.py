@@ -7,7 +7,12 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
+
+# A capacity-invalid proof is neither a pass nor a failure. The workflow maps
+# this exit status to a neutral check conclusion.
+INCONCLUSIVE_EXIT = 78
 
 
 def snapshot():
@@ -121,15 +126,51 @@ def digest(path):
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
+def slo_report(text):
+    reports = re.findall(r'charts/workloads p50=\S+ p95=\S+ p99=\S+ SLO=(\S+)', text)
+    if len(reports) != 1 or reports[0] != '90ms':
+        raise RuntimeError(f'Expected one explicit SLO report at the selected budget, got {reports}')
+    return re.search(r'charts/workloads p50=\S+ p95=\S+ p99=\S+ SLO=\S+', text).group(0)
+
+
 def validate_output(text, returncode):
     if returncode != 0:
         raise RuntimeError(f'SLO process exited {returncode}')
     passes = re.findall(r'^--- PASS: TestSLO_WorkloadCharts \(', text, re.MULTILINE)
     if len(passes) != 1 or re.search(r'^--- SKIP: TestSLO_WorkloadCharts ', text, re.MULTILINE):
         raise RuntimeError('SLO did not pass, including a skipped or missing test')
-    reports = re.findall(r'charts/workloads p50=\S+ p95=\S+ p99=\S+ SLO=(\S+)', text)
-    if len(reports) != 1 or reports[0] != '90ms':
-        raise RuntimeError(f'Expected one explicit SLO report at the selected budget, got {reports}')
+    slo_report(text)
+
+
+def validate_contended_output(text, returncode):
+    # Contention only voids the latency verdict. The test must still have
+    # executed once and reported, so a crash, skip or broken fixture fails.
+    report = slo_report(text)
+    outcome = re.findall(r'^--- (PASS|FAIL|SKIP): TestSLO_WorkloadCharts \(', text, re.MULTILINE)
+    diagnostics = re.findall(r'^\s+\S+\.go:\d+: (.*)$', text, re.MULTILINE)
+    violations = [line for line in diagnostics if line.startswith('SLO VIOLATION: p95=')]
+    others = [line for line in diagnostics
+              if line not in violations and not line.startswith('charts/workloads p50=')]
+    budget_only = (outcome == ['FAIL'] and returncode == 1
+                   and len(violations) == 1 and not others)
+    if not (outcome == ['PASS'] and returncode == 0) and not budget_only:
+        raise RuntimeError(f'SLO process exited {returncode} with outcome {outcome}')
+    return report
+
+
+def report_inconclusive(report, capacity_errors, summary_path):
+    names = sorted({row['name'] for error in capacity_errors
+                    for row in error['background_processes'] if row['cpu_pct'] > 2})
+    peak = max(error['background_busy_pct'] for error in capacity_errors)
+    lines = ['Workload chart 90ms SLO: inconclusive',
+             f'{report} (not a verdict)',
+             f'{len(capacity_errors)} measurement intervals had competing capacity '
+             f'(peak {peak:.1f}% background CPU; processes: {", ".join(names) or "none named"}).',
+             'The hosted runner was not idle, so this result neither passes nor fails the budget.']
+    print('\n'.join(lines), flush=True)
+    if summary_path:
+        with open(summary_path, 'a') as summary:
+            summary.write('\n\n'.join(lines) + '\n')
 
 
 def measure(binary, prefix):
@@ -174,17 +215,21 @@ def measure(binary, prefix):
             after = snapshot()
             receipt.write(json.dumps(interval(before, after)) + '\n')
             before = after
+    verdict = 'inconclusive' if capacity_errors else 'valid'
     result = dict(command=command, binary_sha256=identity, environment=env,
-                  pid=process.pid, returncode=returncode, capacity_errors=capacity_errors)
+                  pid=process.pid, returncode=returncode, verdict=verdict,
+                  capacity_errors=capacity_errors)
     prefix.with_suffix('.result.json').write_text(json.dumps(result, indent=2) + '\n')
     text = prefix.with_suffix('.log').read_text()
     print(text, flush=True)
     if digest(binary) != identity:
         raise RuntimeError('Measured executable changed')
     if capacity_errors:
-        raise RuntimeError('Background CPU or guest/steal activity invalidated the idle measurement '
-                           f'(SLO process exit {returncode}; see raw log)')
+        report = validate_contended_output(text, returncode)
+        report_inconclusive(report, capacity_errors, os.environ.get('GITHUB_STEP_SUMMARY'))
+        return verdict
     validate_output(text, returncode)
+    return verdict
 
 
 def main():
@@ -195,7 +240,8 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     # Absolute qualification executes the candidate directly. The separate
     # paired benchmark job owns relative comparisons and baseline context.
-    measure(args.candidate.resolve(), args.output / 'candidate')
+    if measure(args.candidate.resolve(), args.output / 'candidate') == 'inconclusive':
+        sys.exit(INCONCLUSIVE_EXIT)
 
 
 if __name__ == '__main__':

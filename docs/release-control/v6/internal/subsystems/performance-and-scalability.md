@@ -1888,6 +1888,11 @@ dashboard-specific overview, trend, or summary transport.
     Competing CPU, guest/steal or swap activity invalidates the measurement,
     and process CPU counters identify the largest observed background users.
     Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
+    In the hosted job an invalidated measurement is reported as inconclusive,
+    not failed. The proof exits 78, and a separate check-write job with no
+    PR code publishes a neutral `Workload chart 90ms SLO` check. A crash,
+    skip or missing report still fails. Every non-zero exit, 78 included,
+    still fails the manual disposable-worker route below.
     The manual `pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml`
     reuses that same public proof on the existing disposable `pulse-ci-vm-large`
     runner. It checks out literal public Pulse `main` and verifies the expected

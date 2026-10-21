@@ -59,6 +59,12 @@ and post-measurement samples. The candidate must execute exactly one fresh
 tests and ordinary 550 ms hosted passes cannot satisfy it. Actual hosted
 runner identity remains intact. Background contention invalidates the proof.
 
+Since 21 October a contended hosted run reports a neutral, inconclusive
+verdict instead of failing. In every hosted run since this job was
+introduced, the runner's own `provjobd` daemon contended during the
+measurement. See
+[workload-chart-hosted-slo-2026-10-21.md](workload-chart-hosted-slo-2026-10-21.md).
+
 The associated source-check run and retained artifact supply the measured
 percentiles for that exact candidate. This record does not substitute a
 diagnostic benchmark mean for those percentiles. The earlier historical
