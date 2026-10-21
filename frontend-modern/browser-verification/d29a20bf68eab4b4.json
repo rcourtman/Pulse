@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ce21b4e1b2a44b39607dc551947c534c73ccb837",
+  "changed_paths": [
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/resource.ts": "729d82751790973f3a236b41baa2e75fbf71c37499ef3c6089c47537024e9002",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "3390c23c98b69413a021859fffe8889e8d53236eb72cc100d17fc988af8af094"
+  },
+  "routes": [
+    "/ (isolated read-only fixture consuming the existing Workloads row/drawer and Alerts Overview)"
+  ],
+  "states": [
+    "QEMU and LXC measured 98% CPU and original acknowledged incident",
+    "Omitted/null/negative source CPU is unavailable, not measured idle or a refreshed prior value",
+    "Original 98% acknowledgement persists across unavailable CPU",
+    "Measured zero restores current CPU and ordinary recovery",
+    "Configured guest-grace source frames distinguish current/unknown CPU without an immediate active card; elapsed legacy/explicit grace is separately tested in Go"
+  ],
+  "interactions": [
+    "Keyboard Enter / touch open and close the actual guest drawer",
+    "Hide and show acknowledged incidents without writes",
+    "Consume exact Go resource/alert frames through full snapshot, slow-delta and fast-delta production merges",
+    "Inspect current History legends and independent memory/storage at desktop and 320px; native pixels opened and reviewed"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-21T07:53:53Z",
+  "evidence": {
+    "go_source": "ce21b4e1b2a44b39607dc551947c534c73ccb837",
+    "go_receipt": "source-gh4w8lcs",
+    "frontend_receipt": "source-rf2ztieu",
+    "frontend_executor_source": "be5520e9b7f9ae6f95e6ce2fbd35a0072e04c890",
+    "matched_frontend_inputs": 2574,
+    "scenarios": 16,
+    "exact_http_exchanges": 68,
+    "browser_result_sha256": "ea7ee2b6803c4bff23e1e1c57c6fb4c9a9561e00893bbb7ba0d568d0e9d3c18a",
+    "browser_protocol_sha256": "91380d298acc667f48530c9f7f35261ac3ae4ab86426c613ad24cfa4f8ed29f8",
+    "captures": [
+      {
+        "file": "desktop-acknowledged-qemu.png",
+        "viewport": "desktop",
+        "phase": "acknowledged-qemu",
+        "sha256": "d0632c4c5a63e0da97342ad18d35bbe1d04f1628139e9bf64c0a489a87faeb4c"
+      },
+      {
+        "file": "desktop-unknown-qemu.png",
+        "viewport": "desktop",
+        "phase": "unknown-qemu",
+        "sha256": "325adbdbf12061c0ae61abc2c135ca686580b87ab2f26bcf5ce7e24e24098d39"
+      },
+      {
+        "file": "desktop-unknown-lxc.png",
+        "viewport": "desktop",
+        "phase": "unknown-lxc",
+        "sha256": "ba1c2d87972e6a19ee0d9ce9f46d72e1cd6727c8c1c3e633f47032c7b62430a0"
+      },
+      {
+        "file": "desktop-delayed-busy-lxc.png",
+        "viewport": "desktop",
+        "phase": "delayed-busy-lxc",
+        "sha256": "ffc56c405e930816d1dc551e89af2e7a82c67d45db4917db32549468d854af5b"
+      },
+      {
+        "file": "phone-unknown-qemu.png",
+        "viewport": "phone",
+        "phase": "unknown-qemu",
+        "sha256": "54d16a0cfa26131d11ef4b6e3e508723af1df6b5d8793acabd61a0063e82673f"
+      },
+      {
+        "file": "phone-unknown-lxc.png",
+        "viewport": "phone",
+        "phase": "unknown-lxc",
+        "sha256": "511d0bc2aecb88438a979d1b0d77a355659c7f59b8ccd025a76ede66f5a41613"
+      },
+      {
+        "file": "phone-idle-confirmed-lxc.png",
+        "viewport": "phone",
+        "phase": "idle-confirmed-lxc",
+        "sha256": "7155d83f7ea2cb74b0af6400ae39817635e1e2c1bd238ad5f74e010904dfed35"
+      },
+      {
+        "file": "phone-delayed-unknown-lxc.png",
+        "viewport": "phone",
+        "phase": "delayed-unknown-lxc",
+        "sha256": "3e76e95acf1147ea16ec88d09b0c7c8eedc5825535b2e3e5cdea06dd7ed26060"
+      }
+    ],
+    "native_pixel_review": "Eight captures opened with native view_image and inspected; full observations retained in the lane dossier."
+  },
+  "limits": "Safe isolated producer/consumer fixtures only. No native guest/QGA/backup/freeze/thaw, installed or released result, real stored-History HTTP proof or #2439 recovery. Existing independent review and protected containing CI remain required."
+}
