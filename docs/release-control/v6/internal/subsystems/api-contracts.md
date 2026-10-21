@@ -2258,6 +2258,12 @@ payload shape change when the portal presents compact client rows.
     approvals, policy-allowed fixes, verification, and history rather than as
     generic operations workflows or a separate agent product.
 33. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+    Every generated Windows installer download uses a single request with
+    `-TimeoutSec 60 -ErrorAction Stop`, including the typed removal bootstrap
+    and installation's file download under either system or selected trust.
+    Caller Continue/Ignore error preferences cannot turn request refusal into
+    installer execution. Trust restoration, literal identity and saved-state
+    credential selection are unchanged; this adds no server API or retry.
     Generated install commands are part of the API contract because they bind
     the UI-selected Pulse URL, token source, custom CA, insecure/plain-HTTP
     behavior, and `/download/pulse-agent?arch=...` availability proof into the

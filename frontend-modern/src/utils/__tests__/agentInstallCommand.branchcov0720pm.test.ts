@@ -162,9 +162,11 @@ describe('buildPowerShellInstallScriptBootstrap — bootstrap script wiring', ()
   it('fetches the script via `irm $pulseScriptUrl` inside both the custom-trust and the bare else arm', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
     // custom-trust arm:
-    expect(script).toContain('irm $pulseScriptUrl ');
+    expect(script).toContain('irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop ');
     // bare else arm (no env-var set):
-    expect(script).toContain('} else { irm $pulseScriptUrl } } | iex');
+    expect(script).toContain(
+      '} else { irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop } } | iex',
+    );
   });
 
   it('pipes the entire bootstrap through `| iex` so it is executed inline', () => {

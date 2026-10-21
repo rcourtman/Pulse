@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "19d2d7b73de83325e4f4aead4d724b9b0761212e",
+  "verified_at": "2026-10-21T02:24:14.615357Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/agentInstallCommand.ts": "1b90fe05cda227e3c745bbd90a79591ad942f4dca58ec7c6e113a065de00f3c6"
+  },
+  "routes": [
+    "Existing InfrastructureInstallerSection in /browser-tests/agent-uninstall.html, with the real operations state and local synthetic API responses; not a new application route."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Playwright1.56.1 matches the integration lock. Chromium desktop/light and WebKit touch-phone/dark complete four consuming cases and twelve copy/display comparisons; all six retained captures were opened with native view_image.",
+    "Without generating an installation token, existing Unix and Windows removal copies remain available. Windows copies include the60-second request timeout and terminating error option, with empty installation credentials and no issued token.",
+    "After one explicitly requested synthetic token per install case, both Windows service and parameter variants display/copy the bounded Invoke-WebRequest call. System-trust and selected-CA states retain private-file cleanup, preflight and chosen trust. Long commands stay within their own scroll areas at both widths.",
+    "No page/console errors, unexpected or off-origin request are recorded. Removal writes nothing; installation writes only the one explicitly requested synthetic token response. Both browser/server runs close.",
+    "The first preview failed before UI execution because the worker-owned copied esbuild helper had mode0660. Only its owner execution bit was restored; the unchanged source/runner then completed. Canonical CLI reads refused during preparation were not repeated. No host policy or identity changed.",
+    "This is actual producer/consumer/copy proof, not PowerShell execution or native TLS/installed recovery. The offline Linux source proof passes120 tests, type-check, scoped lint and full frontend/embed build; seven Windows5.1 runtime cases remain unexecuted locally and must pass in the existing native Windows CI."
+  ],
+  "interactions": [
+    "Expand Uninstall agent, focus both copy buttons and use Enter; compare clipboard and displayed command bytes without unlocking installation.",
+    "Generate/dismiss one synthetic installation token; focus and copy both Windows install variants before and after selecting a CA path. Inspect desktop/narrow consuming pixels and bounded scrolling."
+  ]
+}

@@ -278,9 +278,9 @@ const buildPowerShellInstallerDownload = (
     `} else { ` +
     `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::ValidateCustomCaCallback ` +
     `}; ` +
-    `irm $pulseScriptUrl ` +
+    `irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop ` +
     `} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev; [PulseInstallerCertificateValidator]::CustomCa = $null } ` +
-    `} else { irm $pulseScriptUrl } }`
+    `} else { irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop } }`
   );
 };
 
@@ -343,8 +343,8 @@ export const buildWindowsAgentInstallCommand = ({
     ? `[PulseInstallerCertificateValidator]::AcceptAnyCallback`
     : `[PulseInstallerCertificateValidator]::ValidateCustomCaCallback`;
   const customTrustFetch = installerFetchRequiresCustomTrust
-    ? `${powerShellTlsValidatorBootstrap}$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { ${powerShellLoadCustomCa('$pulseCaCertPath')}}; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev; [PulseInstallerCertificateValidator]::CustomCa=$null }`
-    : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript`;
+    ? `${powerShellTlsValidatorBootstrap}$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { ${powerShellLoadCustomCa('$pulseCaCertPath')}}; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript -TimeoutSec 60 -ErrorAction Stop } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev; [PulseInstallerCertificateValidator]::CustomCa=$null }`
+    : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript -TimeoutSec 60 -ErrorAction Stop`;
 
   const tokenBootstrap = normalizedToken
     ? `$pulseTokenFile=Join-Path $pulseTmp "token"; [System.IO.File]::WriteAllText($pulseTokenFile, "${powerShellQuote(normalizedToken)}", [System.Text.Encoding]::ASCII); `

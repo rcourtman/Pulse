@@ -1071,6 +1071,25 @@ describe('terminal-control portability', { timeout: 25_000 }, () => {
 });
 
 describe('saved-credential uninstall commands', () => {
+  it('bounds every PowerShell installer download and makes request errors terminating', () => {
+    for (const options of [
+      { baseUrl: 'https://download.invalid' },
+      { baseUrl: 'https://download.invalid', insecure: true },
+      { baseUrl: 'https://download.invalid', caCertPath: 'C:\\trust\\root.pem' },
+    ]) {
+      const uninstall = buildWindowsAgentUninstallCommand(options);
+      // Both the system-trust arm and the selected custom-trust arm must keep
+      // the same bound, including when the caller uses Continue or Ignore.
+      expect(
+        uninstall.match(/irm \$pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop/g),
+      ).toHaveLength(2);
+      const install = buildWindowsAgentInstallCommand(options);
+      expect(install).toContain(
+        'Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript -TimeoutSec 60 -ErrorAction Stop',
+      );
+    }
+  });
+
   it.each(['unused-new-install-token', null])(
     'never asks for installation credentials (%s)',
     (token) => {
