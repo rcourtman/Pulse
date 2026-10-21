@@ -57,6 +57,21 @@ func TestResolvePulseAccountPortalURL_DefaultWhenUnset(t *testing.T) {
 	}
 }
 
+func TestDefaultPurchasePageDoesNotDependOnLegacyHostedBase(t *testing.T) {
+	// Check the literal destination, not only agreement with the constant: moving
+	// both back to the retired portal must not silently pass this regression.
+	const purchasePage = "https://license.pulserelay.pro/buy"
+	for _, override := range []string{"", "  ", "relative/path", "http://10.0.0.25/portal"} {
+		if got := ResolvePulseAccountPortalURL(override); got != purchasePage {
+			t.Errorf("ResolvePulseAccountPortalURL(%q) = %q, want %q", override, got, purchasePage)
+		}
+	}
+	// Hosted entitlement compatibility is not a purchase-page migration.
+	if got := ResolveProTrialSignupURL(""); got != "https://cloud.pulserelay.pro" {
+		t.Fatalf("legacy hosted base = %q", got)
+	}
+}
+
 func TestResolvePulseAccountPortalURL_UsesValidOverride(t *testing.T) {
 	const override = "https://example.com/portal?src=test"
 

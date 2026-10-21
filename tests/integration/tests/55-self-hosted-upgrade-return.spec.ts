@@ -11,7 +11,7 @@ import { ensureAuthenticated } from "./helpers";
 const DEV_SERVER_URL = preferredPlaywrightRouteBaseURL();
 const PURCHASE_START_PATH = "/auth/license-purchase-start";
 const PURCHASE_START_URL = `${DEV_SERVER_URL}${PURCHASE_START_PATH}`;
-const PULSE_ACCOUNT_PORTAL_URL = "https://cloud.pulserelay.pro/portal";
+const PULSE_ACCOUNT_PORTAL_URL = "https://license.pulserelay.pro/buy";
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const PORTAL_HANDOFF_ID = "cph_checkout_return";
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan&purchase=activated`;

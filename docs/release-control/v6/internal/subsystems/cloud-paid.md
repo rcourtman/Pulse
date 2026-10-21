@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Self-hosted purchase entry does not depend on hosted Cloud
+
+The default Buy, Upgrade and Renew handoff opens
+`https://license.pulserelay.pro/buy`, not the legacy hosted Cloud portal.
+`PULSE_ACCOUNT_PORTAL_URL` keeps its existing validated HTTPS/loopback override;
+the separate legacy hosted entitlement base is unchanged. The existing
+authenticated purchase-start handler still creates the server-side handoff,
+keeps signed return state out of the destination query, and preserves only its
+existing permitted query context. Callback origin, organisation, one-use
+redemption, activation and failure recovery remain enforced by the existing
+purchase-return path. This changes neither offers, prices, Relay availability,
+Stripe state nor entitlement policy.
+
+`TestDefaultPurchasePageDoesNotDependOnLegacyHostedBase`, the purchase-start
+handler/contract tests and the self-hosted upgrade-return browser spec bind this
+destination and its unchanged return boundaries. Local fixtures do not establish
+that `/buy` is deployed, that old Cloud links redirect, or that payment has
+completed; those need separate exact-source/served acceptance.
+
 ### Retired mobile settings keep information separate from entitlement
 
 Pulse Mobile retirement guidance is a full-text labelled note, not a paid
