@@ -125,6 +125,18 @@ describe('frontend dependency security floors', () => {
     }
   });
 
+  it('keeps Vite above the bundled launch-editor and dev-server fs floors', () => {
+    // GHSA-587h-7wmj-h5pm, GHSA-r825-w8mm-5pxw and GHSA-698v-4r3x-3vcv: Vite
+    // bundles launch-editor, fixed on 6.x in 6.4.4. 6.4.5 also applies the
+    // server.fs check after stripping the query.
+    expect(manifest.devDependencies.vite).toBe('^6.4.5');
+    const versions = lockedVersions('vite');
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).not.toContain('-');
+    expect(parseVersion(versions[0])[0], 'vite must stay on the reviewed major').toBe(6);
+    expect(atLeast(versions[0], [6, 4, 5]), `vite ${versions[0]} is vulnerable`).toBe(true);
+  });
+
   it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {
     // GHSA-2883-xcg3-v3hh: our override keeps every transitive copy on patched 4.x.
     expect(manifest.overrides['js-yaml']).toBe('^4.3.2');
