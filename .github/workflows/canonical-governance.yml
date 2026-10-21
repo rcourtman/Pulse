@@ -77,8 +77,8 @@ jobs:
             range="${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
           elif [ "${{ github.event_name }}" = "push" ]; then
             range="${{ github.event.before }}...${{ github.sha }}"
-          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-            range="HEAD^...HEAD"
+          elif base=$(git rev-parse --verify HEAD^ 2>/dev/null); then
+            range="${base}...$(git rev-parse HEAD)"
           else
             range=""
           fi

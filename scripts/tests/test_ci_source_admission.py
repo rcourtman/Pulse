@@ -212,8 +212,8 @@ class ContractRangeTest(SourceAdmissionFixture):
         self.assertIn("defer early admission", result.stdout)
         self.assertEqual(self.recorded(), [])
 
-    def test_receipt_only_diff_runs_actual_browser_guard_not_an_assumed_skip(self):
-        self.changed("frontend-modern/browser-verification/invalid.json")
+    def test_receipt_rules_run_actual_browser_guard_not_an_assumed_skip(self):
+        self.changed("frontend-modern/browser-verification.json")
         result = self.run_guard(early=True)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("BLOCKED", result.stderr)
@@ -243,14 +243,35 @@ class WorkflowAdmissionTest(SourceAdmissionFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.recorded()[1]["argv"], ["--files-from-stdin", "--diff-base", self.base, "--commit", head])
 
+    def test_full_manual_governance_range_resolves_exact_commits(self):
+        head = self.changed()
+        steps = workflow("canonical-governance.yml")["jobs"]["governance"]["steps"]
+        diff = next(s for s in steps if s.get("name") == "Determine governance diff range")
+        command = diff["run"]
+        for expression, value in (("github.event_name", "workflow_dispatch"),
+                                  ("github.event.pull_request.base.sha", ""),
+                                  ("github.event.before", ""), ("github.sha", head)):
+            command = command.replace("${{ " + expression + " }}", value)
+        output = Path(self.temp.name) / "diff-output"
+        result = subprocess.run(["bash", "-c", command], cwd=self.repo,
+                                env={**self.env, "GITHUB_OUTPUT": str(output)},
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(output.read_text().strip(), "range=" + self.base + "..." + head)
+        full = next(s for s in steps if s.get("name") == "Run canonical completion guard against changed commits")
+        result = subprocess.run(["bash", "-c", full["run"]], cwd=self.repo,
+                                env={**self.env, "WORKFLOW_OUTPUT_1": self.base + "..." + head},
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_missing_push_base_stops_instead_of_claiming_an_empty_change(self):
         self.changed()
         result = self.run_early_workflow("test-e2e.yml", "push", "")
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.installs.exists())
 
-    def test_missing_receipt_blocks_before_install_and_runtime_verdict(self):
-        self.changed("frontend-modern/browser-verification/invalid.json")
+    def test_retired_receipt_blocks_before_install_and_runtime_verdict(self):
+        self.changed("frontend-modern/browser-verification.json")
         result = self.run_early_workflow("test-e2e.yml")
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.installs.exists())
@@ -304,8 +325,9 @@ class RealGuardConsumerTest(SourceAdmissionFixture):
         for name in ("canonical_completion_history.py", "canonical_completion_guard.py", "control_plane.py", "subsystem_contracts.py"):
             self.write(CONTROL + name, (ROOT / CONTROL / name).read_text())
         self.write(CONTROL + "canonical_completion_history.json", '{"version":1,"completions":[]}\n')
-        path = "docs/release-control/v6/internal/subsystems/registry.json"
-        self.write(path, (ROOT / path).read_text())
+        for path in ("docs/release-control/control_plane.json",
+                     "docs/release-control/v6/internal/subsystems/registry.json"):
+            self.write(path, (ROOT / path).read_text())
         self.base = self.commit("real public guards")
 
     def test_real_contract_guard_rejects_missing_contract_before_install(self):
