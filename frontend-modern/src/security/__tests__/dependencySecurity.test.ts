@@ -98,7 +98,9 @@ describe('frontend dependency security floors', () => {
     // make a live advisory failure look like inherited base findings.
     expect(changes).toContain('frontend_deps=true');
     expect(changes).toContain('scripts/(npm-audit-retry\\.sh|npm_audit_process\\.py)');
-    expect(workflow).toContain('NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}');
+    expect(workflow).toContain(
+      'NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}',
+    );
     const secretScan = workflow.split('\n  secret-scan:\n')[1].split('\n  changes:\n')[0];
     expect(secretScan).not.toContain('needs:');
     expect(secretScan).toContain('bash scripts/scan-ci-secrets.sh');
