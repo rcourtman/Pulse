@@ -1,8 +1,13 @@
 package monitoring
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"math"
 	"os"
 	"path/filepath"
@@ -1929,23 +1934,53 @@ func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
 }
 
 func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
-	requiredSnippets := map[string][]string{
-		"monitor_pve_guest_builders.go":  {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_guest_lxc.go":       {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_node_vm_builder.go": {"Pool:       vm.Pool"},
-		"monitor_polling_containers.go":  {"Pool:     strings.TrimSpace(container.Pool)"},
+	required := map[string]struct{ model, value string }{
+		"monitor_pve_guest_builders.go":  {"models.VM", "strings.TrimSpace(res.Pool)"},
+		"monitor_pve_guest_lxc.go":       {"models.Container", "strings.TrimSpace(res.Pool)"},
+		"monitor_pve_node_vm_builder.go": {"proxmox.ClusterResource", "vm.Pool"},
+		"monitor_polling_containers.go":  {"models.Container", "strings.TrimSpace(container.Pool)"},
 	}
 
-	for file, snippets := range requiredSnippets {
-		data, err := os.ReadFile(file)
+	for file, want := range required {
+		fset := token.NewFileSet()
+		source, err := parser.ParseFile(fset, file, nil, 0)
 		if err != nil {
-			t.Fatalf("failed to read %s: %v", file, err)
+			t.Fatal(err)
 		}
-		source := string(data)
-		for _, snippet := range snippets {
-			if !strings.Contains(source, snippet) {
-				t.Fatalf("%s must contain %q", file, snippet)
+		render := func(node ast.Node) string {
+			var text bytes.Buffer
+			if err := format.Node(&text, fset, node); err != nil {
+				t.Fatal(err)
 			}
+			return text.String()
+		}
+		modelsChecked := 0
+		ast.Inspect(source, func(node ast.Node) bool {
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok || len(literal.Elts) == 0 || render(literal.Type) != want.model {
+				return true
+			}
+			modelsChecked++
+			// Inspect actual model fields, not an alignment-sensitive string
+			// that can pass in a comment or fail after ordinary gofmt changes.
+			found := false
+			for _, element := range literal.Elts {
+				field, ok := element.(*ast.KeyValueExpr)
+				if !ok || render(field.Key) != "Pool" {
+					continue
+				}
+				found = true
+				if got := render(field.Value); got != want.value {
+					t.Errorf("%s %s.Pool = %s, want %s", file, want.model, got, want.value)
+				}
+			}
+			if !found {
+				t.Errorf("%s populated %s lacks its source-owned Pool field", file, want.model)
+			}
+			return true
+		})
+		if modelsChecked == 0 {
+			t.Errorf("%s has no populated %s to verify", file, want.model)
 		}
 	}
 }
