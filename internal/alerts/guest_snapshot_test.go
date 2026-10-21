@@ -1,12 +1,14 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
 func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
@@ -627,5 +629,61 @@ func TestGuestFilesystemInvalidRowNodeMove(t *testing.T) {
 				t.Fatal("node move created a replacement incident")
 			}
 		})
+	}
+}
+
+func TestGuestRuleMetadataIsNotZeroForBackupSnapshotOrSave(t *testing.T) {
+	m := guestObservationManager(t)
+	cfg := m.GetConfig()
+	cfg.GuestDefaults = ThresholdConfig{}
+	cfg.BackupDefaults = BackupAlertConfig{Enabled: true, WarningDays: 14, CriticalDays: 21}
+	cfg.SnapshotDefaults = SnapshotAlertConfig{Enabled: true, WarningDays: 14, CriticalDays: 21}
+	rule := CustomAlertRule{Enabled: true, Priority: 10,
+		FilterConditions: FilterStack{Filters: []FilterCondition{{Type: "text", Field: "name", Value: "database"}}},
+		Thresholds:       ThresholdConfig{Backup: &BackupAlertConfig{Enabled: true, WarningDays: 1, CriticalDays: 2}, Snapshot: &SnapshotAlertConfig{Enabled: true, WarningDays: 1, CriticalDays: 2}},
+	}
+	cfg.CustomRules = []CustomAlertRule{rule}
+	m.UpdateConfig(cfg)
+	at := time.Now().Add(-10 * 24 * time.Hour)
+	id := "site:node:105"
+	lookup := GuestLookup{ResourceID: id, Name: "database", Instance: "site", Node: "node", Type: "qemu", VMID: 105}
+	lookups := map[string]GuestLookup{id: lookup}
+	rollups := []recovery.ProtectionRollup{{RollupID: "res:vm:proxmox:" + id, SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "site", Name: "database", ID: id, Class: "node"}, LastSuccessAt: &at, LastOutcome: recovery.OutcomeSuccess, Providers: []recovery.Provider{recovery.ProviderProxmoxPVE}}}
+	snapshots := []models.GuestSnapshot{{ID: "site:node:105:weekly", Name: "weekly", Node: "node", Instance: "site", Type: "qemu", VMID: 105, Time: at}}
+	check := func() {
+		if err := m.CheckBackups(rollups, lookups, map[string][]GuestLookup{"105": {lookup}}); err != nil {
+			t.Fatal(err)
+		}
+		m.CheckSnapshotsForInstance("site", snapshots, lookups)
+	}
+	check()
+	if len(m.GetActiveAlerts()) != 2 {
+		t.Fatalf("known age policies failed: %+v", m.GetActiveAlerts())
+	}
+	for _, alert := range m.GetActiveAlerts() {
+		if err := m.AcknowledgeAlert(alert.ID, "operator"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := guestObservationBytes(t, m)
+	// Lookups and saved alert metadata contain identities, not a current CPU
+	// reading. Neither > nor < may use their zero-valued fields as evidence.
+	for _, op := range []string{">", "<"} {
+		cfg = m.GetConfig()
+		cfg.CustomRules[0].FilterConditions = FilterStack{Filters: []FilterCondition{{Type: "metric", Field: "cpu", Operator: op, Value: 80.0}}}
+		m.UpdateConfig(cfg)
+		for i := 0; i < 3; i++ {
+			check()
+		}
+		if !bytes.Equal(before, guestObservationBytes(t, m)) || len(m.GetRecentlyResolved()) != 0 {
+			t.Fatal("identity-only lookup selected an age policy or erased the original occurrence")
+		}
+	}
+	cfg = m.GetConfig()
+	cfg.Overrides[id] = ThresholdConfig{Backup: &BackupAlertConfig{Enabled: false}, Snapshot: &SnapshotAlertConfig{Enabled: false}}
+	m.UpdateConfig(cfg)
+	check()
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("explicit per-guest age disablement was fenced")
 	}
 }

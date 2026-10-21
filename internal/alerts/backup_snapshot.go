@@ -396,8 +396,20 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 		m.mu.RLock()
-		gh := m.getGuestThresholds(guestContext, resourceID)
+		thresholdPolicy := m.guestThresholdPolicyNoLock(guestContext, resourceID)
+		knownPolicy := m.guestSignalPolicyKnownNoLock(thresholdPolicy, "snapshot-age")
 		m.mu.RUnlock()
+		if !knownPolicy {
+			// Lookup metadata cannot supply current metric-filter evidence.
+			// Retain the occurrence, not a freshly evaluated or removed alert.
+			specID := resourceID + "/snapshot:" + snapshot.ID
+			stateID := buildCanonicalStateID(resourceID, specID)
+			validAlerts[stateID] = struct{}{}
+			validAlerts["snapshot-age-"+snapshot.ID] = struct{}{}
+			m.interruptMetricRunIDs(resourceID, specID, stateID)
+			continue
+		}
+		gh := thresholdPolicy.Thresholds
 
 		if gh.Disabled {
 			continue
@@ -917,6 +929,21 @@ func (m *Manager) CheckBackupsWithInventory(
 		if guestResourceID == "" {
 			guestResourceID = guestContext.ID
 		}
+		if backupIgnoreVMID(record.vmID, backupCfg.IgnoreVMIDs) {
+			continue
+		}
+		if orphaned {
+			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
+				continue
+			}
+			if !backupOrphanInventoryReady(inventoryScope, *record) {
+				continue
+			}
+			if backupCfg.AlertOrphaned != nil && !*backupCfg.AlertOrphaned {
+				continue
+			}
+		}
+
 		if guestResourceID != "" {
 			policy := m.resolveGuestAlertPolicy(guestContext)
 			if policy.SuppressionReason != "" {
@@ -926,8 +953,20 @@ func (m *Manager) CheckBackupsWithInventory(
 				continue
 			}
 			m.mu.RLock()
-			gh := m.getGuestThresholds(guestContext, guestResourceID)
+			thresholdPolicy := m.guestThresholdPolicyNoLock(guestContext, guestResourceID)
+			knownPolicy := m.guestSignalPolicyKnownNoLock(thresholdPolicy, "backup-age")
 			m.mu.RUnlock()
+			if !knownPolicy {
+				alertKey := sanitizeAlertKey(key)
+				resourceID := canonicalBackupSubjectResourceID(alertKey, *record)
+				specID := resourceID + "-backup-age"
+				stateID := buildCanonicalStateID(resourceID, specID)
+				validAlerts[stateID] = struct{}{}
+				validAlerts["backup-age-"+alertKey] = struct{}{}
+				m.interruptMetricRunIDs(resourceID, specID, stateID)
+				continue
+			}
+			gh := thresholdPolicy.Thresholds
 			if gh.Disabled {
 				continue
 			}
@@ -938,21 +977,6 @@ func (m *Manager) CheckBackupsWithInventory(
 
 		currentBackupCfg.AlertOrphaned = backupCfg.AlertOrphaned
 		currentBackupCfg.IgnoreVMIDs = backupCfg.IgnoreVMIDs
-
-		if backupIgnoreVMID(record.vmID, currentBackupCfg.IgnoreVMIDs) {
-			continue
-		}
-		if orphaned {
-			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
-				continue
-			}
-			if !backupOrphanInventoryReady(inventoryScope, *record) {
-				continue
-			}
-			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
-				continue
-			}
-		}
 
 		if !currentBackupCfg.Enabled {
 			continue
