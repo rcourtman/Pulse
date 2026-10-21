@@ -138,7 +138,7 @@ describe('selfHostedPlans', () => {
       'Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
-      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([

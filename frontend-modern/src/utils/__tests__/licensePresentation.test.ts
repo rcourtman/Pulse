@@ -902,13 +902,15 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'Pulse Pro plan',
-          body: 'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+          body: 'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
           highlights: [
+            'Team controls: 3 named seats, RBAC, and audit logging',
+            'Reporting and agent profiles',
+            'External probes check your services from another site',
+            'Commercial support, typically within two business days',
             'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-            'Patrol investigates issues and explains the root cause',
-            'Patrol applies safe fixes and verifies the result',
+            'Patrol investigates issues, applies safe fixes, and verifies the result',
             '90-day metric history',
-            'Team controls: RBAC, audit logging, reporting, and agent profiles',
           ],
         },
       ],
