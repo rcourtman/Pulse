@@ -4894,6 +4894,7 @@ verify_pinned_server_certificate() {
     local certificate_file=""
     local probe_status=0
     local probe_second=0
+    local probe_interruption=0
     normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
@@ -4919,8 +4920,15 @@ verify_pinned_server_certificate() {
     certificate_file=$(mktemp) || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
     TMP_FILES+=("$certificate_file")
     chmod 600 "$certificate_file" || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
+    # Do not exit in the fork/$! interval while the child is still unowned.
+    # Retain that signal, restore main's handlers, then leave through cleanup.
+    trap 'probe_interruption=130' INT
+    trap 'probe_interruption=143' TERM
     openssl s_client -connect "$target" -servername "$host" </dev/null >"$certificate_file" 2>/dev/null &
     SERVER_CERTIFICATE_PROBE_PID=$!
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    [[ "$probe_interruption" -eq 0 ]] || exit "$probe_interruption"
     for ((probe_second=0; probe_second<10; probe_second++)); do
         kill -0 "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || break
         sleep 1

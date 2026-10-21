@@ -4627,7 +4627,9 @@ stops or replaces a collector. A silent peer fails preflight with exit 14;
 a failed probe or unreadable certificate fails with the same normal diagnostic
 path, not an implicit shell exit. The installer owns and reaps its direct
 OpenSSL child and removes its private output on success, failure and handled
-INT/TERM. It needs neither GNU timeout nor a new runtime dependency.
+INT/TERM. A signal during fork/PID capture is retained until the child is
+owned, then exits through the same cleanup. It needs neither GNU timeout nor
+a new runtime dependency.
 
 Exact leaf SHA-256 comparison, pin normalization, pin refusal even alongside
 explicit insecure mode, saved pin persistence, unpinned certificate verification,
