@@ -140,16 +140,14 @@ func testLXCMountDiskObservationLifecycle(t *testing.T) {
 								t.Fatal("canonical resource lost")
 							}
 							wire, err := json.Marshal(front.Resources[0].Proxmox)
-							var facet struct {
-								Disks []models.Disk `json:"disks"`
-							}
+							var facet unifiedresources.ProxmoxData
 							if err != nil || json.Unmarshal(wire, &facet) != nil || len(facet.Disks) != 2 {
 								t.Fatal("public mount projection lost")
 							}
 							matched := false
 							for _, disk := range facet.Disks {
 								if disk.Mountpoint == wantMount {
-									matched = disk == selected
+									matched = disk == (unifiedresources.DiskInfo{Total: selected.Total, Used: selected.Used, Free: selected.Free, Usage: selected.Usage, Mountpoint: selected.Mountpoint, Device: selected.Device, Filesystem: selected.Type})
 								}
 							}
 							if !matched {
