@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "e3670a98baf09821fa58b183764792b0a48e6622",
+  "verified_at": "2026-10-21T16:54:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/shared/cards/RootDiskCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "038c03ef47b89eec569ab540c116db1e03c04aa2d5fcb00f0ad2e90147ea4347",
+    "frontend-modern/src/components/shared/cards/RootDiskCard.tsx": "6daa4961c5760ff574ff69fefcd163bcaf54ae44806391e95350d119f5a3fdc8"
+  },
+  "routes": [
+    "/infrastructure (actual ResourceDetailDrawer through stored canonical-delta fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Missing aggregate: Usage unavailable, with no invented zero or utilization bar.",
+    "Capacity only: Usage unavailable plus actual total; no fabricated used bytes.",
+    "Measured 93GB/100GB displays 93% with real bar width, not the former 1%.",
+    "Invalid/sentinel/contradictory or removed observations clear earlier utilization; explicit used zero remains measured 0%."
+  ],
+  "interactions": [
+    "Open, close and reopen the real Infrastructure host disclosure with desktop keyboard and 320px WebKit touch.",
+    "Update/remove disk observations through the actual canonical delta merger without replacing the drawer.",
+    "Sixteen browser assertion groups pass; all eight exact-source captures opened with native view_image and inspected. Only allowlisted loopback GETs, no guest/host/disk operation."
+  ],
+  "source_sha": "e3670a98baf09821fa58b183764792b0a48e6622",
+  "source_proof_receipt": "source-00ytdx0q",
+  "playwright": "1.56.1",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "capture_sha256": {
+    "desktop-missing.png": "abe497d96b3e52232101502af7e9946e472222a9bd98ffde03ebeea0fed54b29",
+    "desktop-capacity.png": "7ac433dcdb235a23ffffbf1b547752013c0923060a1c7a3426cfa13d32bae810",
+    "desktop-measured.png": "a5e45eda95b2c4a744ff5c9e626c7cb4b13dc3903abf5e222555ec9511f83e9e",
+    "desktop-zero.png": "95fc7e4d6df3fcbf387a21af2fcc7c2878ec1a69c397b9e223f2b8f13d4b319a",
+    "narrow-missing.png": "46a322e4392ea9042d74d62e691f57f5b8801a57a2de55370055c0c716b017ca",
+    "narrow-capacity.png": "d59a838576fa1ea19d8e28b95feb9e3c22ea001fcdd78ea1026149a4f718e7ca",
+    "narrow-measured.png": "64b4180fc33423bde51c590809d4e300733fdfa6220ac33b7c62c148b28a5b38",
+    "narrow-zero.png": "8897b28ccf883cb446170e1557a975a7697f4932601b8a6c2ff7cb77d4e8c244"
+  },
+  "scope_limit": "Local synthetic producer/consumer proof, not installed recovery, filesystem liveness, guest thaw or release availability."
+}
