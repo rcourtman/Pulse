@@ -10578,3 +10578,15 @@ effective environment and command, not its exit alone. It also consumes the
 actual XML producers with a plist parser and checks shell-export round trips.
 These are disposable parser proofs, not a running systemd/launchd agent,
 installed TLS recovery or a change to the saved-state/transport contract.
+
+### Hosted chart evidence cannot qualify an agent lifecycle
+
+The optional hosted workload-chart capacity proof reports an executed but
+contended measurement as inconclusive, never as a healthy reading or a passed
+90 ms budget. This CI-only classification does not satisfy agent installation,
+restart, confinement, credential persistence or signed recovery acceptance.
+Skips, missing reports and non-budget child failures still fail the proof.
+The actual CLI/receipt control is
+`TestContractChartSLOProofCLIClassifiesExecution`; the separate read-only
+evidence and check-writer boundary is
+`TestChartSLOWorkflowPreservesInconclusiveAndFailure`.

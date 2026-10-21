@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import chart_latency_proof as proof
 
@@ -33,6 +35,43 @@ class ChartLatencyProofTests(unittest.TestCase):
             with self.subTest(text=text, status=status):
                 with self.assertRaises(RuntimeError):
                     proof.validate_output(text, status)
+
+    def test_contention_voids_only_the_latency_verdict(self):
+        report = '    slo_bench_test.go:637: charts/workloads p50=75ms p95=107ms p99=112ms SLO=90ms\n'
+        violation = '    slo_bench_test.go:637: SLO VIOLATION: p95=107ms exceeds target 90ms\n'
+        passed = report + '--- PASS: TestSLO_WorkloadCharts (1.0s)\n'
+        failed = report + violation + '--- FAIL: TestSLO_WorkloadCharts (1.0s)\nFAIL\n'
+        for text, status in [(passed, 0), (failed, 1)]:
+            with self.subTest(text=text):
+                self.assertEqual(proof.validate_contended_output(text, status),
+                                 report.split(': ', 1)[1].strip())
+        cleanup = '    testing.go:1369: TempDir RemoveAll cleanup: directory not empty\n'
+        for text, status in [(report + '--- SKIP: TestSLO_WorkloadCharts (1.0s)\n', 0),
+                             (failed.replace(violation, ''), 1), (failed, 2), (passed, 1),
+                             (failed.replace(violation, violation + cleanup), 1),
+                             (failed.replace(violation, violation + violation), 1),
+                             ('--- FAIL: TestSLO_WorkloadCharts (1.0s)\n', 1),
+                             (passed.replace('90ms', '550ms'), 0), (passed + passed, 0)]:
+            with self.subTest(text=text, status=status):
+                with self.assertRaises(RuntimeError):
+                    proof.validate_contended_output(text, status)
+
+    def test_inconclusive_summary_names_competing_processes(self):
+        errors = [dict(background_busy_pct=25.2, background_processes=[
+                      dict(pid=1, name='provjobd312033', cpu_pct=25.2),
+                      dict(pid=2, name='python3', cpu_pct=0.2)]),
+                  dict(background_busy_pct=14.4, background_processes=[
+                      dict(pid=1, name='provjobd312033', cpu_pct=14.2)])]
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / 'summary.md'
+            proof.report_inconclusive('charts/workloads p50=1ms p95=2ms p99=3ms SLO=90ms',
+                                      errors, summary)
+            text = summary.read_text()
+        self.assertIn('inconclusive', text)
+        self.assertIn('2 measurement intervals', text)
+        self.assertIn('peak 25.2%', text)
+        self.assertIn('provjobd312033', text)
+        self.assertNotIn('python3', text)
 
     def test_measurement_io_stays_in_latency_and_background_cpu_invalidates(self):
         row = dict(background_busy_pct=0, guest_pct=0, steal_pct=0, swap_pages=0,
