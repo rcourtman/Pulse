@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "68a59805c99f78f1f69ce1853f5d507a6dfe5e8f",
+  "verified_at": "2026-10-21T14:41:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "60ada62ddc528bee9c5a394350a59c4b440f95a40e33ebd1b33805e07359a879",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "208d237386ae98e3c9b502213150c757bdba7c9eb0936fff00a2fad94f5be041",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "9b855b0ed510168c73c768beb756afbb6bd0f0dcdbcf9132231420564ddc70ce",
+    "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts": "2ba26a0b11445fc1483fcf825c30cd2b4245f9a0a097612f0cfe2d437b78943c"
+  },
+  "routes": [
+    "/docker",
+    "/settings/infrastructure?add=linux-host",
+    "/settings/infrastructure?add=docker",
+    "/settings/infrastructure?add=pve"
+  ],
+  "viewports": [
+    {
+      "width": 1400,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Install Pulse Agent (Linux, macOS, Windows host): 'Allow Pulse to run commands on this host' checkbox visible in step 1 under the token summary, before any token exists, unchecked by default, with its root-access description",
+    "Token summary bullet reads 'Monitoring only. Pulse cannot run commands or change containers on this host.' when unchecked and 'Pulse can run commands as root on this host, including container updates and Patrol actions.' when checked",
+    "Advanced connection and install options now hold only the Agent URL, CA, TLS and profile controls; the only other checkbox there is Skip TLS certificate verification",
+    "Docker installer: the Docker inside Proxmox LXCs note names the new option and the Proxmox VE node profile; no horizontal overflow at 375 px",
+    "Proxmox VE Host Telemetry Agent guide: the Docker-in-LXC note names 'Allow Pulse to run commands on this host'",
+    "No console errors",
+    "The 'installed without command access' pill variant cannot render on mock data (no mock docker-host carries an agent facet); its copy is covered by containerUpdateBadgeModel and ContainerUpdateBadge tests"
+  ],
+  "interactions": [
+    "Opened Settings, Infrastructure, Add infrastructure, Install Pulse Agent",
+    "Ticked the option before generating a token, then generated one: toast confirmed command execution permission and every install command carried --enable-commands or PULSE_ENABLE_COMMANDS",
+    "Unticked it afterwards: token regenerated without command execution, toast told the user to copy the command again, no install command carried the flag",
+    "Opened the advanced options and listed their checkboxes",
+    "Opened the Docker installer at the mobile viewport and scrolled to the option",
+    "Opened the Proxmox VE flow and chose Host Telemetry Agent"
+  ]
+}

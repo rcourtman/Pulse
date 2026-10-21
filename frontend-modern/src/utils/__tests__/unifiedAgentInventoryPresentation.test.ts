@@ -4,6 +4,7 @@ import {
   getUnifiedAgentAllowReconnectSuccessMessage,
   getUnifiedAgentClipboardCopyErrorMessage,
   getUnifiedAgentClipboardCopySuccessMessage,
+  getUnifiedAgentCommandAccessOptionLabel,
   getUnifiedAgentCommandsUnavailableMessage,
   getUnifiedAgentConfigUpdateErrorMessage,
   getUnifiedAgentConfigUpdateSuccessMessage,
@@ -58,6 +59,9 @@ describe('unifiedAgentInventoryPresentation', () => {
     );
     expect(getUnifiedAgentCommandsUnavailableMessage()).toBe(
       'Agent ID unavailable for command configuration',
+    );
+    expect(getUnifiedAgentCommandAccessOptionLabel()).toBe(
+      'Allow Pulse to run commands on this host',
     );
     expect(getUnifiedAgentConfigUpdateSuccessMessage(true)).toBe(
       'Pulse command execution enabled. Syncing with agent...',

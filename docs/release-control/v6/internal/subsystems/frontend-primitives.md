@@ -20,6 +20,14 @@
 
 ## Purpose
 
+### Locked update pill names the command-access option by its shared label (21 October 2026)
+
+For a host whose agent was installed without command access, the locked pill
+names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
+("Allow Pulse to run commands on this host") and the host to run the new
+install command on, instead of the retired "legacy combined command profile"
+wording and its advanced-options path.
+
 ### Container update control offers only what the server advertises (21 October 2026)
 
 `UpdateButton` is live only when the server advertises the `update` capability

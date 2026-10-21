@@ -11,6 +11,7 @@ import { getUnifiedAgentLookupStatusPresentation } from '@/utils/unifiedAgentSta
 import {
   getUnifiedAgentClipboardCopyErrorMessage,
   getUnifiedAgentClipboardCopySuccessMessage,
+  getUnifiedAgentCommandAccessOptionLabel,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   INSTALL_PROFILE_OPTIONS,
@@ -40,6 +41,8 @@ type InfrastructureInstallerFocusPresentation = {
   preferredProfile: InstallProfile;
   platforms: readonly AgentPlatform[];
 };
+
+const COMMAND_ACCESS_OPTION_LABEL = getUnifiedAgentCommandAccessOptionLabel();
 
 const ALL_AGENT_PLATFORMS: readonly AgentPlatform[] = ['linux', 'macos', 'freebsd', 'windows'];
 
@@ -119,7 +122,7 @@ const getCommandSectionDescription = (
     return 'Use the Linux installer from Unraid terminal or SSH. The agent stores its local uninstall helper under the Unraid plugin path.';
   }
   if (focus === 'docker') {
-    return 'Use the Linux installer on a standalone Docker or Podman host. Docker discovery inside Proxmox LXCs currently requires the advanced, command-capable Proxmox install profile.';
+    return 'Use the Linux installer on a standalone Docker or Podman host. Docker discovery inside Proxmox LXCs needs the Proxmox VE node profile with command access allowed.';
   }
   if (focus === 'kubernetes') {
     return 'Use the Linux installer on a Kubernetes node. Commands in this flow include the Kubernetes profile.';
@@ -289,12 +292,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
             <p class="font-semibold">Docker inside Proxmox LXCs</p>
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-              Install the agent on the Proxmox node, not inside every LXC. In advanced options,
-              select <span class="font-medium">Proxmox VE node</span> and enable{' '}
-              <span class="font-medium">the legacy combined command profile</span>. This is a
-              temporary full command-capable runtime, not a least-privilege monitoring install. Then
-              turn on <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
-              System → General (admin only), or set{' '}
+              Install the agent on the Proxmox node, not inside every LXC. Turn on{' '}
+              <span class="font-medium">{COMMAND_ACCESS_OPTION_LABEL}</span> below, and in advanced
+              options select <span class="font-medium">Proxmox VE node</span>. This gives Pulse
+              command access to the node; it is not a monitoring-only install. Then turn on{' '}
+              <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
+              General (admin only), or set{' '}
               <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
               environment to lock it on. Optionally restrict it with{' '}
               <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses bounded{' '}
@@ -340,8 +343,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <li class="flex items-start">
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
                 <span>
-                  Read-only by default. Assistant chat actions and host shell stay off until you opt
-                  in per host from <span class="font-medium">Settings → Infrastructure</span>.
+                  {state.enableCommands()
+                    ? 'Pulse can run commands as root on this host, including container updates and Patrol actions.'
+                    : 'Monitoring only. Pulse cannot run commands or change containers on this host.'}
                 </span>
               </li>
               <li class="flex items-start">
@@ -353,6 +357,28 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 </span>
               </li>
             </ul>
+          </div>
+
+          <div class="ml-6 rounded-md border border-border bg-surface-hover px-4 py-3">
+            <label
+              class={`flex items-start gap-2 text-sm font-medium text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
+            >
+              <input
+                type="checkbox"
+                checked={state.enableCommands()}
+                disabled={state.isGeneratingToken()}
+                onChange={(event) => void state.setEnableCommands(event.currentTarget.checked)}
+                aria-describedby="install-command-access-description"
+                class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
+              />
+              {COMMAND_ACCESS_OPTION_LABEL}
+            </label>
+            <p id="install-command-access-description" class="ml-6 mt-1 text-xs text-muted">
+              Needed to update, start, stop or restart Docker and Podman containers from Pulse, and
+              for Patrol actions. Pulse can then run commands as root on this host, so leave it off
+              if you only want monitoring. It cannot be switched on later from Pulse: rerun the
+              install command with this selected.
+            </p>
           </div>
 
           <div class="flex gap-2">
@@ -514,8 +540,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </p>
                     <p class="text-xs text-muted">
                       Default commands use the auto-detected Pulse URL. Open this only if the target
-                      host needs a different URL, custom CA trust, TLS override, command execution,
-                      or a specific install profile.
+                      host needs a different URL, custom CA trust, TLS override, or a specific
+                      install profile.
                     </p>
                   </div>
                   <Button
@@ -609,31 +635,6 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     />
                     Skip TLS certificate verification (self-signed certs, not recommended)
                   </label>
-
-                  <label
-                    class="flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                    title="Install the transitional combined runtime that can accept server command requests"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={state.enableCommands()}
-                      disabled={state.isGeneratingToken()}
-                      onChange={(event) =>
-                        void state.setEnableCommands(event.currentTarget.checked)
-                      }
-                      class="rounded-sm text-blue-600 focus:ring-blue-500"
-                    />
-                    Enable legacy combined command profile
-                  </label>
-
-                  <Show when={state.enableCommands()}>
-                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
-                      <span class="font-medium">Legacy combined trust enabled</span>: The root
-                      monitoring service will also accept server command requests. On Proxmox nodes,
-                      this remains necessary for opted-in Docker-in-LXC inventory until the scoped
-                      local helper replaces the current <code>pct exec</code> path.
-                    </div>
-                  </Show>
 
                   <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
                     <span class="font-medium">Config signing (optional)</span> — Require signed
