@@ -72,6 +72,17 @@ func TestDefaultPurchasePageDoesNotDependOnLegacyHostedBase(t *testing.T) {
 	}
 }
 
+// In-app Buy must land on a page that is served. Hosted Cloud was hibernated
+// on 2026-06-01, so the purchase page lives on the licence server.
+func TestDefaultPulseAccountPortalURL_IsLicenceServerPurchasePage(t *testing.T) {
+	if DefaultPulseAccountPortalURL != "https://license.pulserelay.pro/buy" {
+		t.Fatalf("DefaultPulseAccountPortalURL = %q, want the licence server purchase page", DefaultPulseAccountPortalURL)
+	}
+	if strings.Contains(DefaultPulseAccountPortalURL, "cloud.pulserelay.pro") {
+		t.Fatalf("DefaultPulseAccountPortalURL = %q must not use the hibernated Cloud host", DefaultPulseAccountPortalURL)
+	}
+}
+
 func TestResolvePulseAccountPortalURL_UsesValidOverride(t *testing.T) {
 	const override = "https://example.com/portal?src=test"
 
