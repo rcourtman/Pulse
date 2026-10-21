@@ -7,7 +7,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
 HOT_DEV="${ROOT_DIR}/scripts/hot-dev.sh"
-CLEAN_MOCK_ALERTS="${ROOT_DIR}/scripts/clean-mock-alerts.sh"
 DEV_CHECK="${ROOT_DIR}/scripts/dev-check.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
 PACKAGE_LOCK_JSON="${ROOT_DIR}/package-lock.json"
@@ -1447,117 +1446,13 @@ test_cloud_and_commercial_specs_use_shared_route_defaults() {
   assert_not_contains "commercial cancellation spec no longer duplicates Pulse-vs-Playwright precedence" "${output}" "process.env.PULSE_BASE_URL ||"
 }
 
-test_clean_mock_alerts_prefers_managed_runtime() {
-  local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
-  test_dir="$(mktemp -d)"
-  temp_dirs+=("${test_dir}")
-  fake_bin="${test_dir}/bin"
-  mkdir -p "${fake_bin}"
-  action_log="${test_dir}/actions.log"
-  alert_history="${test_dir}/alert-history.json"
-  fake_hot_dev_bg="${test_dir}/hot-dev-bg.sh"
-
-  cat > "${alert_history}" <<'EOF'
-[
-  {
-    "alert": {
-      "resourceId": "mock-resource-1"
-    }
-  },
-  {
-    "alert": {
-      "resourceId": "real-resource-1"
-    }
-  }
-]
-EOF
-
-  cat > "${fake_hot_dev_bg}" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'hot-dev-bg %s\n' "$*" >> "${ACTION_LOG}"
-case "${1:-}" in
-  status)
-    echo "[hot-dev-bg] Running (pid: 12345)"
-    ;;
-  stop)
-    echo "[hot-dev-bg] Stopped"
-    ;;
-  *)
-    echo "unexpected hot-dev-bg command: $*" >&2
-    exit 1
-    ;;
-esac
-EOF
-  chmod +x "${fake_hot_dev_bg}"
-
-  cat > "${fake_bin}/sudo" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'sudo %s\n' "$*" >> "${ACTION_LOG}"
-exec "$@"
-EOF
-  chmod +x "${fake_bin}/sudo"
-
-  cat > "${fake_bin}/systemctl" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'systemctl %s\n' "$*" >> "${ACTION_LOG}"
-exit 0
-EOF
-  chmod +x "${fake_bin}/systemctl"
-
-  cat > "${fake_bin}/chown" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'chown %s\n' "$*" >> "${ACTION_LOG}"
-exit 0
-EOF
-  chmod +x "${fake_bin}/chown"
-
-  cat > "${fake_bin}/pkill" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'pkill %s\n' "$*" >> "${ACTION_LOG}"
-exit 0
-EOF
-  chmod +x "${fake_bin}/pkill"
-
-  output="$(
-    PATH="${fake_bin}:$PATH" \
-    ACTION_LOG="${action_log}" \
-    ALERT_HISTORY="${alert_history}" \
-    HOT_DEV_BG_PATH="${fake_hot_dev_bg}" \
-    "${CLEAN_MOCK_ALERTS}"
-  )"
-
-  local actions
-  actions="$(cat "${action_log}")"
-  assert_contains "clean-mock-alerts checks managed runtime state" "${actions}" "hot-dev-bg status"
-  assert_contains "clean-mock-alerts stops managed runtime first" "${actions}" "hot-dev-bg stop"
-  assert_contains "clean-mock-alerts still stops compatibility services" "${actions}" "systemctl stop pulse-hot-dev"
-  assert_contains "clean-mock-alerts advertises managed restart" "${output}" "npm run dev"
-  assert_contains "clean-mock-alerts advertises foreground escape hatch" "${output}" "npm run dev:foreground"
-
-  local order_output
-  order_output="$(
-    ACTION_LOG_PATH="${action_log}" python3 - <<'PY'
-import os
-from pathlib import Path
-
-lines = Path(os.environ["ACTION_LOG_PATH"]).read_text(encoding="utf-8").splitlines()
-stop_index = next(i for i, line in enumerate(lines) if line == "hot-dev-bg stop")
-systemctl_index = next(i for i, line in enumerate(lines) if line == "systemctl stop pulse-hot-dev")
-print(f"managed_before_systemctl={stop_index < systemctl_index}")
-PY
-  )"
-  assert_contains "managed runtime stop precedes legacy service stop" "${order_output}" "managed_before_systemctl=True"
-
-  local cleaned_count mock_count
-  cleaned_count="$(jq 'length' "${alert_history}")"
-  mock_count="$(jq '[.[] | select((.alert.resourceId // "" | contains("mock")))] | length' "${alert_history}")"
-  assert_contains "clean-mock-alerts removes only mock alerts" "${cleaned_count}" "1"
-  assert_contains "clean-mock-alerts leaves no mock alerts" "${mock_count}" "0"
+test_clean_mock_alerts_preserves_history_and_monitoring() {
+  # Execute the same hermetic regression standalone and in managed-runtime CI.
+  # Retired cleanup must never stop either a managed or a compatibility service.
+  if ! python3 "${ROOT_DIR}/scripts/tests/test_clean_mock_alerts.py"; then
+    echo "[FAIL] retired mock-alert cleanup safety" >&2
+    ((failures+=1))
+  fi
 }
 
 test_dev_check_uses_managed_runtime_status() {
@@ -1764,7 +1659,7 @@ main() {
   test_integration_runtime_defaults_prefer_explicit_browser_override
   test_integration_runtime_defaults_honor_repo_root_override
   test_cloud_and_commercial_specs_use_shared_route_defaults
-  test_clean_mock_alerts_prefers_managed_runtime
+  test_clean_mock_alerts_preserves_history_and_monitoring
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime
   test_backend_restart_waits_for_healthy_listener
