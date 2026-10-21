@@ -184,7 +184,10 @@ const HostDetailsDisclosure: Component<{
           <>
             <SystemInfoCard variant="agent" agent={agent()} />
             <HardwareCard variant="agent" agent={agent()} />
-            <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
+            <NetworkInterfacesCard
+              interfaces={agent().networkInterfaces}
+              lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
+            />
             <DisksCard
               disks={agent().disks}
               lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
@@ -193,7 +196,11 @@ const HostDetailsDisclosure: Component<{
               arrays={props.drawer.agentMeta()?.raid}
               lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
             />
-            <TemperaturesCard rows={props.drawer.temperatureRows()} title="Thermals" />
+            <TemperaturesCard
+              rows={props.drawer.temperatureRows()}
+              title="Thermals"
+              lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
+            />
             <TemperaturesCard
               rows={props.drawer.customSensorRows()}
               title="Custom Metrics"

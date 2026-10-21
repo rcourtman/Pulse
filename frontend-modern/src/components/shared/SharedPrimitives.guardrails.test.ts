@@ -1,3 +1,12 @@
+import { createComponent, createSignal } from 'solid-js';
+import {
+  cleanup,
+  render as renderPrimitive,
+  screen as primitiveScreen,
+} from '@solidjs/testing-library';
+import { DisksCard } from './cards/DisksCard';
+import { NetworkInterfacesCard } from './cards/NetworkInterfacesCard';
+import type { Disk, HostNetworkInterface } from '@/types/api';
 import { traverse, transformSync, types as t } from '@babel/core';
 // @ts-expect-error babel-preset-solid ships no type declarations.
 import solidPreset from 'babel-preset-solid';
@@ -8972,5 +8981,47 @@ describe('shared sensor card live-report boundary', () => {
     expect(source).toContain('Last known readings, not current:');
     expect(source).toContain('role="status"');
     expect(source).toContain("props.wrapValues ? 'whitespace-normal wrap-anywhere' : 'truncate'");
+  });
+});
+
+describe('retained detail-card lifecycle', () => {
+  it('accepts first filesystem and interface reports without reopening, then removes them', () => {
+    const [disks, setDisks] = createSignal<Disk[]>();
+    const [interfaces, setInterfaces] = createSignal<HostNetworkInterface[]>();
+    try {
+      renderPrimitive(() =>
+        createComponent(DisksCard, {
+          get disks() {
+            return disks();
+          },
+          lastKnownReason: 'Proxmox reports this VM stopped',
+        }),
+      );
+      renderPrimitive(() =>
+        createComponent(NetworkInterfacesCard, {
+          get interfaces() {
+            return interfaces();
+          },
+          lastKnownReason: 'Proxmox reports this VM stopped',
+        }),
+      );
+      expect(primitiveScreen.queryByTestId('disks-card-total')).toBeNull();
+      expect(primitiveScreen.queryByText('Network')).toBeNull();
+      setDisks([{ mountpoint: '/data', total: 100, used: 90 }]);
+      setInterfaces([{ name: 'eth0', addresses: ['192.0.2.11/24'] }]);
+      expect(primitiveScreen.getByTestId('disks-card-total')).toHaveTextContent('Last known 90%');
+      expect(primitiveScreen.queryByTestId('disks-card-mount-bar')).toBeNull();
+      const explanations = primitiveScreen.getAllByRole('status');
+      expect(explanations).toHaveLength(2);
+      for (const explanation of explanations)
+        expect(explanation).toHaveTextContent('Proxmox reports this VM stopped');
+      expect(primitiveScreen.getByText('192.0.2.11/24')).toHaveClass('text-muted');
+      setDisks([]);
+      setInterfaces([]);
+      expect(primitiveScreen.queryByTestId('disks-card-total')).toBeNull();
+      expect(primitiveScreen.queryByText('Network')).toBeNull();
+    } finally {
+      cleanup();
+    }
   });
 });
