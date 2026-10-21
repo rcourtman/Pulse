@@ -1,6 +1,6 @@
 // Full existing Notifications tab and its actual state/API owners. Only the
 // offline server's responses are synthetic; no sender or real queue is used.
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DestinationsTab } from '../src/features/alerts/tabs/DestinationsTab';
@@ -11,6 +11,8 @@ import '../src/index.css';
 
 function Fixture() {
   const sendTests = new URLSearchParams(location.search).has('send-tests');
+  const ownershipTests = new URLSearchParams(location.search).has('test-ownership');
+  const [visible, setVisible] = createSignal(true);
   const [email, setEmail] = createSignal<UIEmailConfig>({
     enabled: sendTests,
     provider: 'smtp',
@@ -46,6 +48,18 @@ function Fixture() {
       enabled: true,
       headers: {},
     },
+    ...(ownershipTests
+      ? [
+          {
+            id: 'pager',
+            name: 'Fixture pager',
+            url: 'https://notifications.invalid/pager',
+            method: 'POST' as const,
+            enabled: true,
+            headers: {},
+          },
+        ]
+      : []),
   ]);
   const [pingUrl, setPingUrl] = createSignal('');
   const [severity, setSeverity] = createSignal<'all' | 'critical'>('all');
@@ -55,23 +69,30 @@ function Fixture() {
       <p class="text-sm text-muted">
         Synthetic notification activity. No real destination or queue is contacted.
       </p>
-      <DestinationsTab
-        emailConfig={email}
-        setEmailConfig={setEmail}
-        appriseConfig={apprise}
-        setAppriseConfig={setApprise}
-        webhooks={webhooks}
-        setWebhooks={setWebhooks}
-        configLoadError={() => null}
-        isRetrying={() => false}
-        isLoadingDestinations={() => false}
-        onRetryLoad={() => {}}
-        setHasUnsavedChanges={() => {}}
-        deadManPingUrl={pingUrl}
-        setDeadManPingUrl={setPingUrl}
-        pushMinimumSeverity={severity}
-        setPushMinimumSeverity={setSeverity}
-      />
+      <Show when={ownershipTests}>
+        <button onClick={() => setVisible((value) => !value)}>
+          {visible() ? 'Hide synthetic Notifications tab' : 'Show synthetic Notifications tab'}
+        </button>
+      </Show>
+      <Show when={visible()}>
+        <DestinationsTab
+          emailConfig={email}
+          setEmailConfig={setEmail}
+          appriseConfig={apprise}
+          setAppriseConfig={setApprise}
+          webhooks={webhooks}
+          setWebhooks={setWebhooks}
+          configLoadError={() => null}
+          isRetrying={() => false}
+          isLoadingDestinations={() => false}
+          onRetryLoad={() => {}}
+          setHasUnsavedChanges={() => {}}
+          deadManPingUrl={pingUrl}
+          setDeadManPingUrl={setPingUrl}
+          pushMinimumSeverity={severity}
+          setPushMinimumSeverity={setSeverity}
+        />
+      </Show>
       <ToastContainer />
     </main>
   );
