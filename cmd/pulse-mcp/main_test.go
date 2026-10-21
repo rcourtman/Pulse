@@ -8,11 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type httpDoerFunc func(*http.Request) (*http.Response, error)
@@ -1489,5 +1496,187 @@ func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
 	}
 	if sent["intentionallyOffline"] != true {
 		t.Errorf("non-placeholder fields must reach the body; got %v", sent)
+	}
+}
+
+type mcpFleetSnapshot struct{ resources []unified.Resource }
+
+func (s mcpFleetSnapshot) ReadSnapshot() models.StateSnapshot {
+	return models.StateSnapshot{LastUpdate: time.Now()}
+}
+func (s mcpFleetSnapshot) UnifiedResourceSnapshot() ([]unified.Resource, time.Time) {
+	return s.resources, time.Now()
+}
+
+type mcpFleetFindings map[string][]api.AgentResourceFindingSnapshot
+
+func (f mcpFleetFindings) ActiveFindingsForResource(id string) []api.AgentResourceFindingSnapshot {
+	return f[id]
+}
+func (f mcpFleetFindings) ActiveFindingCount() int {
+	count := 0
+	for _, findings := range f {
+		count += len(findings)
+	}
+	return count
+}
+
+// Exercise the real stdio decoder, published schema, HTTP projection, fleet
+// handler and MCP stdout together. Only collected resources/findings are fixtures;
+// the backend must not reimplement the production filter in a test double.
+func TestServer_FleetBooleanFiltersReachRealHandler(t *testing.T) {
+	all := []string{"container:info", "container:warning", "vm:critical", "vm:healthy"}
+	cases := []struct {
+		name, args, query string
+		ids               []string
+	}{
+		{"true", `{"hasFindings":true}`, "hasFindings=true", []string{"container:info", "container:warning", "vm:critical"}},
+		{"false_is_unfiltered", `{"hasFindings":false}`, "hasFindings=false", all},
+		{"omitted_is_unfiltered", `{}`, "", all},
+		{"true_and_technology", `{"hasFindings":true,"technology":"qemu"}`, "hasFindings=true&technology=qemu", []string{"vm:critical"}},
+		{"false_and_technology", `{"hasFindings":false,"technology":"qemu"}`, "hasFindings=false&technology=qemu", []string{"vm:critical", "vm:healthy"}},
+		{"true_and_severity", `{"hasFindings":true,"severity":"warning"}`, "hasFindings=true&severity=warning", []string{"container:warning"}},
+		{"empty_intersection", `{"hasFindings":true,"technology":"qemu","severity":"warning"}`, "hasFindings=true&severity=warning&technology=qemu", []string{}},
+		// Retain old string transport compatibility, without recommending an
+		// out-of-schema client workaround for the advertised boolean.
+		{"legacy_string", `{"hasFindings":"true"}`, "hasFindings=true", []string{"container:info", "container:warning", "vm:critical"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resources := api.NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+			resources.SetStateProvider(mcpFleetSnapshot{resources: []unified.Resource{
+				{ID: "vm:healthy", Type: "vm", Name: "healthy", Technology: "qemu"},
+				{ID: "vm:critical", Type: "vm", Name: "critical", Technology: "qemu"},
+				{ID: "container:warning", Type: "container", Name: "warning", Technology: "docker"},
+				{ID: "container:info", Type: "system-container", Name: "info", Technology: "lxc"},
+			}})
+			handler := api.NewAgentContextHandler(resources)
+			handler.SetFindingsProvider(mcpFleetFindings{
+				"vm:critical":       {{ID: "fixture-critical", Severity: "critical"}},
+				"container:warning": {{ID: "fixture-warning", Severity: "warning"}},
+				"container:info":    {{ID: "fixture-info", Severity: "info"}},
+			})
+			manifest := agentcapabilities.CanonicalManifest()
+			calls := make(chan string, 2)
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == agentcapabilities.AgentCapabilitiesPath {
+					if r.Header.Get(agentcapabilities.AgentAPITokenHeader) != "" {
+						t.Error("discovery unexpectedly sent a token")
+					}
+					_ = json.NewEncoder(w).Encode(manifest)
+					return
+				}
+				if r.URL.Path != agentcapabilities.FleetContextCapabilityPath || r.Method != http.MethodGet {
+					t.Errorf("unexpected fleet request %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected request", http.StatusNotFound)
+					return
+				}
+				calls <- r.URL.RawQuery
+				if r.Header.Get(agentcapabilities.AgentAPITokenHeader) != "fixture-token" || r.Header.Get(agentcapabilities.AgentSurfaceHeader) != agentcapabilities.AgentSurfacePulseMCP {
+					t.Error("MCP token or surface header was lost")
+					http.Error(w, "unauthorized", http.StatusUnauthorized)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil || len(body) != 0 {
+					t.Errorf("GET unexpectedly carried a body: %q, %v", body, err)
+				}
+				handler.HandleFleetContext(w, r)
+			}))
+			defer backend.Close()
+			fetched, err := agentcapabilities.FetchManifest(context.Background(), backend.Client(), backend.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := &mcpServer{baseURL: backend.URL, token: "fixture-token", manifest: fetched, http: backend.Client()}
+			input := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n" +
+				`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_fleet_context","arguments":` + tc.args + `}}` + "\n"
+			var stdout bytes.Buffer
+			server.serve(strings.NewReader(input), &stdout)
+			decoder := json.NewDecoder(&stdout)
+			var list struct {
+				ID     int
+				Result struct {
+					Tools []agentcapabilities.ProjectedTool
+				}
+				Error any
+			}
+			if err := decoder.Decode(&list); err != nil {
+				t.Fatal(err)
+			}
+			if list.ID != 1 || list.Error != nil {
+				t.Fatalf("tools/list: %+v", list)
+			}
+			found := false
+			for _, tool := range list.Result.Tools {
+				if tool.Name == agentcapabilities.FleetContextCapabilityName {
+					var schema struct {
+						Properties map[string]struct{ Type string }
+					}
+					if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+						t.Fatal(err)
+					}
+					if schema.Properties["hasFindings"].Type != "boolean" {
+						t.Fatalf("hasFindings is not advertised as boolean: %s", tool.InputSchema)
+					}
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("canonical MCP tool list omitted fleet context")
+			}
+			var reply struct {
+				ID     int
+				Result agentcapabilities.MCPToolResult
+				Error  any
+			}
+			if err := decoder.Decode(&reply); err != nil {
+				t.Fatal(err)
+			}
+			if reply.ID != 2 || reply.Error != nil || reply.Result.IsError || len(reply.Result.Content) != 1 {
+				t.Fatalf("tools/call: %+v", reply)
+			}
+			var fleet api.AgentFleetContext
+			if err := json.Unmarshal([]byte(reply.Result.Content[0].Text), &fleet); err != nil {
+				t.Fatal(err)
+			}
+			if fleet.Resources == nil || fleet.GeneratedAt.IsZero() {
+				t.Fatalf("lost fleet envelope: %+v", fleet)
+			}
+			ids := make([]string, 0, len(fleet.Resources))
+			for _, resource := range fleet.Resources {
+				ids = append(ids, resource.CanonicalID)
+			}
+			sort.Strings(ids)
+			if !reflect.DeepEqual(ids, tc.ids) {
+				t.Errorf("MCP resource ids = %v, want %v", ids, tc.ids)
+			}
+			var structured api.AgentFleetContext
+			encoded, err := json.Marshal(reply.Result.StructuredContent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(encoded, &structured); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(structured, fleet) {
+				t.Errorf("MCP structured output differs from text: %+v vs %+v", structured, fleet)
+			}
+			select {
+			case query := <-calls:
+				if query != tc.query {
+					t.Errorf("encoded query = %q, want %q", query, tc.query)
+				}
+			default:
+				t.Error("MCP call never reached the fleet handler")
+			}
+			if len(calls) != 0 {
+				t.Error("MCP issued more than one fleet request")
+			}
+			var extra any
+			if err := decoder.Decode(&extra); err != io.EOF {
+				t.Errorf("unexpected extra stdout: %v (%v)", extra, err)
+			}
+		})
 	}
 }
