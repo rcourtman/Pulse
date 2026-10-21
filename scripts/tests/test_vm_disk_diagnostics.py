@@ -403,6 +403,46 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertIn(f"Guest agent configured: {expected} (not a responsiveness test)", result.stdout)
                 self.assert_passive(calls)
 
+    def test_conflicting_or_incomplete_agent_options_remain_unknown(self):
+        for value in (
+            "enabled=1,enabled=2", "enabled=0,enabled=2",
+            "enabled=2,1", "enabled=2,0", "enabled=1,enabled=",
+            "1,unexpected", "0,unexpected", "1,,type=virtio",
+            "enabled=1,", "enabled=0,", "enabled=1,Enabled=0",
+        ):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={
+                    "config_output": f"agent: {value}\nlock: backup\nname: {PRIVATE}\n",
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Guest agent configured: unknown (not a responsiveness test)", result.stdout)
+                # Uncertain agent configuration must not hide an independently
+                # reported lock or authorise any active guest operation.
+                self.assertIn("VM lock: backup", result.stdout)
+                self.assert_passive(calls)
+
+    def test_embedded_agent_option_whitespace_is_not_silently_repaired(self):
+        for value in ("enabled= 1", "enabled=\t0", "en abled=1", "enabled=1, enabled=bad",
+                      "1,type=", "1,type=vir tio", "1,freeze-fs-on-backup =0"):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={"config_output": f"agent: {value}\nname: {PRIVATE}\n"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Guest agent configured: unknown (not a responsiveness test)", result.stdout)
+                self.assert_passive(calls)
+
+    def test_agent_field_padding_and_additive_properties_remain_compatible(self):
+        for value, expected in (
+            ("\t1 \t", "enabled"), (" enabled=0\t ", "disabled"),
+            ("enabled=1,type=virtio,freeze-fs-on-backup=0", "enabled"),
+            ("future-read_option=opaque,enabled=0", "disabled"),
+            ("future-read_option=opaque", "unknown"),
+        ):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={"config_output": f"agent: {value}\nname: {PRIVATE}\n"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Guest agent configured: {expected} (not a responsiveness test)", result.stdout)
+                self.assert_passive(calls)
+
     def test_failed_status_never_reads_configuration_or_reports_completion(self):
         for code in (1, 13, 124, 137, 143):
             with self.subTest(code=code):

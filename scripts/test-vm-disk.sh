@@ -145,7 +145,10 @@ while IFS= read -r line; do
             fi
             agent_seen=true
             agent_value=${line#agent:}
-            agent_value=${agent_value//[[:space:]]/}
+            # Trim field padding, not whitespace inside an option. Repairing
+            # malformed bytes here could turn an unknown value into enabled.
+            agent_value=${agent_value#"${agent_value%%[![:space:]]*}"}
+            agent_value=${agent_value%"${agent_value##*[![:space:]]}"}
             ;;
         lock:*)
             if [[ $lock_seen == true ]]; then
@@ -167,14 +170,31 @@ agent=disabled
 if [[ $agent_seen == true ]]; then
     agent=unknown
     enabled_options=0
+    agent_options_valid=true
     IFS=, read -r -a options <<< "$agent_value"
+    # Bash's read discards a final empty field. A trailing comma is still an
+    # incomplete option, not permission to trust the earlier enabled value.
+    if [[ $agent_value == *, ]]; then agent_options_valid=false; fi
     for option in "${options[@]}"; do
         case "$option" in
             1|enabled=1) agent=enabled; enabled_options=$((enabled_options + 1)) ;;
             0|enabled=0) agent=disabled; enabled_options=$((enabled_options + 1)) ;;
+            enabled=*)
+                # Count invalid explicit values too: enabled=1,enabled=2 is
+                # contradictory, not a single affirmative observation.
+                enabled_options=$((enabled_options + 1))
+                agent_options_valid=false
+                ;;
+            *)
+                # Additive provider properties may accompany enabled. Bare,
+                # empty or malformed options cannot establish configuration.
+                if [[ ! $option =~ ^[a-z][a-z0-9_-]*=[^,[:space:]]+$ ]]; then
+                    agent_options_valid=false
+                fi
+                ;;
         esac
     done
-    if [[ $enabled_options -ne 1 ]]; then
+    if [[ $enabled_options -ne 1 || $agent_options_valid != true ]]; then
         agent=unknown
     fi
 fi
