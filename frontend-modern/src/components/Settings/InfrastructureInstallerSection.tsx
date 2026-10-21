@@ -295,7 +295,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               Install the agent on the Proxmox node, not inside every LXC. Turn on{' '}
               <span class="font-medium">{COMMAND_ACCESS_OPTION_LABEL}</span> below, and in advanced
               options select <span class="font-medium">Proxmox VE node</span>. This gives Pulse
-              command access to the node; it is not a monitoring-only install. Then turn on{' '}
+              command access to the node, so it is not a monitoring-only install. Then turn on{' '}
               <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
               General (admin only), or set{' '}
               <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
