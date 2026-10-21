@@ -4542,6 +4542,28 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Unix installer certificate probing has a total deadline
+
+The leaf-certificate pin check in `scripts/install.sh` must finish its TCP/TLS
+probe within ten one-second waits, before the ordinary install/update path
+stops or replaces a collector. A silent peer fails preflight with exit 14;
+a failed probe or unreadable certificate fails with the same normal diagnostic
+path, not an implicit shell exit. The installer owns and reaps its direct
+OpenSSL child and removes its private output on success, failure and handled
+INT/TERM. A signal during fork/PID capture is retained until the child is
+owned, then exits through the same cleanup. It needs neither GNU timeout nor
+a new runtime dependency.
+
+Exact leaf SHA-256 comparison, pin normalization, pin refusal even alongside
+explicit insecure mode, saved pin persistence, unpinned certificate verification,
+signed executable admission and subsequent curl deadlines are unchanged.
+`server_pin_deadline_test.go` exercises the complete installer with real
+OpenSSL/curl and disposable TLS/silent peers, exact/mismatched pins, ordinary
+preflight consumption, handled interruptions and byte/mode-preserved recovery
+material. Platform/service mutation sentinels remain closed; these Linux-hosted
+controls are not native macOS/BSD/NAS installation or Windows removal proof.
+
+
 ### Paid Docker broker image identity
 
 The public updater accepts both supported Docker response shapes: the current
