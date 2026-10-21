@@ -3678,6 +3678,28 @@ describe('GuestRow accessible reading explanations', () => {
     expect(screen.getByRole('dialog')).not.toHaveTextContent('no current aggregate');
   });
 
+  it('does not borrow an individual filesystem measurement to fill the missing aggregate', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        type: 'lxc',
+        platformScopes: ['proxmox-pve'],
+        disk: { usage: -1 },
+        disks: [{ mountpoint: '/data', total: 100, used: 50, usage: 50 }],
+      }),
+    );
+    renderGuestRow({
+      get guest() {
+        return guest();
+      },
+      visibleColumnIds: ['name', 'disk'],
+    });
+    expect(screen.getByRole('button', { name: 'Disk reading for test-vm: No data' })).toBeVisible();
+    expect(screen.queryByTestId('disk-bar')).toBeNull();
+    setGuest({ ...guest(), disk: { total: 100, used: 97, usage: 97 } });
+    expect(screen.queryByRole('button', { name: /Disk reading for/ })).toBeNull();
+    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+  });
+
   it.each(['bars', 'sparklines'] as const)(
     'regression: %s exposes safe disk evidence without opening the enclosing row',
     async (metricDisplayMode) => {

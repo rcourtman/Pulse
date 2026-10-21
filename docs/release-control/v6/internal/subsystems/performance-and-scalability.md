@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Missing LXC disk measurements remain explainable without hover
+
+The existing workload Disk cell labels an unavailable Proxmox LXC aggregate
+**No data**, including omitted canonical metrics and the legacy unknown-usage
+sentinel. The existing keyboard/touch reading disclosure explains that capacity
+and configured mounts do not establish used/free space or an empty filesystem,
+and directs the operator to the individually reported filesystem details. It
+does not diagnose a guest-agent failure or offer a probe, restart or new read.
+The cue applies in bars and sparklines. An ordinary measured-zero replacement
+withdraws the cue/dialog and returns focus to the same row's disclosure without
+opening it. Existing retained-agent reasons take precedence. Templates and
+other platforms/kinds are unaffected; collection, health, alerts, History,
+backup evidence, access and recovery operations are unchanged.
+
+`GuestRow.test.tsx` covers missing/invalid aggregate evidence, canonical
+availability, legacy LXC shape, source/platform boundaries, dialog containment,
+keyboard focus and measured-zero replacement. The retained source-bound browser
+protocol exercises the real HTTP reader, canonical mapper, row, full drawer and
+production CSS at desktop and 320px touch widths. These synthetic observations
+are not native storage, filesystem liveness, guest recovery or release proof.
+
 ### Custom sensor freshness remains a local projection
 
 Retained custom metrics use the selected agent's existing reporting-lease flag,
