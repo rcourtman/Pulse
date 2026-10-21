@@ -433,6 +433,15 @@ let browser, context;
         hasTouch: dark,
       });
       const page = await context.newPage();
+      page.on('pageerror', (error) => run.errors.push(error.message));
+      page.on('console', (message) => {
+        if (message.type() === 'error') run.consoleErrors.push(message.text());
+      });
+      await page.route('**/*', (route) => {
+        if (new URL(route.request().url()).origin === origin) return route.continue();
+        run.unexpected.push(route.request().url());
+        return route.abort();
+      });
       await page.goto(`${origin}/browser-tests/alert-configuration-deadline.html`, {
         waitUntil: 'domcontentloaded',
       });
