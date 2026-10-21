@@ -19,7 +19,11 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getWorkloadCPUPercent,
+  getWorkloadPlatformScopes,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import {
   MetricMiniSparkline,
@@ -384,7 +388,27 @@ export function GuestRow(props: GuestRowProps) {
   // so their reason stays in the title, assistive text and drawer.
   const diskReadStatus = createMemo(() => {
     const read = diskUsageRead();
-    if (read.state === 'current') return undefined;
+    if (read.state === 'current') {
+      // A successful host poll can still omit the LXC usage counters. The
+      // missing aggregate is not an empty filesystem, nor a guest-agent fault.
+      // Other platforms and templates need not supply this measurement.
+      const scopes = getWorkloadPlatformScopes(props.guest);
+      if (
+        workloadType() === 'system-container' &&
+        !props.guest.template &&
+        (scopes.includes('proxmox-pve') || (scopes.length === 0 && props.guest.type === 'lxc')) &&
+        !hasDiskUsage()
+      ) {
+        return {
+          label: 'No data',
+          message:
+            "Pulse has no current aggregate disk-usage measurement for this container. Capacity and configured mounts alone do not show used or free space. A missing reading does not mean an empty filesystem. Open the container's details for individually reported filesystems.",
+          valueLabelContext: 'unavailable' as const,
+          needsAction: false,
+        };
+      }
+      return undefined;
+    }
     const retained = read.state === 'last-known';
     const reason = isVM(props.guest)
       ? (props.guest.diskStatusReason ?? '').replace(/^prev-/, '')
