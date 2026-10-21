@@ -128,17 +128,13 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// Normalize host URL - ensure it has a protocol
-	defaultedScheme := !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://")
-	if defaultedScheme {
-		// Default to HTTPS if no protocol specified
-		cfg.Host = "https://" + cfg.Host
-	}
-
-	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "")
+	// Add HTTPS only to a bare authority, never to an explicit scheme.
+	defaultedScheme := !strings.Contains(strings.TrimSpace(cfg.Host), "://")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "https")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PBS host: %w", err)
 	}
+	cfg.Host = baseHostURL.String()
 	// Logs must use validated input: a refused host can contain credentials.
 	if defaultedScheme {
 		log.Debug().Str("host", baseHostURL.String()).Msg("No protocol specified in PBS host, defaulting to HTTPS")
