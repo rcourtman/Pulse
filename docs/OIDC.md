@@ -43,6 +43,26 @@ Only after verifying SSO, optionally hide the local username/password form with
 Appending `?show_local=true` to your Pulse URL shows that form again; it does
 not create or restore local credentials, bypass the proxy or revoke SSO sessions.
 
+### Hiding the local login form
+
+**Hiding is not password rejection.** `PULSE_AUTH_HIDE_LOCAL_LOGIN=true` and
+**Hide local login form** in **Settings → Security** change the login page only.
+Local password authentication remains enabled, including `POST /api/login`;
+`?show_local=true` reveals the form again. Existing password checks, rate limits
+and lockouts still apply. An IdP's MFA requirement does not apply to a local
+password sign-in.
+
+If your policy requires OIDC-only authentication, this setting does **not**
+enforce it. An existing authenticated proxy or network boundary must cover every
+reachable Pulse listener, including direct backend access. Blocking only
+`/api/login` is not a complete password-authentication boundary: HTTP Basic
+authentication is a separate path. Preserve the scoped API-token and agent
+access your deployment needs; do not block all API routes as a substitute.
+
+Keep an independent, policy-compliant administrator recovery path and verify SSO
+in a separate browser session before changing access. Do not disable Pulse
+authentication, remove credentials or delete configuration to hide the form.
+
 ## ⚙️ Configuration
 
 | Setting | Description |
