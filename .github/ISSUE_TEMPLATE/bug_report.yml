@@ -90,10 +90,10 @@ body:
     id: agent_version
     attributes:
       label: Agent version
-      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      description: Optional, only if an agent is affected. Give its running version separately from the Pulse server; leave blank or write "none" for an API-only connection, or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
       placeholder: v6.x.y, none, or unknown
     validations:
-      required: true
+      required: false
 
   - type: input
     id: image_ref

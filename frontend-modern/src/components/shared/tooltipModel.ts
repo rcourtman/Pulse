@@ -5,6 +5,8 @@ export interface TooltipOptions {
   align?: TooltipAlignment;
   direction?: TooltipDirection;
   maxWidth?: number;
+  /** Deliberate focus/tap may reveal read-only help without enabling touch hover. */
+  trigger?: 'hover' | 'intentional';
 }
 
 export interface TooltipViewportRect {

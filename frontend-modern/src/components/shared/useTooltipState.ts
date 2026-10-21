@@ -214,7 +214,7 @@ export function createTooltipSystemState() {
 }
 
 export function showTooltip(content: string, x: number, y: number, options?: TooltipOptions) {
-  if (!supportsHoverTooltips()) {
+  if (options?.trigger !== 'intentional' && !supportsHoverTooltips()) {
     tooltipInstance?.hide();
     return;
   }

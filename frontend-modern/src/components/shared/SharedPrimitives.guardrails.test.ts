@@ -5,14 +5,15 @@ import {
   screen as primitiveScreen,
 } from '@solidjs/testing-library';
 import { DisksCard } from './cards/DisksCard';
+import { RootDiskCard } from './cards/RootDiskCard';
 import { NetworkInterfacesCard } from './cards/NetworkInterfacesCard';
-import type { Disk, HostNetworkInterface } from '@/types/api';
+import type { Disk, HostNetworkInterface, Node } from '@/types/api';
 import { traverse, transformSync, types as t } from '@babel/core';
 // @ts-expect-error babel-preset-solid ships no type declarations.
 import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { settingsDocumentationLinkViolations } from './__tests__/settingsDocumentationLinkContract';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
@@ -350,6 +351,44 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('replaces the real root usage bar with visible unavailable evidence in the same card', () => {
+    const [disk, setDisk] = createSignal<Disk>({ total: 100, used: 0 });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    try {
+      renderPrimitive(() =>
+        createComponent(RootDiskCard, {
+          get node() {
+            return { disk: disk() } as Node;
+          },
+        }),
+      );
+      const card = primitiveScreen.getByTestId('root-disk-card');
+      expect(card.querySelector('[data-stacked-disk-trigger]')).not.toBeNull();
+      for (const percent of [0.5, 25, 93, 100]) {
+        setDisk({ total: 100, used: percent });
+        expect(card.querySelector('[data-stacked-disk-fill="single"]')).toHaveAttribute(
+          'width',
+          String(percent),
+        );
+      }
+      setDisk({ total: 100 });
+      expect(primitiveScreen.getByRole('status')).toHaveTextContent(
+        'Usage unavailable · 100 B total',
+      );
+      expect(card.querySelector('[data-stacked-disk-trigger]')).toBeNull();
+      expect(primitiveScreen.getByTestId('root-disk-card')).toBe(card);
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
+  });
   it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
     const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
     expect(source).toContain('data-testid="disks-card-mounts"');

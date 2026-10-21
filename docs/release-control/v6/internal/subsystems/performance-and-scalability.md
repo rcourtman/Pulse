@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Root aggregate availability uses the existing projection only
+
+The detail mapper and Root Disk card preserve unavailable byte readings through
+the existing reactive resource path. They add only constant-time validity checks,
+with no extra requests, pollers, timers or stored observations. Mapper/card
+regressions and `root-disk-observation.cjs` exercise live canonical replacements
+inside the same full drawer. Production build and unchanged bundle budgets remain
+the size checks; the browser fixture is not native storage or recovery proof.
+
 ### Retained agent cards stay off the collection hot path
 
 Native-power qualification in the existing resource drawer reuses the small

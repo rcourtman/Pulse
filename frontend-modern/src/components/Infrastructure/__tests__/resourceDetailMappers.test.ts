@@ -538,6 +538,18 @@ describe('resourceDetailMappers', () => {
   });
 
   describe('toNodeFromProxmox', () => {
+    it('keeps an incomplete canonical root aggregate incomplete without mutating source', () => {
+      const host = createHybridHostResource();
+      host.disk = { current: 0, total: 2048 };
+      const before = structuredClone(host);
+      expect(toNodeFromProxmox(host)?.disk).toMatchObject({
+        total: 2048,
+        used: undefined,
+        free: undefined,
+        usage: undefined,
+      });
+      expect(host).toEqual(before);
+    });
     it('preserves canonical linkedAgentId for hybrid hosts', () => {
       const node = toNodeFromProxmox(createHybridHostResource());
 

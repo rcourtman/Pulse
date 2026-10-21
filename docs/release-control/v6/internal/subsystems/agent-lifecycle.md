@@ -41,7 +41,6 @@ alongside `digest-pinned image`, rather than as a checked image with a
 registry error. No agent authority or transport changes.
 `TestSummarizeManualUpdateCheckSkipsUncheckableImages` covers the summary.
 
-
 ### Malformed Unix installer invocations preserve local state
 
 An unrecognised argument exits 16 before credential reads or lifecycle work,

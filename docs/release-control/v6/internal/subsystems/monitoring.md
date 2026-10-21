@@ -31,7 +31,6 @@ covers the collect path without network access, and
 `TestGenerateDockerContainerUpdateStatusLocalImageShape` keeps the mock
 fixtures to the same shape.
 
-
 ### Proxmox endpoint authority before authentication
 
 `internal/config/client_helpers.go`, startup validation, the node save/test

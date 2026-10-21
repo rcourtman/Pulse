@@ -52,7 +52,7 @@ body:
     id: agent_version
     attributes:
       label: Agent version
-      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      description: Optional, only if an agent is affected. Give its running version separately from the Pulse server; leave blank or write "none" for an API-only connection, or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
       placeholder: v6.x.y, none, or unknown
     validations:
       required: false
@@ -141,17 +141,15 @@ body:
     id: license_tier
     attributes:
       label: License tier
+      description: Optional, only if the problem depends on plan access. Select an existing subscription, not a plan to buy; Relay is no longer sold. Do not include licence keys, account or payment details.
       options:
         - Community / Free
-        - Relay
         - Pro
-        - Pro+
-        - Cloud
-        - MSP
-        - Enterprise
+        - Existing Relay subscription
+        - Other / legacy tier
         - Not sure
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
