@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "c827ab47b09d7b59f070a06ea5bfc5637ac82b42",
+  "verified_at": "2026-10-21T23:08:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4f7dc55e681d7c162857c87b23f5fb7eb8bc1542680d57fc6bee5f9c53697c04"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/backups?view=coverage",
+    "/docs/VM_DISK_MONITORING"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Protected and mixed backup protection verdicts with visible evidence limits",
+    "By date and Coverage with the same non-health summary",
+    "Filtered and empty selections, selected zero count",
+    "Unavailable protection posture withdraws green verdicts but keeps safety guidance",
+    "Retry recovers exact server posture without changing restore evidence",
+    "Actual shipped Markdown in production Docs viewer"
+  ],
+  "interactions": [
+    "Keyboard Enter and phone touch select exact global counted targets, clear only incompatible scopes and preserve unrelated route state",
+    "View tabs preserve coverage limits and keep real restore inventory",
+    "Refresh and unavailable-posture retry use existing collected-evidence GETs only",
+    "Keyboard/touch guidance opens real shipped safety document with no opener and leaves backup route intact with no extra inventory reads",
+    "All 14 retained desktop and phone captures opened natively with view_image; no horizontal overflow"
+  ],
+  "engines": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "browser_report_sha256": "e8aab808b9f8edc44fb86f1ea53b1982cbd7266a20d3dee718366945d69f417a",
+  "limits": "Synthetic collected evidence through production readers, router, tables and Docs. No guest operation, native thaw/liveness, restore, installed recovery, screen-reader speech, protected landing or release proof."
+}
