@@ -38,7 +38,7 @@ func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
 		Permissions map[string]string
 		Jobs        map[string]struct {
 			Permissions map[string]string
-			Needs       string
+			Needs       any
 			If          string
 			Steps       []step
 		}

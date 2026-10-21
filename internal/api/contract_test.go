@@ -102,7 +102,7 @@ proof.process_io = lambda pid: {}
 os.environ['GITHUB_TOKEN'] = 'synthetic-must-not-reach-child'
 report = '    slo_bench_test.go:637: charts/workloads p50=75ms p95=107ms p99=112ms SLO=90ms\n'
 violation = '    slo_bench_test.go:637: SLO VIOLATION: p95=107ms exceeds target 90ms\n'
-passed = report + '--- PASS: TestSLO_WorkloadCharts (0.03s)\nPASS\n'
+passed = report.replace('p95=107ms p99=112ms', 'p95=82ms p99=86ms') + '--- PASS: TestSLO_WorkloadCharts (0.03s)\nPASS\n'
 failed = report + violation + '--- FAIL: TestSLO_WorkloadCharts (0.03s)\nFAIL\n'
 cases = [
     ('idle-pass', False, passed, 0, 0),
