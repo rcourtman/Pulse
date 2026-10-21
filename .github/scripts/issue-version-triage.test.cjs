@@ -2838,3 +2838,36 @@ test("server reference correction preserves independent whole-thread evidence", 
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
 });
+
+for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+  test(`agent context does not block API-only or unknown-version reports: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const field = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: agent_version\n"));
+    assert.match(field, /required: false/);
+    assert.doesNotMatch(field, /required: true/);
+    for (const phrase of ["only if an agent is affected", "leave blank", "API-only", '"unknown"',
+      "Do not reinstall or re-enrol"]) {
+      assert.ok(field.includes(phrase), `${name}: ${phrase}`);
+    }
+    const version = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: pulse_version\n"));
+    assert.match(version, /required: true/);
+    assert.ok(version.includes('"unknown"'));
+  });
+}
+
+test("preview plan context is optional and retains existing subscriptions without advertising retired tiers", () => {
+  const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE/v6_rc_feedback.yml"), "utf8");
+  const field = form.split(/(?=^  - type: )/m)
+    .find(block => block.includes("    id: license_tier\n"));
+  assert.match(field, /required: false/);
+  assert.doesNotMatch(field, /required: true/);
+  const options = [...field.matchAll(/^        - (.+)$/gm)].map(match => match[1]);
+  assert.deepEqual(options, ["Community / Free", "Pro", "Existing Relay subscription",
+    "Other / legacy tier", "Not sure"]);
+  for (const phrase of ["only if the problem depends on plan access", "not a plan to buy",
+    "Relay is no longer sold", "Do not include licence keys, account or payment details"]) {
+    assert.ok(field.includes(phrase), phrase);
+  }
+});
