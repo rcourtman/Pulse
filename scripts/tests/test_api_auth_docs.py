@@ -187,6 +187,22 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
 
 
 class APIAuthDocsTest(unittest.TestCase):
+    def test_base_url_does_not_recommend_remote_plaintext_credentials(self):
+        introduction = DOC.read_text().split("## 🔐 Authentication", 1)[0]
+        self.assertNotIn("http://<your-pulse-ip>", introduction)
+        self.assertIn("https://pulse.example.com/api", introduction)
+        for boundary in ("verified **HTTPS origin**", "same public origin",
+                         "Do not send API tokens", "even on a private network",
+                         "local-only", "client runs\non the Pulse host",
+                         "on another\nmachine refers to that machine",
+                         "#api-token-recommended", "certificate verification enabled"):
+            self.assertIn(boundary, introduction)
+        # The actual shared helper remains loopback-only by default. Remote
+        # HTTPS is a deliberate origin/protocol change, not an HTTP shortcut.
+        self.assertIn("http://127.0.0.1:7655$api_path", request_helper())
+        self.assertIn("--proto '=http' --noproxy 127.0.0.1", request_helper())
+        self.assertIn("with `--proto '=https'`", auth_section())
+
     def test_credentials_are_not_documented_as_command_arguments(self):
         section = auth_section()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", section, re.DOTALL))

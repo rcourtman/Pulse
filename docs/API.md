@@ -2,7 +2,16 @@
 
 Pulse provides a comprehensive REST API for automation and integration.
 
-**Base URL**: `http://<your-pulse-ip>:7655/api`
+**Base URL**: your Pulse installation's verified **HTTPS origin** followed by
+`/api`, for example `https://pulse.example.com/api`. Use the same public origin
+as the browser UI when a reverse proxy terminates TLS. Do not send API tokens,
+passwords or session cookies to a remote HTTP address, even on a private network.
+
+The local-only example `http://127.0.0.1:7655/api` applies when the client runs
+on the Pulse host and Pulse actually listens there. `127.0.0.1` on another
+machine refers to that machine, not the Pulse server. The
+[private-file request helper](#api-token-recommended) below explains both local
+loopback and remote HTTPS requests; keep certificate verification enabled.
 
 ## 🔐 Authentication
 
