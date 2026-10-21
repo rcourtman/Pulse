@@ -7395,7 +7395,13 @@ return path. Product-originated upgrade handoffs must include a canonical
 commercial-owned `portal_handoff_id` that resolves server-side to the bound
 checkout intent. Pulse still binds checkout completion to a signed
 `purchase_return_token`, but that token must stay inside the Pulse-owned
-activation callback path rather than leaking into the portal arrival URL. The
+activation callback path rather than leaking into the portal arrival URL.
+When the instance has no secure callback address (plain HTTP on a non-loopback
+address, or no public URL), `/auth/license-purchase-start` mints no return
+token at all: the handoff carries a fresh `web`-prefixed `purchase_return_jti`
+and the website's checkout-result (`thanks.html?session_id=...`) and pricing
+pages as success and cancel targets, so checkout completes on the website and
+the activation key is pasted into Plans & Billing. The
 portal runtime must resolve the verified portal handoff through the shared
 commercial API and use only that owned handoff-derived checkout state when it
 starts checkout instead of trusting browser referrer state, raw

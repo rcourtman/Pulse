@@ -26,10 +26,7 @@ import {
 } from '@/features/patrol/patrolAutonomyAvailability';
 import { getRuntimeCapabilityBlock, hasFeature, runtimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesCommercialSurfaces,
-  presentationPolicyHidesUpgradePrompts,
-} from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
   getPatrolCostPresentation,
   getPatrolIntervalCostHint,
@@ -104,7 +101,10 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: !hasFeature('ai_autofix'),
       commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
-      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      // Settings is where an operator goes looking: plan-locked lines here
+      // always link to Plans & Billing. Demo and white-label runtimes hide
+      // commercial surfaces, which wins inside the presentation.
+      upgradePromptsHidden: false,
       runtimeCapabilityBlock: getRuntimeCapabilityBlock('ai_autofix'),
       runtime: runtimeCapabilities()?.runtime,
       planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),
@@ -115,7 +115,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     getPatrolAlertAnalysisAvailabilityPresentation({
       alertAnalysisLocked: props.state.alertAnalysisLocked(),
       commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
-      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      upgradePromptsHidden: false,
       runtimeCapabilityBlock: getRuntimeCapabilityBlock(PATROL_ALERT_ANALYSIS_FEATURE_KEY),
       runtime: runtimeCapabilities()?.runtime,
       planUpgradeDestination: getUpgradeActionDestination(PATROL_ALERT_ANALYSIS_FEATURE_KEY),

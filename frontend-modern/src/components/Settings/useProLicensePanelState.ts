@@ -394,8 +394,15 @@ export function useProLicensePanelState() {
     };
   });
   const planStatus = createMemo(() => getSelfHostedPlanStatusPresentation(entitlements()));
+  // A free install sees what Pro adds and how to buy it whenever it opens the
+  // plan page, not only when an upgrade prompt sent it here. Paid tiers get no
+  // comparison cards, and nothing renders until the plan state has loaded.
   const planComparisonSummary = createMemo(() => {
-    if (!showPlanSelectionPrompt()) {
+    if (
+      activeSection() !== 'plan' ||
+      purchaseActivationResult().trim().length > 0 ||
+      !entitlements()
+    ) {
       return { cards: [], action: null };
     }
     const comparison = getSelfHostedPlanComparisonPresentation({

@@ -367,12 +367,14 @@ describe('settings architecture guardrails', () => {
     );
     expect(pulseIntelligenceNavBlock?.[0]).toContain("id: 'system-billing'");
     const systemBillingNavBlock = settingsNavCatalogSource.match(
-      /id: 'system-billing',[\s\S]*?hideWhenUpgradeHidden: true,\n\s*},/,
+      /id: 'system-billing',[\s\S]*?hideWhenCommercialHidden: true,\n\s*},/,
     );
     expect(systemBillingNavBlock?.[0]).toContain(
       'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
     );
-    expect(systemBillingNavBlock?.[0]).toContain('hideWhenUpgradeHidden: true');
+    // Listed for free installs so buying is findable; only demo and
+    // white-label runtimes hide it.
+    expect(systemBillingNavBlock?.[0]).not.toContain('hideWhenUpgradeHidden');
     expect(systemBillingNavBlock?.[0]).not.toContain('hideFromSidebar');
     const systemNavBlock = settingsNavCatalogSource.match(/id: 'system',[\s\S]*?id: 'support',/);
     expect(systemNavBlock?.[0]).not.toContain("id: 'system-billing'");
@@ -1460,9 +1462,9 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsSource).toContain(
       'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
     );
-    expect(aiSettingsSource).toContain(
-      'upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),',
-    );
+    // Plan-locked lines in Settings always say where the plan lives.
+    expect(aiSettingsSource).toContain('upgradePromptsHidden: false,');
+    expect(aiSettingsSource).not.toContain('presentationPolicyHidesUpgradePrompts');
     expect(aiSettingsSource).toContain(
       'runtimeCapabilityBlock: getRuntimeCapabilityBlock(PATROL_ALERT_ANALYSIS_FEATURE_KEY),',
     );

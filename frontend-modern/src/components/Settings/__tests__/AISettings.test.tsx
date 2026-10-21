@@ -409,8 +409,10 @@ describe('AISettings model loading error states', () => {
       return document.getElementById(describedBy!)!;
     };
 
-    it('explains a plan lock without an upgrade link on a free install', async () => {
+    it('links a plan lock to Plans & Billing on a free install', async () => {
       hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      // Free installs hide proactive upgrade prompts, but a lock the operator
+      // reads in Settings still says where the plan lives.
       presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
       getSettingsMock.mockResolvedValue(lockedPatrolSettings());
 
@@ -421,8 +423,8 @@ describe('AISettings model loading error states', () => {
       expect(lockExplanation()).toHaveTextContent(
         "Higher license plan required. This install's plan does not include container update risk.",
       );
-      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
-      expect(screen.queryByRole('link', { name: 'Plans & Billing' })).toBeNull();
+      const link = within(lockExplanation()).getByRole('link', { name: 'Plans & Billing' });
+      expect(link).toHaveAttribute('href', 'https://example.com/upgrade');
     });
 
     it('links Plans & Billing when upgrade prompts are allowed', async () => {
