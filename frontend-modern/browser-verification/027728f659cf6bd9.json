@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b618f0ac0a7b88296226ce7f151ffb60b42bf4cf",
+  "verified_at": "2026-10-21T19:29:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "3bbb20f1a225d3c853a6f099564a02a1fd19696834984e4e8d60780079dbda09",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "c17f4ba2ebd00d9544c5b2b4eda5c4c71d6970716d5582b66bc0a0a121da2e56"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?focus=docker",
+    "/settings/infrastructure?surface=node"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Final combined command-access/transport and Proxmox node-guide consumers preserve both histories. Actual production owners and command producer run against synthetic loopback GETs; no API write, mint, copied command execution or target host.",
+    "Command access is unchecked before a token exists; explicit keyboard/touch choices update the authority summary and real rendered command flags without minting. HTTP remains unprotected with TLS bypass unchecked and advanced options closed.",
+    "Docker-LXC guidance preserves root command authority and the independent server opt-in. Pixel review found long environment identifiers clipped at320px despite a page-width check; final source wraps both identifiers and the driver verifies every rendered text rectangle fits its paragraph.",
+    "All eight final captures were opened using native view_image: desktop Chromium141/light and320px touch WebKit26/dark. Full text is readable and policy, command-choice and source-strategy states remain distinct.",
+    "Playwright1.56.1 matches integration lock. The small static fixture uses a separately recorded frozen offline Vite6.4.3 compiler, not a Vite dev server. Product manifests remain Vite6.4.5 and Go1.26.10; a current-graph snapshot was unavailable in this launch. This receipt is not current-graph unit/types/lint/audit/full-build qualification, installed recovery or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard Space/phone tap select and clear command access before any token, then confirm the optional no-token command path; actual Linux flags track the choice.",
+    "Open advanced options, change the draft URL from HTTPS to HTTP with TLS bypass off, then close them: the warning remains visible.",
+    "Open Docker setup and inspect exact authority/server-opt-in guidance, including range rectangles for its long identifiers; then switch the actual Proxmox node setup among agent, manual token and API inventory strategies.",
+    "Synthetic setup handoff remains disabled using its real disabled-reason accessible name. No writes, unexpected requests or page errors; both contexts/browsers and server closed."
+  ]
+}
