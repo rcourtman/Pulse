@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, type ComponentProps, type JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Resource } from '@/types/resource';
@@ -22,6 +22,12 @@ vi.mock('@/components/shared/HistoryChart', () => ({
     </div>
   ),
 }));
+// Resolve the real lazy leaves before assertions; do not make their first
+// transform compete with the default findBy deadline in the complete suite.
+beforeAll(async () => {
+  await import('../GuestPhysicalDisks');
+  await import('@/components/Storage/DiskDetail');
+});
 afterEach(cleanup);
 const guest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   id: 'fixture:pve-a:101',
@@ -188,6 +194,50 @@ describe('native power cannot renew in-guest hardware evidence', () => {
       );
     },
   );
+
+  it.each(['stopped', 'offline'])(
+    'qualifies agent SMART and RAID when an LXC becomes %s without expiring its lease',
+    async (status) => {
+      query.resources = [disk()];
+      const original = JSON.stringify(query.resources);
+      const [value, setValue] = createSignal(guest({ type: 'lxc' }));
+      render(() => <GuestDrawerOverview {...props(value())} />);
+      const row = await expandDisk();
+      const chart = within(row).getAllByTestId('history-chart')[0];
+      setValue({ ...value(), status });
+      expect(within(row).queryAllByText('Healthy')).toHaveLength(0);
+      expect(within(row).getByTestId('disk-detail-health')).toHaveTextContent(
+        'Proxmox reports this container stopped.',
+      );
+      expect(within(row).getByText('Last known temperature')).toBeVisible();
+      const array = screen.getByTestId('raid-card-array');
+      expect(array).toHaveAttribute('data-raid-reading', 'last-known');
+      expect(array).toHaveTextContent('/dev/sdb · faulty');
+      expect(array).toHaveTextContent('Rebuild was at 37%');
+      expect(array).not.toHaveTextContent('100M/sec');
+      expect(within(row).getAllByTestId('history-chart')[0]).toBe(chart);
+      expect((row as HTMLDetailsElement).open).toBe(true);
+      expect(JSON.stringify(query.resources)).toBe(original);
+      expect(value().agentStale).toBe(false);
+      setValue({ ...value(), status: 'running' });
+      expect(within(row).getAllByText('Healthy')).toHaveLength(2);
+      expect(array).toHaveAttribute('data-raid-reading', 'current');
+    },
+  );
+
+  it('preserves an independent API disk on a stopped LXC while retaining agent RAID', async () => {
+    const source = disk();
+    source.sourceType = 'api';
+    source.sources = ['proxmox'];
+    query.resources = [source];
+    render(() => <GuestDrawerOverview {...props(guest({ type: 'lxc', status: 'stopped' }))} />);
+    const row = await screen.findByTestId('guest-physical-disk');
+    expect(within(row).getByText('Healthy')).toBeVisible();
+    expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+      'data-raid-reading',
+      'last-known',
+    );
+  });
 
   it('keeps reported disk risks and a separately stale disk qualified after running resumes', async () => {
     const source = disk();

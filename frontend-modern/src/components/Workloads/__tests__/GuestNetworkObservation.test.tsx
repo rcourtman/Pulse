@@ -86,4 +86,26 @@ describe('native power does not renew retained guest network details', () => {
       expect(screen.getByTestId('guest-technical-details')).toBe(details);
     },
   );
+
+  it.each(['stopped', 'offline'])(
+    'keeps LXC %s agent interfaces last known without mislabelling host configuration',
+    (status) => {
+      const [value, setValue] = createSignal(
+        guest({ type: 'lxc', networkInterfacesFromAgent: true }),
+      );
+      render(() => <GuestDrawerOverview {...props(value())} />);
+      const details = screen.getByTestId('guest-technical-details') as HTMLDetailsElement;
+      details.open = true;
+      setValue({ ...value(), status });
+      expect(screen.getByText(/Proxmox reports this container stopped/)).toBeVisible();
+      expect(screen.getByText('Last known IP 192.0.2.80')).toBeVisible();
+      expect(screen.getByText(/RX 1.00 KB \/ TX 2.00 KB/)).toBeVisible();
+      expect(value().networkInterfaces).toEqual(interfaces);
+      expect(screen.getByTestId('guest-technical-details')).toBe(details);
+      setValue({ ...value(), networkInterfacesFromAgent: false });
+      expect(screen.queryByText(/Using last known interface details/)).not.toBeInTheDocument();
+      expect(screen.getByText('eth0')).toBeVisible();
+      expect(screen.getByTestId('guest-technical-details')).toBe(details);
+    },
+  );
 });

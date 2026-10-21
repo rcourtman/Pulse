@@ -273,6 +273,45 @@ const save = () =>
       record.cases.push(
         'Host/configuration-derived LXC interfaces do not acquire VM power semantics.',
       );
+      await apply('producer', true, false);
+      for (const power of ['stopped', 'offline']) {
+        await apply('power', power);
+        await expect(cue).toBeVisible();
+        await expect(drawer.getByText(/Proxmox reports this container stopped\./)).toBeVisible();
+        await expect(drawer.getByText('Last known IP 192.0.2.80', { exact: true })).toBeVisible();
+        const evidence = await page.evaluate(() => window.__guestNetwork.evidence());
+        assert.equal(evidence.canonical.status, 'online');
+        assert.equal(evidence.projected.networkInterfacesFromAgent, true);
+        assert.equal(evidence.projected.networkInterfaces[0].rxBytes, 1024);
+        assert.equal(evidence.canonical.agent.stale, false);
+        assert.equal(evidence.canonical.agent.lastReportAt, '2026-10-20T12:00:00Z');
+        assert.equal(await row.locator('tr').getAttribute('data-observation-identity'), 'same-row');
+        assert.equal(await details.getAttribute('data-observation-identity'), 'same-details');
+        record.cases.push(
+          `LXC ${power}: selected agent interfaces are retained, not current; lease, carrier, addresses, counters and owner identity unchanged.`,
+        );
+      }
+      await activate(cue);
+      await expect(dialog).toContainText('Proxmox reports this container stopped.');
+      await expect(dialog).toContainText(
+        'Retained addresses and counters do not establish a current connection.',
+      );
+      assert.equal((await page.evaluate(() => window.__guestNetwork.evidence())).rowActions, 0);
+      await capture('stopped-lxc-disclosure', dialog);
+      if (width < 768)
+        await activate(dialog.getByRole('button', { name: 'Close reading details' }));
+      else await page.keyboard.press('Escape');
+      await expect(cue).toBeFocused();
+      await capture(
+        'stopped-lxc-details',
+        drawer.getByText(/Proxmox reports this container stopped\./),
+      );
+      await apply('producer', false, false);
+      await expect(cue).toHaveCount(0);
+      await expect(drawer.getByText(/Using last known interface details/)).toHaveCount(0);
+      record.cases.push(
+        'Returning to host-derived LXC configuration withdraws the cue without changing power or fabricating a live connection.',
+      );
       await apply('kind', 'vm');
       await apply('producer', false, false);
       await apply('power', 'stopped');

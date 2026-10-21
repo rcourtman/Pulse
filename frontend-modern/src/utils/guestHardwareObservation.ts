@@ -1,5 +1,9 @@
 import type { WorkloadGuest } from '@/types/workloads';
-import { getWorkloadPlatformScopes, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getWorkloadPlatformScopes,
+  resolveWorkloadType,
+  resolveWorkloadTypeFromString,
+} from '@/utils/workloads';
 
 type GuestHardwareEvidence = Pick<
   WorkloadGuest,
@@ -19,6 +23,15 @@ export const getGuestHardwareLastKnownReason = (
   const status = guest.status?.trim().toLowerCase();
   if (proxmoxVM && ['paused', 'suspended', 'stopped', 'offline'].includes(status ?? '')) {
     return `Proxmox reports this VM ${status === 'offline' ? 'stopped' : status}.`;
+  }
+  // LXC configuration can remain visible on its host while the container is
+  // stopped, but RAID/SMART from its own agent cannot be a current report.
+  const proxmoxContainer =
+    (resolveWorkloadTypeFromString(guest.workloadType) ??
+      resolveWorkloadTypeFromString(guest.type)) === 'system-container' &&
+    (scopes.includes('proxmox-pve') || (scopes.length === 0 && guest.type === 'lxc'));
+  if (proxmoxContainer && ['stopped', 'offline'].includes(status ?? '')) {
+    return 'Proxmox reports this container stopped.';
   }
   return guest.agentStale ? 'The Pulse Agent in this guest stopped reporting.' : undefined;
 };
