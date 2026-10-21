@@ -173,6 +173,23 @@ access) reports one outcome under its own title, an error annotation or a
 `passed` notice, so a check that was never reached is distinguishable from
 one that passed. It uploads nothing and gates nothing.
 
+`memory-regression.yml` compares Pulse's memory with the latest stable release,
+daily at 04:41 UTC and on manual dispatch. It builds that release and `main` from
+source with a placeholder frontend, runs both for 15 minutes at once against the
+same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
+licence server), and splits steady-state resident memory into the Go heap, memory
+outside Go (where the SQLite driver allocates) and file pages
+(`scripts/memory/compare_release_memory.sh`). It fails when `main` uses more than
+15% and 16 MiB more resident memory than the release. The step summary has the
+table, and the `memory-regression` artifact holds the samples, both heap profiles
+and `heap-growth.txt`, which lists what grew by function. Mock fixtures live in
+the heap, so a growth list led by `internal/mock` is not production memory. A
+failed scheduled run opens an issue titled "Pulse memory grew against the last
+stable release", or comments on the open one, and the next passing scheduled run
+closes it. SQLite page caches only fill on large databases, which this short run
+never builds; `pkg/db/pagecache_test.go` guards those on every pull request.
+It gates nothing.
+
 `dependency-advisory-watch.yml` runs the required build-and-test frontend audit
 daily against `main` and every active `release/v<major>.<minor>` line (the
 latest stable's line and newer), because a new npm advisory against an

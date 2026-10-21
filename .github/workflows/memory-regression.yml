@@ -1,0 +1,136 @@
+name: Memory Regression Watch
+
+# Pulse's resident memory rose release after release without anything noticing
+# (#1803): a 256 MB LXC that ran v5 for a year needed 1 GB by v6.3. Nothing
+# compared memory across versions, and part of the growth sat outside the Go
+# heap, where heap-only tests cannot see it. This watch builds the latest stable
+# release and main from source, runs both against the same small mock estate,
+# and compares resident memory split into the Go heap, memory outside Go and
+# file pages. Both heap profiles and their difference are uploaded, so a failure
+# names what grew. SQLite page caches only fill on large databases, which a
+# short mock run never builds; pkg/db's page cache tests guard those instead.
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-regression
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    name: Compare memory with the latest stable release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidate
+          persist-credentials: false
+
+      - name: Resolve the latest stable release
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --json tagName,isPrerelease --jq 'select(.isPrerelease | not) | .tagName')"
+          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found: '${tag}'" >&2; exit 1; }
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Baseline: ${tag}"
+
+      - name: Checkout baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.stable.outputs.tag }}
+          path: baseline
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: candidate/go.mod
+          cache: false
+
+      - name: Measure both builds
+        env:
+          # Each tree builds with the toolchain its own go.mod names.
+          GOTOOLCHAIN: auto
+          PULSE_MEMORY_DURATION: '900'
+        run: bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory"
+
+      - name: Publish the comparison
+        if: ${{ !cancelled() }}
+        run: |
+          if [[ -f "$RUNNER_TEMP/memory/summary.md" ]]; then
+            cat "$RUNNER_TEMP/memory/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The measurement did not finish; see the run logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload memory evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: memory-regression
+          path: |
+            ${{ runner.temp }}/memory/*.tsv
+            ${{ runner.temp }}/memory/*.pb.gz
+            ${{ runner.temp }}/memory/heap-growth.txt
+            ${{ runner.temp }}/memory/summary.md
+            ${{ runner.temp }}/memory/result.json
+            ${{ runner.temp }}/memory/run-*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Scheduled runs have no caller watching them. Keep one open issue while the
+  # watch fails and close it when memory is back within tolerance.
+  report-scheduled-result:
+    name: Report scheduled result
+    needs: compare
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the memory regression issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.compare.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Pulse memory grew against the last stable release"
+          number="$(gh issue list --state open --search "\"${title}\" in:title" \
+            --limit 100 --json number,title \
+            --jq "map(select(.title == \"${title}\")) | first | .number // empty")"
+          case "${RESULT}" in
+            success)
+              if [[ -n "${number}" ]]; then
+                gh issue close "${number}" --comment "Memory is back within tolerance: ${RUN_URL}"
+              fi
+              ;;
+            failure)
+              if [[ -n "${number}" ]]; then
+                gh issue comment "${number}" --body "It failed again: ${RUN_URL}"
+              else
+                gh issue create --title "${title}" --body "The daily memory comparison failed: ${RUN_URL}
+
+          The run summary compares main with the latest stable release on the same small mock estate, split into the Go heap, memory outside Go and file pages. The memory-regression artifact holds both heap profiles and heap-growth.txt, which lists what grew by function. Check that list for internal/mock first: mock fixtures live in the heap and are not production memory. A failure with no samples means a build or startup failed, not a memory change.
+
+          This issue closes itself when the comparison passes again."
+              fi
+              ;;
+            *)
+              echo "The comparison ended as ${RESULT}; nothing to report."
+              ;;
+          esac
