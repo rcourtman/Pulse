@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "base_sha": "0bdca94f3a7a8c5289824362f9400d0fbe0e182b",
+  "verified_at": "2026-10-21T07:39:33.920226Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "3026e67434f758c5bef6773c9c8fbff22ebac7ff963eb492feb0f5474609ec18"
+  },
+  "routes": [
+    "http://127.0.0.1:5353/ \u2014 static guest-hardware-observation fixture importing the production GuestDrawer and scoped useUnifiedResources reader"
+  ],
+  "states": [
+    "Pending scoped inventory read, not prematurely empty",
+    "Successful foreign-parent/non-disk-only response with no guest disks; no claim of absent or healthy hardware",
+    "Current 45\u00b0C disk -> successful empty response withdraws the old row",
+    "HTTP 503 withdraws prior readings and private fixture text; failure remains explicit throughout one pending Retry",
+    "Successful empty Retry clears failure without a phantom disk",
+    "New 42\u00b0C replacement removes the status card and opens the actual SMART detail"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter activates Retry and the disk summary",
+    "320px touch tap activates Retry and opens SMART details",
+    "Existing metadata refresh event drives seven scoped inventory HTTP exchanges per viewport; no guest probe or write",
+    "Every failed request matches a distinct recorded client History AbortSignal; non-abort and asset errors remain fatal",
+    "Native view_image inspection of eight final captures plus all five retained initial failed-run captures; pending/empty text wraps without clipping at 320px"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "touch": true
+    }
+  ],
+  "playwright": "1.56.1 (matches integration lock)",
+  "compiled_source_sha": "a2d2f3c3ea55be099e7edde9143edc74ad7f8244",
+  "driver_source_sha": "0bdca94f3a7a8c5289824362f9400d0fbe0e182b",
+  "compiled_binding_sha256": "8aa84f4754c7270e690cb56e4f5834aacf9ce1b835d739e5c79e3476ddfe7123",
+  "browser_result_sha256": "3d62c342aa06ae31b5bd7bd3de37b0332433d3f69ee53733d05ca9eff3c4766a",
+  "captures": [
+    {
+      "file": "desktop-pending.png",
+      "sha256": "df0315903ea314cdb1057b288ad285bdc7097aa374ced239e9bbe7e27be942c9"
+    },
+    {
+      "file": "desktop-empty.png",
+      "sha256": "6b137d0449c38602cb34992991574de21e62141fa8d9496cdf1ebef428833a31"
+    },
+    {
+      "file": "desktop-failed-retry.png",
+      "sha256": "ad427b8b6f687c188d6c8dab39d6c3136e7158b0e768a0c9547af9da4f4066a4"
+    },
+    {
+      "file": "desktop-replacement.png",
+      "sha256": "4b50385dece87add2334e645b77755cb173c2bc67aaf7ff81a28503804689b72"
+    },
+    {
+      "file": "narrow-pending.png",
+      "sha256": "5a12019f916a99d1d9f576d8878319fc5ee4771da58cc19f168c8f3bfcb23bc4"
+    },
+    {
+      "file": "narrow-empty.png",
+      "sha256": "9c9668bf509029d64c00ba7d5b4a1a724f387e403f615e0709b751560136a57a"
+    },
+    {
+      "file": "narrow-failed-retry.png",
+      "sha256": "eed169122aeccbf4e75171c99b04a372036d96d428cb445a622ac066d554e11a"
+    },
+    {
+      "file": "narrow-replacement.png",
+      "sha256": "a34e5a54c40bf7b20032b125cfad86035298ffe21ec91075b9d8655ee10537bc"
+    }
+  ],
+  "notes": [
+    "Full app, imported source and CSS inputs remain hash-identical to completed source-proof compilation at a2d2f3c3. The only later source delta is the driver, bound separately at 0bdca94f.",
+    "Initial default-pool suite timed out two cases; that failure is retained. Both focused controls and a predeclared two-worker complete suite passed with unchanged thresholds and test selection. Types, all lint/format controls, production build and budgets passed on the same app source.",
+    "Initial browser failed strict request checks and exposed invalid History fixture envelopes; retained separately. Corrected single/all envelopes and observed one-to-one abort matching pass without a production source edit.",
+    "Synthetic consumer-state proof only. No native disk collection repair, actual hardware health, thaw, filesystem liveness, installed recovery, Vite advisory clearance or release availability."
+  ],
+  "evidence": "Lane outcome RECEIPTS.md, browser-final/result.json, BROWSER-DRIVER-BINDING.json, source-th5nt7ez / source-52h0mcbp / source-z_4th622 and native-inspected captures retained in the containing lane dossier."
+}
