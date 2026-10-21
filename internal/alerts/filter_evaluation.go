@@ -36,6 +36,62 @@ type guestMetrics struct {
 	Status            string
 }
 
+// A missing rule input is neither a match nor a non-match. Keep that third
+// state until policy selection; boolean callers still accept only a match.
+type guestFilterResult uint8
+
+const (
+	guestFilterNoMatch guestFilterResult = iota
+	guestFilterMatch
+	guestFilterUnknown
+)
+
+func guestMetricFilterValue(metrics guestMetrics, field string) (value float64, available, supported bool) {
+	validity := metrics.IORateValidity.EffectiveForRates(metrics.DiskRead, metrics.DiskWrite, metrics.NetworkIn, metrics.NetworkOut)
+	available, supported = true, true
+	switch strings.ToLower(field) {
+	case "cpu":
+		value = metrics.CPU
+	case "memory":
+		value, available = metrics.MemUsage, !metrics.MemoryUnavailable
+	case "disk":
+		value, available = metrics.DiskUsage, !metrics.DiskUnavailable
+	case "diskread":
+		value, available = float64(metrics.DiskRead)/1024/1024, validity.DiskRead
+	case "diskwrite":
+		value, available = float64(metrics.DiskWrite)/1024/1024, validity.DiskWrite
+	case "networkin":
+		value, available = float64(metrics.NetworkIn)/1024/1024, validity.NetworkIn
+	case "networkout":
+		value, available = float64(metrics.NetworkOut)/1024/1024, validity.NetworkOut
+	default:
+		supported = false
+	}
+	available = available && value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+	return
+}
+
+func evaluateGuestConditionResult(metrics guestMetrics, condition FilterCondition) guestFilterResult {
+	if condition.Type == "metric" {
+		// Invalid rules must not become unknown and fence legitimate policy.
+		if value, ok := numericConditionValue(condition.Value); !ok || math.IsNaN(value) || math.IsInf(value, 0) {
+			return guestFilterNoMatch
+		}
+		switch condition.Operator {
+		case ">", "<", ">=", "<=", "=", "==":
+		default:
+			return guestFilterNoMatch
+		}
+		if _, available, supported := guestMetricFilterValue(metrics, condition.Field); supported && !available {
+			return guestFilterUnknown
+		}
+	}
+	if evaluateGuestCondition(metrics, condition) {
+		return guestFilterMatch
+	}
+	return guestFilterNoMatch
+}
+
 // extractGuestMetrics extracts common metrics from a VM or Container
 func extractGuestMetrics(guest any) (guestMetrics, bool) {
 	snapshot, ok := extractGuestSnapshot(guest)
@@ -49,51 +105,8 @@ func extractGuestMetrics(guest any) (guestMetrics, bool) {
 func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) bool {
 	switch condition.Type {
 	case "metric":
-		value := 0.0
-		validity := metrics.IORateValidity.EffectiveForRates(
-			metrics.DiskRead,
-			metrics.DiskWrite,
-			metrics.NetworkIn,
-			metrics.NetworkOut,
-		)
-		switch strings.ToLower(condition.Field) {
-		case "cpu":
-			// Missing CPU is not idle, including for <, = and != rules.
-			if metrics.CPU < 0 || math.IsNaN(metrics.CPU) || math.IsInf(metrics.CPU, 0) {
-				return false
-			}
-			value = metrics.CPU
-		case "memory":
-			if metrics.MemoryUnavailable {
-				return false
-			}
-			value = metrics.MemUsage
-		case "disk":
-			if metrics.DiskUnavailable {
-				return false
-			}
-			value = metrics.DiskUsage
-		case "diskread":
-			if !validity.DiskRead {
-				return false
-			}
-			value = float64(metrics.DiskRead) / 1024 / 1024 // Convert to MB/s
-		case "diskwrite":
-			if !validity.DiskWrite {
-				return false
-			}
-			value = float64(metrics.DiskWrite) / 1024 / 1024
-		case "networkin":
-			if !validity.NetworkIn {
-				return false
-			}
-			value = float64(metrics.NetworkIn) / 1024 / 1024
-		case "networkout":
-			if !validity.NetworkOut {
-				return false
-			}
-			value = float64(metrics.NetworkOut) / 1024 / 1024
-		default:
+		value, available, supported := guestMetricFilterValue(metrics, condition.Field)
+		if !supported || !available {
 			return false
 		}
 		return evaluateNumericCondition(value, condition)
@@ -193,31 +206,37 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 
 // evaluateFilterStack evaluates a filter stack against a guest
 func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
+	return m.evaluateFilterStackResult(guest, stack) == guestFilterMatch
+}
+
+func (m *Manager) evaluateFilterStackResult(guest any, stack FilterStack) guestFilterResult {
 	if len(stack.Filters) == 0 {
-		return true
+		return guestFilterMatch
 	}
-
-	results := make([]bool, len(stack.Filters))
-	for i, filter := range stack.Filters {
-		results[i] = m.evaluateFilterCondition(guest, filter)
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
+		return guestFilterNoMatch
 	}
-
-	// Apply logical operator
-	if stack.LogicalOperator == "AND" {
-		for _, result := range results {
-			if !result {
-				return false
-			}
+	and := stack.LogicalOperator == "AND"
+	unknown := false
+	metrics := snapshot.metrics()
+	for _, filter := range stack.Filters {
+		result := evaluateGuestConditionResult(metrics, filter)
+		if and && result == guestFilterNoMatch {
+			return guestFilterNoMatch
 		}
-		return true
-	}
-	// OR
-	for _, result := range results {
-		if result {
-			return true
+		if !and && result == guestFilterMatch {
+			return guestFilterMatch
 		}
+		unknown = unknown || result == guestFilterUnknown
 	}
-	return false
+	if unknown {
+		return guestFilterUnknown
+	}
+	if and {
+		return guestFilterMatch
+	}
+	return guestFilterNoMatch
 }
 
 // getGuestThresholds returns the appropriate thresholds for a guest

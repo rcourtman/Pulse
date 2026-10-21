@@ -1,5 +1,7 @@
 package alerts
 
+import "reflect"
+
 // Alert policy resolution: the declarative rule model scoped by
 // docs/ALERT_ENGINE_EVOLUTION.md, Phase 3. The persisted AlertConfig keeps
 // its shape — per-type default blocks, per-resource overrides, custom
@@ -59,6 +61,10 @@ type EffectiveAlertPolicy struct {
 	// custom rules, then the per-resource override, then a guest's
 	// pulse-relaxed floor.
 	Thresholds ThresholdConfig
+	// Plausible higher-priority rules whose current filter input is missing.
+	// Each is already folded through resource overrides and pulse-relaxed.
+	// Evaluation may use a signal only when every possible policy agrees.
+	guestAlternatives []ThresholdConfig
 }
 
 // alertPolicyTypeSwitches maps a resource type key to its global disable
@@ -96,27 +102,92 @@ func (m *Manager) alertPolicyTypeSwitchesNoLock(typeKey string) (allDisabled, of
 // custom rule onto base. Custom rules are guest-scoped: they match on
 // live guest state, so a query without a guest never matches one.
 func (m *Manager) customRuleThresholdsNoLock(base ThresholdConfig, guest any) ThresholdConfig {
+	thresholds, _ := m.customRuleThresholdCandidatesNoLock(base, guest)
+	return thresholds
+}
+
+func (m *Manager) customRuleThresholdCandidatesNoLock(base ThresholdConfig, guest any) (ThresholdConfig, []ThresholdConfig) {
 	if guest == nil {
-		return base
+		return base, nil
 	}
-	var applicable *CustomAlertRule
+	applicable := -1
 	highestPriority := -1
+	unknown := make([]int, 0)
 	for i := range m.config.CustomRules {
 		rule := &m.config.CustomRules[i]
-		if !rule.Enabled {
+		if !rule.Enabled || rule.Priority < 0 {
 			continue
 		}
-		if m.evaluateFilterStack(guest, rule.FilterConditions) {
+		switch m.evaluateFilterStackResult(guest, rule.FilterConditions) {
+		case guestFilterMatch:
 			if rule.Priority > highestPriority {
-				applicable = rule
+				applicable = i
 				highestPriority = rule.Priority
+			}
+		case guestFilterUnknown:
+			unknown = append(unknown, i)
+		}
+	}
+	selected := base
+	if applicable >= 0 {
+		selected = m.applyThresholdOverride(base, m.config.CustomRules[applicable].Thresholds)
+	}
+	var alternatives []ThresholdConfig
+	for _, i := range unknown {
+		rule := m.config.CustomRules[i]
+		// Preserve the existing first-in-config tie break. Lower priority or
+		// later tied unknown rules cannot displace an affirmative winner.
+		if rule.Priority > highestPriority || (rule.Priority == highestPriority && i < applicable) {
+			alternatives = append(alternatives, m.applyThresholdOverride(base, rule.Thresholds))
+		}
+	}
+	return selected, alternatives
+}
+
+// guestSignalPolicyKnownNoLock compares the final policy, not just the rule's
+// fields: an explicit guest/filesystem override can remove the ambiguity. It
+// is deliberately stateless; a cached old match must not authorise a new one
+// after a config change, restart, migration or telemetry gap.
+func (m *Manager) guestSignalPolicyKnownNoLock(policy EffectiveAlertPolicy, signal string) bool {
+	for _, alternative := range policy.guestAlternatives {
+		if policy.Thresholds.Disabled != alternative.Disabled {
+			return false
+		}
+		if policy.Thresholds.Disabled {
+			continue
+		}
+		switch signal {
+		case "disabled":
+		case "powered-off":
+			if policy.Thresholds.DisableConnectivity != alternative.DisableConnectivity ||
+				NormalizePoweredOffSeverity(policy.Thresholds.PoweredOffSeverity) != NormalizePoweredOffSeverity(alternative.PoweredOffSeverity) {
+				return false
+			}
+		case "backup-age":
+			if !m.config.BackupDefaults.Enabled {
+				continue
+			}
+			if !reflect.DeepEqual(m.resolvedBackupAlertConfigNoLock(policy.Thresholds), m.resolvedBackupAlertConfigNoLock(alternative)) {
+				return false
+			}
+		case "snapshot-age":
+			if !m.config.SnapshotDefaults.Enabled {
+				continue
+			}
+			if !reflect.DeepEqual(m.resolvedSnapshotAlertConfigNoLock(policy.Thresholds), m.resolvedSnapshotAlertConfigNoLock(alternative)) {
+				return false
+			}
+		default:
+			if !reflect.DeepEqual(getThresholdForMetric(policy.Thresholds, signal), getThresholdForMetric(alternative, signal)) {
+				return false
 			}
 		}
 	}
-	if applicable == nil {
-		return base
-	}
-	return m.applyThresholdOverride(base, applicable.Thresholds)
+	return true
+}
+
+func (m *Manager) guestThresholdPolicyNoLock(guest any, guestID string) EffectiveAlertPolicy {
+	return m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: "vm", ResourceID: guestID, Guest: guest})
 }
 
 // effectiveAlertPolicyNoLock resolves the alert policy for one resource.
@@ -131,13 +202,21 @@ func (m *Manager) effectiveAlertPolicyNoLock(q alertPolicyQuery) EffectiveAlertP
 	}
 	switch {
 	case isGuestThresholdResourceType(q.TypeKey):
-		thresholds = m.customRuleThresholdsNoLock(thresholds, q.Guest)
-		thresholds = m.resolveGuestThresholdOverride(thresholds, q.Guest, q.ResourceID)
+		var alternatives []ThresholdConfig
+		thresholds, alternatives = m.customRuleThresholdCandidatesNoLock(thresholds, q.Guest)
 		// Polling and config-save reevaluation both resolve through here,
 		// so a relaxed guest's alert is judged by one threshold. Applied
 		// only by CheckGuest, a save re-judged it by the unrelaxed one.
-		if guest, ok := extractGuestSnapshot(q.Guest); ok && parsePulseTags(guest.Tags).Relaxed {
-			thresholds = applyRelaxedGuestThresholds(thresholds)
+		finish := func(candidate ThresholdConfig) ThresholdConfig {
+			candidate = m.resolveGuestThresholdOverride(candidate, q.Guest, q.ResourceID)
+			if guest, ok := extractGuestSnapshot(q.Guest); ok && parsePulseTags(guest.Tags).Relaxed {
+				candidate = applyRelaxedGuestThresholds(candidate)
+			}
+			return candidate
+		}
+		thresholds = finish(thresholds)
+		for _, alternative := range alternatives {
+			policy.guestAlternatives = append(policy.guestAlternatives, finish(alternative))
 		}
 	case q.TypeKey == "storage":
 		thresholds = m.resolveStorageThresholdOverride(thresholds, q.ResourceID, q.StorageAliases)

@@ -1562,6 +1562,40 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Missing guest rule inputs do not select a different policy (21 October 2026)
+
+Custom rule filters retain match, non-match and unavailable results. AND is
+false if any input is affirmatively false; OR is true if any input is
+affirmatively true. Otherwise an unavailable numeric input keeps membership
+unknown. Unsupported fields/operators/values remain non-matches, and measured
+zero remains a usable input. Enabled rules retain highest-priority, then
+first-in-config selection. Unknown rules below an affirmative winner cannot
+change it; unknown rules that could win remain possible policies.
+
+Resource overrides, filesystem overrides and `pulse-relaxed` are applied before
+comparing those possibilities. Only a signal whose final policy agrees across
+all possibilities may activate, update or resolve an incident. Other signals
+interrupt pending activation/recovery without changing the original occurrence,
+acknowledgement, value or evidence. An unknown filter does not freeze a previous
+rule match as authority. Independent policies continue; explicit disablement
+and overrides that remove the ambiguity still apply. A current non-match and a
+current recovery resume normal evaluation.
+
+Identity-only backup/snapshot lookups and persisted alert metadata contain no
+current metric inputs. Their numeric placeholders must never match filters;
+uncertain age policy retains the original occurrence through enumeration
+cleanup and config-save reevaluation. Global backup exclusions remain effective.
+This is a policy/evaluation boundary, not a new rule kind, persisted config
+shape, native guest probe, delivery guarantee or proof of guest liveness.
+
+Verification: `guest_rule_observation_test.go` covers all seven filter inputs,
+AND/OR shortcuts, rule priority/ties, independent signals, overrides and gap
+interruption; `TestGuestRuleMetadataIsNotZeroForBackupSnapshotOrSave` in
+`guest_snapshot_test.go` pins age/save behaviour. The actual single/cluster
+client and both collector routes cross canonical projection and alert state in
+`TestGuestRuleObservationProducerLifecycle`.
+
+
 ### Typed policy identity stays separate from display labels (21 October 2026)
 
 Canonical metric intent and legacy-delay lookup use the typed spec's resource
